@@ -1,0 +1,40 @@
+import { defineConfig, devices } from '@playwright/test'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const backendDir = path.join(__dirname, '..', 'backend')
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  use: {
+    ...devices['Desktop Chrome'],
+    baseURL: 'http://127.0.0.1:5173',
+  },
+  webServer: [
+    {
+      command: 'uv run uvicorn app.main:app --host 127.0.0.1 --port 8000',
+      cwd: backendDir,
+      env: {
+        ...process.env,
+        DATABASE_URL: 'sqlite:///./e2e.sqlite',
+        APP_TIMEZONE: 'UTC',
+        CORS_ORIGINS: '*',
+        AUTO_CREATE_TABLES: '1',
+      },
+      port: 8000,
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      cwd: __dirname,
+      port: 5173,
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
+})
