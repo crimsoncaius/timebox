@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DayCalendarPopover } from '../../components/DayCalendarPopover'
 import { DayTimeline } from '../../components/DayTimeline'
 import { Layout } from '../../components/Layout'
+import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { TimeBlockModal } from '../../components/TimeBlockModal'
-import { api, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
+import { api, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
 import { addDaysIso } from '../../lib/time'
 
 function formatDisplayDate(isoDate: string): string {
@@ -20,9 +21,8 @@ function formatDisplayDate(isoDate: string): string {
   })
 }
 
-function defaultTaskTypeId(types: TaskType[]): number | null {
-  if (types.length === 0) return null
-  return [...types].sort((a, b) => a.id - b.id)[0]!.id
+function confirmDiscardUnsaved(): boolean {
+  return window.confirm('Discard unsaved changes?')
 }
 
 export function TodayPage() {
@@ -34,6 +34,10 @@ export function TodayPage() {
   const [error, setError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
+  const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
+  const [inspectorDirty, setInspectorDirty] = useState(false)
+  const [blockDragActive, setBlockDragActive] = useState(false)
+  const timelineRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     if (!date) return
@@ -56,6 +60,8 @@ export function TodayPage() {
 
   useEffect(() => {
     setSelectedBlockId(null)
+    setDraft(null)
+    setInspectorDirty(false)
   }, [date])
 
   const selectedBlock = useMemo(() => {
@@ -69,32 +75,88 @@ export function TodayPage() {
     }
   }, [day, selectedBlockId])
 
-  const createBlock = useCallback(
-    async (lane: BlockLane, startMin: number, endMin: number) => {
-      if (!date) return
-      const tid = defaultTaskTypeId(taskTypes)
-      if (tid === null) {
-        setSaveState('error')
-        setError('Add at least one task type on the Task types page before creating blocks.')
-        return
-      }
+  const tryDiscardIfNeeded = useCallback(() => {
+    if (!inspectorDirty) return true
+    return confirmDiscardUnsaved()
+  }, [inspectorDirty])
+
+  const tryClosePanel = useCallback(() => {
+    if (!tryDiscardIfNeeded()) return
+    setSelectedBlockId(null)
+    setDraft(null)
+  }, [tryDiscardIfNeeded])
+
+  const onLaneSlotClick = useCallback(
+    (lane: BlockLane, startMin: number, endMin: number) => {
+      if (!tryDiscardIfNeeded()) return
+      setDraft({ lane, start_minute: startMin, end_minute: endMin })
+      setSelectedBlockId(null)
+    },
+    [tryDiscardIfNeeded],
+  )
+
+  const onDraftTimeChange = useCallback((startMin: number, endMin: number) => {
+    setDraft((d) => (d ? { ...d, start_minute: startMin, end_minute: endMin } : null))
+  }, [])
+
+  useEffect(() => {
+    if (draft == null && selectedBlockId == null) return
+    const onPointerDown = (e: PointerEvent) => {
+      const node = e.target
+      if (!(node instanceof Node)) return
+      if (timelineRef.current?.contains(node)) return
+      const el = node instanceof Element ? node : node.parentElement
+      if (el?.closest('[role="dialog"]')) return
+      if (el?.closest('[data-inspector]')) return
+      tryClosePanel()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [draft, selectedBlockId, tryClosePanel])
+
+  /** Desktop: Escape clears selection (mobile sheet uses TimeBlockModal's Escape handler). */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (window.matchMedia('(max-width: 1023px)').matches) return
+      if (selectedBlock == null && draft == null) return
+      tryClosePanel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [draft, selectedBlock, tryClosePanel])
+
+  const commitDraft = useCallback(
+    async (payload: { task_type_id: number; note: string | null }) => {
+      if (!date || !draft) return
       setSaveState('saving')
       setError(null)
       try {
         const next = await api.createBlock(date, {
-          lane,
-          task_type_id: tid,
-          start_minute: startMin,
-          end_minute: endMin,
+          lane: draft.lane,
+          task_type_id: payload.task_type_id,
+          note: payload.note ?? undefined,
+          start_minute: draft.start_minute,
+          end_minute: draft.end_minute,
         })
         setDay(next)
+        const created = next.time_blocks.find(
+          (b) =>
+            b.lane === draft.lane &&
+            b.start_minute === draft.start_minute &&
+            b.end_minute === draft.end_minute &&
+            b.task_type_id === payload.task_type_id,
+        )
+        setDraft(null)
+        if (created) setSelectedBlockId(created.id)
         setSaveState('saved')
       } catch (e) {
         setSaveState('error')
         setError(e instanceof Error ? e.message : 'Failed to create block')
+        throw e
       }
     },
-    [date, taskTypes],
+    [date, draft],
   )
 
   const patchBlock = useCallback(
@@ -179,6 +241,16 @@ export function TodayPage() {
     }
   }, [])
 
+  const onBlockClick = useCallback(
+    (blockId: number): boolean => {
+      if (!tryDiscardIfNeeded()) return false
+      setDraft(null)
+      setSelectedBlockId(blockId)
+      return true
+    },
+    [tryDiscardIfNeeded],
+  )
+
   if (!date) {
     return (
       <Layout>
@@ -203,16 +275,34 @@ export function TodayPage() {
     )
   }
 
-  const detailOpen = selectedBlock != null
+  const inspectorSharedProps = {
+    day,
+    taskTypes,
+    onClose: tryClosePanel,
+    onSave: (patch: { task_type_id?: number; note?: string | null }) => {
+      if (!selectedBlock) return Promise.resolve()
+      return patchBlock(selectedBlock.id, patch)
+    },
+    onCreateFromDraft: commitDraft,
+    onDelete: () => {
+      if (!selectedBlock) return Promise.resolve()
+      return deleteBlock(selectedBlock.id)
+    },
+    onCompleteAsPlanned:
+      selectedBlock?.lane === 'planned'
+        ? () => {
+            if (!selectedBlock) return Promise.resolve()
+            return completeBlockAsPlanned(selectedBlock.id)
+          }
+        : undefined,
+    onCreateTaskTypePath: createTaskTypePath,
+    onDirtyChange: setInspectorDirty,
+  }
+
+  const mobileSheetOpen = selectedBlock != null || draft != null
 
   return (
-    <Layout
-      mainClassName={
-        detailOpen
-          ? 'mx-auto w-full max-w-none px-6 py-12 lg:px-8 xl:px-10'
-          : undefined
-      }
-    >
+    <Layout mainClassName="mx-auto w-full max-w-none px-6 py-12 lg:px-8 xl:px-10">
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-0">
         <div className="min-w-0 flex-1 lg:pr-4">
           <span data-testid="day-date" className="sr-only">
@@ -293,39 +383,74 @@ export function TodayPage() {
 
           <section className="overflow-x-auto pb-24">
             <DayTimeline
+              ref={timelineRef}
               day={day}
               readOnly={false}
-              onCreateBlock={createBlock}
+              draft={draft}
+              selectedBlockId={selectedBlockId}
+              onLaneSlotClick={onLaneSlotClick}
+              onDraftTimeChange={onDraftTimeChange}
               onPatchBlock={patchBlock}
-              onBlockClick={(blockId) => setSelectedBlockId(blockId)}
+              onBlockClick={(blockId, _lane) => onBlockClick(blockId)}
+              onBlockDragSessionChange={setBlockDragActive}
             />
           </section>
         </div>
 
-        <TimeBlockModal
-          open={selectedBlock != null}
-          block={selectedBlock}
-          day={day}
-          taskTypes={taskTypes}
-          onClose={() => setSelectedBlockId(null)}
-          onSave={(patch) => {
-            if (!selectedBlock) return Promise.resolve()
-            return patchBlock(selectedBlock.id, patch)
-          }}
-          onDelete={() => {
-            if (!selectedBlock) return Promise.resolve()
-            return deleteBlock(selectedBlock.id)
-          }}
-          onCompleteAsPlanned={
-            selectedBlock?.lane === 'planned'
-              ? () => {
-                  if (!selectedBlock) return Promise.resolve()
-                  return completeBlockAsPlanned(selectedBlock.id)
-                }
-              : undefined
-          }
-          onCreateTaskTypePath={createTaskTypePath}
-        />
+        {/* Desktop: persistent inspector rail */}
+        <div
+          className="hidden w-full shrink-0 lg:block lg:w-[min(28rem,100%)] lg:max-w-md lg:self-start lg:pl-6"
+          data-testid="day-inspector-rail"
+        >
+          <aside
+            role="complementary"
+            aria-label="Block details"
+            data-inspector="rail"
+            className={`sticky top-24 mt-0 w-full bg-surface-container-low dark:bg-stone-900${blockDragActive ? ' pointer-events-none' : ''}`}
+          >
+            {selectedBlock == null && draft == null ? (
+              <div className="rounded-2xl bg-surface-container-lowest/90 px-4 pb-6 pt-6 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] transition-opacity duration-150 dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)] lg:rounded-none lg:bg-transparent lg:px-0 lg:pb-6 lg:pt-6 lg:shadow-none lg:backdrop-blur-none">
+                <h2 className="font-headline text-sm font-light tracking-wide text-on-surface-variant">
+                  Details
+                </h2>
+                <p className="mt-2 font-headline text-lg font-extralight text-on-surface">
+                  Select a block to edit
+                </p>
+                <p className="mt-1 font-body text-xs text-on-surface-variant">
+                  Click an empty slot to create
+                </p>
+              </div>
+            ) : (
+              <div className="transition-opacity duration-150">
+                <TimeBlockInspectorContent
+                  variant="rail"
+                  block={selectedBlock}
+                  draft={draft}
+                  {...inspectorSharedProps}
+                />
+              </div>
+            )}
+          </aside>
+        </div>
+
+        {/* Mobile: sheet below timeline */}
+        <div className="lg:hidden w-full">
+          <TimeBlockModal
+            open={mobileSheetOpen}
+            block={selectedBlock}
+            draft={draft}
+            day={day}
+            taskTypes={taskTypes}
+            onClose={tryClosePanel}
+            onSave={inspectorSharedProps.onSave}
+            onCreateFromDraft={commitDraft}
+            onDelete={inspectorSharedProps.onDelete}
+            onCompleteAsPlanned={inspectorSharedProps.onCompleteAsPlanned}
+            onCreateTaskTypePath={createTaskTypePath}
+            onDirtyChange={setInspectorDirty}
+            blockDragActive={blockDragActive}
+          />
+        </div>
       </div>
     </Layout>
   )

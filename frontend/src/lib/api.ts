@@ -1,5 +1,12 @@
 export type BlockLane = 'planned' | 'actual'
 
+/** Client-only placement before POST /days/.../blocks (draft-first creation). */
+export type BlockDraftPlacement = {
+  lane: BlockLane
+  start_minute: number
+  end_minute: number
+}
+
 export interface TaskType {
   id: number
   name: string

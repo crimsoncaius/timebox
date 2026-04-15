@@ -86,7 +86,7 @@ describe('App routing', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByRole('link', { name: 'Today' })
+    await screen.findByRole('link', { name: 'Day' })
 
     const banner = screen.getByRole('banner')
     expect(within(banner).getByRole('link', { name: 'Settings' })).toBeInTheDocument()
@@ -96,7 +96,7 @@ describe('App routing', () => {
     expect(screen.queryByTitle('Not available yet')).not.toBeInTheDocument()
   })
 
-  it('shows day window controls on Settings instead of Today', async () => {
+  it('shows day window controls on Settings instead of Day', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/day/2026-04-13']}>
@@ -108,7 +108,7 @@ describe('App routing', () => {
     await user.click(screen.getByRole('link', { name: 'Settings' }))
     expect(await screen.findByText(/Start hour/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('link', { name: 'Today' }))
+    await user.click(screen.getByRole('link', { name: 'Day' }))
     expect(screen.queryByText('Day window')).not.toBeInTheDocument()
   })
 

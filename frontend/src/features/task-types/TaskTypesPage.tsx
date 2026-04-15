@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import { api, type TaskType } from '../../lib/api'
+import {
+  filterTaskTypesByQuery,
+  formatTaskTypePathParts,
+  groupTaskTypesByRoot,
+  pathDepth,
+} from '../../lib/taskTypePaths'
 
 function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
   if (saveState === 'error') return 'text-error'
@@ -15,6 +21,20 @@ export function TaskTypesPage() {
   const [error, setError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [newName, setNewName] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState('')
+
+  const visibleTypes = useMemo(() => filterTaskTypesByQuery(types, newName), [types, newName])
+
+  const grouped = useMemo(() => groupTaskTypesByRoot(visibleTypes), [visibleTypes])
+
+  const displayRows = useMemo(() => {
+    let stripe = 0
+    return grouped.map((g) => ({
+      root: g.root,
+      rows: g.items.map((t) => ({ t, stripeIndex: stripe++ })),
+    }))
+  }, [grouped])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,6 +75,7 @@ export function TaskTypesPage() {
     try {
       await api.patchTaskType(id, { name })
       await load()
+      setEditingId(null)
       setSaveState('saved')
     } catch (e) {
       setSaveState('error')
@@ -63,6 +84,7 @@ export function TaskTypesPage() {
   }
 
   const remove = async (id: number) => {
+    setEditingId((cur) => (cur === id ? null : cur))
     setSaveState('saving')
     setError(null)
     try {
@@ -73,6 +95,22 @@ export function TaskTypesPage() {
       setSaveState('error')
       setError(e instanceof Error ? e.message : 'Failed to delete task type')
     }
+  }
+
+  const startEdit = (t: TaskType) => {
+    setEditingId(t.id)
+    setEditValue(t.name)
+  }
+
+  const commitEdit = (t: TaskType) => {
+    const v = editValue.trim()
+    if (!v) {
+      setEditValue(t.name)
+      setEditingId(null)
+      return
+    }
+    if (v !== t.name) void rename(t.id, v)
+    else setEditingId(null)
   }
 
   if (loading) {
@@ -97,7 +135,7 @@ export function TaskTypesPage() {
               to="/"
               className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:text-on-surface"
             >
-              Today
+              Day
             </Link>{' '}
             block only after at least one type exists.
           </p>
@@ -140,21 +178,21 @@ export function TaskTypesPage() {
           {/* Composer: glass lift + gradient CTA */}
           <section
             className="rounded-2xl bg-surface-container-lowest/85 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-xl dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]"
-            aria-labelledby="task-types-new-heading"
+            aria-labelledby="task-types-composer-heading"
           >
             <h2
-              id="task-types-new-heading"
+              id="task-types-composer-heading"
               className="mb-3 font-headline text-sm font-normal tracking-tight text-on-surface-variant"
             >
-              New task type
+              Task type
             </h2>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
               <label className="min-w-0 flex-1">
-                <span className="sr-only">New task type name</span>
+                <span className="sr-only">Filter saved types or enter a new task type name</span>
                 <input
                   className="w-full rounded-xl bg-surface-container-low/80 px-4 py-3 font-body text-base font-light text-on-surface shadow-inner shadow-black/3 outline-none transition-[background-color,box-shadow] placeholder:text-on-surface-variant/70 focus-visible:bg-surface-container-high/90 focus-visible:ring-2 focus-visible:ring-primary/20 dark:bg-stone-900/60 dark:shadow-black/20 dark:focus-visible:bg-stone-800/80"
                   value={newName}
-                  placeholder="e.g. work"
+                  placeholder="Search or add (e.g. work)"
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void addType()
@@ -171,7 +209,7 @@ export function TaskTypesPage() {
             </div>
           </section>
 
-          {/* Saved list: gap rule, alternating tone, invisible row inputs */}
+          {/* Saved list: grouped by root segment, breadcrumb display, edit on demand */}
           <section aria-labelledby="task-types-saved-heading">
             <h2
               id="task-types-saved-heading"
@@ -183,36 +221,94 @@ export function TaskTypesPage() {
               <p className="font-body text-sm font-light leading-relaxed text-on-surface-variant">
                 No task types yet. Add one above.
               </p>
+            ) : visibleTypes.length === 0 ? (
+              <p className="font-body text-sm font-light leading-relaxed text-on-surface-variant">
+                No matching task types.
+              </p>
             ) : (
-              <ul className="space-y-4">
-                {types.map((t, index) => (
-                  <li
-                    key={t.id}
-                    className={[
-                      'flex flex-wrap items-center gap-3 rounded-xl px-3 py-2 transition-colors sm:gap-4',
-                      index % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low/50 dark:bg-stone-900/35',
-                    ].join(' ')}
-                  >
-                    <input
-                      className="min-w-0 flex-1 rounded-md border-0 bg-transparent px-2 py-2 font-body text-base font-light text-on-surface shadow-none outline-none ring-0 transition-colors placeholder:text-on-surface-variant hover:bg-surface-container-highest/60 focus:bg-surface-container-highest/80 focus:text-primary focus-visible:ring-2 focus-visible:ring-primary/15 dark:hover:bg-stone-800/50 dark:focus:bg-stone-800/70"
-                      defaultValue={t.name}
-                      aria-label={`Task type name ${t.id}`}
-                      key={`${t.id}-${t.updated_at}`}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim()
-                        if (v && v !== t.name) void rename(t.id, v)
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-stone-600/40 dark:hover:bg-error-container/10"
-                      onClick={() => void remove(t.id)}
-                    >
-                      Delete
-                    </button>
-                  </li>
+              <div className="space-y-8">
+                {displayRows.map(({ root, rows }) => (
+                  <div key={root} className="space-y-2">
+                    <h3 className="font-headline text-xs font-normal uppercase tracking-[0.2em] text-on-surface-variant">
+                      {root}
+                    </h3>
+                    <ul className="space-y-2">
+                      {rows.map(({ t, stripeIndex }) => {
+                        const parts = formatTaskTypePathParts(t.name)
+                        const depth = pathDepth(t.name)
+                        const indentPx = 8 + depth * 14
+                        const isEditing = editingId === t.id
+                        return (
+                          <li
+                            key={t.id}
+                            className={[
+                              'flex flex-wrap items-center gap-2 rounded-xl px-2 py-1 transition-colors sm:gap-3',
+                              stripeIndex % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low/50 dark:bg-stone-900/35',
+                            ].join(' ')}
+                          >
+                            {isEditing ? (
+                              <input
+                                className="min-w-0 flex-1 rounded-md border-0 bg-surface-container-highest/80 px-3 py-2 font-body text-base font-light text-on-surface shadow-none outline-none ring-0 transition-colors focus-visible:ring-2 focus-visible:ring-primary/15 dark:bg-stone-800/70"
+                                value={editValue}
+                                aria-label={`Task type name ${t.id}`}
+                                autoFocus
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={() => commitEdit(t)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault()
+                                    setEditValue(t.name)
+                                    setEditingId(null)
+                                  }
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    ;(e.target as HTMLInputElement).blur()
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className="min-w-0 flex-1 py-2 font-body text-base font-light"
+                                style={{ paddingLeft: indentPx }}
+                                aria-label={`Task type ${t.name}`}
+                              >
+                                <span className="text-on-surface">
+                                  {parts.ancestorsLabel ? (
+                                    <>
+                                      <span className="text-on-surface-variant">{parts.ancestorsLabel} / </span>
+                                      <span>{parts.leafLabel}</span>
+                                    </>
+                                  ) : (
+                                    <span>{parts.leafLabel}</span>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                            {!isEditing && (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/30 dark:border-stone-600/40"
+                                aria-label={`Edit ${t.name}`}
+                                onClick={() => startEdit(t)}
+                              >
+                                Edit
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-stone-600/40 dark:hover:bg-error-container/10"
+                              aria-label={`Delete ${t.name}`}
+                              onClick={() => void remove(t.id)}
+                            >
+                              Delete
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </section>
         </div>

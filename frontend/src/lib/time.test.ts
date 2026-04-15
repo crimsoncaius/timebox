@@ -4,11 +4,16 @@ import {
   addMonthsIso,
   firstOfMonthIso,
   floorToSlotMinute,
+  minuteFromPointerYInVisibleLane,
   monthGridForIso,
   monthYearLabelForIso,
+  MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
+  resolveSameLaneMovePreviewStart,
   resolveSameLaneMoveStart,
+  gapBoundsForDraft,
   sameLaneResizeBounds,
   snapToSlot,
+  validStartMinuteRangesForDuration,
   visibleMinuteRange,
 } from './time'
 
@@ -30,6 +35,19 @@ describe('time helpers', () => {
     })
   })
 
+  it('minuteFromPointerYInVisibleLane clamps Y to the visible slot rows', () => {
+    const vs = 8 * 60
+    const ve = 20 * 60
+    const h = 46
+    expect(minuteFromPointerYInVisibleLane(-80, vs, ve, h)).toBe(vs)
+    expect(minuteFromPointerYInVisibleLane(0, vs, ve, h)).toBe(vs)
+    expect(minuteFromPointerYInVisibleLane(h - 1, vs, ve, h)).toBe(vs)
+    expect(minuteFromPointerYInVisibleLane(h, vs, ve, h)).toBe(vs + 30)
+    const lastRow = ((ve - vs) / 30 - 1) * h
+    expect(minuteFromPointerYInVisibleLane(lastRow, vs, ve, h)).toBe(ve - 30)
+    expect(minuteFromPointerYInVisibleLane(lastRow + h * 4, vs, ve, h)).toBe(ve - 30)
+  })
+
   it('sameLaneResizeBounds clamps to neighbors in sorted order', () => {
     const a = { id: 1, start_minute: 480, end_minute: 510 }
     const b = { id: 2, start_minute: 540, end_minute: 600 }
@@ -42,6 +60,24 @@ describe('time helpers', () => {
 
   it('sameLaneResizeBounds returns full day when id missing', () => {
     expect(sameLaneResizeBounds([], 99)).toEqual({ minStartMinute: 0, maxEndMinute: 24 * 60 })
+  })
+
+  it('gapBoundsForDraft returns gap containing the draft interval', () => {
+    const a = { id: 1, start_minute: 480, end_minute: 510 }
+    const b = { id: 2, start_minute: 540, end_minute: 600 }
+    const lane = [b, a]
+    expect(gapBoundsForDraft(lane, 510, 540)).toEqual({ minStartMinute: 510, maxEndMinute: 540 })
+    expect(gapBoundsForDraft(lane, 600, 630)).toEqual({ minStartMinute: 600, maxEndMinute: 24 * 60 })
+    expect(gapBoundsForDraft(lane, 0, 30)).toEqual({ minStartMinute: 0, maxEndMinute: 480 })
+  })
+
+  it('gapBoundsForDraft empty lane is full day', () => {
+    expect(gapBoundsForDraft([], 120, 180)).toEqual({ minStartMinute: 0, maxEndMinute: 24 * 60 })
+  })
+
+  it('gapBoundsForDraft falls back when interval does not fit any gap', () => {
+    const a = { id: 1, start_minute: 480, end_minute: 510 }
+    expect(gapBoundsForDraft([a], 500, 520)).toEqual({ minStartMinute: 0, maxEndMinute: 24 * 60 })
   })
 
   it('floorToSlotMinute floors to 30-minute grid', () => {
@@ -81,6 +117,58 @@ describe('time helpers', () => {
     const lane = [a, b]
     expect(resolveSameLaneMoveStart(lane, 2, 30, 510, 540)).toBe(510)
     expect(resolveSameLaneMoveStart(lane, 2, 30, 630, 540)).toBe(630)
+  })
+
+  const laneWithGap = () => {
+    const a = { id: 1, start_minute: 480, end_minute: 510 }
+    const b = { id: 2, start_minute: 540, end_minute: 600 }
+    return [a, b]
+  }
+
+  it('resolveSameLaneMovePreviewStart: valid candidate passes through', () => {
+    const lane = laneWithGap()
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 600, 480)).toBe(600)
+  })
+
+  it('resolveSameLaneMovePreviewStart: stays at committed until threshold toward higher naive', () => {
+    const lane = laneWithGap()
+    const h = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES
+    // Invalid overlap strip; instant resolve would snap to 600, preview stays 510 until c >= 600 - h
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 570, 510)).toBe(510)
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 600 - h - 1, 510)).toBe(510)
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 600 - h, 510)).toBe(600)
+  })
+
+  it('resolveSameLaneMovePreviewStart: stays at committed until threshold toward lower naive', () => {
+    const lane = laneWithGap()
+    const h = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 540, 600)).toBe(600)
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 510 + h + 1, 600)).toBe(600)
+    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 510 + h, 600)).toBe(510)
+  })
+
+  it('resolveSameLaneMovePreviewStart: does not oscillate mid-gap candidate stream', () => {
+    const lane = laneWithGap()
+    let preview = 510
+    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 593, preview)
+    expect(preview).toBe(600)
+    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 540, preview)
+    expect(preview).toBe(600)
+    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 570, preview)
+    expect(preview).toBe(600)
+    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 515, preview)
+    expect(preview).toBe(510)
+  })
+
+  it('validStartMinuteRangesForDuration: exposes gaps for fixed duration', () => {
+    const a = { id: 1, start_minute: 480, end_minute: 510 }
+    const b = { id: 2, start_minute: 540, end_minute: 600 }
+    const obstacles = [a, b].sort((x, y) => x.start_minute - y.start_minute)
+    expect(validStartMinuteRangesForDuration(obstacles, 30)).toEqual([
+      { lo: 0, hi: 450 },
+      { lo: 510, hi: 510 },
+      { lo: 600, hi: 1410 },
+    ])
   })
 
   it('addDaysIso shifts UTC calendar dates', () => {

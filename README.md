@@ -59,7 +59,7 @@ cd frontend && npm test
 cd frontend && npm run e2e
 ```
 
-`npm test` runs Vitest (unit/component tests). `npm run e2e` starts the API and dev server with test env and runs Playwright (requires Chromium via `npx playwright install chromium`). The Playwright spec seeds task types and blocks via the HTTP API, then drives Today, History, and Settings in the browser.
+`npm test` runs Vitest (unit/component tests). `npm run e2e` starts the API and dev server with test env and runs Playwright (requires Chromium via `npx playwright install chromium`). The Playwright spec seeds task types and blocks via the HTTP API, then drives Day, Chronicle, and Settings in the browser.
 
 **E2E note:** Playwright may reuse an API already listening on port 8000. If E2E fails after backend schema changes, stop any manual `uvicorn` on that port (or delete `backend/e2e.sqlite` when using the default Playwright SQLite URL) so a fresh server runs migrations / `AUTO_CREATE_TABLES` logic.
 

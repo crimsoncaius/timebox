@@ -102,4 +102,65 @@ describe('TimeBlockCard', () => {
 
     expect(onBlockClick).toHaveBeenCalledTimes(1)
   })
+
+  it('does not oscillate preview top when moving through a same-lane gap past a blocker', () => {
+    const blocker: TimeBlock = {
+      id: 11,
+      lane: 'planned',
+      task_type_id: 2,
+      task_type: { id: 2, name: 'beta', created_at: '', updated_at: '' },
+      note: null,
+      start_minute: 540,
+      end_minute: 600,
+      created_at: '',
+      updated_at: '',
+    }
+
+    const onPatch = vi.fn(() => Promise.resolve())
+    const view = render(
+      <div style={{ position: 'relative', height: 800 }}>
+        <TimeBlockCard
+          block={block}
+          lane="planned"
+          visibleStartMin={480}
+          visibleEndMin={1200}
+          slotHeightPx={20}
+          readOnly={false}
+          sameLaneBlocks={[block, blocker]}
+          resizeMinStartMinute={0}
+          resizeMaxEndMinute={540}
+          getMinuteFromClientY={(clientY) => clientY}
+          onPatch={onPatch}
+          isSelected={false}
+        />
+      </div>,
+    )
+
+    const body = screen.getByRole('button', { name: 'Edit planned block' })
+    const shell = view.container.querySelector('[data-block-id="10"]') as HTMLDivElement
+
+    /**
+     * clientY is absolute minute. Body pointer gesture ignores moves until 8px from pointer-down (dead zone).
+     * First move past dead zone anchors the vertical axis; then raw = originStart + (clientY - anchor).
+     */
+    fireEvent.pointerDown(body, { button: 0, pointerId: 1, clientX: 10, clientY: 480 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 489 })
+    /** anchor = 489; raw 510 → preview commits at 510 */
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 519 })
+    expect(shell.style.top).toBe('20px')
+
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 550 })
+    expect(shell.style.top).toBe('20px')
+
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 530 })
+    expect(shell.style.top).toBe('20px')
+
+    /** raw ≥ 592 switches block to 600; use anchor 489 → clientY 489 + 112 = 601 */
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 601 })
+    expect(shell.style.top).toBe('80px')
+
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 10, clientY: 601 })
+
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 600, end_minute: 630 })
+  })
 })

@@ -62,14 +62,15 @@ describe('TaskTypesPage', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Task types', level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'New task type' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Task type' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Saved types' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('e.g. work')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search or add (e.g. work)')).toBeInTheDocument()
     expect(await screen.findByText('No task types yet. Add one above.')).toBeInTheDocument()
     expect(screen.getByText('Up to date')).toBeInTheDocument()
   })
 
   it('lists task types from GET /task-types', async () => {
+    const user = userEvent.setup()
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -95,8 +96,9 @@ describe('TaskTypesPage', () => {
 
     renderPage()
 
-    const rowInput = await screen.findByRole('textbox', { name: /Task type name 2/i })
-    expect(rowInput).toHaveValue('Deep work')
+    expect(await screen.findByLabelText('Task type Deep work')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Edit Deep work' }))
+    expect(await screen.findByRole('textbox', { name: /Task type name 2/i })).toHaveValue('Deep work')
   })
 
   it('POSTs new task type on Add', async () => {
@@ -137,9 +139,9 @@ describe('TaskTypesPage', () => {
 
     await screen.findByRole('heading', { name: 'Task types' })
 
-    const composer = screen.getByRole('heading', { name: 'New task type' }).closest('section')
+    const composer = screen.getByRole('heading', { name: 'Task type' }).closest('section')
     expect(composer).toBeTruthy()
-    const input = within(composer!).getByPlaceholderText('e.g. work')
+    const input = within(composer!).getByPlaceholderText('Search or add (e.g. work)')
     await user.type(input, 'work')
     await user.click(screen.getByRole('button', { name: 'Add' }))
 
@@ -151,7 +153,112 @@ describe('TaskTypesPage', () => {
       }),
     )
 
+    expect(await screen.findByLabelText('Task type work')).toBeInTheDocument()
+    expect(input).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: 'Edit work' }))
     expect(await screen.findByRole('textbox', { name: /Task type name 1/i })).toHaveValue('work')
+  })
+
+  it('filters saved types as the user types in the composer', async () => {
+    const user = userEvent.setup()
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const method = init?.method ?? 'GET'
+      if (url.includes('/health')) {
+        return Promise.resolve(
+          jsonResponse({ status: 'ok', today: '2026-04-13', timezone: 'UTC' }),
+        )
+      }
+      if (url.includes('/task-types') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse([
+            { id: 1, name: 'coding', created_at: '', updated_at: '' },
+            { id: 2, name: 'coding/ai', created_at: '', updated_at: '' },
+            { id: 3, name: 'gym', created_at: '', updated_at: '' },
+          ]),
+        )
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }))
+    }) as typeof fetch
+
+    renderPage()
+
+    expect(await screen.findByLabelText('Task type coding')).toBeInTheDocument()
+    expect(screen.getByLabelText('Task type gym')).toBeInTheDocument()
+
+    const composer = screen.getByRole('heading', { name: 'Task type' }).closest('section')
+    expect(composer).toBeTruthy()
+    const input = within(composer!).getByPlaceholderText('Search or add (e.g. work)')
+    await user.type(input, 'gym')
+
+    expect(screen.getByLabelText('Task type gym')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Task type coding')).not.toBeInTheDocument()
+  })
+
+  it('shows no matching task types when the filter matches nothing', async () => {
+    const user = userEvent.setup()
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const method = init?.method ?? 'GET'
+      if (url.includes('/health')) {
+        return Promise.resolve(
+          jsonResponse({ status: 'ok', today: '2026-04-13', timezone: 'UTC' }),
+        )
+      }
+      if (url.includes('/task-types') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse([{ id: 1, name: 'work', created_at: '', updated_at: '' }]),
+        )
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }))
+    }) as typeof fetch
+
+    renderPage()
+
+    await screen.findByLabelText('Task type work')
+
+    const composer = screen.getByRole('heading', { name: 'Task type' }).closest('section')
+    expect(composer).toBeTruthy()
+    const input = within(composer!).getByPlaceholderText('Search or add (e.g. work)')
+    await user.type(input, 'nomatchxyz')
+
+    expect(screen.getByText('No matching task types.')).toBeInTheDocument()
+  })
+
+  it('clearing the composer shows all saved types again', async () => {
+    const user = userEvent.setup()
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const method = init?.method ?? 'GET'
+      if (url.includes('/health')) {
+        return Promise.resolve(
+          jsonResponse({ status: 'ok', today: '2026-04-13', timezone: 'UTC' }),
+        )
+      }
+      if (url.includes('/task-types') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse([
+            { id: 1, name: 'coding', created_at: '', updated_at: '' },
+            { id: 3, name: 'gym', created_at: '', updated_at: '' },
+          ]),
+        )
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }))
+    }) as typeof fetch
+
+    renderPage()
+
+    expect(await screen.findByLabelText('Task type coding')).toBeInTheDocument()
+
+    const composer = screen.getByRole('heading', { name: 'Task type' }).closest('section')
+    expect(composer).toBeTruthy()
+    const input = within(composer!).getByPlaceholderText('Search or add (e.g. work)')
+    await user.type(input, 'gym')
+    expect(screen.queryByLabelText('Task type coding')).not.toBeInTheDocument()
+
+    await user.clear(input)
+    expect(screen.getByLabelText('Task type coding')).toBeInTheDocument()
+    expect(screen.getByLabelText('Task type gym')).toBeInTheDocument()
   })
 
   it('refetches task types after rename updates descendant paths', async () => {
@@ -182,11 +289,13 @@ describe('TaskTypesPage', () => {
     }) as typeof fetch
 
     renderPage()
+    await screen.findByRole('button', { name: 'Edit coding' })
+    await user.click(screen.getByRole('button', { name: 'Edit coding' }))
     const input = await screen.findByRole('textbox', { name: /Task type name 1/i })
     await user.clear(input)
     await user.type(input, 'development')
     await user.tab()
 
-    expect(await screen.findByRole('textbox', { name: /Task type name 2/i })).toHaveValue('development/ai')
+    expect(await screen.findByLabelText('Task type development/ai')).toBeInTheDocument()
   })
 })

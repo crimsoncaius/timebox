@@ -277,6 +277,80 @@ test('move planned block preserves duration and jumps past blocker', async ({ pa
   expect(a?.end_minute).toBe(630)
 })
 
+test('move planned block: preview stays stable while pointer wiggles in the invalid gap', async ({
+  page,
+  request,
+}) => {
+  const date = '2026-06-25'
+  const base = 'http://127.0.0.1:8000'
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await clearDayBlocks(request, base, date)
+
+  const tidA = await ensureTaskType(request, base, 'Hysteresis A')
+  const tidB = await ensureTaskType(request, base, 'Hysteresis B')
+
+  const r1 = await request.post(`${base}/days/${date}/blocks`, {
+    data: {
+      lane: 'planned',
+      task_type_id: tidA,
+      start_minute: 480,
+      end_minute: 510,
+    },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  expect(r1.ok()).toBeTruthy()
+  const idA = (await r1.json()).time_blocks[0].id as number
+
+  const r2 = await request.post(`${base}/days/${date}/blocks`, {
+    data: {
+      lane: 'planned',
+      task_type_id: tidB,
+      start_minute: 540,
+      end_minute: 600,
+    },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  expect(r2.ok()).toBeTruthy()
+
+  await page.reload()
+
+  const body = page.locator(`[data-block-id="${idA}"]`).getByRole('button', { name: 'Edit planned block' })
+  await body.scrollIntoViewIfNeeded()
+  const box = await body.boundingBox()
+  expect(box).toBeTruthy()
+  const cx = box!.x + box!.width / 2
+  const cy = box!.y + box!.height / 2
+  await page.mouse.move(cx, cy)
+  await page.mouse.down()
+  await page.mouse.move(cx, cy + 1)
+
+  /** Hover in the invalid strip above blocker B without crossing the 600-preview threshold. */
+  await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 2.2, { steps: 8 })
+  const y1 = (await page.locator(`[data-block-id="${idA}"]`).boundingBox())?.y
+  await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 2.35, { steps: 8 })
+  const y2 = (await page.locator(`[data-block-id="${idA}"]`).boundingBox())?.y
+  expect(y1).toBeTruthy()
+  expect(y2).toBeTruthy()
+  expect(Math.round(y1!)).toBe(Math.round(y2!))
+
+  await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 4, { steps: 12 })
+  await page.mouse.up()
+
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
+
+  const rDay = await request.get(`${base}/days/${date}`)
+  expect(rDay.ok()).toBeTruthy()
+  const blocks = (await rDay.json()).time_blocks as Array<{
+    id: number
+    start_minute: number
+    end_minute: number
+  }>
+  const a = blocks.find((b) => b.id === idA)
+  expect(a?.start_minute).toBe(600)
+  expect(a?.end_minute).toBe(630)
+})
+
 test('creates a hierarchical task type from the block editor and renames parent on Task types', async ({
   page,
   request,

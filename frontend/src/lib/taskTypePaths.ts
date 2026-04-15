@@ -19,6 +19,31 @@ export function formatTaskTypePathParts(path: string): {
   return { fullLabel: path, leafLabel, ancestorsLabel }
 }
 
+/** First path segment, used to group related types (e.g. `coding` for `coding/ai`). */
+export function taskTypeRootSegment(path: string): string {
+  const s = path.split('/')[0]
+  return s?.trim() ? s : path
+}
+
+/** 0 for a single segment, 1 for `a/b`, etc. */
+export function pathDepth(path: string): number {
+  return Math.max(0, path.split('/').length - 1)
+}
+
+/**
+ * Sort by full path, then bucket by top-level segment for grouped UI.
+ */
+export function groupTaskTypesByRoot(types: TaskType[]): { root: string; items: TaskType[] }[] {
+  const sorted = [...types].sort((a, b) => a.name.localeCompare(b.name))
+  const roots = [...new Set(sorted.map((t) => taskTypeRootSegment(t.name)))].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  return roots.map((root) => ({
+    root,
+    items: sorted.filter((t) => taskTypeRootSegment(t.name) === root),
+  }))
+}
+
 /** True when `path` should appear while typing `query` (both canonical paths). */
 function pathMatchesQuery(path: string, query: string): boolean {
   if (path === query) return true
@@ -42,6 +67,26 @@ function pathMatchScore(path: string, query: string): number {
   return 4
 }
 
+/**
+ * Returns task types that match the path-aware query, with the same ordering as combobox suggestions.
+ * Empty or invalid query returns all types sorted by name.
+ */
+export function filterTaskTypesByQuery(taskTypes: TaskType[], query: string): TaskType[] {
+  const canonicalQuery = canonicalizeTaskTypePathInput(query)
+  const sorted = [...taskTypes].sort((a, b) => a.name.localeCompare(b.name))
+  if (!canonicalQuery) {
+    return sorted
+  }
+  return sorted
+    .filter((row) => pathMatchesQuery(row.name, canonicalQuery))
+    .sort((a, b) => {
+      const da = pathMatchScore(a.name, canonicalQuery)
+      const db = pathMatchScore(b.name, canonicalQuery)
+      if (da !== db) return da - db
+      return a.name.localeCompare(b.name)
+    })
+}
+
 export function buildTaskTypeSuggestions(taskTypes: TaskType[], query: string): {
   rows: TaskType[]
   createPath: string | null
@@ -54,14 +99,7 @@ export function buildTaskTypeSuggestions(taskTypes: TaskType[], query: string): 
   }
 
   const exact = sorted.some((row) => row.name === canonicalQuery)
-  const rows = sorted
-    .filter((row) => pathMatchesQuery(row.name, canonicalQuery))
-    .sort((a, b) => {
-      const da = pathMatchScore(a.name, canonicalQuery)
-      const db = pathMatchScore(b.name, canonicalQuery)
-      if (da !== db) return da - db
-      return a.name.localeCompare(b.name)
-    })
+  const rows = filterTaskTypesByQuery(taskTypes, query)
 
   return { rows, createPath: exact ? null : canonicalQuery }
 }

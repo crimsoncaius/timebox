@@ -1,6 +1,17 @@
 /** 30-minute grid (matches backend). */
 export const SLOT_MINUTES = 30
+/** Pixel height per 30-minute row in the day timeline UI. */
+export const TIMELINE_SLOT_HEIGHT_PX = 46
 export const MINUTES_PER_DAY = 24 * 60
+
+/**
+ * Minute band during move-drag: ~25% of a slot before snapping to the next valid landing
+ * (stable preview at slot boundaries).
+ */
+export const MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES = Math.round(0.25 * SLOT_MINUTES)
+
+/** @deprecated Use {@link MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES}. */
+export const MOVE_PREVIEW_HYSTERESIS_MINUTES = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES
 
 /** Calendar math in UTC to match API `YYYY-MM-DD` dates. */
 export function addDaysIso(iso: string, delta: number): string {
@@ -96,6 +107,25 @@ export function slotCountInRange(startMin: number, endMin: number): number {
   return Math.max(0, (endMin - startMin) / SLOT_MINUTES)
 }
 
+/**
+ * Maps pointer distance from the lane's top edge to a slot-aligned minute in the visible window.
+ * Caps the slot index so coordinates above the lane (negative Y clamped to 0) cannot yield a minute
+ * below `visibleStartMin`, and coordinates past the lane bottom cannot exceed the last row.
+ */
+export function minuteFromPointerYInVisibleLane(
+  yFromLaneTop: number,
+  visibleStartMin: number,
+  visibleEndMin: number,
+  slotHeightPx: number,
+): number {
+  const range = visibleEndMin - visibleStartMin
+  if (range <= 0 || slotHeightPx <= 0) return visibleStartMin
+  const rowCount = Math.max(1, Math.floor(range / SLOT_MINUTES))
+  const maxIdx = rowCount - 1
+  const idx = Math.min(maxIdx, Math.max(0, Math.floor(Math.max(0, yFromLaneTop) / slotHeightPx)))
+  return visibleStartMin + idx * SLOT_MINUTES
+}
+
 /** Same-lane blocks sorted by start; used to clamp resize so edges cannot cross neighbors. */
 export interface TimeBlockLike {
   id: number
@@ -120,6 +150,37 @@ export function sameLaneResizeBounds(
   const minStartMinute = idx > 0 ? sorted[idx - 1].end_minute : 0
   const maxEndMinute = idx < sorted.length - 1 ? sorted[idx + 1].start_minute : MINUTES_PER_DAY
   return { minStartMinute, maxEndMinute }
+}
+
+/**
+ * Resize limits for a draft block that is not yet in the lane list: the free gap
+ * `[minStartMinute, maxEndMinute)` that fully contains `[start, end)`.
+ * Falls back to full day when no gap fits (invalid or degenerate interval).
+ */
+export function gapBoundsForDraft(
+  sameLaneBlocks: TimeBlockLike[],
+  start: number,
+  end: number,
+): { minStartMinute: number; maxEndMinute: number } {
+  if (end <= start) {
+    return { minStartMinute: 0, maxEndMinute: MINUTES_PER_DAY }
+  }
+  const sorted = [...sameLaneBlocks].sort((a, b) => a.start_minute - b.start_minute)
+  let cursor = 0
+  for (const b of sorted) {
+    const gapLo = cursor
+    const gapHi = b.start_minute
+    if (start >= gapLo && end <= gapHi) {
+      return { minStartMinute: gapLo, maxEndMinute: gapHi }
+    }
+    cursor = Math.max(cursor, b.end_minute)
+  }
+  const gapLo = cursor
+  const gapHi = MINUTES_PER_DAY
+  if (start >= gapLo && end <= gapHi) {
+    return { minStartMinute: gapLo, maxEndMinute: gapHi }
+  }
+  return { minStartMinute: 0, maxEndMinute: MINUTES_PER_DAY }
 }
 
 /** Floor to slot grid (matches timeline Y → minute mapping). */
@@ -147,7 +208,7 @@ function obstaclesExcluding(
 }
 
 /** Inclusive [lo, hi] of valid start minutes for a block of fixed duration in gaps between obstacles. */
-function validStartMinuteRangesForDuration(
+export function validStartMinuteRangesForDuration(
   obstaclesSorted: TimeBlockLike[],
   durationMinutes: number,
 ): Array<{ lo: number; hi: number }> {
@@ -278,4 +339,48 @@ export function resolveSameLaneMoveStart(
   }
   const nearest = pickNearestValidStart(c, ranges)
   return Math.min(nearest ?? ranges[0]!.lo, maxStart)
+}
+
+/**
+ * Same-lane move preview start: stable while the pointer hovers near a blocker boundary.
+ * Uses {@link resolveSameLaneMoveStart} for the next "instant" target, but only commits to that
+ * target when the raw candidate crosses a threshold toward that target (see spec hysteresis).
+ *
+ * When the candidate is already a valid non-overlapping start, returns it (free move within a gap).
+ */
+export function resolveSameLaneMovePreviewStart(
+  sameLaneBlocks: TimeBlockLike[],
+  movingBlockId: number,
+  durationMinutes: number,
+  candidateStartMinutes: number,
+  committedPreviewStart: number,
+  hysteresisMinutes: number = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
+): number {
+  const committed = floorToSlotMinute(committedPreviewStart)
+  const obstacles = obstaclesExcluding(sameLaneBlocks, movingBlockId)
+  const maxStart = MINUTES_PER_DAY - durationMinutes
+
+  /** Slot floor for instant-resolve; raw minute drives hysteresis edges. */
+  const cSlot = floorToSlotMinute(candidateStartMinutes)
+
+  const naive = resolveSameLaneMoveStart(
+    sameLaneBlocks,
+    movingBlockId,
+    durationMinutes,
+    cSlot,
+    committed,
+  )
+
+  if (naive === committed) {
+    if (isValidMoveStart(cSlot, durationMinutes, obstacles)) {
+      return Math.min(cSlot, maxStart)
+    }
+    return committed
+  }
+
+  if (naive > committed) {
+    return candidateStartMinutes >= naive - hysteresisMinutes ? Math.min(naive, maxStart) : committed
+  }
+
+  return candidateStartMinutes <= naive + hysteresisMinutes ? Math.min(naive, maxStart) : committed
 }

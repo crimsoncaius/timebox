@@ -46,6 +46,7 @@ describe('TimeBlockModal', () => {
       <TimeBlockModal
         open
         block={makeBlock()}
+        draft={null}
         day={emptyDay}
         taskTypes={taskTypes}
         onClose={vi.fn()}
@@ -64,6 +65,7 @@ describe('TimeBlockModal', () => {
       <TimeBlockModal
         open
         block={makeBlock()}
+        draft={null}
         day={emptyDay}
         taskTypes={taskTypes}
         onClose={vi.fn()}
@@ -85,6 +87,7 @@ describe('TimeBlockModal', () => {
       <TimeBlockModal
         open
         block={makeBlock({ note: 'old' })}
+        draft={null}
         day={emptyDay}
         taskTypes={taskTypes}
         onClose={vi.fn()}
@@ -113,6 +116,7 @@ describe('TimeBlockModal', () => {
       <TimeBlockModal
         open
         block={makeBlock()}
+        draft={null}
         day={emptyDay}
         taskTypes={taskTypes}
         onClose={vi.fn()}
@@ -129,5 +133,52 @@ describe('TimeBlockModal', () => {
 
     expect(onCreateTaskTypePath).toHaveBeenCalledWith('coding/personal')
     expect(onSave).toHaveBeenCalledWith({ task_type_id: 7 })
+  })
+
+  it('draft mode disables Save until task type is chosen and calls onCreateFromDraft', async () => {
+    const user = userEvent.setup()
+    const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
+    const draft = { lane: 'planned' as const, start_minute: 480, end_minute: 510 }
+    render(
+      <TimeBlockModal
+        open
+        block={null}
+        draft={draft}
+        day={emptyDay}
+        taskTypes={taskTypes}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onCreateFromDraft={onCreateFromDraft}
+        onDelete={vi.fn()}
+        onCreateTaskTypePath={noopCreate}
+      />,
+    )
+    expect(screen.getByRole('heading', { name: 'New block' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.click(screen.getByLabelText('Task type'))
+    await user.click(screen.getByRole('option', { name: /^break$/i }))
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onCreateFromDraft).toHaveBeenCalledWith({ task_type_id: 2, note: null })
+  })
+
+  it('draft mode hides Delete and Complete', () => {
+    render(
+      <TimeBlockModal
+        open
+        block={null}
+        draft={{ lane: 'planned', start_minute: 480, end_minute: 510 }}
+        day={emptyDay}
+        taskTypes={taskTypes}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onCreateFromDraft={vi.fn()}
+        onDelete={vi.fn()}
+        onCompleteAsPlanned={vi.fn()}
+        onCreateTaskTypePath={noopCreate}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument()
   })
 })

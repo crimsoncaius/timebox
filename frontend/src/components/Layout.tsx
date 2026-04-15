@@ -48,19 +48,19 @@ export function Layout({
         <nav className="flex flex-1 flex-col gap-2">
           <NavLink
             to={todayHref}
-            aria-label="Today"
+            aria-label="Day"
             className={() => navItem(isTodayPath(location.pathname, today))}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
               calendar_today
             </span>
-            <span className="font-headline font-light tracking-tight">Today</span>
+            <span className="font-headline font-light tracking-tight">Day</span>
           </NavLink>
-          <NavLink to="/history" aria-label="History" className={() => navItem(location.pathname === '/history')}>
+          <NavLink to="/history" aria-label="Chronicle" className={() => navItem(location.pathname === '/history')}>
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
               history
             </span>
-            <span className="font-headline font-light tracking-tight">History</span>
+            <span className="font-headline font-light tracking-tight">Chronicle</span>
           </NavLink>
           <NavLink
             to="/task-types"
