@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.time import parse_iso_date
 from app.db.session import get_db
-from app.schemas.day import DayListItem, DayPatch, DayRead
+from app.schemas.day import DayListItem, DayRead
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch
 from app.services import day_service
 
@@ -34,27 +34,6 @@ def get_day(
         raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
     return day_service.to_day_read(day, settings)
-
-
-@router.patch("/{date}", response_model=DayRead)
-def patch_day(
-    date: str,
-    body: DayPatch,
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
-    day = day_service.get_or_create_day(db, d)
-    try:
-        day_service.patch_day(db, day, body)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    db_day = day_service.get_day_by_date(db, d)
-    assert db_day is not None
-    return day_service.to_day_read(db_day, settings)
 
 
 @router.post("/{date}/blocks", response_model=DayRead)
@@ -114,6 +93,27 @@ def delete_block(
     day = day_service.get_or_create_day(db, d)
     try:
         day_service.delete_time_block(db, day, block_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    db_day = day_service.get_day_by_date(db, d)
+    assert db_day is not None
+    return day_service.to_day_read(db_day, settings)
+
+
+@router.post("/{date}/blocks/{block_id}/complete-as-planned", response_model=DayRead)
+def complete_block_as_planned(
+    date: str,
+    block_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> DayRead:
+    try:
+        d = parse_iso_date(date)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
+    day = day_service.get_or_create_day(db, d)
+    try:
+        day_service.complete_planned_as_actual(db, day, block_id)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)

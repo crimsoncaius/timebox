@@ -27,12 +27,6 @@ class DayRead(BaseModel):
     meta: DayMeta
 
 
-class DayPatch(BaseModel):
-    start_hour: int | None = Field(None, ge=0, le=23)
-    end_hour: int | None = Field(None, ge=1, le=24)
-    show_full_day: bool | None = None
-
-
 class DayListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

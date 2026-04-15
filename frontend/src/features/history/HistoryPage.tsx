@@ -3,20 +3,12 @@ import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import { api, type DayListItem } from '../../lib/api'
 
-function formatShortDate(iso: string): string {
+/** Compact day + month (e.g. `14 Apr`), UTC-stable. */
+function formatDayMonth(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   if (!y || !m || !d) return iso
   const dt = new Date(Date.UTC(y, m - 1, d))
-  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
-}
-
-function formatTitle(iso: string, index: number): string {
-  if (index === 0) return 'Most recent'
-  if (index === 1) return 'Previous'
-  const [y, m, d] = iso.split('-').map(Number)
-  if (!y || !m || !d) return iso
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  return dt.toLocaleDateString(undefined, { weekday: 'long', timeZone: 'UTC' })
+  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
 export function HistoryPage() {
@@ -49,7 +41,7 @@ export function HistoryPage() {
             Chronicle of focus
           </h1>
           <p className="max-w-lg font-body text-lg leading-relaxed text-on-surface-variant">
-            Recent days, newest first. Open a day to plan or review blocks.
+            Recent days, newest first. Open a day to plan and track blocks.
           </p>
         </div>
       </section>
@@ -67,14 +59,11 @@ export function HistoryPage() {
       )}
 
       <div className="grid grid-cols-1 gap-x-12 gap-y-16 md:grid-cols-2 xl:grid-cols-3">
-        {rows.map((r, i) => (
+        {rows.map((r) => (
           <Link key={r.id} to={`/day/${r.date}`} className="group block cursor-pointer">
-            <div className="mb-4 flex items-baseline justify-between">
+            <div className="mb-4">
               <span className="font-headline text-2xl font-light tracking-tight text-on-surface">
-                {formatTitle(r.date, i)}
-              </span>
-              <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-                {formatShortDate(r.date)}
+                {formatDayMonth(r.date)}
               </span>
             </div>
             <div className="relative overflow-hidden rounded-xl bg-surface-container-low p-6 transition-all group-hover:bg-surface-container-high">

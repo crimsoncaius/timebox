@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz
+from app.models.app_settings import AppSettings
 from app.models.day import Day
 from app.models.time_block import BlockLane, TimeBlock
-from app.schemas.day import DayListItem, DayMeta, DayPatch, DayRead
+from app.services import task_type_service
+from app.schemas.day import DayListItem, DayMeta, DayRead
+from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch, TimeBlockRead
 
 SLOT_MINUTES = 30
@@ -61,16 +64,34 @@ def _assert_no_overlap(
 
 
 def get_day_by_date(db: Session, d: dt.date) -> Day | None:
-    stmt = select(Day).where(Day.date == d).options(selectinload(Day.time_blocks))
+    stmt = (
+        select(Day)
+        .where(Day.date == d)
+        .options(
+            selectinload(Day.time_blocks).selectinload(TimeBlock.task_type),
+        )
+    )
     return db.execute(stmt).scalar_one_or_none()
 
 
+def get_or_create_app_settings(db: Session) -> AppSettings:
+    stmt = select(AppSettings).where(AppSettings.id == 1)
+    row = db.execute(stmt).scalar_one_or_none()
+    if row is None:
+        row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False)
+        db.add(row)
+        db.flush()
+        db.refresh(row)
+    return row
+
+
 def create_day(db: Session, d: dt.date) -> Day:
+    s = get_or_create_app_settings(db)
     day = Day(
         date=d,
-        start_hour=8,
-        end_hour=20,
-        show_full_day=False,
+        start_hour=s.start_hour,
+        end_hour=s.end_hour,
+        show_full_day=s.show_full_day,
     )
     db.add(day)
     db.flush()
@@ -123,22 +144,34 @@ def to_day_list_item(day: Day) -> DayListItem:
     )
 
 
-def patch_day(db: Session, day: Day, body: DayPatch) -> Day:
+def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
+    s = get_or_create_app_settings(db)
     data = body.model_dump(exclude_unset=True)
     if not data:
-        return day
+        return s
     if body.start_hour is not None:
-        day.start_hour = body.start_hour
+        s.start_hour = body.start_hour
     if body.end_hour is not None:
-        day.end_hour = body.end_hour
+        s.end_hour = body.end_hour
     if body.show_full_day is not None:
-        day.show_full_day = body.show_full_day
-    if day.start_hour >= day.end_hour or day.end_hour > 24 or day.start_hour < 0:
+        s.show_full_day = body.show_full_day
+    if s.start_hour >= s.end_hour or s.end_hour > 24 or s.start_hour < 0:
         raise ValueError("Invalid day window: require 0 <= start_hour < end_hour <= 24")
-    _touch_day(day)
+    s.updated_at = _utc_now()
+    db.add(s)
+    db.flush()
+    now = _utc_now()
+    db.execute(
+        update(Day).values(
+            start_hour=s.start_hour,
+            end_hour=s.end_hour,
+            show_full_day=s.show_full_day,
+            updated_at=now,
+        )
+    )
     db.commit()
-    db.refresh(day)
-    return day
+    db.refresh(s)
+    return s
 
 
 def get_block(db: Session, day: Day, block_id: int) -> TimeBlock | None:
@@ -153,11 +186,15 @@ def get_block(db: Session, day: Day, block_id: int) -> TimeBlock | None:
 def create_time_block(db: Session, day: Day, body: TimeBlockCreate) -> TimeBlock:
     _validate_minutes(body.start_minute, body.end_minute)
     _assert_no_overlap(day, body.lane, body.start_minute, body.end_minute)
-    title = (body.title or "").strip()
+    tt = task_type_service.get_task_type(db, body.task_type_id)
+    if tt is None:
+        raise ValueError("Task type not found")
+    note_val = (body.note or "").strip() or None
     block = TimeBlock(
         day_id=day.id,
         lane=body.lane,
-        title=title,
+        task_type_id=body.task_type_id,
+        note=note_val,
         start_minute=body.start_minute,
         end_minute=body.end_minute,
     )
@@ -179,8 +216,13 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
     if "start_minute" in data or "end_minute" in data:
         _validate_minutes(start, end)
         _assert_no_overlap(day, block.lane, start, end, exclude_id=block.id)
-    if "title" in data:
-        block.title = str(data["title"] or "").strip()
+    if "task_type_id" in data:
+        tid = data["task_type_id"]
+        if task_type_service.get_task_type(db, tid) is None:
+            raise ValueError("Task type not found")
+        block.task_type_id = tid
+    if "note" in data:
+        block.note = str(data["note"] or "").strip() or None
     if "start_minute" in data:
         block.start_minute = data["start_minute"]
     if "end_minute" in data:
@@ -200,6 +242,64 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
     _touch_day(day)
     db.commit()
     db.refresh(day)
+
+
+def complete_planned_as_actual(db: Session, day: Day, planned_block_id: int) -> TimeBlock:
+    """Create (or refresh) an Actual block that mirrors a Planned block, linked by planned_block_id."""
+    drow = get_day_by_date(db, day.date)
+    assert drow is not None
+    planned = get_block(db, drow, planned_block_id)
+    if planned is None:
+        raise ValueError("Block not found")
+    if planned.lane != BlockLane.planned:
+        raise ValueError("Only planned blocks can be completed as planned")
+
+    existing = next(
+        (
+            b
+            for b in drow.time_blocks
+            if b.lane == BlockLane.actual and b.planned_block_id == planned_block_id
+        ),
+        None,
+    )
+    start = planned.start_minute
+    end = planned.end_minute
+    _validate_minutes(start, end)
+    if existing is not None:
+        _assert_no_overlap(drow, BlockLane.actual, start, end, exclude_id=existing.id)
+        tt = task_type_service.get_task_type(db, planned.task_type_id)
+        if tt is None:
+            raise ValueError("Task type not found")
+        existing.task_type_id = planned.task_type_id
+        existing.note = (planned.note or "").strip() or None
+        existing.start_minute = start
+        existing.end_minute = end
+        _touch_day(drow)
+        db.commit()
+        db.refresh(existing)
+        db.refresh(drow)
+        return existing
+
+    _assert_no_overlap(drow, BlockLane.actual, start, end)
+    tt = task_type_service.get_task_type(db, planned.task_type_id)
+    if tt is None:
+        raise ValueError("Task type not found")
+    note_val = (planned.note or "").strip() or None
+    block = TimeBlock(
+        day_id=drow.id,
+        lane=BlockLane.actual,
+        task_type_id=planned.task_type_id,
+        note=note_val,
+        start_minute=start,
+        end_minute=end,
+        planned_block_id=planned.id,
+    )
+    db.add(block)
+    _touch_day(drow)
+    db.commit()
+    db.refresh(block)
+    db.refresh(drow)
+    return block
 
 
 def list_recent_days(db: Session, limit: int = 60) -> list[Day]:

@@ -1,6 +1,11 @@
 import { useRef } from 'react'
 import type { BlockLane, DayRead, TimeBlock } from '../lib/api'
-import { formatMinuteLabel24, SLOT_MINUTES, visibleMinuteRange } from '../lib/time'
+import {
+  formatMinuteLabel24,
+  sameLaneResizeBounds,
+  SLOT_MINUTES,
+  visibleMinuteRange,
+} from '../lib/time'
 import { TimeBlockCard } from './TimeBlockCard'
 
 const SLOT_HEIGHT_PX = 28
@@ -10,16 +15,21 @@ export function DayTimeline({
   readOnly,
   onCreateBlock,
   onPatchBlock,
-  onDeleteBlock,
+  onBlockClick,
 }: {
   day: DayRead
   readOnly: boolean
   onCreateBlock: (lane: BlockLane, startMin: number, endMin: number) => Promise<void>
   onPatchBlock: (
     blockId: number,
-    patch: { title?: string; start_minute?: number; end_minute?: number },
+    patch: {
+      task_type_id?: number
+      note?: string | null
+      start_minute?: number
+      end_minute?: number
+    },
   ) => Promise<void>
-  onDeleteBlock?: (blockId: number) => Promise<void>
+  onBlockClick?: (blockId: number, lane: BlockLane) => void
 }) {
   const { start: visibleStartMin, end: visibleEndMin } = visibleMinuteRange(day)
   const slotCount = (visibleEndMin - visibleStartMin) / SLOT_MINUTES
@@ -76,11 +86,12 @@ export function DayTimeline({
             totalHeight={totalHeight}
             slotCount={slotCount}
             visibleStartMin={visibleStartMin}
+            visibleEndMin={visibleEndMin}
             blocks={blocksFor('planned')}
             readOnly={readOnly}
             onLaneClick={(e) => onLaneClick('planned', e)}
             onPatchBlock={onPatchBlock}
-            onDeleteBlock={onDeleteBlock}
+            onBlockClick={onBlockClick}
           />
         </div>
         <div>
@@ -93,11 +104,12 @@ export function DayTimeline({
             totalHeight={totalHeight}
             slotCount={slotCount}
             visibleStartMin={visibleStartMin}
+            visibleEndMin={visibleEndMin}
             blocks={blocksFor('actual')}
             readOnly={readOnly}
             onLaneClick={(e) => onLaneClick('actual', e)}
             onPatchBlock={onPatchBlock}
-            onDeleteBlock={onDeleteBlock}
+            onBlockClick={onBlockClick}
           />
         </div>
       </div>
@@ -111,25 +123,32 @@ function Lane({
   totalHeight,
   slotCount,
   visibleStartMin,
+  visibleEndMin,
   blocks,
   readOnly,
   onLaneClick,
   onPatchBlock,
-  onDeleteBlock,
+  onBlockClick,
 }: {
   laneRef: React.RefObject<HTMLDivElement | null>
   lane: BlockLane
   totalHeight: number
   slotCount: number
   visibleStartMin: number
+  visibleEndMin: number
   blocks: TimeBlock[]
   readOnly: boolean
   onLaneClick: (e: React.MouseEvent<HTMLDivElement>) => void
   onPatchBlock: (
     blockId: number,
-    patch: { title?: string; start_minute?: number; end_minute?: number },
+    patch: {
+      task_type_id?: number
+      note?: string | null
+      start_minute?: number
+      end_minute?: number
+    },
   ) => Promise<void>
-  onDeleteBlock?: (blockId: number) => Promise<void>
+  onBlockClick?: (blockId: number, lane: BlockLane) => void
 }) {
   return (
     <div
@@ -146,27 +165,36 @@ function Lane({
           style={{ top: i * SLOT_HEIGHT_PX, height: SLOT_HEIGHT_PX }}
         />
       ))}
-      {blocks.map((b) => (
-        <TimeBlockCard
-          key={b.id}
-          block={b}
-          lane={lane}
-          visibleStartMin={visibleStartMin}
-          slotHeightPx={SLOT_HEIGHT_PX}
-          readOnly={readOnly}
-          getMinuteFromClientY={(cy) => {
-            const el = laneRef.current
-            if (!el) return visibleStartMin
-            const top = el.getBoundingClientRect().top
-            const y = cy - top
-            const idx = Math.floor(Math.max(0, y) / SLOT_HEIGHT_PX)
-            const m = visibleStartMin + idx * SLOT_MINUTES
-            return Math.min(Math.max(m, 0), 24 * 60 - SLOT_MINUTES)
-          }}
-          onPatch={(patch) => onPatchBlock(b.id, patch)}
-          onDelete={onDeleteBlock ? () => onDeleteBlock(b.id) : undefined}
-        />
-      ))}
+      {blocks.map((b) => {
+        const { minStartMinute, maxEndMinute } = sameLaneResizeBounds(blocks, b.id)
+        return (
+          <TimeBlockCard
+            key={b.id}
+            block={b}
+            lane={lane}
+            visibleStartMin={visibleStartMin}
+            visibleEndMin={visibleEndMin}
+            slotHeightPx={SLOT_HEIGHT_PX}
+            readOnly={readOnly}
+            sameLaneBlocks={blocks}
+            resizeMinStartMinute={minStartMinute}
+            resizeMaxEndMinute={maxEndMinute}
+            getMinuteFromClientY={(cy) => {
+              const el = laneRef.current
+              if (!el) return visibleStartMin
+              const top = el.getBoundingClientRect().top
+              const y = cy - top
+              const idx = Math.floor(Math.max(0, y) / SLOT_HEIGHT_PX)
+              const m = visibleStartMin + idx * SLOT_MINUTES
+              return Math.min(Math.max(m, 0), 24 * 60 - SLOT_MINUTES)
+            }}
+            onPatch={(patch) => onPatchBlock(b.id, patch)}
+            onBlockClick={
+              readOnly || !onBlockClick ? undefined : () => onBlockClick(b.id, lane)
+            }
+          />
+        )
+      })}
     </div>
   )
 }

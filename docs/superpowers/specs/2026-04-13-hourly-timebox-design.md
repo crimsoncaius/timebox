@@ -4,11 +4,11 @@
 
 This project is a browser-based application for planning a day in hourly blocks and reflecting on how closely the day matched the plan. The first version targets desktop web use, with a React and Tailwind frontend, a FastAPI backend, and Postgres for durable storage across devices.
 
-The product is intentionally structured around three lightweight activities:
+The product is intentionally structured around two primary screens (**Today** and **History**), covering:
 
 - planning the day quickly
 - checking in during the day with minimal friction
-- reviewing the day afterward to see patterns
+- looking back at past days from History or the current day on Today
 
 The app is a private single-user product in `v1`. It uses a dedicated backend and database, but does not yet include a full authentication system.
 
@@ -79,7 +79,7 @@ The reflection view should make patterns visible without turning the app into a 
 
 ## Information Architecture
 
-The product should have three primary screens.
+The product should have two primary screens.
 
 ### Today
 
@@ -95,21 +95,11 @@ This is the main working screen. It includes:
 - clear indication of save state and error state
 - visual highlight for the current hour
 
-### Day Review
-
-This screen is focused on one selected day. It presents:
-
-- the full timeline for that date
-- the saved planned tasks
-- the recorded statuses
-- any notes entered
-- a short summary of how the day went
-
-This screen is primarily for reflection and should be more read-oriented than the `Today` screen.
+Reflection on how the day went happens on this same screen (timeline and statuses), without a separate read-only review route.
 
 ### History
 
-This screen lists previous days and their high-level summaries. It should make it easy to scan recent days and open a specific day for deeper review.
+This screen lists previous days and their high-level summaries. It should make it easy to scan recent days and open a specific day in **Today** (`/day/:date`) for planning and tracking.
 
 Each history row should include enough summary information to spot patterns at a glance, such as:
 
@@ -129,7 +119,7 @@ The frontend should be built with:
 
 Responsibilities:
 
-- render planning and review screens
+- render planning and day views (Today and per-day timeline)
 - manage client-side loading and error states
 - call backend APIs for reads and writes
 - highlight the current hour based on client time
@@ -327,8 +317,7 @@ Cover one realistic flow:
 3. enter planned tasks for several hours
 4. set statuses for some hours
 5. open history
-6. open that day in review mode
-7. confirm the summary and saved entries are shown correctly
+6. return to Today (or open a day from History) and confirm the timeline and saved entries are shown correctly
 
 ## Future Evolution
 
@@ -351,8 +340,7 @@ The current architecture should make these possible without requiring a rewrite 
 The first implementation should prioritize:
 
 - a polished `Today` view
-- a dependable `Day Review` screen
-- a simple `History` list
+- a simple `History` list that links into per-day views
 - a small and reliable API surface
 - clear persistence in Postgres
 

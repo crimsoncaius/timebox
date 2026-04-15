@@ -9,16 +9,12 @@ function isTodayPath(pathname: string, today: string | null) {
   return pathname === '/' || pathname === `/day/${today}`
 }
 
-function isReviewPath(pathname: string) {
-  return pathname.startsWith('/review/')
-}
-
 export function Layout({
   children,
   mainClassName,
 }: {
   children: ReactNode
-  /** Optional canvas tone (e.g. Review page paper background). */
+  /** Optional extra classes for the main content area. */
   mainClassName?: string
 }) {
   const location = useLocation()
@@ -32,7 +28,6 @@ export function Layout({
   }, [])
 
   const todayHref = today ? `/day/${today}` : '/'
-  const reviewHref = today ? `/review/${today}` : '/history'
 
   const navItem = (active: boolean) =>
     active
@@ -51,17 +46,31 @@ export function Layout({
           </p>
         </div>
         <nav className="flex flex-1 flex-col gap-2">
-          <NavLink to={todayHref} className={() => navItem(isTodayPath(location.pathname, today))}>
-            <span className="material-symbols-outlined text-[20px]">calendar_today</span>
+          <NavLink
+            to={todayHref}
+            aria-label="Today"
+            className={() => navItem(isTodayPath(location.pathname, today))}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              calendar_today
+            </span>
             <span className="font-headline font-light tracking-tight">Today</span>
           </NavLink>
-          <NavLink to={reviewHref} className={() => navItem(isReviewPath(location.pathname))}>
-            <span className="material-symbols-outlined text-[20px]">analytics</span>
-            <span className="font-headline font-light tracking-tight">Review</span>
-          </NavLink>
-          <NavLink to="/history" className={() => navItem(location.pathname === '/history')}>
-            <span className="material-symbols-outlined text-[20px]">history</span>
+          <NavLink to="/history" aria-label="History" className={() => navItem(location.pathname === '/history')}>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              history
+            </span>
             <span className="font-headline font-light tracking-tight">History</span>
+          </NavLink>
+          <NavLink
+            to="/task-types"
+            aria-label="Task types"
+            className={() => navItem(location.pathname === '/task-types')}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              category
+            </span>
+            <span className="font-headline font-light tracking-tight">Task types</span>
           </NavLink>
         </nav>
         <div className="mt-auto">
@@ -84,35 +93,31 @@ export function Layout({
               Timebox
             </h2>
           </div>
-          <div className="flex items-center gap-8">
-            <div className="relative flex items-center">
-              <span className="material-symbols-outlined pointer-events-none absolute left-3 text-sm text-stone-400">
-                search
+          <div className="flex items-center gap-3 text-stone-800 dark:text-stone-200">
+            <NavLink
+              to="/settings"
+              aria-label="Settings"
+              className={({ isActive }) =>
+                [
+                  'flex items-center gap-2 rounded-full px-3 py-2 text-sm font-headline font-light tracking-tight transition-colors',
+                  isActive
+                    ? 'bg-stone-200/80 text-stone-900 dark:bg-stone-800/80 dark:text-stone-50'
+                    : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100',
+                ].join(' ')
+              }
+            >
+              <span className="material-symbols-outlined text-[20px]" aria-hidden>
+                settings
               </span>
-              <input
-                type="search"
-                disabled
-                aria-disabled="true"
-                title="Search is not wired yet"
-                placeholder="Search the archive…"
-                className="w-64 rounded-full border-none bg-surface-container-low py-2 pl-10 pr-4 text-sm font-body placeholder:text-stone-400 focus:ring-1 focus:ring-outline-variant/30 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-stone-900"
-              />
-            </div>
-            <div className="flex items-center gap-2 text-stone-800 dark:text-stone-200">
-              <button
-                type="button"
-                disabled
-                title="Not available yet"
-                className="material-symbols-outlined cursor-not-allowed rounded-full p-2 opacity-40"
-              >
-                notifications_none
-              </button>
-              <ThemeToggle />
-            </div>
+              <span>Settings</span>
+            </NavLink>
+            <ThemeToggle />
           </div>
         </header>
         <main
-          className={['mx-auto w-full max-w-7xl px-12 py-12', mainClassName].filter(Boolean).join(' ')}
+          className={
+            mainClassName ?? 'mx-auto w-full max-w-7xl px-12 py-12'
+          }
         >
           {children}
         </main>
