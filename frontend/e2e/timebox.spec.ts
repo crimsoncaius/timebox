@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test'
 import { expect, test } from '@playwright/test'
+import { TIMELINE_SLOT_HEIGHT_PX } from '../src/lib/time'
 
 /** E2E uses a persistent SQLite file; clear blocks so seed POSTs stay idempotent. */
 async function clearDayBlocks(request: APIRequestContext, base: string, date: string) {
@@ -36,7 +37,7 @@ async function ensureTaskType(request: APIRequestContext, base: string, name: st
 }
 
 /**
- * Seeds planned + actual blocks via API, then verifies Today and History in the browser.
+ * Seeds planned + actual blocks via API, then verifies Day and Chronicle in the browser.
  */
 test('plan blocks and history', async ({ page, request }) => {
   const date = '2026-06-01'
@@ -71,23 +72,32 @@ test('plan blocks and history', async ({ page, request }) => {
   expect(r2.ok()).toBeTruthy()
 
   await page.reload()
-  await page.locator('[data-block-id]').nth(0).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await expect(page.getByRole('dialog').getByLabel('Task type', { exact: true })).toHaveValue('e2e planned', {
+  const inspector = page.getByRole('complementary', { name: 'Block details' })
+  const timeline = page.getByTestId('day-timeline')
+  const timelineWidthBefore = (await timeline.boundingBox())?.width
+
+  const firstPlannedBlock = page.locator('[data-block-id]').nth(0)
+  await firstPlannedBlock.click()
+  await expect(firstPlannedBlock).toHaveAttribute('data-selected', 'true')
+  await expect(inspector).toBeVisible()
+  const timelineWidthAfter = (await timeline.boundingBox())?.width
+  expect(timelineWidthBefore).toBeTruthy()
+  expect(timelineWidthAfter).toBeTruthy()
+  expect(Math.round(timelineWidthBefore!)).toBe(Math.round(timelineWidthAfter!))
+
+  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveValue('e2e planned', {
     timeout: 15_000,
   })
-  const dialog0 = page.getByRole('dialog')
-  await expect(dialog0.getByText('08:00', { exact: true })).toBeVisible()
-  await expect(dialog0.getByText('08:30', { exact: true })).toBeVisible()
-  await expect(dialog0.locator('#block-start')).toHaveCount(0)
+  await expect(inspector.getByText('08:00', { exact: true })).toBeVisible()
+  await expect(inspector.getByText('08:30', { exact: true })).toBeVisible()
+  await expect(inspector.locator('#block-start')).toHaveCount(0)
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(inspector.getByText('Select a block to edit')).toBeVisible()
 
   await page.locator('[data-block-id]').nth(1).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await expect(page.getByRole('dialog').getByLabel('Task type', { exact: true })).toHaveValue('e2e actual')
+  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveValue('e2e actual')
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(inspector.getByText('Select a block to edit')).toBeVisible()
 
   await page.getByTestId('day-nav').getByRole('button', { name: 'Next day' }).click()
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-02')
@@ -99,10 +109,15 @@ test('plan blocks and history', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/day\/2026-06-10$/)
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-10')
 
-  await page.getByRole('link', { name: 'History' }).click()
+  await page.getByRole('link', { name: 'Chronicle' }).click()
   await expect(page.getByRole('heading', { name: /Chronicle of focus/i })).toBeVisible()
+  await expect(page.getByTestId('chronicle-calendar')).toBeVisible()
+  await expect(page.getByTestId('chronicle-month-heading')).toContainText(/June 2026/i)
+  await page.getByTestId('chronicle-day-2026-06-01').click()
+  await expect(page).toHaveURL(/\/day\/2026-06-01$/)
 
-  await page.getByRole('link', { name: 'Today' }).click()
+  await page.getByRole('link', { name: 'Chronicle' }).click()
+  await page.getByRole('link', { name: 'Day' }).click()
   await expect(page.getByTestId('day-timeline')).toBeVisible()
 
   await page.getByRole('link', { name: 'Settings' }).click()
@@ -112,7 +127,7 @@ test('plan blocks and history', async ({ page, request }) => {
   await page.getByLabel(/Start hour/i).blur()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
 
-  await page.getByRole('link', { name: 'Today' }).click()
+  await page.getByRole('link', { name: 'Day' }).click()
   await expect(page.getByTestId('day-timeline')).toBeVisible()
   await expect(page.locator('text=Day window')).toHaveCount(0)
 
@@ -156,13 +171,14 @@ test('resize planned block stops at next block in same lane', async ({ page, req
   expect(r2.ok()).toBeTruthy()
 
   await page.reload()
+  const inspectorResize = page.getByRole('complementary', { name: 'Block details' })
   await page.locator(`[data-block-id="${idA}"]`).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await expect(page.getByRole('dialog').getByLabel('Task type', { exact: true })).toHaveValue('resize a', {
+  await expect(inspectorResize).toBeVisible()
+  await expect(inspectorResize.getByLabel('Task type', { exact: true })).toHaveValue('resize a', {
     timeout: 15_000,
   })
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(inspectorResize.getByText('Select a block to edit')).toBeVisible()
 
   const handle = page.locator(`[data-block-id="${idA}"]`).getByRole('button', { name: 'Resize block end' })
   await handle.scrollIntoViewIfNeeded()
@@ -171,15 +187,19 @@ test('resize planned block stops at next block in same lane', async ({ page, req
 
   await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
   await page.mouse.down()
+  await expect(page.locator(`[data-block-id="${idA}"]`)).toHaveAttribute('data-dragging', 'true')
+  await expect(page.locator(`[data-block-id="${idA}"]`)).toHaveAttribute('data-drag-kind', 'resize')
   // Try to drag far past the next block; UI should clamp to its start (540).
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2 + 28 * 12, { steps: 12 })
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2 + TIMELINE_SLOT_HEIGHT_PX * 12, {
+    steps: 12,
+  })
   await page.mouse.up()
 
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
 
   await page.locator(`[data-block-id="${idA}"]`).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await expect(page.getByRole('dialog').getByText('09:00', { exact: true })).toBeVisible()
+  await expect(inspectorResize).toBeVisible()
+  await expect(inspectorResize.getByText('09:00', { exact: true })).toBeVisible()
 
   const rDay = await request.get(`${base}/days/${date}`)
   expect(rDay.ok()).toBeTruthy()
@@ -188,7 +208,7 @@ test('resize planned block stops at next block in same lane', async ({ page, req
   expect(a?.end_minute).toBe(540)
 })
 
-test('move planned block long-press preserves duration and jumps past blocker', async ({ page, request }) => {
+test('move planned block preserves duration and jumps past blocker', async ({ page, request }) => {
   const date = '2026-06-03'
   const base = 'http://127.0.0.1:8000'
   await page.goto(`/day/${date}`)
@@ -231,14 +251,19 @@ test('move planned block long-press preserves duration and jumps past blocker', 
   const cy = box!.y + box!.height / 2
   await page.mouse.move(cx, cy)
   await page.mouse.down()
-  await page.waitForTimeout(550)
+  // Any movement starts move mode (no long-press).
+  await page.mouse.move(cx, cy + 1)
+  await expect(page.locator(`[data-block-id="${idA}"]`)).toHaveAttribute('data-dragging', 'true')
+  await expect(page.locator(`[data-block-id="${idA}"]`)).toHaveAttribute('data-drag-kind', 'move')
   // Drag down past blocker B (9:00–10:00) so A can land at 10:00–10:30 (duration preserved).
   // Four slots ≈ +120 minutes from 8:00 anchor → 10:00 start.
-  await page.mouse.move(cx, cy + 28 * 4, { steps: 12 })
+  await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 4, { steps: 12 })
   await page.mouse.up()
 
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(
+    page.getByRole('complementary', { name: 'Block details' }).getByText('Select a block to edit'),
+  ).toBeVisible()
 
   const rDay = await request.get(`${base}/days/${date}`)
   expect(rDay.ok()).toBeTruthy()
@@ -278,7 +303,7 @@ test('creates a hierarchical task type from the block editor and renames parent 
 
   await page.reload()
   await page.locator(`[data-block-id="${blockId}"]`).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Block details' })).toBeVisible()
 
   await page.getByLabel('Task type', { exact: true }).fill(childPath)
   await page.getByRole('option', { name: `Create "${childPath}"` }).click()
@@ -292,6 +317,7 @@ test('creates a hierarchical task type from the block editor and renames parent 
   const rootRow = rows.find((row) => row.name === rootPath)
   expect(rootRow).toBeTruthy()
   await page.getByRole('link', { name: /Task types/i }).click()
+  await page.getByRole('button', { name: `Edit ${rootPath}`, exact: true }).click()
   const taskTypeNameField = page.getByRole('textbox', {
     name: new RegExp(`Task type name ${rootRow!.id}`, 'i'),
   })
@@ -313,4 +339,75 @@ test('creates a hierarchical task type from the block editor and renames parent 
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await page.locator(`[data-block-id="${blockId}"]`).click()
   await expect(page.getByLabel('Task type', { exact: true })).toHaveValue(renamedChild)
+})
+
+test('draft-first: lane click shows ghost; block is created on Save', async ({ page, request }) => {
+  const date = '2026-06-20'
+  const base = 'http://127.0.0.1:8000'
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await clearDayBlocks(request, base, date)
+
+  await ensureTaskType(request, base, 'E2E draft')
+  await page.reload()
+  await expect(page.getByTestId('day-timeline')).toBeVisible()
+
+  // Planned lane: first interactive lane column (role=presentation on the lane surface).
+  const plannedLane = page.getByTestId('day-timeline').locator('[role="presentation"]').first()
+  await plannedLane.scrollIntoViewIfNeeded()
+  const box = await plannedLane.boundingBox()
+  expect(box).toBeTruthy()
+  // Click below the sticky app header (top slots can sit under it). Slot index 4 → 10:00–10:30.
+  const laneRelY = TIMELINE_SLOT_HEIGHT_PX * 4 + TIMELINE_SLOT_HEIGHT_PX * 0.5
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + laneRelY)
+
+  await expect(page.getByRole('complementary', { name: 'Block details' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'New block' })).toBeVisible()
+  const draftBlock = page.getByTestId('draft-block')
+  await expect(draftBlock).toBeVisible()
+  const draftEndHandle = draftBlock.getByRole('button', { name: /Resize draft block end/i })
+  await draftEndHandle.scrollIntoViewIfNeeded()
+  const dbox = await draftEndHandle.boundingBox()
+  expect(dbox).toBeTruthy()
+  await page.mouse.move(dbox!.x + dbox!.width / 2, dbox!.y + dbox!.height / 2)
+  await page.mouse.down()
+  await expect(draftBlock).toHaveAttribute('data-dragging', 'true')
+  await expect(draftBlock).toHaveAttribute('data-drag-kind', 'resize')
+  await page.mouse.up()
+  await expect(
+    page.getByRole('complementary', { name: 'Block details' }).getByRole('button', { name: 'Save' }),
+  ).toBeDisabled()
+
+  await page.getByLabel('Task type', { exact: true }).fill('e2e draft')
+  await page.getByRole('option', { name: /e2e draft/i }).click()
+  await page
+    .getByRole('complementary', { name: 'Block details' })
+    .getByRole('button', { name: 'Save' })
+    .click()
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
+
+  const rDay = await request.get(`${base}/days/${date}`)
+  expect(rDay.ok()).toBeTruthy()
+  const data = (await rDay.json()) as { time_blocks: Array<{ start_minute: number; end_minute: number }> }
+  expect(data.time_blocks.length).toBe(1)
+  expect(data.time_blocks[0].start_minute).toBe(600)
+  expect(data.time_blocks[0].end_minute).toBe(630)
+})
+
+test('draft cleared when clicking outside the timeline', async ({ page }) => {
+  const date = '2026-06-21'
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await expect(page.getByTestId('day-timeline')).toBeVisible()
+
+  const plannedLane = page.getByTestId('day-timeline').locator('[role="presentation"]').first()
+  await plannedLane.scrollIntoViewIfNeeded()
+  const box = await plannedLane.boundingBox()
+  expect(box).toBeTruthy()
+  const laneRelY = TIMELINE_SLOT_HEIGHT_PX * 4 + TIMELINE_SLOT_HEIGHT_PX * 0.5
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + laneRelY)
+
+  await expect(page.getByTestId('draft-block')).toBeVisible()
+  await page.locator('main h1').first().click()
+  await expect(page.getByTestId('draft-block')).toHaveCount(0)
 })
