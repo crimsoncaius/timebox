@@ -23,7 +23,7 @@ uv sync --extra dev
 alembic upgrade head
 ```
 
-If you previously ran an older schema (with `hour_entries`), `alembic upgrade head` applies the follow-up migration that drops `hour_entries` and creates `time_blocks`. Always back up production data before migrating.
+If you previously ran an older schema (with `hour_entries`), `alembic upgrade head` applies the follow-up migration that drops `hour_entries` and creates `time_blocks`. Later migrations add `app_settings` for the global day window and `task_types` (replacing freeform block titles with `task_type_id` plus optional `note`). Always back up production data before migrating.
 
 Without uv: `python -m pip install -e ".[dev]"` (from `backend/`).
 
@@ -59,7 +59,9 @@ cd frontend && npm test
 cd frontend && npm run e2e
 ```
 
-`npm test` runs Vitest (unit/component tests). `npm run e2e` starts the API and dev server with test env and runs Playwright (requires Chromium via `npx playwright install chromium`). The Playwright spec seeds sample blocks via the HTTP API, then drives Today, History, and Review in the browser.
+`npm test` runs Vitest (unit/component tests). `npm run e2e` starts the API and dev server with test env and runs Playwright (requires Chromium via `npx playwright install chromium`). The Playwright spec seeds task types and blocks via the HTTP API, then drives Today, History, and Settings in the browser.
+
+**E2E note:** Playwright may reuse an API already listening on port 8000. If E2E fails after backend schema changes, stop any manual `uvicorn` on that port (or delete `backend/e2e.sqlite` when using the default Playwright SQLite URL) so a fresh server runs migrations / `AUTO_CREATE_TABLES` logic.
 
 ## Product spec
 
@@ -70,3 +72,5 @@ See [docs/superpowers/specs/2026-04-13-hourly-timebox-design.md](docs/superpower
 - **Timezone:** The backend owns `APP_TIMEZONE`; the UI uses `meta` from day responses for “today” and server time.
 - **Auth:** Single-user `v1`; see [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for how to add login later.
 - **E2E / SQLite:** Setting `AUTO_CREATE_TABLES=1` lets the API create tables on startup (used by Playwright). Do **not** use this for production Postgres; use Alembic instead.
+- **Day window:** Configure the visible hours under **Settings** (`GET`/`PATCH /settings`); changes apply to all days.
+- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Each time block references a `task_type_id` and may include an optional `note`. See [docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md) and the earlier [task types overview](docs/superpowers/specs/2026-04-14-task-types-design.md).

@@ -106,3 +106,15 @@ def test_post_invalid_task_type_path_double_slash(client):
     r = client.post("/task-types", json={"name": "coding//ai"})
     assert r.status_code == 422
     assert "invalid" in r.json()["detail"].lower()
+
+
+def test_patch_task_type_renames_descendants_when_path_has_underscores(client):
+    """Underscores must not act as SQL LIKE wildcards when matching descendant paths."""
+    client.post("/task-types", json={"name": "e2e_hier_root_20260604/subleaf"})
+    rows = client.get("/task-types").json()
+    root_id = next(r["id"] for r in rows if r["name"] == "e2e_hier_root_20260604")
+    r = client.patch(f"/task-types/{root_id}", json={"name": "e2e_hier_renamed_20260604"})
+    assert r.status_code == 200
+    names = [x["name"] for x in client.get("/task-types").json()]
+    assert "e2e_hier_renamed_20260604/subleaf" in names
+    assert "e2e_hier_root_20260604/subleaf" not in names

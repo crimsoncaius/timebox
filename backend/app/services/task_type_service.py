@@ -11,6 +11,12 @@ from app.schemas.task_type import TaskTypeCreate, TaskTypePatch
 from app.services.task_type_paths import canonicalize_task_type_path, path_prefixes
 
 
+def _descendants_like(prefix: str) -> tuple[str, str]:
+    """LIKE pattern for `prefix/...` children; escapes % and _ so SQLite LIKE is path-safe."""
+    escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"{escaped}/%", "\\"
+
+
 def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
@@ -63,10 +69,11 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
             db.add(TaskType(name=prefix))
             db.flush()
 
+    child_pat, child_esc = _descendants_like(old_path)
     branch_rows = list(
         db.execute(
             select(TaskType)
-            .where(or_(TaskType.name == old_path, TaskType.name.like(f"{old_path}/%")))
+            .where(or_(TaskType.name == old_path, TaskType.name.like(child_pat, escape=child_esc)))
             .order_by(func.length(TaskType.name), TaskType.id)
         ).scalars()
     )
@@ -99,8 +106,9 @@ def delete_task_type(db: Session, task_type_id: int) -> None:
     row = get_task_type(db, task_type_id)
     if row is None:
         raise ValueError("Task type not found")
+    desc_pat, desc_esc = _descendants_like(row.name)
     has_descendants = db.execute(
-        select(TaskType.id).where(TaskType.name.like(f"{row.name}/%")).limit(1)
+        select(TaskType.id).where(TaskType.name.like(desc_pat, escape=desc_esc)).limit(1)
     ).scalar_one_or_none()
     if has_descendants is not None:
         raise ValueError("TASK_TYPE_HAS_DESCENDANTS")
