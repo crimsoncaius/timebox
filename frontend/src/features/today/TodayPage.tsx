@@ -38,6 +38,7 @@ export function TodayPage() {
   const [inspectorDirty, setInspectorDirty] = useState(false)
   const [blockDragActive, setBlockDragActive] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const draftCommitInFlightRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!date) return
@@ -128,7 +129,8 @@ export function TodayPage() {
 
   const commitDraft = useCallback(
     async (payload: { task_type_id: number; note: string | null }) => {
-      if (!date || !draft) return
+      if (!date || !draft || draftCommitInFlightRef.current) return
+      draftCommitInFlightRef.current = true
       setSaveState('saving')
       setError(null)
       try {
@@ -154,6 +156,8 @@ export function TodayPage() {
         setSaveState('error')
         setError(e instanceof Error ? e.message : 'Failed to create block')
         throw e
+      } finally {
+        draftCommitInFlightRef.current = false
       }
     },
     [date, draft],
@@ -391,7 +395,7 @@ export function TodayPage() {
               onLaneSlotClick={onLaneSlotClick}
               onDraftTimeChange={onDraftTimeChange}
               onPatchBlock={patchBlock}
-              onBlockClick={(blockId, _lane) => onBlockClick(blockId)}
+              onBlockClick={(blockId) => onBlockClick(blockId)}
               onBlockDragSessionChange={setBlockDragActive}
             />
           </section>
@@ -423,6 +427,13 @@ export function TodayPage() {
             ) : (
               <div className="transition-opacity duration-150">
                 <TimeBlockInspectorContent
+                  key={
+                    selectedBlock != null
+                      ? `block-${selectedBlock.id}`
+                      : draft != null
+                        ? `draft-${draft.lane}-${draft.start_minute}-${draft.end_minute}`
+                        : 'none'
+                  }
                   variant="rail"
                   block={selectedBlock}
                   draft={draft}
@@ -436,6 +447,13 @@ export function TodayPage() {
         {/* Mobile: sheet below timeline */}
         <div className="lg:hidden w-full">
           <TimeBlockModal
+            key={
+              selectedBlock != null
+                ? `block-${selectedBlock.id}`
+                : draft != null
+                  ? `draft-${draft.lane}-${draft.start_minute}-${draft.end_minute}`
+                  : 'none'
+            }
             open={mobileSheetOpen}
             block={selectedBlock}
             draft={draft}

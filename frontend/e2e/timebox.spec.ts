@@ -381,7 +381,6 @@ test('creates a hierarchical task type from the block editor and renames parent 
 
   await page.getByLabel('Task type', { exact: true }).fill(childPath)
   await page.getByRole('option', { name: `Create "${childPath}"` }).click()
-  await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
 
   const rows = (await (await request.get(`${base}/task-types`)).json()) as Array<{ id: number; name: string }>
@@ -415,7 +414,10 @@ test('creates a hierarchical task type from the block editor and renames parent 
   await expect(page.getByLabel('Task type', { exact: true })).toHaveValue(renamedChild)
 })
 
-test('draft-first: lane click shows ghost; block is created on Save', async ({ page, request }) => {
+test('draft-first: lane click shows ghost; block is created when task type is chosen', async ({
+  page,
+  request,
+}) => {
   const date = '2026-06-20'
   const base = 'http://127.0.0.1:8000'
   await page.goto(`/day/${date}`)
@@ -448,16 +450,9 @@ test('draft-first: lane click shows ghost; block is created on Save', async ({ p
   await expect(draftBlock).toHaveAttribute('data-dragging', 'true')
   await expect(draftBlock).toHaveAttribute('data-drag-kind', 'resize')
   await page.mouse.up()
-  await expect(
-    page.getByRole('complementary', { name: 'Block details' }).getByRole('button', { name: 'Save' }),
-  ).toBeDisabled()
 
   await page.getByLabel('Task type', { exact: true }).fill('e2e draft')
   await page.getByRole('option', { name: /e2e draft/i }).click()
-  await page
-    .getByRole('complementary', { name: 'Block details' })
-    .getByRole('button', { name: 'Save' })
-    .click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
 
   const rDay = await request.get(`${base}/days/${date}`)

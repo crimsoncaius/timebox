@@ -90,6 +90,29 @@ describe('TimeBlockCard', () => {
     expect(onBlockClick).toHaveBeenCalledTimes(1)
   })
 
+  it('shows a time range under the title when the block is tall enough', () => {
+    const wide: TimeBlock = { ...block, end_minute: 600 }
+    render(
+      <div style={{ position: 'relative', height: 400 }}>
+        <TimeBlockCard
+          block={wide}
+          lane="planned"
+          visibleStartMin={480}
+          visibleEndMin={1200}
+          slotHeightPx={30}
+          readOnly={false}
+          sameLaneBlocks={[wide]}
+          resizeMinStartMinute={0}
+          resizeMaxEndMinute={1440}
+          getMinuteFromClientY={(clientY) => clientY}
+          onPatch={vi.fn(() => Promise.resolve())}
+          isSelected={false}
+        />
+      </div>,
+    )
+    expect(screen.getByText('08:00–10:00')).toBeInTheDocument()
+  })
+
   it('does not call onBlockClick twice for a tap (pointer down + click)', () => {
     const onBlockClick = vi.fn(() => true)
     const { body } = renderCard({ onBlockClick })

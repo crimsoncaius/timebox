@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { DayRead, TaskType, TimeBlock } from '../lib/api'
@@ -80,7 +80,7 @@ describe('TimeBlockModal', () => {
     expect(noteField).toHaveClass('min-h-24')
   })
 
-  it('submits only task_type_id and note, not time fields', async () => {
+  it('auto-saves only task_type_id on task type change, not time fields', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn().mockResolvedValue(undefined)
     render(
@@ -99,8 +99,9 @@ describe('TimeBlockModal', () => {
     await user.click(screen.getByLabelText('Task type'))
     await user.clear(screen.getByLabelText('Task type'))
     await user.click(screen.getByRole('option', { name: /^break$/i }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave).toHaveBeenCalledWith({ task_type_id: 2 })
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ task_type_id: 2 })
+    })
   })
 
   it('creates a missing task type path from the modal and saves only task_type_id', async () => {
@@ -129,13 +130,14 @@ describe('TimeBlockModal', () => {
     await user.clear(screen.getByLabelText('Task type'))
     await user.type(screen.getByLabelText('Task type'), 'coding/personal')
     await user.click(screen.getByRole('option', { name: /create "coding\/personal"/i }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(onCreateTaskTypePath).toHaveBeenCalledWith('coding/personal')
-    expect(onSave).toHaveBeenCalledWith({ task_type_id: 7 })
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ task_type_id: 7 })
+    })
   })
 
-  it('draft mode disables Save until task type is chosen and calls onCreateFromDraft', async () => {
+  it('draft mode creates the block when a task type is chosen (no Save button)', async () => {
     const user = userEvent.setup()
     const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
     const draft = { lane: 'planned' as const, start_minute: 480, end_minute: 510 }
@@ -154,12 +156,13 @@ describe('TimeBlockModal', () => {
       />,
     )
     expect(screen.getByRole('heading', { name: 'New block' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+    expect(onCreateFromDraft).not.toHaveBeenCalled()
     await user.click(screen.getByLabelText('Task type'))
     await user.click(screen.getByRole('option', { name: /^break$/i }))
-    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onCreateFromDraft).toHaveBeenCalledWith({ task_type_id: 2, note: null })
+    await waitFor(() => {
+      expect(onCreateFromDraft).toHaveBeenCalledWith({ task_type_id: 2, note: null })
+    })
   })
 
   it('draft mode hides Delete and Complete', () => {

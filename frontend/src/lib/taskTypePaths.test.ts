@@ -55,6 +55,18 @@ describe('taskTypePaths', () => {
     expect(filterTaskTypesByQuery(rows, 'coding/a').map((t) => t.name)).toEqual(['coding', 'coding/ai'])
   })
 
+  it('filterTaskTypesByQuery matches child segment without matching parent root', () => {
+    expect(filterTaskTypesByQuery(rows, 'ai').map((t) => t.name)).toEqual(['coding/ai'])
+  })
+
+  it('filterTaskTypesByQuery matches query aligned to path suffix segments', () => {
+    const deep: TaskType[] = [
+      { id: 1, name: 'a/b/c', created_at: '', updated_at: '' },
+      { id: 2, name: 'x/y', created_at: '', updated_at: '' },
+    ]
+    expect(filterTaskTypesByQuery(deep, 'b/c').map((t) => t.name)).toEqual(['a/b/c'])
+  })
+
   it('filterTaskTypesByQuery falls back to all rows for invalid path input', () => {
     expect(filterTaskTypesByQuery(rows, 'coding//a').map((t) => t.name)).toEqual([
       'coding',

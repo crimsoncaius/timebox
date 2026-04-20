@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockLane, TimeBlock } from '../lib/api'
-import { MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES, resolveSameLaneMovePreviewStart, SLOT_MINUTES } from '../lib/time'
+import {
+  formatMinuteLabel24,
+  MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
+  resolveSameLaneMovePreviewStart,
+  SLOT_MINUTES,
+} from '../lib/time'
 import type { TimeBlockLike } from '../lib/time'
 
 /** Drag far enough right before release counts as complete-as-planned. */
@@ -11,6 +16,12 @@ const SWIPE_COMPLETE_HINT_PX = 28
 const SWIPE_AXIS_DEAD_ZONE_PX = 8
 /** Horizontal pull must beat vertical by this ratio to arm swipe-complete. */
 const SWIPE_COMPLETE_DOMINANCE = 1.15
+
+/** Resize handle row height (`h-2`) in px; two handles when editable. */
+const RESIZE_HANDLE_ROWS_PX = 16
+/** Min height for the body (below handles) before showing the time row. */
+const MIN_INNER_PX_FOR_TIME = 34
+const MIN_INNER_PX_FOR_TIME_WITH_NOTE = 48
 
 type DragState =
   | { kind: 'resize'; edge: 'start' | 'end'; start: number; end: number }
@@ -327,6 +338,10 @@ export function TimeBlockCard({
   )
 
   const label = block.task_type?.name ?? '—'
+  const timeRangeLabel = `${formatMinuteLabel24(displayStart)}–${formatMinuteLabel24(displayEnd)}`
+  const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
+  const showTime =
+    innerContentPx >= (block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME)
 
   const isDragging = drag != null
   const dragKind =
@@ -388,17 +403,22 @@ export function TimeBlockCard({
         />
       )}
       {readOnly ? (
-        <div className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden px-1.5 py-0.5">
-          <p className="truncate font-body text-[10px] font-medium leading-tight text-on-surface">{label}</p>
+        <div className="flex min-h-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden px-1.5 py-1">
+          <p className="shrink-0 truncate font-body text-[11px] font-medium leading-snug text-on-surface">{label}</p>
+          {showTime ? (
+            <p className="shrink-0 truncate font-body text-[9px] tabular-nums leading-tight text-on-surface/70">
+              {timeRangeLabel}
+            </p>
+          ) : null}
           {block.note ? (
-            <p className="truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
+            <p className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
           ) : null}
         </div>
       ) : (
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
-          className={`touch-none flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden border-0 bg-transparent px-1.5 py-0.5 text-left select-none ${
+          className={`touch-none flex min-h-0 min-w-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden border-0 bg-transparent px-1.5 py-1 text-left select-none ${
             drag?.kind === 'move' || drag?.kind === 'complete' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={onBodyPointerDown}
@@ -418,9 +438,18 @@ export function TimeBlockCard({
             onBlockClick?.()
           }}
         >
-          <span className="truncate font-body text-[10px] font-medium leading-tight text-on-surface">{label}</span>
+          <span className="shrink-0 truncate font-body text-[11px] font-medium leading-snug text-on-surface">
+            {label}
+          </span>
+          {showTime ? (
+            <span className="shrink-0 truncate font-body text-[9px] tabular-nums leading-tight text-on-surface/70">
+              {timeRangeLabel}
+            </span>
+          ) : null}
           {block.note ? (
-            <span className="truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</span>
+            <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
+              {block.note}
+            </span>
           ) : null}
         </button>
       )}

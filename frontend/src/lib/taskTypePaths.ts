@@ -44,17 +44,46 @@ export function groupTaskTypesByRoot(types: TaskType[]): { root: string; items: 
   }))
 }
 
+function segmentPrefixMatch(a: string, b: string): boolean {
+  return a.startsWith(b) || b.startsWith(a)
+}
+
+/** Same segment list length; each pair must satisfy two-way prefix match. */
+function segmentsAlign(pathSegments: readonly string[], querySegments: readonly string[]): boolean {
+  if (pathSegments.length !== querySegments.length) return false
+  for (let i = 0; i < querySegments.length; i++) {
+    const a = pathSegments[i]!
+    const b = querySegments[i]!
+    if (!segmentPrefixMatch(a, b)) return false
+  }
+  return true
+}
+
+/**
+ * Minimum segment index where `query` aligns with a contiguous slice of `path`, or null if none.
+ * Only defined when `path` and `query` are non-empty canonical paths.
+ */
+function minQueryAlignmentStart(path: string, query: string): number | null {
+  const ps = path.split('/')
+  const qs = query.split('/')
+  if (qs.length > ps.length) return null
+  for (let start = 0; start <= ps.length - qs.length; start++) {
+    if (segmentsAlign(ps.slice(start, start + qs.length), qs)) return start
+  }
+  return null
+}
+
 /** True when `path` should appear while typing `query` (both canonical paths). */
 function pathMatchesQuery(path: string, query: string): boolean {
   if (path === query) return true
   if (path.startsWith(`${query}/`)) return true
   if (query.startsWith(`${path}/`)) return true
+  if (minQueryAlignmentStart(path, query) !== null) return true
   const ps = path.split('/')
   const qs = query.split('/')
-  for (let i = 0; i < Math.min(ps.length, qs.length); i++) {
-    const a = ps[i]!
-    const b = qs[i]!
-    if (!a.startsWith(b) && !b.startsWith(a)) return false
+  const k = Math.min(ps.length, qs.length)
+  for (let i = 0; i < k; i++) {
+    if (!segmentPrefixMatch(ps[i]!, qs[i]!)) return false
   }
   return true
 }
@@ -64,6 +93,14 @@ function pathMatchScore(path: string, query: string): number {
   if (path.startsWith(`${query}/`)) return 1
   if (query.startsWith(`${path}/`)) return 2
   if (path.startsWith(query)) return 3
+  const start = minQueryAlignmentStart(path, query)
+  if (start !== null) return start === 0 ? 4 : 5
+  const ps = path.split('/')
+  const qs = query.split('/')
+  const k = Math.min(ps.length, qs.length)
+  for (let i = 0; i < k; i++) {
+    if (!segmentPrefixMatch(ps[i]!, qs[i]!)) return 6
+  }
   return 4
 }
 
