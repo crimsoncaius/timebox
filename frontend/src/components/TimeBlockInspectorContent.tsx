@@ -295,10 +295,14 @@ export function TimeBlockInspectorContent({
         {!isCreateMode && (
           <button
             type="button"
-            className="rounded-full px-3 py-2 font-label text-xs uppercase tracking-[0.05em] text-error transition-colors hover:bg-error-container/20"
+            className="shrink-0 rounded-full p-2 text-error transition-colors hover:bg-error-container/20"
+            aria-label="Delete"
+            title="Delete"
             onClick={() => void handleDelete()}
           >
-            Delete
+            <span className="material-symbols-outlined text-[22px]" aria-hidden>
+              delete
+            </span>
           </button>
         )}
       </div>

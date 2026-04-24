@@ -1,10 +1,12 @@
-import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BlockDraftPlacement, BlockLane, DayRead, TimeBlock } from '../lib/api'
 import {
-  formatMinuteLabel24,
+  calendarIsoDateInTimeZone,
+  formatHourLabelGcal12,
   gapBoundsForDraft,
   MINUTES_PER_DAY,
   minuteFromPointerYInVisibleLane,
+  minuteOfDayWithSecondsInTimeZone,
   sameLaneResizeBounds,
   SLOT_MINUTES,
   TIMELINE_SLOT_HEIGHT_PX,
@@ -12,8 +14,16 @@ import {
 } from '../lib/time'
 import { TimeBlockCard } from './TimeBlockCard'
 
-const headerClass =
-  'font-headline text-xs uppercase tracking-[0.2em] text-on-surface-variant'
+const laneHeaderPlanned =
+  'font-label text-xs font-semibold uppercase tracking-[0.08em] text-[#1967d2] dark:text-[#8ab4f8] border-b-2 border-[#1967d2]/45 pb-1 dark:border-[#8ab4f8]/40'
+const laneHeaderActual =
+  'font-label text-xs font-semibold uppercase tracking-[0.08em] text-[#0d6b63] dark:text-[#7dd3c8] border-b-2 border-[#0d6b63]/40 pb-1 dark:border-[#7dd3c8]/38'
+
+function laneSurfaceClass(lane: BlockLane) {
+  return lane === 'planned'
+    ? 'border-[#c5d9f7] bg-[#f5f9ff]/95 dark:border-[#2a3f55] dark:bg-[#0f141c]'
+    : 'border-[#b5ded6] bg-[#f2faf9]/95 dark:border-[#1e3d38] dark:bg-[#0c1211]'
+}
 
 export const DayTimeline = forwardRef<
   HTMLDivElement,
@@ -59,6 +69,19 @@ export const DayTimeline = forwardRef<
   const plannedRef = useRef<HTMLDivElement>(null)
   const actualRef = useRef<HTMLDivElement>(null)
 
+  const [nowTick, setNowTick] = useState(0)
+  const isTodayInTz = calendarIsoDateInTimeZone(new Date(), day.meta.timezone) === day.date
+  useEffect(() => {
+    if (!isTodayInTz) return
+    const id = window.setInterval(() => setNowTick((n) => n + 1), 30_000)
+    return () => window.clearInterval(id)
+  }, [isTodayInTz])
+
+  const nowMinuteOfDay = useMemo(
+    () => minuteOfDayWithSecondsInTimeZone(new Date(), day.meta.timezone),
+    [day.meta.timezone, nowTick],
+  )
+
   const onLaneClick = (lane: BlockLane, e: React.MouseEvent<HTMLDivElement>) => {
     if (readOnly) return
     if ((e.target as HTMLElement).closest('[data-block]')) return
@@ -80,17 +103,27 @@ export const DayTimeline = forwardRef<
   const blocksFor = (lane: BlockLane) =>
     day.time_blocks.filter((b) => b.lane === lane).sort((a, b) => a.start_minute - b.start_minute)
 
+  const visibleRange = visibleEndMin - visibleStartMin
+  const showNowLine =
+    isTodayInTz &&
+    visibleRange > 0 &&
+    nowMinuteOfDay >= visibleStartMin &&
+    nowMinuteOfDay < visibleEndMin
+  const nowLineTopPx = showNowLine
+    ? ((nowMinuteOfDay - visibleStartMin) / visibleRange) * totalHeight
+    : 0
+
   return (
     <div
       ref={ref}
-      className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-2"
+      className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-x-1 gap-y-1.5 sm:gap-x-2"
       data-testid="day-timeline"
     >
-      <div className="w-14 shrink-0" aria-hidden />
-      <h3 className={headerClass}>Planned</h3>
-      <h3 className={headerClass}>Actual</h3>
+      <div className="w-12 shrink-0 sm:w-14" aria-hidden />
+      <h3 className={laneHeaderPlanned}>Planned</h3>
+      <h3 className={laneHeaderActual}>Actual</h3>
 
-      <div className="w-14 shrink-0 select-none text-right font-headline text-[10px] text-outline">
+      <div className="w-12 shrink-0 select-none border-r border-[#e0e0e0] pr-1.5 text-right font-body text-[11px] text-[#5f6368] sm:w-14 dark:border-[#3c4043] dark:text-[#9aa0a6]">
         <div style={{ height: totalHeight }} className="relative">
           {Array.from({ length: slotCount }, (_, i) => {
             const m = visibleStartMin + i * SLOT_MINUTES
@@ -98,10 +131,14 @@ export const DayTimeline = forwardRef<
             return (
               <div
                 key={m}
-                className="absolute w-full border-t border-outline-variant/10 pr-1 pt-0.5"
+                className={
+                  m % 60 === 0
+                    ? 'absolute w-full border-t border-[#dadce0] pt-0.5 dark:border-[#3c4043]'
+                    : 'absolute w-full border-t border-[#e8eaed] dark:border-[#2d2d2d]'
+                }
                 style={{ top: i * TIMELINE_SLOT_HEIGHT_PX, height: TIMELINE_SLOT_HEIGHT_PX }}
               >
-                {showLabel ? formatMinuteLabel24(m) : ''}
+                {showLabel ? formatHourLabelGcal12(m) : ''}
               </div>
             )
           })}
@@ -144,6 +181,20 @@ export const DayTimeline = forwardRef<
         selectedBlockId={selectedBlockId}
         onBlockDragSessionChange={onBlockDragSessionChange}
       />
+
+      {showNowLine && (
+        <div
+          className="pointer-events-none relative z-18 col-start-2 col-span-2 row-start-2"
+          style={{ height: totalHeight }}
+          data-testid="day-now-line"
+          aria-hidden
+        >
+          <div
+            className="absolute left-0 right-0 border-t-2 border-error dark:border-[#ea4335]"
+            style={{ top: nowLineTopPx, transform: 'translateY(-1px)' }}
+          />
+        </div>
+      )}
     </div>
   )
 })
@@ -286,10 +337,10 @@ function DraftBlockOverlay({
       data-testid="draft-block"
       data-dragging={isDragging ? 'true' : undefined}
       data-drag-kind={isDragging ? 'resize' : undefined}
-      className={`absolute left-1 right-1 flex flex-col overflow-hidden rounded-lg border border-dashed border-primary/50 transition-[box-shadow,background-color] duration-150 ${
+      className={`absolute left-1 right-1 flex flex-col overflow-hidden rounded-md border border-dashed border-primary/50 transition-[box-shadow,background-color] duration-150 dark:border-white/25 dark:bg-[#4285F4]/18 ${
         isDragging
-          ? 'z-30 bg-primary-container/35 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/25 dark:bg-primary-container/25 dark:shadow-[0_0_40px_rgba(0,0,0,0.3)]'
-          : 'z-20 bg-primary-container/15 dark:bg-primary-container/10'
+          ? 'z-30 bg-primary-container/35 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/25 dark:bg-[#5f9de8]/40 dark:shadow-[0_0_40px_rgba(0,0,0,0.3)]'
+          : 'z-20 bg-primary-container/15'
       }`}
       style={{ top: draftTop, height: draftHeight }}
       onPointerDown={(e) => e.stopPropagation()}
@@ -299,7 +350,7 @@ function DraftBlockOverlay({
         <button
           type="button"
           aria-label={`Resize draft block start (${laneLabel})`}
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20"
+          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
           onPointerDown={(e) => startResize('start', e)}
         />
       )}
@@ -308,7 +359,7 @@ function DraftBlockOverlay({
         <button
           type="button"
           aria-label={`Resize draft block end (${laneLabel})`}
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20"
+          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
           onPointerDown={(e) => startResize('end', e)}
         />
       )}
@@ -363,17 +414,24 @@ function Lane({
     <div
       ref={laneRef}
       role="presentation"
-      className={`relative min-w-0 rounded-xl border border-outline-variant/20 bg-surface-container-low/80 ${readOnly ? '' : 'cursor-crosshair'}`}
+      className={`relative min-w-0 border ${laneSurfaceClass(lane)} ${readOnly ? '' : 'cursor-crosshair'}`}
       style={{ height: totalHeight }}
       onClick={onLaneClick}
     >
-      {Array.from({ length: slotCount }, (_, i) => (
+      {Array.from({ length: slotCount }, (_, i) => {
+        const m = visibleStartMin + i * SLOT_MINUTES
+        return (
         <div
           key={i}
-          className="absolute left-0 right-0 border-t border-outline-variant/10"
+          className={
+            m % 60 === 0
+              ? 'absolute left-0 right-0 border-t border-[#dadce0] dark:border-[#3c4043]'
+              : 'absolute left-0 right-0 border-t border-[#e8eaed] dark:border-[#2d2d2d]/90'
+          }
           style={{ top: i * slotHeightPx, height: slotHeightPx }}
         />
-      ))}
+        )
+      })}
       {blocks.map((b) => {
         const { minStartMinute, maxEndMinute } = sameLaneResizeBounds(blocks, b.id)
         return (

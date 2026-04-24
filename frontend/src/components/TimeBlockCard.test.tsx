@@ -110,7 +110,7 @@ describe('TimeBlockCard', () => {
         />
       </div>,
     )
-    expect(screen.getByText('08:00–10:00')).toBeInTheDocument()
+    expect(screen.getByText('8 – 10am')).toBeInTheDocument()
   })
 
   it('does not call onBlockClick twice for a tap (pointer down + click)', () => {

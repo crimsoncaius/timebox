@@ -306,9 +306,9 @@ export function TodayPage() {
   const mobileSheetOpen = selectedBlock != null || draft != null
 
   return (
-    <Layout mainClassName="mx-auto w-full max-w-none px-6 py-12 lg:px-8 xl:px-10">
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-0">
-        <div className="min-w-0 flex-1 lg:pr-4">
+    <Layout mainClassName="mx-auto w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-[#121212]">
+      <div className="flex flex-col gap-8 lg:flex-row lg:gap-0 lg:items-stretch">
+        <div className="min-w-0 min-h-0 flex-1 lg:pr-4">
           <span data-testid="day-date" className="sr-only">
             {day.date}
           </span>
@@ -319,7 +319,7 @@ export function TodayPage() {
                   {formatDisplayDate(day.date)}
                 </h1>
                 <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-                  Timezone {day.meta.timezone}. Server today {day.meta.today}.
+                  Timezone {day.meta.timezone}.
                 </p>
                 <p className="mt-2 text-xs text-outline">
                   <span
@@ -403,14 +403,14 @@ export function TodayPage() {
 
         {/* Desktop: persistent inspector rail */}
         <div
-          className="hidden w-full shrink-0 lg:block lg:w-[min(28rem,100%)] lg:max-w-md lg:self-start lg:pl-6"
+          className="hidden w-full shrink-0 lg:block lg:w-[min(28rem,100%)] lg:max-w-md lg:pl-6"
           data-testid="day-inspector-rail"
         >
           <aside
             role="complementary"
             aria-label="Block details"
             data-inspector="rail"
-            className={`sticky top-24 mt-0 w-full bg-surface-container-low dark:bg-stone-900${blockDragActive ? ' pointer-events-none' : ''}`}
+            className={`sticky top-32 mt-0 max-h-[calc(100dvh-8.5rem)] w-full overflow-y-auto bg-surface-container-low dark:bg-stone-900${blockDragActive ? ' pointer-events-none' : ''}`}
           >
             {selectedBlock == null && draft == null ? (
               <div className="rounded-2xl bg-surface-container-lowest/90 px-4 pb-6 pt-6 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] transition-opacity duration-150 dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)] lg:rounded-none lg:bg-transparent lg:px-0 lg:pb-6 lg:pt-6 lg:shadow-none lg:backdrop-blur-none">

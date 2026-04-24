@@ -190,7 +190,7 @@ export function TaskTypesPage() {
               <label className="min-w-0 flex-1">
                 <span className="sr-only">Filter saved types or enter a new task type name</span>
                 <input
-                  className="w-full rounded-xl bg-surface-container-low/80 px-4 py-3 font-body text-base font-light text-on-surface shadow-inner shadow-black/3 outline-none transition-[background-color,box-shadow] placeholder:text-on-surface-variant/70 focus-visible:bg-surface-container-high/90 focus-visible:ring-2 focus-visible:ring-primary/20 dark:bg-stone-900/60 dark:shadow-black/20 dark:focus-visible:bg-stone-800/80"
+                  className="w-full rounded-xl bg-surface-container-low/80 px-4 py-3 font-body text-base font-light text-on-surface shadow-inner shadow-black/3 outline-none transition-[background-color,box-shadow] placeholder:text-on-surface-variant focus-visible:bg-surface-container-high/90 focus-visible:ring-2 focus-visible:ring-primary/20 dark:bg-stone-900/60 dark:shadow-black/20 dark:focus-visible:bg-stone-800/80"
                   value={newName}
                   placeholder="Search or add (e.g. work)"
                   onChange={(e) => setNewName(e.target.value)}
@@ -296,11 +296,14 @@ export function TaskTypesPage() {
                             )}
                             <button
                               type="button"
-                              className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-stone-600/40 dark:hover:bg-error-container/10"
+                              className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent p-2 text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-stone-600/40 dark:hover:bg-error-container/10"
                               aria-label={`Delete ${t.name}`}
+                              title={`Delete ${t.name}`}
                               onClick={() => void remove(t.id)}
                             >
-                              Delete
+                              <span className="material-symbols-outlined text-[20px]" aria-hidden>
+                                delete
+                              </span>
                             </button>
                           </li>
                         )

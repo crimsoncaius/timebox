@@ -1,29 +1,29 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   addMonthsIso,
   firstOfMonthIso,
   monthGridForIso,
   monthYearLabelForIso,
   WEEKDAY_LABELS_SUN_FIRST,
-} from '../lib/time'
+} from "../lib/time";
 
 function formatTriggerDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  if (!y || !m || !d) return iso
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  return dt.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function dayCellLabel(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  if (!y || !m || !d) return ''
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  return String(dt.getUTCDate())
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return String(dt.getUTCDate());
 }
 
 export function DayCalendarPopover({
@@ -31,49 +31,52 @@ export function DayCalendarPopover({
   todayIso,
   onSelect,
 }: {
-  value: string
-  todayIso: string
-  onSelect: (iso: string) => void
+  value: string;
+  todayIso: string;
+  onSelect: (iso: string) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const [visibleMonthIso, setVisibleMonthIso] = useState(() => firstOfMonthIso(value))
-  const containerRef = useRef<HTMLDivElement>(null)
-  const headingId = useId()
+  const [open, setOpen] = useState(false);
+  const [visibleMonthIso, setVisibleMonthIso] = useState(() =>
+    firstOfMonthIso(value),
+  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const headingId = useId();
 
   useEffect(() => {
-    setVisibleMonthIso(firstOfMonthIso(value))
-  }, [value])
+    setVisibleMonthIso(firstOfMonthIso(value));
+  }, [value]);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
-      const el = containerRef.current
-      if (!el || !(e.target instanceof Node)) return
-      if (!el.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => document.removeEventListener('pointerdown', onPointerDown, true)
-  }, [open])
+      const el = containerRef.current;
+      if (!el || !(e.target instanceof Node)) return;
+      if (!el.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open]);
 
-  const grid = monthGridForIso(visibleMonthIso)
-  const monthLabel = monthYearLabelForIso(visibleMonthIso)
+  const grid = monthGridForIso(visibleMonthIso);
+  const monthLabel = monthYearLabelForIso(visibleMonthIso);
 
   const pickDay = useCallback(
     (iso: string) => {
-      onSelect(iso)
-      setOpen(false)
+      onSelect(iso);
+      setOpen(false);
     },
     [onSelect],
-  )
+  );
 
   return (
     <div ref={containerRef} className="relative inline-block">
@@ -88,7 +91,10 @@ export function DayCalendarPopover({
         onClick={() => setOpen((o) => !o)}
       >
         <span>{formatTriggerDate(value)}</span>
-        <span className="material-symbols-outlined text-[18px] text-on-surface-variant" aria-hidden>
+        <span
+          className="material-symbols-outlined text-[18px] text-on-surface-variant"
+          aria-hidden
+        >
           calendar_month
         </span>
       </button>
@@ -102,7 +108,10 @@ export function DayCalendarPopover({
           className="absolute left-0 top-full z-70 mt-2 w-[min(100vw-2rem,20rem)] rounded-2xl border border-outline-variant/15 bg-surface-container-lowest/85 p-4 shadow-[0_0_40px_rgba(45,52,53,0.06)] backdrop-blur-[20px] dark:border-stone-700/50 dark:bg-stone-950/85 dark:shadow-none"
         >
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 id={headingId} className="font-headline text-sm font-medium text-on-surface dark:text-stone-100">
+            <h2
+              id={headingId}
+              className="font-headline text-sm font-medium text-on-surface dark:text-stone-100"
+            >
               {monthLabel}
             </h2>
             <div className="flex gap-1">
@@ -135,28 +144,30 @@ export function DayCalendarPopover({
 
           <div className="grid grid-cols-7 gap-1">
             {grid.map((cell) => {
-              const selected = cell.iso === value
-              const isToday = cell.iso === todayIso
+              const selected = cell.iso === value;
+              const isToday = cell.iso === todayIso;
               return (
                 <button
                   key={cell.iso}
                   type="button"
                   className={[
-                    'flex h-9 items-center justify-center rounded-xl font-headline text-sm tabular-nums transition-colors',
-                    !cell.inMonth ? 'text-on-surface-variant/50' : 'text-on-surface',
+                    "flex h-9 items-center justify-center rounded-xl font-headline text-sm tabular-nums transition-colors",
+                    !cell.inMonth
+                      ? "text-on-surface-variant/50"
+                      : "text-on-surface",
                     selected
-                      ? 'bg-primary-container text-on-primary-container ring-2 ring-on-surface/40 dark:bg-stone-700 dark:text-stone-100 dark:ring-stone-200/30'
+                      ? "bg-primary-container text-on-primary-container ring-2 ring-on-surface/40 dark:bg-stone-700 dark:text-stone-100 dark:ring-stone-200/30"
                       : isToday
-                        ? 'ring-1 ring-outline-variant/40 dark:ring-stone-500/50'
-                        : 'hover:bg-surface-container-high dark:hover:bg-stone-800/80',
-                  ].join(' ')}
+                        ? "ring-1 ring-outline-variant/40 dark:ring-stone-500/50"
+                        : "hover:bg-surface-container-high dark:hover:bg-stone-800/80",
+                  ].join(" ")}
                   aria-pressed={selected}
                   aria-label={cell.iso}
                   onClick={() => pickDay(cell.iso)}
                 >
                   {dayCellLabel(cell.iso)}
                 </button>
-              )
+              );
             })}
           </div>
 
@@ -172,5 +183,5 @@ export function DayCalendarPopover({
         </div>
       ) : null}
     </div>
-  )
+  );
 }

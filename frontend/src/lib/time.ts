@@ -85,6 +85,75 @@ export function formatMinuteLabel24(minuteFromMidnight: number): string {
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
 }
 
+const normMinute = (minuteFromMidnight: number) =>
+  ((minuteFromMidnight % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
+
+/**
+ * Google Calendar–style time range, e.g. "4:15 – 5:45am", "9 – 10:30am", "11:30am – 1:15pm".
+ * Uses an en dash between start and end; single am/pm when both times share the same half of the day.
+ */
+export function formatTimeRangeGcal12(startMin: number, endMin: number): string {
+  const s = normMinute(startMin)
+  const e = normMinute(endMin)
+  const sH = Math.floor(s / 60)
+  const eH = Math.floor(e / 60)
+  const sPart = s % 60
+  const ePart = e % 60
+  const toCompact = (h24: number, min: number) => {
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+    return min === 0 ? String(h12) : `${h12}:${String(min).padStart(2, '0')}`
+  }
+  const sameHalf = sH < 12 === eH < 12
+  const a = toCompact(sH, sPart)
+  const b = toCompact(eH, ePart)
+  if (sameHalf) {
+    const p = sH < 12 ? 'am' : 'pm'
+    return `${a} – ${b}${p}`
+  }
+  return `${a}${sH < 12 ? 'am' : 'pm'} – ${b}${eH < 12 ? 'am' : 'pm'}`
+}
+
+/** Hour line label for the time gutter, e.g. "4 AM" (12-hour clock). */
+export function formatHourLabelGcal12(minuteFromMidnight: number): string {
+  const m = normMinute(minuteFromMidnight)
+  const h24 = Math.floor(m / 60)
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  const p = h24 < 12 ? 'AM' : 'PM'
+  return `${h12} ${p}`
+}
+
+/** `YYYY-MM-DD` for the calendar day of `date` in `timeZone` (IANA), matching API day strings. */
+export function calendarIsoDateInTimeZone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+function intPart(parts: Intl.DateTimeFormatPart[], type: string): number {
+  const raw = parts.find((p) => p.type === type)?.value
+  if (raw === undefined) return 0
+  const n = Number.parseInt(raw, 10)
+  return Number.isFinite(n) ? n : 0
+}
+
+/** Minutes from local midnight in `timeZone`, with fractional seconds (0 ≤ x < 1440). */
+export function minuteOfDayWithSecondsInTimeZone(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const h = intPart(parts, 'hour')
+  const m = intPart(parts, 'minute')
+  const s = intPart(parts, 'second')
+  return h * 60 + m + s / 60
+}
+
 export function snapToSlot(minute: number): number {
   return Math.round(minute / SLOT_MINUTES) * SLOT_MINUTES
 }

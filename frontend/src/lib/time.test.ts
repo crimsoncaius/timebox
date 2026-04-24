@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   addDaysIso,
   addMonthsIso,
+  calendarIsoDateInTimeZone,
   firstOfMonthIso,
   floorToSlotMinute,
   minuteFromPointerYInVisibleLane,
+  minuteOfDayWithSecondsInTimeZone,
   monthGridForIso,
   monthYearLabelForIso,
   MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
@@ -15,6 +17,8 @@ import {
   snapToSlot,
   validStartMinuteRangesForDuration,
   visibleMinuteRange,
+  formatTimeRangeGcal12,
+  formatHourLabelGcal12,
 } from './time'
 
 describe('time helpers', () => {
@@ -202,5 +206,26 @@ describe('time helpers', () => {
 
   it('monthYearLabelForIso uses UTC', () => {
     expect(monthYearLabelForIso('2026-04-13', 'en-US')).toMatch(/April 2026/)
+  })
+
+  it('calendarIsoDateInTimeZone formats YYYY-MM-DD in the given zone', () => {
+    const d = new Date('2026-06-01T12:00:00Z')
+    expect(calendarIsoDateInTimeZone(d, 'UTC')).toBe('2026-06-01')
+  })
+
+  it('minuteOfDayWithSecondsInTimeZone returns fractional minutes in the given zone', () => {
+    const d = new Date('2026-06-01T12:34:56Z')
+    expect(minuteOfDayWithSecondsInTimeZone(d, 'UTC')).toBe(12 * 60 + 34 + 56 / 60)
+  })
+
+  it('formatTimeRangeGcal12 uses compact 12h like Google Calendar', () => {
+    expect(formatTimeRangeGcal12(4 * 60 + 15, 5 * 60 + 45)).toBe('4:15 – 5:45am')
+    expect(formatTimeRangeGcal12(9 * 60, 10 * 60 + 30)).toBe('9 – 10:30am')
+    expect(formatTimeRangeGcal12(11 * 60 + 30, 13 * 60 + 15)).toBe('11:30am – 1:15pm')
+  })
+
+  it('formatHourLabelGcal12 labels hour on the 12h clock', () => {
+    expect(formatHourLabelGcal12(4 * 60)).toBe('4 AM')
+    expect(formatHourLabelGcal12(12 * 60)).toBe('12 PM')
   })
 })

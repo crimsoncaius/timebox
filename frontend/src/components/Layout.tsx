@@ -1,38 +1,38 @@
-import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { api } from '../lib/api'
-import { ThemeToggle } from './ThemeToggle'
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { api } from "../lib/api";
+import { ThemeToggle } from "./ThemeToggle";
 
 function isTodayPath(pathname: string, today: string | null) {
-  if (!today) return pathname === '/'
-  return pathname === '/' || pathname === `/day/${today}`
+  if (!today) return pathname === "/";
+  return pathname === "/" || pathname === `/day/${today}`;
 }
 
 export function Layout({
   children,
   mainClassName,
 }: {
-  children: ReactNode
+  children: ReactNode;
   /** Optional extra classes for the main content area. */
-  mainClassName?: string
+  mainClassName?: string;
 }) {
-  const location = useLocation()
-  const [today, setToday] = useState<string | null>(null)
+  const location = useLocation();
+  const [today, setToday] = useState<string | null>(null);
 
   useEffect(() => {
     void api
       .health()
       .then((h) => setToday(h.today))
-      .catch(() => setToday(null))
-  }, [])
+      .catch(() => setToday(null));
+  }, []);
 
-  const todayHref = today ? `/day/${today}` : '/'
+  const todayHref = today ? `/day/${today}` : "/";
 
   const navItem = (active: boolean) =>
     active
-      ? 'flex items-center gap-3 border-l-4 border-stone-800 py-2 pl-4 font-medium text-stone-900 transition-colors dark:border-stone-200 dark:text-stone-50'
-      : 'flex items-center gap-3 py-2 pl-5 text-stone-500 transition-colors hover:bg-stone-200/50 dark:text-stone-400 dark:hover:bg-stone-800/50'
+      ? "flex items-center gap-3 border-l-4 border-stone-800 py-2 pl-4 font-medium text-stone-900 transition-colors dark:border-stone-200 dark:text-stone-50"
+      : "flex items-center gap-3 py-2 pl-5 text-stone-500 transition-colors hover:bg-stone-200/50 dark:text-stone-400 dark:hover:bg-stone-800/50";
 
   return (
     <div className="min-h-screen bg-surface font-body text-on-surface selection:bg-primary-container selection:text-on-primary-container dark:bg-stone-950 dark:text-stone-100">
@@ -56,21 +56,29 @@ export function Layout({
             </span>
             <span className="font-headline font-light tracking-tight">Day</span>
           </NavLink>
-          <NavLink to="/history" aria-label="Chronicle" className={() => navItem(location.pathname === '/history')}>
+          <NavLink
+            to="/history"
+            aria-label="Chronicle"
+            className={() => navItem(location.pathname === "/history")}
+          >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
               history
             </span>
-            <span className="font-headline font-light tracking-tight">Chronicle</span>
+            <span className="font-headline font-light tracking-tight">
+              Chronicle
+            </span>
           </NavLink>
           <NavLink
             to="/task-types"
             aria-label="Task types"
-            className={() => navItem(location.pathname === '/task-types')}
+            className={() => navItem(location.pathname === "/task-types")}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
               category
             </span>
-            <span className="font-headline font-light tracking-tight">Task types</span>
+            <span className="font-headline font-light tracking-tight">
+              Task types
+            </span>
           </NavLink>
         </nav>
         <div className="mt-auto">
@@ -79,8 +87,12 @@ export function Layout({
               TB
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-stone-900 dark:text-stone-100">You</span>
-              <span className="text-[10px] uppercase tracking-widest text-stone-400">Local</span>
+              <span className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                You
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-stone-400">
+                Local
+              </span>
             </div>
           </div>
         </div>
@@ -99,14 +111,17 @@ export function Layout({
               aria-label="Settings"
               className={({ isActive }) =>
                 [
-                  'flex items-center gap-2 rounded-full px-3 py-2 text-sm font-headline font-light tracking-tight transition-colors',
+                  "flex items-center gap-2 rounded-full px-3 py-2 text-sm font-headline font-light tracking-tight transition-colors",
                   isActive
-                    ? 'bg-stone-200/80 text-stone-900 dark:bg-stone-800/80 dark:text-stone-50'
-                    : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100',
-                ].join(' ')
+                    ? "bg-stone-200/80 text-stone-900 dark:bg-stone-800/80 dark:text-stone-50"
+                    : "text-stone-600 hover:bg-stone-200/60 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100",
+                ].join(" ")
               }
             >
-              <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              <span
+                className="material-symbols-outlined text-[20px]"
+                aria-hidden
+              >
                 settings
               </span>
               <span>Settings</span>
@@ -115,13 +130,11 @@ export function Layout({
           </div>
         </header>
         <main
-          className={
-            mainClassName ?? 'mx-auto w-full max-w-7xl px-12 py-12'
-          }
+          className={mainClassName ?? "mx-auto w-full max-w-7xl px-12 py-12"}
         >
           {children}
         </main>
       </div>
     </div>
-  )
+  );
 }

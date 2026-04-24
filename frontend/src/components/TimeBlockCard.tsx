@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockLane, TimeBlock } from '../lib/api'
 import {
-  formatMinuteLabel24,
+  formatTimeRangeGcal12,
   MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
   resolveSameLaneMovePreviewStart,
   SLOT_MINUTES,
@@ -337,8 +337,8 @@ export function TimeBlockCard({
     ],
   )
 
-  const label = block.task_type?.name ?? '—'
-  const timeRangeLabel = `${formatMinuteLabel24(displayStart)}–${formatMinuteLabel24(displayEnd)}`
+  const label = block.task_type?.name?.trim() || '(No title)'
+  const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
   const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
   const showTime =
     innerContentPx >= (block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME)
@@ -353,11 +353,20 @@ export function TimeBlockCard({
           ? 'complete'
           : undefined
 
+  const gcalPlanned = 'border-outline-variant/30 bg-primary-container/40 dark:border-0 dark:bg-[#4285F4] dark:shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a5fb4]'
+  const gcalActual =
+    'border-outline-variant/30 bg-primary-container/40 dark:border-0 dark:bg-[#2f8d98] dark:shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a6b64]'
+  const gcalBase = lane === 'planned' ? gcalPlanned : gcalActual
+
   const shellClassName = (() => {
     const base =
-      'absolute left-1 right-1 flex flex-col overflow-hidden rounded-lg border transition-[box-shadow,background-color,border-color] duration-150'
+      'absolute left-1 right-1 flex flex-col overflow-hidden rounded-md border transition-[box-shadow,background-color,border-color] duration-150'
     if (dragKind === 'move') {
-      return `${base} z-30 cursor-grabbing border-outline-variant/40 bg-surface-container-lowest/95 shadow-[0_0_40px_rgba(45,52,53,0.14)] ring-2 ring-primary/40 ring-offset-0 dark:border-outline-variant/50 dark:bg-surface-container-high/90 dark:shadow-[0_0_40px_rgba(0,0,0,0.38)] dark:ring-primary/50`
+      const gcalMoveShadow =
+        lane === 'planned'
+          ? 'dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_20px_0_0_#1a5fb4]'
+          : 'dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_20px_0_0_#1a6b64]'
+      return `${base} z-30 cursor-grabbing border-outline-variant/40 bg-surface-container-lowest/95 shadow-[0_0_40px_rgba(45,52,53,0.14)] ring-2 ring-primary/40 ring-offset-0 dark:border-outline-variant/50 dark:bg-[#5f9de8] ${gcalMoveShadow} dark:ring-white/30`
     }
     if (dragKind === 'complete') {
       const armed =
@@ -370,14 +379,13 @@ export function TimeBlockCard({
           : 'border-primary/55 bg-surface-container-lowest/90 shadow-[0_0_40px_rgba(45,52,53,0.12)] dark:border-primary/60 dark:bg-surface-container-high/80 dark:shadow-[0_0_40px_rgba(0,0,0,0.32)]'
       }`
     }
-    // Resize: inset ring + subtle border; stays handle-adjacent, not the same as move.
     if (dragKind === 'resize') {
-      return `${base} z-30 border-outline-variant/50 bg-surface-container-lowest/95 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/20 dark:bg-surface-container-high/90 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)] dark:ring-primary/30`
+      return `${base} z-30 border-outline-variant/50 bg-surface-container-lowest/95 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/20 dark:ring-2 dark:ring-white/50 dark:ring-inset ${gcalBase}`
     }
     if (isSelected) {
-      return `${base} z-20 border-l-4 border-l-primary-fixed border-outline-variant/45 bg-surface-container-lowest/95 pl-0 shadow-[0_0_40px_rgba(45,52,53,0.12)] dark:border-outline-variant/55 dark:bg-surface-container-high/75 dark:shadow-[0_0_40px_rgba(0,0,0,0.28)]`
+      return `${base} z-20 border-l-4 border-l-primary-fixed border-outline-variant/45 bg-surface-container-lowest/95 pl-0 shadow-[0_0_40px_rgba(45,52,53,0.12)] dark:border-0 dark:bg-[#4285F4] dark:pl-0 dark:ring-2 dark:ring-white/90 dark:shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a5fb4] ${lane === 'actual' ? 'dark:!bg-[#2f8d98] dark:!shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a6b64]' : ''}`
     }
-    return `${base} z-10 border-outline-variant/30 bg-primary-container/40 dark:bg-primary-container/25`
+    return `${base} z-10 ${gcalBase}`
   })()
 
   return (
@@ -398,15 +406,17 @@ export function TimeBlockCard({
         <button
           type="button"
           aria-label="Resize block start"
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20"
+          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
           onPointerDown={(e) => startResize('start', e)}
         />
       )}
       {readOnly ? (
-        <div className="flex min-h-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden px-1.5 py-1">
-          <p className="shrink-0 truncate font-body text-[11px] font-medium leading-snug text-on-surface">{label}</p>
+        <div className="flex min-h-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden px-1.5 py-1.5">
+          <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface dark:text-[#202124]">
+            {label}
+          </p>
           {showTime ? (
-            <p className="shrink-0 truncate font-body text-[9px] tabular-nums leading-tight text-on-surface/70">
+            <p className="shrink-0 truncate font-body text-[11px] leading-tight text-on-surface/70 dark:text-[#202124]/80">
               {timeRangeLabel}
             </p>
           ) : null}
@@ -418,7 +428,7 @@ export function TimeBlockCard({
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
-          className={`touch-none flex min-h-0 min-w-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden border-0 bg-transparent px-1.5 py-1 text-left select-none ${
+          className={`touch-none flex min-h-0 min-w-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden border-0 bg-transparent px-1.5 py-1.5 text-left select-none ${
             drag?.kind === 'move' || drag?.kind === 'complete' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={onBodyPointerDown}
@@ -438,11 +448,11 @@ export function TimeBlockCard({
             onBlockClick?.()
           }}
         >
-          <span className="shrink-0 truncate font-body text-[11px] font-medium leading-snug text-on-surface">
+          <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface dark:text-[#202124]">
             {label}
           </span>
           {showTime ? (
-            <span className="shrink-0 truncate font-body text-[9px] tabular-nums leading-tight text-on-surface/70">
+            <span className="shrink-0 truncate font-body text-[11px] leading-tight text-on-surface/70 dark:text-[#202124]/80">
               {timeRangeLabel}
             </span>
           ) : null}
@@ -467,7 +477,7 @@ export function TimeBlockCard({
         <button
           type="button"
           aria-label="Resize block end"
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20"
+          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
           onPointerDown={(e) => startResize('end', e)}
         />
       )}
