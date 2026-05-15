@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TimeBlock } from '../lib/api'
 import { TimeBlockCard } from './TimeBlockCard'
+
+const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture
+const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture
 
 const block: TimeBlock = {
   id: 10,
@@ -61,6 +64,11 @@ describe('TimeBlockCard', () => {
     HTMLElement.prototype.releasePointerCapture = vi.fn()
   })
 
+  afterEach(() => {
+    HTMLElement.prototype.setPointerCapture = originalSetPointerCapture
+    HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
+  })
+
   it('keeps the moved position visible until the async patch settles', () => {
     const patchControl: { resolve: (() => void) | null } = { resolve: null }
     const onPatch = vi.fn(
@@ -111,6 +119,29 @@ describe('TimeBlockCard', () => {
       </div>,
     )
     expect(screen.getByText('8 – 10am')).toBeInTheDocument()
+  })
+
+  it('shows title and time beside the lane bar when the inner body is too short', () => {
+    render(
+      <div style={{ position: 'relative', height: 400 }}>
+        <TimeBlockCard
+          block={block}
+          lane="planned"
+          visibleStartMin={480}
+          visibleEndMin={600}
+          slotHeightPx={20}
+          readOnly={false}
+          sameLaneBlocks={[block]}
+          resizeMinStartMinute={0}
+          resizeMaxEndMinute={1440}
+          getMinuteFromClientY={(clientY) => clientY}
+          onPatch={vi.fn(() => Promise.resolve())}
+          isSelected={false}
+        />
+      </div>,
+    )
+    expect(screen.getByText(/8 – 8:30am/)).toBeInTheDocument()
+    expect(screen.getByText(/alpha/)).toBeInTheDocument()
   })
 
   it('does not call onBlockClick twice for a tap (pointer down + click)', () => {

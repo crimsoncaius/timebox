@@ -9,7 +9,7 @@ function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
 }
 
 const inputClassName =
-  'min-w-[4.5rem] rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-right font-body text-sm tabular-nums text-on-surface shadow-inner shadow-black/5 transition-[border-color,box-shadow] placeholder:text-outline focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-stone-600 dark:bg-stone-950/80 dark:shadow-black/20 dark:focus:border-stone-500 dark:focus:ring-stone-500/25'
+  'min-w-[4.5rem] rounded-lg border border-outline-variant/15 bg-surface-container-lowest px-3 py-2 text-right font-body text-sm tabular-nums text-on-surface shadow-inner shadow-black/5 transition-[border-color,box-shadow] placeholder:text-outline focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/80 dark:text-dark-on-surface dark:shadow-black/20 dark:focus:border-dark-outline'
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsRead | null>(null)
@@ -79,7 +79,7 @@ export function SettingsPage() {
           </p>
         </div>
         <div
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-outline-variant/30 bg-surface-container-low/80 px-3 py-1.5 text-xs font-medium dark:border-stone-700/60 dark:bg-stone-900/50"
+          className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-outline-variant/15 bg-surface-container-low/80 px-3 py-1.5 text-xs font-medium dark:border-dark-outline-variant dark:bg-dark-surface-container/50"
           aria-live="polite"
         >
           <span
@@ -110,13 +110,13 @@ export function SettingsPage() {
       )}
 
       <section
-        className="max-w-3xl overflow-hidden rounded-2xl border border-outline-variant/25 bg-surface-container-low/70 shadow-sm dark:border-stone-700/50 dark:bg-stone-900/35 dark:shadow-none"
+        className="max-w-3xl overflow-hidden rounded-2xl bg-surface-container-low/70 dark:bg-dark-surface-container/35"
         aria-labelledby="settings-day-window-heading"
       >
-        <header className="border-b border-outline-variant/15 px-5 py-4 dark:border-stone-700/50">
+        <header className="px-5 py-4">
           <h2
             id="settings-day-window-heading"
-            className="font-headline text-base font-semibold tracking-tight text-on-surface dark:text-stone-100"
+            className="font-headline text-base font-light tracking-tight text-on-surface dark:text-dark-on-surface"
           >
             Day window
           </h2>
@@ -125,10 +125,10 @@ export function SettingsPage() {
           </p>
         </header>
 
-        <div className="divide-y divide-outline-variant/15 dark:divide-stone-700/50">
-          <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+        <div className="space-y-3 px-3 pb-3">
+          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
             <div className="min-w-0 flex-1">
-              <label htmlFor="settings-start-hour" className="block font-headline text-sm font-medium text-on-surface dark:text-stone-100">
+              <label htmlFor="settings-start-hour" className="block font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface">
                 Start hour
               </label>
               <p className="mt-0.5 text-sm text-on-surface-variant">First hour shown (0–23).</p>
@@ -148,9 +148,9 @@ export function SettingsPage() {
             />
           </div>
 
-          <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
             <div className="min-w-0 flex-1">
-              <label htmlFor="settings-end-hour" className="block font-headline text-sm font-medium text-on-surface dark:text-stone-100">
+              <label htmlFor="settings-end-hour" className="block font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface">
                 End hour
               </label>
               <p className="mt-0.5 text-sm text-on-surface-variant">Exclusive end of the window (1–24).</p>
@@ -170,9 +170,9 @@ export function SettingsPage() {
             />
           </div>
 
-          <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="font-headline text-sm font-medium text-on-surface dark:text-stone-100">Show full 24 hours</p>
+              <p className="font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface">Show full 24 hours</p>
               <p className="mt-0.5 text-sm text-on-surface-variant">
                 Ignore start/end and display the full day on the timeline.
               </p>
@@ -186,11 +186,11 @@ export function SettingsPage() {
                 aria-label="Show full 24 hours"
               />
               <span
-                className="block h-7 w-12 rounded-full border border-outline-variant/30 bg-outline-variant/25 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 peer-checked:border-tertiary/50 peer-checked:bg-tertiary dark:border-stone-600 dark:bg-stone-800 dark:peer-checked:bg-tertiary"
+                className="block h-7 w-12 rounded-full border border-outline-variant/15 bg-outline-variant/25 transition-colors peer-focus-visible:ring-1 peer-focus-visible:ring-primary/30 peer-checked:border-tertiary/50 peer-checked:bg-tertiary dark:border-dark-outline-variant dark:bg-dark-surface-container-high dark:peer-checked:bg-tertiary"
                 aria-hidden
               />
               <span
-                className="pointer-events-none absolute left-0.5 top-0.5 z-10 h-6 w-6 rounded-full bg-surface-container-lowest shadow-sm transition-transform peer-checked:translate-x-5 dark:bg-stone-200"
+                className="pointer-events-none absolute left-0.5 top-0.5 z-10 h-6 w-6 rounded-full bg-surface-container-lowest shadow-[0_0_24px_rgba(45,52,53,0.04)] transition-transform peer-checked:translate-x-5 dark:bg-dark-on-surface"
                 aria-hidden
               />
             </label>

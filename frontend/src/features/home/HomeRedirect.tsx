@@ -17,10 +17,10 @@ export function HomeRedirect() {
   if (error) {
     return (
       <Layout>
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
+        <div className="rounded-xl bg-error-container/20 px-4 py-3 text-on-error-container outline-1 outline-error/20 dark:bg-error-container/15 dark:outline-error/30">
           <p className="font-medium">Cannot load today from server.</p>
           <p className="mt-1 text-sm">{error}</p>
-          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+          <p className="mt-2 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">
             Start the API (see README) and ensure the Vite proxy points to it, or set <code>VITE_API_BASE_URL</code>.
           </p>
         </div>
@@ -31,7 +31,7 @@ export function HomeRedirect() {
   if (!target) {
     return (
       <Layout>
-        <p className="text-zinc-600">Loading today…</p>
+        <p className="text-on-surface-variant">Loading today…</p>
       </Layout>
     )
   }

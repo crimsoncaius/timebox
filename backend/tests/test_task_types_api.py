@@ -93,6 +93,98 @@ def test_delete_task_type_with_descendants_returns_conflict(client):
     assert "subpaths" in r.json()["detail"].lower()
 
 
+def test_delete_task_type_cascade_removes_blocks(client):
+    tid = client.post("/task-types", json={"name": "cascade-me"}).json()["id"]
+    client.get("/days/2026-06-01")
+    client.post(
+        "/days/2026-06-01/blocks",
+        json={"lane": "planned", "task_type_id": tid, "start_minute": 0, "end_minute": 30},
+    )
+    r = client.delete(f"/task-types/{tid}?cascade_blocks=true")
+    assert r.status_code == 204
+    day = client.get("/days/2026-06-01").json()
+    assert day["time_blocks"] == []
+    ids = [x["id"] for x in client.get("/task-types").json()]
+    assert tid not in ids
+
+
+def test_delete_task_type_migrate_then_remove(client):
+    tid_a = client.post("/task-types", json={"name": "migrate-from"}).json()["id"]
+    tid_b = client.post("/task-types", json={"name": "migrate-to"}).json()["id"]
+    client.get("/days/2026-06-02")
+    client.post(
+        "/days/2026-06-02/blocks",
+        json={"lane": "planned", "task_type_id": tid_a, "start_minute": 0, "end_minute": 30},
+    )
+    r = client.delete(f"/task-types/{tid_a}?migrate_blocks_to={tid_b}")
+    assert r.status_code == 204
+    day = client.get("/days/2026-06-02").json()
+    assert len(day["time_blocks"]) == 1
+    assert day["time_blocks"][0]["task_type_id"] == tid_b
+    ids = [x["id"] for x in client.get("/task-types").json()]
+    assert tid_a not in ids
+
+
+def test_delete_task_type_both_cascade_and_migrate_422(client):
+    tid = client.post("/task-types", json={"name": "both-modes"}).json()["id"]
+    other = client.post("/task-types", json={"name": "other-for-query"}).json()["id"]
+    r = client.delete(f"/task-types/{tid}?cascade_blocks=true&migrate_blocks_to={other}")
+    assert r.status_code == 422
+
+
+def test_delete_task_type_migrate_same_id_422(client):
+    tid = client.post("/task-types", json={"name": "self-migrate"}).json()["id"]
+    r = client.delete(f"/task-types/{tid}?migrate_blocks_to={tid}")
+    assert r.status_code == 422
+
+
+def test_delete_task_type_migrate_missing_target_422(client):
+    tid = client.post("/task-types", json={"name": "orphan-migrate"}).json()["id"]
+    r = client.delete(f"/task-types/{tid}?migrate_blocks_to=99999")
+    assert r.status_code == 422
+
+
+def test_delete_task_type_cascade_removes_planned_and_actual_pair(client):
+    tid = client.post("/task-types", json={"name": "planned-pair"}).json()["id"]
+    client.get("/days/2026-06-03")
+    planned = client.post(
+        "/days/2026-06-03/blocks",
+        json={"lane": "planned", "task_type_id": tid, "start_minute": 60, "end_minute": 90},
+    ).json()["time_blocks"][0]
+    pid = planned["id"]
+    client.post(f"/days/2026-06-03/blocks/{pid}/complete-as-planned")
+    day_before = client.get("/days/2026-06-03").json()
+    assert len(day_before["time_blocks"]) == 2
+    actual = next(b for b in day_before["time_blocks"] if b["lane"] == "actual")
+    assert actual.get("planned_block_id") == pid
+
+    r = client.delete(f"/task-types/{tid}?cascade_blocks=true")
+    assert r.status_code == 204
+    day_after = client.get("/days/2026-06-03").json()
+    assert day_after["time_blocks"] == []
+
+
+def test_delete_task_type_migrate_keeps_planned_block_link(client):
+    tid_a = client.post("/task-types", json={"name": "m-from"}).json()["id"]
+    tid_b = client.post("/task-types", json={"name": "m-to"}).json()["id"]
+    client.get("/days/2026-06-04")
+    planned = client.post(
+        "/days/2026-06-04/blocks",
+        json={"lane": "planned", "task_type_id": tid_a, "start_minute": 120, "end_minute": 150},
+    ).json()["time_blocks"][0]
+    pid = planned["id"]
+    client.post(f"/days/2026-06-04/blocks/{pid}/complete-as-planned")
+    r = client.delete(f"/task-types/{tid_a}?migrate_blocks_to={tid_b}")
+    assert r.status_code == 204
+    day = client.get("/days/2026-06-04").json()
+    assert len(day["time_blocks"]) == 2
+    actual = next(b for b in day["time_blocks"] if b["lane"] == "actual")
+    assert actual["task_type_id"] == tid_b
+    assert actual.get("planned_block_id") == pid
+    planned2 = next(b for b in day["time_blocks"] if b["lane"] == "planned")
+    assert planned2["task_type_id"] == tid_b
+
+
 def test_patch_task_type_creates_missing_target_ancestors(client):
     leaf_id = client.post("/task-types", json={"name": "coding/ai"}).json()["id"]
     r = client.patch(f"/task-types/{leaf_id}", json={"name": "development/ml"})

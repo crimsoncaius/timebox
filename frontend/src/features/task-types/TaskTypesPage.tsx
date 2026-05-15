@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
-import { api, type TaskType } from '../../lib/api'
+import { DeleteTaskTypeResolutionModal } from '../../components/DeleteTaskTypeResolutionModal'
+import { ApiHttpError, api, TASK_TYPE_STILL_IN_USE_DETAIL, type TaskType } from '../../lib/api'
 import {
   filterTaskTypesByQuery,
   formatTaskTypePathParts,
@@ -15,6 +16,12 @@ function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
   return 'text-on-surface-variant'
 }
 
+function apiErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiHttpError) return e.detailMessage
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
 export function TaskTypesPage() {
   const [types, setTypes] = useState<TaskType[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,10 +30,17 @@ export function TaskTypesPage() {
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string } | null>(null)
+  const [resolveBusy, setResolveBusy] = useState(false)
 
   const visibleTypes = useMemo(() => filterTaskTypesByQuery(types, newName), [types, newName])
 
   const grouped = useMemo(() => groupTaskTypesByRoot(visibleTypes), [visibleTypes])
+
+  const migrateTargets = useMemo(
+    () => (resolveDelete ? types.filter((t) => t.id !== resolveDelete.id) : []),
+    [types, resolveDelete],
+  )
 
   const displayRows = useMemo(() => {
     let stripe = 0
@@ -43,7 +57,7 @@ export function TaskTypesPage() {
       const rows = await api.listTaskTypes()
       setTypes(rows)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load task types')
+      setError(apiErrorMessage(e, 'Failed to load task types'))
     } finally {
       setLoading(false)
     }
@@ -65,7 +79,7 @@ export function TaskTypesPage() {
       setSaveState('saved')
     } catch (e) {
       setSaveState('error')
-      setError(e instanceof Error ? e.message : 'Failed to create task type')
+      setError(apiErrorMessage(e, 'Failed to create task type'))
     }
   }
 
@@ -79,11 +93,11 @@ export function TaskTypesPage() {
       setSaveState('saved')
     } catch (e) {
       setSaveState('error')
-      setError(e instanceof Error ? e.message : 'Failed to update task type')
+      setError(apiErrorMessage(e, 'Failed to update task type'))
     }
   }
 
-  const remove = async (id: number) => {
+  const attemptRemove = async (id: number) => {
     setEditingId((cur) => (cur === id ? null : cur))
     setSaveState('saving')
     setError(null)
@@ -92,8 +106,55 @@ export function TaskTypesPage() {
       await load()
       setSaveState('saved')
     } catch (e) {
+      if (
+        e instanceof ApiHttpError &&
+        e.status === 409 &&
+        e.detailMessage === TASK_TYPE_STILL_IN_USE_DETAIL
+      ) {
+        const row = types.find((t) => t.id === id)
+        setResolveDelete({ id, name: row?.name ?? `Task type #${id}` })
+        setSaveState('idle')
+        setError(null)
+        return
+      }
       setSaveState('error')
-      setError(e instanceof Error ? e.message : 'Failed to delete task type')
+      setError(apiErrorMessage(e, 'Failed to delete task type'))
+    }
+  }
+
+  const confirmCascadeDelete = async () => {
+    if (!resolveDelete) return
+    setResolveBusy(true)
+    setError(null)
+    try {
+      await api.deleteTaskType(resolveDelete.id, { cascadeBlocks: true })
+      setResolveDelete(null)
+      await load()
+      setSaveState('saved')
+    } catch (e) {
+      setResolveDelete(null)
+      setSaveState('error')
+      setError(apiErrorMessage(e, 'Failed to delete task type'))
+    } finally {
+      setResolveBusy(false)
+    }
+  }
+
+  const confirmMigrateDelete = async (targetId: number) => {
+    if (!resolveDelete) return
+    setResolveBusy(true)
+    setError(null)
+    try {
+      await api.deleteTaskType(resolveDelete.id, { migrateBlocksTo: targetId })
+      setResolveDelete(null)
+      await load()
+      setSaveState('saved')
+    } catch (e) {
+      setResolveDelete(null)
+      setSaveState('error')
+      setError(apiErrorMessage(e, 'Failed to delete task type'))
+    } finally {
+      setResolveBusy(false)
     }
   }
 
@@ -125,22 +186,24 @@ export function TaskTypesPage() {
     <Layout>
       <div className="flex flex-col gap-12 lg:flex-row lg:items-start lg:gap-16 xl:gap-24">
         {/* Left: editorial intro — intentional asymmetry */}
-        <section className="min-w-0 shrink-0 lg:max-w-md lg:pt-2">
-          <h1 className="mb-3 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
-            Task types
-          </h1>
-          <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-            Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a{' '}
-            <Link
-              to="/"
-              className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:text-on-surface"
-            >
-              Day
-            </Link>{' '}
-            block only after at least one type exists.
-          </p>
+        <section className="min-w-0 shrink-0 lg:max-w-md lg:pt-4">
+          <div className="space-y-5">
+            <h1 className="font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
+              Task types
+            </h1>
+            <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
+              Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a{' '}
+              <Link
+                to="/"
+                className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:text-on-surface"
+              >
+                Day
+              </Link>{' '}
+              block only after at least one type exists.
+            </p>
+          </div>
           <div
-            className="mt-6 inline-flex items-center gap-2 rounded-full border border-outline-variant/15 bg-surface-container-low/90 px-3 py-1.5 text-xs font-medium backdrop-blur-sm dark:border-stone-600/40 dark:bg-stone-900/50"
+            className="mt-10 inline-flex items-center gap-2 rounded-full border border-outline-variant/15 bg-surface-container-low/90 px-3 py-1.5 text-xs font-medium backdrop-blur-sm dark:border-dark-outline-variant dark:bg-dark-surface-container/50"
             aria-live="polite"
           >
             <span
@@ -177,7 +240,7 @@ export function TaskTypesPage() {
 
           {/* Composer: glass lift + gradient CTA */}
           <section
-            className="rounded-2xl bg-surface-container-lowest/85 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-xl dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]"
+            className="rounded-2xl bg-surface-container-lowest/85 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-xl dark:bg-dark-surface-container-lowest/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]"
             aria-labelledby="task-types-composer-heading"
           >
             <h2
@@ -190,7 +253,7 @@ export function TaskTypesPage() {
               <label className="min-w-0 flex-1">
                 <span className="sr-only">Filter saved types or enter a new task type name</span>
                 <input
-                  className="w-full rounded-xl bg-surface-container-low/80 px-4 py-3 font-body text-base font-light text-on-surface shadow-inner shadow-black/3 outline-none transition-[background-color,box-shadow] placeholder:text-on-surface-variant focus-visible:bg-surface-container-high/90 focus-visible:ring-2 focus-visible:ring-primary/20 dark:bg-stone-900/60 dark:shadow-black/20 dark:focus-visible:bg-stone-800/80"
+                  className="w-full rounded-xl bg-surface-container-low/80 px-4 py-3 font-body text-base font-light text-on-surface shadow-inner shadow-black/3 outline-none transition-[background-color,box-shadow] placeholder:text-on-surface-variant focus-visible:bg-surface-container-high/90 focus-visible:ring-1 focus-visible:ring-primary/20 dark:bg-dark-surface-container/60 dark:text-dark-on-surface dark:shadow-black/20 dark:focus-visible:bg-dark-surface-container-high/80"
                   value={newName}
                   placeholder="Search or add (e.g. work)"
                   onChange={(e) => setNewName(e.target.value)}
@@ -243,12 +306,12 @@ export function TaskTypesPage() {
                             key={t.id}
                             className={[
                               'flex flex-wrap items-center gap-2 rounded-xl px-2 py-1 transition-colors sm:gap-3',
-                              stripeIndex % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low/50 dark:bg-stone-900/35',
+                              stripeIndex % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low/50 dark:bg-dark-surface-container/35',
                             ].join(' ')}
                           >
                             {isEditing ? (
                               <input
-                                className="min-w-0 flex-1 rounded-md border-0 bg-surface-container-highest/80 px-3 py-2 font-body text-base font-light text-on-surface shadow-none outline-none ring-0 transition-colors focus-visible:ring-2 focus-visible:ring-primary/15 dark:bg-stone-800/70"
+                                className="min-w-0 flex-1 rounded-md border-0 bg-surface-container-highest/80 px-3 py-2 font-body text-base font-light text-on-surface shadow-none outline-none ring-0 transition-colors focus-visible:ring-1 focus-visible:ring-primary/15 dark:bg-dark-surface-container-high/70 dark:text-dark-on-surface"
                                 value={editValue}
                                 aria-label={`Task type name ${t.id}`}
                                 autoFocus
@@ -287,7 +350,7 @@ export function TaskTypesPage() {
                             {!isEditing && (
                               <button
                                 type="button"
-                                className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/30 dark:border-stone-600/40"
+                                className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/30 dark:border-dark-outline-variant dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container-high"
                                 aria-label={`Edit ${t.name}`}
                                 onClick={() => startEdit(t)}
                               >
@@ -296,10 +359,10 @@ export function TaskTypesPage() {
                             )}
                             <button
                               type="button"
-                              className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent p-2 text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-stone-600/40 dark:hover:bg-error-container/10"
+                              className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent p-2 text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-dark-outline-variant dark:hover:bg-error-container/10"
                               aria-label={`Delete ${t.name}`}
                               title={`Delete ${t.name}`}
-                              onClick={() => void remove(t.id)}
+                              onClick={() => void attemptRemove(t.id)}
                             >
                               <span className="material-symbols-outlined text-[20px]" aria-hidden>
                                 delete
@@ -316,6 +379,17 @@ export function TaskTypesPage() {
           </section>
         </div>
       </div>
+      <DeleteTaskTypeResolutionModal
+        open={resolveDelete !== null}
+        taskTypeName={resolveDelete?.name ?? ''}
+        migrateTargets={migrateTargets}
+        busy={resolveBusy}
+        onClose={() => {
+          if (!resolveBusy) setResolveDelete(null)
+        }}
+        onCascade={() => void confirmCascadeDelete()}
+        onMigrate={(targetId) => void confirmMigrateDelete(targetId)}
+      />
     </Layout>
   )
 }

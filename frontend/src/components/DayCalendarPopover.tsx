@@ -86,7 +86,7 @@ export function DayCalendarPopover({
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-controls={open ? headingId : undefined}
-        className="inline-flex min-w-38 items-center justify-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low/80 px-3 py-1.5 font-headline text-sm tabular-nums text-on-surface shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-sm transition-colors hover:bg-surface-container-high dark:border-stone-600/40 dark:bg-stone-900/50 dark:hover:bg-stone-800/60"
+        className="inline-flex min-w-38 items-center justify-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low/80 px-3 py-1.5 font-headline text-sm tabular-nums text-on-surface shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-sm transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:bg-dark-surface-container/50 dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
         aria-label="Jump to date"
         onClick={() => setOpen((o) => !o)}
       >
@@ -105,19 +105,19 @@ export function DayCalendarPopover({
           role="dialog"
           aria-modal="true"
           aria-labelledby={headingId}
-          className="absolute left-0 top-full z-70 mt-2 w-[min(100vw-2rem,20rem)] rounded-2xl border border-outline-variant/15 bg-surface-container-lowest/85 p-4 shadow-[0_0_40px_rgba(45,52,53,0.06)] backdrop-blur-[20px] dark:border-stone-700/50 dark:bg-stone-950/85 dark:shadow-none"
+          className="absolute left-0 top-full z-70 mt-2 w-[min(100vw-2rem,20rem)] rounded-2xl border border-outline-variant/15 bg-surface-container-lowest/85 p-4 shadow-[0_0_40px_rgba(45,52,53,0.06)] backdrop-blur-[20px] dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]"
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2
               id={headingId}
-              className="font-headline text-sm font-medium text-on-surface dark:text-stone-100"
+              className="font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface"
             >
               {monthLabel}
             </h2>
             <div className="flex gap-1">
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 font-headline text-on-surface-variant transition-colors hover:bg-surface-container-high dark:hover:bg-stone-800"
+                className="rounded-lg px-2 py-1 font-headline text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container-high"
                 aria-label="Previous month"
                 onClick={() => setVisibleMonthIso((v) => addMonthsIso(v, -1))}
               >
@@ -125,7 +125,7 @@ export function DayCalendarPopover({
               </button>
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 font-headline text-on-surface-variant transition-colors hover:bg-surface-container-high dark:hover:bg-stone-800"
+                className="rounded-lg px-2 py-1 font-headline text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container-high"
                 aria-label="Next month"
                 onClick={() => setVisibleMonthIso((v) => addMonthsIso(v, 1))}
               >
@@ -156,10 +156,10 @@ export function DayCalendarPopover({
                       ? "text-on-surface-variant/50"
                       : "text-on-surface",
                     selected
-                      ? "bg-primary-container text-on-primary-container ring-2 ring-on-surface/40 dark:bg-stone-700 dark:text-stone-100 dark:ring-stone-200/30"
+                      ? "bg-primary-container text-on-primary-container ring-1 ring-on-surface/30 dark:bg-dark-surface-container-high dark:text-dark-on-surface dark:ring-dark-on-surface/30"
                       : isToday
-                        ? "ring-1 ring-outline-variant/40 dark:ring-stone-500/50"
-                        : "hover:bg-surface-container-high dark:hover:bg-stone-800/80",
+                        ? "ring-1 ring-outline-variant/40 dark:ring-dark-outline/50"
+                        : "hover:bg-surface-container-high dark:hover:bg-dark-surface-container-high",
                   ].join(" ")}
                   aria-pressed={selected}
                   aria-label={cell.iso}
@@ -171,10 +171,10 @@ export function DayCalendarPopover({
             })}
           </div>
 
-          <div className="mt-4 flex justify-end border-t border-outline-variant/10 pt-3 dark:border-stone-700/50">
+          <div className="mt-4 flex justify-end rounded-xl bg-surface-container-low/50 px-2 py-2 dark:bg-dark-surface-container-low/60">
             <button
               type="button"
-              className="font-headline text-sm font-medium text-primary transition-colors hover:text-primary-dim dark:text-stone-300 dark:hover:text-stone-100"
+              className="font-headline text-sm font-medium text-primary transition-colors hover:text-primary-dim dark:text-dark-on-surface-variant dark:hover:text-dark-on-surface"
               onClick={() => pickDay(todayIso)}
             >
               Today

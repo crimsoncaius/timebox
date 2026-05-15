@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -87,15 +87,13 @@ describe('TodayPage inspector rail', () => {
       </MemoryRouter>,
     )
 
-    await expect(screen.findByText('Select a block to edit')).resolves.toBeInTheDocument()
-
-    const rail = screen.getByRole('complementary', { name: 'Block details' })
-    expect(within(rail).getByText('Details')).toBeInTheDocument()
+    const rail = await screen.findByRole('complementary', { name: 'Block details' })
+    expect(within(rail).queryByLabelText('Task type', { exact: true })).not.toBeInTheDocument()
 
     await user.click(screen.getAllByRole('button', { name: /Edit planned block/i })[0]!)
 
     await expect(screen.findByLabelText('Task type', { exact: true })).resolves.toHaveValue('alpha')
-    expect(screen.queryByText('Select a block to edit')).not.toBeInTheDocument()
+    expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {
@@ -110,7 +108,7 @@ describe('TodayPage inspector rail', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Select a block to edit')
+    await screen.findByRole('complementary', { name: 'Block details' })
     await user.click(screen.getAllByRole('button', { name: /Edit planned block/i })[0]!)
     await screen.findByLabelText('Task type', { exact: true })
 
@@ -136,14 +134,16 @@ describe('TodayPage inspector rail', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Select a block to edit')
+    const rail = await screen.findByRole('complementary', { name: 'Block details' })
     await user.click(screen.getAllByRole('button', { name: /Edit planned block/i })[0]!)
     await screen.findByLabelText('Task type', { exact: true })
-    expect(screen.queryByText('Select a block to edit')).not.toBeInTheDocument()
+    expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
 
     await user.click(screen.getByText(/^Monday,/))
 
-    await expect(screen.findByText('Select a block to edit')).resolves.toBeInTheDocument()
+    await waitFor(() => {
+      expect(within(rail).queryByLabelText('Task type', { exact: true })).not.toBeInTheDocument()
+    })
   })
 
   it('does not deselect on outside click when user cancels discard', async () => {
@@ -158,7 +158,7 @@ describe('TodayPage inspector rail', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Select a block to edit')
+    await screen.findByRole('complementary', { name: 'Block details' })
     await user.click(screen.getAllByRole('button', { name: /Edit planned block/i })[0]!)
     await screen.findByLabelText('Task type', { exact: true })
 

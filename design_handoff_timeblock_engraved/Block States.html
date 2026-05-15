@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Timebox · Block states · 6 directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600&family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  :root {
+    --ink: #1f2426;
+    --ink-soft: #5a6061;
+    --ink-mute: #9aa1a3;
+    --paper: #fbfaf7;
+    --paper-2: #f4f2ec;
+    --rule: #d8d3c8;
+    --rule-soft: #e8e4da;
+    --planned: #1967d2;
+    --planned-tint: #f5f9ff;
+    --planned-rule: #c5d9f7;
+    --actual: #0d6b63;
+  }
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: 'Inter', sans-serif; }
+  * { box-sizing: border-box; }
+  .dc-card { background: #fff; border-radius: 14px; }
+  .intro {
+    padding: 32px 40px 12px;
+    color: #2a251f;
+    max-width: 900px;
+  }
+  .intro h1 {
+    font-family: 'Newsreader', serif;
+    font-weight: 400;
+    font-size: 30px;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+  .intro p {
+    margin: 0;
+    color: rgba(40,30,20,0.65);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 640px;
+  }
+  .intro .legend {
+    display: flex;
+    gap: 18px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: rgba(60,50,40,0.6);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .intro .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .intro .legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--rule);
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="variants.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

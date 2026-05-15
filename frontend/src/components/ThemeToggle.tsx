@@ -29,7 +29,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="material-symbols-outlined rounded-full p-2 text-stone-600 transition-colors hover:bg-stone-200/80 hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:bg-stone-800/80 dark:hover:text-stone-100"
+      className="material-symbols-outlined rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface active:scale-95 dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container dark:hover:text-dark-on-surface"
       aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       title={mode === 'dark' ? 'Light mode' : 'Dark mode'}
     >

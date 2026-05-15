@@ -14,6 +14,10 @@ frontend/dist/
 .env.local
 *.local
 
+# Agent skill copies (CLI installs; canonical under %USERPROFILE%\.agents)
+.agents/
+.claude/
+
 # IDE
 .idea/
 .vscode/

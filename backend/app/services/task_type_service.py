@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import TimeBlock
 from app.schemas.task_type import TaskTypeCreate, TaskTypePatch
@@ -102,7 +103,23 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
     return row
 
 
-def delete_task_type(db: Session, task_type_id: int) -> None:
+def _touch_days(db: Session, day_ids: list[int]) -> None:
+    if not day_ids:
+        return
+    now = _utc_now()
+    db.execute(update(Day).where(Day.id.in_(day_ids)).values(updated_at=now))
+
+
+def delete_task_type(
+    db: Session,
+    task_type_id: int,
+    *,
+    cascade_blocks: bool = False,
+    migrate_blocks_to: int | None = None,
+) -> None:
+    if cascade_blocks and migrate_blocks_to is not None:
+        raise ValueError("Cannot use cascade_blocks and migrate_blocks_to together")
+
     row = get_task_type(db, task_type_id)
     if row is None:
         raise ValueError("Task type not found")
@@ -112,10 +129,47 @@ def delete_task_type(db: Session, task_type_id: int) -> None:
     ).scalar_one_or_none()
     if has_descendants is not None:
         raise ValueError("TASK_TYPE_HAS_DESCENDANTS")
+
+    if migrate_blocks_to is not None:
+        if migrate_blocks_to == task_type_id:
+            raise ValueError("Cannot migrate blocks to the same task type")
+        if get_task_type(db, migrate_blocks_to) is None:
+            raise ValueError("Migrate target task type not found")
+
     in_use = db.execute(
         select(TimeBlock.id).where(TimeBlock.task_type_id == task_type_id).limit(1)
     ).scalar_one_or_none()
-    if in_use is not None:
+
+    if cascade_blocks:
+        affected_day_ids = list(
+            db.execute(
+                select(TimeBlock.day_id).where(TimeBlock.task_type_id == task_type_id).distinct()
+            ).scalars().all()
+        )
+        block_ids = list(
+            db.execute(select(TimeBlock.id).where(TimeBlock.task_type_id == task_type_id)).scalars().all()
+        )
+        if block_ids:
+            db.execute(
+                update(TimeBlock).where(TimeBlock.planned_block_id.in_(block_ids)).values(planned_block_id=None)
+            )
+            db.execute(delete(TimeBlock).where(TimeBlock.task_type_id == task_type_id))
+            _touch_days(db, affected_day_ids)
+    elif migrate_blocks_to is not None:
+        affected_day_ids = list(
+            db.execute(
+                select(TimeBlock.day_id).where(TimeBlock.task_type_id == task_type_id).distinct()
+            ).scalars().all()
+        )
+        if affected_day_ids:
+            db.execute(
+                update(TimeBlock)
+                .where(TimeBlock.task_type_id == task_type_id)
+                .values(task_type_id=migrate_blocks_to)
+            )
+            _touch_days(db, affected_day_ids)
+    elif in_use is not None:
         raise ValueError("TASK_TYPE_IN_USE")
+
     db.delete(row)
     db.commit()

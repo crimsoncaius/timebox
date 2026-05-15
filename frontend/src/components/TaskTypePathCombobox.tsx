@@ -53,7 +53,7 @@ export function TaskTypePathCombobox({
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
-        className="w-full rounded-xl border border-outline-variant/15 bg-surface px-3 py-2.5 font-body text-sm text-on-surface outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+        className="w-full rounded-xl border border-outline-variant/15 bg-surface px-3 py-2.5 font-body text-sm text-on-surface outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
         value={query}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
@@ -69,7 +69,7 @@ export function TaskTypePathCombobox({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-stone-950/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]"
+          className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-dark-surface-container-lowest/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]"
         >
           {suggestions.rows.map((row) => {
             const parts = formatTaskTypePathParts(row.name)
@@ -78,7 +78,7 @@ export function TaskTypePathCombobox({
                 <button
                   type="button"
                   role="option"
-                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface-container-high"
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface-container-high dark:hover:bg-dark-surface-container-high"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     onSelectTaskTypeId(row.id)
@@ -103,7 +103,7 @@ export function TaskTypePathCombobox({
                 type="button"
                 role="option"
                 disabled={busy}
-                className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-container-high disabled:opacity-50"
+                className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-container-high disabled:opacity-50 dark:hover:bg-dark-surface-container-high"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={async () => {
                   setBusy(true)

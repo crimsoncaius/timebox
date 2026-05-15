@@ -32,7 +32,6 @@ export function TodayPage() {
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
   const [inspectorDirty, setInspectorDirty] = useState(false)
@@ -131,7 +130,6 @@ export function TodayPage() {
     async (payload: { task_type_id: number; note: string | null }) => {
       if (!date || !draft || draftCommitInFlightRef.current) return
       draftCommitInFlightRef.current = true
-      setSaveState('saving')
       setError(null)
       try {
         const next = await api.createBlock(date, {
@@ -151,9 +149,7 @@ export function TodayPage() {
         )
         setDraft(null)
         if (created) setSelectedBlockId(created.id)
-        setSaveState('saved')
       } catch (e) {
-        setSaveState('error')
         setError(e instanceof Error ? e.message : 'Failed to create block')
         throw e
       } finally {
@@ -174,14 +170,11 @@ export function TodayPage() {
       },
     ) => {
       if (!date) return
-      setSaveState('saving')
       setError(null)
       try {
         const next = await api.patchBlock(date, blockId, patch)
         setDay(next)
-        setSaveState('saved')
       } catch (e) {
-        setSaveState('error')
         const msg = e instanceof Error ? e.message : 'Failed to update block'
         setError(msg)
         throw e
@@ -193,14 +186,11 @@ export function TodayPage() {
   const deleteBlock = useCallback(
     async (blockId: number) => {
       if (!date) return
-      setSaveState('saving')
       setError(null)
       try {
         const next = await api.deleteBlock(date, blockId)
         setDay(next)
-        setSaveState('saved')
       } catch (e) {
-        setSaveState('error')
         const msg = e instanceof Error ? e.message : 'Failed to delete block'
         setError(msg)
         throw e
@@ -212,14 +202,11 @@ export function TodayPage() {
   const completeBlockAsPlanned = useCallback(
     async (blockId: number) => {
       if (!date) return
-      setSaveState('saving')
       setError(null)
       try {
         const next = await api.completeBlockAsPlanned(date, blockId)
         setDay(next)
-        setSaveState('saved')
       } catch (e) {
-        setSaveState('error')
         const msg = e instanceof Error ? e.message : 'Failed to complete block'
         setError(msg)
         throw e
@@ -229,16 +216,13 @@ export function TodayPage() {
   )
 
   const createTaskTypePath = useCallback(async (name: string) => {
-    setSaveState('saving')
     setError(null)
     try {
       const created = await api.createTaskType({ name })
       const nextTaskTypes = await api.listTaskTypes()
       setTaskTypes(nextTaskTypes)
-      setSaveState('saved')
       return created
     } catch (e) {
-      setSaveState('error')
       const msg = e instanceof Error ? e.message : 'Failed to create task type'
       setError(msg)
       throw e
@@ -306,7 +290,7 @@ export function TodayPage() {
   const mobileSheetOpen = selectedBlock != null || draft != null
 
   return (
-    <Layout mainClassName="mx-auto w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-[#121212]">
+    <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
       <div className="flex flex-col gap-8 lg:flex-row lg:gap-0 lg:items-stretch">
         <div className="min-w-0 min-h-0 flex-1 lg:pr-4">
           <span data-testid="day-date" className="sr-only">
@@ -321,24 +305,6 @@ export function TodayPage() {
                 <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
                   Timezone {day.meta.timezone}.
                 </p>
-                <p className="mt-2 text-xs text-outline">
-                  <span
-                    className={
-                      saveState === 'error'
-                        ? 'text-error'
-                        : saveState === 'saving'
-                          ? 'text-tertiary'
-                          : saveState === 'saved'
-                            ? 'text-tertiary'
-                            : 'text-outline'
-                    }
-                  >
-                    {saveState === 'saving' && 'Saving…'}
-                    {saveState === 'saved' && 'Saved'}
-                    {saveState === 'error' && 'Save failed'}
-                    {saveState === 'idle' && '\u00a0'}
-                  </span>
-                </p>
               </div>
               <div
                 className="flex flex-wrap items-center gap-2"
@@ -346,7 +312,7 @@ export function TodayPage() {
               >
                 <button
                   type="button"
-                  className="rounded-full border border-outline-variant/40 px-3 py-1.5 font-headline text-sm text-on-surface hover:bg-surface-container-high"
+                  className="rounded-full border border-outline-variant/15 px-3 py-1.5 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
                   aria-label="Previous day"
                   onClick={() => navigate(`/day/${addDaysIso(day.date, -1)}`)}
                 >
@@ -359,7 +325,7 @@ export function TodayPage() {
                 />
                 <button
                   type="button"
-                  className="rounded-full border border-outline-variant/40 px-3 py-1.5 font-headline text-sm text-on-surface hover:bg-surface-container-high"
+                  className="rounded-full border border-outline-variant/15 px-3 py-1.5 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
                   aria-label="Next day"
                   onClick={() => navigate(`/day/${addDaysIso(day.date, 1)}`)}
                 >
@@ -410,21 +376,9 @@ export function TodayPage() {
             role="complementary"
             aria-label="Block details"
             data-inspector="rail"
-            className={`sticky top-32 mt-0 max-h-[calc(100dvh-8.5rem)] w-full overflow-y-auto bg-surface-container-low dark:bg-stone-900${blockDragActive ? ' pointer-events-none' : ''}`}
+            className={`sticky top-32 mt-0 max-h-[calc(100dvh-8.5rem)] w-full overflow-y-auto bg-surface-container-low dark:bg-dark-surface-container-low${blockDragActive ? ' pointer-events-none' : ''}`}
           >
-            {selectedBlock == null && draft == null ? (
-              <div className="rounded-2xl bg-surface-container-lowest/90 px-4 pb-6 pt-6 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] transition-opacity duration-150 dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)] lg:rounded-none lg:bg-transparent lg:px-0 lg:pb-6 lg:pt-6 lg:shadow-none lg:backdrop-blur-none">
-                <h2 className="font-headline text-sm font-light tracking-wide text-on-surface-variant">
-                  Details
-                </h2>
-                <p className="mt-2 font-headline text-lg font-extralight text-on-surface">
-                  Select a block to edit
-                </p>
-                <p className="mt-1 font-body text-xs text-on-surface-variant">
-                  Click an empty slot to create
-                </p>
-              </div>
-            ) : (
+            {selectedBlock == null && draft == null ? null : (
               <div className="transition-opacity duration-150">
                 <TimeBlockInspectorContent
                   key={

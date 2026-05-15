@@ -92,12 +92,12 @@ test('plan blocks and history', async ({ page, request }) => {
   await expect(inspector.getByText('08:30', { exact: true })).toBeVisible()
   await expect(inspector.locator('#block-start')).toHaveCount(0)
   await page.keyboard.press('Escape')
-  await expect(inspector.getByText('Select a block to edit')).toBeVisible()
+  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveCount(0)
 
   await page.locator('[data-block-id]').nth(1).click()
   await expect(inspector.getByLabel('Task type', { exact: true })).toHaveValue('e2e actual')
   await page.keyboard.press('Escape')
-  await expect(inspector.getByText('Select a block to edit')).toBeVisible()
+  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveCount(0)
 
   await page.getByTestId('day-nav').getByRole('button', { name: 'Next day' }).click()
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-02')
@@ -178,7 +178,7 @@ test('resize planned block stops at next block in same lane', async ({ page, req
     timeout: 15_000,
   })
   await page.keyboard.press('Escape')
-  await expect(inspectorResize.getByText('Select a block to edit')).toBeVisible()
+  await expect(inspectorResize.getByLabel('Task type', { exact: true })).toHaveCount(0)
 
   const handle = page.locator(`[data-block-id="${idA}"]`).getByRole('button', { name: 'Resize block end' })
   await handle.scrollIntoViewIfNeeded()
@@ -262,8 +262,8 @@ test('move planned block preserves duration and jumps past blocker', async ({ pa
 
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
   await expect(
-    page.getByRole('complementary', { name: 'Block details' }).getByText('Select a block to edit'),
-  ).toBeVisible()
+    page.getByRole('complementary', { name: 'Block details' }).getByLabel('Task type', { exact: true }),
+  ).toHaveCount(0)
 
   const rDay = await request.get(`${base}/days/${date}`)
   expect(rDay.ok()).toBeTruthy()

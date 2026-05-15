@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -45,9 +45,24 @@ def patch_task_type(
 
 
 @router.delete("/{task_type_id}", status_code=204)
-def delete_task_type(task_type_id: int, db: Session = Depends(get_db)) -> None:
+def delete_task_type(
+    task_type_id: int,
+    cascade_blocks: bool = Query(False),
+    migrate_blocks_to: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> None:
+    if cascade_blocks and migrate_blocks_to is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Cannot use cascade_blocks and migrate_blocks_to together",
+        )
     try:
-        task_type_service.delete_task_type(db, task_type_id)
+        task_type_service.delete_task_type(
+            db,
+            task_type_id,
+            cascade_blocks=cascade_blocks,
+            migrate_blocks_to=migrate_blocks_to,
+        )
     except ValueError as e:
         msg = str(e)
         if msg == "TASK_TYPE_IN_USE":

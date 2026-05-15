@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://timebox:timebox@localhost:5432/timebox"
     app_timezone: str = "America/New_York"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5174,http://127.0.0.1:5174"
 
 
 @lru_cache

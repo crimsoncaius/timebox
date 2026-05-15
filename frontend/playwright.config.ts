@@ -12,7 +12,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://127.0.0.1:5174',
   },
   webServer: [
     {
@@ -30,9 +30,9 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      command: 'npm run dev -- --host 127.0.0.1 --port 5174',
       cwd: __dirname,
-      url: 'http://127.0.0.1:5173/',
+      url: 'http://127.0.0.1:5174/',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

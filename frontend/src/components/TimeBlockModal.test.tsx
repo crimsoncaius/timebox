@@ -77,7 +77,7 @@ describe('TimeBlockModal', () => {
 
     const noteField = screen.getByLabelText('Note')
     expect(noteField).toHaveAttribute('rows', '4')
-    expect(noteField).toHaveClass('min-h-24')
+    expect(noteField).toHaveClass('min-h-20')
   })
 
   it('auto-saves only task_type_id on task type change, not time fields', async () => {

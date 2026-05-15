@@ -60,10 +60,10 @@ export function HistoryPage() {
     <Layout>
       <section className="mb-16 flex items-end justify-between gap-8">
         <div className="max-w-2xl">
-          <h1 className="mb-4 font-headline text-[2.75rem] font-light leading-none tracking-tighter text-on-surface">
+          <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
             Chronicle of focus
           </h1>
-          <p className="max-w-lg font-body text-lg leading-relaxed text-on-surface-variant">
+          <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
             Browse by month. Days you have opened appear in the archive; any day opens in Day.
           </p>
         </div>

@@ -52,7 +52,7 @@ export function TimeBlockModal({
       aria-modal="true"
       aria-labelledby="block-panel-title"
       data-inspector="sheet"
-      className={`w-full shrink-0 bg-surface-container-low dark:bg-stone-900 lg:hidden${blockDragActive ? ' pointer-events-none' : ''}`}
+      className={`w-full shrink-0 bg-surface-container-low dark:bg-dark-surface-container-low lg:hidden${blockDragActive ? ' pointer-events-none' : ''}`}
     >
       <TimeBlockInspectorContent
         variant="sheet"

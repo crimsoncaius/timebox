@@ -205,59 +205,69 @@ export function TimeBlockInspectorContent({
   const startMinute = block?.start_minute ?? draft!.start_minute
   const endMinute = block?.end_minute ?? draft!.end_minute
 
-  const laneLabel = lane === 'planned' ? 'Planned' : 'Actual'
   const startLabel = formatMinuteLabel24(startMinute)
   const endLabel = formatMinuteLabel24(endMinute)
 
+  const durationTotal = endMinute - startMinute
+  const durationH = Math.floor(durationTotal / 60)
+  const durationM = durationTotal % 60
+  const durationLabel = `${durationH}h ${String(durationM).padStart(2, '0')}m`
+
+  const lanePillColors =
+    lane === 'planned'
+      ? 'border-planned-border bg-planned-surface text-planned'
+      : 'border-actual-border bg-actual-surface text-actual'
+
+  const laneDotColor = lane === 'planned' ? 'bg-planned' : 'bg-actual'
+
   const formClassName =
     variant === 'sheet'
-      ? 'flex max-h-[min(85vh,56rem)] flex-col gap-4 overflow-y-auto rounded-2xl bg-surface-container-lowest/90 px-4 pb-6 pt-6 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]'
-      : 'flex max-h-[min(85vh,56rem)] flex-col gap-4 overflow-y-auto rounded-2xl bg-surface-container-lowest/90 px-4 pb-6 pt-6 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] dark:bg-stone-950/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)] lg:max-h-[calc(100vh-8rem)] lg:rounded-none lg:bg-transparent lg:px-0 lg:pb-6 lg:pt-6 lg:shadow-none lg:backdrop-blur-none'
+      ? 'flex max-h-[min(85vh,56rem)] flex-col gap-5 overflow-y-auto rounded-2xl bg-surface-container-lowest/90 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] dark:bg-dark-surface-container-lowest/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]'
+      : 'flex max-h-[min(85vh,56rem)] flex-col gap-5 overflow-y-auto rounded-2xl bg-surface-container-lowest/90 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-[20px] dark:bg-dark-surface-container-lowest/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)] lg:max-h-[calc(100vh-8rem)] lg:rounded-none lg:bg-transparent lg:p-5 lg:shadow-none lg:backdrop-blur-none'
 
   return (
     <div className={formClassName}>
-      <div className="flex shrink-0 items-start justify-between gap-4">
-        <div>
-          <h2
-            id="block-panel-title"
-            className="font-headline text-sm font-light tracking-wide text-on-surface-variant">
-            {isCreateMode ? 'New block' : 'Block details'}
-          </h2>
-          <p className="mt-1 font-headline text-xl font-extralight tracking-tight text-on-surface">
-            {laneLabel}
-          </p>
-          <p className="mt-1 font-headline text-xl font-light tabular-nums tracking-tight text-on-surface">
-            {startLabel}–{endLabel}
-          </p>
-          <p className="mt-1.5 max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">
-            {isCreateMode
-              ? 'Pick a task type to create this block. Notes save as you type. Click the timeline to move it.'
-              : 'Adjust start and end on the timeline by dragging the block edges. Task type and notes save automatically.'}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="shrink-0 rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high"
-          aria-label="Close"
-          onClick={() => onClose()}
+      {/* Header: lane pill + duration pill + close */}
+      <div className="flex shrink-0 items-center gap-2">
+        <h2
+          id="block-panel-title"
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-wider ${lanePillColors}`}
         >
-          <span className="material-symbols-outlined text-[22px]" aria-hidden>
-            close
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${laneDotColor}`} />
+          {isCreateMode ? 'New block' : lane === 'planned' ? 'Planned' : 'Actual'}
+        </h2>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="rounded-md bg-surface-container px-2 py-0.5 font-mono text-[10.5px] text-on-surface-variant">
+            {durationLabel}
           </span>
-        </button>
+          <button
+            type="button"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
+            aria-label="Close"
+            onClick={() => onClose()}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              close
+            </span>
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-2.5">
-        <div className="min-w-0 flex-1 rounded-xl bg-surface-container-low px-2.5 py-2 dark:bg-stone-800/80">
-          <p className="font-headline text-[10px] text-on-surface-variant">Start</p>
-          <p className="mt-0.5 font-headline text-lg font-light tabular-nums text-on-surface">{startLabel}</p>
-        </div>
-        <div className="min-w-0 flex-1 rounded-xl bg-surface-container-low px-2.5 py-2 dark:bg-stone-800/80">
-          <p className="font-headline text-[10px] text-on-surface-variant">End</p>
-          <p className="mt-0.5 font-headline text-lg font-light tabular-nums text-on-surface">{endLabel}</p>
-        </div>
-      </div>
+      {/* Time range headline */}
+      <p className="font-headline text-4xl font-extralight tracking-tight tabular-nums text-on-surface">
+        <span>{startLabel}</span>
+        <span className="text-outline-variant"> – </span>
+        <span>{endLabel}</span>
+      </p>
 
+      {/* Helper text */}
+      <p className="max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">
+        {isCreateMode
+          ? 'Pick a task type to create this block. Edits save as you make them.'
+          : 'Drag the block edges on the timeline to adjust. Edits save as you make them.'}
+      </p>
+
+      {/* Task type */}
       <TaskTypePathCombobox
         label="Task type"
         taskTypes={taskTypes}
@@ -266,14 +276,15 @@ export function TimeBlockInspectorContent({
         onCreateTaskTypePath={onCreateTaskTypePath}
       />
 
+      {/* Note */}
       <div>
-        <label htmlFor="block-note" className="mb-0.5 block font-body text-xs text-on-surface-variant">
+        <label htmlFor="block-note" className="mb-1.5 block text-[11px] font-medium text-on-surface-variant">
           Note
         </label>
         <textarea
           id="block-note"
           rows={4}
-          className="min-h-24 w-full rounded-xl border border-outline-variant/15 bg-surface px-3 py-2.5 font-body text-sm leading-relaxed text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+          className="min-h-20 w-full rounded-xl border border-outline-variant/35 bg-surface px-3 py-2.5 font-body text-[13.5px] leading-relaxed text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
           placeholder="Optional"
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -281,28 +292,33 @@ export function TimeBlockInspectorContent({
         />
       </div>
 
-      <div className="mt-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
-        {!isCreateMode && block?.lane === 'planned' && onCompleteAsPlanned && (
-          <button
-            type="button"
-            disabled={!!hasLinkedActual || saving}
-            className="rounded-full border border-outline-variant/15 bg-tertiary-container/50 px-4 py-2 text-sm text-on-surface transition-colors hover:bg-surface-container-high disabled:opacity-50 dark:bg-stone-800/60"
-            onClick={() => void handleComplete()}
-          >
-            {hasLinkedActual ? 'Completed' : 'Complete'}
-          </button>
-        )}
+      {/* Action row */}
+      <div className="mt-auto flex shrink-0 items-center">
         {!isCreateMode && (
           <button
             type="button"
-            className="shrink-0 rounded-full p-2 text-error transition-colors hover:bg-error-container/20"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-error transition-colors hover:bg-error-container/15"
             aria-label="Delete"
             title="Delete"
             onClick={() => void handleDelete()}
           >
-            <span className="material-symbols-outlined text-[22px]" aria-hidden>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
               delete
             </span>
+          </button>
+        )}
+        <div className="flex-1" />
+        {!isCreateMode && block?.lane === 'planned' && onCompleteAsPlanned && (
+          <button
+            type="button"
+            disabled={!!hasLinkedActual || saving}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-on-surface px-[18px] text-[13px] font-medium text-surface transition-colors hover:bg-on-surface/85 disabled:opacity-50 dark:bg-dark-on-surface dark:text-dark-surface dark:hover:bg-dark-on-surface/85"
+            onClick={() => void handleComplete()}
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden>
+              check
+            </span>
+            {hasLinkedActual ? 'Completed' : 'Mark complete'}
           </button>
         )}
       </div>

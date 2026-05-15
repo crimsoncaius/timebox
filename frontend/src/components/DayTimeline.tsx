@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockDraftPlacement, BlockLane, DayRead, TimeBlock } from '../lib/api'
 import {
   calendarIsoDateInTimeZone,
@@ -15,14 +15,14 @@ import {
 import { TimeBlockCard } from './TimeBlockCard'
 
 const laneHeaderPlanned =
-  'font-label text-xs font-semibold uppercase tracking-[0.08em] text-[#1967d2] dark:text-[#8ab4f8] border-b-2 border-[#1967d2]/45 pb-1 dark:border-[#8ab4f8]/40'
+  'font-label text-xs font-semibold uppercase tracking-[0.08em] text-planned dark:text-planned-dark pb-1'
 const laneHeaderActual =
-  'font-label text-xs font-semibold uppercase tracking-[0.08em] text-[#0d6b63] dark:text-[#7dd3c8] border-b-2 border-[#0d6b63]/40 pb-1 dark:border-[#7dd3c8]/38'
+  'font-label text-xs font-semibold uppercase tracking-[0.08em] text-actual dark:text-actual-dark pb-1'
 
 function laneSurfaceClass(lane: BlockLane) {
   return lane === 'planned'
-    ? 'border-[#c5d9f7] bg-[#f5f9ff]/95 dark:border-[#2a3f55] dark:bg-[#0f141c]'
-    : 'border-[#b5ded6] bg-[#f2faf9]/95 dark:border-[#1e3d38] dark:bg-[#0c1211]'
+    ? 'border-planned-border/80 bg-planned-surface/95 dark:border-planned-dark-border dark:bg-planned-dark-surface'
+    : 'border-actual-border/80 bg-actual-surface/95 dark:border-actual-dark-border dark:bg-actual-dark-surface'
 }
 
 export const DayTimeline = forwardRef<
@@ -69,7 +69,7 @@ export const DayTimeline = forwardRef<
   const plannedRef = useRef<HTMLDivElement>(null)
   const actualRef = useRef<HTMLDivElement>(null)
 
-  const [nowTick, setNowTick] = useState(0)
+  const [, setNowTick] = useState(0)
   const isTodayInTz = calendarIsoDateInTimeZone(new Date(), day.meta.timezone) === day.date
   useEffect(() => {
     if (!isTodayInTz) return
@@ -77,10 +77,7 @@ export const DayTimeline = forwardRef<
     return () => window.clearInterval(id)
   }, [isTodayInTz])
 
-  const nowMinuteOfDay = useMemo(
-    () => minuteOfDayWithSecondsInTimeZone(new Date(), day.meta.timezone),
-    [day.meta.timezone, nowTick],
-  )
+  const nowMinuteOfDay = minuteOfDayWithSecondsInTimeZone(new Date(), day.meta.timezone)
 
   const onLaneClick = (lane: BlockLane, e: React.MouseEvent<HTMLDivElement>) => {
     if (readOnly) return
@@ -123,7 +120,7 @@ export const DayTimeline = forwardRef<
       <h3 className={laneHeaderPlanned}>Planned</h3>
       <h3 className={laneHeaderActual}>Actual</h3>
 
-      <div className="w-12 shrink-0 select-none border-r border-[#e0e0e0] pr-1.5 text-right font-body text-[11px] text-[#5f6368] sm:w-14 dark:border-[#3c4043] dark:text-[#9aa0a6]">
+      <div className="w-12 shrink-0 select-none border-r border-outline-variant/25 pr-1.5 text-right font-body text-[11px] text-timeline-label sm:w-14 dark:border-dark-outline-variant dark:text-dark-on-surface-variant">
         <div style={{ height: totalHeight }} className="relative">
           {Array.from({ length: slotCount }, (_, i) => {
             const m = visibleStartMin + i * SLOT_MINUTES
@@ -133,8 +130,8 @@ export const DayTimeline = forwardRef<
                 key={m}
                 className={
                   m % 60 === 0
-                    ? 'absolute w-full border-t border-[#dadce0] pt-0.5 dark:border-[#3c4043]'
-                    : 'absolute w-full border-t border-[#e8eaed] dark:border-[#2d2d2d]'
+                    ? 'absolute w-full border-t border-timeline-grid-strong pt-0.5 dark:border-dark-outline-variant'
+                    : 'absolute w-full border-t border-timeline-grid-soft dark:border-dark-surface-container'
                 }
                 style={{ top: i * TIMELINE_SLOT_HEIGHT_PX, height: TIMELINE_SLOT_HEIGHT_PX }}
               >
@@ -190,7 +187,7 @@ export const DayTimeline = forwardRef<
           aria-hidden
         >
           <div
-            className="absolute left-0 right-0 border-t-2 border-error dark:border-[#ea4335]"
+            className="absolute left-0 right-0 border-t-2 border-now-line"
             style={{ top: nowLineTopPx, transform: 'translateY(-1px)' }}
           />
         </div>
@@ -337,9 +334,9 @@ function DraftBlockOverlay({
       data-testid="draft-block"
       data-dragging={isDragging ? 'true' : undefined}
       data-drag-kind={isDragging ? 'resize' : undefined}
-      className={`absolute left-1 right-1 flex flex-col overflow-hidden rounded-md border border-dashed border-primary/50 transition-[box-shadow,background-color] duration-150 dark:border-white/25 dark:bg-[#4285F4]/18 ${
+      className={`absolute left-1 right-1 flex flex-col overflow-hidden rounded-md border border-dashed border-primary/40 transition-[box-shadow,background-color] duration-150 dark:border-dark-outline dark:bg-primary-container/10 ${
         isDragging
-          ? 'z-30 bg-primary-container/35 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/25 dark:bg-[#5f9de8]/40 dark:shadow-[0_0_40px_rgba(0,0,0,0.3)]'
+          ? 'z-30 bg-primary-container/35 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/25 dark:bg-dark-surface-container-high/45 dark:shadow-[0_0_40px_rgba(0,0,0,0.3)]'
           : 'z-20 bg-primary-container/15'
       }`}
       style={{ top: draftTop, height: draftHeight }}
@@ -350,7 +347,7 @@ function DraftBlockOverlay({
         <button
           type="button"
           aria-label={`Resize draft block start (${laneLabel})`}
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
+          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-dark-on-surface/10 dark:hover:bg-dark-on-surface/20"
           onPointerDown={(e) => startResize('start', e)}
         />
       )}
@@ -359,7 +356,7 @@ function DraftBlockOverlay({
         <button
           type="button"
           aria-label={`Resize draft block end (${laneLabel})`}
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
+          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-dark-on-surface/10 dark:hover:bg-dark-on-surface/20"
           onPointerDown={(e) => startResize('end', e)}
         />
       )}
@@ -410,11 +407,17 @@ function Lane({
   selectedBlockId: number | null
   onBlockDragSessionChange?: (active: boolean) => void
 }) {
+  /**
+   * Explicit grid placement so the `[data-testid="day-now-line"]` overlay's
+   * `col-start-2 col-span-2 row-start-2` (definite position) cannot evict the
+   * auto-placed lanes into an implicit row.
+   */
+  const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-2' : 'col-start-3 row-start-2'
   return (
     <div
       ref={laneRef}
       role="presentation"
-      className={`relative min-w-0 border ${laneSurfaceClass(lane)} ${readOnly ? '' : 'cursor-crosshair'}`}
+      className={`relative min-w-0 border ${gridPlacement} ${laneSurfaceClass(lane)} ${readOnly ? '' : 'cursor-crosshair'}`}
       style={{ height: totalHeight }}
       onClick={onLaneClick}
     >
@@ -425,8 +428,8 @@ function Lane({
           key={i}
           className={
             m % 60 === 0
-              ? 'absolute left-0 right-0 border-t border-[#dadce0] dark:border-[#3c4043]'
-              : 'absolute left-0 right-0 border-t border-[#e8eaed] dark:border-[#2d2d2d]/90'
+              ? 'absolute left-0 right-0 border-t border-timeline-grid-strong dark:border-dark-outline-variant'
+              : 'absolute left-0 right-0 border-t border-timeline-grid-soft dark:border-dark-surface-container'
           }
           style={{ top: i * slotHeightPx, height: slotHeightPx }}
         />

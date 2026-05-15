@@ -31,17 +31,17 @@ export function Layout({
 
   const navItem = (active: boolean) =>
     active
-      ? "flex items-center gap-3 border-l-4 border-stone-800 py-2 pl-4 font-medium text-stone-900 transition-colors dark:border-stone-200 dark:text-stone-50"
-      : "flex items-center gap-3 py-2 pl-5 text-stone-500 transition-colors hover:bg-stone-200/50 dark:text-stone-400 dark:hover:bg-stone-800/50";
+      ? "flex items-center gap-3 border-l-4 border-primary py-2 pl-4 font-medium text-on-surface transition-colors dark:border-dark-on-surface dark:text-dark-on-surface"
+      : "flex items-center gap-3 py-2 pl-5 text-on-surface-variant transition-colors hover:bg-surface-container-low dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container";
 
   return (
-    <div className="min-h-screen bg-surface font-body text-on-surface selection:bg-primary-container selection:text-on-primary-container dark:bg-stone-950 dark:text-stone-100">
-      <aside className="fixed left-0 top-0 z-[60] flex h-screen w-64 flex-col border-r-0 bg-[#f9f9f9] px-6 py-8 dark:bg-stone-950">
+    <div className="min-h-screen bg-surface font-body text-on-surface selection:bg-primary-container selection:text-on-primary-container dark:bg-dark-background dark:text-dark-on-surface">
+      <aside className="fixed left-0 top-0 z-60 flex h-screen w-64 flex-col border-r-0 bg-surface px-8 py-8 dark:bg-dark-background">
         <div className="mb-12">
-          <h1 className="font-headline text-lg font-semibold uppercase tracking-widest text-stone-900 dark:text-stone-100">
+          <h1 className="font-headline text-lg font-medium uppercase tracking-widest text-on-surface dark:text-dark-on-surface">
             Timebox
           </h1>
-          <p className="mt-1 font-headline text-xs font-light tracking-tight text-stone-500 dark:text-stone-400">
+          <p className="mt-1 font-headline text-xs font-light tracking-tight text-on-surface-variant dark:text-dark-on-surface-variant">
             Monastic productivity
           </p>
         </div>
@@ -87,10 +87,10 @@ export function Layout({
               TB
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-stone-900 dark:text-stone-100">
+              <span className="text-sm font-medium text-on-surface dark:text-dark-on-surface">
                 You
               </span>
-              <span className="text-[10px] uppercase tracking-widest text-stone-400">
+              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/70 dark:text-dark-on-surface-variant">
                 Local
               </span>
             </div>
@@ -99,13 +99,13 @@ export function Layout({
       </aside>
 
       <div className="ml-64 min-h-screen">
-        <header className="sticky top-0 z-50 flex w-full items-center justify-between bg-[#f9f9f9]/85 px-12 py-6 shadow-sm backdrop-blur-xl dark:bg-stone-950/85 dark:shadow-none">
+        <header className="sticky top-0 z-50 flex w-full items-center justify-between bg-surface/85 px-12 py-6 backdrop-blur-[24px] dark:bg-dark-background/85">
           <div>
-            <h2 className="font-headline text-xl font-light tracking-tighter text-stone-900 dark:text-white">
+            <h2 className="font-headline text-xl font-light tracking-tighter text-on-surface dark:text-dark-on-surface">
               Timebox
             </h2>
           </div>
-          <div className="flex items-center gap-3 text-stone-800 dark:text-stone-200">
+          <div className="flex items-center gap-3 text-on-surface dark:text-dark-on-surface">
             <NavLink
               to="/settings"
               aria-label="Settings"
@@ -113,8 +113,8 @@ export function Layout({
                 [
                   "flex items-center gap-2 rounded-full px-3 py-2 text-sm font-headline font-light tracking-tight transition-colors",
                   isActive
-                    ? "bg-stone-200/80 text-stone-900 dark:bg-stone-800/80 dark:text-stone-50"
-                    : "text-stone-600 hover:bg-stone-200/60 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100",
+                    ? "bg-surface-container-low text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface"
+                    : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container dark:hover:text-dark-on-surface",
                 ].join(" ")
               }
             >
@@ -130,7 +130,7 @@ export function Layout({
           </div>
         </header>
         <main
-          className={mainClassName ?? "mx-auto w-full max-w-7xl px-12 py-12"}
+          className={mainClassName ?? "w-full max-w-7xl px-12 py-12"}
         >
           {children}
         </main>

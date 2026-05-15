@@ -22,6 +22,8 @@ const RESIZE_HANDLE_ROWS_PX = 16
 /** Min height for the body (below handles) before showing the time row. */
 const MIN_INNER_PX_FOR_TIME = 34
 const MIN_INNER_PX_FOR_TIME_WITH_NOTE = 48
+/** Inner height needed to show title and time on two lines in side-text mode. */
+const MIN_INNER_PX_SIDE_TEXT_TWO_LINES = 30
 
 type DragState =
   | { kind: 'resize'; edge: 'start' | 'end'; start: number; end: number }
@@ -340,7 +342,11 @@ export function TimeBlockCard({
   const label = block.task_type?.name?.trim() || '(No title)'
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
   const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
+  const innerTextThreshold = block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME
+  const useSideTextLayout = drag == null && innerContentPx < innerTextThreshold
+  const sideTextTwoLines = innerContentPx >= MIN_INNER_PX_SIDE_TEXT_TWO_LINES
   const showTime =
+    !useSideTextLayout &&
     innerContentPx >= (block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME)
 
   const isDragging = drag != null
@@ -353,39 +359,47 @@ export function TimeBlockCard({
           ? 'complete'
           : undefined
 
-  const gcalPlanned = 'border-outline-variant/30 bg-primary-container/40 dark:border-0 dark:bg-[#4285F4] dark:shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a5fb4]'
-  const gcalActual =
-    'border-outline-variant/30 bg-primary-container/40 dark:border-0 dark:bg-[#2f8d98] dark:shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a6b64]'
-  const gcalBase = lane === 'planned' ? gcalPlanned : gcalActual
+  const laneStripeColor =
+    lane === 'planned' ? 'bg-planned' : 'bg-actual'
+  const laneBarClassName = `w-3 shrink-0 rounded-md border border-[rgba(80,70,50,0.25)] dark:border-[rgba(255,250,240,0.18)] bg-paper-soft ${
+    isSelected ? `border-l-4 ${lane === 'planned' ? 'border-l-planned' : 'border-l-actual'} pl-0` : ''
+  }`
+
+  const showLaneStripe = isSelected || dragKind === 'move'
+  const durationMin = displayEnd - displayStart
+  const showSelectedMeta = isSelected && durationMin >= 60 && !useSideTextLayout
 
   const shellClassName = (() => {
-    const base =
-      'absolute left-1 right-1 flex flex-col overflow-hidden rounded-md border transition-[box-shadow,background-color,border-color] duration-150'
+    const clip =
+      useSideTextLayout && dragKind == null ? 'overflow-visible' : 'overflow-hidden'
+    const base = `absolute left-1 right-1 flex flex-col ${clip} rounded-md transition-[box-shadow,background-color,border-color] duration-150`
     if (dragKind === 'move') {
-      const gcalMoveShadow =
-        lane === 'planned'
-          ? 'dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_20px_0_0_#1a5fb4]'
-          : 'dark:shadow-[0_1px_2px_rgba(0,0,0,0.3),0_20px_0_0_#1a6b64]'
-      return `${base} z-30 cursor-grabbing border-outline-variant/40 bg-surface-container-lowest/95 shadow-[0_0_40px_rgba(45,52,53,0.14)] ring-2 ring-primary/40 ring-offset-0 dark:border-outline-variant/50 dark:bg-[#5f9de8] ${gcalMoveShadow} dark:ring-white/30`
+      return `${base} z-30 cursor-grabbing border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-drag)] rotate-[-1.2deg]`
     }
     if (dragKind === 'complete') {
       const armed =
         drag &&
         drag.kind === 'complete' &&
         drag.pullPx >= SWIPE_COMPLETE_COMMIT_PX
-      return `${base} z-30 cursor-grabbing border-2 border-dotted ${
+      return `${base} z-30 cursor-grabbing ${
         armed
-          ? 'border-tertiary bg-tertiary-container/55 shadow-[0_0_40px_rgba(45,52,53,0.16)] dark:border-tertiary dark:bg-tertiary-container/35 dark:shadow-[0_0_40px_rgba(0,0,0,0.4)]'
-          : 'border-primary/55 bg-surface-container-lowest/90 shadow-[0_0_40px_rgba(45,52,53,0.12)] dark:border-primary/60 dark:bg-surface-container-high/80 dark:shadow-[0_0_40px_rgba(0,0,0,0.32)]'
+          ? 'border-0 bg-tertiary-container/55 [box-shadow:var(--shadow-engrave-drag)]'
+          : 'border border-solid border-[rgba(80,70,50,0.25)] dark:border-[rgba(255,250,240,0.18)] bg-paper-raised'
       }`
     }
     if (dragKind === 'resize') {
-      return `${base} z-30 border-outline-variant/50 bg-surface-container-lowest/95 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/20 dark:ring-2 dark:ring-white/50 dark:ring-inset ${gcalBase}`
+      return `${base} z-30 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
+    }
+    if (useSideTextLayout && isSelected) {
+      return `${base} z-20 border-transparent bg-transparent shadow-none ring-1 ring-inset ring-on-surface/15 dark:ring-on-surface/20`
+    }
+    if (useSideTextLayout) {
+      return `${base} z-10 border-transparent bg-transparent shadow-none`
     }
     if (isSelected) {
-      return `${base} z-20 border-l-4 border-l-primary-fixed border-outline-variant/45 bg-surface-container-lowest/95 pl-0 shadow-[0_0_40px_rgba(45,52,53,0.12)] dark:border-0 dark:bg-[#4285F4] dark:pl-0 dark:ring-2 dark:ring-white/90 dark:shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a5fb4] ${lane === 'actual' ? 'dark:!bg-[#2f8d98] dark:!shadow-[0_1px_2px_rgba(0,0,0,0.28),0_20px_0_0_#1a6b64]' : ''}`
+      return `${base} z-20 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
     }
-    return `${base} z-10 ${gcalBase}`
+    return `${base} z-10 border-0 bg-paper-soft [box-shadow:var(--shadow-engrave-rest)]`
   })()
 
   return (
@@ -402,33 +416,79 @@ export function TimeBlockCard({
         transform: swipeNudgePx ? `translateX(${swipeNudgePx}px)` : undefined,
       }}
     >
-      {!readOnly && (
+      {!readOnly && dragKind !== 'move' && (
         <button
           type="button"
           aria-label="Resize block start"
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
+          className={[
+            useSideTextLayout ? 'h-[5px]' : 'h-2',
+            'w-full shrink-0 cursor-ns-resize border-0 relative',
+            'bg-paper-groove-bg hover:bg-paper-groove-bg-strong',
+            '[box-shadow:var(--shadow-groove-inner)]',
+            ...(!useSideTextLayout ? [
+              "before:content-[''] before:absolute before:left-1/2 before:-translate-x-1/2",
+              'before:top-[2px] before:h-[1px] before:w-9',
+              isSelected ? 'before:bg-paper-rule-ink' : 'before:bg-paper-rule',
+              "after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2",
+              'after:top-[4.5px] after:h-[1px] after:w-9',
+              isSelected ? 'after:bg-paper-rule-ink' : 'after:bg-paper-rule',
+            ] : []),
+          ].join(' ')}
           onPointerDown={(e) => startResize('start', e)}
         />
       )}
       {readOnly ? (
-        <div className="flex min-h-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden px-1.5 py-1.5">
-          <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface dark:text-[#202124]">
-            {label}
-          </p>
-          {showTime ? (
-            <p className="shrink-0 truncate font-body text-[11px] leading-tight text-on-surface/70 dark:text-[#202124]/80">
-              {timeRangeLabel}
+        useSideTextLayout ? (
+          <div className="flex min-h-0 flex-1 flex-row items-stretch gap-2 overflow-hidden px-1.5 py-0.5">
+            <div aria-hidden className={`self-stretch ${laneBarClassName}`} />
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden">
+              {sideTextTwoLines ? (
+                <>
+                  <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
+                    {label}
+                  </p>
+                  <p className="shrink-0 truncate font-body text-[10.5px] font-mono leading-tight text-on-surface-variant">
+                    {timeRangeLabel}
+                  </p>
+                </>
+              ) : (
+                <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
+                  {label}
+                  <span className="font-normal text-on-surface-variant">
+                    {' '}
+                    · {timeRangeLabel}
+                  </span>
+                </p>
+              )}
+              {block.note && sideTextTwoLines ? (
+                <p className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col items-stretch justify-center gap-0.5 overflow-hidden px-3 py-0">
+            <p className="shrink-0 truncate font-body text-[12.5px] font-medium leading-tight text-on-surface">
+              {label}
             </p>
-          ) : null}
-          {block.note ? (
-            <p className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
-          ) : null}
-        </div>
+            {showTime ? (
+              <p className="shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant">
+                {timeRangeLabel}
+              </p>
+            ) : null}
+            {block.note ? (
+              <p className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
+            ) : null}
+          </div>
+        )
       ) : (
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
-          className={`touch-none flex min-h-0 min-w-0 flex-1 flex-col justify-start gap-0.5 overflow-hidden border-0 bg-transparent px-1.5 py-1.5 text-left select-none ${
+          className={`touch-none flex min-h-0 min-w-0 flex-1 border-0 bg-transparent text-left select-none relative ${
+            useSideTextLayout
+              ? 'flex-row items-stretch gap-2 overflow-hidden px-1.5 py-0.5'
+              : 'flex-col items-stretch justify-center gap-0.5 overflow-hidden px-3 py-0'
+          } ${
             drag?.kind === 'move' || drag?.kind === 'complete' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={onBodyPointerDown}
@@ -448,24 +508,68 @@ export function TimeBlockCard({
             onBlockClick?.()
           }}
         >
-          <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface dark:text-[#202124]">
-            {label}
-          </span>
-          {showTime ? (
-            <span className="shrink-0 truncate font-body text-[11px] leading-tight text-on-surface/70 dark:text-[#202124]/80">
-              {timeRangeLabel}
+          {showLaneStripe && !useSideTextLayout && (
+            <span
+              aria-hidden
+              className={`absolute top-2 bottom-2 left-0 w-[2px] rounded-[2px] ${laneStripeColor}`}
+            />
+          )}
+          {showSelectedMeta && (
+            <span className="absolute top-1.5 right-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-on-surface-variant">
+              · selected
             </span>
-          ) : null}
-          {block.note ? (
-            <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
-              {block.note}
-            </span>
-          ) : null}
+          )}
+          {useSideTextLayout ? (
+            <>
+              <span aria-hidden className={`self-stretch ${laneBarClassName}`} />
+              <span className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden">
+                {sideTextTwoLines ? (
+                  <>
+                    <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
+                      {label}
+                    </span>
+                    <span className="shrink-0 truncate font-body text-[10.5px] font-mono leading-tight text-on-surface-variant">
+                      {timeRangeLabel}
+                    </span>
+                  </>
+                ) : (
+                  <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
+                    {label}
+                    <span className="font-normal text-on-surface-variant">
+                      {' '}
+                      · {timeRangeLabel}
+                    </span>
+                  </span>
+                )}
+                {block.note && sideTextTwoLines ? (
+                  <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
+                    {block.note}
+                  </span>
+                ) : null}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className={`shrink-0 truncate font-body leading-tight text-on-surface ${isSelected ? 'text-[13.5px] font-semibold' : 'text-[12.5px] font-medium'}`}>
+                {label}
+              </span>
+              {showTime ? (
+                <span className="shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant">
+                  {timeRangeLabel}
+                </span>
+              ) : null}
+              {block.note ? (
+                <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
+                  {block.note}
+                </span>
+              ) : null}
+            </>
+          )}
         </button>
       )}
       {drag?.kind === 'complete' && drag.pullPx >= SWIPE_COMPLETE_HINT_PX ? (
         <div
-          className="pointer-events-none absolute inset-0 z-1 flex items-center justify-center rounded-md bg-surface/75 px-1 dark:bg-stone-950/70"
+          className="pointer-events-none absolute inset-0 z-1 flex items-center justify-center rounded-md bg-surface/75 px-1 dark:bg-dark-background/70"
           aria-hidden
         >
           <span className="text-center font-headline text-[10px] font-medium uppercase tracking-wide text-on-surface">
@@ -473,11 +577,24 @@ export function TimeBlockCard({
           </span>
         </div>
       ) : null}
-      {!readOnly && (
+      {!readOnly && dragKind !== 'move' && (
         <button
           type="button"
           aria-label="Resize block end"
-          className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-[#0d0d0d]/12 dark:hover:bg-[#0d0d0d]/22"
+          className={[
+            useSideTextLayout ? 'h-[5px]' : 'h-2',
+            'w-full shrink-0 cursor-ns-resize border-0 relative',
+            'bg-paper-groove-bg hover:bg-paper-groove-bg-strong',
+            '[box-shadow:var(--shadow-groove-inner)]',
+            ...(!useSideTextLayout ? [
+              "before:content-[''] before:absolute before:left-1/2 before:-translate-x-1/2",
+              'before:top-[2px] before:h-[1px] before:w-9',
+              isSelected ? 'before:bg-paper-rule-ink' : 'before:bg-paper-rule',
+              "after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2",
+              'after:top-[4.5px] after:h-[1px] after:w-9',
+              isSelected ? 'after:bg-paper-rule-ink' : 'after:bg-paper-rule',
+            ] : []),
+          ].join(' ')}
           onPointerDown={(e) => startResize('end', e)}
         />
       )}
