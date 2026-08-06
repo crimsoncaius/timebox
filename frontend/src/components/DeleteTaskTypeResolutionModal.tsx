@@ -31,15 +31,10 @@ export function DeleteTaskTypeResolutionModal({
     }
   }, [open])
 
-  useEffect(() => {
-    if (open && migrateTargets.length > 0) {
-      setMigrateToId(migrateTargets[0]!.id)
-    } else {
-      setMigrateToId(null)
-    }
-  }, [open, migrateTargets])
-
-  const canMigrate = migrateTargets.length > 0 && migrateToId != null
+  const selectedMigrateToId = migrateTargets.some((target) => target.id === migrateToId)
+    ? migrateToId
+    : (migrateTargets[0]?.id ?? null)
+  const canMigrate = selectedMigrateToId != null
 
   return (
     <dialog
@@ -92,7 +87,7 @@ export function DeleteTaskTypeResolutionModal({
               <span className="sr-only">Target task type</span>
               <select
                 className="mt-1 w-full rounded-lg border-0 bg-surface-container-highest/90 px-3 py-2.5 font-body text-sm font-light text-on-surface outline-none ring-1 ring-outline-variant/20 focus-visible:ring-primary/25 dark:bg-dark-surface-container-high/80 dark:text-dark-on-surface dark:ring-dark-outline-variant/40"
-                value={migrateToId ?? ''}
+                value={selectedMigrateToId ?? ''}
                 disabled={busy}
                 onChange={(ev) => setMigrateToId(Number(ev.target.value))}
               >
@@ -113,7 +108,7 @@ export function DeleteTaskTypeResolutionModal({
             disabled={busy || !canMigrate}
             className="mt-3 w-full rounded-lg bg-linear-to-br from-primary to-primary-dim px-4 py-2.5 font-headline text-sm font-light text-on-primary transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40 dark:from-primary/90 dark:to-primary-dim/90"
             onClick={() => {
-              if (migrateToId != null) onMigrate(migrateToId)
+              if (selectedMigrateToId != null) onMigrate(selectedMigrateToId)
             }}
           >
             Move blocks and delete type

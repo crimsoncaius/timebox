@@ -113,3 +113,28 @@ vercel deploy frontend -y --no-wait --target preview --scope caius-projects-fddd
 - Browser traffic goes from Vercel to the Railway public API domain.
 - Backend-to-database traffic uses Railway private networking through `${{Postgres.DATABASE_URL}}`.
 - A Vercel deployment without `--target preview` also created `https://frontend-8vz3kgk5d-caius-projects-fddd122e.vercel.app`; it is included in CORS because it was created during deployment, but the intended frontend URL is the preview URL above.
+
+## Client-side routing and preview CORS
+
+The frontend includes `frontend/vercel.json`, which rewrites client-side routes (such as `/day/2026-08-06`) to the Vite entry point. Vercel continues to serve static assets normally.
+
+Keep the stable production frontend URL in `CORS_ORIGINS`. To allow this Timebox project's Vercel preview deployments without opening CORS to arbitrary origins, set the Railway API variable below:
+
+```bash
+railway variable set \
+  CORS_ORIGIN_REGEX='^https://timebox-[a-z0-9-]+-caius-projects-fddd122e\\.vercel\\.app$' \
+  --service api
+```
+
+## Opt-in live smoke test
+
+`backend/scripts/live_smoke.py` creates a namespaced task type and time block, updates both, then deletes them. It refuses to run unless the destructive-test confirmation variable is set, and it attempts cleanup in `finally` on every failure.
+
+```bash
+cd backend
+TIMEBOX_API_BASE_URL='https://your-api.example.com' \
+TIMEBOX_LIVE_SMOKE_CONFIRM='DELETE_TEST_DATA' \
+python scripts/live_smoke.py
+```
+
+It defaults to the isolated date `2099-12-31`; override it with `TIMEBOX_LIVE_SMOKE_DATE=YYYY-MM-DD` when needed.

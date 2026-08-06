@@ -91,7 +91,7 @@ export function Layout({
                 You
               </span>
               <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/70 dark:text-dark-on-surface-variant">
-                Local
+                Cloud
               </span>
             </div>
           </div>

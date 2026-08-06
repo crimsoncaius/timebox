@@ -36,7 +36,6 @@ test.beforeAll(() => {
 async function capture(page: Page, basename: string): Promise<void> {
   const filePath = path.join(SCREENSHOT_DIR, `${basename}.png`)
   await page.screenshot({ path: filePath, fullPage: true, animations: 'disabled' })
-  // eslint-disable-next-line no-console -- operator feedback for regeneration runs
   console.log(`Saved ${filePath}`)
 }
 

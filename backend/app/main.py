@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import days, settings, task_types
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from sqlalchemy import inspect
 
@@ -41,12 +41,22 @@ app = FastAPI(title="Timebox API", lifespan=lifespan)
 
 _settings = get_settings()
 _origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
+
+
+def cors_middleware_options(settings: Settings) -> dict[str, object]:
+    origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+    return {
+        "allow_origins": origins if origins else ["*"],
+        "allow_origin_regex": settings.cors_origin_regex or None,
+        "allow_credentials": True,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins if _origins else ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **cors_middleware_options(_settings),
 )
 
 app.include_router(days.router)
