@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.deps import require_api_key
 from app.api.routes import days, settings, task_types
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
@@ -59,9 +60,12 @@ app.add_middleware(
     **cors_middleware_options(_settings),
 )
 
-app.include_router(days.router)
-app.include_router(settings.router)
-app.include_router(task_types.router)
+# /health stays open so container health checks keep working without a key.
+_protected = [Depends(require_api_key)]
+
+app.include_router(days.router, dependencies=_protected)
+app.include_router(settings.router, dependencies=_protected)
+app.include_router(task_types.router, dependencies=_protected)
 
 
 @app.get("/health")

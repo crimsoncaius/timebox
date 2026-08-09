@@ -27,6 +27,14 @@ def list_task_types(db: Session) -> list[TaskType]:
     return list(db.execute(stmt).scalars().all())
 
 
+def block_counts_by_task_type(db: Session) -> dict[int, int]:
+    """Number of time blocks per task type id; types with no blocks are absent."""
+    stmt = select(TimeBlock.task_type_id, func.count(TimeBlock.id)).group_by(
+        TimeBlock.task_type_id
+    )
+    return {type_id: count for type_id, count in db.execute(stmt).all()}
+
+
 def get_task_type(db: Session, task_type_id: int) -> TaskType | None:
     return db.get(TaskType, task_type_id)
 

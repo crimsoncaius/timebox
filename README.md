@@ -2,6 +2,8 @@
 
 Dual-lane timeboxing app: **React + Tailwind** frontend, **FastAPI + Postgres** backend. Plan and track **planned** vs **actual** time blocks on a 30-minute grid; data is stored in Postgres with a **fixed app timezone** (`APP_TIMEZONE`) so every device agrees on “today”.
 
+There is also a native **Kotlin + Compose** Android client in [android/](android/README.md), talking to the same API.
+
 ## Prerequisites
 
 - Node.js 20+
@@ -70,7 +72,9 @@ See [docs/superpowers/specs/2026-04-13-hourly-timebox-design.md](docs/superpower
 ## API assumptions and extensions
 
 - **Timezone:** The backend owns `APP_TIMEZONE`; the UI uses `meta` from day responses for “today” and server time.
-- **Auth:** Single-user `v1`; see [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for how to add login later.
+- **Auth:** Single-user `v1`; see [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for how to add login later. Setting `API_KEY` turns on a shared-secret `X-API-Key` check for `/days`, `/settings` and `/task-types` (`/health` stays open) — used by the Android client. The web frontend does not send the header, so leave it unset while relying on the browser UI.
+- **Day summary:** `GET /days/{date}/summary` returns planned/actual totals plus per-task-type minutes without creating the day. Added for the Android Review screen.
+- **Day list:** `GET /days` rows carry `block_count`. Simply opening a date creates the day, so the archive is mostly empty rows; the count is how a calendar tells those from days with real entries.
 - **E2E / SQLite:** Setting `AUTO_CREATE_TABLES=1` lets the API create tables on startup (used by Playwright). Do **not** use this for production Postgres; use Alembic instead.
 - **Day window:** Configure the visible hours under **Settings** (`GET`/`PATCH /settings`); changes apply to all days.
 - **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Each time block references a `task_type_id` and may include an optional `note`. See [docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md) and the earlier [task types overview](docs/superpowers/specs/2026-04-14-task-types-design.md).

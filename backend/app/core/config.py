@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     app_timezone: str = "America/New_York"
     cors_origins: str = "http://localhost:5174,http://127.0.0.1:5174"
     cors_origin_regex: str | None = None
+    # When set, every /days, /settings and /task-types request must send a matching
+    # X-API-Key header. Unset (the default) leaves the API open, as it was before.
+    api_key: str | None = None
 
 
 @lru_cache

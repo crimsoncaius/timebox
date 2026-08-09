@@ -4,16 +4,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.task_type import TaskTypeCreate, TaskTypePatch, TaskTypeRead
+from app.schemas.task_type import (
+    TaskTypeCreate,
+    TaskTypeListItem,
+    TaskTypePatch,
+    TaskTypeRead,
+)
 from app.services import task_type_service
 
 router = APIRouter(prefix="/task-types", tags=["task-types"])
 
 
-@router.get("", response_model=list[TaskTypeRead])
-def list_task_types(db: Session = Depends(get_db)) -> list[TaskTypeRead]:
+@router.get("", response_model=list[TaskTypeListItem])
+def list_task_types(db: Session = Depends(get_db)) -> list[TaskTypeListItem]:
     rows = task_type_service.list_task_types(db)
-    return [TaskTypeRead.model_validate(r) for r in rows]
+    counts = task_type_service.block_counts_by_task_type(db)
+    return [
+        TaskTypeListItem(
+            **TaskTypeRead.model_validate(r).model_dump(),
+            usage_count=counts.get(r.id, 0),
+        )
+        for r in rows
+    ]
 
 
 @router.post("", response_model=TaskTypeRead)

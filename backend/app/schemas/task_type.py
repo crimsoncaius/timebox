@@ -14,6 +14,12 @@ class TaskTypeRead(BaseModel):
     updated_at: datetime
 
 
+class TaskTypeListItem(TaskTypeRead):
+    """List row with the number of time blocks referencing this type."""
+
+    usage_count: int = 0
+
+
 class TaskTypeCreate(BaseModel):
     name: str = Field(..., min_length=1)
 

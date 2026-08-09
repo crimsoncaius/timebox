@@ -27,6 +27,23 @@ class DayRead(BaseModel):
     meta: DayMeta
 
 
+class DaySummaryRow(BaseModel):
+    """Planned vs actual minutes for one task type on a single day."""
+
+    task_type_id: int
+    task_type_name: str
+    planned_minutes: int
+    actual_minutes: int
+
+
+class DaySummaryRead(BaseModel):
+    date: date
+    planned_minutes: int
+    actual_minutes: int
+    rows: list[DaySummaryRow]
+    meta: DayMeta
+
+
 class DayListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -36,3 +53,5 @@ class DayListItem(BaseModel):
     end_hour: int
     show_full_day: bool
     updated_at: datetime
+    #: How many blocks the day holds — lets a client tell an opened-but-empty day apart.
+    block_count: int

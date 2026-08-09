@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
@@ -11,7 +11,7 @@ from app.models.app_settings import AppSettings
 from app.models.day import Day
 from app.models.time_block import BlockLane, TimeBlock
 from app.services import task_type_service
-from app.schemas.day import DayListItem, DayMeta, DayRead
+from app.schemas.day import DayListItem, DayMeta, DayRead, DaySummaryRead, DaySummaryRow
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch, TimeBlockRead
 
@@ -112,14 +112,7 @@ def get_or_create_day(db: Session, d: dt.date) -> Day:
 
 def to_day_read(day: Day, settings: Settings) -> DayRead:
     blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
-    tz_name = settings.app_timezone
-    now = now_in_tz(tz_name)
-    today = today_in_tz(tz_name)
-    meta = DayMeta(
-        timezone=tz_name,
-        today=today,
-        server_now_iso=isoformat_z(now),
-    )
+    meta = _day_meta(settings)
     return DayRead(
         id=day.id,
         date=day.date,
@@ -133,7 +126,55 @@ def to_day_read(day: Day, settings: Settings) -> DayRead:
     )
 
 
-def to_day_list_item(day: Day) -> DayListItem:
+def _day_meta(settings: Settings) -> DayMeta:
+    tz_name = settings.app_timezone
+    return DayMeta(
+        timezone=tz_name,
+        today=today_in_tz(tz_name),
+        server_now_iso=isoformat_z(now_in_tz(tz_name)),
+    )
+
+
+def build_day_summary(day: Day | None, d: dt.date, settings: Settings) -> DaySummaryRead:
+    """Aggregate a day's blocks into planned/actual totals and per-task-type rows.
+
+    `day` may be None for a date that was never opened; that yields an empty summary
+    rather than creating the day, so viewing the review does not add it to the archive.
+    """
+    planned_by_type: dict[int, int] = {}
+    actual_by_type: dict[int, int] = {}
+    names: dict[int, str] = {}
+
+    for block in day.time_blocks if day is not None else []:
+        minutes = block.end_minute - block.start_minute
+        names[block.task_type_id] = block.task_type.name
+        bucket = planned_by_type if block.lane == BlockLane.planned else actual_by_type
+        bucket[block.task_type_id] = bucket.get(block.task_type_id, 0) + minutes
+
+    rows = [
+        DaySummaryRow(
+            task_type_id=type_id,
+            task_type_name=names[type_id],
+            planned_minutes=planned_by_type.get(type_id, 0),
+            actual_minutes=actual_by_type.get(type_id, 0),
+        )
+        for type_id in names
+    ]
+    # Busiest first, so the review screen leads with where the day actually went.
+    rows.sort(
+        key=lambda r: (-(r.actual_minutes + r.planned_minutes), r.task_type_name.lower())
+    )
+
+    return DaySummaryRead(
+        date=d,
+        planned_minutes=sum(planned_by_type.values()),
+        actual_minutes=sum(actual_by_type.values()),
+        rows=rows,
+        meta=_day_meta(settings),
+    )
+
+
+def to_day_list_item(day: Day, block_count: int) -> DayListItem:
     return DayListItem(
         id=day.id,
         date=day.date,
@@ -141,6 +182,7 @@ def to_day_list_item(day: Day) -> DayListItem:
         end_hour=day.end_hour,
         show_full_day=day.show_full_day,
         updated_at=day.updated_at,
+        block_count=block_count,
     )
 
 
@@ -302,9 +344,20 @@ def complete_planned_as_actual(db: Session, day: Day, planned_block_id: int) -> 
     return block
 
 
-def list_recent_days(db: Session, limit: int = 60) -> list[Day]:
-    stmt = select(Day).order_by(Day.date.desc()).limit(limit)
-    return list(db.execute(stmt).scalars().all())
+def list_recent_days(db: Session, limit: int = 60) -> list[tuple[Day, int]]:
+    """Recent days, newest first, each paired with how many blocks it holds.
+
+    Merely opening a date creates the day, so the archive is full of empty rows; the
+    count rides along as a subquery to tell those apart without loading every block.
+    """
+    block_count = (
+        select(func.count(TimeBlock.id))
+        .where(TimeBlock.day_id == Day.id)
+        .correlate(Day)
+        .scalar_subquery()
+    )
+    stmt = select(Day, block_count).order_by(Day.date.desc()).limit(limit)
+    return [(day, count) for day, count in db.execute(stmt).all()]
 
 
 def validate_timezone(tz_name: str) -> None:
