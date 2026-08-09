@@ -1,0 +1,241 @@
+package com.timebox.android.ui.types
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import com.timebox.android.data.TaskType
+import com.timebox.android.ui.components.ErrorState
+import com.timebox.android.ui.components.Hairline
+import com.timebox.android.ui.components.LoadingState
+import com.timebox.android.ui.leafOf
+import com.timebox.android.ui.theme.TimeboxDimens
+import com.timebox.android.ui.theme.TimeboxShapes
+import com.timebox.android.ui.theme.TimeboxTheme
+
+@Composable
+fun TypesScreen(
+    state: TypesUiState,
+    onInputChange: (String) -> Unit,
+    onAdd: () -> Unit,
+    onDelete: (TaskType) -> Unit,
+    onConfirmCascade: () -> Unit,
+    onDismissCascade: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TimeboxDimens.screenPadding)
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = state.input,
+                onValueChange = onInputChange,
+                singleLine = true,
+                placeholder = {
+                    Text("coding/ai", style = TimeboxTheme.type.body, color = colors.outlineVariant)
+                },
+                textStyle = TimeboxTheme.type.body.copy(color = colors.on, fontSize = 14.sp),
+                shape = TimeboxShapes.field,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onAdd() }),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = colors.lowest,
+                    unfocusedContainerColor = colors.lowest,
+                    focusedIndicatorColor = colors.outline,
+                    unfocusedIndicatorColor = colors.hairline,
+                    cursorColor = colors.on,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(TimeboxShapes.field)
+                    .background(colors.on)
+                    .clickable(enabled = !state.saving, onClick = onAdd),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = "Add task type",
+                    tint = colors.bg,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
+        }
+
+        when {
+            state.loading && state.groups.isEmpty() -> LoadingState(Modifier.weight(1f))
+            state.error != null && state.groups.isEmpty() -> ErrorState(
+                message = state.error,
+                onRetry = onRetry,
+                modifier = Modifier.weight(1f),
+            )
+            state.groups.isEmpty() -> Box(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No task types yet. Add a path like coding/ai to get started.",
+                    style = TimeboxTheme.type.body,
+                    color = colors.onVariant,
+                )
+            }
+            else -> LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(
+                    start = TimeboxDimens.screenPadding,
+                    end = TimeboxDimens.screenPadding,
+                    bottom = TimeboxDimens.bottomInset,
+                ),
+            ) {
+                state.groups.forEach { group ->
+                    item(key = "header-${group.root}") {
+                        Text(
+                            text = group.root.uppercase(),
+                            style = TimeboxTheme.type.laneLabel.copy(
+                                fontSize = 9.5.sp,
+                                letterSpacing = 0.16.em,
+                            ),
+                            color = colors.onVariant,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                        )
+                    }
+                    item(key = "group-${group.root}") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(TimeboxShapes.card)
+                                .background(colors.low)
+                                .padding(bottom = 0.dp),
+                        ) {
+                            group.items.forEachIndexed { index, type ->
+                                if (index > 0) Hairline()
+                                TypeRow(type = type, onDelete = { onDelete(type) })
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    val pending = state.pendingCascade
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = onDismissCascade,
+            containerColor = colors.sheet,
+            titleContentColor = colors.on,
+            textContentColor = colors.onVariant,
+            title = { Text("Delete ${pending.name}?", style = TimeboxTheme.type.sectionTitle) },
+            text = {
+                Text(
+                    text = "${pending.usageCount} block${if (pending.usageCount == 1) "" else "s"} " +
+                        "use this type. Deleting it removes those blocks too.",
+                    style = TimeboxTheme.type.bodySmall,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirmCascade) {
+                    Text("Delete anyway", color = colors.error, style = TimeboxTheme.type.label)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissCascade) {
+                    Text("Cancel", color = colors.on, style = TimeboxTheme.type.label)
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun TypeRow(type: TaskType, onDelete: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // Nesting depth reads as indentation, same as the design.
+        Spacer(Modifier.width((type.depth * 14).dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = leafOf(type.name),
+                style = TimeboxTheme.type.label,
+                color = colors.on,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = type.name,
+                style = TimeboxTheme.type.monoSmall,
+                color = colors.onVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp),
+            )
+        }
+        Text(
+            text = if (type.usageCount > 0) "${type.usageCount}×" else "—",
+            style = TimeboxTheme.type.mono,
+            color = colors.onVariant,
+        )
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onDelete),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Delete,
+                contentDescription = "Delete ${type.name}",
+                tint = colors.error,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
