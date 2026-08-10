@@ -24,6 +24,7 @@ data class Draft(
 )
 
 data class DayUiState(
+    /** The device's date until the backend's is known; see [DayViewModel.start]. */
     val date: LocalDate = LocalDate.now(),
     val day: Day? = null,
     val taskTypes: List<TaskType> = emptyList(),
@@ -65,6 +66,31 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     val state: StateFlow<DayUiState> = _state.asStateFlow()
 
     private var typesLoaded = false
+    private var todayResolved = false
+
+    /**
+     * Open the Day tab on the backend's today rather than the device's.
+     *
+     * `APP_TIMEZONE` is what decides which date a block belongs to, and a phone in
+     * another zone can be a day out from it — Singapore's small hours are still
+     * yesterday in UTC. The summary endpoint carries the same `meta` as a day fetch but
+     * does not create the date it is asked about, so probing with it cannot leave a
+     * stray empty day in the archive.
+     *
+     * Resolved once per process. Afterwards this is an ordinary reload, which keeps the
+     * date the user navigated to instead of yanking them back to today.
+     */
+    fun start() {
+        if (todayResolved) {
+            load()
+            return
+        }
+        viewModelScope.launch {
+            val today = repository.getDaySummary(_state.value.date).getOrNull()?.today
+            todayResolved = today != null
+            load(today ?: _state.value.date)
+        }
+    }
 
     fun load(date: LocalDate = _state.value.date, showSpinner: Boolean = true) {
         _state.update { it.copy(date = date, loading = showSpinner && it.day == null, error = null) }

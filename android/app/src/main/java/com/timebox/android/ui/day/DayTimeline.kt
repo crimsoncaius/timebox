@@ -14,13 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +50,7 @@ import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -118,7 +121,7 @@ fun DayTimeline(
             )
         }
 
-        val nowMinute = day.serverNowMinute
+        val nowMinute = rememberNowMinute(day)
         if (day.date == day.today && nowMinute != null &&
             nowMinute >= day.visibleStart && nowMinute < day.visibleEnd
         ) {
@@ -126,22 +129,51 @@ fun DayTimeline(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = TimeboxDimens.gutterWidth)
+                    // The lanes sit one gap past the gutter, so the rule has to start there
+                    // too or it hangs over the gutter's hairline.
+                    .padding(start = TimeboxDimens.gutterWidth + TimeboxDimens.laneGap)
                     .offset(y = y)
                     .height(1.dp)
                     .background(colors.now),
+                // The knob is seven times the rule's height, so it is centred on the rule
+                // rather than hung off its top corner.
+                contentAlignment = Alignment.CenterStart,
             ) {
+                // requiredSize, not size: the rule is 1dp tall and hands that down as a
+                // maximum, which squashes the knob into a dash floating clear of the line.
                 Box(
                     modifier = Modifier
-                        .offset(x = (-3).dp, y = (-3.5).dp)
-                        .size(7.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .offset(x = (-3).dp)
+                        .requiredSize(7.dp)
+                        .clip(CircleShape)
                         .background(colors.now),
                 )
             }
         }
     }
 }
+
+/** A slot is 30 minutes tall, so anything finer than this moves the rule sub-pixel. */
+private const val NOW_TICK_MILLIS = 30_000L
+
+/**
+ * The now line's minute, ticking locally so the rule creeps down between fetches.
+ *
+ * `serverNowMinute` is a snapshot taken when the day was loaded; without this the line
+ * would sit wherever it was when the screen opened until something reloaded the day.
+ */
+@Composable
+private fun rememberNowMinute(day: Day): Int? = produceState(
+    initialValue = day.nowMinuteAt(System.currentTimeMillis()),
+    key1 = day,
+) {
+    // Re-synced at the top of the loop as well as on first composition, so a fresh day
+    // takes effect immediately rather than after the next tick.
+    while (true) {
+        value = day.nowMinuteAt(System.currentTimeMillis())
+        delay(NOW_TICK_MILLIS)
+    }
+}.value
 
 @Composable
 private fun HourGutter(day: Day, slotHeight: Dp, modifier: Modifier = Modifier) {
@@ -388,7 +420,9 @@ private fun BlockCard(
                     // tap on empty space and open a draft over the top of our selection.
                     down.consume()
                     var total = 0f
+                    var sideways = 0f
                     var isDrag = false
+                    var swiping = false
 
                     // The timeline's own vertical scroll claims these moves, and a claimed
                     // change reports a zero delta to `positionChange`. Reading past the
@@ -398,7 +432,18 @@ private fun BlockCard(
                         val change = awaitPointerEvent().changes
                             .firstOrNull { it.id == down.id } ?: break
                         if (!change.pressed) break
-                        total += change.positionChangeIgnoreConsumed().y
+                        val moved = change.positionChangeIgnoreConsumed()
+                        total += moved.y
+                        sideways += moved.x
+                        // A sideways drag is the screen's day swipe passing through. Reading
+                        // past the claim means that swipe cannot cancel this gesture the way
+                        // it cancels an ordinary tap, so the card has to stand down itself —
+                        // otherwise the lift lands as a tap and the sheet opens over the day
+                        // the user just swiped to.
+                        if (abs(sideways) > slop && abs(sideways) > abs(total)) {
+                            swiping = true
+                            break
+                        }
                         if (abs(total) > slop) {
                             isDrag = true
                             change.consume()
@@ -416,7 +461,7 @@ private fun BlockCard(
                             onDrag(mode, total)
                         }
                         onDragEnd(mode, total)
-                    } else {
+                    } else if (!swiping) {
                         onTap()
                     }
                 }

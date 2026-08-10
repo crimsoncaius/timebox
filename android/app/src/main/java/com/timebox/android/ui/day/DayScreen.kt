@@ -18,6 +18,8 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,7 +55,7 @@ fun DayScreen(
 ) {
     val colors = TimeboxTheme.colors
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().dayChangeSwipe(onPrevDay, onNextDay)) {
         DayStrip(
             label = "${formatDayStrip(state.date)} · swipe to change day",
             onPrev = onPrevDay,
@@ -113,6 +115,45 @@ fun DayScreen(
     }
 }
 
+/**
+ * How far sideways a drag must travel before it counts as changing the day.
+ *
+ * The prototype's 55px, read as dp rather than raw pixels: across a whole screen a
+ * fifth of an inch of travel is an accident waiting to happen on a dense display.
+ */
+private val DAY_SWIPE_THRESHOLD = 55.dp
+
+/**
+ * Drag sideways anywhere on the screen to step a day.
+ *
+ * This sits outermost, so everything inside it gets the pointer first and anything
+ * that claims one wins outright — the timeline's vertical scroll, a block being moved
+ * or resized, a tap on an empty slot. Only a drag none of them wanted arrives here.
+ */
+@Composable
+private fun Modifier.dayChangeSwipe(onPrev: () -> Unit, onNext: () -> Unit): Modifier {
+    val prev by rememberUpdatedState(onPrev)
+    val next by rememberUpdatedState(onNext)
+    // Keyed on Unit so a recomposition mid-gesture cannot restart the detector and
+    // swallow the drag; the callbacks are read through the states above instead.
+    return this.pointerInput(Unit) {
+        val threshold = DAY_SWIPE_THRESHOLD.toPx()
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onDragEnd = {
+                if (abs(total) > threshold) {
+                    if (total < 0) next() else prev()
+                }
+            },
+            onHorizontalDrag = { change, amount ->
+                change.consume()
+                total += amount
+            },
+        )
+    }
+}
+
 @Composable
 private fun DayStrip(
     label: String,
@@ -124,23 +165,7 @@ private fun DayStrip(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = TimeboxDimens.screenPadding)
-            .padding(bottom = 10.dp)
-            .pointerInput(Unit) {
-                var total = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { total = 0f },
-                    onDragEnd = {
-                        // Same 55px threshold the prototype uses.
-                        if (abs(total) > 55f) {
-                            if (total < 0) onNext() else onPrev()
-                        }
-                    },
-                    onHorizontalDrag = { change, amount ->
-                        change.consume()
-                        total += amount
-                    },
-                )
-            },
+            .padding(bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

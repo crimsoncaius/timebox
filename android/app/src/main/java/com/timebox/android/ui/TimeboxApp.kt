@@ -74,7 +74,7 @@ fun TimeboxApp(
             Screen.Review -> reviewViewModel.load(dayState.date)
             Screen.Day -> {
                 // Types may have changed on the Types tab; the chips must stay current.
-                dayViewModel.load()
+                dayViewModel.start()
                 dayViewModel.refreshTaskTypes()
             }
         }
@@ -134,7 +134,7 @@ fun TimeboxApp(
                         state = dayState,
                         onPrevDay = { dayViewModel.shiftDay(-1) },
                         onNextDay = { dayViewModel.shiftDay(1) },
-                        onRetry = { dayViewModel.load() },
+                        onRetry = { dayViewModel.start() },
                         onTapSlot = { lane: Lane, minute: Int ->
                             dayViewModel.startDraft(lane, minute)
                         },

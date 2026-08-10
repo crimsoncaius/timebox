@@ -54,12 +54,27 @@ data class Day(
     val today: LocalDate,
     /** Minutes past midnight in the app timezone, or null when the clock is unknown. */
     val serverNowMinute: Int?,
+    /** When [serverNowMinute] was read, so the now line can advance between fetches. */
+    val capturedAtMillis: Long = System.currentTimeMillis(),
 ) {
     val visibleStart: Int get() = if (showFullDay) 0 else startHour * 60
     val visibleEnd: Int get() = if (showFullDay) DAY_END_MINUTES else endHour * 60
     val slotCount: Int get() = (visibleEnd - visibleStart) / SLOT_MINUTES
 
     fun lane(lane: Lane): List<TimeBlock> = blocks.filter { it.lane == lane }
+
+    /**
+     * [serverNowMinute] advanced by the time elapsed since this day was fetched.
+     *
+     * Only the *interval* is taken from the device, never its wall-clock reading: the
+     * phone may sit in a different zone from `APP_TIMEZONE`, and the whole point of the
+     * server clock is that every device agrees on the same time of day.
+     */
+    fun nowMinuteAt(millis: Long): Int? {
+        val base = serverNowMinute ?: return null
+        val elapsed = ((millis - capturedAtMillis) / 60_000L).coerceAtLeast(0L)
+        return base + elapsed.toInt()
+    }
 }
 
 data class ArchivedDay(
@@ -86,6 +101,8 @@ data class DaySummaryRow(
 
 data class DaySummary(
     val date: LocalDate,
+    /** The backend's today in the app timezone. Read-only, so it costs no stray day row. */
+    val today: LocalDate,
     val plannedMinutes: Int,
     val actualMinutes: Int,
     val rows: List<DaySummaryRow>,
@@ -131,6 +148,7 @@ fun DayListItemDto.toModel() = ArchivedDay(
 
 fun DaySummaryDto.toModel() = DaySummary(
     date = LocalDate.parse(date),
+    today = LocalDate.parse(meta.today),
     plannedMinutes = plannedMinutes,
     actualMinutes = actualMinutes,
     rows = rows.map {
