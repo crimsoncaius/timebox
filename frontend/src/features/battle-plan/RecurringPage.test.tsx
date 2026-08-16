@@ -49,6 +49,7 @@ describe('RecurringPage', () => {
   let paused: RecurringTemplate[]
 
   beforeEach(() => {
+    localStorage.clear()
     active = [template]
     paused = []
     window.confirm = vi.fn(() => true)
@@ -95,6 +96,9 @@ describe('RecurringPage', () => {
     render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
 
     expect(await screen.findByText('3 times per week')).toBeInTheDocument()
+    const sidebar = screen.getByRole('complementary', { name: 'Battle Plan lists and projects' })
+    expect(within(sidebar).getByRole('button', { name: 'All Tasks' })).toBeInTheDocument()
+    expect(within(sidebar).getByRole('link', { name: 'Recurring' })).toHaveClass('bg-surface-container-high')
     await user.click(screen.getByRole('button', { name: 'Gym' }))
     const detail = screen.getByRole('dialog', { name: 'Recurring template Gym' })
     expect(within(detail).getByText('Next five')).toBeInTheDocument()

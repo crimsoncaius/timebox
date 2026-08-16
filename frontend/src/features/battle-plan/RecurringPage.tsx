@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import {
   api,
+  type BattleTask,
   type PriorityLevel,
   type Project,
+  type ProjectWrite,
   type RecurrenceFrequency,
   type RecurrenceMode,
   type RecurrencePreview,
@@ -14,6 +16,9 @@ import {
   type RecurringTemplateWrite,
   type TaskType,
 } from '../../lib/api'
+import { BattlePlanSidebar } from './BattlePlanSidebar'
+import { persistBattlePlanScope, type BattlePlanScope } from './battlePlanState'
+import { ProjectEditor } from './ProjectEditor'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const inputClass = 'w-full rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-3 py-2.5 text-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/15 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest'
@@ -37,8 +42,16 @@ function displayWindow(start: string, end: string) {
   return `${formatter.format(startDate)}–${formatter.format(endDate)}`
 }
 
+function projectTaskCount(tasks: BattleTask[], projectId: number) {
+  return tasks.reduce(
+    (count, task) => count + (task.project_id === projectId ? 1 + task.subtasks.length : 0),
+    0,
+  )
+}
+
 export function RecurringPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [status, setStatus] = useState<RecurrenceStatus>('active')
   const [templates, setTemplates] = useState<RecurringTemplate[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -47,6 +60,10 @@ export function RecurringPage() {
   const [error, setError] = useState<string | null>(null)
   const [creatingMode, setCreatingMode] = useState<RecurrenceMode | null>(null)
   const [editing, setEditing] = useState<RecurringTemplate | null>(null)
+  const [mobileSidebar, setMobileSidebar] = useState(false)
+  const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
+  const [projectEditorCount, setProjectEditorCount] = useState(0)
+  const [timezone, setTimezone] = useState('UTC')
   const selectedId = Number(searchParams.get('recurring')) || null
   const selected = templates.find((template) => template.id === selectedId) ?? null
 
@@ -69,6 +86,12 @@ export function RecurringPage() {
 
   useEffect(() => { void load(status) }, [load, status])
 
+  useEffect(() => {
+    let active = true
+    void api.health().then((health) => { if (active) setTimezone(health.timezone) }).catch(() => undefined)
+    return () => { active = false }
+  }, [])
+
   const lifecycle = async (template: RecurringTemplate, action: 'pause' | 'resume' | 'end' | 'delete') => {
     setError(null)
     try {
@@ -89,13 +112,46 @@ export function RecurringPage() {
     }
   }
 
+  const openBattlePlanScope = (scope: BattlePlanScope) => {
+    persistBattlePlanScope(scope)
+    navigate('/battle-plan')
+  }
+
+  const openProject = async (project: Project) => {
+    setProjectEditor(project)
+    try {
+      const [active, archived, trash] = await Promise.all([
+        api.listBattleTasks('active'), api.listBattleTasks('archived'), api.listBattleTasks('trash'),
+      ])
+      setProjectEditorCount(projectTaskCount([...active.items, ...archived.items, ...trash.items], project.id))
+    } catch {
+      setProjectEditorCount(0)
+    }
+  }
+
   return (
     <Layout mainClassName="w-full px-4 py-6 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-6 flex items-center justify-between lg:hidden">
+        <button type="button" className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container" onClick={() => setMobileSidebar(true)}>Lists & projects</button>
+      </div>
+      <div className="flex min-h-[calc(100vh-9rem)] gap-6">
+        <BattlePlanSidebar
+          open={mobileSidebar}
+          collection="active"
+          scope="all"
+          recurring
+          projects={projects}
+          onClose={() => setMobileSidebar(false)}
+          onScope={openBattlePlanScope}
+          onCollection={(collection) => navigate(`/battle-plan?collection=${collection}`)}
+          onNewProject={() => { setProjectEditorCount(0); setProjectEditor(null) }}
+          onEditProject={(project) => void openProject(project)}
+        />
+
+        <section className="min-w-0 max-w-6xl flex-1">
+          <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link to="/battle-plan" className="text-xs text-on-surface-variant hover:text-on-surface">← Battle Plan</Link>
-            <p className="mt-4 font-label text-xs uppercase tracking-[0.18em] text-on-surface-variant">Battle Plan</p>
+            <p className="font-label text-xs uppercase tracking-[0.18em] text-on-surface-variant">Battle Plan</p>
             <h1 className="mt-2 font-headline text-[2.5rem] font-extralight leading-none tracking-tighter">Recurring</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-on-surface-variant">Templates create independent Battle Plan tasks seven days ahead.</p>
           </div>
@@ -107,7 +163,7 @@ export function RecurringPage() {
               Times per period
             </button>
           </div>
-        </header>
+          </header>
 
         <div className="mt-8 flex gap-1 rounded-xl bg-surface-container-low p-1 sm:w-fit dark:bg-dark-surface-container-low">
           {(['active', 'paused', 'ended'] as RecurrenceStatus[]).map((value) => (
@@ -138,6 +194,7 @@ export function RecurringPage() {
             />
           ))}
         </div>
+        </section>
       </div>
 
       {selected ? <TemplateDetail template={selected} onClose={() => setSearchParams({ view: 'recurring' })} onEdit={() => setEditing(selected)} /> : null}
@@ -155,6 +212,25 @@ export function RecurringPage() {
             setSearchParams({ view: 'recurring', recurring: String(saved.id) })
             await load(saved.status)
           }}
+        />
+      ) : null}
+      {projectEditor !== undefined ? (
+        <ProjectEditor
+          project={projectEditor}
+          timezone={timezone}
+          taskCount={projectEditorCount}
+          onClose={() => setProjectEditor(undefined)}
+          onSave={async (body: ProjectWrite) => {
+            if (projectEditor) await api.patchProject(projectEditor.id, body)
+            else await api.createProject(body)
+            setProjects(await api.listProjects())
+            setProjectEditor(undefined)
+          }}
+          onDelete={projectEditor ? async () => {
+            await api.deleteProject(projectEditor.id)
+            setProjects(await api.listProjects())
+            setProjectEditor(undefined)
+          } : null}
         />
       ) : null}
     </Layout>
