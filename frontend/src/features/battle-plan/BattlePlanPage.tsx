@@ -352,6 +352,7 @@ export function BattlePlanPage() {
                       onOpen={openTask}
                       onAddSubtask={addSubtask}
                       onPatchSubtask={(id, nextStatus) => patchTask(id, { status: nextStatus })}
+                      onToggleReady={(id, ready) => patchTask(id, { ready_to_plan: ready })}
                     />
                   ))}
                 </div>
@@ -473,7 +474,7 @@ function BattlePlanSidebar({ open, collection, scope, projects, onClose, onScope
   )
 }
 
-function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onPatchSubtask }: {
+function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onPatchSubtask, onToggleReady }: {
   status: TaskStatus
   tasks: BattleTask[]
   projects: Project[]
@@ -485,6 +486,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   onOpen: (id: number) => void
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onPatchSubtask: (id: number, status: TaskStatus) => Promise<void>
+  onToggleReady: (id: number, ready: boolean) => Promise<void>
 }) {
   const { ref, isDropTarget } = useDroppable({ id: `column:${status}`, accept: 'battle-task' })
   const fixedProjectId = scope === 'all'
@@ -520,6 +522,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
             onOpen={(id = task.id) => onOpen(id)}
             onAddSubtask={onAddSubtask}
             onPatchSubtask={onPatchSubtask}
+            onToggleReady={onToggleReady}
           />
         ))}
       </div>

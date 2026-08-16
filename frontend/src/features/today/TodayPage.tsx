@@ -5,7 +5,7 @@ import { DayTimeline } from '../../components/DayTimeline'
 import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { TimeBlockModal } from '../../components/TimeBlockModal'
-import { api, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
+import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
 import { addDaysIso } from '../../lib/time'
 
 function formatDisplayDate(isoDate: string): string {
@@ -30,6 +30,8 @@ export function TodayPage() {
   const navigate = useNavigate()
   const [day, setDay] = useState<DayRead | null>(null)
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
+  const [battleTasks, setBattleTasks] = useState<BattleTask[]>([])
+  const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
@@ -44,9 +46,14 @@ export function TodayPage() {
     setLoading(true)
     setError(null)
     try {
-      const [d, tt] = await Promise.all([api.getDay(date), api.listTaskTypes()])
+      const [d, tt, battle] = await Promise.all([
+        api.getDay(date),
+        api.listTaskTypes(),
+        api.listBattleTasks('active').catch(() => null),
+      ])
       setDay(d)
       setTaskTypes(tt)
+      setBattleTasks(battle?.items ?? [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load day')
     } finally {
@@ -89,10 +96,19 @@ export function TodayPage() {
   const onLaneSlotClick = useCallback(
     (lane: BlockLane, startMin: number, endMin: number) => {
       if (!tryDiscardIfNeeded()) return
-      setDraft({ lane, start_minute: startMin, end_minute: endMin })
+      const planningTask = battleTasks
+        .flatMap((task) => [task, ...task.subtasks])
+        .find((task) => task.id === planningTaskId)
+      setDraft({
+        lane,
+        start_minute: startMin,
+        end_minute: endMin,
+        task_id: lane === 'planned' ? planningTask?.id ?? null : null,
+        task_type_id: lane === 'planned' ? planningTask?.task_type_id ?? null : null,
+      })
       setSelectedBlockId(null)
     },
-    [tryDiscardIfNeeded],
+    [battleTasks, planningTaskId, tryDiscardIfNeeded],
   )
 
   const onDraftTimeChange = useCallback((startMin: number, endMin: number) => {
@@ -135,6 +151,7 @@ export function TodayPage() {
         const next = await api.createBlock(date, {
           lane: draft.lane,
           task_type_id: payload.task_type_id,
+          task_id: draft.task_id ?? null,
           note: payload.note ?? undefined,
           start_minute: draft.start_minute,
           end_minute: draft.end_minute,
@@ -147,6 +164,11 @@ export function TodayPage() {
             b.end_minute === draft.end_minute &&
             b.task_type_id === payload.task_type_id,
         )
+        if (draft.task_id) {
+          const refreshed = await api.listBattleTasks('active')
+          setBattleTasks(refreshed.items)
+          setPlanningTaskId(null)
+        }
         setDraft(null)
         if (created) setSelectedBlockId(created.id)
       } catch (e) {
@@ -164,6 +186,7 @@ export function TodayPage() {
       blockId: number,
       patch: {
         task_type_id?: number
+        task_id?: number | null
         note?: string | null
         start_minute?: number
         end_minute?: number
@@ -288,6 +311,10 @@ export function TodayPage() {
   }
 
   const mobileSheetOpen = selectedBlock != null || draft != null
+  const readyTasks = battleTasks
+    .flatMap((task) => [task, ...task.subtasks])
+    .filter((task) => task.ready_to_plan)
+  const planningTask = readyTasks.find((task) => task.id === planningTaskId) ?? null
 
   return (
     <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
@@ -351,6 +378,24 @@ export function TodayPage() {
             </div>
           )}
 
+          <div className="mb-6 lg:hidden">
+            <ReadyToPlanDrawer
+              tasks={readyTasks}
+              selectedTaskId={planningTaskId}
+              onSelect={(taskId) => {
+                setPlanningTaskId(taskId)
+                setDraft(null)
+                setSelectedBlockId(null)
+              }}
+            />
+          </div>
+
+          {planningTask ? (
+            <p className="mb-3 rounded-xl bg-primary/8 px-4 py-2.5 text-sm text-on-surface">
+              <strong>{planningTask.title}</strong> is selected. Choose an open slot in the <strong>Planned</strong> lane.
+            </p>
+          ) : null}
+
           <section className="overflow-x-auto pb-24">
             <DayTimeline
               ref={timelineRef}
@@ -378,7 +423,17 @@ export function TodayPage() {
             data-inspector="rail"
             className={`sticky top-32 mt-0 max-h-[calc(100dvh-8.5rem)] w-full overflow-y-auto bg-surface-container-low dark:bg-dark-surface-container-low${blockDragActive ? ' pointer-events-none' : ''}`}
           >
-            {selectedBlock == null && draft == null ? null : (
+            {selectedBlock == null && draft == null ? (
+              <ReadyToPlanDrawer
+                tasks={readyTasks}
+                selectedTaskId={planningTaskId}
+                onSelect={(taskId) => {
+                  setPlanningTaskId(taskId)
+                  setDraft(null)
+                  setSelectedBlockId(null)
+                }}
+              />
+            ) : (
               <div className="transition-opacity duration-150">
                 <TimeBlockInspectorContent
                   key={
@@ -425,5 +480,63 @@ export function TodayPage() {
         </div>
       </div>
     </Layout>
+  )
+}
+
+function ReadyToPlanDrawer({ tasks, selectedTaskId, onSelect }: {
+  tasks: BattleTask[]
+  selectedTaskId: number | null
+  onSelect: (taskId: number | null) => void
+}) {
+  const [query, setQuery] = useState('')
+  const visible = tasks.filter((task) => task.title.toLowerCase().includes(query.trim().toLowerCase()))
+
+  return (
+    <section className="rounded-2xl bg-surface-container-lowest/90 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] dark:bg-dark-surface-container-lowest/85" aria-label="Ready to Plan tasks">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-label text-[10px] uppercase tracking-[0.16em] text-primary">Battle Plan</p>
+          <h2 className="mt-1 font-headline text-xl font-light text-on-surface">Ready to Plan</h2>
+          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Select a task, then choose a Planned time slot.</p>
+        </div>
+        <span className="rounded-full bg-surface-container px-2 py-1 text-xs text-on-surface-variant">{tasks.length}</span>
+      </div>
+
+      {tasks.length > 4 ? (
+        <input
+          type="search"
+          aria-label="Search Ready to Plan tasks"
+          placeholder="Search tasks"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="mt-4 w-full rounded-xl border border-outline-variant/25 bg-surface px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface"
+        />
+      ) : null}
+
+      <div className="mt-4 space-y-2">
+        {visible.map((task) => {
+          const selected = task.id === selectedTaskId
+          return (
+            <button
+              key={task.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(selected ? null : task.id)}
+              className={`w-full rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/15' : 'border-outline-variant/20 bg-surface hover:border-primary/25 dark:border-dark-outline-variant dark:bg-dark-surface'}`}
+            >
+              <span className="block truncate text-sm font-medium text-on-surface">{task.title}</span>
+              <span className={`mt-1 block text-xs ${task.task_type ? 'text-on-surface-variant' : 'text-amber-700 dark:text-amber-300'}`}>
+                {task.task_type?.name ?? 'Choose a task type after placing'}
+              </span>
+            </button>
+          )
+        })}
+        {visible.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-outline-variant/30 px-3 py-5 text-center text-xs text-on-surface-variant">
+            {tasks.length === 0 ? 'No tasks are waiting to be planned.' : 'No matching tasks.'}
+          </p>
+        ) : null}
+      </div>
+    </section>
   )
 }

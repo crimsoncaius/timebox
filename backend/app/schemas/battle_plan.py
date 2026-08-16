@@ -52,6 +52,7 @@ class TaskRead(BaseModel):
     task_type: TaskTypeRead | None = None
     title: str
     description: str
+    ready_to_plan: bool
     status: TaskStatus
     urgency: PriorityLevel | None
     importance: PriorityLevel | None
@@ -77,6 +78,7 @@ class TaskListRead(BaseModel):
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: str = ""
+    ready_to_plan: bool = False
     status: TaskStatus = TaskStatus.open
     project_id: int | None = None
     parent_id: int | None = None
@@ -97,6 +99,7 @@ class TaskCreate(BaseModel):
 class TaskPatch(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     description: str | None = None
+    ready_to_plan: bool | None = None
     status: TaskStatus | None = None
     project_id: int | None = None
     task_type_id: int | None = None

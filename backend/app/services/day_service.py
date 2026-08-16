@@ -9,6 +9,7 @@ from app.core.config import Settings
 from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz
 from app.models.app_settings import AppSettings
 from app.models.day import Day
+from app.models.battle_plan import Task
 from app.models.time_block import BlockLane, TimeBlock
 from app.services import task_type_service
 from app.schemas.day import (
@@ -39,6 +40,17 @@ def _validate_minutes(start: int, end: int) -> None:
         raise ValueError(f"Times must snap to {SLOT_MINUTES}-minute boundaries")
     if not (0 <= start < end <= DAY_END):
         raise ValueError("Invalid range: require 0 <= start < end <= 1440")
+
+
+def _active_task(db: Session, task_id: int | None) -> Task | None:
+    if task_id is None:
+        return None
+    task = db.get(Task, task_id)
+    if task is None:
+        raise ValueError("Task not found")
+    if task.archived_at is not None or task.deleted_at is not None:
+        raise ValueError("Only active tasks can be scheduled")
+    return task
 
 
 def _intervals_overlap(a0: int, a1: int, b0: int, b1: int) -> bool:
@@ -76,6 +88,7 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
         .where(Day.date == d)
         .options(
             selectinload(Day.time_blocks).selectinload(TimeBlock.task_type),
+            selectinload(Day.time_blocks).selectinload(TimeBlock.task),
         )
     )
     return db.execute(stmt).scalar_one_or_none()
@@ -279,16 +292,20 @@ def create_time_block(db: Session, day: Day, body: TimeBlockCreate) -> TimeBlock
     tt = task_type_service.get_task_type(db, body.task_type_id)
     if tt is None:
         raise ValueError("Task type not found")
+    task = _active_task(db, body.task_id)
     note_val = (body.note or "").strip() or None
     block = TimeBlock(
         day_id=day.id,
         lane=body.lane,
         task_type_id=body.task_type_id,
+        task_id=body.task_id,
         note=note_val,
         start_minute=body.start_minute,
         end_minute=body.end_minute,
     )
     db.add(block)
+    if task is not None and body.lane == BlockLane.planned:
+        task.ready_to_plan = False
     _touch_day(day)
     db.commit()
     db.refresh(block)
@@ -311,6 +328,11 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         if task_type_service.get_task_type(db, tid) is None:
             raise ValueError("Task type not found")
         block.task_type_id = tid
+    if "task_id" in data:
+        task = _active_task(db, data["task_id"])
+        block.task_id = data["task_id"]
+        if task is not None and block.lane == BlockLane.planned:
+            task.ready_to_plan = False
     if "note" in data:
         block.note = str(data["note"] or "").strip() or None
     if "start_minute" in data:
@@ -361,6 +383,7 @@ def complete_planned_as_actual(db: Session, day: Day, planned_block_id: int) -> 
         if tt is None:
             raise ValueError("Task type not found")
         existing.task_type_id = planned.task_type_id
+        existing.task_id = planned.task_id
         existing.note = (planned.note or "").strip() or None
         existing.start_minute = start
         existing.end_minute = end
@@ -379,6 +402,7 @@ def complete_planned_as_actual(db: Session, day: Day, planned_block_id: int) -> 
         day_id=drow.id,
         lane=BlockLane.actual,
         task_type_id=planned.task_type_id,
+        task_id=planned.task_id,
         note=note_val,
         start_minute=start,
         end_minute=end,

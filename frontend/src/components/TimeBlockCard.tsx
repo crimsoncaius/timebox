@@ -339,7 +339,7 @@ export function TimeBlockCard({
     ],
   )
 
-  const label = block.task_type?.name?.trim() || '(No title)'
+  const label = block.task?.title?.trim() || block.task_type?.name?.trim() || '(No title)'
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
   const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
   const innerTextThreshold = block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME

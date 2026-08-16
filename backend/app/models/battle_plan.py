@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import enum
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -57,6 +57,9 @@ class Task(Base):
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    ready_to_plan: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     status: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus, name="task_status", native_enum=False, length=24),
         nullable=False,
@@ -92,3 +95,4 @@ class Task(Base):
     )
     project: Mapped[Project | None] = relationship("Project", back_populates="tasks")
     task_type: Mapped["TaskType | None"] = relationship("TaskType", back_populates="tasks")
+    time_blocks: Mapped[list["TimeBlock"]] = relationship("TimeBlock", back_populates="task")

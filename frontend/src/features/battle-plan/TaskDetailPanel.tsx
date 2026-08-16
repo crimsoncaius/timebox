@@ -73,6 +73,8 @@ export function TaskDetailPanel({
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isReadyToPlan, setIsReadyToPlan] = useState(task.ready_to_plan)
+  const [isTogglingPlan, setIsTogglingPlan] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(
@@ -322,6 +324,29 @@ export function TaskDetailPanel({
 
           <aside className="flex min-w-0 flex-col border-t border-[var(--task-detail-divider)] bg-[var(--task-detail-rail)] min-[720px]:border-t-0 min-[720px]:border-l min-[720px]:pt-[52px]">
             <div className="flex flex-col px-6 pb-2">
+              <div className="border-b border-[var(--task-detail-divider)] py-4">
+                <button
+                  type="button"
+                  aria-pressed={isReadyToPlan}
+                  disabled={isTogglingPlan}
+                  onClick={async () => {
+                    const next = !isReadyToPlan
+                    setIsTogglingPlan(true)
+                    try {
+                      await onPatch(task.id, { ready_to_plan: next })
+                      setIsReadyToPlan(next)
+                    } finally {
+                      setIsTogglingPlan(false)
+                    }
+                  }}
+                  className={`flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:opacity-50 ${isReadyToPlan ? 'bg-primary/12 text-primary' : 'border border-[var(--task-detail-input-border)] text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>{isReadyToPlan ? 'event_available' : 'event_upcoming'}</span>
+                  {isReadyToPlan ? 'Ready to Plan' : 'Add to Ready to Plan'}
+                </button>
+                <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">Planning readiness is separate from work status.</p>
+              </div>
+
               <PropertySelect label="Status" value={draft.status} onChange={(value) => setDraftField('status', value as TaskStatus)}>
                 {TASK_STATUSES.map((status) => <option key={status} value={status}>{STATUS_LABELS[status]}</option>)}
               </PropertySelect>

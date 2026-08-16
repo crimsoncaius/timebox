@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { BlockDraftPlacement, DayRead, TaskType, TimeBlock } from '../lib/api'
 import { formatMinuteLabel24 } from '../lib/time'
 import { TaskTypePathCombobox } from './TaskTypePathCombobox'
+import { Link } from 'react-router-dom'
 
 export type TimeBlockInspectorVariant = 'rail' | 'sheet'
 
@@ -39,7 +40,7 @@ export function TimeBlockInspectorContent({
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
 }) {
-  const [taskTypeId, setTaskTypeId] = useState(() => block?.task_type_id ?? 0)
+  const [taskTypeId, setTaskTypeId] = useState(() => block?.task_type_id ?? draft?.task_type_id ?? 0)
   const [note, setNote] = useState(() => block?.note ?? '')
   const [saving, setSaving] = useState(false)
 
@@ -62,7 +63,7 @@ export function TimeBlockInspectorContent({
       return
     }
     if (draft) {
-      setTaskTypeId(0)
+      setTaskTypeId(draft.task_type_id ?? 0)
       setNote('')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when selection `block.id` or `draft` changes; omitting `block` avoids wiping local state on every parent day refresh for the same block id.
@@ -266,6 +267,20 @@ export function TimeBlockInspectorContent({
           ? 'Pick a task type to create this block. Edits save as you make them.'
           : 'Drag the block edges on the timeline to adjust. Edits save as you make them.'}
       </p>
+
+      {(block?.task ?? (draft?.task_id ? { id: draft.task_id, title: 'Selected Battle Plan task' } : null)) ? (
+        <div className="rounded-xl border border-outline-variant/25 bg-surface-container-low px-3 py-2.5 dark:border-dark-outline-variant">
+          <p className="font-label text-[10px] uppercase tracking-[0.12em] text-on-surface-variant">Battle Plan task</p>
+          {block?.task ? (
+            <Link className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-on-surface hover:text-primary" to={`/battle-plan?task=${block.task.id}`}>
+              {block.task.title}
+              <span className="material-symbols-outlined text-[16px]" aria-hidden>open_in_new</span>
+            </Link>
+          ) : (
+            <p className="mt-1 text-sm text-on-surface">Selected from Ready to Plan</p>
+          )}
+        </div>
+      ) : null}
 
       {/* Task type */}
       <TaskTypePathCombobox

@@ -211,6 +211,84 @@ def test_complete_planned_as_actual(client):
     assert len(day3["time_blocks"]) == 2
 
 
+def test_linked_planned_block_clears_readiness_and_preserves_task_on_actual(client):
+    tid = _tid(client, "linked-work")
+    task_response = client.post(
+        "/tasks",
+        json={
+            "title": "Draft launch brief",
+            "task_type_id": tid,
+            "ready_to_plan": True,
+            "status": "in_progress",
+        },
+    )
+    assert task_response.status_code == 201
+    task = task_response.json()
+
+    created = client.post(
+        "/days/2026-05-06/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "task_id": task["id"],
+            "start_minute": 540,
+            "end_minute": 600,
+        },
+    )
+    assert created.status_code == 200
+    planned = created.json()["time_blocks"][0]
+    assert planned["task_id"] == task["id"]
+    assert planned["task"] == {
+        "id": task["id"],
+        "title": "Draft launch brief",
+        "status": "in_progress",
+        "task_type_id": tid,
+    }
+
+    refreshed_task = client.get("/tasks").json()["items"][0]
+    assert refreshed_task["ready_to_plan"] is False
+    assert refreshed_task["status"] == "in_progress"
+
+    completed = client.post(
+        f"/days/2026-05-06/blocks/{planned['id']}/complete-as-planned"
+    )
+    assert completed.status_code == 200
+    actual = next(
+        block for block in completed.json()["time_blocks"] if block["lane"] == "actual"
+    )
+    assert actual["task_id"] == task["id"]
+    assert actual["task"]["title"] == "Draft launch brief"
+    assert client.get("/tasks").json()["items"][0]["status"] == "in_progress"
+
+
+def test_patch_block_accepts_and_clears_task_link(client):
+    tid = _tid(client, "patch-link")
+    task = client.post("/tasks", json={"title": "Link later", "ready_to_plan": True}).json()
+    created = client.post(
+        "/days/2026-05-07/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "start_minute": 600,
+            "end_minute": 630,
+        },
+    ).json()
+    block_id = created["time_blocks"][0]["id"]
+
+    linked = client.patch(
+        f"/days/2026-05-07/blocks/{block_id}", json={"task_id": task["id"]}
+    )
+    assert linked.status_code == 200
+    assert linked.json()["time_blocks"][0]["task_id"] == task["id"]
+    assert client.get("/tasks").json()["items"][0]["ready_to_plan"] is False
+
+    unlinked = client.patch(
+        f"/days/2026-05-07/blocks/{block_id}", json={"task_id": None}
+    )
+    assert unlinked.status_code == 200
+    assert unlinked.json()["time_blocks"][0]["task"] is None
+
+
 def test_complete_non_planned_block_rejected(client):
     tid = _tid(client, "actual-only")
     client.get("/days/2026-04-22")

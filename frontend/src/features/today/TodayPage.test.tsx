@@ -63,6 +63,20 @@ describe('TodayPage inspector rail', () => {
       if (url.includes('/task-types') && !url.match(/\/task-types\/\d/)) {
         return Promise.resolve(jsonResponse(taskTypes))
       }
+      if (url.includes('/tasks?state=active')) {
+        return Promise.resolve(jsonResponse({
+          timezone: 'UTC',
+          server_now_iso: '2026-06-01T12:00:00Z',
+          items: [{
+            id: 77,
+            title: 'Write launch narrative',
+            ready_to_plan: true,
+            task_type_id: 1,
+            task_type: taskTypes[0],
+            subtasks: [],
+          }],
+        }))
+      }
       if (url.includes('/health')) {
         return Promise.resolve(
           jsonResponse({ status: 'ok', today: '2026-06-01', timezone: 'UTC' }),
@@ -94,6 +108,23 @@ describe('TodayPage inspector rail', () => {
 
     await expect(screen.findByLabelText('Task type', { exact: true })).resolves.toHaveValue('alpha')
     expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
+  })
+
+  it('selects a Ready to Plan task before placing it on the timeline', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/day/2026-06-01']}>
+        <Routes>
+          <Route path="/day/:date" element={<TodayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const taskButtons = await screen.findAllByRole('button', { name: /Write launch narrative/ })
+    await user.click(taskButtons[0]!)
+
+    expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
+    expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {

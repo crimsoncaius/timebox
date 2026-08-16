@@ -69,6 +69,20 @@ def test_subtask_completion_does_not_complete_parent(client):
     assert refreshed["subtasks"][0]["status"] == "completed"
 
 
+def test_planning_readiness_is_persistent_and_separate_from_work_status(client):
+    task = create_task(client, "Plan me", status="in_progress", ready_to_plan=True)
+    assert task["ready_to_plan"] is True
+    assert task["status"] == "in_progress"
+
+    patched = client.patch(
+        f"/tasks/{task['id']}",
+        json={"ready_to_plan": False},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["ready_to_plan"] is False
+    assert patched.json()["status"] == "in_progress"
+
+
 def test_reorder_changes_status_and_position(client):
     first = create_task(client, "First")
     second = create_task(client, "Second")

@@ -148,6 +148,23 @@ describe('BattlePlanPage', () => {
     expect(screen.getByText('U · high')).toBeInTheDocument()
   })
 
+  it('toggles Ready to Plan without changing work status', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: 'Add Draft launch brief to Ready to Plan' }))
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/11$/),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ ready_to_plan: true }),
+      }),
+    ))
+    expect(await screen.findByRole('button', { name: 'Remove Draft launch brief from Ready to Plan' })).toBeInTheDocument()
+    expect(activeTasks[0]?.status).toBe('open')
+  })
+
   it('quick-adds an Admin task from All Tasks', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)

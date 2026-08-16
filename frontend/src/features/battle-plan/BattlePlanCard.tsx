@@ -24,6 +24,7 @@ export function BattlePlanCard({
   onOpen,
   onAddSubtask,
   onPatchSubtask,
+  onToggleReady,
 }: {
   task: BattleTask
   index: number
@@ -33,6 +34,7 @@ export function BattlePlanCard({
   onOpen: (id?: number) => void
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onPatchSubtask: (id: number, status: TaskStatus) => Promise<void>
+  onToggleReady: (id: number, ready: boolean) => Promise<void>
 }) {
   const { ref, isDragging } = useSortable({
     id: task.id,
@@ -99,7 +101,23 @@ export function BattlePlanCard({
 
       <div className="mt-3 flex items-center justify-between gap-3">
         {due ? <DeadlineBadge badge={due} /> : <span />}
-        <button
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={`${task.ready_to_plan ? 'Remove' : 'Add'} ${task.title} ${task.ready_to_plan ? 'from' : 'to'} Ready to Plan`}
+            aria-pressed={task.ready_to_plan}
+            title={task.ready_to_plan ? 'Remove from Ready to Plan' : 'Add to Ready to Plan'}
+            className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium uppercase tracking-wide transition ${task.ready_to_plan ? 'bg-primary/12 text-primary' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              void onToggleReady(task.id, !task.ready_to_plan)
+            }}
+          >
+            <span className="material-symbols-outlined text-[14px]" aria-hidden>{task.ready_to_plan ? 'event_available' : 'event_upcoming'}</span>
+            {task.ready_to_plan ? 'Ready' : 'Plan'}
+          </button>
+          <button
           type="button"
           aria-label={progressLabel}
           aria-expanded={subtasksOpen}
@@ -113,7 +131,8 @@ export function BattlePlanCard({
         >
           <span className="material-symbols-outlined text-[15px]" aria-hidden>account_tree</span>
           {completed}/{task.subtasks.length}
-        </button>
+          </button>
+        </div>
       </div>
 
       {subtasksOpen ? (

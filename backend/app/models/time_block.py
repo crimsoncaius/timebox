@@ -28,6 +28,9 @@ class TimeBlock(Base):
         nullable=False,
         index=True,
     )
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # When set on an Actual block, points to the Planned block this row completes (as planned).
     planned_block_id: Mapped[int | None] = mapped_column(
@@ -49,3 +52,4 @@ class TimeBlock(Base):
 
     day: Mapped["Day"] = relationship("Day", back_populates="time_blocks")
     task_type: Mapped["TaskType"] = relationship("TaskType", back_populates="time_blocks")
+    task: Mapped["Task | None"] = relationship("Task", back_populates="time_blocks")

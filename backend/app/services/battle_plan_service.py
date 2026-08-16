@@ -172,6 +172,7 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
     row = Task(
         title=title,
         description=body.description,
+        ready_to_plan=body.ready_to_plan,
         status=body.status,
         project_id=project_id,
         parent_id=body.parent_id,
@@ -197,6 +198,8 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
         row.title = _clean_title(body.title)
     if "description" in fields:
         row.description = body.description or ""
+    if "ready_to_plan" in fields and body.ready_to_plan is not None:
+        row.ready_to_plan = body.ready_to_plan
     if "status" in fields and body.status is not None:
         row.status = body.status
     if "project_id" in fields:
@@ -277,6 +280,7 @@ def _to_read(
         task_type=task.task_type,
         title=task.title,
         description=task.description,
+        ready_to_plan=task.ready_to_plan,
         status=task.status,
         urgency=task.urgency,
         importance=task.importance,

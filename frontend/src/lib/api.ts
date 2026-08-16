@@ -5,6 +5,8 @@ export type BlockDraftPlacement = {
   lane: BlockLane
   start_minute: number
   end_minute: number
+  task_id?: number | null
+  task_type_id?: number | null
 }
 
 export interface TaskType {
@@ -39,6 +41,7 @@ export interface BattleTask {
   task_type: TaskType | null
   title: string
   description: string
+  ready_to_plan?: boolean
   status: TaskStatus
   urgency: PriorityLevel | null
   importance: PriorityLevel | null
@@ -79,6 +82,7 @@ export type ProjectWrite = {
 export type BattleTaskWrite = {
   title: string
   description?: string
+  ready_to_plan?: boolean
   status?: TaskStatus
   project_id?: number | null
   parent_id?: number | null
@@ -95,6 +99,8 @@ export interface TimeBlock {
   lane: BlockLane
   task_type_id: number
   task_type: TaskType
+  task_id?: number | null
+  task?: Pick<BattleTask, 'id' | 'title' | 'status' | 'task_type_id'> | null
   note: string | null
   /** Present on Actual blocks created via "complete as planned" from a Planned block. */
   planned_block_id?: number | null
@@ -330,6 +336,7 @@ export const api = {
     body: {
       lane: BlockLane
       task_type_id: number
+      task_id?: number | null
       note?: string | null
       start_minute: number
       end_minute: number
@@ -343,7 +350,7 @@ export const api = {
   patchBlock: (
     date: string,
     blockId: number,
-    body: Partial<{ task_type_id: number; note: string | null; start_minute: number; end_minute: number }>,
+    body: Partial<{ task_type_id: number; task_id: number | null; note: string | null; start_minute: number; end_minute: number }>,
   ) =>
     fetchJson<DayRead>(`/days/${date}/blocks/${blockId}`, {
       method: 'PATCH',
