@@ -19,6 +19,7 @@ class TaskTypeListItem(TaskTypeRead):
 
     usage_count: int = 0
     task_usage_count: int = 0
+    recurring_template_usage_count: int = 0
 
 
 class TaskTypeCreate(BaseModel):

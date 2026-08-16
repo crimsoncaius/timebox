@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const backendDir = path.join(__dirname, '..', 'backend')
-const apiPort = 18001
-const webPort = 15174
+const apiPort = 18002
+const webPort = 15175
 
 export default defineConfig({
   testDir: './e2e',

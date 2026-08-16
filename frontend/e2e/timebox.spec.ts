@@ -41,7 +41,7 @@ async function ensureTaskType(request: APIRequestContext, base: string, name: st
  */
 test('plan blocks and history', async ({ page, request }) => {
   const date = '2026-06-01'
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -139,7 +139,7 @@ test('plan blocks and history', async ({ page, request }) => {
 
 test('resize planned block stops at next block in same lane', async ({ page, request }) => {
   const date = '2026-06-02'
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -210,7 +210,7 @@ test('resize planned block stops at next block in same lane', async ({ page, req
 
 test('move planned block preserves duration and jumps past blocker', async ({ page, request }) => {
   const date = '2026-06-03'
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -282,7 +282,7 @@ test('move planned block: preview stays stable while pointer wiggles in the inva
   request,
 }) => {
   const date = '2026-06-25'
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -356,7 +356,7 @@ test('creates a hierarchical task type from the block editor and renames parent 
   request,
 }) => {
   const date = '2026-06-04'
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   const uniq = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
   const rootPath = `e2ehp${uniq}`
   const childPath = `${rootPath}/x`
@@ -419,7 +419,7 @@ test('draft-first: lane click shows ghost; block is created when task type is ch
   request,
 }) => {
   const date = '2026-06-20'
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -482,7 +482,7 @@ test('draft cleared when clicking outside the timeline', async ({ page }) => {
 })
 
 test('Battle Plan creates a dated project task, persists subtask progress, moves, and restores it', async ({ page, request }) => {
-  const base = 'http://127.0.0.1:18001'
+  const base = 'http://127.0.0.1:18002'
   const uniq = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
   const projectName = `Atlas ${uniq}`
   const taskTitle = `Launch brief ${uniq}`

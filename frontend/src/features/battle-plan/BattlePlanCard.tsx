@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { OptimisticSortingPlugin } from '@dnd-kit/dom/sortable'
 import { KeyboardSensor, PointerSensor } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
+import { useNavigate } from 'react-router-dom'
 import { deadlineBadge, STATUS_LABELS, type DeadlineBadge as DeadlineBadgeValue } from '../../lib/battlePlan'
 import type { BattleTask, TaskStatus } from '../../lib/api'
 
@@ -36,6 +37,7 @@ export function BattlePlanCard({
   onPatchSubtask: (id: number, status: TaskStatus) => Promise<void>
   onToggleReady: (id: number, ready: boolean) => Promise<void>
 }) {
+  const navigate = useNavigate()
   const { ref, isDragging } = useSortable({
     id: task.id,
     index,
@@ -96,6 +98,24 @@ export function BattlePlanCard({
           {task.task_type ? <MetaChip>{task.task_type.name}</MetaChip> : null}
           {task.urgency ? <MetaChip>U · {task.urgency}</MetaChip> : null}
           {task.importance ? <MetaChip>I · {task.importance}</MetaChip> : null}
+          {task.recurring_template_id ? (
+            <button
+              type="button"
+              className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary transition hover:bg-primary/15"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                navigate(`/battle-plan?view=recurring&recurring=${task.recurring_template_id}`)
+              }}
+            >
+              ↻ {task.recurring_template_title ?? 'Recurring'}
+            </button>
+          ) : null}
+          {task.recurrence_kind === 'quota_parent' && task.quota_period_start && task.quota_period_end ? (
+            <MetaChip>
+              {formatQuotaPeriod(task.quota_period_start, task.quota_period_end)} · {task.quota_completed ?? 0}/{task.expected_sessions ?? 0}
+            </MetaChip>
+          ) : null}
         </div>
       </div>
 
@@ -217,6 +237,13 @@ export function BattlePlanCard({
       ) : null}
     </article>
   )
+}
+
+function formatQuotaPeriod(start: string, end: string) {
+  const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  const left = formatter.format(new Date(`${start}T12:00:00Z`))
+  const right = formatter.format(new Date(`${end}T12:00:00Z`))
+  return start === end ? left : `${left}–${right}`
 }
 
 function DeadlineBadge({ badge }: { badge: DeadlineBadgeValue }) {

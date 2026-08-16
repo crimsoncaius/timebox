@@ -53,6 +53,16 @@ def _active_task(db: Session, task_id: int | None) -> Task | None:
     return task
 
 
+def _validate_recurrence_schedule(task: Task | None, day: Day) -> None:
+    if task is None:
+        return
+    if task.recurrence_kind == "quota_parent":
+        raise ValueError("Schedule quota sessions individually")
+    if task.recurrence_kind == "quota_session" and task.quota_period_start is not None:
+        if day.date < task.quota_period_start:
+            raise ValueError("Quota sessions cannot be scheduled before their period starts")
+
+
 def _intervals_overlap(a0: int, a1: int, b0: int, b1: int) -> bool:
     """[a0,a1) and [b0,b1) overlap if not disjoint."""
     return not (a1 <= b0 or b1 <= a0)
@@ -97,7 +107,7 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
 def get_or_create_app_settings(db: Session) -> AppSettings:
     row = get_app_settings(db)
     if row is None:
-        row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False)
+        row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False, week_start="monday")
         db.add(row)
         db.flush()
         db.refresh(row)
@@ -258,6 +268,8 @@ def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
         s.end_hour = body.end_hour
     if body.show_full_day is not None:
         s.show_full_day = body.show_full_day
+    if body.week_start is not None:
+        s.week_start = body.week_start
     if s.start_hour >= s.end_hour or s.end_hour > 24 or s.start_hour < 0:
         raise ValueError("Invalid day window: require 0 <= start_hour < end_hour <= 24")
     s.updated_at = _utc_now()
@@ -293,6 +305,7 @@ def create_time_block(db: Session, day: Day, body: TimeBlockCreate) -> TimeBlock
     if tt is None:
         raise ValueError("Task type not found")
     task = _active_task(db, body.task_id)
+    _validate_recurrence_schedule(task, day)
     note_val = (body.note or "").strip() or None
     block = TimeBlock(
         day_id=day.id,
@@ -330,6 +343,7 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         block.task_type_id = tid
     if "task_id" in data:
         task = _active_task(db, data["task_id"])
+        _validate_recurrence_schedule(task, day)
         block.task_id = data["task_id"]
         if task is not None and block.lane == BlockLane.planned:
             task.ready_to_plan = False

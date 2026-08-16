@@ -38,6 +38,7 @@ export function SettingsPage() {
     start_hour: number
     end_hour: number
     show_full_day: boolean
+    week_start: 'monday' | 'sunday'
   }>) => {
     setSaveState('saving')
     setError(null)
@@ -194,6 +195,22 @@ export function SettingsPage() {
                 aria-hidden
               />
             </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-6 max-w-3xl overflow-hidden rounded-2xl bg-surface-container-low/70 dark:bg-dark-surface-container/35" aria-labelledby="settings-week-heading">
+        <header className="px-5 py-4">
+          <h2 id="settings-week-heading" className="font-headline text-base font-light tracking-tight text-on-surface dark:text-dark-on-surface">Week boundaries</h2>
+          <p className="mt-1 max-w-lg text-sm leading-relaxed text-on-surface-variant">Controls weekly recurrence quota periods across the app.</p>
+        </header>
+        <div className="px-3 pb-3">
+          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
+            <div><label htmlFor="settings-week-start" className="font-headline text-sm font-medium">Week starts on</label><p className="mt-0.5 text-sm text-on-surface-variant">Future pristine weekly quota periods are recalculated when this changes.</p></div>
+            <select id="settings-week-start" value={settings.week_start ?? 'monday'} onChange={(event) => void patchSettings({ week_start: event.target.value as 'monday' | 'sunday' })} className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest">
+              <option value="monday">Monday</option>
+              <option value="sunday">Sunday</option>
+            </select>
           </div>
         </div>
       </section>

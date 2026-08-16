@@ -1,7 +1,7 @@
 import { DragDropProvider, useDroppable, type DragEndEvent } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import {
   deadlineRank,
@@ -450,6 +450,7 @@ function BattlePlanSidebar({ open, collection, scope, projects, onClose, onScope
         <nav className="space-y-1">
           <button type="button" className={buttonClass(collection === 'active' && scope === 'all')} onClick={() => onScope('all')}>All Tasks</button>
           <button type="button" className={buttonClass(collection === 'active' && scope === 'admin')} onClick={() => onScope('admin')}>Admin</button>
+          <Link to="/battle-plan?view=recurring" className={buttonClass(false)}>Recurring</Link>
         </nav>
         <div className="mt-8 flex items-center justify-between px-3">
           <span className="font-label text-[10px] uppercase tracking-[0.16em] text-on-surface-variant">Projects</span>

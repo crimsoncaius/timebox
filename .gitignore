@@ -35,6 +35,7 @@ Thumbs.db
 
 # E2E SQLite (Playwright)
 backend/e2e.sqlite
+backend/e2e.sqlite.*
 
 # Playwright
 test-results/

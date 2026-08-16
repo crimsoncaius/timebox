@@ -524,7 +524,11 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, onSelect }: {
               onClick={() => onSelect(selected ? null : task.id)}
               className={`w-full rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/15' : 'border-outline-variant/20 bg-surface hover:border-primary/25 dark:border-dark-outline-variant dark:bg-dark-surface'}`}
             >
-              <span className="block truncate text-sm font-medium text-on-surface">{task.title}</span>
+              <span className="block truncate text-sm font-medium text-on-surface">
+                {task.recurrence_kind === 'quota_session' && task.parent_title
+                  ? `${task.parent_title} · ${task.title}`
+                  : task.title}
+              </span>
               <span className={`mt-1 block text-xs ${task.task_type ? 'text-on-surface-variant' : 'text-amber-700 dark:text-amber-300'}`}>
                 {task.task_type?.name ?? 'Choose a task type after placing'}
               </span>

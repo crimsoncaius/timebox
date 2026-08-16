@@ -29,3 +29,6 @@ class TaskType(Base):
         "TimeBlock", back_populates="task_type"
     )
     tasks: Mapped[list["Task"]] = relationship("Task", back_populates="task_type")
+    recurring_templates: Mapped[list["RecurringTemplate"]] = relationship(
+        "RecurringTemplate", back_populates="task_type"
+    )

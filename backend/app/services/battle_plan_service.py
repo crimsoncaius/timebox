@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.time import now_in_tz
-from app.models.battle_plan import Project, Task, TaskStatus
+from app.models.battle_plan import Project, RecurrenceOccurrence, Task, TaskStatus
 from app.models.task_type import TaskType
 from app.schemas.battle_plan import (
     ProjectCreate,
@@ -127,6 +127,8 @@ def delete_project(db: Session, project_id: int) -> None:
     row = db.get(Project, project_id)
     if row is None:
         raise ValueError("Project not found")
+    from app.services import recurrence_service
+    recurrence_service.move_project_templates_to_admin(db, project_id)
     db.delete(row)
     db.commit()
 
@@ -193,6 +195,8 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
 def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -> Task:
     row = _load_task(db, task_id)
     fields = body.model_fields_set
+    if row.recurrence_kind == "quota_parent" and "status" in fields:
+        raise ValueError("Quota parent status is derived from its sessions")
     old_deadline = (row.deadline_date, row.deadline_at, row.reminder_at)
     if "title" in fields and body.title is not None:
         row.title = _clean_title(body.title)
@@ -233,7 +237,12 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     if old_deadline != (row.deadline_date, row.deadline_at, row.reminder_at):
         row.reminder_delivered_at = None
     _validate_reminder(row, settings)
+    from app.services import recurrence_service
+    recurrence_service.record_task_overrides(row, fields)
     db.commit()
+    if row.parent_id is not None and row.recurrence_kind == "quota_session":
+        recurrence_service._derive_quota_parents(db)
+        db.commit()
     return _load_task(db, task_id)
 
 
@@ -274,10 +283,23 @@ def _to_read(
     return TaskRead(
         id=task.id,
         parent_id=task.parent_id,
+        parent_title=task.parent.title if task.parent is not None else None,
         project_id=task.project_id,
         project=ProjectRead.model_validate(task.project) if task.project is not None else None,
         task_type_id=task.task_type_id,
         task_type=task.task_type,
+        recurring_template_id=task.recurring_template_id,
+        recurring_template_title=task.recurring_template.title if task.recurring_template is not None else None,
+        occurrence_key=task.occurrence_key,
+        recurrence_kind=task.recurrence_kind,
+        quota_period_start=task.quota_period_start,
+        quota_period_end=task.quota_period_end,
+        expected_sessions=task.expected_sessions,
+        session_index=task.session_index,
+        quota_completed=(
+            sum(child.deleted_at is None and child.status == TaskStatus.completed for child in task.subtasks)
+            if task.recurrence_kind == "quota_parent" else None
+        ),
         title=task.title,
         description=task.description,
         ready_to_plan=task.ready_to_plan,
@@ -300,7 +322,14 @@ def _to_read(
 
 def list_tasks(db: Session, state: str, settings: Settings) -> list[TaskRead]:
     purge_expired_trash(db)
-    options = (selectinload(Task.project), selectinload(Task.task_type), selectinload(Task.subtasks).selectinload(Task.task_type))
+    if state == "active":
+        from app.services import recurrence_service
+        recurrence_service.synchronize(db, settings)
+    options = (
+        selectinload(Task.project), selectinload(Task.task_type), selectinload(Task.recurring_template),
+        selectinload(Task.subtasks).selectinload(Task.task_type),
+        selectinload(Task.subtasks).selectinload(Task.recurring_template),
+    )
     if state == "active":
         stmt = select(Task).options(*options).where(
             Task.parent_id.is_(None), Task.archived_at.is_(None), Task.deleted_at.is_(None)
@@ -398,6 +427,7 @@ def permanently_delete_task(db: Session, task_id: int) -> None:
     row = _load_task(db, task_id)
     if row.deleted_at is None:
         raise ValueError("Only trashed tasks can be permanently deleted")
+    db.execute(update(RecurrenceOccurrence).where(RecurrenceOccurrence.task_id == row.id).values(task_id=None))
     db.delete(row)
     db.commit()
 

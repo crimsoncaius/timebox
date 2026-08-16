@@ -21,6 +21,9 @@ export interface TaskType {
 export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'completed'
 export type PriorityLevel = 'low' | 'medium' | 'high'
 export type TaskCollection = 'active' | 'archived' | 'trash'
+export type RecurrenceMode = 'scheduled' | 'quota'
+export type RecurrenceStatus = 'active' | 'paused' | 'ended'
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
 
 export interface Project {
   id: number
@@ -35,10 +38,20 @@ export interface Project {
 export interface BattleTask {
   id: number
   parent_id: number | null
+  parent_title?: string | null
   project_id: number | null
   project: Project | null
   task_type_id: number | null
   task_type: TaskType | null
+  recurring_template_id?: number | null
+  recurring_template_title?: string | null
+  occurrence_key?: string | null
+  recurrence_kind?: 'scheduled' | 'checklist' | 'quota_parent' | 'quota_session' | null
+  quota_period_start?: string | null
+  quota_period_end?: string | null
+  expected_sessions?: number | null
+  session_index?: number | null
+  quota_completed?: number | null
   title: string
   description: string
   ready_to_plan?: boolean
@@ -148,8 +161,71 @@ export interface SettingsRead {
   start_hour: number
   end_hour: number
   show_full_day: boolean
+  week_start?: 'monday' | 'sunday'
   created_at: string
   updated_at: string
+}
+
+export type RecurrenceWindow = { key: string; start: string; end: string }
+
+export interface RecurringTemplate {
+  id: number
+  title: string
+  description: string
+  project_id: number | null
+  project: Project | null
+  task_type_id: number | null
+  task_type: TaskType | null
+  mode: RecurrenceMode
+  status: RecurrenceStatus
+  frequency: RecurrenceFrequency
+  interval: number
+  weekdays: number[]
+  month_day: number | null
+  quota_count: number | null
+  start_date: string
+  end_date: string | null
+  cycle_limit: number | null
+  urgency: PriorityLevel | null
+  importance: PriorityLevel | null
+  paused_at: string | null
+  ended_at: string | null
+  created_at: string
+  updated_at: string
+  checklist_items: Array<{ id: number; title: string; position: number }>
+  upcoming: RecurrenceWindow[]
+  current_tasks: Array<{ id: number; title: string; deadline_date: string | null; overdue: boolean }>
+  cadence: string
+  next_occurrence: string | null
+}
+
+export type RecurrenceRuleWrite = {
+  mode: RecurrenceMode
+  frequency: RecurrenceFrequency
+  interval: number
+  weekdays?: number[]
+  month_day?: number | null
+  quota_count?: number | null
+  start_date: string
+  end_date?: string | null
+  cycle_limit?: number | null
+}
+
+export type RecurringTemplateWrite = RecurrenceRuleWrite & {
+  title: string
+  description?: string
+  project_id?: number | null
+  task_type_id?: number | null
+  urgency?: PriorityLevel | null
+  importance?: PriorityLevel | null
+  checklist_titles?: string[]
+  confirm_backfill?: boolean
+}
+
+export type RecurrencePreview = {
+  upcoming: RecurrenceWindow[]
+  past_cycles: number
+  past_tasks: number
 }
 
 function apiPrefix(): string {
@@ -297,7 +373,7 @@ export const api = {
 
   getSettings: () => fetchJson<SettingsRead>('/settings'),
 
-  patchSettings: (body: Partial<{ start_hour: number; end_hour: number; show_full_day: boolean }>) =>
+  patchSettings: (body: Partial<{ start_hour: number; end_hour: number; show_full_day: boolean; week_start: 'monday' | 'sunday' }>) =>
     fetchJson<SettingsRead>('/settings', {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -418,4 +494,37 @@ export const api = {
 
   acknowledgeReminder: (id: number) =>
     fetchVoid(`/reminders/${id}/delivered`, { method: 'POST' }),
+
+  previewRecurrence: (body: RecurrenceRuleWrite) =>
+    fetchJson<RecurrencePreview>('/recurring-templates/preview', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+
+  listRecurringTemplates: (status: RecurrenceStatus = 'active') =>
+    fetchJson<RecurringTemplate[]>(`/recurring-templates?status=${status}`),
+
+  getRecurringTemplate: (id: number) =>
+    fetchJson<RecurringTemplate>(`/recurring-templates/${id}`),
+
+  createRecurringTemplate: (body: RecurringTemplateWrite) =>
+    fetchJson<RecurringTemplate>('/recurring-templates', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+
+  patchRecurringTemplate: (id: number, body: Partial<RecurringTemplateWrite>) =>
+    fetchJson<RecurringTemplate>(`/recurring-templates/${id}`, {
+      method: 'PATCH', body: JSON.stringify(body),
+    }),
+
+  pauseRecurringTemplate: (id: number) =>
+    fetchJson<RecurringTemplate>(`/recurring-templates/${id}/pause`, { method: 'POST' }),
+
+  resumeRecurringTemplate: (id: number) =>
+    fetchJson<RecurringTemplate>(`/recurring-templates/${id}/resume`, { method: 'POST' }),
+
+  endRecurringTemplate: (id: number) =>
+    fetchJson<RecurringTemplate>(`/recurring-templates/${id}/end`, { method: 'POST' }),
+
+  deleteRecurringTemplate: (id: number) =>
+    fetchVoid(`/recurring-templates/${id}`, { method: 'DELETE' }),
 }

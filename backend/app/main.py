@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import require_api_key
-from app.api.routes import battle_plan, days, settings, task_types
+from app.api.routes import battle_plan, days, recurring, settings, task_types
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from sqlalchemy import inspect
@@ -67,6 +67,7 @@ app.include_router(days.router, dependencies=_protected)
 app.include_router(settings.router, dependencies=_protected)
 app.include_router(task_types.router, dependencies=_protected)
 app.include_router(battle_plan.router, dependencies=_protected)
+app.include_router(recurring.router, dependencies=_protected)
 
 
 @app.get("/health")
