@@ -4,19 +4,24 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const backendDir = path.join(__dirname, '..', 'backend')
+const apiPort = 18001
+const webPort = 15174
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  // The suite intentionally shares one SQLite database and seeds common task types.
+  // Serial workers keep those integration fixtures deterministic.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: 'http://127.0.0.1:5174',
+    baseURL: `http://127.0.0.1:${webPort}`,
   },
   webServer: [
     {
-      command: 'uv run uvicorn app.main:app --host 127.0.0.1 --port 8000',
+      command: `uv run uvicorn app.main:app --host 127.0.0.1 --port ${apiPort}`,
       cwd: backendDir,
       env: {
         ...process.env,
@@ -25,14 +30,18 @@ export default defineConfig({
         CORS_ORIGINS: '*',
         AUTO_CREATE_TABLES: '1',
       },
-      url: 'http://127.0.0.1:8000/health',
+      url: `http://127.0.0.1:${apiPort}/health`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 5174',
+      command: `npm run dev -- --host 127.0.0.1 --port ${webPort}`,
       cwd: __dirname,
-      url: 'http://127.0.0.1:5174/',
+      env: {
+        ...process.env,
+        VITE_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`,
+      },
+      url: `http://127.0.0.1:${webPort}/`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

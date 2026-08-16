@@ -27,6 +27,17 @@ class DayRead(BaseModel):
     meta: DayMeta
 
 
+class DayPreviewRead(BaseModel):
+    """Renderable day data that may describe a date not yet stored."""
+
+    date: date
+    start_hour: int = Field(..., ge=0, le=23)
+    end_hour: int = Field(..., ge=0, le=24)
+    show_full_day: bool
+    time_blocks: list[TimeBlockRead]
+    meta: DayMeta
+
+
 class DaySummaryRow(BaseModel):
     """Planned vs actual minutes for one task type on a single day."""
 

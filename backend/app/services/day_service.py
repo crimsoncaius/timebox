@@ -11,7 +11,14 @@ from app.models.app_settings import AppSettings
 from app.models.day import Day
 from app.models.time_block import BlockLane, TimeBlock
 from app.services import task_type_service
-from app.schemas.day import DayListItem, DayMeta, DayRead, DaySummaryRead, DaySummaryRow
+from app.schemas.day import (
+    DayListItem,
+    DayMeta,
+    DayPreviewRead,
+    DayRead,
+    DaySummaryRead,
+    DaySummaryRow,
+)
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch, TimeBlockRead
 
@@ -75,14 +82,20 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
 
 
 def get_or_create_app_settings(db: Session) -> AppSettings:
-    stmt = select(AppSettings).where(AppSettings.id == 1)
-    row = db.execute(stmt).scalar_one_or_none()
+    row = get_app_settings(db)
     if row is None:
         row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False)
         db.add(row)
         db.flush()
         db.refresh(row)
     return row
+
+
+def get_app_settings(db: Session) -> AppSettings | None:
+    """Read the singleton window settings without creating them."""
+
+    stmt = select(AppSettings).where(AppSettings.id == 1)
+    return db.execute(stmt).scalar_one_or_none()
 
 
 def create_day(db: Session, d: dt.date) -> Day:
@@ -123,6 +136,41 @@ def to_day_read(day: Day, settings: Settings) -> DayRead:
         updated_at=day.updated_at,
         time_blocks=[TimeBlockRead.model_validate(b) for b in blocks],
         meta=meta,
+    )
+
+
+def build_day_preview(
+    db: Session,
+    day: Day | None,
+    d: dt.date,
+    settings: Settings,
+) -> DayPreviewRead:
+    """Return a renderable day without materialising a missing date."""
+
+    if day is None:
+        window = get_app_settings(db) or AppSettings(
+            id=1,
+            start_hour=8,
+            end_hour=20,
+            show_full_day=False,
+        )
+        start_hour = window.start_hour
+        end_hour = window.end_hour
+        show_full_day = window.show_full_day
+        blocks: list[TimeBlock] = []
+    else:
+        start_hour = day.start_hour
+        end_hour = day.end_hour
+        show_full_day = day.show_full_day
+        blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
+
+    return DayPreviewRead(
+        date=d,
+        start_hour=start_hour,
+        end_hour=end_hour,
+        show_full_day=show_full_day,
+        time_blocks=[TimeBlockRead.model_validate(block) for block in blocks],
+        meta=_day_meta(settings),
     )
 
 

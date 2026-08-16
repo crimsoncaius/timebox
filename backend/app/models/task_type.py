@@ -28,3 +28,4 @@ class TaskType(Base):
     time_blocks: Mapped[list["TimeBlock"]] = relationship(
         "TimeBlock", back_populates="task_type"
     )
+    tasks: Mapped[list["Task"]] = relationship("Task", back_populates="task_type")

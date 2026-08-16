@@ -4,6 +4,8 @@ import type { TaskType } from '../lib/api'
 export function DeleteTaskTypeResolutionModal({
   open,
   taskTypeName,
+  blockUsageCount,
+  taskUsageCount,
   migrateTargets,
   busy,
   onClose,
@@ -12,6 +14,8 @@ export function DeleteTaskTypeResolutionModal({
 }: {
   open: boolean
   taskTypeName: string
+  blockUsageCount: number
+  taskUsageCount: number
   migrateTargets: TaskType[]
   busy: boolean
   onClose: () => void
@@ -51,8 +55,11 @@ export function DeleteTaskTypeResolutionModal({
           Remove task type?
         </h2>
         <p className="mt-2 font-body text-sm font-light leading-relaxed text-on-surface-variant dark:text-dark-on-surface-variant">
-          <span className="text-on-surface dark:text-dark-on-surface">{taskTypeName}</span> is used by existing time
-          blocks. Choose how to proceed.
+          <span className="text-on-surface dark:text-dark-on-surface">{taskTypeName}</span> is used by{' '}
+          {blockUsageCount > 0 ? `${blockUsageCount} time block${blockUsageCount === 1 ? '' : 's'}` : ''}
+          {blockUsageCount > 0 && taskUsageCount > 0 ? ' and ' : ''}
+          {taskUsageCount > 0 ? `${taskUsageCount} Battle Plan item${taskUsageCount === 1 ? '' : 's'}` : ''}.
+          {' '}Choose how to proceed.
         </p>
       </div>
       <div className="flex flex-col gap-3 px-5 py-4">
@@ -62,13 +69,16 @@ export function DeleteTaskTypeResolutionModal({
           className="rounded-xl border border-error/25 bg-error-container/20 px-4 py-3 text-left font-body text-sm font-light text-on-error-container transition-opacity hover:bg-error-container/30 disabled:opacity-50 dark:border-error/30 dark:bg-error-container/15 dark:text-dark-on-error-container"
           onClick={() => onCascade()}
         >
-          <span className="font-headline text-sm font-normal text-error dark:text-error">Delete type and all time blocks</span>
+          <span className="font-headline text-sm font-normal text-error dark:text-error">
+            {blockUsageCount > 0 ? 'Delete type and all time blocks' : 'Remove task type'}
+          </span>
           <span className="mt-1 block text-xs text-on-surface-variant dark:text-dark-on-surface-variant">
-            Permanently removes this task type and every planned or actual block that uses it.
+            {blockUsageCount > 0 ? 'Permanently removes every planned or actual block that uses it. ' : ''}
+            {taskUsageCount > 0 ? 'Battle Plan items remain, with their task type cleared.' : ''}
           </span>
         </button>
 
-        <div
+        {blockUsageCount > 0 ? <div
           className={[
             'rounded-xl border px-4 py-3',
             canMigrate
@@ -113,7 +123,7 @@ export function DeleteTaskTypeResolutionModal({
           >
             Move blocks and delete type
           </button>
-        </div>
+        </div> : null}
       </div>
       <div className="flex justify-end gap-2 border-t border-outline-variant/15 px-5 py-3 dark:border-dark-outline-variant/25">
         <button

@@ -48,7 +48,9 @@ export function TaskTypePathCombobox({
       </label>
       <input
         id={inputId}
+        name="timebox-task-type-search"
         type="text"
+        autoComplete="off"
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}

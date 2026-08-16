@@ -30,7 +30,7 @@ export function TaskTypesPage() {
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
-  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string } | null>(null)
+  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string; blockCount: number; taskCount: number } | null>(null)
   const [resolveBusy, setResolveBusy] = useState(false)
 
   const visibleTypes = useMemo(() => filterTaskTypesByQuery(types, newName), [types, newName])
@@ -101,6 +101,17 @@ export function TaskTypesPage() {
     setEditingId((cur) => (cur === id ? null : cur))
     setSaveState('saving')
     setError(null)
+    const selected = types.find((t) => t.id === id)
+    if ((selected?.task_usage_count ?? 0) > 0) {
+      setResolveDelete({
+        id,
+        name: selected?.name ?? `Task type #${id}`,
+        blockCount: selected?.usage_count ?? 0,
+        taskCount: selected?.task_usage_count ?? 0,
+      })
+      setSaveState('idle')
+      return
+    }
     try {
       await api.deleteTaskType(id)
       await load()
@@ -112,7 +123,12 @@ export function TaskTypesPage() {
         e.detailMessage === TASK_TYPE_STILL_IN_USE_DETAIL
       ) {
         const row = types.find((t) => t.id === id)
-        setResolveDelete({ id, name: row?.name ?? `Task type #${id}` })
+        setResolveDelete({
+          id,
+          name: row?.name ?? `Task type #${id}`,
+          blockCount: row?.usage_count ?? 1,
+          taskCount: row?.task_usage_count ?? 0,
+        })
         setSaveState('idle')
         setError(null)
         return
@@ -127,7 +143,7 @@ export function TaskTypesPage() {
     setResolveBusy(true)
     setError(null)
     try {
-      await api.deleteTaskType(resolveDelete.id, { cascadeBlocks: true })
+      await api.deleteTaskType(resolveDelete.id, { cascadeBlocks: true, clearTaskReferences: true })
       setResolveDelete(null)
       await load()
       setSaveState('saved')
@@ -145,7 +161,7 @@ export function TaskTypesPage() {
     setResolveBusy(true)
     setError(null)
     try {
-      await api.deleteTaskType(resolveDelete.id, { migrateBlocksTo: targetId })
+      await api.deleteTaskType(resolveDelete.id, { migrateBlocksTo: targetId, clearTaskReferences: true })
       setResolveDelete(null)
       await load()
       setSaveState('saved')
@@ -382,6 +398,8 @@ export function TaskTypesPage() {
       <DeleteTaskTypeResolutionModal
         open={resolveDelete !== null}
         taskTypeName={resolveDelete?.name ?? ''}
+        blockUsageCount={resolveDelete?.blockCount ?? 0}
+        taskUsageCount={resolveDelete?.taskCount ?? 0}
         migrateTargets={migrateTargets}
         busy={resolveBusy}
         onClose={() => {

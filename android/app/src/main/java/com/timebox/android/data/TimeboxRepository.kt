@@ -59,6 +59,9 @@ class TimeboxRepository(private val preferences: AppPreferences) {
 
     suspend fun getDay(date: LocalDate): Result<Day> = call { api().getDay(date.toString()).toModel() }
 
+    suspend fun getDayPreview(date: LocalDate): Result<Day> =
+        call { api().getDayPreview(date.toString()).toModel() }
+
     suspend fun getDaySummary(date: LocalDate): Result<DaySummary> =
         call { api().getDaySummary(date.toString()).toModel() }
 

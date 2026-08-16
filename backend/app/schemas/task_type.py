@@ -18,6 +18,7 @@ class TaskTypeListItem(TaskTypeRead):
     """List row with the number of time blocks referencing this type."""
 
     usage_count: int = 0
+    task_usage_count: int = 0
 
 
 class TaskTypeCreate(BaseModel):

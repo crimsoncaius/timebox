@@ -16,6 +16,9 @@ interface TimeboxApi {
     @GET("days/{date}")
     suspend fun getDay(@Path("date") date: String): DayDto
 
+    @GET("days/{date}/preview")
+    suspend fun getDayPreview(@Path("date") date: String): DayPreviewDto
+
     @GET("days/{date}/summary")
     suspend fun getDaySummary(@Path("date") date: String): DaySummaryDto
 

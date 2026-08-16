@@ -23,14 +23,20 @@ data class Draft(
     val endMinute: Int,
 )
 
+data class DayPageState(
+    val day: Day? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+    /** False for a read-only preview; true once the normal day endpoint has opened it. */
+    val materialized: Boolean = false,
+)
+
 data class DayUiState(
     /** The device's date until the backend's is known; see [DayViewModel.start]. */
     val date: LocalDate = LocalDate.now(),
-    val day: Day? = null,
+    val pages: Map<LocalDate, DayPageState> = emptyMap(),
     val taskTypes: List<TaskType> = emptyList(),
-    val loading: Boolean = true,
     val saving: Boolean = false,
-    val error: String? = null,
     val message: String? = null,
     val selectedBlockId: Int? = null,
     val draft: Draft? = null,
@@ -38,6 +44,13 @@ data class DayUiState(
     /** Raw text in the task type picker; cleared whenever the sheet changes what it shows. */
     val typeQuery: String = "",
 ) {
+    fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
+
+    val currentPage: DayPageState get() = page(date)
+    val day: Day? get() = currentPage.day
+    val loading: Boolean get() = currentPage.loading
+    val error: String? get() = currentPage.error
+
     val selectedBlock: TimeBlock?
         get() = day?.blocks?.firstOrNull { it.id == selectedBlockId }
 
@@ -67,6 +80,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     private var typesLoaded = false
     private var todayResolved = false
+    private val pageRequestVersions = mutableMapOf<LocalDate, Int>()
 
     /**
      * Open the Day tab on the backend's today rather than the device's.
@@ -93,18 +107,100 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 
     fun load(date: LocalDate = _state.value.date, showSpinner: Boolean = true) {
-        _state.update { it.copy(date = date, loading = showSpinner && it.day == null, error = null) }
+        val requestVersion = nextRequestVersion(date)
+        _state.update { state ->
+            state.copy(date = date).withPage(date) { page ->
+                page.copy(loading = showSpinner && page.day == null, error = null)
+            }
+        }
         viewModelScope.launch {
             repository.getDay(date).fold(
                 onSuccess = { day ->
-                    _state.update { it.copy(day = day, loading = false, error = null) }
+                    if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
+                        _state.update { state ->
+                            state.withPage(date) {
+                                DayPageState(
+                                    day = day,
+                                    loading = false,
+                                    error = null,
+                                    materialized = true,
+                                )
+                            }
+                        }
+                        if (_state.value.date == date) prefetchAdjacent(date)
+                    }
                 },
                 onFailure = { e ->
-                    _state.update { it.copy(loading = false, error = e.apiError.message) }
+                    if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
+                        _state.update { state ->
+                            state.withPage(date) { page ->
+                                page.copy(loading = false, error = e.apiError.message)
+                            }
+                        }
+                    }
                 },
             )
             if (!typesLoaded) loadTaskTypes()
         }
+    }
+
+    /** Retry whichever kind of read a page currently needs. */
+    fun retryPage(date: LocalDate) {
+        if (date == _state.value.date) load(date) else loadPreview(date)
+    }
+
+    private fun prefetchAdjacent(center: LocalDate) {
+        _state.update { state ->
+            val keep = setOf(center.minusDays(1), center, center.plusDays(1))
+            state.copy(pages = state.pages.filterKeys { it in keep })
+        }
+        loadPreview(center.minusDays(1))
+        loadPreview(center.plusDays(1))
+    }
+
+    private fun loadPreview(date: LocalDate) {
+        val existing = _state.value.pages[date]
+        if (existing?.loading == true) return
+        val requestVersion = nextRequestVersion(date)
+        _state.update { state ->
+            state.withPage(date) { it.copy(loading = true, error = null) }
+        }
+        viewModelScope.launch {
+            repository.getDayPreview(date).fold(
+                onSuccess = { day ->
+                    if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
+                        _state.update { state ->
+                            state.withPage(date) {
+                                DayPageState(day = day, loading = false, materialized = false)
+                            }
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
+                        _state.update { state ->
+                            state.withPage(date) {
+                                it.copy(loading = false, error = error.apiError.message)
+                            }
+                        }
+                    }
+                },
+            )
+        }
+    }
+
+    private fun nextRequestVersion(date: LocalDate): Int {
+        val next = (pageRequestVersions[date] ?: 0) + 1
+        pageRequestVersions[date] = next
+        return next
+    }
+
+    private fun isLatest(date: LocalDate, version: Int): Boolean =
+        pageRequestVersions[date] == version
+
+    private fun isInActiveWindow(date: LocalDate): Boolean {
+        val selected = _state.value.date
+        return date >= selected.minusDays(1) && date <= selected.plusDays(1)
     }
 
     /** Re-read types after the Types screen may have changed them. */
@@ -120,7 +216,16 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 
     fun goToDate(date: LocalDate) {
-        _state.update { it.copy(date = date, selectedBlockId = null, draft = null) }
+        if (date == _state.value.date) return
+        _state.update {
+            it.copy(
+                date = date,
+                selectedBlockId = null,
+                draft = null,
+                noteInput = "",
+                typeQuery = "",
+            )
+        }
         load(date)
     }
 
@@ -176,7 +281,9 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
         val selected = current.selectedBlock ?: return
         if (selected.taskTypeId == taskType.id) return
-        mutate("Saved") { repository.patchBlock(current.date, selected.id, taskTypeId = taskType.id) }
+        mutate(current.date, "Saved") {
+            repository.patchBlock(current.date, selected.id, taskTypeId = taskType.id)
+        }
     }
 
     /**
@@ -209,16 +316,17 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 onSuccess = { day ->
                     // Picking the type is the whole draft flow, so the sheet is done: leaving
                     // it open on the fresh block would just hide the timeline it landed on.
-                    _state.update {
-                        it.copy(
-                            day = day,
+                    _state.update { state ->
+                        state.copy(
                             saving = false,
-                            draft = null,
-                            selectedBlockId = null,
-                            noteInput = "",
-                            typeQuery = "",
+                            draft = if (state.date == date) null else state.draft,
+                            selectedBlockId = if (state.date == date) null else state.selectedBlockId,
+                            noteInput = if (state.date == date) "" else state.noteInput,
+                            typeQuery = if (state.date == date) "" else state.typeQuery,
                             message = "Block created",
-                        )
+                        ).withPage(date) {
+                            DayPageState(day = day, loading = false, materialized = true)
+                        }
                     }
                 },
                 onFailure = { e ->
@@ -242,8 +350,10 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val block = day.blocks.firstOrNull { it.id == blockId } ?: return
         if (block.startMinute == startMinute && block.endMinute == endMinute) return
 
-        _state.update {
-            it.copy(day = it.day?.withBlockTimes(blockId, startMinute, endMinute), saving = true)
+        _state.update { state ->
+            state.copy(saving = true).withPage(current.date) { page ->
+                page.copy(day = page.day?.withBlockTimes(blockId, startMinute, endMinute))
+            }
         }
         viewModelScope.launch {
             repository.patchBlock(
@@ -252,20 +362,27 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 startMinute = startMinute,
                 endMinute = endMinute,
             ).fold(
-                onSuccess = { day -> _state.update { it.copy(day = day, saving = false) } },
+                onSuccess = { day ->
+                    _state.update { state ->
+                        state.copy(saving = false).withPage(current.date) {
+                            DayPageState(day = day, loading = false, materialized = true)
+                        }
+                    }
+                },
                 onFailure = { e ->
                     // Roll back this block alone rather than the whole day: another
                     // request (a note save, say) may have landed a fresh day meanwhile.
-                    _state.update {
-                        it.copy(
-                            day = it.day?.withBlockTimes(
+                    _state.update { state ->
+                        state.copy(
+                            saving = false,
+                            message = e.apiError.message,
+                        ).withPage(current.date) { page ->
+                            page.copy(day = page.day?.withBlockTimes(
                                 blockId,
                                 block.startMinute,
                                 block.endMinute,
-                            ),
-                            saving = false,
-                            message = e.apiError.message,
-                        )
+                            ))
+                        }
                     }
                 },
             )
@@ -276,7 +393,11 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val date = _state.value.date
         viewModelScope.launch {
             repository.patchBlock(date, blockId, note = note).onSuccess { day ->
-                _state.update { it.copy(day = day) }
+                _state.update { state ->
+                    state.withPage(date) {
+                        DayPageState(day = day, loading = false, materialized = true)
+                    }
+                }
             }
         }
     }
@@ -285,7 +406,9 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val current = _state.value
         val selected = current.selectedBlock ?: return
         _state.update { it.copy(selectedBlockId = null) }
-        mutate("Block deleted") { repository.deleteBlock(current.date, selected.id) }
+        mutate(current.date, "Block deleted") {
+            repository.deleteBlock(current.date, selected.id)
+        }
     }
 
     fun completeSelected() {
@@ -293,7 +416,9 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val selected = current.selectedBlock ?: return
         if (selected.lane != Lane.Planned) return
         _state.update { it.copy(selectedBlockId = null) }
-        mutate("Copied to actual") { repository.completeAsPlanned(current.date, selected.id) }
+        mutate(current.date, "Copied to actual") {
+            repository.completeAsPlanned(current.date, selected.id)
+        }
     }
 
     /** A copy of the day with one block re-timed; unchanged if that block has gone. */
@@ -307,13 +432,19 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         },
     )
 
-    private fun mutate(successMessage: String?, block: suspend () -> Result<Day>) {
+    private fun mutate(
+        date: LocalDate,
+        successMessage: String?,
+        block: suspend () -> Result<Day>,
+    ) {
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             block().fold(
                 onSuccess = { day ->
-                    _state.update {
-                        it.copy(day = day, saving = false, message = successMessage)
+                    _state.update { state ->
+                        state.copy(saving = false, message = successMessage).withPage(date) {
+                            DayPageState(day = day, loading = false, materialized = true)
+                        }
                     }
                 },
                 onFailure = { e ->
@@ -323,3 +454,8 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
     }
 }
+
+private inline fun DayUiState.withPage(
+    date: LocalDate,
+    transform: (DayPageState) -> DayPageState,
+): DayUiState = copy(pages = pages + (date to transform(page(date))))

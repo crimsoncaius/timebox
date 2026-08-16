@@ -41,6 +41,16 @@ data class DayDto(
 )
 
 @Serializable
+data class DayPreviewDto(
+    val date: String,
+    @SerialName("start_hour") val startHour: Int,
+    @SerialName("end_hour") val endHour: Int,
+    @SerialName("show_full_day") val showFullDay: Boolean,
+    @SerialName("time_blocks") val timeBlocks: List<TimeBlockDto>,
+    val meta: DayMetaDto,
+)
+
+@Serializable
 data class DayListItemDto(
     val id: Int,
     val date: String,

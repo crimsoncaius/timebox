@@ -12,6 +12,82 @@ export interface TaskType {
   name: string
   created_at: string
   updated_at: string
+  usage_count?: number
+  task_usage_count?: number
+}
+
+export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'completed'
+export type PriorityLevel = 'low' | 'medium' | 'high'
+export type TaskCollection = 'active' | 'archived' | 'trash'
+
+export interface Project {
+  id: number
+  name: string
+  description: string
+  deadline_date: string | null
+  deadline_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BattleTask {
+  id: number
+  parent_id: number | null
+  project_id: number | null
+  project: Project | null
+  task_type_id: number | null
+  task_type: TaskType | null
+  title: string
+  description: string
+  status: TaskStatus
+  urgency: PriorityLevel | null
+  importance: PriorityLevel | null
+  deadline_date: string | null
+  deadline_at: string | null
+  reminder_at: string | null
+  reminder_delivered_at: string | null
+  position: number
+  archived_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  overdue: boolean
+  subtasks: BattleTask[]
+}
+
+export interface BattleTaskList {
+  items: BattleTask[]
+  timezone: string
+  server_now_iso: string
+}
+
+export interface DueReminder {
+  id: number
+  title: string
+  deadline_date: string | null
+  deadline_at: string | null
+  reminder_at: string
+}
+
+export type ProjectWrite = {
+  name: string
+  description?: string
+  deadline_date?: string | null
+  deadline_at?: string | null
+}
+
+export type BattleTaskWrite = {
+  title: string
+  description?: string
+  status?: TaskStatus
+  project_id?: number | null
+  parent_id?: number | null
+  task_type_id?: number | null
+  urgency?: PriorityLevel | null
+  importance?: PriorityLevel | null
+  deadline_date?: string | null
+  deadline_at?: string | null
+  reminder_at?: string | null
 }
 
 export interface TimeBlock {
@@ -237,11 +313,12 @@ export const api = {
 
   deleteTaskType: (
     id: number,
-    opts?: { cascadeBlocks?: boolean; migrateBlocksTo?: number },
+    opts?: { cascadeBlocks?: boolean; migrateBlocksTo?: number; clearTaskReferences?: boolean },
   ) => {
     const params = new URLSearchParams()
     if (opts?.cascadeBlocks) params.set('cascade_blocks', 'true')
     if (opts?.migrateBlocksTo != null) params.set('migrate_blocks_to', String(opts.migrateBlocksTo))
+    if (opts?.clearTaskReferences) params.set('clear_task_references', 'true')
     const qs = params.toString()
     return fetchVoid(`/task-types/${id}${qs ? `?${qs}` : ''}`, {
       method: 'DELETE',
@@ -284,4 +361,54 @@ export const api = {
     }),
 
   listDays: (limit = 60) => fetchJson<DayListItem[]>(`/days?limit=${limit}`),
+
+  listProjects: () => fetchJson<Project[]>('/projects'),
+
+  createProject: (body: ProjectWrite) =>
+    fetchJson<Project>('/projects', { method: 'POST', body: JSON.stringify(body) }),
+
+  patchProject: (id: number, body: Partial<ProjectWrite>) =>
+    fetchJson<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  deleteProject: (id: number) => fetchVoid(`/projects/${id}`, { method: 'DELETE' }),
+
+  listBattleTasks: (state: TaskCollection = 'active') =>
+    fetchJson<BattleTaskList>(`/tasks?state=${state}`),
+
+  createBattleTask: (body: BattleTaskWrite) =>
+    fetchJson<BattleTask>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
+
+  patchBattleTask: (id: number, body: Partial<BattleTaskWrite>) =>
+    fetchJson<BattleTask>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  reorderBattleTasks: (
+    placements: Array<{ task_id: number; status: TaskStatus; position: number }>,
+  ) =>
+    fetchVoid('/tasks/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ placements }),
+    }),
+
+  archiveBattleTasks: (taskIds: number[]) =>
+    fetchVoid('/tasks/archive-completed', {
+      method: 'POST',
+      body: JSON.stringify({ task_ids: taskIds }),
+    }),
+
+  unarchiveBattleTask: (id: number) =>
+    fetchVoid(`/tasks/${id}/unarchive`, { method: 'POST' }),
+
+  trashBattleTask: (id: number) =>
+    fetchJson<BattleTask>(`/tasks/${id}`, { method: 'DELETE' }),
+
+  restoreBattleTask: (id: number) =>
+    fetchVoid(`/tasks/${id}/restore`, { method: 'POST' }),
+
+  permanentlyDeleteBattleTask: (id: number) =>
+    fetchVoid(`/tasks/${id}/permanent`, { method: 'DELETE' }),
+
+  dueReminders: () => fetchJson<DueReminder[]>('/reminders/due'),
+
+  acknowledgeReminder: (id: number) =>
+    fetchVoid(`/reminders/${id}/delivered`, { method: 'POST' }),
 }

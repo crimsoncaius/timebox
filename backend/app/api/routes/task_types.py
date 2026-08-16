@@ -11,6 +11,7 @@ from app.schemas.task_type import (
     TaskTypeRead,
 )
 from app.services import task_type_service
+from app.services import battle_plan_service
 
 router = APIRouter(prefix="/task-types", tags=["task-types"])
 
@@ -19,10 +20,12 @@ router = APIRouter(prefix="/task-types", tags=["task-types"])
 def list_task_types(db: Session = Depends(get_db)) -> list[TaskTypeListItem]:
     rows = task_type_service.list_task_types(db)
     counts = task_type_service.block_counts_by_task_type(db)
+    task_counts = battle_plan_service.task_type_counts(db)
     return [
         TaskTypeListItem(
             **TaskTypeRead.model_validate(r).model_dump(),
             usage_count=counts.get(r.id, 0),
+            task_usage_count=task_counts.get(r.id, 0),
         )
         for r in rows
     ]
@@ -61,6 +64,7 @@ def delete_task_type(
     task_type_id: int,
     cascade_blocks: bool = Query(False),
     migrate_blocks_to: int | None = Query(None),
+    clear_task_references: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> None:
     if cascade_blocks and migrate_blocks_to is not None:
@@ -69,6 +73,11 @@ def delete_task_type(
             detail="Cannot use cascade_blocks and migrate_blocks_to together",
         )
     try:
+        task_count = battle_plan_service.task_type_counts(db).get(task_type_id, 0)
+        if task_count and not clear_task_references:
+            raise ValueError("TASK_TYPE_USED_BY_TASKS")
+        if clear_task_references:
+            battle_plan_service.clear_task_type_references(db, task_type_id)
         task_type_service.delete_task_type(
             db,
             task_type_id,
@@ -81,6 +90,11 @@ def delete_task_type(
             raise HTTPException(
                 status_code=409,
                 detail="Task type is still used by existing blocks",
+            ) from e
+        if msg == "TASK_TYPE_USED_BY_TASKS":
+            raise HTTPException(
+                status_code=409,
+                detail="Task type is still used by Battle Plan tasks",
             ) from e
         if msg == "TASK_TYPE_HAS_DESCENDANTS":
             raise HTTPException(

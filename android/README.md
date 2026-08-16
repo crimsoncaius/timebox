@@ -70,6 +70,9 @@ browser UI.
 
 ## Backend endpoints this client adds
 
+- `GET /days/{date}/preview` — renderable blocks and window settings for the live
+  adjacent-page swipe. Missing dates stay read-only, so peeking and snapping back does
+  not add an empty Chronicle row.
 - `GET /days/{date}/summary` — planned/actual totals plus per-task-type minutes for
   the Review screen. Read-only: unlike `GET /days/{date}` it does not create the day,
   so opening Review never adds a date to the archive.
@@ -107,7 +110,7 @@ webfont; the glyph names map one-to-one.
   `taskTypePaths.ts`, which scores by segment alignment.
 - **The picker's field autofocuses only for new blocks.** Editing an existing block
   keeps the keyboard down so Mark complete and delete stay reachable.
-- **Online only.** Nothing is cached. Every screen reads through to the API and shows
-  a retry on failure.
+- **Online only.** The Day screen keeps only its current and adjacent pages in memory
+  for swiping; there is no persistent/offline cache. Reads show a retry on failure.
 - **Overlaps are rejected by the server.** Dragging a block onto another in the same
   lane returns 422 and the timeline snaps back with a message.

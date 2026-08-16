@@ -41,7 +41,7 @@ async function ensureTaskType(request: APIRequestContext, base: string, name: st
  */
 test('plan blocks and history', async ({ page, request }) => {
   const date = '2026-06-01'
-  const base = 'http://127.0.0.1:8000'
+  const base = 'http://127.0.0.1:18001'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -139,7 +139,7 @@ test('plan blocks and history', async ({ page, request }) => {
 
 test('resize planned block stops at next block in same lane', async ({ page, request }) => {
   const date = '2026-06-02'
-  const base = 'http://127.0.0.1:8000'
+  const base = 'http://127.0.0.1:18001'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -210,7 +210,7 @@ test('resize planned block stops at next block in same lane', async ({ page, req
 
 test('move planned block preserves duration and jumps past blocker', async ({ page, request }) => {
   const date = '2026-06-03'
-  const base = 'http://127.0.0.1:8000'
+  const base = 'http://127.0.0.1:18001'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -282,7 +282,7 @@ test('move planned block: preview stays stable while pointer wiggles in the inva
   request,
 }) => {
   const date = '2026-06-25'
-  const base = 'http://127.0.0.1:8000'
+  const base = 'http://127.0.0.1:18001'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -356,7 +356,7 @@ test('creates a hierarchical task type from the block editor and renames parent 
   request,
 }) => {
   const date = '2026-06-04'
-  const base = 'http://127.0.0.1:8000'
+  const base = 'http://127.0.0.1:18001'
   const uniq = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
   const rootPath = `e2ehp${uniq}`
   const childPath = `${rootPath}/x`
@@ -419,7 +419,7 @@ test('draft-first: lane click shows ghost; block is created when task type is ch
   request,
 }) => {
   const date = '2026-06-20'
-  const base = 'http://127.0.0.1:8000'
+  const base = 'http://127.0.0.1:18001'
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -479,4 +479,62 @@ test('draft cleared when clicking outside the timeline', async ({ page }) => {
   await expect(page.getByTestId('draft-block')).toBeVisible()
   await page.locator('main h1').first().click()
   await expect(page.getByTestId('draft-block')).toHaveCount(0)
+})
+
+test('Battle Plan creates a dated project task, persists subtask progress, moves, and restores it', async ({ page, request }) => {
+  const base = 'http://127.0.0.1:18001'
+  const uniq = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
+  const projectName = `Atlas ${uniq}`
+  const taskTitle = `Launch brief ${uniq}`
+
+  const projectResponse = await request.post(`${base}/projects`, {
+    data: { name: projectName, description: 'E2E project' },
+  })
+  expect(projectResponse.ok()).toBeTruthy()
+
+  await page.goto('/battle-plan')
+  await page.getByRole('button', { name: projectName, exact: true }).click()
+  const open = page.getByRole('region', { name: 'Open tasks' })
+  await open.getByRole('button', { name: 'Add Open task' }).click()
+  const composer = open.getByRole('form', { name: 'New task' })
+  await composer.getByLabel('Task title').fill(taskTitle)
+  await composer.getByLabel('Task description').fill('Prepare the launch review')
+  await composer.getByLabel('Urgency').selectOption('high')
+  await composer.getByLabel('Importance').selectOption('medium')
+  await composer.getByRole('button', { name: 'Today' }).click()
+  await composer.getByRole('button', { name: 'Add task', exact: true }).click()
+
+  await expect(page.getByText(taskTitle, { exact: true })).toBeVisible()
+  await expect(open.getByText('Today', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: `Add a subtask to ${taskTitle}` }).click()
+  await page.getByLabel(`New subtask for ${taskTitle}`).fill('Review sources')
+  await page.getByLabel(`Add subtask to ${taskTitle}`).click()
+  await expect(page.getByText('Review sources', { exact: true })).toBeVisible()
+  await page.getByLabel('Complete subtask Review sources').click()
+  await expect(page.getByRole('button', { name: `1 of 1 subtasks completed for ${taskTitle}` })).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByRole('button', { name: `1 of 1 subtasks completed for ${taskTitle}` })).toBeVisible()
+
+  const blocked = page.getByRole('region', { name: 'Blocked tasks' })
+  const taskCard = page.locator('article[data-task-id]').filter({ hasText: taskTitle }).first()
+  const cardBox = await taskCard.boundingBox()
+  const blockedBox = await blocked.boundingBox()
+  expect(cardBox).toBeTruthy()
+  expect(blockedBox).toBeTruthy()
+  await page.mouse.move(cardBox!.x + cardBox!.width / 2, cardBox!.y + cardBox!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(cardBox!.x + cardBox!.width / 2 + 2, cardBox!.y + cardBox!.height / 2 + 2)
+  await expect(taskCard).toHaveAttribute('data-dragging', 'true')
+  await page.mouse.move(blockedBox!.x + blockedBox!.width / 2, blockedBox!.y + 120, { steps: 12 })
+  await page.mouse.up()
+  const movedCard = blocked.getByRole('button', { name: `Move ${taskTitle}` })
+  await expect(movedCard).toBeVisible()
+
+  await movedCard.click()
+  await page.getByRole('button', { name: 'Move to Trash' }).click()
+  await expect(page.getByText('Moved to Trash')).toBeVisible()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(page.getByText(taskTitle, { exact: true })).toBeVisible()
 })

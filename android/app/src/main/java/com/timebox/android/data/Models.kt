@@ -2,6 +2,7 @@ package com.timebox.android.data
 
 import com.timebox.android.data.remote.DayDto
 import com.timebox.android.data.remote.DayListItemDto
+import com.timebox.android.data.remote.DayPreviewDto
 import com.timebox.android.data.remote.DaySummaryDto
 import com.timebox.android.data.remote.SettingsDto
 import com.timebox.android.data.remote.TaskTypeDto
@@ -128,6 +129,17 @@ fun TimeBlockDto.toModel() = TimeBlock(
 )
 
 fun DayDto.toModel() = Day(
+    date = LocalDate.parse(date),
+    startHour = startHour,
+    endHour = endHour,
+    showFullDay = showFullDay,
+    blocks = timeBlocks.map { it.toModel() },
+    timezone = meta.timezone,
+    today = LocalDate.parse(meta.today),
+    serverNowMinute = parseMinuteOfDay(meta.serverNowIso),
+)
+
+fun DayPreviewDto.toModel() = Day(
     date = LocalDate.parse(date),
     startHour = startHour,
     endHour = endHour,

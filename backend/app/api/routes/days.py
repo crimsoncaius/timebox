@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.time import parse_iso_date
 from app.db.session import get_db
-from app.schemas.day import DayListItem, DayRead, DaySummaryRead
+from app.schemas.day import DayListItem, DayPreviewRead, DayRead, DaySummaryRead
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch
 from app.services import day_service
 
@@ -34,6 +34,20 @@ def get_day(
         raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
     return day_service.to_day_read(day, settings)
+
+
+@router.get("/{date}/preview", response_model=DayPreviewRead)
+def get_day_preview(
+    date: str,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> DayPreviewRead:
+    try:
+        d = parse_iso_date(date)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
+    day = day_service.get_day_by_date(db, d)
+    return day_service.build_day_preview(db, day, d, settings)
 
 
 @router.get("/{date}/summary", response_model=DaySummaryRead)

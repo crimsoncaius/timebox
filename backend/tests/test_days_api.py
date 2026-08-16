@@ -26,6 +26,42 @@ def test_get_day_creates_empty_blocks(client):
     assert data["meta"]["timezone"] == "UTC"
 
 
+def test_preview_missing_day_does_not_create_archive_row(client):
+    client.patch(
+        "/settings",
+        json={"start_hour": 7, "end_hour": 19, "show_full_day": False},
+    )
+
+    r = client.get("/days/2026-04-30/preview")
+
+    assert r.status_code == 200
+    assert r.json()["date"] == "2026-04-30"
+    assert r.json()["start_hour"] == 7
+    assert r.json()["end_hour"] == 19
+    assert r.json()["time_blocks"] == []
+    assert all(row["date"] != "2026-04-30" for row in client.get("/days").json())
+
+
+def test_preview_existing_day_includes_its_blocks(client):
+    tid = _tid(client, "previewed")
+    created = client.post(
+        "/days/2026-05-01/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "start_minute": 540,
+            "end_minute": 600,
+        },
+    )
+    assert created.status_code == 200
+
+    r = client.get("/days/2026-05-01/preview")
+
+    assert r.status_code == 200
+    assert r.json()["date"] == "2026-05-01"
+    assert [block["task_type"]["name"] for block in r.json()["time_blocks"]] == ["previewed"]
+
+
 def test_create_and_patch_block(client):
     tid = _tid(client, "Deep work")
     client.get("/days/2026-04-13")

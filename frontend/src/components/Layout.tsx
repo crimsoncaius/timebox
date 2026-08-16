@@ -36,7 +36,7 @@ export function Layout({
 
   return (
     <div className="min-h-screen bg-surface font-body text-on-surface selection:bg-primary-container selection:text-on-primary-container dark:bg-dark-background dark:text-dark-on-surface">
-      <aside className="fixed left-0 top-0 z-60 flex h-screen w-64 flex-col border-r-0 bg-surface px-8 py-8 dark:bg-dark-background">
+      <aside className="fixed left-0 top-0 z-60 hidden h-screen w-64 flex-col border-r-0 bg-surface px-8 py-8 dark:bg-dark-background lg:flex">
         <div className="mb-12">
           <h1 className="font-headline text-lg font-medium uppercase tracking-widest text-on-surface dark:text-dark-on-surface">
             Timebox
@@ -69,6 +69,18 @@ export function Layout({
             </span>
           </NavLink>
           <NavLink
+            to="/battle-plan"
+            aria-label="Battle Plan"
+            className={() => navItem(location.pathname.startsWith("/battle-plan"))}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              view_kanban
+            </span>
+            <span className="font-headline font-light tracking-tight">
+              Battle Plan
+            </span>
+          </NavLink>
+          <NavLink
             to="/task-types"
             aria-label="Task types"
             className={() => navItem(location.pathname === "/task-types")}
@@ -98,8 +110,8 @@ export function Layout({
         </div>
       </aside>
 
-      <div className="ml-64 min-h-screen">
-        <header className="sticky top-0 z-50 flex w-full items-center justify-between bg-surface/85 px-12 py-6 backdrop-blur-[24px] dark:bg-dark-background/85">
+      <div className="min-h-screen pb-20 lg:ml-64 lg:pb-0">
+        <header className="sticky top-0 z-50 flex w-full items-center justify-between bg-surface/85 px-4 py-4 backdrop-blur-[24px] dark:bg-dark-background/85 sm:px-8 lg:px-12 lg:py-6">
           <div>
             <h2 className="font-headline text-xl font-light tracking-tighter text-on-surface dark:text-dark-on-surface">
               Timebox
@@ -135,6 +147,21 @@ export function Layout({
           {children}
         </main>
       </div>
+      <nav className="fixed inset-x-0 bottom-0 z-70 grid grid-cols-4 border-t border-outline-variant/20 bg-surface/95 px-2 py-2 backdrop-blur-xl dark:border-dark-outline-variant dark:bg-dark-background/95 lg:hidden">
+        <MobileNavLink to={todayHref} label="Day" icon="calendar_today" active={isTodayPath(location.pathname, today)} />
+        <MobileNavLink to="/history" label="Chronicle" icon="history" active={location.pathname === "/history"} />
+        <MobileNavLink to="/battle-plan" label="Battle Plan" icon="view_kanban" active={location.pathname.startsWith("/battle-plan")} />
+        <MobileNavLink to="/task-types" label="Task types" icon="category" active={location.pathname === "/task-types"} />
+      </nav>
     </div>
   );
+}
+
+function MobileNavLink({ to, label, icon, active }: { to: string; label: string; icon: string; active: boolean }) {
+  return (
+    <NavLink to={to} aria-label={`${label} mobile navigation`} className={`flex flex-col items-center gap-0.5 rounded-xl px-1 py-1 text-[10px] ${active ? "bg-surface-container-low text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface" : "text-on-surface-variant dark:text-dark-on-surface-variant"}`}>
+      <span className="material-symbols-outlined text-[20px]" aria-hidden>{icon}</span>
+      <span className="truncate">{label}</span>
+    </NavLink>
+  )
 }

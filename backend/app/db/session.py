@@ -15,11 +15,14 @@ def get_engine():
     settings = get_settings()
     url = settings.database_url
     if url.startswith("sqlite"):
-        return create_engine(
-            url,
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
+        engine_options = {"connect_args": {"check_same_thread": False}}
+        # In-memory SQLite databases need one shared connection so every test
+        # session sees the same schema. File-backed databases must instead use
+        # SQLite's regular pool: sharing one connection across FastAPI worker
+        # threads can corrupt concurrent reminder and page-load requests.
+        if ":memory:" in url or url.rstrip("/") == "sqlite:":
+            engine_options["poolclass"] = StaticPool
+        return create_engine(url, **engine_options)
     return create_engine(url, pool_pre_ping=True)
 
 

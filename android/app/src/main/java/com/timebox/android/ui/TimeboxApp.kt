@@ -132,9 +132,8 @@ fun TimeboxApp(
                 when (screen) {
                     Screen.Day -> DayScreen(
                         state = dayState,
-                        onPrevDay = { dayViewModel.shiftDay(-1) },
-                        onNextDay = { dayViewModel.shiftDay(1) },
-                        onRetry = { dayViewModel.start() },
+                        onDateSettled = dayViewModel::goToDate,
+                        onRetry = dayViewModel::retryPage,
                         onTapSlot = { lane: Lane, minute: Int ->
                             dayViewModel.startDraft(lane, minute)
                         },

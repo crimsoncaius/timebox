@@ -188,3 +188,56 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.task-detail-dialog {
+  --task-detail-dialog: #ffffff;
+  --task-detail-rail: #f2f4f4;
+  --task-detail-track: #e4e9ea;
+  --task-detail-selected: #dde4e5;
+  --task-detail-primary: #2d3435;
+  --task-detail-secondary: #5a6061;
+  --task-detail-muted: #757c7d;
+  --task-detail-rule: #adb3b4;
+  --task-detail-border: rgba(117, 124, 125, 0.45);
+  --task-detail-divider: rgba(117, 124, 125, 0.24);
+  --task-detail-input-border: rgba(117, 124, 125, 0.55);
+  --task-detail-input-hover: #757c7d;
+  --task-detail-input-surface: #ffffff;
+  --task-detail-title-placeholder: #757c7d;
+  --task-detail-field-hover: rgba(228, 233, 234, 0.7);
+  --task-detail-shadow: 0 25px 50px -12px rgba(45, 52, 53, 0.26);
+}
+
+.dark .task-detail-dialog {
+  --task-detail-dialog: #0c0a09;
+  --task-detail-rail: #0f0d0c;
+  --task-detail-track: #1c1917;
+  --task-detail-selected: #44403c;
+  --task-detail-primary: #f5f5f4;
+  --task-detail-secondary: #a8a29e;
+  --task-detail-muted: #78716c;
+  --task-detail-rule: #44403c;
+  --task-detail-border: rgba(68, 64, 60, 0.5);
+  --task-detail-divider: rgba(68, 64, 60, 0.25);
+  --task-detail-input-border: rgba(68, 64, 60, 0.7);
+  --task-detail-input-hover: #57534e;
+  --task-detail-input-surface: #1c1917;
+  --task-detail-title-placeholder: #57534e;
+  --task-detail-field-hover: rgba(41, 37, 36, 0.6);
+  --task-detail-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+}
+
+.task-detail-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%235a6061' stroke-width='1.5'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-position: right 2px center;
+  background-repeat: no-repeat;
+}
+
+.dark .task-detail-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23a8a29e' stroke-width='1.5'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+}
+
+.task-detail-select option {
+  background: var(--task-detail-dialog);
+  color: var(--task-detail-primary);
+}
