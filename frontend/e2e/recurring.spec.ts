@@ -37,12 +37,16 @@ async function createTemplateThroughUi(page: Page, values: {
   quotaCount?: number
 }) {
   await page.goto('/battle-plan?view=recurring')
-  await page.getByRole('button', { name: values.mode === 'scheduled' ? 'On a schedule' : 'Times per period' }).click()
+  await page.getByRole('button', { name: 'New recurring task' }).click()
   const dialog = page.getByRole('dialog', { name: 'New recurring task' })
+  if (values.mode === 'quota') await dialog.getByRole('radio', { name: 'Times per period' }).click()
   await dialog.getByLabel('Title', { exact: true }).fill(values.title)
   await dialog.getByLabel('Task type').selectOption({ label: values.taskTypeName.toLowerCase() })
   if (values.frequency) {
-    await dialog.getByLabel(values.mode === 'scheduled' ? 'Repeats' : 'Period', { exact: true }).selectOption(values.frequency)
+    const preset = values.mode === 'scheduled'
+      ? { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[values.frequency]
+      : { daily: 'Per day', weekly: 'Per week', monthly: 'Per month' }[values.frequency]
+    await dialog.getByRole('button', { name: preset, exact: true }).click()
   }
   if (values.mode === 'quota' && values.quotaCount) {
     await dialog.getByLabel('Times per period').fill(String(values.quotaCount))

@@ -249,12 +249,17 @@ describe('BattlePlanPage', () => {
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
     await user.click(await screen.findByLabelText('Add Open task'))
     const composer = screen.getByRole('form', { name: 'New task' })
-    await user.type(within(composer).getByLabelText('Task title'), 'Prepare review')
+    await user.type(within(composer).getByLabelText('Task title'), 'Prepare review #Atlas !low ~medium')
     await user.type(within(composer).getByLabelText('Task description'), 'Bring the draft')
-    await user.selectOptions(within(composer).getByLabelText('Location'), '7')
-    await user.selectOptions(within(composer).getByLabelText('Task type'), '3')
-    await user.selectOptions(within(composer).getByLabelText('Urgency'), 'high')
-    await user.click(within(composer).getByRole('button', { name: 'Today' }))
+    expect(within(composer).getByTitle('Location: Atlas')).toBeInTheDocument()
+    expect(within(composer).getByText('Low')).toBeInTheDocument()
+    expect(within(composer).getByText('Medium')).toBeInTheDocument()
+    await user.click(within(composer).getByRole('button', { name: 'Type' }))
+    await user.click(within(composer).getByRole('menuitemradio', { name: 'work/deep' }))
+    await user.click(within(composer).getByRole('button', { name: 'Urgency' }))
+    await user.click(within(composer).getByRole('menuitemradio', { name: 'High' }))
+    await user.click(within(composer).getByRole('button', { name: 'Due' }))
+    await user.click(within(composer).getByRole('menuitemradio', { name: 'Today' }))
     await user.click(within(composer).getByRole('button', { name: 'Add task' }))
 
     expect(await screen.findByText('Prepare review')).toBeInTheDocument()
@@ -263,7 +268,7 @@ describe('BattlePlanPage', () => {
       expect.stringContaining('/tasks'),
       expect.objectContaining({
         method: 'POST',
-        body: expect.stringMatching(/"project_id":7.*"task_type_id":3.*"urgency":"high".*"deadline_date":"2026-08-15"/),
+        body: expect.stringMatching(/"project_id":7.*"task_type_id":3.*"urgency":"high".*"importance":"medium".*"deadline_date":"2026-08-15"/),
       }),
     )
   })

@@ -53,6 +53,9 @@ fun SettingsScreen(
     onBaseUrlChange: (String) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSaveConnection: () -> Unit,
+    notificationsAllowed: Boolean,
+    onRequestNotificationPermission: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onRetry: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -138,6 +141,37 @@ fun SettingsScreen(
                     description = "Charcoal surfaces, brighter lanes.",
                 ) {
                     TimeboxSwitch(checked = isDark, onCheckedChange = { onToggleDark() })
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        SectionCard {
+            SectionHeader(
+                title = "Notifications",
+                description = if (notificationsAllowed) {
+                    "This device can display Battle Plan reminders. Delivery may be delayed by battery restrictions."
+                } else {
+                    "Reminders still save to the server, but this device cannot display them until notifications are enabled."
+                },
+            )
+            Column(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (!notificationsAllowed) {
+                    PrimaryButton(
+                        text = "Enable notifications",
+                        onClick = onRequestNotificationPermission,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                androidx.compose.material3.TextButton(
+                    onClick = onOpenNotificationSettings,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open notification settings")
                 }
             }
         }

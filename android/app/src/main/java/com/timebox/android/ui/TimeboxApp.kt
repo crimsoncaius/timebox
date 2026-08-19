@@ -14,16 +14,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.timebox.android.data.Lane
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleViewModel
+import com.timebox.android.ui.battleplan.BattlePlanScreen
+import com.timebox.android.ui.battleplan.BattlePlanViewModel
+import com.timebox.android.ui.battleplan.ProjectEditorScreen
+import com.timebox.android.ui.battleplan.ProjectEditorViewModel
+import com.timebox.android.ui.battleplan.RecurringDetailScreen
+import com.timebox.android.ui.battleplan.RecurringEditorScreen
+import com.timebox.android.ui.battleplan.RecurringEditorViewModel
+import com.timebox.android.ui.battleplan.RecurringScreen
+import com.timebox.android.ui.battleplan.RecurringViewModel
+import com.timebox.android.ui.battleplan.TaskDetailScreen
+import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.components.TimeboxBottomNav
 import com.timebox.android.ui.components.TimeboxTab
 import com.timebox.android.ui.components.TimeboxTopBar
@@ -36,199 +53,531 @@ import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
 import com.timebox.android.ui.types.TypesScreen
 import com.timebox.android.ui.types.TypesViewModel
-
-/** Review is reached from the Day tab rather than the nav bar, as in the design. */
-private enum class Screen { Day, Chronicle, Types, Settings, Review }
+import java.time.LocalDate
 
 @Composable
 fun TimeboxApp(
     isDark: Boolean,
     onToggleDark: () -> Unit,
+    notificationsAllowed: Boolean,
+    onRequestNotificationPermission: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
 ) {
     val repository = rememberRepository()
     val factory = remember(repository) { timeboxViewModelFactory(repository) }
+    val navController = rememberNavController()
 
     val dayViewModel: DayViewModel = viewModel(factory = factory)
     val chronicleViewModel: ChronicleViewModel = viewModel(factory = factory)
     val typesViewModel: TypesViewModel = viewModel(factory = factory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
     val reviewViewModel: ReviewViewModel = viewModel(factory = factory)
-
+    val battlePlanViewModel: BattlePlanViewModel = viewModel(factory = factory)
+    val taskDetailViewModel: TaskDetailViewModel = viewModel(factory = factory)
+    val projectEditorViewModel: ProjectEditorViewModel = viewModel(factory = factory)
+    val recurringViewModel: RecurringViewModel = viewModel(factory = factory)
+    val recurringEditorViewModel: RecurringEditorViewModel = viewModel(factory = factory)
     val dayState by dayViewModel.state.collectAsState()
     val chronicleState by chronicleViewModel.state.collectAsState()
     val typesState by typesViewModel.state.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
     val reviewState by reviewViewModel.state.collectAsState()
-
-    var screen by remember { mutableStateOf(Screen.Day) }
+    val battlePlanState by battlePlanViewModel.state.collectAsState()
+    val taskDetailState by taskDetailViewModel.state.collectAsState()
+    val projectEditorState by projectEditorViewModel.state.collectAsState()
+    val recurringState by recurringViewModel.state.collectAsState()
+    val recurringEditorState by recurringEditorViewModel.state.collectAsState()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val route = backStackEntry?.destination?.route ?: AppRoutes.DayPattern
+    val routeDate = backStackEntry?.arguments?.getString(AppRoutes.DateArg)?.let {
+        runCatching { LocalDate.parse(it) }.getOrNull()
+    }
+    val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
+    val routeProjectId = backStackEntry?.arguments?.getInt(AppRoutes.ProjectIdArg)
+    val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(screen) {
-        when (screen) {
-            Screen.Chronicle -> {
+    LaunchedEffect(route, routeDate, routeTaskId, routeProjectId, routeTemplateId) {
+        when (route) {
+            AppRoutes.DayPattern -> {
+                routeDate?.let(dayViewModel::goToDate)
+                dayViewModel.start()
+                dayViewModel.refreshTaskTypes()
+                dayViewModel.refreshReadyToPlan()
+            }
+            AppRoutes.Chronicle -> {
                 dayState.day?.today?.let(chronicleViewModel::setToday)
                 chronicleViewModel.load()
             }
-            Screen.Types -> typesViewModel.load()
-            Screen.Settings -> settingsViewModel.load(dayState.day?.timezone)
-            Screen.Review -> reviewViewModel.load(dayState.date)
-            Screen.Day -> {
-                // Types may have changed on the Types tab; the chips must stay current.
-                dayViewModel.start()
-                dayViewModel.refreshTaskTypes()
+            AppRoutes.Types -> typesViewModel.load()
+            AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)
+            AppRoutes.ReviewPattern -> reviewViewModel.load(routeDate ?: dayState.date)
+            AppRoutes.BattlePlan -> battlePlanViewModel.load()
+            AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
+            AppRoutes.ProjectNew -> projectEditorViewModel.open(null)
+            AppRoutes.ProjectDetailPattern -> projectEditorViewModel.open(routeProjectId)
+            AppRoutes.Recurring -> recurringViewModel.load()
+            AppRoutes.RecurringNew -> recurringEditorViewModel.open(null)
+            AppRoutes.RecurringDetailPattern -> routeTemplateId?.let(recurringViewModel::openDetail)
+            AppRoutes.RecurringEditPattern -> recurringEditorViewModel.open(routeTemplateId)
+        }
+    }
+    LaunchedEffect(dayState.message) {
+        dayState.message?.let { snackbarHostState.showSnackbar(it); dayViewModel.consumeMessage() }
+    }
+    LaunchedEffect(typesState.message) {
+        typesState.message?.let { snackbarHostState.showSnackbar(it); typesViewModel.consumeMessage() }
+    }
+    LaunchedEffect(settingsState.message) {
+        settingsState.message?.let { snackbarHostState.showSnackbar(it); settingsViewModel.consumeMessage() }
+    }
+    LaunchedEffect(battlePlanState.message) {
+        battlePlanState.message?.let { snackbarHostState.showSnackbar(it); battlePlanViewModel.consumeMessage() }
+    }
+    LaunchedEffect(taskDetailState.message) {
+        taskDetailState.message?.let { snackbarHostState.showSnackbar(it); taskDetailViewModel.consumeMessage() }
+    }
+    LaunchedEffect(projectEditorState.message) {
+        projectEditorState.message?.let { snackbarHostState.showSnackbar(it); projectEditorViewModel.consumeMessage() }
+    }
+    LaunchedEffect(recurringState.message) {
+        recurringState.message?.let { snackbarHostState.showSnackbar(it); recurringViewModel.consumeMessage() }
+    }
+    LaunchedEffect(recurringEditorState.message) {
+        recurringEditorState.message?.let { snackbarHostState.showSnackbar(it); recurringEditorViewModel.consumeMessage() }
+    }
+    LaunchedEffect(recurringEditorState.savedTemplateId) {
+        recurringEditorState.savedTemplateId?.let { templateId ->
+            recurringEditorViewModel.consumeSaved()
+            recurringViewModel.load(showSpinner = false)
+            navController.navigate(AppRoutes.recurringDetail(templateId)) {
+                popUpTo(if (route == AppRoutes.RecurringNew) AppRoutes.RecurringNew else AppRoutes.RecurringEditPattern) {
+                    inclusive = true
+                }
             }
         }
     }
 
-    // Surface one-off outcomes (saved, deleted, rejected) without blocking the screen.
-    LaunchedEffect(dayState.message) {
-        dayState.message?.let {
-            snackbarHostState.showSnackbar(it)
-            dayViewModel.consumeMessage()
-        }
+    val selectedTab = when (route) {
+        AppRoutes.DayPattern, AppRoutes.ReviewPattern -> TimeboxTab.Day
+        AppRoutes.Chronicle -> TimeboxTab.Chronicle
+        AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern, AppRoutes.ProjectNew,
+        AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
+        AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> TimeboxTab.BattlePlan
+        AppRoutes.Types -> TimeboxTab.Types
+        else -> null
     }
-    LaunchedEffect(typesState.message) {
-        typesState.message?.let {
-            snackbarHostState.showSnackbar(it)
-            typesViewModel.consumeMessage()
-        }
-    }
-    LaunchedEffect(settingsState.message) {
-        settingsState.message?.let {
-            snackbarHostState.showSnackbar(it)
-            settingsViewModel.consumeMessage()
-        }
-    }
-
     val colors = TimeboxTheme.colors
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
             TimeboxTopBar(
-                kicker = when (screen) {
-                    Screen.Day -> "Day"
-                    Screen.Chronicle -> "Chronicle"
-                    Screen.Types -> "Task types"
-                    Screen.Settings -> "Settings"
-                    Screen.Review -> "Review"
-                },
-                title = when (screen) {
-                    Screen.Day -> formatFullDate(dayState.date)
-                    Screen.Chronicle -> formatMonthTitle(chronicleState.monthStart)
-                    Screen.Types -> "Paths"
-                    Screen.Settings -> "Preferences"
-                    Screen.Review -> formatShortDate(reviewState.date)
-                },
+                kicker = routeKicker(route),
+                title = routeTitle(
+                    route,
+                    formatFullDate(dayState.date),
+                    formatMonthTitle(chronicleState.monthStart),
+                    formatShortDate(reviewState.date),
+                ),
                 isDark = isDark,
                 onToggleTheme = onToggleDark,
-                onOpenReview = if (screen == Screen.Day) {
-                    { screen = Screen.Review }
-                } else {
-                    null
-                },
+                primaryActionLabel = if (route == AppRoutes.DayPattern) {
+                    if (dayState.isPlanningMode) "Done" else "Plan"
+                } else null,
+                onPrimaryAction = if (route == AppRoutes.DayPattern) {
+                    { dayViewModel.setPlanningMode(!dayState.isPlanningMode) }
+                } else null,
+                onOpenReview = if (route == AppRoutes.DayPattern && !dayState.isPlanningMode) {
+                    { navController.navigate(AppRoutes.review(dayState.date)) }
+                } else null,
+                onOpenSettings = if (route != AppRoutes.Settings) {
+                    { navController.navigate(AppRoutes.Settings) { launchSingleTop = true } }
+                } else null,
             )
 
             Box(modifier = Modifier.weight(1f)) {
-                when (screen) {
-                    Screen.Day -> DayScreen(
-                        state = dayState,
-                        onDateSettled = dayViewModel::goToDate,
-                        onRetry = dayViewModel::retryPage,
-                        onTapSlot = { lane: Lane, minute: Int ->
-                            dayViewModel.startDraft(lane, minute)
-                        },
-                        onSelectBlock = dayViewModel::selectBlock,
-                        onCommitMove = dayViewModel::moveBlock,
-                        onDismissSheet = dayViewModel::closeSheet,
-                        onChooseType = dayViewModel::chooseTaskType,
-                        onTypeQueryChange = dayViewModel::onTypeQueryChange,
-                        onCreateType = dayViewModel::createTaskTypeAndChoose,
-                        onNoteChange = dayViewModel::onNoteChange,
-                        onDeleteSelected = dayViewModel::deleteSelected,
-                        onCompleteSelected = dayViewModel::completeSelected,
-                    )
-
-                    Screen.Chronicle -> ChronicleScreen(
-                        state = chronicleState,
-                        onPrevMonth = { chronicleViewModel.shiftMonth(-1) },
-                        onNextMonth = { chronicleViewModel.shiftMonth(1) },
-                        onThisMonth = chronicleViewModel::goToThisMonth,
-                        onOpenDay = { date ->
-                            dayViewModel.goToDate(date)
-                            screen = Screen.Day
-                        },
-                        onRetry = chronicleViewModel::load,
-                    )
-
-                    Screen.Types -> TypesScreen(
-                        state = typesState,
-                        onInputChange = typesViewModel::onInputChange,
-                        onAdd = typesViewModel::addType,
-                        onDelete = typesViewModel::deleteType,
-                        onConfirmCascade = typesViewModel::confirmCascadeDelete,
-                        onDismissCascade = typesViewModel::dismissCascadePrompt,
-                        onRetry = typesViewModel::load,
-                    )
-
-                    Screen.Settings -> SettingsScreen(
-                        state = settingsState,
-                        isDark = isDark,
-                        onToggleDark = onToggleDark,
-                        onStartHourDelta = settingsViewModel::adjustStartHour,
-                        onEndHourDelta = settingsViewModel::adjustEndHour,
-                        onToggleFullDay = settingsViewModel::toggleFullDay,
-                        onBaseUrlChange = settingsViewModel::onBaseUrlChange,
-                        onApiKeyChange = settingsViewModel::onApiKeyChange,
-                        onSaveConnection = {
-                            settingsViewModel.saveConnection()
-                            dayViewModel.load(showSpinner = true)
-                        },
-                        onRetry = { settingsViewModel.load(dayState.day?.timezone) },
-                    )
-
-                    Screen.Review -> ReviewScreen(
-                        state = reviewState,
-                        onBackToDay = { screen = Screen.Day },
-                        onRetry = { reviewViewModel.load(dayState.date) },
-                    )
+                NavHost(navController, startDestination = AppRoutes.DayPattern) {
+                    composable(
+                        AppRoutes.DayPattern,
+                        arguments = listOf(navArgument(AppRoutes.DateArg) {
+                            type = NavType.StringType
+                            defaultValue = LocalDate.now().toString()
+                        }),
+                    ) {
+                        DayScreen(
+                            state = dayState,
+                            onDateSettled = { date ->
+                                dayViewModel.goToDate(date)
+                                navController.navigate(AppRoutes.day(date)) { launchSingleTop = true }
+                            },
+                            onRetry = dayViewModel::retryPage,
+                            onTapSlot = { lane: Lane, minute: Int -> dayViewModel.startDraft(lane, minute) },
+                            onSelectBlock = dayViewModel::selectBlock,
+                            onCommitMove = dayViewModel::moveBlock,
+                            onDismissSheet = dayViewModel::closeSheet,
+                            onChooseType = dayViewModel::chooseTaskType,
+                            onTypeQueryChange = dayViewModel::onTypeQueryChange,
+                            onCreateType = dayViewModel::createTaskTypeAndChoose,
+                            onNoteChange = dayViewModel::onNoteChange,
+                            onDeleteSelected = dayViewModel::deleteSelected,
+                            onCompleteSelected = dayViewModel::completeSelected,
+                            onOpenLinkedTask = { taskId ->
+                                dayViewModel.closeSheet()
+                                navController.navigate(AppRoutes.taskDetail(taskId))
+                            },
+                            onSetPlanningMode = dayViewModel::setPlanningMode,
+                            onPlanTask = dayViewModel::planTaskAt,
+                            onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,
+                            onRetryReadyTasks = dayViewModel::refreshReadyToPlan,
+                        )
+                    }
+                    composable(AppRoutes.Chronicle) {
+                        ChronicleScreen(
+                            state = chronicleState,
+                            onPrevMonth = { chronicleViewModel.shiftMonth(-1) },
+                            onNextMonth = { chronicleViewModel.shiftMonth(1) },
+                            onThisMonth = chronicleViewModel::goToThisMonth,
+                            onOpenDay = { navController.navigate(AppRoutes.day(it)) },
+                            onRetry = chronicleViewModel::load,
+                        )
+                    }
+                    composable(AppRoutes.BattlePlan) {
+                        BattlePlanScreen(
+                            state = battlePlanState,
+                            onRetry = { battlePlanViewModel.load() },
+                            onSelectCollection = battlePlanViewModel::selectCollection,
+                            onSelectScope = battlePlanViewModel::selectScope,
+                            onSelectStatus = battlePlanViewModel::selectStatus,
+                            onToggleUrgency = battlePlanViewModel::toggleUrgency,
+                            onToggleImportance = battlePlanViewModel::toggleImportance,
+                            onToggleTaskType = battlePlanViewModel::toggleTaskType,
+                            onClearFilters = battlePlanViewModel::clearFilters,
+                            onSetHideCompleted = battlePlanViewModel::setHideCompleted,
+                            onArchiveCompleted = battlePlanViewModel::archiveCompleted,
+                            onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
+                            onToggleReady = battlePlanViewModel::toggleReady,
+                            onMoveTask = battlePlanViewModel::moveTask,
+                            onReorderTask = battlePlanViewModel::reorderTask,
+                            onDropTask = battlePlanViewModel::dropTask,
+                            onSetBlocked = battlePlanViewModel::setBlocked,
+                            onCreateSubtask = battlePlanViewModel::createSubtask,
+                            onToggleSubtask = battlePlanViewModel::toggleSubtaskComplete,
+                            onCreateTask = battlePlanViewModel::createTask,
+                            onShowComposer = battlePlanViewModel::setComposerVisible,
+                            onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
+                            onNewProject = { navController.navigate(AppRoutes.ProjectNew) },
+                            onPrepareDeleteProject = battlePlanViewModel::prepareProjectDelete,
+                            onDismissDeleteProject = battlePlanViewModel::dismissProjectDelete,
+                            onConfirmDeleteProject = battlePlanViewModel::confirmProjectDelete,
+                            onRestoreArchived = battlePlanViewModel::restoreArchived,
+                            onRestoreTrashed = battlePlanViewModel::restoreTrashed,
+                            onUndoTrash = battlePlanViewModel::undoTrash,
+                            onDismissUndo = battlePlanViewModel::dismissUndo,
+                            onRequestPermanentDelete = battlePlanViewModel::requestPermanentDelete,
+                            onDismissPermanentDelete = battlePlanViewModel::dismissPermanentDelete,
+                            onConfirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
+                        )
+                    }
+                    composable(
+                        AppRoutes.TaskDetailPattern,
+                        arguments = listOf(navArgument(AppRoutes.TaskIdArg) { type = NavType.IntType }),
+                        deepLinks = listOf(navDeepLink { uriPattern = AppRoutes.TaskDeepLinkPattern }),
+                    ) {
+                        val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@composable
+                        TaskDetailScreen(
+                            state = taskDetailState,
+                            onBack = { navController.popBackStack() },
+                            onRetry = { taskDetailViewModel.load(taskId) },
+                            onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
+                            onTitleChange = taskDetailViewModel::setTitle,
+                            onDescriptionChange = taskDetailViewModel::setDescription,
+                            onStatusChange = taskDetailViewModel::setStatus,
+                            onProjectChange = taskDetailViewModel::setProject,
+                            onTaskTypeChange = taskDetailViewModel::setTaskType,
+                            onUrgencyChange = taskDetailViewModel::setUrgency,
+                            onImportanceChange = taskDetailViewModel::setImportance,
+                            onDeadlineModeChange = taskDetailViewModel::setDeadlineMode,
+                            onDeadlineDateChange = taskDetailViewModel::setDeadlineDate,
+                            onDeadlineTimeChange = taskDetailViewModel::setDeadlineTime,
+                            onReminderEnabledChange = { enabled ->
+                                if (enabled && !notificationsAllowed) onRequestNotificationPermission()
+                                taskDetailViewModel.setReminderEnabled(enabled)
+                            },
+                            notificationsAllowed = notificationsAllowed,
+                            onReminderDateChange = taskDetailViewModel::setReminderDate,
+                            onReminderTimeChange = taskDetailViewModel::setReminderTime,
+                            onReadyChange = taskDetailViewModel::setReady,
+                            onAddSubtask = taskDetailViewModel::addSubtask,
+                            onToggleSubtask = taskDetailViewModel::toggleSubtask,
+                            onTrashSubtask = taskDetailViewModel::requestSubtaskTrash,
+                            onDismissSubtaskTrash = taskDetailViewModel::dismissSubtaskTrash,
+                            onConfirmSubtaskTrash = taskDetailViewModel::confirmSubtaskTrash,
+                            onUndoSubtaskTrash = taskDetailViewModel::undoSubtaskTrash,
+                            onRequestTrash = taskDetailViewModel::requestTrash,
+                            onDismissTrash = taskDetailViewModel::dismissTrash,
+                            onConfirmTrash = taskDetailViewModel::confirmTrash,
+                            onTrashed = {
+                                battlePlanViewModel.offerUndo(taskId)
+                                battlePlanViewModel.load(showSpinner = false)
+                                navController.popBackStack()
+                            },
+                            onSave = taskDetailViewModel::save,
+                        )
+                    }
+                    composable(AppRoutes.ProjectNew) {
+                        ProjectEditorScreen(
+                            state = projectEditorState,
+                            deleteSummary = battlePlanState.projectDeleteSummary,
+                            deleteSummaryLoading = battlePlanState.deleteSummaryLoading,
+                            onBack = { navController.popBackStack() },
+                            onRetry = { projectEditorViewModel.open(null) },
+                            onNameChange = projectEditorViewModel::setName,
+                            onDescriptionChange = projectEditorViewModel::setDescription,
+                            onDeadlineChange = projectEditorViewModel::setDeadlineDate,
+                            onDeadlineTimeChange = projectEditorViewModel::setDeadlineTime,
+                            onDeadlineModeChange = projectEditorViewModel::setDeadlineMode,
+                            onSave = projectEditorViewModel::save,
+                            onPrepareDelete = {},
+                            onDismissDelete = battlePlanViewModel::dismissProjectDelete,
+                            onConfirmDelete = battlePlanViewModel::confirmProjectDelete,
+                            onSaved = {
+                                battlePlanViewModel.load(showSpinner = false)
+                                navController.popBackStack()
+                            },
+                        )
+                    }
+                    composable(
+                        AppRoutes.ProjectDetailPattern,
+                        arguments = listOf(navArgument(AppRoutes.ProjectIdArg) { type = NavType.IntType }),
+                    ) { entry ->
+                        val projectId = entry.arguments?.getInt(AppRoutes.ProjectIdArg) ?: return@composable
+                        ProjectEditorScreen(
+                            state = projectEditorState,
+                            deleteSummary = battlePlanState.projectDeleteSummary,
+                            deleteSummaryLoading = battlePlanState.deleteSummaryLoading,
+                            onBack = { navController.popBackStack() },
+                            onRetry = { projectEditorViewModel.open(projectId) },
+                            onNameChange = projectEditorViewModel::setName,
+                            onDescriptionChange = projectEditorViewModel::setDescription,
+                            onDeadlineChange = projectEditorViewModel::setDeadlineDate,
+                            onDeadlineTimeChange = projectEditorViewModel::setDeadlineTime,
+                            onDeadlineModeChange = projectEditorViewModel::setDeadlineMode,
+                            onSave = projectEditorViewModel::save,
+                            onPrepareDelete = {
+                                battlePlanState.projects.firstOrNull { it.id == projectId }
+                                    ?.let(battlePlanViewModel::prepareProjectDelete)
+                            },
+                            onDismissDelete = battlePlanViewModel::dismissProjectDelete,
+                            onConfirmDelete = {
+                                battlePlanViewModel.confirmProjectDelete()
+                                navController.popBackStack()
+                            },
+                            onSaved = {
+                                battlePlanViewModel.load(showSpinner = false)
+                                navController.popBackStack()
+                            },
+                        )
+                    }
+                    composable(AppRoutes.Recurring) {
+                        RecurringScreen(
+                            state = recurringState,
+                            onRetry = { recurringViewModel.load() },
+                            onSelectStatus = recurringViewModel::selectStatus,
+                            onNew = { navController.navigate(AppRoutes.RecurringNew) },
+                            onOpen = { navController.navigate(AppRoutes.recurringDetail(it)) },
+                        )
+                    }
+                    composable(AppRoutes.RecurringNew) {
+                        RecurringEditorScreen(
+                            state = recurringEditorState,
+                            onBack = { navController.popBackStack() },
+                            onRetry = { recurringEditorViewModel.open(null) },
+                            onTitle = recurringEditorViewModel::setTitle,
+                            onDescription = recurringEditorViewModel::setDescription,
+                            onProject = recurringEditorViewModel::setProject,
+                            onTaskType = recurringEditorViewModel::setTaskType,
+                            onUrgency = recurringEditorViewModel::setUrgency,
+                            onImportance = recurringEditorViewModel::setImportance,
+                            onMode = recurringEditorViewModel::setMode,
+                            onFrequency = recurringEditorViewModel::setFrequency,
+                            onInterval = recurringEditorViewModel::setInterval,
+                            onToggleWeekday = recurringEditorViewModel::toggleWeekday,
+                            onMonthDay = recurringEditorViewModel::setMonthDay,
+                            onQuotaCount = recurringEditorViewModel::setQuotaCount,
+                            onStartDate = recurringEditorViewModel::setStartDate,
+                            onEndMode = recurringEditorViewModel::setEndMode,
+                            onEndDate = recurringEditorViewModel::setEndDate,
+                            onCycleLimit = recurringEditorViewModel::setCycleLimit,
+                            onChecklist = recurringEditorViewModel::setChecklistText,
+                            onRefreshPreview = recurringEditorViewModel::refreshPreview,
+                            onSave = { recurringEditorViewModel.save() },
+                            onConfirmBackfill = { recurringEditorViewModel.save(confirmBackfill = true) },
+                            onDismissBackfill = recurringEditorViewModel::dismissBackfill,
+                        )
+                    }
+                    composable(
+                        AppRoutes.RecurringDetailPattern,
+                        arguments = listOf(navArgument(AppRoutes.TemplateIdArg) { type = NavType.IntType }),
+                    ) { entry ->
+                        val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@composable
+                        RecurringDetailScreen(
+                            state = recurringState,
+                            onBack = { navController.popBackStack() },
+                            onRetry = { recurringViewModel.openDetail(templateId) },
+                            onEdit = { navController.navigate(AppRoutes.recurringEdit(it)) },
+                            onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
+                            onPause = recurringViewModel::pause,
+                            onResume = recurringViewModel::resume,
+                            onEnd = recurringViewModel::end,
+                            onRequestDelete = recurringViewModel::requestDelete,
+                            onDismissDelete = recurringViewModel::dismissDelete,
+                            onConfirmDelete = {
+                                recurringViewModel.confirmDelete { navController.popBackStack() }
+                            },
+                        )
+                    }
+                    composable(
+                        AppRoutes.RecurringEditPattern,
+                        arguments = listOf(navArgument(AppRoutes.TemplateIdArg) { type = NavType.IntType }),
+                    ) { entry ->
+                        val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@composable
+                        RecurringEditorScreen(
+                            state = recurringEditorState,
+                            onBack = { navController.popBackStack() },
+                            onRetry = { recurringEditorViewModel.open(templateId) },
+                            onTitle = recurringEditorViewModel::setTitle,
+                            onDescription = recurringEditorViewModel::setDescription,
+                            onProject = recurringEditorViewModel::setProject,
+                            onTaskType = recurringEditorViewModel::setTaskType,
+                            onUrgency = recurringEditorViewModel::setUrgency,
+                            onImportance = recurringEditorViewModel::setImportance,
+                            onMode = recurringEditorViewModel::setMode,
+                            onFrequency = recurringEditorViewModel::setFrequency,
+                            onInterval = recurringEditorViewModel::setInterval,
+                            onToggleWeekday = recurringEditorViewModel::toggleWeekday,
+                            onMonthDay = recurringEditorViewModel::setMonthDay,
+                            onQuotaCount = recurringEditorViewModel::setQuotaCount,
+                            onStartDate = recurringEditorViewModel::setStartDate,
+                            onEndMode = recurringEditorViewModel::setEndMode,
+                            onEndDate = recurringEditorViewModel::setEndDate,
+                            onCycleLimit = recurringEditorViewModel::setCycleLimit,
+                            onChecklist = recurringEditorViewModel::setChecklistText,
+                            onRefreshPreview = recurringEditorViewModel::refreshPreview,
+                            onSave = { recurringEditorViewModel.save() },
+                            onConfirmBackfill = { recurringEditorViewModel.save(confirmBackfill = true) },
+                            onDismissBackfill = recurringEditorViewModel::dismissBackfill,
+                        )
+                    }
+                    composable(AppRoutes.Types) {
+                        TypesScreen(
+                            state = typesState,
+                            onInputChange = typesViewModel::onInputChange,
+                            onAdd = typesViewModel::addType,
+                            onDelete = typesViewModel::deleteType,
+                            onConfirmCascade = typesViewModel::confirmCascadeDelete,
+                            onMigrateTarget = typesViewModel::setMigrateBlocksTo,
+                            onConfirmMigrate = typesViewModel::confirmMigrateDelete,
+                            onDismissCascade = typesViewModel::dismissCascadePrompt,
+                            onRetry = typesViewModel::load,
+                        )
+                    }
+                    composable(AppRoutes.Settings) {
+                        SettingsScreen(
+                            state = settingsState,
+                            isDark = isDark,
+                            onToggleDark = onToggleDark,
+                            onStartHourDelta = settingsViewModel::adjustStartHour,
+                            onEndHourDelta = settingsViewModel::adjustEndHour,
+                            onToggleFullDay = settingsViewModel::toggleFullDay,
+                            onBaseUrlChange = settingsViewModel::onBaseUrlChange,
+                            onApiKeyChange = settingsViewModel::onApiKeyChange,
+                            onSaveConnection = {
+                                settingsViewModel.saveConnection()
+                                dayViewModel.load(showSpinner = true)
+                            },
+                            notificationsAllowed = notificationsAllowed,
+                            onRequestNotificationPermission = onRequestNotificationPermission,
+                            onOpenNotificationSettings = onOpenNotificationSettings,
+                            onRetry = { settingsViewModel.load(dayState.day?.timezone) },
+                        )
+                    }
+                    composable(
+                        AppRoutes.ReviewPattern,
+                        arguments = listOf(navArgument(AppRoutes.DateArg) { type = NavType.StringType }),
+                    ) {
+                        ReviewScreen(
+                            state = reviewState,
+                            onBackToDay = {
+                                if (!navController.popBackStack()) navController.navigate(AppRoutes.day(reviewState.date))
+                            },
+                            onRetry = { reviewViewModel.load(reviewState.date) },
+                        )
+                    }
                 }
             }
 
-            TimeboxBottomNav(
-                selected = when (screen) {
-                    // Review belongs to the Day tab, so the pill stays there.
-                    Screen.Day, Screen.Review -> TimeboxTab.Day
-                    Screen.Chronicle -> TimeboxTab.Chronicle
-                    Screen.Types -> TimeboxTab.Types
-                    Screen.Settings -> TimeboxTab.Settings
-                },
-                onSelect = { tab ->
-                    screen = when (tab) {
-                        TimeboxTab.Day -> Screen.Day
-                        TimeboxTab.Chronicle -> Screen.Chronicle
-                        TimeboxTab.Types -> Screen.Types
-                        TimeboxTab.Settings -> Screen.Settings
-                    }
-                },
-            )
+            TimeboxBottomNav(selectedTab) { tab ->
+                val target = when (tab) {
+                    TimeboxTab.Day -> AppRoutes.day(dayState.date)
+                    TimeboxTab.Chronicle -> AppRoutes.Chronicle
+                    TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
+                    TimeboxTab.Types -> AppRoutes.Types
+                }
+                navController.navigate(target) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                }
+            }
         }
 
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp),
-        ) { data ->
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp)) { data ->
             Box(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .background(colors.on, RoundedCornerShape(12.dp))
+                Modifier.padding(horizontal = 16.dp).background(colors.on, RoundedCornerShape(12.dp))
                     .padding(horizontal = 16.dp, vertical = 13.dp),
             ) {
-                Text(
-                    text = data.visuals.message,
-                    style = TimeboxTheme.type.bodySmall,
-                    color = colors.bg,
-                )
+                Text(data.visuals.message, style = TimeboxTheme.type.bodySmall, color = colors.bg)
             }
         }
     }
 }
+
+@Composable
+private fun FoundationPlaceholder(title: String, message: String) {
+    val colors = TimeboxTheme.colors
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, style = TimeboxTheme.type.screenTitle, color = colors.on)
+            Text(message, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+        }
+    }
+}
+
+private fun routeKicker(route: String): String = when (route) {
+    AppRoutes.DayPattern -> "Day"
+    AppRoutes.Chronicle -> "Chronicle"
+    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern, AppRoutes.ProjectNew,
+    AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
+    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Battle Plan"
+    AppRoutes.Types -> "Task types"
+    AppRoutes.Settings -> "Settings"
+    AppRoutes.ReviewPattern -> "Review"
+    else -> "Timebox"
+}
+
+internal fun routeTitle(route: String, day: String, chronicle: String, review: String): String =
+    when (route) {
+        AppRoutes.DayPattern -> day
+        AppRoutes.Chronicle -> chronicle
+        AppRoutes.BattlePlan -> "Tasks"
+        AppRoutes.TaskDetailPattern -> "Task details"
+        AppRoutes.ProjectNew -> "New project"
+        AppRoutes.ProjectDetailPattern -> "Project"
+        AppRoutes.Recurring -> "Recurring"
+        AppRoutes.RecurringNew -> "New recurrence"
+        AppRoutes.RecurringDetailPattern -> "Template details"
+        AppRoutes.RecurringEditPattern -> "Edit recurrence"
+        AppRoutes.Types -> "Paths"
+        AppRoutes.Settings -> "Preferences"
+        AppRoutes.ReviewPattern -> review
+        else -> "Timebox"
+    }

@@ -3,6 +3,7 @@ package com.timebox.android.ui.day
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.Day
+import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TaskType
@@ -19,6 +20,16 @@ import java.time.LocalDate
 /** A pending block the user sketched by tapping an empty slot. */
 data class Draft(
     val lane: Lane,
+    val startMinute: Int,
+    val endMinute: Int,
+    val taskId: Int? = null,
+    val taskTypeId: Int? = null,
+)
+
+data class PendingPlanningPlacement(
+    val date: LocalDate,
+    val taskId: Int,
+    val taskTitle: String,
     val startMinute: Int,
     val endMinute: Int,
 )
@@ -43,6 +54,12 @@ data class DayUiState(
     val noteInput: String = "",
     /** Raw text in the task type picker; cleared whenever the sheet changes what it shows. */
     val typeQuery: String = "",
+    val readyTasks: List<BattleTask> = emptyList(),
+    val readyTasksLoading: Boolean = false,
+    val readyTasksError: String? = null,
+    val isPlanningMode: Boolean = false,
+    val accessibilityPlanningTaskId: Int? = null,
+    val pendingPlanningPlacement: PendingPlanningPlacement? = null,
 ) {
     fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
 
@@ -71,6 +88,9 @@ data class DayUiState(
                 it.lane == Lane.Actual && it.plannedBlockId == sel.id
             }
         }
+
+    val accessibilityPlanningTask: BattleTask?
+        get() = readyTasks.firstOrNull { it.id == accessibilityPlanningTaskId }
 }
 
 class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -103,6 +123,52 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
             val today = repository.getDaySummary(_state.value.date).getOrNull()?.today
             todayResolved = today != null
             load(today ?: _state.value.date)
+        }
+    }
+
+    /** Battle Plan is independent of the timeline: failure leaves Day fully usable. */
+    fun refreshReadyToPlan() {
+        _state.update { it.copy(readyTasksLoading = it.readyTasks.isEmpty(), readyTasksError = null) }
+        viewModelScope.launch {
+            repository.listBattleTasks().fold(
+                onSuccess = { result ->
+                    val ready = result.items.readyToPlanTasks()
+                    _state.update { state ->
+                        state.copy(
+                            readyTasks = ready,
+                            readyTasksLoading = false,
+                            accessibilityPlanningTaskId = state.accessibilityPlanningTaskId
+                                ?.takeIf { id -> ready.any { it.id == id } },
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _state.update { it.copy(readyTasksLoading = false, readyTasksError = error.apiError.message) }
+                },
+            )
+        }
+    }
+
+    fun setPlanningMode(enabled: Boolean) {
+        _state.update {
+            it.copy(
+                isPlanningMode = enabled,
+                accessibilityPlanningTaskId = null,
+                draft = null,
+                selectedBlockId = null,
+            )
+        }
+    }
+
+    fun armAccessiblePlanningTask(taskId: Int?) {
+        _state.update { state ->
+            state.copy(
+                accessibilityPlanningTaskId = taskId?.takeUnless {
+                    it == state.accessibilityPlanningTaskId
+                },
+                draft = null,
+                selectedBlockId = null,
+            )
         }
     }
 
@@ -224,6 +290,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 draft = null,
                 noteInput = "",
                 typeQuery = "",
+                accessibilityPlanningTaskId = null,
             )
         }
         load(date)
@@ -246,9 +313,13 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     fun startDraft(lane: Lane, startMinute: Int) {
         val day = _state.value.day ?: return
         val start = startMinute.coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
-        _state.update {
-            it.copy(
-                draft = Draft(lane, start, start + SLOT_MINUTES),
+        _state.update { state ->
+            state.copy(
+                draft = Draft(
+                    lane = lane,
+                    startMinute = start,
+                    endMinute = start + SLOT_MINUTES,
+                ),
                 selectedBlockId = null,
                 noteInput = "",
                 typeQuery = "",
@@ -276,7 +347,14 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val current = _state.value
         val draft = current.draft
         if (draft != null) {
-            createBlock(draft.lane, draft.startMinute, draft.endMinute, taskType.id, current.noteInput)
+            createBlock(
+                draft.lane,
+                draft.startMinute,
+                draft.endMinute,
+                taskType.id,
+                current.noteInput,
+                draft.taskId,
+            )
             return
         }
         val selected = current.selectedBlock ?: return
@@ -308,11 +386,18 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
     }
 
-    private fun createBlock(lane: Lane, start: Int, end: Int, taskTypeId: Int, note: String) {
+    private fun createBlock(
+        lane: Lane,
+        start: Int,
+        end: Int,
+        taskTypeId: Int,
+        note: String,
+        taskId: Int?,
+    ) {
         val date = _state.value.date
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.createBlock(date, lane, taskTypeId, start, end, note.ifBlank { null }).fold(
+            repository.createBlock(date, lane, taskTypeId, start, end, note.ifBlank { null }, taskId).fold(
                 onSuccess = { day ->
                     // Picking the type is the whole draft flow, so the sheet is done: leaving
                     // it open on the fresh block would just hide the timeline it landed on.
@@ -324,14 +409,109 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                             noteInput = if (state.date == date) "" else state.noteInput,
                             typeQuery = if (state.date == date) "" else state.typeQuery,
                             message = "Block created",
+                            accessibilityPlanningTaskId = if (state.date == date && taskId != null) {
+                                null
+                            } else {
+                                state.accessibilityPlanningTaskId
+                            },
                         ).withPage(date) {
                             DayPageState(day = day, loading = false, materialized = true)
                         }
                     }
+                    if (taskId != null) refreshReadyToPlan()
                 },
                 onFailure = { e ->
                     _state.update { it.copy(saving = false, message = e.apiError.message) }
                 },
+            )
+        }
+    }
+
+    fun planTaskAt(taskId: Int, startMinute: Int) {
+        val current = _state.value
+        if (current.pendingPlanningPlacement != null) return
+        val day = current.day ?: return
+        val task = current.readyTasks.firstOrNull { it.id == taskId } ?: return
+        val start = startMinute.coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
+        val end = start + SLOT_MINUTES
+        if (day.lane(Lane.Planned).any { blocksOverlap(start, end, it.startMinute, it.endMinute) }) {
+            _state.update { it.copy(message = "That time is already planned") }
+            return
+        }
+
+        val pending = PendingPlanningPlacement(
+            date = current.date,
+            taskId = task.id,
+            taskTitle = task.title,
+            startMinute = start,
+            endMinute = end,
+        )
+        _state.update {
+            it.copy(
+                saving = true,
+                pendingPlanningPlacement = pending,
+                accessibilityPlanningTaskId = null,
+            )
+        }
+        viewModelScope.launch {
+            val taskTypeId = resolvePlanningTaskType(task)
+            if (taskTypeId == null) {
+                failPlanningPlacement(pending, "Could not create the unspecified task type")
+                return@launch
+            }
+            repository.createBlock(
+                pending.date,
+                Lane.Planned,
+                taskTypeId,
+                pending.startMinute,
+                pending.endMinute,
+                note = null,
+                taskId = pending.taskId,
+            ).fold(
+                onSuccess = { updatedDay ->
+                    _state.update { state ->
+                        state.copy(
+                            saving = false,
+                            pendingPlanningPlacement = null,
+                            readyTasks = state.readyTasks.filterNot { it.id == pending.taskId },
+                            message = "Task planned",
+                        ).withPage(pending.date) {
+                            DayPageState(day = updatedDay, loading = false, materialized = true)
+                        }
+                    }
+                    refreshReadyToPlan()
+                },
+                onFailure = { error ->
+                    failPlanningPlacement(pending, error.apiError.message)
+                },
+            )
+        }
+    }
+
+    private suspend fun resolvePlanningTaskType(task: BattleTask): Int? {
+        task.taskTypeId?.let { return it }
+        _state.value.taskTypes.unspecifiedTypeId()?.let { return it }
+
+        val refreshed = repository.listTaskTypes().getOrNull().orEmpty()
+        if (refreshed.isNotEmpty()) _state.update { it.copy(taskTypes = refreshed) }
+        refreshed.unspecifiedTypeId()?.let { return it }
+
+        repository.createTaskType("unspecified").getOrNull()?.let { created ->
+            _state.update { state -> state.copy(taskTypes = (state.taskTypes + created).distinctBy { it.id }) }
+            return created.id
+        }
+
+        val afterConflict = repository.listTaskTypes().getOrNull().orEmpty()
+        if (afterConflict.isNotEmpty()) _state.update { it.copy(taskTypes = afterConflict) }
+        return afterConflict.unspecifiedTypeId()
+    }
+
+    private fun failPlanningPlacement(pending: PendingPlanningPlacement, message: String) {
+        _state.update { state ->
+            if (state.pendingPlanningPlacement != pending) state else state.copy(
+                saving = false,
+                pendingPlanningPlacement = null,
+                message = message,
             )
         }
     }
@@ -454,6 +634,15 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
     }
 }
+
+internal fun List<BattleTask>.readyToPlanTasks(): List<BattleTask> =
+    flatMap { listOf(it) + it.subtasks }.filter { it.readyToPlan }
+
+internal fun List<TaskType>.unspecifiedTypeId(): Int? =
+    firstOrNull { it.name.equals("unspecified", ignoreCase = true) }?.id
+
+internal fun blocksOverlap(start: Int, end: Int, otherStart: Int, otherEnd: Int): Boolean =
+    start < otherEnd && otherStart < end
 
 private inline fun DayUiState.withPage(
     date: LocalDate,

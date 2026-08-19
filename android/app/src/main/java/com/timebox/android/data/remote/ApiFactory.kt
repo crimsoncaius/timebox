@@ -26,7 +26,8 @@ object ApiFactory {
 
     val json: Json = Json {
         ignoreUnknownKeys = true
-        // PATCH bodies rely on absent-means-unchanged, so null fields must not be sent.
+        // Ordinary nullable DTOs keep absent-means-unchanged. Fields that must be cleared
+        // use request-specific JsonObject builders with an explicit JsonNull instead.
         explicitNulls = false
     }
 

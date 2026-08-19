@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import datetime as dt
 
+from sqlalchemy.orm import Session
+
+from app.db.session import get_engine
+from app.models.battle_plan import RecurringTemplate
 from app.models.battle_plan import RecurrenceFrequency, RecurrenceMode
 from app.schemas.battle_plan import RecurrencePreviewRequest
 from app.services.recurrence_service import iter_windows
@@ -202,3 +206,52 @@ def test_lifecycle_and_permanent_template_delete_preserve_tasks(client):
     assert len(preserved) == 1
     assert preserved[0]["recurring_template_id"] is None
     assert preserved[0]["description"] == "keep me"
+
+
+def test_same_day_pause_resume_rematerializes_today(client):
+    today = client.get("/health").json()["today"]
+    template = client.post(
+        "/recurring-templates",
+        json=_daily_body(today, checklist_titles=[]),
+    ).json()
+
+    assert client.post(f"/recurring-templates/{template['id']}/pause").status_code == 200
+    resumed = client.post(f"/recurring-templates/{template['id']}/resume")
+
+    assert resumed.status_code == 200, resumed.text
+    tasks = [
+        task for task in client.get("/tasks").json()["items"]
+        if task["recurring_template_id"] == template["id"]
+    ]
+    assert len(tasks) == 8
+    assert {task["deadline_date"] for task in tasks} >= {today}
+    assert resumed.json()["next_occurrence"] == today
+
+
+def test_resume_after_longer_pause_still_suppresses_through_resume_day(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    yesterday = today - dt.timedelta(days=1)
+    template = client.post(
+        "/recurring-templates",
+        json=_daily_body(yesterday.isoformat(), checklist_titles=[], confirm_backfill=True),
+    ).json()
+    assert client.post(f"/recurring-templates/{template['id']}/pause").status_code == 200
+    with Session(get_engine()) as db:
+        row = db.get(RecurringTemplate, template["id"])
+        row.paused_at = dt.datetime.combine(
+            yesterday,
+            dt.time(hour=12),
+            tzinfo=dt.timezone.utc,
+        )
+        db.commit()
+
+    resumed = client.post(f"/recurring-templates/{template['id']}/resume")
+
+    assert resumed.status_code == 200, resumed.text
+    dates = {
+        task["deadline_date"] for task in client.get("/tasks").json()["items"]
+        if task["recurring_template_id"] == template["id"]
+    }
+    assert yesterday.isoformat() in dates
+    assert today.isoformat() not in dates
+    assert resumed.json()["next_occurrence"] == (today + dt.timedelta(days=1)).isoformat()

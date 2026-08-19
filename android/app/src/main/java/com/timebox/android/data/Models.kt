@@ -7,7 +7,11 @@ import com.timebox.android.data.remote.DaySummaryDto
 import com.timebox.android.data.remote.SettingsDto
 import com.timebox.android.data.remote.TaskTypeDto
 import com.timebox.android.data.remote.TimeBlockDto
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 const val SLOT_MINUTES = 30
 const val DAY_END_MINUTES = 24 * 60
@@ -26,6 +30,8 @@ data class TaskType(
     val id: Int,
     val name: String,
     val usageCount: Int,
+    val taskUsageCount: Int = 0,
+    val recurringTemplateUsageCount: Int = 0,
 ) {
     val root: String get() = name.substringBefore('/')
     val leaf: String get() = name.substringAfterLast('/')
@@ -37,6 +43,8 @@ data class TimeBlock(
     val lane: Lane,
     val taskTypeId: Int,
     val taskTypeName: String,
+    val taskId: Int?,
+    val task: LinkedTask?,
     val note: String?,
     val plannedBlockId: Int?,
     val startMinute: Int,
@@ -44,6 +52,13 @@ data class TimeBlock(
 ) {
     val durationMinutes: Int get() = endMinute - startMinute
 }
+
+data class LinkedTask(
+    val id: Int,
+    val title: String,
+    val status: TaskStatus,
+    val taskTypeId: Int?,
+)
 
 data class Day(
     val date: LocalDate,
@@ -115,13 +130,28 @@ data class DayWindowSettings(
     val showFullDay: Boolean,
 )
 
-fun TaskTypeDto.toModel() = TaskType(id = id, name = name, usageCount = usageCount)
+fun TaskTypeDto.toModel() = TaskType(
+    id = id,
+    name = name,
+    usageCount = usageCount,
+    taskUsageCount = taskUsageCount,
+    recurringTemplateUsageCount = recurringTemplateUsageCount,
+)
 
 fun TimeBlockDto.toModel() = TimeBlock(
     id = id,
     lane = Lane.fromWire(lane),
     taskTypeId = taskTypeId,
     taskTypeName = taskType.name,
+    taskId = taskId,
+    task = task?.let {
+        LinkedTask(
+            id = it.id,
+            title = it.title,
+            status = TaskStatus.fromWire(it.status),
+            taskTypeId = it.taskTypeId,
+        )
+    },
     note = note,
     plannedBlockId = plannedBlockId,
     startMinute = startMinute,
@@ -192,3 +222,7 @@ private fun parseMinuteOfDay(iso: String): Int? {
     val minutes = hhmm[1].toIntOrNull() ?: return null
     return hours * 60 + minutes
 }
+
+internal fun parseInstant(value: String): Instant =
+    runCatching { OffsetDateTime.parse(value).toInstant() }
+        .getOrElse { LocalDateTime.parse(value).toInstant(ZoneOffset.UTC) }

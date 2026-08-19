@@ -22,7 +22,8 @@ android {
     buildTypes {
         debug {
             // 10.0.2.2 is the host machine from inside the emulator.
-            buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8000/\"")
+            // Port 8001 is the registered Timebox API allocation on this workspace.
+            buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8001/\"")
         }
         release {
             isMinifyEnabled = true
@@ -68,6 +69,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.work.runtime.ktx)
 
     implementation(libs.androidx.datastore.preferences)
 
@@ -82,4 +84,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

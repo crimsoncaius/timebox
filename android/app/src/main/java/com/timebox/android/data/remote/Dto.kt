@@ -8,6 +8,16 @@ data class TaskTypeDto(
     val id: Int,
     val name: String,
     @SerialName("usage_count") val usageCount: Int = 0,
+    @SerialName("task_usage_count") val taskUsageCount: Int = 0,
+    @SerialName("recurring_template_usage_count") val recurringTemplateUsageCount: Int = 0,
+)
+
+@Serializable
+data class LinkedTaskDto(
+    val id: Int,
+    val title: String,
+    val status: String,
+    @SerialName("task_type_id") val taskTypeId: Int? = null,
 )
 
 @Serializable
@@ -16,6 +26,8 @@ data class TimeBlockDto(
     val lane: String,
     @SerialName("task_type_id") val taskTypeId: Int,
     @SerialName("task_type") val taskType: TaskTypeDto,
+    @SerialName("task_id") val taskId: Int? = null,
+    val task: LinkedTaskDto? = null,
     val note: String? = null,
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
     @SerialName("start_minute") val startMinute: Int,
@@ -95,22 +107,11 @@ data class SettingsPatchDto(
 data class TimeBlockCreateDto(
     val lane: String,
     @SerialName("task_type_id") val taskTypeId: Int,
+    @SerialName("task_id") val taskId: Int? = null,
     val note: String? = null,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
 )
 
 @Serializable
-data class TimeBlockPatchDto(
-    @SerialName("task_type_id") val taskTypeId: Int? = null,
-    val note: String? = null,
-    @SerialName("start_minute") val startMinute: Int? = null,
-    @SerialName("end_minute") val endMinute: Int? = null,
-)
-
-@Serializable
 data class TaskTypeCreateDto(val name: String)
-
-/** FastAPI's error envelope. `detail` is a string for our handlers. */
-@Serializable
-data class ApiErrorDto(val detail: String? = null)

@@ -20,9 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,11 +31,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +67,15 @@ private data class DragState(
 
 private enum class DragMode { Move, ResizeStart, ResizeEnd }
 
+enum class PlanningPreviewState { Valid, Invalid, Pending }
+
+data class PlanningDropPreview(
+    val title: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val state: PlanningPreviewState,
+)
+
 @Composable
 fun DayTimeline(
     day: Day,
@@ -72,6 +84,9 @@ fun DayTimeline(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    showActual: Boolean = true,
+    planningPreview: PlanningDropPreview? = null,
+    onPlannedLaneBoundsChanged: (Rect) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -104,21 +119,25 @@ fun DayTimeline(
                 onTapSlot = onTapSlot,
                 onSelectBlock = onSelectBlock,
                 onCommitMove = onCommitMove,
+                planningPreview = planningPreview,
+                onBoundsChanged = onPlannedLaneBoundsChanged,
                 modifier = Modifier.weight(1f).fillMaxSize(),
             )
-            LaneColumn(
-                day = day,
-                lane = Lane.Actual,
-                slotHeight = slotHeight,
-                selectedBlockId = selectedBlockId,
-                draft = draft,
-                drag = drag,
-                onDragChange = { drag = it },
-                onTapSlot = onTapSlot,
-                onSelectBlock = onSelectBlock,
-                onCommitMove = onCommitMove,
-                modifier = Modifier.weight(1f).fillMaxSize(),
-            )
+            if (showActual) {
+                LaneColumn(
+                    day = day,
+                    lane = Lane.Actual,
+                    slotHeight = slotHeight,
+                    selectedBlockId = selectedBlockId,
+                    draft = draft,
+                    drag = drag,
+                    onDragChange = { drag = it },
+                    onTapSlot = onTapSlot,
+                    onSelectBlock = onSelectBlock,
+                    onCommitMove = onCommitMove,
+                    modifier = Modifier.weight(1f).fillMaxSize(),
+                )
+            }
         }
 
         val nowMinute = rememberNowMinute(day)
@@ -163,17 +182,19 @@ private const val NOW_TICK_MILLIS = 30_000L
  * would sit wherever it was when the screen opened until something reloaded the day.
  */
 @Composable
-private fun rememberNowMinute(day: Day): Int? = produceState(
-    initialValue = day.nowMinuteAt(System.currentTimeMillis()),
-    key1 = day,
-) {
-    // Re-synced at the top of the loop as well as on first composition, so a fresh day
-    // takes effect immediately rather than after the next tick.
-    while (true) {
-        value = day.nowMinuteAt(System.currentTimeMillis())
-        delay(NOW_TICK_MILLIS)
+private fun rememberNowMinute(day: Day): Int? {
+    var minute by remember(day) { mutableStateOf(day.nowMinuteAt(System.currentTimeMillis())) }
+    LaunchedEffect(day) {
+        // Re-synced at the top of the loop as well as on first composition, so a fresh day
+        // takes effect immediately rather than after the next tick.
+        minute = day.nowMinuteAt(System.currentTimeMillis())
+        while (true) {
+            delay(NOW_TICK_MILLIS)
+            minute = day.nowMinuteAt(System.currentTimeMillis())
+        }
     }
-}.value
+    return minute
+}
 
 @Composable
 private fun HourGutter(day: Day, slotHeight: Dp, modifier: Modifier = Modifier) {
@@ -234,6 +255,8 @@ private fun LaneColumn(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    planningPreview: PlanningDropPreview? = null,
+    onBoundsChanged: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -247,6 +270,13 @@ private fun LaneColumn(
             .clip(RoundedCornerShape(3.dp))
             .background(surface)
             .border(1.dp, borderColor, RoundedCornerShape(3.dp))
+            .then(
+                if (onBoundsChanged != null) {
+                    Modifier.onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) }
+                } else {
+                    Modifier
+                }
+            )
             .pointerInput(day.visibleStart, day.visibleEnd, lane) {
                 detectTapGestures { offset ->
                     val index = (offset.y / slotPx).toInt()
@@ -297,6 +327,14 @@ private fun LaneColumn(
             )
         }
 
+        if (lane == Lane.Planned && planningPreview != null) {
+            PlanningPreviewCard(
+                preview = planningPreview,
+                visibleStart = day.visibleStart,
+                slotHeight = slotHeight,
+            )
+        }
+
         if (draft != null && draft.lane == lane) {
             val top = slotHeight * ((draft.startMinute - day.visibleStart).toFloat() / SLOT_MINUTES)
             val height = slotHeight * ((draft.endMinute - draft.startMinute).toFloat() / SLOT_MINUTES)
@@ -310,6 +348,45 @@ private fun LaneColumn(
                     .background(Color(0x14808080), TimeboxShapes.block),
             )
         }
+    }
+}
+
+@Composable
+private fun PlanningPreviewCard(
+    preview: PlanningDropPreview,
+    visibleStart: Int,
+    slotHeight: Dp,
+) {
+    val colors = TimeboxTheme.colors
+    val top = slotHeight * ((preview.startMinute - visibleStart).toFloat() / SLOT_MINUTES)
+    val height = slotHeight * ((preview.endMinute - preview.startMinute).toFloat() / SLOT_MINUTES)
+    val border = when (preview.state) {
+        PlanningPreviewState.Invalid -> colors.error
+        PlanningPreviewState.Valid, PlanningPreviewState.Pending -> colors.planned
+    }
+    val fill = when (preview.state) {
+        PlanningPreviewState.Invalid -> colors.error.copy(alpha = 0.12f)
+        PlanningPreviewState.Valid -> colors.planned.copy(alpha = 0.16f)
+        PlanningPreviewState.Pending -> colors.planned.copy(alpha = 0.24f)
+    }
+    Box(
+        modifier = Modifier
+            .offset(y = top)
+            .padding(horizontal = 3.dp)
+            .fillMaxWidth()
+            .height(height)
+            .border(1.5.dp, border, TimeboxShapes.block)
+            .background(fill, TimeboxShapes.block)
+            .padding(horizontal = 7.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text = preview.title,
+            style = TimeboxTheme.type.blockTitle,
+            color = if (preview.state == PlanningPreviewState.Invalid) colors.error else colors.on,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -477,7 +554,7 @@ private fun BlockCard(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = block.taskTypeName,
+                    text = block.task?.title ?: block.taskTypeName,
                     style = if (selected) {
                         TimeboxTheme.type.blockTitleSelected
                     } else {
@@ -487,7 +564,15 @@ private fun BlockCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (innerHeight >= 30.dp) {
+                if (block.task != null && innerHeight >= 30.dp) {
+                    Text(
+                        text = block.taskTypeName,
+                        style = TimeboxTheme.type.monoSmall,
+                        color = colors.onVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else if (innerHeight >= 30.dp) {
                     Text(
                         text = "${hhmm(startMinute)} – ${hhmm(endMinute)}",
                         style = TimeboxTheme.type.monoSmall,

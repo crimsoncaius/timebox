@@ -430,7 +430,7 @@ function PropertySelect({ label, value, unset = false, divider = true, onChange,
   )
 }
 
-function PriorityControl({ label, value, onChange }: { label: string; value: PriorityLevel | null; onChange: (value: PriorityLevel | null) => void }) {
+export function PriorityControl({ label, value, onChange }: { label: string; value: PriorityLevel | null; onChange: (value: PriorityLevel | null) => void }) {
   const groupRef = useRef<HTMLDivElement>(null)
 
   const moveSelection = (event: React.KeyboardEvent<HTMLButtonElement>, level: PriorityLevel) => {

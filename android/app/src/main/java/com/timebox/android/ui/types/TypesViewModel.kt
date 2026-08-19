@@ -26,6 +26,7 @@ data class TypesUiState(
     val message: String? = null,
     /** Set when a delete needs the user to confirm dropping its blocks too. */
     val pendingCascade: TaskType? = null,
+    val migrateBlocksTo: Int? = null,
 )
 
 class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -51,7 +52,8 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
-    fun dismissCascadePrompt() = _state.update { it.copy(pendingCascade = null) }
+    fun dismissCascadePrompt() = _state.update { it.copy(pendingCascade = null, migrateBlocksTo = null) }
+    fun setMigrateBlocksTo(id: Int?) = _state.update { it.copy(migrateBlocksTo = id) }
 
     fun addType() {
         val name = _state.value.input.trim()
@@ -71,24 +73,41 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 
     fun deleteType(type: TaskType) {
-        if (type.usageCount > 0) {
-            // Ask before destroying blocks; the API would refuse with a 409 anyway.
-            _state.update { it.copy(pendingCascade = type) }
+        val allTypes = _state.value.groups.flatMap { it.items }
+        if (allTypes.any { it.id != type.id && it.name.startsWith("${type.name}/") }) {
+            _state.update { it.copy(message = "Delete saved subpaths under ${type.name} first.") }
             return
         }
-        performDelete(type, cascade = false)
+        if (type.totalUsageCount > 0) {
+            _state.update { it.copy(pendingCascade = type, migrateBlocksTo = null) }
+            return
+        }
+        performDelete(type)
     }
 
     fun confirmCascadeDelete() {
         val type = _state.value.pendingCascade ?: return
-        _state.update { it.copy(pendingCascade = null) }
-        performDelete(type, cascade = true)
+        _state.update { it.copy(pendingCascade = null, migrateBlocksTo = null) }
+        performDelete(type, cascade = type.usageCount > 0, clearReferences = type.hasTaskReferences)
     }
 
-    private fun performDelete(type: TaskType, cascade: Boolean) {
+    fun confirmMigrateDelete() {
+        val state = _state.value
+        val type = state.pendingCascade ?: return
+        val target = state.migrateBlocksTo ?: return
+        _state.update { it.copy(pendingCascade = null, migrateBlocksTo = null) }
+        performDelete(type, migrateTo = target, clearReferences = type.hasTaskReferences)
+    }
+
+    private fun performDelete(
+        type: TaskType,
+        cascade: Boolean = false,
+        migrateTo: Int? = null,
+        clearReferences: Boolean = false,
+    ) {
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.deleteTaskType(type.id, cascadeBlocks = cascade).fold(
+            repository.deleteTaskType(type.id, cascadeBlocks = cascade, migrateBlocksTo = migrateTo, clearTaskReferences = clearReferences).fold(
                 onSuccess = {
                     _state.update {
                         it.copy(saving = false, message = "Deleted ${type.name}")
@@ -108,3 +127,9 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
             .map { (root, items) -> TypeGroup(root, items) }
             .sortedBy { it.root.lowercase() }
 }
+
+val TaskType.hasTaskReferences: Boolean
+    get() = taskUsageCount > 0 || recurringTemplateUsageCount > 0
+
+val TaskType.totalUsageCount: Int
+    get() = usageCount + taskUsageCount + recurringTemplateUsageCount

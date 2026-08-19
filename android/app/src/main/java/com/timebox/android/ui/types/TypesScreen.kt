@@ -22,12 +22,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +58,8 @@ fun TypesScreen(
     onAdd: () -> Unit,
     onDelete: (TaskType) -> Unit,
     onConfirmCascade: () -> Unit,
+    onMigrateTarget: (Int?) -> Unit,
+    onConfirmMigrate: () -> Unit,
     onDismissCascade: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -162,6 +170,8 @@ fun TypesScreen(
 
     val pending = state.pendingCascade
     if (pending != null) {
+        val otherTypes = state.groups.flatMap { it.items }.filter { it.id != pending.id }
+        var migrateMenu by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = onDismissCascade,
             containerColor = colors.sheet,
@@ -169,15 +179,31 @@ fun TypesScreen(
             textContentColor = colors.onVariant,
             title = { Text("Delete ${pending.name}?", style = TimeboxTheme.type.sectionTitle) },
             text = {
-                Text(
-                    text = "${pending.usageCount} block${if (pending.usageCount == 1) "" else "s"} " +
-                        "use this type. Deleting it removes those blocks too.",
-                    style = TimeboxTheme.type.bodySmall,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = buildString {
+                            append("Used by ${pending.usageCount} block(s), ${pending.taskUsageCount} Battle Plan task(s), and ${pending.recurringTemplateUsageCount} recurring template(s). ")
+                            if (pending.hasTaskReferences) append("Task and template references will be cleared. ")
+                            if (pending.usageCount > 0) append("Choose whether to delete its blocks or migrate them.")
+                        },
+                        style = TimeboxTheme.type.bodySmall,
+                    )
+                    if (pending.usageCount > 0 && otherTypes.isNotEmpty()) {
+                        Box {
+                            TextButton(onClick = { migrateMenu = true }) {
+                                Text(otherTypes.firstOrNull { it.id == state.migrateBlocksTo }?.name ?: "Choose migration target")
+                            }
+                            DropdownMenu(migrateMenu, { migrateMenu = false }) {
+                                otherTypes.forEach { target -> DropdownMenuItem({ Text(target.name) }, { migrateMenu = false; onMigrateTarget(target.id) }) }
+                            }
+                        }
+                        TextButton(enabled = state.migrateBlocksTo != null, onClick = onConfirmMigrate) { Text("Migrate blocks and delete") }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = onConfirmCascade) {
-                    Text("Delete anyway", color = colors.error, style = TimeboxTheme.type.label)
+                    Text(if (pending.usageCount > 0) "Delete blocks and type" else "Clear references and delete", color = colors.error, style = TimeboxTheme.type.label)
                 }
             },
             dismissButton = {
@@ -219,7 +245,7 @@ private fun TypeRow(type: TaskType, onDelete: () -> Unit) {
             )
         }
         Text(
-            text = if (type.usageCount > 0) "${type.usageCount}×" else "—",
+            text = if (type.totalUsageCount > 0) "${type.totalUsageCount}×" else "—",
             style = TimeboxTheme.type.mono,
             color = colors.onVariant,
         )

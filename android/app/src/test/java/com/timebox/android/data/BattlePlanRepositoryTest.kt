@@ -1,0 +1,144 @@
+package com.timebox.android.data
+
+import com.timebox.android.data.remote.BattleTaskDto
+import com.timebox.android.data.remote.BattleTaskListDto
+import com.timebox.android.data.remote.DueReminderDto
+import com.timebox.android.data.remote.PatchField
+import com.timebox.android.data.remote.ProjectDto
+import com.timebox.android.data.remote.RecurrencePreviewDto
+import com.timebox.android.data.remote.RecurringTemplateDto
+import com.timebox.android.data.remote.TimeboxApi
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.lang.reflect.Proxy
+import java.time.LocalDate
+
+class BattlePlanRepositoryTest {
+    private val calls = mutableListOf<String>()
+    private val repository = TimeboxRepository(fakeApi())
+
+    @Test
+    fun `every Battle Plan and recurring endpoint is callable through repository`() = runBlocking {
+        repository.listProjects().getOrThrow()
+        repository.createProject(ProjectCreate("New")).getOrThrow()
+        repository.patchProject(1, ProjectPatch(name = PatchField.of("Changed"))).getOrThrow()
+        repository.deleteProject(1).getOrThrow()
+
+        repository.listBattleTasks(TaskCollection.Active).getOrThrow()
+        repository.createBattleTask(BattleTaskCreate("Task")).getOrThrow()
+        repository.patchBattleTask(10, BattleTaskPatch(projectId = PatchField.clear())).getOrThrow()
+        repository.reorderBattleTasks(listOf(TaskPlacement(10, TaskStatus.Open, 0))).getOrThrow()
+        repository.archiveCompletedBattleTasks(listOf(10)).getOrThrow()
+        repository.unarchiveBattleTask(10).getOrThrow()
+        repository.trashBattleTask(10).getOrThrow()
+        repository.restoreBattleTask(10).getOrThrow()
+        repository.permanentlyDeleteBattleTask(10).getOrThrow()
+
+        repository.listDueReminders().getOrThrow()
+        repository.acknowledgeReminder(10).getOrThrow()
+
+        val rule = RecurrenceRule(
+            RecurrenceMode.Scheduled,
+            RecurrenceFrequency.Daily,
+            startDate = LocalDate.parse("2026-08-17"),
+        )
+        repository.previewRecurrence(rule).getOrThrow()
+        repository.listRecurringTemplates(RecurrenceStatus.Active).getOrThrow()
+        repository.createRecurringTemplate(RecurringTemplateCreate("Daily", rule = rule)).getOrThrow()
+        repository.getRecurringTemplate(5).getOrThrow()
+        repository.patchRecurringTemplate(5, RecurringTemplatePatch(title = PatchField.of("Updated"))).getOrThrow()
+        repository.pauseRecurringTemplate(5).getOrThrow()
+        repository.resumeRecurringTemplate(5).getOrThrow()
+        repository.endRecurringTemplate(5).getOrThrow()
+        repository.deleteRecurringTemplate(5).getOrThrow()
+
+        assertEquals(
+            setOf(
+                "listProjects", "createProject", "patchProject", "deleteProject",
+                "listBattleTasks", "createBattleTask", "patchBattleTask", "reorderBattleTasks",
+                "archiveCompletedBattleTasks", "unarchiveBattleTask", "trashBattleTask",
+                "restoreBattleTask", "permanentlyDeleteBattleTask", "listDueReminders",
+                "acknowledgeReminder", "previewRecurrence", "listRecurringTemplates",
+                "createRecurringTemplate", "getRecurringTemplate", "patchRecurringTemplate",
+                "pauseRecurringTemplate", "resumeRecurringTemplate", "endRecurringTemplate",
+                "deleteRecurringTemplate",
+            ),
+            calls.toSet(),
+        )
+        assertEquals(24, calls.size)
+    }
+
+    @Test
+    fun `repository maps wire values to domain values`() = runBlocking {
+        val task = repository.listBattleTasks().getOrThrow().items.single()
+        assertEquals(TaskStatus.Open, task.status)
+        assertEquals("Project", task.project?.name)
+        val reminder = repository.listDueReminders().getOrThrow().single()
+        assertTrue(reminder.reminderAt.toString().startsWith("2026-08-17T"))
+        val template = repository.getRecurringTemplate(5).getOrThrow()
+        assertEquals(RecurrenceFrequency.Daily, template.frequency)
+    }
+
+    private fun fakeApi(): TimeboxApi {
+        val project = projectDto()
+        val task = taskDto(project)
+        val template = templateDto()
+        val handler = java.lang.reflect.InvocationHandler { _, method, _ ->
+            calls += method.name
+            when (method.name) {
+                "listProjects" -> listOf(project)
+                "createProject", "patchProject" -> project
+                "listBattleTasks" -> BattleTaskListDto(
+                    listOf(task), "Asia/Singapore", "2026-08-17T12:00:00+08:00",
+                )
+                "createBattleTask", "patchBattleTask", "trashBattleTask" -> task
+                "listDueReminders" -> listOf(
+                    DueReminderDto(10, "Task", null, "2026-08-18T10:00:00+08:00", "2026-08-17T09:00:00+08:00")
+                )
+                "previewRecurrence" -> RecurrencePreviewDto(emptyList(), 0, 0)
+                "listRecurringTemplates" -> listOf(template)
+                "createRecurringTemplate", "getRecurringTemplate", "patchRecurringTemplate",
+                "pauseRecurringTemplate", "resumeRecurringTemplate", "endRecurringTemplate" -> template
+                else -> Unit
+            }
+        }
+        return Proxy.newProxyInstance(
+            TimeboxApi::class.java.classLoader,
+            arrayOf(TimeboxApi::class.java),
+            handler,
+        ) as TimeboxApi
+    }
+
+    private fun projectDto() = ProjectDto(
+        1, "Project", "", null, null, "2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z",
+    )
+
+    private fun taskDto(project: ProjectDto) = BattleTaskDto(
+        id = 10,
+        projectId = project.id,
+        project = project,
+        title = "Task",
+        description = "",
+        readyToPlan = false,
+        status = "open",
+        position = 0,
+        createdAt = "2026-08-17T00:00:00Z",
+        updatedAt = "2026-08-17T00:00:00Z",
+    )
+
+    private fun templateDto() = RecurringTemplateDto(
+        id = 5,
+        title = "Daily",
+        description = "",
+        mode = "scheduled",
+        status = "active",
+        frequency = "daily",
+        interval = 1,
+        startDate = "2026-08-17",
+        createdAt = "2026-08-17T00:00:00Z",
+        updatedAt = "2026-08-17T00:00:00Z",
+        cadence = "Daily",
+    )
+}

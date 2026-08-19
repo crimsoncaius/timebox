@@ -58,6 +58,8 @@ fun BlockSheet(
     onNoteChange: (String) -> Unit,
     onDelete: () -> Unit,
     onComplete: () -> Unit,
+    onOpenLinkedTask: (Int) -> Unit,
+    allowComplete: Boolean = true,
 ) {
     val colors = TimeboxTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -154,13 +156,33 @@ fun BlockSheet(
             )
 
             Spacer(Modifier.height(18.dp))
+            val linkedTask = state.selectedBlock?.task
+            val linkedTaskId = linkedTask?.id
+            if (linkedTaskId != null) {
+                SheetLabel("Battle Plan task")
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.plannedSurface)
+                        .padding(horizontal = 12.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(linkedTask.title, style = TimeboxTheme.type.label, color = colors.on)
+                        Text("Linked Planned block", style = TimeboxTheme.type.bodySmall, color = colors.planned)
+                    }
+                    androidx.compose.material3.TextButton(onClick = { onOpenLinkedTask(linkedTaskId) }) {
+                        Text("Open task")
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+            }
             SheetLabel("Task type")
             Spacer(Modifier.height(8.dp))
             TaskTypePicker(
                 taskTypes = state.taskTypes,
                 query = state.typeQuery,
                 onQueryChange = onTypeQueryChange,
-                selectedTypeId = state.selectedBlock?.taskTypeId,
+                selectedTypeId = state.selectedBlock?.taskTypeId ?: state.draft?.taskTypeId,
                 onChoose = onChooseType,
                 onCreate = onCreateType,
                 // Raising the keyboard is right for a draft, where naming the type is the
@@ -204,7 +226,7 @@ fun BlockSheet(
                 }
                 Spacer(Modifier.weight(1f))
                 val selected = state.selectedBlock
-                if (selected != null && selected.lane == Lane.Planned) {
+                if (allowComplete && selected != null && selected.lane == Lane.Planned) {
                     PrimaryButton(
                         text = if (state.selectedAlreadyCompleted) "Completed" else "Mark complete",
                         onClick = onComplete,

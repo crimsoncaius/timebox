@@ -2,7 +2,7 @@ package com.timebox.android.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,9 +24,11 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -36,6 +38,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.timebox.android.ui.theme.TimeboxTheme
 
@@ -46,7 +51,10 @@ fun TimeboxTopBar(
     title: String,
     isDark: Boolean,
     onToggleTheme: () -> Unit,
+    primaryActionLabel: String? = null,
+    onPrimaryAction: (() -> Unit)? = null,
     onOpenReview: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     val colors = TimeboxTheme.colors
     Row(
@@ -74,11 +82,23 @@ fun TimeboxTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        if (primaryActionLabel != null && onPrimaryAction != null) {
+            TextButton(onClick = onPrimaryAction) {
+                Text(primaryActionLabel, style = TimeboxTheme.type.label, color = colors.planned)
+            }
+        }
         if (onOpenReview != null) {
             RoundIconButton(
                 icon = Icons.Outlined.Insights,
                 contentDescription = "Day review",
                 onClick = onOpenReview,
+            )
+        }
+        if (onOpenSettings != null) {
+            RoundIconButton(
+                icon = Icons.Outlined.Settings,
+                contentDescription = "Settings",
+                onClick = onOpenSettings,
             )
         }
         RoundIconButton(
@@ -92,13 +112,13 @@ fun TimeboxTopBar(
 enum class TimeboxTab(val label: String, val icon: ImageVector) {
     Day("Day", Icons.Outlined.CalendarToday),
     Chronicle("Chronicle", Icons.Outlined.History),
+    BattlePlan("Battle Plan", Icons.Outlined.Checklist),
     Types("Types", Icons.Outlined.Category),
-    Settings("Settings", Icons.Outlined.Settings),
 }
 
 @Composable
 fun TimeboxBottomNav(
-    selected: TimeboxTab,
+    selected: TimeboxTab?,
     onSelect: (TimeboxTab) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -145,7 +165,11 @@ private fun NavItem(
     )
     val interaction = remember { MutableInteractionSource() }
     Column(
-        modifier = modifier.clickable(
+        modifier = modifier
+            .semantics { contentDescription = tab.label }
+            .selectable(
+            selected = active,
+            role = Role.Tab,
             interactionSource = interaction,
             indication = null,
             onClick = onClick,
@@ -163,7 +187,7 @@ private fun NavItem(
         ) {
             Icon(
                 imageVector = tab.icon,
-                contentDescription = tab.label,
+                contentDescription = null,
                 tint = colors.on,
                 modifier = Modifier.size(21.dp),
             )

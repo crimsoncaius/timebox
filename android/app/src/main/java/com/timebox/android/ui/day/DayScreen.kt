@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ScrollState
@@ -18,6 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -33,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -66,15 +73,35 @@ fun DayScreen(
     onNoteChange: (String) -> Unit,
     onDeleteSelected: () -> Unit,
     onCompleteSelected: () -> Unit,
+    onOpenLinkedTask: (Int) -> Unit,
+    onSetPlanningMode: (Boolean) -> Unit,
+    onPlanTask: (Int, Int) -> Unit,
+    onArmAccessibleTask: (Int?) -> Unit,
+    onRetryReadyTasks: () -> Unit,
 ) {
-    InteractiveDayPager(
-        state = state,
-        onDateSettled = onDateSettled,
-        onRetry = onRetry,
-        onTapSlot = onTapSlot,
-        onSelectBlock = onSelectBlock,
-        onCommitMove = onCommitMove,
-    )
+    BackHandler(enabled = state.isPlanningMode) { onSetPlanningMode(false) }
+
+    if (state.isPlanningMode) {
+        PlanningDayPage(
+            state = state,
+            onDateSettled = onDateSettled,
+            onRetry = onRetry,
+            onSelectBlock = onSelectBlock,
+            onCommitMove = onCommitMove,
+            onPlanTask = onPlanTask,
+            onArmAccessibleTask = onArmAccessibleTask,
+            onRetryReadyTasks = onRetryReadyTasks,
+        )
+    } else {
+        InteractiveDayPager(
+            state = state,
+            onDateSettled = onDateSettled,
+            onRetry = onRetry,
+            onTapSlot = onTapSlot,
+            onSelectBlock = onSelectBlock,
+            onCommitMove = onCommitMove,
+        )
+    }
 
     if (state.sheetOpen) {
         BlockSheet(
@@ -86,7 +113,50 @@ fun DayScreen(
             onNoteChange = onNoteChange,
             onDelete = onDeleteSelected,
             onComplete = onCompleteSelected,
+            onOpenLinkedTask = onOpenLinkedTask,
+            allowComplete = !state.isPlanningMode,
         )
+    }
+}
+
+@Composable
+private fun PlanningDayPage(
+    state: DayUiState,
+    onDateSettled: (LocalDate) -> Unit,
+    onRetry: (LocalDate) -> Unit,
+    onSelectBlock: (Int) -> Unit,
+    onCommitMove: (Int, Int, Int) -> Unit,
+    onPlanTask: (Int, Int) -> Unit,
+    onArmAccessibleTask: (Int?) -> Unit,
+    onRetryReadyTasks: () -> Unit,
+) {
+    val page = state.currentPage
+    Column(Modifier.fillMaxSize()) {
+        DayStrip(
+            label = formatDayStrip(state.date),
+            onPrev = { onDateSettled(state.date.minusDays(1)) },
+            onNext = { onDateSettled(state.date.plusDays(1)) },
+        )
+        PlanningModeHeaders(Modifier.padding(bottom = 4.dp))
+        val day = page.day
+        when {
+            page.loading && day == null -> LoadingState(Modifier.weight(1f))
+            page.error != null && day == null -> ErrorState(
+                message = page.error,
+                onRetry = { onRetry(state.date) },
+                modifier = Modifier.weight(1f),
+            )
+            day != null -> PlanningWorkspace(
+                state = state,
+                day = day,
+                onSelectBlock = onSelectBlock,
+                onCommitMove = onCommitMove,
+                onPlanTask = onPlanTask,
+                onArmAccessibleTask = onArmAccessibleTask,
+                onRetryReadyTasks = onRetryReadyTasks,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

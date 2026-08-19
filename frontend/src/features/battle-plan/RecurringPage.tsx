@@ -19,9 +19,9 @@ import {
 import { BattlePlanSidebar } from './BattlePlanSidebar'
 import { persistBattlePlanScope, type BattlePlanScope } from './battlePlanState'
 import { ProjectEditor } from './ProjectEditor'
+import { PriorityControl } from './TaskDetailPanel'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const inputClass = 'w-full rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-3 py-2.5 text-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/15 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest'
 const buttonClass = 'rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
 
 function todayIso() {
@@ -58,7 +58,7 @@ export function RecurringPage() {
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [creatingMode, setCreatingMode] = useState<RecurrenceMode | null>(null)
+  const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<RecurringTemplate | null>(null)
   const [mobileSidebar, setMobileSidebar] = useState(false)
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
@@ -155,14 +155,9 @@ export function RecurringPage() {
             <h1 className="mt-2 font-headline text-[2.5rem] font-extralight leading-none tracking-tighter">Recurring</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-on-surface-variant">Templates create independent Battle Plan tasks seven days ahead.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={`${buttonClass} bg-surface-container-low hover:bg-surface-container-high dark:bg-dark-surface-container`} onClick={() => setCreatingMode('scheduled')}>
-              On a schedule
-            </button>
-            <button type="button" className={`${buttonClass} bg-primary text-on-primary hover:bg-primary-dim`} onClick={() => setCreatingMode('quota')}>
-              Times per period
-            </button>
-          </div>
+          <button type="button" className={`${buttonClass} bg-primary text-on-primary hover:bg-primary-dim`} onClick={() => setCreating(true)}>
+            New recurring task
+          </button>
           </header>
 
         <div className="mt-8 flex gap-1 rounded-xl bg-surface-container-low p-1 sm:w-fit dark:bg-dark-surface-container-low">
@@ -198,15 +193,15 @@ export function RecurringPage() {
       </div>
 
       {selected ? <TemplateDetail template={selected} onClose={() => setSearchParams({ view: 'recurring' })} onEdit={() => setEditing(selected)} /> : null}
-      {creatingMode || editing ? (
+      {creating || editing ? (
         <TemplateForm
-          mode={editing?.mode ?? creatingMode!}
+          initialMode={editing?.mode ?? 'scheduled'}
           template={editing}
           projects={projects}
           taskTypes={taskTypes}
-          onClose={() => { setCreatingMode(null); setEditing(null) }}
+          onClose={() => { setCreating(false); setEditing(null) }}
           onSaved={async (saved) => {
-            setCreatingMode(null)
+            setCreating(false)
             setEditing(null)
             setStatus(saved.status)
             setSearchParams({ view: 'recurring', recurring: String(saved.id) })
@@ -290,23 +285,83 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
   )
 }
 
-function TemplateForm({ mode, template, projects, taskTypes, onClose, onSaved }: {
+type RecurrencePreset = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'custom' | 'day' | 'week' | 'month'
+
+const SCHEDULE_PRESETS: Array<{ id: RecurrencePreset; label: string }> = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekdays', label: 'Weekdays' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+  { id: 'custom', label: 'Custom…' },
+]
+
+const QUOTA_PRESETS: Array<{ id: RecurrencePreset; label: string }> = [
+  { id: 'day', label: 'Per day' },
+  { id: 'week', label: 'Per week' },
+  { id: 'month', label: 'Per month' },
+]
+
+const recurringFieldClass = 'w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-[9px] text-sm text-[var(--task-detail-primary)] outline-none transition-colors duration-120 ease-out hover:border-[var(--task-detail-input-hover)] focus-visible:border-[var(--task-detail-input-hover)] focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]'
+
+function currentWeekdayIndex() {
+  const day = new Date().getDay()
+  return day === 0 ? 6 : day - 1
+}
+
+function initialPreset(mode: RecurrenceMode, frequency: RecurrenceFrequency, interval: number, weekdays: number[]): RecurrencePreset {
+  if (mode === 'quota') return frequency === 'daily' ? 'day' : frequency === 'monthly' ? 'month' : 'week'
+  if (interval !== 1) return 'custom'
+  if (frequency === 'daily') return 'daily'
+  if (frequency === 'monthly') return 'monthly'
+  if (weekdays.length === 5 && weekdays.every((day, index) => day === index)) return 'weekdays'
+  return 'weekly'
+}
+
+function recurrenceSummary({
+  mode, frequency, interval, weekdays, monthDay, quotaCount, startDate, ending,
+}: {
   mode: RecurrenceMode
+  frequency: RecurrenceFrequency
+  interval: number
+  weekdays: number[]
+  monthDay: number
+  quotaCount: number
+  startDate: string
+  ending: 'never' | 'date' | 'cycles'
+}) {
+  const start = startDate ? displayDate(startDate) : 'the selected date'
+  const endingText = ending === 'never' ? 'forever' : ending === 'date' ? 'until an end date' : 'for a set number of cycles'
+  const unit = frequency === 'daily' ? 'day' : frequency === 'weekly' ? 'week' : 'month'
+
+  if (mode === 'quota') {
+    const cadence = quotaCount === 1 ? 'Once' : `${quotaCount} times`
+    return `${cadence} per calendar ${unit}, starting ${start}, ${endingText}.`
+  }
+
+  let cadence = interval === 1 ? `Every ${unit}` : `Every ${interval} ${unit}s`
+  if (frequency === 'weekly' && weekdays.length > 0) cadence += ` on ${weekdays.map((day) => WEEKDAYS[day]).join(', ')}`
+  if (frequency === 'monthly') cadence += ` on day ${monthDay}`
+  return `${cadence}, starting ${start}, ${endingText}.`
+}
+
+function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onSaved }: {
+  initialMode: RecurrenceMode
   template: RecurringTemplate | null
   projects: Project[]
   taskTypes: TaskType[]
   onClose: () => void
   onSaved: (template: RecurringTemplate) => Promise<void>
 }) {
+  const [mode, setMode] = useState<RecurrenceMode>(initialMode)
   const [title, setTitle] = useState(template?.title ?? '')
   const [description, setDescription] = useState(template?.description ?? '')
   const [projectId, setProjectId] = useState(template?.project_id ? String(template.project_id) : '')
   const [taskTypeId, setTaskTypeId] = useState(template?.task_type_id ? String(template.task_type_id) : '')
-  const [urgency, setUrgency] = useState<PriorityLevel | ''>(template?.urgency ?? '')
-  const [importance, setImportance] = useState<PriorityLevel | ''>(template?.importance ?? '')
+  const [urgency, setUrgency] = useState<PriorityLevel | null>(template?.urgency ?? null)
+  const [importance, setImportance] = useState<PriorityLevel | null>(template?.importance ?? null)
   const [frequency, setFrequency] = useState<RecurrenceFrequency>(template?.frequency ?? 'daily')
   const [interval, setInterval] = useState(template?.interval ?? 1)
-  const [weekdays, setWeekdays] = useState<number[]>(template?.weekdays ?? [new Date().getDay() === 0 ? 6 : new Date().getDay() - 1])
+  const [weekdays, setWeekdays] = useState<number[]>(template?.weekdays ?? [currentWeekdayIndex()])
   const [monthDay, setMonthDay] = useState(template?.month_day ?? new Date().getDate())
   const [quotaCount, setQuotaCount] = useState(template?.quota_count ?? 3)
   const [startDate, setStartDate] = useState(template?.start_date ?? todayIso())
@@ -317,6 +372,12 @@ function TemplateForm({ mode, template, projects, taskTypes, onClose, onSaved }:
   const [preview, setPreview] = useState<RecurrencePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [preset, setPreset] = useState<RecurrencePreset>(() => initialPreset(
+    initialMode,
+    template?.frequency ?? 'daily',
+    template?.interval ?? 1,
+    template?.weekdays ?? [currentWeekdayIndex()],
+  ))
 
   const rule = useMemo<RecurrenceRuleWrite>(() => ({
     mode, frequency, interval: mode === 'quota' ? 1 : interval,
@@ -337,6 +398,48 @@ function TemplateForm({ mode, template, projects, taskTypes, onClose, onSaved }:
     return () => { active = false; window.clearTimeout(timer) }
   }, [rule, startDate, frequency, mode, weekdays.length, ending, endDate])
 
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [])
+
+  const switchMode = (nextMode: RecurrenceMode) => {
+    if (template || nextMode === mode) return
+    setMode(nextMode)
+    setInterval(1)
+    if (nextMode === 'scheduled') {
+      setFrequency('daily')
+      setPreset('daily')
+    } else {
+      setFrequency('weekly')
+      setPreset('week')
+    }
+  }
+
+  const choosePreset = (nextPreset: RecurrencePreset) => {
+    setPreset(nextPreset)
+    if (nextPreset === 'custom') return
+    setInterval(1)
+    if (nextPreset === 'daily' || nextPreset === 'day') setFrequency('daily')
+    if (nextPreset === 'weekly' || nextPreset === 'weekdays' || nextPreset === 'week') setFrequency('weekly')
+    if (nextPreset === 'monthly' || nextPreset === 'month') setFrequency('monthly')
+    if (nextPreset === 'weekdays') setWeekdays([0, 1, 2, 3, 4])
+    if (nextPreset === 'weekly' && weekdays.length === 0) setWeekdays([currentWeekdayIndex()])
+  }
+
+  const summary = recurrenceSummary({
+    mode, frequency, interval, weekdays, monthDay, quotaCount, startDate, ending,
+  })
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!title.trim()) return
@@ -352,7 +455,7 @@ function TemplateForm({ mode, template, projects, taskTypes, onClose, onSaved }:
       const body: RecurringTemplateWrite = {
         ...rule, title: title.trim(), description, project_id: projectId ? Number(projectId) : null,
         task_type_id: taskTypeId ? Number(taskTypeId) : null,
-        urgency: urgency || null, importance: importance || null,
+        urgency, importance,
         checklist_titles: mode === 'scheduled' ? checklist.split('\n').map((value) => value.trim()).filter(Boolean) : [],
         confirm_backfill: confirmBackfill,
       }
@@ -368,34 +471,149 @@ function TemplateForm({ mode, template, projects, taskTypes, onClose, onSaved }:
   }
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/35 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <form role="dialog" aria-modal="true" aria-label={template ? `Edit ${template.title}` : 'New recurring task'} onSubmit={(event) => void submit(event)} className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-surface p-5 shadow-2xl sm:p-7 dark:bg-dark-background">
-        <div className="flex items-start justify-between gap-4"><div><p className="font-label text-xs uppercase tracking-[0.16em] text-on-surface-variant">{template ? 'Edit recurring template' : mode === 'scheduled' ? 'On a schedule' : 'Times per period'}</p><h2 className="mt-2 font-headline text-2xl font-light">{template ? template.title : 'New recurring task'}</h2></div><button type="button" aria-label="Close recurring form" onClick={onClose} className="rounded-full p-2 hover:bg-surface-container-low">×</button></div>
-        {error ? <div role="alert" className="mt-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <label className="sm:col-span-2"><span className="mb-1.5 block text-xs text-on-surface-variant">Title</span><input autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} className={inputClass} /></label>
-          <label className="sm:col-span-2"><span className="mb-1.5 block text-xs text-on-surface-variant">Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} className={inputClass} /></label>
-          <Select label="Location" value={projectId} onChange={setProjectId}><option value="">Admin</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
-          <Select label="Task type" value={taskTypeId} onChange={setTaskTypeId}><option value="">Unset</option>{taskTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
-          <Select label={mode === 'scheduled' ? 'Repeats' : 'Period'} value={frequency} onChange={(value) => setFrequency(value as RecurrenceFrequency)}><option value="daily">{mode === 'scheduled' ? 'Daily' : 'Calendar day'}</option><option value="weekly">{mode === 'scheduled' ? 'Weekly' : 'Calendar week'}</option><option value="monthly">{mode === 'scheduled' ? 'Monthly' : 'Calendar month'}</option></Select>
-          {mode === 'scheduled' ? <label><span className="mb-1.5 block text-xs text-on-surface-variant">Every</span><div className="flex items-center gap-2"><input type="number" min={1} value={interval} onChange={(event) => setInterval(Number(event.target.value))} className={inputClass} /><span className="text-sm text-on-surface-variant">{{ daily: 'days', weekly: 'weeks', monthly: 'months' }[frequency]}</span></div></label> : <label><span className="mb-1.5 block text-xs text-on-surface-variant">Times per period</span><input type="number" min={1} max={100} value={quotaCount} onChange={(event) => setQuotaCount(Number(event.target.value))} className={inputClass} /></label>}
-          {mode === 'scheduled' && frequency === 'weekly' ? <fieldset className="sm:col-span-2"><legend className="mb-2 text-xs text-on-surface-variant">Weekdays</legend><div className="flex flex-wrap gap-2">{WEEKDAYS.map((day, index) => <button key={day} type="button" aria-label={day} aria-pressed={weekdays.includes(index)} onClick={() => setWeekdays((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index].sort())} className={`${buttonClass} size-10 p-0 text-xs ${weekdays.includes(index) ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-on-surface-variant'}`}>{day.slice(0, 1)}</button>)}</div></fieldset> : null}
-          {mode === 'scheduled' && frequency === 'monthly' ? <label><span className="mb-1.5 block text-xs text-on-surface-variant">Day of month</span><input type="number" min={1} max={31} value={monthDay} onChange={(event) => setMonthDay(Number(event.target.value))} className={inputClass} /><span className="mt-1 block text-[11px] text-on-surface-variant">Short months use their final day.</span></label> : null}
-          <label><span className="mb-1.5 block text-xs text-on-surface-variant">Start date</span><input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={inputClass} /></label>
-          <Select label="Ending" value={ending} onChange={(value) => setEnding(value as typeof ending)}><option value="never">Never</option><option value="date">On date</option><option value="cycles">After cycles</option></Select>
-          {ending === 'date' ? <label><span className="mb-1.5 block text-xs text-on-surface-variant">Inclusive end date</span><input required type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} className={inputClass} /></label> : null}
-          {ending === 'cycles' ? <label><span className="mb-1.5 block text-xs text-on-surface-variant">Cycle limit</span><input type="number" min={1} value={cycleLimit} onChange={(event) => setCycleLimit(Number(event.target.value))} className={inputClass} /></label> : null}
-          <Select label="Urgency" value={urgency} onChange={(value) => setUrgency(value as PriorityLevel | '')}><option value="">Unset</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></Select>
-          <Select label="Importance" value={importance} onChange={(value) => setImportance(value as PriorityLevel | '')}><option value="">Unset</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></Select>
-          {mode === 'scheduled' ? <label className="sm:col-span-2"><span className="mb-1.5 block text-xs text-on-surface-variant">Checklist (one title per line)</span><textarea value={checklist} onChange={(event) => setChecklist(event.target.value)} rows={3} className={inputClass} /></label> : null}
+    <div className="fixed inset-0 z-100 flex items-center justify-center overflow-hidden bg-black/35 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <form role="dialog" aria-modal="true" aria-label={template ? `Edit ${template.title}` : 'New recurring task'} onSubmit={(event) => void submit(event)} className="task-detail-dialog max-h-[94vh] w-full max-w-[640px] overflow-y-auto rounded-3xl border border-[var(--task-detail-border)] bg-surface text-[var(--task-detail-primary)] shadow-[var(--task-detail-shadow)] dark:bg-dark-background">
+        <header className="flex items-start justify-between gap-4 px-5 pt-[26px] pb-[18px] sm:px-7">
+          <div>
+            <p className="font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Recurring template</p>
+            <h2 className="mt-2 font-headline text-[28px] font-light tracking-[-0.02em]">{template ? template.title : 'New recurring task'}</h2>
+          </div>
+          <button type="button" aria-label="Close recurring form" onClick={onClose} className="border-0 bg-transparent p-1.5 text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]">
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>close</span>
+          </button>
+        </header>
+
+        <div role="radiogroup" aria-label="Recurrence mode" aria-disabled={Boolean(template)} className="mx-5 mb-[22px] flex w-fit gap-1 rounded-full bg-[var(--task-detail-track)] p-1 sm:mx-7">
+          {([
+            ['scheduled', 'On a schedule'],
+            ['quota', 'Times per period'],
+          ] as const).map(([value, label]) => {
+            const selected = mode === value
+            return (
+              <button key={value} type="button" role="radio" aria-checked={selected} disabled={Boolean(template)} onClick={() => switchMode(value)} className={`rounded-full border-0 px-4 py-[7px] text-[13px] transition-colors duration-120 ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:cursor-default ${selected ? 'bg-[var(--task-detail-input-surface)] font-medium text-[var(--task-detail-primary)] shadow-[0_1px_2px_rgba(45,52,53,0.08)]' : 'bg-transparent font-normal text-[var(--task-detail-muted)] hover:text-[var(--task-detail-primary)]'}`}>
+                {label}
+              </button>
+            )
+          })}
         </div>
-        {preview ? <div className="mt-5 rounded-2xl bg-surface-container-low p-4 text-sm dark:bg-dark-surface-container-low"><p className="font-medium">Preview</p><p className="mt-1 text-xs text-on-surface-variant">{preview.past_cycles ? `${preview.past_cycles} past cycles will require confirmation. ` : ''}Next: {preview.upcoming.map((window) => displayWindow(window.start, window.end)).join(', ') || 'none'}</p></div> : null}
-        <div className="mt-6 flex justify-end gap-2"><button type="button" className={`${buttonClass} text-on-surface-variant hover:bg-surface-container-low`} onClick={onClose}>Cancel</button><button type="submit" disabled={saving || !title.trim()} className={`${buttonClass} bg-primary text-on-primary disabled:opacity-50`}>{saving ? 'Saving…' : template ? 'Save changes' : 'Create recurrence'}</button></div>
+
+        {error ? <div role="alert" className="mx-5 mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container sm:mx-7">{error}</div> : null}
+
+        <section className="border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7 sm:py-[22px]">
+          <SectionHeading>The task</SectionHeading>
+          <input autoFocus required aria-label="Title" placeholder="Untitled recurring task" value={title} onChange={(event) => setTitle(event.target.value)} className="w-full border-0 bg-transparent p-0 font-headline text-2xl font-light tracking-[-0.02em] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-title-placeholder)]" />
+          <textarea rows={2} aria-label="Description" placeholder="Notes and context" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-3.5 w-full resize-y border-0 border-l-2 border-l-[var(--color-paper-rule)] bg-transparent py-0.5 pr-0 pl-3.5 text-sm leading-[1.7] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-muted)]" />
+          <div className="mt-[18px] grid gap-3.5 sm:grid-cols-2">
+            <Select label="Location" value={projectId} unset={!projectId} onChange={setProjectId}><option value="">Admin</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
+            <Select label="Task type" value={taskTypeId} unset={!taskTypeId} onChange={setTaskTypeId}><option value="">Unset</option>{taskTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
+          </div>
+        </section>
+
+        <section className="border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7 sm:py-[22px]">
+          <SectionHeading>{mode === 'scheduled' ? 'The schedule' : 'The quota'}</SectionHeading>
+          <div className="flex flex-wrap gap-2">
+            {(mode === 'scheduled' ? SCHEDULE_PRESETS : QUOTA_PRESETS).map((item) => {
+              const selected = preset === item.id
+              return (
+                <button key={item.id} type="button" aria-pressed={selected} onClick={() => choosePreset(item.id)} className={`rounded-full px-3.5 py-[7px] text-[13px] transition-colors duration-120 ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] ${selected ? 'border border-transparent bg-[var(--task-detail-selected)] text-[var(--task-detail-primary)]' : 'border border-[var(--task-detail-border)] bg-transparent text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}>
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-4 grid gap-3.5 sm:grid-cols-3">
+            {mode === 'scheduled' ? (
+              <Field label="Every">
+                <div className="flex items-center gap-2">
+                  <input aria-label="Interval" type="number" min={1} value={interval} onChange={(event) => { setInterval(Number(event.target.value)); setPreset('custom') }} className={recurringFieldClass} />
+                  <span className="text-[13px] text-[var(--task-detail-muted)]">{{ daily: 'days', weekly: 'weeks', monthly: 'months' }[frequency]}</span>
+                </div>
+              </Field>
+            ) : (
+              <Field label="Times per period">
+                <div className="flex items-center gap-2">
+                  <input aria-label="Times per period" type="number" min={1} max={100} value={quotaCount} onChange={(event) => setQuotaCount(Number(event.target.value))} className={recurringFieldClass} />
+                  <span className="text-[13px] text-[var(--task-detail-muted)]">times</span>
+                </div>
+              </Field>
+            )}
+            <Field label="Starts"><input aria-label="Start date" required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={recurringFieldClass} /></Field>
+            <Select label="Ends" ariaLabel="Ending" value={ending} onChange={(value) => setEnding(value as typeof ending)}><option value="never">Never</option><option value="date">On date</option><option value="cycles">After cycles</option></Select>
+            {ending === 'date' ? <Field label="Inclusive end date"><input aria-label="Inclusive end date" required type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} className={recurringFieldClass} /></Field> : null}
+            {ending === 'cycles' ? <Field label="Cycle limit"><input aria-label="Cycle limit" type="number" min={1} value={cycleLimit} onChange={(event) => setCycleLimit(Number(event.target.value))} className={recurringFieldClass} /></Field> : null}
+          </div>
+
+          {mode === 'scheduled' && frequency === 'weekly' ? (
+            <fieldset className="mt-4 border-0 p-0">
+              <legend className="mb-2 p-0 text-xs text-[var(--task-detail-muted)]">Weekdays</legend>
+              <div className="flex flex-wrap gap-2">
+                {WEEKDAYS.map((day, index) => {
+                  const selected = weekdays.includes(index)
+                  return (
+                    <button key={day} type="button" aria-label={day} aria-pressed={selected} onClick={() => { setWeekdays((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index].sort()); setPreset('custom') }} className={`size-[38px] rounded-[10px] text-xs transition-colors duration-120 ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] ${selected ? 'border border-transparent bg-primary text-on-primary' : 'border border-[var(--task-detail-border)] bg-transparent text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}>
+                      {day.slice(0, 1)}
+                    </button>
+                  )
+                })}
+              </div>
+            </fieldset>
+          ) : null}
+
+          {mode === 'scheduled' && frequency === 'monthly' ? (
+            <div className="mt-4 max-w-56">
+              <Field label="Day of month">
+                <input aria-label="Day of month" type="number" min={1} max={31} value={monthDay} onChange={(event) => setMonthDay(Number(event.target.value))} className={recurringFieldClass} />
+                <span className="mt-1.5 block text-[11px] text-[var(--task-detail-muted)]">Short months use their final day.</span>
+              </Field>
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex items-start gap-2 text-sm leading-[1.6] text-[var(--task-detail-primary)]">
+            <span className="material-symbols-outlined mt-0.5 text-[18px] text-[var(--task-detail-muted)]" aria-hidden>event_repeat</span>
+            <div>
+              <p>{summary}</p>
+              {preview && preview.past_cycles > 0 ? <p className="mt-1 text-xs text-[var(--task-detail-muted)]">{preview.past_cycles} past cycles ({preview.past_tasks} tasks) will be backfilled — you&apos;ll be asked to confirm.</p> : null}
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7 sm:py-[22px]">
+          <SectionHeading>{mode === 'scheduled' ? 'Priority & checklist' : 'Priority'}</SectionHeading>
+          <div className="flex items-center justify-between gap-4 border-b border-[var(--task-detail-divider)] py-2.5">
+            <span className="text-[13px] text-[var(--task-detail-muted)]">Urgency</span>
+            <PriorityControl label="Urgency" value={urgency} onChange={setUrgency} />
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <span className="text-[13px] text-[var(--task-detail-muted)]">Importance</span>
+            <PriorityControl label="Importance" value={importance} onChange={setImportance} />
+          </div>
+          {mode === 'scheduled' ? (
+            <textarea rows={3} aria-label="Checklist (one title per line)" placeholder="One checklist item per line" value={checklist} onChange={(event) => setChecklist(event.target.value)} className={`${recurringFieldClass} mt-3.5 resize-y leading-[1.7]`} />
+          ) : <p className="mt-3.5 text-xs text-[var(--task-detail-muted)]">Checklists are available on scheduled templates only.</p>}
+        </section>
+
+        <footer className="flex items-center justify-end gap-2.5 border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7">
+          <button type="button" className="border-0 bg-transparent px-2 py-[9px] text-[13px] text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" onClick={onClose}>Cancel</button>
+          <button type="submit" disabled={saving || !title.trim()} className="rounded-[10px] bg-primary px-5 py-[9px] text-[13px] font-medium text-on-primary transition-colors duration-120 ease-out hover:bg-primary-dim focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary">{saving ? 'Saving…' : template ? 'Save changes' : 'Create recurrence'}</button>
+        </footer>
       </form>
     </div>
   )
 }
 
-function Select({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
-  return <label><span className="mb-1.5 block text-xs text-on-surface-variant">{label}</span><select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>{children}</select></label>
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h3 className="mb-3.5 font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">{children}</h3>
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label><span className="mb-1.5 block text-xs text-[var(--task-detail-muted)]">{label}</span>{children}</label>
+}
+
+function Select({ label, ariaLabel, value, unset = false, onChange, children }: { label: string; ariaLabel?: string; value: string; unset?: boolean; onChange: (value: string) => void; children: React.ReactNode }) {
+  return (
+    <Field label={label}>
+      <select aria-label={ariaLabel ?? label} value={value} onChange={(event) => onChange(event.target.value)} className={`task-detail-select ${recurringFieldClass} appearance-none pr-9 ${unset ? 'text-[var(--task-detail-secondary)]' : ''}`}>{children}</select>
+    </Field>
+  )
 }

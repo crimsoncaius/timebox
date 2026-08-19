@@ -1,9 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   addCalendarDays,
   dateInTimeZone,
-  defaultReminderIso,
-  isoToZonedLocal,
   PRIORITY_LEVELS,
   STATUS_LABELS,
   zonedLocalToIso,
@@ -16,7 +14,15 @@ import type {
   TaskType,
 } from '../../lib/api'
 
-type DeadlineMode = 'none' | 'date' | 'datetime'
+type Picker = 'due' | 'urgency' | 'impact' | 'type'
+
+const priorityIcons: Record<PriorityLevel, string> = {
+  high: 'keyboard_double_arrow_up',
+  medium: 'drag_handle',
+  low: 'keyboard_arrow_down',
+}
+
+const chipBase = 'flex h-[30px] items-center rounded-full text-xs transition-[background,border-color] duration-[120ms]'
 
 export function TaskComposer({
   status,
@@ -39,29 +45,45 @@ export function TaskComposer({
   const [busy, setBusy] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [projectId, setProjectId] = useState('')
+  const [projectId, setProjectId] = useState(() => fixedProjectId == null ? '' : String(fixedProjectId))
   const [taskTypeId, setTaskTypeId] = useState('')
   const [urgency, setUrgency] = useState<PriorityLevel | ''>('')
   const [importance, setImportance] = useState<PriorityLevel | ''>('')
-  const [deadlineMode, setDeadlineMode] = useState<DeadlineMode>('none')
   const [deadlineDate, setDeadlineDate] = useState('')
   const [deadlineAt, setDeadlineAt] = useState('')
-  const [reminderAt, setReminderAt] = useState('')
+  const [openPicker, setOpenPicker] = useState<Picker | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
   const today = dateInTimeZone(serverNowIso, timezone)
-  const hasDeadline = deadlineMode === 'date' ? Boolean(deadlineDate) : deadlineMode === 'datetime' && Boolean(deadlineAt)
+  const tomorrow = addCalendarDays(today, 1)
+  const nextWeek = addCalendarDays(today, 7)
+  const effectiveProjectId = fixedProjectId === undefined ? projectId : fixedProjectId == null ? '' : String(fixedProjectId)
+  const projectName = effectiveProjectId
+    ? projects.find((project) => project.id === Number(effectiveProjectId))?.name ?? 'Project'
+    : 'Admin'
+  const selectedType = taskTypes.find((taskType) => taskType.id === Number(taskTypeId))
+
+  useEffect(() => {
+    if (!openPicker) return
+    const dismiss = (event: PointerEvent) => {
+      const picker = (event.target as Element | null)?.closest?.('[data-picker]')
+      if (picker?.getAttribute('data-picker') !== openPicker) setOpenPicker(null)
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [openPicker])
 
   const reset = () => {
     setTitle('')
     setDescription('')
-    setProjectId('')
+    setProjectId(fixedProjectId == null ? '' : String(fixedProjectId))
     setTaskTypeId('')
     setUrgency('')
     setImportance('')
-    setDeadlineMode('none')
     setDeadlineDate('')
     setDeadlineAt('')
-    setReminderAt('')
+    setOpenPicker(null)
   }
 
   const close = () => {
@@ -70,47 +92,52 @@ export function TaskComposer({
     setOpen(false)
   }
 
-  const updateDate = (value: string) => {
-    setDeadlineMode('date')
+  const updateTitle = (value: string) => {
+    let next = value
+
+    next = next.replace(/(^|\s)!((?:high|medium|low))(?=\s|$)/gi, (_match, prefix: string, level: string) => {
+      setUrgency(level.toLowerCase() as PriorityLevel)
+      return prefix
+    })
+    next = next.replace(/(^|\s)~((?:high|medium|low))(?=\s|$)/gi, (_match, prefix: string, level: string) => {
+      setImportance(level.toLowerCase() as PriorityLevel)
+      return prefix
+    })
+
+    if (fixedProjectId === undefined) {
+      next = next.replace(/(^|\s)#([^\s]+)(?=\s|$)/g, (match, prefix: string, token: string) => {
+        const normalized = normalizeShortcut(token)
+        const project = projects.find((item) => normalizeShortcut(item.name) === normalized)
+        if (!project) return match
+        setProjectId(String(project.id))
+        return prefix
+      })
+    }
+
+    setTitle(next.replace(/ {2,}/g, ' '))
+  }
+
+  const setDueDate = (value: string) => {
     setDeadlineDate(value)
     setDeadlineAt('')
-    if (reminderAt) {
-      setReminderAt(isoToZonedLocal(defaultReminderIso(value || null, null, timezone), timezone))
-    }
+    setOpenPicker(null)
   }
 
-  const updateDateTime = (value: string) => {
-    setDeadlineAt(value)
-    if (reminderAt) {
-      const deadline = value ? zonedLocalToIso(value, timezone) : null
-      setReminderAt(isoToZonedLocal(defaultReminderIso(null, deadline, timezone), timezone))
-    }
-  }
-
-  const setMode = (mode: DeadlineMode) => {
-    setDeadlineMode(mode)
-    if (mode !== deadlineMode) setReminderAt('')
-    if (mode === 'none') {
-      setDeadlineDate('')
-      setDeadlineAt('')
-      setReminderAt('')
-    } else if (mode === 'date') {
-      setDeadlineAt('')
+  const showDatePicker = () => {
+    setOpenPicker(null)
+    const input = dateInputRef.current
+    if (!input) return
+    input.focus()
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void }
+    if (typeof pickerInput.showPicker === 'function') {
+      try {
+        pickerInput.showPicker()
+      } catch {
+        input.click()
+      }
     } else {
-      setDeadlineDate('')
+      input.click()
     }
-  }
-
-  const toggleReminder = (enabled: boolean) => {
-    if (!enabled) {
-      setReminderAt('')
-      return
-    }
-    const deadline = deadlineAt ? zonedLocalToIso(deadlineAt, timezone) : null
-    setReminderAt(isoToZonedLocal(
-      defaultReminderIso(deadlineDate || null, deadline, timezone),
-      timezone,
-    ))
   }
 
   if (!open) {
@@ -118,7 +145,7 @@ export function TaskComposer({
       <button
         type="button"
         aria-label={`Add ${STATUS_LABELS[status]} task`}
-        className="mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-lowest/70 hover:text-on-surface dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
+        className="mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-lowest/70 hover:text-on-surface"
         onClick={() => setOpen(true)}
       >
         <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden>add</span>
@@ -129,13 +156,15 @@ export function TaskComposer({
 
   return (
     <form
+      ref={formRef}
       aria-label="New task"
-      className="mb-3 rounded-2xl border border-outline-variant/25 bg-surface-container-lowest p-3 shadow-sm dark:border-dark-outline-variant/40 dark:bg-dark-surface-container-lowest"
+      className="mb-3 rounded-2xl border border-outline-variant/25 bg-surface-container-lowest px-4 pb-3 pt-4 shadow-[0_0_32px_rgba(45,52,53,0.045)]"
       onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          close()
-        }
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        event.stopPropagation()
+        if (openPicker) setOpenPicker(null)
+        else close()
       }}
       onSubmit={async (event) => {
         event.preventDefault()
@@ -143,9 +172,6 @@ export function TaskComposer({
         if (!cleanTitle || busy) return
         setBusy(true)
         try {
-          const deadlineAtIso = deadlineMode === 'datetime' && deadlineAt
-            ? zonedLocalToIso(deadlineAt, timezone)
-            : null
           await onCreate({
             title: cleanTitle,
             description,
@@ -156,9 +182,9 @@ export function TaskComposer({
             task_type_id: taskTypeId ? Number(taskTypeId) : null,
             urgency: urgency || null,
             importance: importance || null,
-            deadline_date: deadlineMode === 'date' && deadlineDate ? deadlineDate : null,
-            deadline_at: deadlineAtIso,
-            reminder_at: reminderAt ? zonedLocalToIso(reminderAt, timezone) : null,
+            deadline_date: deadlineDate || null,
+            deadline_at: deadlineAt ? zonedLocalToIso(deadlineAt, timezone) : null,
+            reminder_at: null,
           })
           reset()
           setOpen(false)
@@ -172,117 +198,224 @@ export function TaskComposer({
       <input
         autoFocus
         aria-label="Task title"
-        placeholder="Task name"
+        placeholder="Task name  ·  #project  !urgency  ~impact"
         value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        className="w-full bg-transparent px-1 py-1 font-headline text-base outline-none placeholder:text-on-surface-variant/60"
+        onChange={(event) => updateTitle(event.target.value)}
+        className="w-full bg-transparent p-0 font-headline text-[17px] font-normal tracking-[-0.015em] text-on-surface outline-none placeholder:text-on-surface-variant/60"
       />
       <textarea
         aria-label="Task description"
         placeholder="Description"
-        rows={2}
+        rows={1}
         value={description}
         onChange={(event) => setDescription(event.target.value)}
-        className="mt-1 w-full resize-none bg-transparent px-1 py-1 text-sm outline-none placeholder:text-on-surface-variant/60"
+        className="mt-2 w-full resize-none bg-transparent p-0 text-[13px] leading-[1.6] outline-none placeholder:text-on-surface-variant/60"
       />
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {fixedProjectId === undefined ? (
-          <CompactSelect label="Location" value={projectId} onChange={setProjectId}>
-            <option value="">Admin</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </CompactSelect>
-        ) : (
-          <ReadOnlyField
-            label="Location"
-            value={fixedProjectId == null
-              ? 'Admin'
-              : projects.find((project) => project.id === fixedProjectId)?.name ?? 'Project'}
-          />
-        )}
-        <CompactSelect label="Task type" value={taskTypeId} onChange={setTaskTypeId}>
-          <option value="">Unset</option>
-          {taskTypes.map((taskType) => <option key={taskType.id} value={taskType.id}>{taskType.name}</option>)}
-        </CompactSelect>
-        <CompactSelect label="Urgency" value={urgency} onChange={(value) => setUrgency(value as PriorityLevel | '')}>
-          <option value="">Unset</option>
-          {PRIORITY_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
-        </CompactSelect>
-        <CompactSelect label="Importance" value={importance} onChange={(value) => setImportance(value as PriorityLevel | '')}>
-          <option value="">Unset</option>
-          {PRIORITY_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
-        </CompactSelect>
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-1.5 gap-y-[7px]">
+        <div className={`${chipBase} max-w-full gap-1.5 border border-outline-variant/55 bg-surface-container px-[11px] text-on-surface`} title={`Location: ${projectName}`}>
+          <span className="material-symbols-outlined text-[15px]" aria-hidden>folder_open</span>
+          <span className="truncate">{projectName}</span>
+        </div>
+
+        <AttributeChip
+          label="Due"
+          icon="calendar_today"
+          value={dueLabel(deadlineDate, today, tomorrow, nextWeek)}
+          open={openPicker === 'due'}
+          onToggle={() => setOpenPicker((current) => current === 'due' ? null : 'due')}
+          onClear={() => { setDeadlineDate(''); setDeadlineAt('') }}
+        >
+          <ChipMenu label="Due" options={[
+            { label: 'Today', icon: 'today', active: deadlineDate === today, onSelect: () => setDueDate(today) },
+            { label: 'Tomorrow', icon: 'event', active: deadlineDate === tomorrow, onSelect: () => setDueDate(tomorrow) },
+            { label: 'Next week', icon: 'date_range', active: deadlineDate === nextWeek, onSelect: () => setDueDate(nextWeek) },
+            { label: 'Pick a date…', icon: 'calendar_month', active: Boolean(deadlineDate) && ![today, tomorrow, nextWeek].includes(deadlineDate), onSelect: showDatePicker },
+          ]} />
+        </AttributeChip>
+
+        <AttributeChip
+          label="Urgency"
+          icon="bolt"
+          value={capitalize(urgency)}
+          open={openPicker === 'urgency'}
+          onToggle={() => setOpenPicker((current) => current === 'urgency' ? null : 'urgency')}
+          onClear={() => setUrgency('')}
+        >
+          <PriorityMenu label="Urgency" value={urgency} onSelect={(value) => { setUrgency(value); setOpenPicker(null) }} />
+        </AttributeChip>
+
+        <AttributeChip
+          label="Impact"
+          icon="flag"
+          value={capitalize(importance)}
+          open={openPicker === 'impact'}
+          onToggle={() => setOpenPicker((current) => current === 'impact' ? null : 'impact')}
+          onClear={() => setImportance('')}
+        >
+          <PriorityMenu label="Impact" value={importance} onSelect={(value) => { setImportance(value); setOpenPicker(null) }} />
+        </AttributeChip>
+
+        <AttributeChip
+          label="Type"
+          icon="sell"
+          value={selectedType?.name ?? ''}
+          open={openPicker === 'type'}
+          onToggle={() => setOpenPicker((current) => current === 'type' ? null : 'type')}
+          onClear={() => setTaskTypeId('')}
+        >
+          <ChipMenu label="Type" options={taskTypes.map((taskType) => ({
+            label: taskType.name,
+            icon: taskTypeIcon(taskType.name),
+            active: taskType.id === Number(taskTypeId),
+            onSelect: () => { setTaskTypeId(String(taskType.id)); setOpenPicker(null) },
+          }))} />
+        </AttributeChip>
       </div>
 
-      <fieldset className="mt-3 rounded-xl bg-surface-container-low p-2.5 dark:bg-dark-surface-container">
-        <legend className="px-1 font-label text-[10px] uppercase tracking-[0.12em] text-on-surface-variant">Deadline</legend>
-        <div className="flex flex-wrap gap-1.5">
-          <ShortcutButton active={deadlineMode === 'date' && deadlineDate === today} onClick={() => updateDate(today)}>Today</ShortcutButton>
-          <ShortcutButton active={deadlineMode === 'date' && deadlineDate === addCalendarDays(today, 1)} onClick={() => updateDate(addCalendarDays(today, 1))}>Tomorrow</ShortcutButton>
-          <select
-            aria-label="Deadline mode"
-            value={deadlineMode}
-            onChange={(event) => setMode(event.target.value as DeadlineMode)}
-            className="min-w-0 flex-1 rounded-lg bg-surface-container-lowest px-2 py-1.5 text-xs outline-none dark:bg-dark-surface-container-lowest"
-          >
-            <option value="none">No date</option>
-            <option value="date">Date</option>
-            <option value="datetime">Date & time</option>
-          </select>
-        </div>
-        {deadlineMode === 'date' ? (
-          <input aria-label="New task deadline date" type="date" value={deadlineDate} onChange={(event) => updateDate(event.target.value)} className="mt-2 w-full rounded-lg bg-surface-container-lowest px-2 py-1.5 text-xs dark:bg-dark-surface-container-lowest" />
-        ) : null}
-        {deadlineMode === 'datetime' ? (
-          <input aria-label="New task deadline date and time" type="datetime-local" value={deadlineAt} onChange={(event) => updateDateTime(event.target.value)} className="mt-2 w-full rounded-lg bg-surface-container-lowest px-2 py-1.5 text-xs dark:bg-dark-surface-container-lowest" />
-        ) : null}
-        {deadlineMode !== 'none' ? (
-          <div className="mt-2 border-t border-outline-variant/20 pt-2 dark:border-dark-outline-variant/30">
-            <label className="flex items-center justify-between gap-2 text-xs">
-              <span>Reminder</span>
-              <input type="checkbox" checked={Boolean(reminderAt)} disabled={!hasDeadline} onChange={(event) => toggleReminder(event.target.checked)} />
-            </label>
-            {reminderAt ? (
-              <input aria-label="New task reminder date and time" type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} className="mt-2 w-full rounded-lg bg-surface-container-lowest px-2 py-1.5 text-xs dark:bg-dark-surface-container-lowest" />
-            ) : null}
-          </div>
-        ) : null}
-      </fieldset>
+      <input
+        ref={dateInputRef}
+        aria-label="New task deadline date"
+        type="date"
+        value={deadlineDate}
+        onChange={(event) => setDueDate(event.target.value)}
+        className="sr-only"
+        tabIndex={-1}
+      />
 
-      <div className="mt-3 flex items-center justify-end gap-2">
-        <button type="button" disabled={busy} onClick={close} className="rounded-lg px-3 py-2 text-xs text-on-surface-variant disabled:opacity-40">Cancel</button>
-        <button type="submit" disabled={busy || !title.trim()} className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-on-primary disabled:opacity-40">
-          {busy ? 'Adding…' : 'Add task'}
+      <div className="mt-3 flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          aria-label="Cancel"
+          disabled={busy}
+          onClick={close}
+          className="flex size-8 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low disabled:opacity-40"
+        >
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>close</span>
+        </button>
+        <button
+          type="submit"
+          aria-label="Add task"
+          disabled={busy || !title.trim()}
+          className="flex size-[34px] items-center justify-center rounded-full bg-on-surface text-on-primary transition disabled:cursor-not-allowed disabled:bg-surface-container-high disabled:text-inverse-on-surface"
+        >
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>arrow_upward</span>
         </button>
       </div>
     </form>
   )
 }
 
-function CompactSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+function AttributeChip({
+  label,
+  icon,
+  value,
+  open,
+  onToggle,
+  onClear,
+  children,
+}: {
+  label: string
+  icon: string
+  value: string
+  open: boolean
+  onToggle: () => void
+  onClear: () => void
+  children: React.ReactNode
+}) {
+  const isSet = Boolean(value)
   return (
-    <label className="min-w-0">
-      <span className="sr-only">{label}</span>
-      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="w-full truncate rounded-lg bg-surface-container-low px-2 py-2 text-xs capitalize outline-none dark:bg-dark-surface-container">
-        {children}
-      </select>
-    </label>
-  )
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-lg bg-surface-container-low px-2 py-2 text-xs dark:bg-dark-surface-container" title={`${label}: ${value}`}>
-      <span className="sr-only">{label}: </span>
-      <span className="block truncate">{value}</span>
+    <div className="relative" data-picker={label.toLowerCase()}>
+      <div className={[
+        chipBase,
+        open
+          ? 'border border-primary bg-primary-fixed text-on-surface'
+          : isSet
+            ? 'border border-outline-variant/55 bg-surface-container text-on-surface'
+            : 'border border-dashed border-outline-variant/85 bg-transparent text-outline',
+      ].join(' ')}>
+        <button
+          type="button"
+          aria-label={label}
+          aria-expanded={open}
+          onClick={onToggle}
+          className={`flex h-full min-w-0 items-center gap-1.5 ${isSet ? 'pl-[11px]' : 'px-[11px]'}`}
+        >
+          <span className="material-symbols-outlined text-[15px]" aria-hidden>{icon}</span>
+          <span className="max-w-32 truncate">{value || label}</span>
+        </button>
+        {isSet ? (
+          <button
+            type="button"
+            aria-label="Clear"
+            onClick={onClear}
+            className="h-[30px] py-0 pl-0.5 pr-[9px] text-[13px] text-outline transition-colors hover:text-on-surface"
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+      {open ? children : null}
     </div>
   )
 }
 
-function ShortcutButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function PriorityMenu({ label, value, onSelect }: { label: string; value: PriorityLevel | ''; onSelect: (value: PriorityLevel) => void }) {
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} className={`rounded-lg px-2 py-1.5 text-xs ${active ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest dark:bg-dark-surface-container-lowest'}`}>
-      {children}
-    </button>
+    <ChipMenu label={label} options={[...PRIORITY_LEVELS].reverse().map((level) => ({
+      label: capitalize(level),
+      icon: priorityIcons[level],
+      active: value === level,
+      onSelect: () => onSelect(level),
+    }))} />
   )
+}
+
+function ChipMenu({ label, options }: {
+  label: string
+  options: Array<{ label: string; icon: string; active: boolean; onSelect: () => void }>
+}) {
+  return (
+    <div role="menu" aria-label={label} className="absolute left-0 top-[38px] z-30 min-w-[196px] rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 shadow-[0_18px_40px_rgba(45,52,53,0.16)]">
+      {options.map((option) => (
+        <button
+          key={option.label}
+          type="button"
+          role="menuitemradio"
+          aria-checked={option.active}
+          onClick={option.onSelect}
+          className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] text-on-surface transition hover:bg-surface-container-low"
+        >
+          <span className="material-symbols-outlined text-[17px] text-outline" aria-hidden>{option.icon}</span>
+          <span className="min-w-0 flex-1 truncate">{option.label}</span>
+          <span className={`text-xs text-primary ${option.active ? 'opacity-100' : 'opacity-0'}`} aria-hidden>✓</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function capitalize(value: string) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : ''
+}
+
+function normalizeShortcut(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function taskTypeIcon(name: string) {
+  const normalized = name.toLowerCase()
+  if (normalized.includes('deep')) return 'psychology'
+  if (normalized.includes('errand')) return 'directions_walk'
+  if (normalized.includes('admin')) return 'inbox'
+  return 'sell'
+}
+
+function dueLabel(value: string, today: string, tomorrow: string, nextWeek: string) {
+  if (!value) return ''
+  if (value === today) return 'Today'
+  if (value === tomorrow) return 'Tomorrow'
+  if (value === nextWeek) return 'Next week'
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    .format(new Date(`${value}T12:00:00Z`))
 }

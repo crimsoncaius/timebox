@@ -161,6 +161,10 @@ def _next_position(db: Session, status: TaskStatus) -> int:
 def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
     title = _clean_title(body.title)
     _validate_deadline(body.deadline_date, body.deadline_at)
+    status = TaskStatus.open if body.status == TaskStatus.blocked else body.status
+    is_blocked = body.is_blocked or body.status == TaskStatus.blocked
+    if status == TaskStatus.completed:
+        is_blocked = False
     parent = None
     project_id = body.project_id
     if body.parent_id is not None:
@@ -175,7 +179,9 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
         title=title,
         description=body.description,
         ready_to_plan=body.ready_to_plan,
-        status=body.status,
+        is_blocked=is_blocked,
+        blocking_reason=(body.blocking_reason.strip() or None) if is_blocked and body.blocking_reason else None,
+        status=status,
         project_id=project_id,
         parent_id=body.parent_id,
         task_type_id=body.task_type_id,
@@ -184,7 +190,7 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
         deadline_date=body.deadline_date,
         deadline_at=body.deadline_at,
         reminder_at=body.reminder_at,
-        position=(len(parent.subtasks) if parent is not None else _next_position(db, body.status)),
+        position=(len(parent.subtasks) if parent is not None else _next_position(db, status)),
     )
     _validate_reminder(row, settings)
     db.add(row)
@@ -205,7 +211,22 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     if "ready_to_plan" in fields and body.ready_to_plan is not None:
         row.ready_to_plan = body.ready_to_plan
     if "status" in fields and body.status is not None:
-        row.status = body.status
+        if body.status == TaskStatus.blocked:
+            row.status = TaskStatus.open
+            row.is_blocked = True
+        else:
+            row.status = body.status
+        if row.status == TaskStatus.completed:
+            row.is_blocked = False
+            row.blocking_reason = None
+    if "is_blocked" in fields and body.is_blocked is not None:
+        row.is_blocked = body.is_blocked and row.status != TaskStatus.completed
+        if not row.is_blocked:
+            row.blocking_reason = None
+    if "blocking_reason" in fields:
+        row.blocking_reason = (body.blocking_reason or "").strip() or None
+        if row.blocking_reason is not None and row.status != TaskStatus.completed:
+            row.is_blocked = True
     if "project_id" in fields:
         if row.parent_id is not None:
             raise ValueError("A subtask inherits its parent's project")
@@ -303,6 +324,8 @@ def _to_read(
         title=task.title,
         description=task.description,
         ready_to_plan=task.ready_to_plan,
+        is_blocked=task.is_blocked,
+        blocking_reason=task.blocking_reason,
         status=task.status,
         urgency=task.urgency,
         importance=task.importance,
@@ -370,7 +393,14 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
         row = rows[item.task_id]
         if row.parent_id is not None or row.archived_at is not None or row.deleted_at is not None:
             raise ValueError("Only active parent tasks can be reordered")
-        row.status = item.status
+        if item.status == TaskStatus.blocked:
+            row.status = TaskStatus.open
+            row.is_blocked = True
+        else:
+            row.status = item.status
+        if row.status == TaskStatus.completed:
+            row.is_blocked = False
+            row.blocking_reason = None
         row.position = item.position
     db.commit()
 

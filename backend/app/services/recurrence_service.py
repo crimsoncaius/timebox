@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import now_in_tz, today_in_tz
+from app.core.time import get_zone, today_in_tz
 from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
     Project,
@@ -59,6 +59,12 @@ class Window:
 
 def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+def _date_in_tz(value: dt.datetime, tz_name: str) -> dt.date:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=dt.timezone.utc)
+    return value.astimezone(get_zone(tz_name)).date()
 
 
 def _json_list(value: str) -> list:
@@ -522,9 +528,10 @@ def resume_template(db: Session, template_id: int, settings: Settings) -> Recurr
     if row.status != RecurrenceStatus.paused:
         raise ValueError("Only paused templates can be resumed")
     today = today_in_tz(settings.app_timezone)
-    paused = row.paused_at.date() if row.paused_at is not None else today
+    paused = _date_in_tz(row.paused_at, settings.app_timezone) if row.paused_at is not None else today
     app_settings = db.execute(select(AppSettings).where(AppSettings.id == 1)).scalar_one_or_none()
-    _suppress_pause_interval(db, row, paused, today, app_settings.week_start if app_settings else "monday")
+    if paused < today:
+        _suppress_pause_interval(db, row, paused, today, app_settings.week_start if app_settings else "monday")
     row.status = RecurrenceStatus.active
     row.paused_at = None
     db.commit()
@@ -579,10 +586,19 @@ def _cadence(row: RecurringTemplate) -> str:
 def to_read(db: Session, row: RecurringTemplate, settings: Settings) -> RecurringTemplateRead:
     today = today_in_tz(settings.app_timezone)
     app_settings = db.execute(select(AppSettings).where(AppSettings.id == 1)).scalar_one_or_none()
+    suppressed_keys = set(db.execute(select(RecurrenceOccurrence.occurrence_key).where(
+        RecurrenceOccurrence.template_id == row.id,
+        RecurrenceOccurrence.suppressed.is_(True),
+        RecurrenceOccurrence.cycle_end >= today,
+    )).scalars())
     windows = [
         window for window in iter_windows(
             row, today + relativedelta(years=20), app_settings.week_start if app_settings else "monday"
-        ) if window.end >= today and window.start >= row.generation_start_date
+        ) if (
+            window.end >= today
+            and window.start >= row.generation_start_date
+            and window.key not in suppressed_keys
+        )
     ][:5]
     tasks = list(db.execute(select(Task).where(
         Task.recurring_template_id == row.id,

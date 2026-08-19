@@ -454,9 +454,9 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
       : Number(scope.slice(8))
   return (
     <section ref={ref} aria-label={`${STATUS_LABELS[status]} tasks`} className={`min-h-72 rounded-3xl bg-surface-container-low p-3 transition-colors dark:bg-dark-surface-container-low ${isDropTarget ? 'ring-1 ring-primary/30' : ''}`}>
-      <div className="flex items-center justify-between px-2 py-2">
+      <div className="flex items-center justify-between px-1.5 pb-3 pt-1">
         <h2 className="font-headline text-sm font-normal tracking-tight">{STATUS_LABELS[status]}</h2>
-        <span className="text-xs text-on-surface-variant">{tasks.length}</span>
+        <span className="text-[13px] text-outline">{tasks.length}</span>
       </div>
       <TaskComposer
         key={`${scope}:${status}`}

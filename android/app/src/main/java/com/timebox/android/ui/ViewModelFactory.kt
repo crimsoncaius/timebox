@@ -8,6 +8,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.ui.chronicle.ChronicleViewModel
+import com.timebox.android.ui.battleplan.BattlePlanViewModel
+import com.timebox.android.ui.battleplan.ProjectEditorViewModel
+import com.timebox.android.ui.battleplan.RecurringEditorViewModel
+import com.timebox.android.ui.battleplan.RecurringViewModel
+import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.day.DayViewModel
 import com.timebox.android.ui.review.ReviewViewModel
 import com.timebox.android.ui.settings.SettingsViewModel
@@ -27,4 +32,9 @@ fun timeboxViewModelFactory(repository: TimeboxRepository): ViewModelProvider.Fa
         initializer { TypesViewModel(repository) }
         initializer { SettingsViewModel(repository) }
         initializer { ReviewViewModel(repository) }
+        initializer { BattlePlanViewModel(repository) }
+        initializer { TaskDetailViewModel(repository) }
+        initializer { ProjectEditorViewModel(repository) }
+        initializer { RecurringViewModel(repository) }
+        initializer { RecurringEditorViewModel(repository) }
     }

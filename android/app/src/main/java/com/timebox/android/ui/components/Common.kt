@@ -1,10 +1,13 @@
 package com.timebox.android.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +34,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,7 +83,12 @@ fun TimeboxSwitch(
             .clip(CircleShape)
             .background(track)
             .border(1.dp, colors.hairline, CircleShape)
-            .clickable { onCheckedChange(!checked) },
+            .semantics { stateDescription = if (checked) "On" else "Off" }
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -94,23 +107,41 @@ fun TimeboxChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    shape: Shape = TimeboxShapes.chip,
+    height: Dp? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+    textStyle: TextStyle = TimeboxTheme.type.bodySmall.copy(fontSize = 12.5.sp),
 ) {
     val colors = TimeboxTheme.colors
+    val fill by animateColorAsState(
+        targetValue = if (selected) colors.on else Color.Transparent,
+        animationSpec = tween(durationMillis = 150),
+        label = "chipFill",
+    )
+    val outline by animateColorAsState(
+        targetValue = if (selected) Color.Transparent else colors.hairline,
+        animationSpec = tween(durationMillis = 150),
+        label = "chipOutline",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) colors.bg else colors.on,
+        animationSpec = tween(durationMillis = 150),
+        label = "chipContent",
+    )
     Box(
         modifier = modifier
-            .clip(TimeboxShapes.chip)
-            .background(if (selected) colors.on else Color.Transparent)
-            .then(
-                if (selected) Modifier
-                else Modifier.border(1.dp, colors.hairline, TimeboxShapes.chip)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .then(if (height != null) Modifier.height(height) else Modifier)
+            .clip(shape)
+            .background(fill)
+            .border(1.dp, outline, shape)
+            .selectable(selected = selected, role = Role.Button, onClick = onClick)
+            .padding(contentPadding),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            style = TimeboxTheme.type.bodySmall.copy(fontSize = 12.5.sp),
-            color = if (selected) colors.bg else colors.on,
+            style = textStyle,
+            color = contentColor,
             maxLines = 1,
         )
     }
@@ -231,12 +262,14 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     leading: @Composable (() -> Unit)? = null,
+    height: Dp = 48.dp,
+    shape: Shape = RoundedCornerShape(24.dp),
 ) {
     val colors = TimeboxTheme.colors
     Row(
         modifier = modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .height(height)
+            .clip(shape)
             .background(if (enabled) colors.on else colors.outlineVariant)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 24.dp),

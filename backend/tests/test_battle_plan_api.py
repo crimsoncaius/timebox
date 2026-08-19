@@ -97,8 +97,27 @@ def test_reorder_changes_status_and_position(client):
     )
     assert response.status_code == 204
     by_id = {row["id"]: row for row in client.get("/tasks").json()["items"]}
-    assert by_id[second["id"]]["status"] == "blocked"
+    assert by_id[second["id"]]["status"] == "open"
+    assert by_id[second["id"]]["is_blocked"] is True
     assert by_id[first["id"]]["position"] == 4
+
+
+def test_blocked_is_an_open_task_condition_and_completed_clears_it(client):
+    task = create_task(client, "Waiting on approval")
+
+    blocked = client.patch(
+        f"/tasks/{task['id']}",
+        json={"is_blocked": True, "blocking_reason": "Legal review"},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["status"] == "open"
+    assert blocked.json()["is_blocked"] is True
+    assert blocked.json()["blocking_reason"] == "Legal review"
+
+    completed = client.patch(f"/tasks/{task['id']}", json={"status": "completed"})
+    assert completed.status_code == 200
+    assert completed.json()["is_blocked"] is False
+    assert completed.json()["blocking_reason"] is None
 
 
 def test_archive_restore_trash_and_permanent_delete(client):
