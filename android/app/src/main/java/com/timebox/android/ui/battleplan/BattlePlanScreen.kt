@@ -1,9 +1,14 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,12 +23,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -60,19 +68,27 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,10 +96,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.timebox.android.data.BattleTask
@@ -102,7 +123,8 @@ import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
-import kotlin.math.absoluteValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -323,11 +345,59 @@ private fun MobileKanbanBoard(
     onNewProject: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
+    val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
+    val dragScope = rememberCoroutineScope()
     val initialPage = battlePlanStatuses.indexOf(state.selectedStatus).coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { battlePlanStatuses.size })
     var scopeMenu by remember { mutableStateOf(false) }
     var filterSheet by remember { mutableStateOf(false) }
+    var dragLayerBounds by remember { mutableStateOf(Rect.Zero) }
+    var dragLayerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var activeDrag by remember { mutableStateOf<MobileTaskDragState?>(null) }
+    var settlingDrop by remember { mutableStateOf<MobileTaskDropSettleState?>(null) }
+    val settleProgress = remember { Animatable(0f) }
+    val cardBounds = remember { mutableStateMapOf<Pair<TaskStatus, Int>, Rect>() }
+    val dropIndicatorBounds = remember { mutableStateMapOf<Pair<TaskStatus, Int>, Rect>() }
+    val laneBounds = remember { mutableStateMapOf<TaskStatus, Rect>() }
+    val openListState = rememberLazyListState()
+    val inProgressListState = rememberLazyListState()
+    val completedListState = rememberLazyListState()
+    val laneListStates = remember(openListState, inProgressListState, completedListState) {
+        mapOf(
+            TaskStatus.Open to openListState,
+            TaskStatus.InProgress to inProgressListState,
+            TaskStatus.Completed to completedListState,
+        )
+    }
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val edgeWidthPx = with(density) { 52.dp.toPx() }
+    val insertionHysteresisPx = with(density) { 8.dp.toPx() }
+    val verticalScrollEdgePx = with(density) { 56.dp.toPx() }
+    val verticalScrollStepPx = with(density) { 18.dp.toPx() }
+
+    fun resolveTarget(drag: MobileTaskDragState, status: TaskStatus): MobileTaskDragState {
+        val candidates = state.filteredTasks.filter { it.status == status && it.id != drag.task.id }
+        val measuredBounds = candidates.mapIndexedNotNull { index, task ->
+            cardBounds[status to task.id]?.let { IndexedValue(index, it) }
+        }
+        val rawIndex = insertionIndexForPointer(drag.pointerInRoot.y, candidates.size, measuredBounds)
+        val targetIndex = if (drag.targetStatus == status) {
+            insertionIndexWithHysteresis(
+                pointerY = drag.pointerInRoot.y,
+                itemCount = candidates.size,
+                measuredBounds = measuredBounds,
+                currentIndex = drag.targetIndex,
+                hysteresis = insertionHysteresisPx,
+            )
+        } else {
+            rawIndex
+        }
+        return drag.copy(
+            targetStatus = status,
+            targetIndex = targetIndex,
+        )
+    }
 
     LaunchedEffect(state.selectedStatus) {
         val page = battlePlanStatuses.indexOf(state.selectedStatus).coerceAtLeast(0)
@@ -336,6 +406,74 @@ private fun MobileKanbanBoard(
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
         if (!pagerState.isScrollInProgress) onSelectStatus(battlePlanStatuses[pagerState.currentPage])
     }
+    LaunchedEffect(activeDrag?.edgeDirection, pagerState.settledPage) {
+        val direction = activeDrag?.edgeDirection ?: return@LaunchedEffect
+        if (direction == 0) return@LaunchedEffect
+        val targetPage = pagerState.settledPage + direction
+        if (targetPage !in battlePlanStatuses.indices) return@LaunchedEffect
+        delay(MobileDragEdgeDwellMillis)
+        if (activeDrag?.edgeDirection != direction) return@LaunchedEffect
+        activeDrag = activeDrag?.copy(edgeDirection = 0, edgeLocked = true)
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        dragScope.launch { pagerState.animateScrollToPage(targetPage) }
+    }
+    LaunchedEffect(pagerState.targetPage, activeDrag?.task?.id) {
+        val drag = activeDrag ?: return@LaunchedEffect
+        activeDrag = resolveTarget(drag, battlePlanStatuses[pagerState.targetPage])
+    }
+    LaunchedEffect(activeDrag?.task?.id, activeDrag?.targetStatus, activeDrag?.pointerInRoot?.y) {
+        while (true) {
+            val drag = activeDrag ?: break
+            val bounds = laneBounds[drag.targetStatus] ?: break
+            val step = verticalAutoScrollStep(
+                pointerY = drag.pointerInRoot.y,
+                laneBounds = bounds,
+                edgeSize = verticalScrollEdgePx,
+                maximumStep = verticalScrollStepPx,
+            )
+            if (step == 0f) break
+            withFrameNanos { }
+            val consumed = laneListStates.getValue(drag.targetStatus).scrollBy(step)
+            if (consumed == 0f) break
+        }
+    }
+    LaunchedEffect(settlingDrop) {
+        val settling = settlingDrop ?: run {
+            settleProgress.snapTo(0f)
+            return@LaunchedEffect
+        }
+        settleProgress.snapTo(0f)
+        settleProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = MobileDropSettleDurationMillis,
+                easing = FastOutSlowInEasing,
+            ),
+        )
+        if (settlingDrop != settling) return@LaunchedEffect
+        if (!settling.unchanged) {
+            onDropTask(settling.drag.task, settling.drag.targetStatus, settling.drag.targetIndex)
+        }
+        settlingDrop = null
+    }
+
+    val visualDrag = activeDrag ?: settlingDrop?.drag
+    val pickupProgress by animateFloatAsState(
+        targetValue = if (visualDrag == null) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = MobilePickupDurationMillis,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "battle-plan-task-pickup",
+    )
+    val sourceGapCloseProgress by animateFloatAsState(
+        targetValue = if (visualDrag == null) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = MobileSourceGapCloseDurationMillis,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "battle-plan-source-gap-close",
+    )
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -418,19 +556,130 @@ private fun MobileKanbanBoard(
             }
         }
 
-        Box(Modifier.fillMaxSize()) {
-            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onGloballyPositioned {
+                    dragLayerCoordinates = it
+                    dragLayerBounds = it.boundsInRoot()
+                }
+                .pointerInput(state.saving, state.sort, state.filteredTasks.map { it.id }) {
+                    if (state.saving || state.sort != BattlePlanSort.Manual) return@pointerInput
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { startOffset ->
+                            if (settlingDrop != null) return@detectDragGesturesAfterLongPress
+                            val coordinates = dragLayerCoordinates ?: return@detectDragGesturesAfterLongPress
+                            val pointerInRoot = coordinates.localToRoot(startOffset)
+                            val sourceStatus = battlePlanStatuses[pagerState.currentPage]
+                            val sourceTasks = state.filteredTasks.filter { it.status == sourceStatus }
+                            val task = sourceTasks.firstOrNull { candidate ->
+                                cardBounds[sourceStatus to candidate.id]?.contains(pointerInRoot) == true
+                            } ?: return@detectDragGesturesAfterLongPress
+                            val sourceIndex = sourceTasks.indexOfFirst { it.id == task.id }
+                            val drag = MobileTaskDragState(
+                                task = task,
+                                sourceIndex = sourceIndex,
+                                cardBoundsInRoot = cardBounds.getValue(sourceStatus to task.id),
+                                startPointerInRoot = pointerInRoot,
+                                pointerInRoot = pointerInRoot,
+                                targetStatus = sourceStatus,
+                                targetIndex = sourceIndex,
+                            )
+                            activeDrag = resolveTarget(drag, sourceStatus)
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDragCancel = { activeDrag = null },
+                        onDragEnd = {
+                            val drag = activeDrag ?: return@detectDragGesturesAfterLongPress
+                            val indicatorBounds = dropIndicatorBounds[drag.targetStatus to drag.targetIndex]
+                            activeDrag = null
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (indicatorBounds != null) {
+                                val landingOffset = Offset(
+                                    x = indicatorBounds.left,
+                                    y = if (drag.targetIndex == 0) indicatorBounds.top else indicatorBounds.center.y,
+                                )
+                                settlingDrop = MobileTaskDropSettleState(
+                                    drag = drag,
+                                    targetTopLeftInRoot = landingOffset,
+                                    unchanged = isUnchangedDrop(
+                                        drag.task.status,
+                                        drag.targetStatus,
+                                        drag.sourceIndex,
+                                        drag.targetIndex,
+                                    ),
+                                )
+                            } else if (!isUnchangedDrop(drag.task.status, drag.targetStatus, drag.sourceIndex, drag.targetIndex)) {
+                                onDropTask(drag.task, drag.targetStatus, drag.targetIndex)
+                            }
+                        },
+                        onDrag = { change, _ ->
+                            val drag = activeDrag ?: return@detectDragGesturesAfterLongPress
+                            val coordinates = dragLayerCoordinates ?: return@detectDragGesturesAfterLongPress
+                            change.consume()
+                            val pointerInRoot = coordinates.localToRoot(change.position)
+                            val edgeDirection = edgePageDirection(
+                                pointerX = pointerInRoot.x - dragLayerBounds.left,
+                                viewportWidth = dragLayerBounds.width,
+                                edgeWidth = edgeWidthPx,
+                                currentPage = pagerState.targetPage,
+                                pageCount = battlePlanStatuses.size,
+                            )
+                            val moved = drag.copy(
+                                pointerInRoot = pointerInRoot,
+                                edgeDirection = if (drag.edgeLocked) 0 else edgeDirection,
+                                edgeLocked = drag.edgeLocked && edgeDirection != 0,
+                            )
+                            activeDrag = resolveTarget(moved, battlePlanStatuses[pagerState.targetPage])
+                        },
+                    )
+                },
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = battlePlanStatuses.size,
+                userScrollEnabled = visualDrag == null,
+            ) { page ->
                 val status = battlePlanStatuses[page]
                 val tasks = state.filteredTasks.filter { it.status == status }
                 MobileTaskLane(
                     status = status,
                     tasks = tasks,
+                    listState = laneListStates.getValue(status),
                     taskCount = { target -> state.filteredTasks.count { it.status == target } },
-                    saving = state.saving,
                     onOpen = onOpenTask,
                     onToggleReady = onToggleReady,
                     onDrop = onDropTask,
                     onSetBlocked = onSetBlocked,
+                    activeDrag = visualDrag,
+                    sourceGapCloseProgress = sourceGapCloseProgress,
+                    onLaneBoundsChanged = { bounds ->
+                        if (bounds == null) {
+                            laneBounds.remove(status)
+                        } else if (laneBounds[status] != bounds) {
+                            laneBounds[status] = bounds
+                        }
+                    },
+                    onCardBoundsChanged = { taskId, bounds ->
+                        val key = status to taskId
+                        if (bounds == null) {
+                            cardBounds.remove(key)
+                        } else if (cardBounds[key] != bounds) {
+                            cardBounds[key] = bounds
+                        }
+                        activeDrag?.takeIf { it.targetStatus == status }?.let { drag ->
+                            activeDrag = resolveTarget(drag, status)
+                        }
+                    },
+                    onDropIndicatorBoundsChanged = { index, bounds ->
+                        val key = status to index
+                        if (bounds == null) {
+                            dropIndicatorBounds.remove(key)
+                        } else if (dropIndicatorBounds[key] != bounds) {
+                            dropIndicatorBounds[key] = bounds
+                        }
+                    },
                 )
             }
             PrimaryButton(
@@ -440,6 +689,16 @@ private fun MobileKanbanBoard(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
                 leading = { Icon(Icons.Outlined.Add, null, tint = colors.bg, modifier = Modifier.size(18.dp)) },
             )
+            visualDrag?.let { drag ->
+                val settling = settlingDrop?.takeIf { it.drag.task.id == drag.task.id }
+                MobileTaskDragPreview(
+                    drag = drag,
+                    dragLayerBounds = dragLayerBounds,
+                    pickupProgress = pickupProgress,
+                    settleTargetTopLeftInRoot = settling?.targetTopLeftInRoot,
+                    settleProgress = if (settling == null) 0f else settleProgress.value,
+                )
+            }
         }
     }
 
@@ -691,37 +950,124 @@ private fun ScopeMenuItem(
 private fun MobileTaskLane(
     status: TaskStatus,
     tasks: List<BattleTask>,
+    listState: LazyListState,
     taskCount: (TaskStatus) -> Int,
-    saving: Boolean,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
+    activeDrag: MobileTaskDragState?,
+    sourceGapCloseProgress: Float,
+    onLaneBoundsChanged: (Rect?) -> Unit,
+    onCardBoundsChanged: (Int, Rect?) -> Unit,
+    onDropIndicatorBoundsChanged: (Int, Rect?) -> Unit,
 ) {
-    if (tasks.isEmpty()) {
-        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text("No ${status.label.lowercase()} tasks", color = TimeboxTheme.colors.onVariant)
+    val density = LocalDensity.current
+    val visibleTasks = tasks.filterNot { it.id == activeDrag?.task?.id }
+    val insertionIndex = activeDrag
+        ?.takeIf { it.targetStatus == status }
+        ?.targetIndex
+        ?.coerceIn(0, visibleTasks.size)
+    val sourceGapIndex = activeDrag
+        ?.takeIf { it.task.status == status }
+        ?.sourceIndex
+        ?.coerceIn(0, visibleTasks.size)
+    val sourceGapHeight = activeDrag
+        ?.takeIf { sourceGapIndex != null }
+        ?.let { drag ->
+            val originalCardHeight = with(density) { drag.cardBoundsInRoot.height.toDp() }
+            val originalBottomSpacing = if (drag.sourceIndex < tasks.lastIndex) 10.dp else 0.dp
+            val markerHeight = if (drag.targetStatus == status && insertionIndex == sourceGapIndex) 20.dp else 0.dp
+            (originalCardHeight + originalBottomSpacing - markerHeight)
+                .coerceAtLeast(0.dp) * (1f - sourceGapCloseProgress.coerceIn(0f, 1f))
         }
-        return
+        ?: 0.dp
+
+    DisposableEffect(status) {
+        onDispose { onLaneBoundsChanged(null) }
     }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { onLaneBoundsChanged(it.boundsInRoot()) },
     ) {
-        itemsIndexed(tasks, key = { _, task -> task.id }) { index, task ->
-            MobileKanbanCard(
-                task = task,
-                index = index,
-                laneSize = tasks.size,
-                taskCount = taskCount,
-                dragEnabled = !saving,
-                onOpen = onOpen,
-                onToggleReady = onToggleReady,
-                onDrop = onDrop,
-                onSetBlocked = onSetBlocked,
-            )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
+        ) {
+            for (index in 0..visibleTasks.size) {
+                if (insertionIndex == index) {
+                    item(key = "drop-indicator-${status.name}-$index") {
+                        MobileDropIndicator(
+                            status = status,
+                            index = index,
+                            onBoundsChanged = onDropIndicatorBoundsChanged,
+                        )
+                    }
+                }
+                if (sourceGapIndex == index && sourceGapHeight > 0.dp) {
+                    item(key = "source-gap-${activeDrag?.task?.id}") {
+                        Spacer(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(sourceGapHeight)
+                                .testTag("battle-plan-source-gap"),
+                        )
+                    }
+                }
+                if (index < visibleTasks.size) {
+                    val task = visibleTasks[index]
+                    item(key = task.id) {
+                        MobileKanbanCard(
+                            task = task,
+                            index = index,
+                            laneSize = visibleTasks.size,
+                            taskCount = taskCount,
+                            bottomSpacing = if (index < visibleTasks.lastIndex && insertionIndex != index + 1) 10.dp else 0.dp,
+                            onOpen = onOpen,
+                            onToggleReady = onToggleReady,
+                            onDrop = onDrop,
+                            onSetBlocked = onSetBlocked,
+                            onBoundsChanged = onCardBoundsChanged,
+                        )
+                    }
+                }
+            }
         }
+        if (visibleTasks.isEmpty() && insertionIndex == null) {
+            Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text("No ${status.label.lowercase()} tasks", color = TimeboxTheme.colors.onVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileDropIndicator(
+    status: TaskStatus,
+    index: Int,
+    onBoundsChanged: (Int, Rect?) -> Unit,
+) {
+    DisposableEffect(status, index) {
+        onDispose { onBoundsChanged(index, null) }
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(20.dp)
+            .testTag("battle-plan-drop-indicator-${status.name.lowercase()}-$index")
+            .onGloballyPositioned { onBoundsChanged(index, it.boundsInRoot()) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp))
+                .background(TimeboxTheme.colors.planned),
+        )
     }
 }
 
@@ -731,113 +1077,75 @@ private fun MobileKanbanCard(
     index: Int,
     laneSize: Int,
     taskCount: (TaskStatus) -> Int,
-    dragEnabled: Boolean,
+    bottomSpacing: Dp,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
+    onBoundsChanged: (Int, Rect?) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    val density = LocalDensity.current
-    val haptics = LocalHapticFeedback.current
-    val cardStride = with(density) { 118.dp.toPx() }
-    val edgeThreshold = with(density) { 88.dp.toPx() }
-    var dragOffset by remember(task.id) { mutableStateOf(Offset.Zero) }
-    var dragging by remember(task.id) { mutableStateOf(false) }
     var menu by remember(task.id) { mutableStateOf(false) }
     var blockDialog by remember(task.id) { mutableStateOf(false) }
     var blockingReason by remember(task.id, blockDialog) { mutableStateOf(task.blockingReason.orEmpty()) }
-    val statusIndex = battlePlanStatuses.indexOf(task.status).coerceAtLeast(0)
 
-    Column(
-        Modifier.fillMaxWidth()
-            .zIndex(if (dragging) 2f else 0f)
-            .graphicsLayer {
-                translationX = dragOffset.x
-                translationY = dragOffset.y
-                scaleX = if (dragging) 1.02f else 1f
-                scaleY = if (dragging) 1.02f else 1f
-                shadowElevation = if (dragging) 14f else 0f
-            }
-            .clip(TimeboxShapes.card)
-            .background(colors.lowest)
-            .pointerInput(task.id, dragEnabled, laneSize) {
-                if (!dragEnabled) return@pointerInput
-                detectDragGesturesAfterLongPress(
-                    onDragStart = {
-                        dragging = true
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onDragCancel = { dragging = false; dragOffset = Offset.Zero },
-                    onDragEnd = {
-                        val horizontal = when {
-                            dragOffset.x > edgeThreshold -> 1
-                            dragOffset.x < -edgeThreshold -> -1
-                            else -> 0
-                        }
-                        val targetStatus = battlePlanStatuses[(statusIndex + horizontal).coerceIn(battlePlanStatuses.indices)]
-                        val targetSize = if (targetStatus == task.status) laneSize - 1 else taskCount(targetStatus)
-                        val targetIndex = (index + (dragOffset.y / cardStride).roundToInt()).coerceIn(0, targetSize.coerceAtLeast(0))
-                        dragging = false
-                        dragOffset = Offset.Zero
-                        onDrop(task, targetStatus, targetIndex)
-                    },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragOffset += amount
-                    },
-                )
-            }
-            .clickable(enabled = !dragging) { onOpen(task.id) }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.Top) {
-            Text(task.title, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            IconButton(onClick = { onToggleReady(task) }, modifier = Modifier.size(38.dp)) {
-                Icon(
-                    if (task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
-                    contentDescription = if (task.readyToPlan) "Remove ${task.title} from Ready to Plan" else "Add ${task.title} to Ready to Plan",
-                    tint = if (task.readyToPlan) colors.planned else colors.onVariant,
-                )
-            }
-            Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.size(38.dp)) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
+    DisposableEffect(task.id) {
+        onDispose { onBoundsChanged(task.id, null) }
+    }
+
+    Box(Modifier.fillMaxWidth().padding(bottom = bottomSpacing)) {
+        Column(
+            Modifier.fillMaxWidth()
+                .testTag("battle-plan-task-${task.id}")
+                .onGloballyPositioned { onBoundsChanged(task.id, it.boundsInRoot()) }
+                .clip(TimeboxShapes.card)
+                .background(colors.lowest)
+                .clickable { onOpen(task.id) }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(task.title, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                IconButton(onClick = { onToggleReady(task) }, modifier = Modifier.size(38.dp)) {
+                    Icon(
+                        if (task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
+                        contentDescription = if (task.readyToPlan) "Remove ${task.title} from Ready to Plan" else "Add ${task.title} to Ready to Plan",
+                        tint = if (task.readyToPlan) colors.planned else colors.onVariant,
+                    )
                 }
-                DropdownMenu(menu, { menu = false }) {
-                    if (index > 0) DropdownMenuItem({ Text("Move earlier") }, { menu = false; onDrop(task, task.status, index - 1) })
-                    if (index < laneSize - 1) DropdownMenuItem({ Text("Move later") }, { menu = false; onDrop(task, task.status, index + 1) })
-                    battlePlanStatuses.filter { it != task.status }.forEach { target ->
-                        DropdownMenuItem({ Text("Move to ${target.label}") }, { menu = false; onDrop(task, target, taskCount(target)) })
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
+                    }
+                    DropdownMenu(menu, { menu = false }) {
+                        if (index > 0) DropdownMenuItem({ Text("Move earlier") }, { menu = false; onDrop(task, task.status, index - 1) })
+                        if (index < laneSize - 1) DropdownMenuItem({ Text("Move later") }, { menu = false; onDrop(task, task.status, index + 1) })
+                        battlePlanStatuses.filter { it != task.status }.forEach { target ->
+                            DropdownMenuItem({ Text("Move to ${target.label}") }, { menu = false; onDrop(task, target, taskCount(target)) })
+                        }
                     }
                 }
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(task.project?.name ?: "Admin", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            TextButton(onClick = {
-                if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
-            }) {
-                Text(if (task.isBlocked) "Blocked" else "Block", color = if (task.isBlocked) colors.error else colors.onVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(task.project?.name ?: "Admin", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TextButton(onClick = {
+                    if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
+                }) {
+                    Text(if (task.isBlocked) "Blocked" else "Block", color = if (task.isBlocked) colors.error else colors.onVariant)
+                }
             }
-        }
-        task.blockingReason?.takeIf { task.isBlocked }?.let {
-            Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        val metadata = buildList {
-            task.deadlineDate?.let { add("Due $it") }
-            task.urgency?.let { add("U ${it.wire}") }
-            task.importance?.let { add("I ${it.wire}") }
-            if (task.subtasks.isNotEmpty()) add("${task.subtasks.count { it.status == TaskStatus.Completed }}/${task.subtasks.size} subtasks")
-        }
-        if (metadata.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
-            Text(metadata.joinToString("  ·  "), style = TimeboxTheme.type.bodySmall, color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (dragging && dragOffset.x.absoluteValue > edgeThreshold) {
-            val direction = if (dragOffset.x > 0) 1 else -1
-            val target = battlePlanStatuses[(statusIndex + direction).coerceIn(battlePlanStatuses.indices)]
-            Text("Drop in ${target.label}", style = TimeboxTheme.type.bodySmall, color = colors.planned)
+            task.blockingReason?.takeIf { task.isBlocked }?.let {
+                Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            val metadata = buildList {
+                task.deadlineDate?.let { add("Due $it") }
+                task.urgency?.let { add("U ${it.wire}") }
+                task.importance?.let { add("I ${it.wire}") }
+                if (task.subtasks.isNotEmpty()) add("${task.subtasks.count { it.status == TaskStatus.Completed }}/${task.subtasks.size} subtasks")
+            }
+            if (metadata.isNotEmpty()) {
+                Spacer(Modifier.height(3.dp))
+                Text(metadata.joinToString("  ·  "), style = TimeboxTheme.type.bodySmall, color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 
@@ -849,6 +1157,210 @@ private fun MobileKanbanCard(
             confirmButton = { TextButton(onClick = { blockDialog = false; onSetBlocked(task, true, blockingReason) }) { Text("Mark blocked") } },
             dismissButton = { TextButton(onClick = { blockDialog = false }) { Text("Cancel") } },
         )
+    }
+}
+
+private data class MobileTaskDragState(
+    val task: BattleTask,
+    val sourceIndex: Int,
+    val cardBoundsInRoot: Rect,
+    val startPointerInRoot: Offset,
+    val pointerInRoot: Offset,
+    val targetStatus: TaskStatus,
+    val targetIndex: Int,
+    val edgeDirection: Int = 0,
+    val edgeLocked: Boolean = false,
+)
+
+private data class MobileTaskDropSettleState(
+    val drag: MobileTaskDragState,
+    val targetTopLeftInRoot: Offset,
+    val unchanged: Boolean,
+)
+
+private const val MobileDragEdgeDwellMillis = 400L
+private const val MobilePickupDurationMillis = 220
+private const val MobileSourceGapCloseDurationMillis = 240
+private const val MobileDropSettleDurationMillis = 220
+
+internal val MobilePickupProgressKey = SemanticsPropertyKey<Float>("MobilePickupProgress")
+private var SemanticsPropertyReceiver.mobilePickupProgress by MobilePickupProgressKey
+
+internal fun insertionIndexForPointer(
+    pointerY: Float,
+    itemCount: Int,
+    measuredBounds: List<IndexedValue<Rect>>,
+): Int {
+    if (itemCount == 0 || measuredBounds.isEmpty()) return 0
+    val ordered = measuredBounds.sortedBy { it.index }
+    val next = ordered.firstOrNull { pointerY < it.value.center.y }
+    return (next?.index ?: (ordered.last().index + 1)).coerceIn(0, itemCount)
+}
+
+internal fun insertionIndexWithHysteresis(
+    pointerY: Float,
+    itemCount: Int,
+    measuredBounds: List<IndexedValue<Rect>>,
+    currentIndex: Int,
+    hysteresis: Float,
+): Int {
+    val raw = insertionIndexForPointer(pointerY, itemCount, measuredBounds)
+    val current = currentIndex.coerceIn(0, itemCount)
+    if (raw == current || hysteresis <= 0f) return raw
+    val boundaryIndex = if (raw > current) current else current - 1
+    val boundary = measuredBounds.firstOrNull { it.index == boundaryIndex }?.value?.center?.y ?: return raw
+    return when {
+        raw > current && pointerY <= boundary + hysteresis -> current
+        raw < current && pointerY >= boundary - hysteresis -> current
+        else -> raw
+    }
+}
+
+internal fun verticalAutoScrollStep(
+    pointerY: Float,
+    laneBounds: Rect,
+    edgeSize: Float,
+    maximumStep: Float,
+): Float = when {
+    edgeSize <= 0f || maximumStep <= 0f -> 0f
+    pointerY < laneBounds.top + edgeSize -> {
+        val strength = ((laneBounds.top + edgeSize - pointerY) / edgeSize).coerceIn(0f, 1f)
+        -maximumStep * strength
+    }
+    pointerY > laneBounds.bottom - edgeSize -> {
+        val strength = ((pointerY - (laneBounds.bottom - edgeSize)) / edgeSize).coerceIn(0f, 1f)
+        maximumStep * strength
+    }
+    else -> 0f
+}
+
+internal fun isUnchangedDrop(
+    sourceStatus: TaskStatus,
+    targetStatus: TaskStatus,
+    sourceIndex: Int,
+    targetIndex: Int,
+): Boolean = sourceStatus == targetStatus && sourceIndex == targetIndex
+
+internal fun edgePageDirection(
+    pointerX: Float,
+    viewportWidth: Float,
+    edgeWidth: Float,
+    currentPage: Int,
+    pageCount: Int,
+): Int = when {
+    pointerX <= edgeWidth && currentPage > 0 -> -1
+    pointerX >= viewportWidth - edgeWidth && currentPage < pageCount - 1 -> 1
+    else -> 0
+}
+
+@Composable
+private fun MobileTaskDragPreview(
+    drag: MobileTaskDragState,
+    dragLayerBounds: Rect,
+    pickupProgress: Float,
+    settleTargetTopLeftInRoot: Offset?,
+    settleProgress: Float,
+) {
+    val colors = TimeboxTheme.colors
+    val density = LocalDensity.current
+    val delta = drag.pointerInRoot - drag.startPointerInRoot
+    val width = with(density) { drag.cardBoundsInRoot.width.toDp() }
+    val pickupLiftPx = with(density) { 2.dp.toPx() }
+    val draggedTopLeftInRoot = Offset(
+        x = drag.cardBoundsInRoot.left + delta.x,
+        y = drag.cardBoundsInRoot.top + delta.y,
+    )
+    val progress = settleProgress.coerceIn(0f, 1f)
+    val liftProgress = pickupProgress.coerceIn(0f, 1f) * (1f - progress)
+    val currentTopLeftInRoot = settleTargetTopLeftInRoot?.let { target ->
+        draggedTopLeftInRoot + (target - draggedTopLeftInRoot) * progress
+    } ?: draggedTopLeftInRoot
+    val left = currentTopLeftInRoot.x - dragLayerBounds.left
+    val top = currentTopLeftInRoot.y - dragLayerBounds.top - (pickupLiftPx * liftProgress)
+
+    Column(
+        Modifier
+            .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
+            .width(width)
+            .zIndex(4f)
+            .testTag("battle-plan-drag-preview")
+            .semantics { mobilePickupProgress = pickupProgress }
+            .graphicsLayer {
+                alpha = 1f - (0.25f * liftProgress)
+                scaleX = 1f + (0.02f * liftProgress)
+                scaleY = 1f + (0.02f * liftProgress)
+                shadowElevation = 14f * liftProgress
+                shape = TimeboxShapes.card
+            }
+            .clip(TimeboxShapes.card)
+            .background(colors.lowest)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                drag.task.title,
+                style = TimeboxTheme.type.label,
+                color = colors.on,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                if (drag.task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
+                contentDescription = null,
+                tint = if (drag.task.readyToPlan) colors.planned else colors.onVariant,
+                modifier = Modifier.padding(7.dp).size(24.dp),
+            )
+            Icon(
+                Icons.Outlined.MoreVert,
+                contentDescription = null,
+                tint = colors.onVariant,
+                modifier = Modifier.padding(7.dp).size(24.dp),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                drag.task.project?.name ?: "Admin",
+                style = TimeboxTheme.type.bodySmall,
+                color = colors.onVariant,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                if (drag.task.isBlocked) "Blocked" else "Block",
+                style = TimeboxTheme.type.label,
+                color = if (drag.task.isBlocked) colors.error else colors.onVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            )
+        }
+        drag.task.blockingReason?.takeIf { drag.task.isBlocked }?.let {
+            Text(
+                it,
+                style = TimeboxTheme.type.bodySmall,
+                color = colors.error,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val metadata = buildList {
+            drag.task.deadlineDate?.let { add("Due $it") }
+            drag.task.urgency?.let { add("U ${it.wire}") }
+            drag.task.importance?.let { add("I ${it.wire}") }
+            if (drag.task.subtasks.isNotEmpty()) {
+                add("${drag.task.subtasks.count { it.status == TaskStatus.Completed }}/${drag.task.subtasks.size} subtasks")
+            }
+        }
+        if (metadata.isNotEmpty()) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                metadata.joinToString("  ·  "),
+                style = TimeboxTheme.type.bodySmall,
+                color = colors.onVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

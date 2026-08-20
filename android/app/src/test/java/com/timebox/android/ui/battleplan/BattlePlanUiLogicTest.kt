@@ -1,5 +1,6 @@
 package com.timebox.android.ui.battleplan
 
+import androidx.compose.ui.geometry.Rect
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.BattlePlanSort
 import com.timebox.android.data.PriorityLevel
@@ -74,6 +75,41 @@ class BattlePlanUiLogicTest {
     }
 
     @Test
+    fun sameStatusDropUsesTheListAfterRemovingTheSourceTask() {
+        val moving = task(2, status = TaskStatus.Open, position = 1)
+        val placements = dropTaskPlacements(
+            tasks = listOf(
+                task(1, status = TaskStatus.Open, position = 0),
+                moving,
+                task(3, status = TaskStatus.Open, position = 2),
+            ),
+            visible = listOf(task(1, position = 0), moving, task(3, position = 2)),
+            moving = moving,
+            target = TaskStatus.Open,
+            targetIndex = 2,
+        )
+
+        assertEquals(listOf(1, 3, 2), placements.sortedBy { it.position }.map { it.taskId })
+    }
+
+    @Test
+    fun dropIntoAnEmptyStatusUsesPositionZero() {
+        val moving = task(2, status = TaskStatus.Open, position = 1)
+        val placements = dropTaskPlacements(
+            tasks = listOf(task(1, position = 0), moving),
+            visible = listOf(task(1, position = 0), moving),
+            moving = moving,
+            target = TaskStatus.Completed,
+            targetIndex = 0,
+        )
+
+        assertEquals(
+            listOf(Triple(1, TaskStatus.Open, 0), Triple(2, TaskStatus.Completed, 0)),
+            placements.map { Triple(it.taskId, it.status, it.position) },
+        )
+    }
+
+    @Test
     fun sortingMatchesWebPriorityAndDeadlineRules() {
         val low = task(1, position = 0, urgency = PriorityLevel.Low, deadlineDate = LocalDate.parse("2026-09-02"))
         val unset = task(2, position = 1)
@@ -96,6 +132,69 @@ class BattlePlanUiLogicTest {
         assertEquals(30, trashRetentionDays(deleted.plusSeconds(23 * 3600), deleted))
         assertEquals(29, trashRetentionDays(deleted.plusSeconds(24 * 3600), deleted))
         assertEquals(0, trashRetentionDays(deleted.plusSeconds(35 * 24 * 3600), deleted))
+    }
+
+    @Test
+    fun dragAtAnAvailableScreenEdgeRequestsTheAdjacentPage() {
+        assertEquals(-1, edgePageDirection(20f, 400f, 52f, currentPage = 1, pageCount = 3))
+        assertEquals(1, edgePageDirection(380f, 400f, 52f, currentPage = 1, pageCount = 3))
+        assertEquals(0, edgePageDirection(200f, 400f, 52f, currentPage = 1, pageCount = 3))
+    }
+
+    @Test
+    fun dragAtTheOuterBoardEdgesDoesNotRequestANonexistentPage() {
+        assertEquals(0, edgePageDirection(20f, 400f, 52f, currentPage = 0, pageCount = 3))
+        assertEquals(0, edgePageDirection(380f, 400f, 52f, currentPage = 2, pageCount = 3))
+    }
+
+    @Test
+    fun pointerPositionResolvesInsertionAroundVariableHeightCards() {
+        val bounds = listOf(
+            IndexedValue(0, Rect(0f, 100f, 300f, 140f)),
+            IndexedValue(1, Rect(0f, 150f, 300f, 250f)),
+            IndexedValue(2, Rect(0f, 260f, 300f, 320f)),
+        )
+
+        assertEquals(0, insertionIndexForPointer(90f, 3, bounds))
+        assertEquals(1, insertionIndexForPointer(121f, 3, bounds))
+        assertEquals(2, insertionIndexForPointer(201f, 3, bounds))
+        assertEquals(3, insertionIndexForPointer(321f, 3, bounds))
+    }
+
+    @Test
+    fun insertionResolutionSupportsEmptyAndPartiallyMeasuredLanes() {
+        assertEquals(0, insertionIndexForPointer(100f, 0, emptyList()))
+        assertEquals(4, insertionIndexForPointer(100f, 8, listOf(IndexedValue(4, Rect(0f, 120f, 300f, 180f)))))
+        assertEquals(5, insertionIndexForPointer(200f, 8, listOf(IndexedValue(4, Rect(0f, 120f, 300f, 180f)))))
+    }
+
+    @Test
+    fun insertionHysteresisKeepsTheCurrentSlotUntilTheAdjacentCenterIsClearlyCrossed() {
+        val bounds = listOf(
+            IndexedValue(0, Rect(0f, 100f, 300f, 140f)),
+            IndexedValue(1, Rect(0f, 150f, 300f, 210f)),
+        )
+
+        assertEquals(1, insertionIndexWithHysteresis(181f, 2, bounds, currentIndex = 1, hysteresis = 8f))
+        assertEquals(2, insertionIndexWithHysteresis(189f, 2, bounds, currentIndex = 1, hysteresis = 8f))
+        assertEquals(1, insertionIndexWithHysteresis(113f, 2, bounds, currentIndex = 1, hysteresis = 8f))
+        assertEquals(0, insertionIndexWithHysteresis(111f, 2, bounds, currentIndex = 1, hysteresis = 8f))
+    }
+
+    @Test
+    fun verticalAutoScrollUsesProportionalTopAndBottomEdgeSteps() {
+        val lane = Rect(0f, 100f, 400f, 700f)
+
+        assertEquals(-18f, verticalAutoScrollStep(100f, lane, edgeSize = 60f, maximumStep = 18f))
+        assertEquals(9f, verticalAutoScrollStep(670f, lane, edgeSize = 60f, maximumStep = 18f))
+        assertEquals(0f, verticalAutoScrollStep(400f, lane, edgeSize = 60f, maximumStep = 18f))
+    }
+
+    @Test
+    fun onlyTheOriginalSameStatusSlotIsAnUnchangedDrop() {
+        assertEquals(true, isUnchangedDrop(TaskStatus.Open, TaskStatus.Open, 1, 1))
+        assertEquals(false, isUnchangedDrop(TaskStatus.Open, TaskStatus.Open, 1, 2))
+        assertEquals(false, isUnchangedDrop(TaskStatus.Open, TaskStatus.Completed, 1, 1))
     }
 }
 

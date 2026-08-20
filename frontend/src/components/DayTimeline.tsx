@@ -1,3 +1,4 @@
+import { useDroppable } from '@dnd-kit/react'
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockDraftPlacement, BlockLane, DayRead, TimeBlock } from '../lib/api'
 import {
@@ -13,6 +14,9 @@ import {
   visibleMinuteRange,
 } from '../lib/time'
 import { TimeBlockCard } from './TimeBlockCard'
+
+export const READY_TASK_DRAG_TYPE = 'ready-to-plan-task'
+export const PLANNED_LANE_DROP_ID = 'day-planned-lane'
 
 const laneHeaderPlanned =
   'font-label text-xs font-semibold uppercase tracking-[0.08em] text-planned dark:text-planned-dark pb-1'
@@ -407,6 +411,18 @@ function Lane({
   selectedBlockId: number | null
   onBlockDragSessionChange?: (active: boolean) => void
 }) {
+  const { ref: dropRef, isDropTarget } = useDroppable({
+    id: lane === 'planned' ? PLANNED_LANE_DROP_ID : 'day-actual-lane',
+    accept: lane === 'planned' ? READY_TASK_DRAG_TYPE : 'no-ready-task-drops',
+    disabled: readOnly || lane !== 'planned',
+  })
+  const setLaneRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      laneRef.current = node
+      dropRef(node)
+    },
+    [dropRef, laneRef],
+  )
   /**
    * Explicit grid placement so the `[data-testid="day-now-line"]` overlay's
    * `col-start-2 col-span-2 row-start-2` (definite position) cannot evict the
@@ -415,9 +431,10 @@ function Lane({
   const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-2' : 'col-start-3 row-start-2'
   return (
     <div
-      ref={laneRef}
+      ref={setLaneRef}
+      data-day-lane={lane}
       role="presentation"
-      className={`relative min-w-0 border ${gridPlacement} ${laneSurfaceClass(lane)} ${readOnly ? '' : 'cursor-crosshair'}`}
+      className={`relative min-w-0 border ${gridPlacement} ${laneSurfaceClass(lane)} ${readOnly ? '' : 'cursor-crosshair'} ${isDropTarget ? 'z-10 ring-2 ring-inset ring-primary/45' : ''}`}
       style={{ height: totalHeight }}
       onClick={onLaneClick}
     >

@@ -1,12 +1,23 @@
+import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DayCalendarPopover } from '../../components/DayCalendarPopover'
-import { DayTimeline } from '../../components/DayTimeline'
+import {
+  DayTimeline,
+  PLANNED_LANE_DROP_ID,
+  READY_TASK_DRAG_TYPE,
+} from '../../components/DayTimeline'
 import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { TimeBlockModal } from '../../components/TimeBlockModal'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
-import { addDaysIso } from '../../lib/time'
+import {
+  addDaysIso,
+  minuteFromPointerYInVisibleLane,
+  SLOT_MINUTES,
+  TIMELINE_SLOT_HEIGHT_PX,
+  visibleMinuteRange,
+} from '../../lib/time'
 
 function formatDisplayDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)
@@ -40,6 +51,8 @@ export function TodayPage() {
   const [blockDragActive, setBlockDragActive] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftCommitInFlightRef = useRef(false)
+  const planningTaskInFlightRef = useRef(false)
+  const [planningTaskBusyId, setPlanningTaskBusyId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     if (!date) return
@@ -93,12 +106,104 @@ export function TodayPage() {
     setDraft(null)
   }, [tryDiscardIfNeeded])
 
+  const resolvePlanningTaskType = useCallback(
+    async (task: BattleTask): Promise<number> => {
+      if (task.task_type_id != null) return task.task_type_id
+
+      const findUnspecified = (types: TaskType[]) =>
+        types.find((type) => type.name.trim().toLowerCase() === 'unspecified')
+
+      const current = findUnspecified(taskTypes)
+      if (current) return current.id
+
+      const refreshed = await api.listTaskTypes()
+      setTaskTypes(refreshed)
+      const existing = findUnspecified(refreshed)
+      if (existing) return existing.id
+
+      try {
+        const created = await api.createTaskType({ name: 'unspecified' })
+        setTaskTypes((types) => [...types.filter((type) => type.id !== created.id), created])
+        return created.id
+      } catch (createError) {
+        // Another client may have created the unique fallback between our GET and POST.
+        const afterConflict = await api.listTaskTypes()
+        setTaskTypes(afterConflict)
+        const concurrent = findUnspecified(afterConflict)
+        if (concurrent) return concurrent.id
+        throw createError
+      }
+    },
+    [taskTypes],
+  )
+
+  const planReadyTaskAt = useCallback(
+    async (taskId: number, startMinute: number) => {
+      if (!date || !day || planningTaskInFlightRef.current) return
+      const task = battleTasks
+        .flatMap((item) => [item, ...item.subtasks])
+        .find((item) => item.id === taskId && item.ready_to_plan)
+      if (!task) return
+
+      const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
+      const start = Math.max(visibleStart, Math.min(startMinute, visibleEnd - SLOT_MINUTES))
+      const end = start + SLOT_MINUTES
+      const overlaps = day.time_blocks.some(
+        (block) =>
+          block.lane === 'planned' && start < block.end_minute && end > block.start_minute,
+      )
+      if (overlaps) {
+        setError('That time is already planned.')
+        return
+      }
+
+      planningTaskInFlightRef.current = true
+      setPlanningTaskBusyId(task.id)
+      setError(null)
+      try {
+        const taskTypeId = await resolvePlanningTaskType(task)
+        const next = await api.createBlock(date, {
+          lane: 'planned',
+          task_type_id: taskTypeId,
+          task_id: task.id,
+          start_minute: start,
+          end_minute: end,
+        })
+        setDay(next)
+        setPlanningTaskId(null)
+        setDraft(null)
+        setSelectedBlockId(null)
+        setBattleTasks((items) =>
+          items.map((item) => ({
+            ...item,
+            ready_to_plan: item.id === task.id ? false : item.ready_to_plan,
+            subtasks: item.subtasks.map((subtask) =>
+              subtask.id === task.id ? { ...subtask, ready_to_plan: false } : subtask,
+            ),
+          })),
+        )
+        const refreshed = await api.listBattleTasks('active').catch(() => null)
+        if (refreshed) setBattleTasks(refreshed.items)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to plan task')
+      } finally {
+        planningTaskInFlightRef.current = false
+        setPlanningTaskBusyId(null)
+      }
+    },
+    [battleTasks, date, day, resolvePlanningTaskType],
+  )
+
   const onLaneSlotClick = useCallback(
     (lane: BlockLane, startMin: number, endMin: number) => {
       if (!tryDiscardIfNeeded()) return
       const planningTask = battleTasks
         .flatMap((task) => [task, ...task.subtasks])
         .find((task) => task.id === planningTaskId)
+      if (lane === 'planned' && planningTask) {
+        void planReadyTaskAt(planningTask.id, startMin)
+        return
+      }
       setDraft({
         lane,
         start_minute: startMin,
@@ -108,7 +213,33 @@ export function TodayPage() {
       })
       setSelectedBlockId(null)
     },
-    [battleTasks, planningTaskId, tryDiscardIfNeeded],
+    [battleTasks, planReadyTaskAt, planningTaskId, tryDiscardIfNeeded],
+  )
+
+  const onReadyTaskDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { source, target, position } = event.operation
+      if (
+        event.canceled ||
+        source?.type !== READY_TASK_DRAG_TYPE ||
+        target?.id !== PLANNED_LANE_DROP_ID
+      ) {
+        return
+      }
+      const taskId = Number(source.data.taskId)
+      const laneElement = target.element
+      if (!Number.isFinite(taskId) || !laneElement || !day) return
+      const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
+      const pointerY = position.current.y - laneElement.getBoundingClientRect().top
+      const start = minuteFromPointerYInVisibleLane(
+        pointerY,
+        visibleStart,
+        visibleEnd,
+        TIMELINE_SLOT_HEIGHT_PX,
+      )
+      void planReadyTaskAt(taskId, start)
+    },
+    [day, planReadyTaskAt],
   )
 
   const onDraftTimeChange = useCallback((startMin: number, endMin: number) => {
@@ -318,6 +449,7 @@ export function TodayPage() {
 
   return (
     <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
+      <DragDropProvider onDragEnd={onReadyTaskDragEnd}>
       <div className="flex flex-col gap-8 lg:flex-row lg:gap-0 lg:items-stretch">
         <div className="min-w-0 min-h-0 flex-1 lg:pr-4">
           <span data-testid="day-date" className="sr-only">
@@ -382,6 +514,8 @@ export function TodayPage() {
             <ReadyToPlanDrawer
               tasks={readyTasks}
               selectedTaskId={planningTaskId}
+              dragInstance="mobile"
+              busyTaskId={planningTaskBusyId}
               onSelect={(taskId) => {
                 setPlanningTaskId(taskId)
                 setDraft(null)
@@ -427,6 +561,8 @@ export function TodayPage() {
               <ReadyToPlanDrawer
                 tasks={readyTasks}
                 selectedTaskId={planningTaskId}
+                dragInstance="desktop"
+                busyTaskId={planningTaskBusyId}
                 onSelect={(taskId) => {
                   setPlanningTaskId(taskId)
                   setDraft(null)
@@ -479,13 +615,16 @@ export function TodayPage() {
           />
         </div>
       </div>
+      </DragDropProvider>
     </Layout>
   )
 }
 
-function ReadyToPlanDrawer({ tasks, selectedTaskId, onSelect }: {
+function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTaskId, onSelect }: {
   tasks: BattleTask[]
   selectedTaskId: number | null
+  dragInstance: 'mobile' | 'desktop'
+  busyTaskId: number | null
   onSelect: (taskId: number | null) => void
 }) {
   const [query, setQuery] = useState('')
@@ -497,7 +636,7 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, onSelect }: {
         <div>
           <p className="font-label text-[10px] uppercase tracking-[0.16em] text-primary">Battle Plan</p>
           <h2 className="mt-1 font-headline text-xl font-light text-on-surface">Ready to Plan</h2>
-          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Select a task, then choose a Planned time slot.</p>
+          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Drag a task to Planned, or select it and choose a time slot.</p>
         </div>
         <span className="rounded-full bg-surface-container px-2 py-1 text-xs text-on-surface-variant">{tasks.length}</span>
       </div>
@@ -515,24 +654,15 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, onSelect }: {
 
       <div className="mt-4 space-y-2">
         {visible.map((task) => {
-          const selected = task.id === selectedTaskId
           return (
-            <button
+            <ReadyToPlanTaskCard
               key={task.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onSelect(selected ? null : task.id)}
-              className={`w-full rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/15' : 'border-outline-variant/20 bg-surface hover:border-primary/25 dark:border-dark-outline-variant dark:bg-dark-surface'}`}
-            >
-              <span className="block truncate text-sm font-medium text-on-surface">
-                {task.recurrence_kind === 'quota_session' && task.parent_title
-                  ? `${task.parent_title} · ${task.title}`
-                  : task.title}
-              </span>
-              <span className={`mt-1 block text-xs ${task.task_type ? 'text-on-surface-variant' : 'text-amber-700 dark:text-amber-300'}`}>
-                {task.task_type?.name ?? 'Choose a task type after placing'}
-              </span>
-            </button>
+              task={task}
+              selected={task.id === selectedTaskId}
+              dragInstance={dragInstance}
+              disabled={busyTaskId != null}
+              onSelect={() => onSelect(task.id === selectedTaskId ? null : task.id)}
+            />
           )
         })}
         {visible.length === 0 ? (
@@ -542,5 +672,56 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, onSelect }: {
         ) : null}
       </div>
     </section>
+  )
+}
+
+function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, onSelect }: {
+  task: BattleTask
+  selected: boolean
+  dragInstance: 'mobile' | 'desktop'
+  disabled: boolean
+  onSelect: () => void
+}) {
+  const displayTitle = task.recurrence_kind === 'quota_session' && task.parent_title
+    ? `${task.parent_title} · ${task.title}`
+    : task.title
+  const { ref, handleRef, isDragging } = useDraggable({
+    id: `ready-task:${dragInstance}:${task.id}`,
+    type: READY_TASK_DRAG_TYPE,
+    data: { taskId: task.id },
+    sensors: [PointerSensor],
+    disabled,
+  })
+
+  return (
+    <div
+      ref={ref}
+      data-ready-task-id={task.id}
+      data-dragging={isDragging ? 'true' : undefined}
+      className={`flex w-full items-stretch rounded-xl border text-left transition ${selected ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/15' : 'border-outline-variant/20 bg-surface hover:border-primary/25 dark:border-dark-outline-variant dark:bg-dark-surface'} ${isDragging ? 'z-80 cursor-grabbing opacity-80 shadow-xl' : ''}`}
+    >
+      <button
+        type="button"
+        aria-pressed={selected}
+        disabled={disabled}
+        onClick={onSelect}
+        className="min-w-0 flex-1 px-3 py-3 text-left disabled:opacity-55"
+      >
+        <span className="block truncate text-sm font-medium text-on-surface">{displayTitle}</span>
+        <span className="mt-1 block text-xs text-on-surface-variant">
+          {task.task_type?.name ?? 'Unspecified'}
+        </span>
+      </button>
+      <button
+        ref={handleRef}
+        type="button"
+        disabled={disabled}
+        aria-label={`Drag ${displayTitle} to Planned timeline`}
+        title="Drag onto the Planned timeline"
+        className="flex w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded-r-xl text-on-surface-variant/65 hover:bg-primary/8 hover:text-primary active:cursor-grabbing disabled:cursor-wait disabled:opacity-40"
+      >
+        <span className="material-symbols-outlined text-[20px]" aria-hidden>drag_indicator</span>
+      </button>
+    </div>
   )
 }

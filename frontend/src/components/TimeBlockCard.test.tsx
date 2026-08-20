@@ -19,6 +19,7 @@ const block: TimeBlock = {
 }
 
 function renderCard(overrides?: {
+  isSelected?: boolean
   onPatch?: (patch: { start_minute?: number; end_minute?: number }) => Promise<void>
   onBlockClick?: () => boolean | void
 }) {
@@ -40,7 +41,7 @@ function renderCard(overrides?: {
         getMinuteFromClientY={(clientY) => clientY}
         onPatch={onPatch}
         onBlockClick={onBlockClick}
-        isSelected={false}
+        isSelected={overrides?.isSelected ?? false}
       />
     </div>,
   )
@@ -142,6 +143,20 @@ describe('TimeBlockCard', () => {
     )
     expect(screen.getByText(/8 – 8:30am/)).toBeInTheDocument()
     expect(screen.getByText(/alpha/)).toBeInTheDocument()
+  })
+
+  it('uses the resting paper surface for a compact block', () => {
+    const { shell } = renderCard()
+
+    expect(shell).toHaveClass('bg-paper-soft')
+    expect(shell.className).toContain('[box-shadow:var(--shadow-engrave-rest)]')
+  })
+
+  it('uses the raised paper surface for a selected compact block', () => {
+    const { shell } = renderCard({ isSelected: true })
+
+    expect(shell).toHaveClass('bg-paper-raised')
+    expect(shell.className).toContain('[box-shadow:var(--shadow-engrave-raise)]')
   })
 
   it('does not call onBlockClick twice for a tap (pointer down + click)', () => {

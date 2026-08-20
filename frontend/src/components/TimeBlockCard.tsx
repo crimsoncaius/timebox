@@ -390,12 +390,6 @@ export function TimeBlockCard({
     if (dragKind === 'resize') {
       return `${base} z-30 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
     }
-    if (useSideTextLayout && isSelected) {
-      return `${base} z-20 border-transparent bg-transparent shadow-none ring-1 ring-inset ring-on-surface/15 dark:ring-on-surface/20`
-    }
-    if (useSideTextLayout) {
-      return `${base} z-10 border-transparent bg-transparent shadow-none`
-    }
     if (isSelected) {
       return `${base} z-20 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
     }

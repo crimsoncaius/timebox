@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,10 +55,40 @@ describe('TodayPage inspector rail', () => {
   const originalFetch = globalThis.fetch
 
   beforeEach(() => {
-    globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const method = init?.method ?? 'GET'
       if (url.includes('/days/2026-06-01') && !url.includes('/blocks')) {
         return Promise.resolve(jsonResponse(dayPayload))
+      }
+      if (url.includes('/days/2026-06-01/blocks') && method === 'POST') {
+        const body = JSON.parse(String(init?.body)) as {
+          task_id: number
+          task_type_id: number
+          start_minute: number
+          end_minute: number
+        }
+        return Promise.resolve(jsonResponse({
+          ...dayPayload,
+          time_blocks: [
+            ...dayPayload.time_blocks,
+            {
+              id: 12,
+              lane: 'planned',
+              task_id: body.task_id,
+              task_type_id: body.task_type_id,
+              task_type: { id: body.task_type_id, name: 'unspecified', created_at: '', updated_at: '' },
+              note: null,
+              start_minute: body.start_minute,
+              end_minute: body.end_minute,
+              created_at: '',
+              updated_at: '',
+            },
+          ],
+        }))
+      }
+      if (url.includes('/task-types') && method === 'POST') {
+        return Promise.resolve(jsonResponse({ id: 3, name: 'unspecified', created_at: '', updated_at: '' }))
       }
       if (url.includes('/task-types') && !url.match(/\/task-types\/\d/)) {
         return Promise.resolve(jsonResponse(taskTypes))
@@ -67,14 +97,24 @@ describe('TodayPage inspector rail', () => {
         return Promise.resolve(jsonResponse({
           timezone: 'UTC',
           server_now_iso: '2026-06-01T12:00:00Z',
-          items: [{
-            id: 77,
-            title: 'Write launch narrative',
-            ready_to_plan: true,
-            task_type_id: 1,
-            task_type: taskTypes[0],
-            subtasks: [],
-          }],
+          items: [
+            {
+              id: 77,
+              title: 'Write launch narrative',
+              ready_to_plan: true,
+              task_type_id: 1,
+              task_type: taskTypes[0],
+              subtasks: [],
+            },
+            {
+              id: 78,
+              title: 'Plan untyped report',
+              ready_to_plan: true,
+              task_type_id: null,
+              task_type: null,
+              subtasks: [],
+            },
+          ],
         }))
       }
       if (url.includes('/health')) {
@@ -125,6 +165,47 @@ describe('TodayPage inspector rail', () => {
 
     expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('plans an untyped Ready to Plan task with the unspecified fallback', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/day/2026-06-01']}>
+        <Routes>
+          <Route path="/day/:date" element={<TodayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const taskTitles = await screen.findAllByText('Plan untyped report')
+    const taskButton = taskTitles[0]!.closest('button')
+    expect(taskButton).not.toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Drag Plan untyped report to Planned timeline' })).not.toHaveLength(0)
+    await user.click(taskButton!)
+
+    const plannedLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')
+    expect(plannedLane).not.toBeNull()
+    fireEvent.click(plannedLane!, { clientY: 47 })
+
+    await waitFor(() => {
+      const calls = vi.mocked(globalThis.fetch).mock.calls
+      const createType = calls.find(([input, init]) =>
+        String(input).endsWith('/task-types') && init?.method === 'POST',
+      )
+      const createBlock = calls.find(([input, init]) =>
+        String(input).includes('/days/2026-06-01/blocks') && init?.method === 'POST',
+      )
+      expect(createType).toBeDefined()
+      expect(JSON.parse(String(createType?.[1]?.body))).toEqual({ name: 'unspecified' })
+      expect(createBlock).toBeDefined()
+      expect(JSON.parse(String(createBlock?.[1]?.body))).toMatchObject({
+        lane: 'planned',
+        task_id: 78,
+        task_type_id: 3,
+        start_minute: 510,
+        end_minute: 540,
+      })
+    })
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {
