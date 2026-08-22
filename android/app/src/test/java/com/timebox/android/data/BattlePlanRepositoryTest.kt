@@ -3,8 +3,11 @@ package com.timebox.android.data
 import com.timebox.android.data.remote.BattleTaskDto
 import com.timebox.android.data.remote.BattleTaskListDto
 import com.timebox.android.data.remote.DueReminderDto
+import com.timebox.android.data.remote.DayDto
+import com.timebox.android.data.remote.DayMetaDto
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.data.remote.ProjectDto
+import com.timebox.android.data.remote.PlanningCommitResponseDto
 import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.TimeboxApi
@@ -35,6 +38,9 @@ class BattlePlanRepositoryTest {
         repository.trashBattleTask(10).getOrThrow()
         repository.restoreBattleTask(10).getOrThrow()
         repository.permanentlyDeleteBattleTask(10).getOrThrow()
+        repository.commitPlan(
+            listOf(PlanningCommitPlacement(LocalDate.parse("2026-08-20"), 10, 3, 540, 570))
+        ).getOrThrow()
 
         repository.listDueReminders().getOrThrow()
         repository.acknowledgeReminder(10).getOrThrow()
@@ -60,6 +66,7 @@ class BattlePlanRepositoryTest {
                 "listBattleTasks", "createBattleTask", "patchBattleTask", "reorderBattleTasks",
                 "archiveCompletedBattleTasks", "unarchiveBattleTask", "trashBattleTask",
                 "restoreBattleTask", "permanentlyDeleteBattleTask", "listDueReminders",
+                "commitPlan",
                 "acknowledgeReminder", "previewRecurrence", "listRecurringTemplates",
                 "createRecurringTemplate", "getRecurringTemplate", "patchRecurringTemplate",
                 "pauseRecurringTemplate", "resumeRecurringTemplate", "endRecurringTemplate",
@@ -67,7 +74,7 @@ class BattlePlanRepositoryTest {
             ),
             calls.toSet(),
         )
-        assertEquals(24, calls.size)
+        assertEquals(25, calls.size)
     }
 
     @Test
@@ -94,6 +101,23 @@ class BattlePlanRepositoryTest {
                     listOf(task), "Asia/Singapore", "2026-08-17T12:00:00+08:00",
                 )
                 "createBattleTask", "patchBattleTask", "trashBattleTask" -> task
+                "commitPlan" -> PlanningCommitResponseDto(
+                    listOf(
+                        DayDto(
+                            id = 1,
+                            date = "2026-08-20",
+                            startHour = 8,
+                            endHour = 20,
+                            showFullDay = false,
+                            timeBlocks = emptyList(),
+                            meta = DayMetaDto(
+                                timezone = "Asia/Singapore",
+                                today = "2026-08-20",
+                                serverNowIso = "2026-08-20T09:00:00+08:00",
+                            ),
+                        )
+                    )
+                )
                 "listDueReminders" -> listOf(
                     DueReminderDto(10, "Task", null, "2026-08-18T10:00:00+08:00", "2026-08-17T09:00:00+08:00")
                 )

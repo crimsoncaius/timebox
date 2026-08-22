@@ -46,8 +46,6 @@ import com.timebox.android.ui.components.TimeboxTab
 import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayViewModel
-import com.timebox.android.ui.review.ReviewScreen
-import com.timebox.android.ui.review.ReviewViewModel
 import com.timebox.android.ui.settings.SettingsScreen
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -71,7 +69,6 @@ fun TimeboxApp(
     val chronicleViewModel: ChronicleViewModel = viewModel(factory = factory)
     val typesViewModel: TypesViewModel = viewModel(factory = factory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
-    val reviewViewModel: ReviewViewModel = viewModel(factory = factory)
     val battlePlanViewModel: BattlePlanViewModel = viewModel(factory = factory)
     val taskDetailViewModel: TaskDetailViewModel = viewModel(factory = factory)
     val projectEditorViewModel: ProjectEditorViewModel = viewModel(factory = factory)
@@ -81,7 +78,6 @@ fun TimeboxApp(
     val chronicleState by chronicleViewModel.state.collectAsState()
     val typesState by typesViewModel.state.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
-    val reviewState by reviewViewModel.state.collectAsState()
     val battlePlanState by battlePlanViewModel.state.collectAsState()
     val taskDetailState by taskDetailViewModel.state.collectAsState()
     val projectEditorState by projectEditorViewModel.state.collectAsState()
@@ -96,11 +92,15 @@ fun TimeboxApp(
     val routeProjectId = backStackEntry?.arguments?.getInt(AppRoutes.ProjectIdArg)
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
+    val openedDayEntryIds = remember { mutableSetOf<String>() }
 
-    LaunchedEffect(route, routeDate, routeTaskId, routeProjectId, routeTemplateId) {
+    LaunchedEffect(route, routeDate, routeTaskId, routeProjectId, routeTemplateId, backStackEntry?.id) {
         when (route) {
             AppRoutes.DayPattern -> {
-                routeDate?.let(dayViewModel::goToDate)
+                val entryId = backStackEntry?.id ?: return@LaunchedEffect
+                // A Day entry's argument seeds selection once. Returning from another tab
+                // must retain any newer date selected inside the mounted screen.
+                if (openedDayEntryIds.add(entryId)) routeDate?.let(dayViewModel::goToDate)
                 dayViewModel.start()
                 dayViewModel.refreshTaskTypes()
                 dayViewModel.refreshReadyToPlan()
@@ -111,7 +111,6 @@ fun TimeboxApp(
             }
             AppRoutes.Types -> typesViewModel.load()
             AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)
-            AppRoutes.ReviewPattern -> reviewViewModel.load(routeDate ?: dayState.date)
             AppRoutes.BattlePlan -> battlePlanViewModel.load()
             AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
             AppRoutes.ProjectNew -> projectEditorViewModel.open(null)
@@ -159,41 +158,29 @@ fun TimeboxApp(
     }
 
     val selectedTab = when (route) {
-        AppRoutes.DayPattern, AppRoutes.ReviewPattern -> TimeboxTab.Day
+        AppRoutes.DayPattern -> TimeboxTab.Day
         AppRoutes.Chronicle -> TimeboxTab.Chronicle
         AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern, AppRoutes.ProjectNew,
         AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
         AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> TimeboxTab.BattlePlan
         AppRoutes.Types -> TimeboxTab.Types
+        AppRoutes.Settings -> TimeboxTab.Settings
         else -> null
     }
     val colors = TimeboxTheme.colors
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
-            TimeboxTopBar(
-                kicker = routeKicker(route),
-                title = routeTitle(
-                    route,
-                    formatFullDate(dayState.date),
-                    formatMonthTitle(chronicleState.monthStart),
-                    formatShortDate(reviewState.date),
-                ),
-                isDark = isDark,
-                onToggleTheme = onToggleDark,
-                primaryActionLabel = if (route == AppRoutes.DayPattern) {
-                    if (dayState.isPlanningMode) "Done" else "Plan"
-                } else null,
-                onPrimaryAction = if (route == AppRoutes.DayPattern) {
-                    { dayViewModel.setPlanningMode(!dayState.isPlanningMode) }
-                } else null,
-                onOpenReview = if (route == AppRoutes.DayPattern && !dayState.isPlanningMode) {
-                    { navController.navigate(AppRoutes.review(dayState.date)) }
-                } else null,
-                onOpenSettings = if (route != AppRoutes.Settings) {
-                    { navController.navigate(AppRoutes.Settings) { launchSingleTop = true } }
-                } else null,
-            )
+            if (route != AppRoutes.DayPattern) {
+                TimeboxTopBar(
+                    kicker = routeKicker(route),
+                    title = routeTitle(
+                        route,
+                        formatFullDate(dayState.date),
+                        formatMonthTitle(chronicleState.monthStart),
+                    ),
+                )
+            }
 
             Box(modifier = Modifier.weight(1f)) {
                 NavHost(navController, startDestination = AppRoutes.DayPattern) {
@@ -206,10 +193,11 @@ fun TimeboxApp(
                     ) {
                         DayScreen(
                             state = dayState,
-                            onDateSettled = { date ->
-                                dayViewModel.goToDate(date)
-                                navController.navigate(AppRoutes.day(date)) { launchSingleTop = true }
-                            },
+                            // Date changes are state within the mounted Day destination. Replacing
+                            // the route here recreated the header and also re-ran Day initialization,
+                            // including a duplicate day load and unrelated task refreshes.
+                            onNavigateToday = dayViewModel::goToDate,
+                            onDateSettled = dayViewModel::goToDate,
                             onRetry = dayViewModel::retryPage,
                             onTapSlot = { lane: Lane, minute: Int -> dayViewModel.startDraft(lane, minute) },
                             onSelectBlock = dayViewModel::selectBlock,
@@ -226,7 +214,11 @@ fun TimeboxApp(
                                 navController.navigate(AppRoutes.taskDetail(taskId))
                             },
                             onSetPlanningMode = dayViewModel::setPlanningMode,
+                            onCommitPlanningMode = dayViewModel::commitPlanningSession,
+                            onCancelPlanningMode = dayViewModel::cancelPlanningSession,
                             onPlanTask = dayViewModel::planTaskAt,
+                            onUpdatePlanningDraft = dayViewModel::updatePlanningDraft,
+                            onReturnPlanningDraft = dayViewModel::returnPlanningDraft,
                             onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,
                             onRetryReadyTasks = dayViewModel::refreshReadyToPlan,
                         )
@@ -307,6 +299,7 @@ fun TimeboxApp(
                             onReminderDateChange = taskDetailViewModel::setReminderDate,
                             onReminderTimeChange = taskDetailViewModel::setReminderTime,
                             onReadyChange = taskDetailViewModel::setReady,
+                            onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                             onAddSubtask = taskDetailViewModel::addSubtask,
                             onToggleSubtask = taskDetailViewModel::toggleSubtask,
                             onTrashSubtask = taskDetailViewModel::requestSubtaskTrash,
@@ -501,18 +494,6 @@ fun TimeboxApp(
                             onRetry = { settingsViewModel.load(dayState.day?.timezone) },
                         )
                     }
-                    composable(
-                        AppRoutes.ReviewPattern,
-                        arguments = listOf(navArgument(AppRoutes.DateArg) { type = NavType.StringType }),
-                    ) {
-                        ReviewScreen(
-                            state = reviewState,
-                            onBackToDay = {
-                                if (!navController.popBackStack()) navController.navigate(AppRoutes.day(reviewState.date))
-                            },
-                            onRetry = { reviewViewModel.load(reviewState.date) },
-                        )
-                    }
                 }
             }
 
@@ -522,6 +503,7 @@ fun TimeboxApp(
                     TimeboxTab.Chronicle -> AppRoutes.Chronicle
                     TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
                     TimeboxTab.Types -> AppRoutes.Types
+                    TimeboxTab.Settings -> AppRoutes.Settings
                 }
                 navController.navigate(target) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -541,17 +523,6 @@ fun TimeboxApp(
     }
 }
 
-@Composable
-private fun FoundationPlaceholder(title: String, message: String) {
-    val colors = TimeboxTheme.colors
-    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, style = TimeboxTheme.type.screenTitle, color = colors.on)
-            Text(message, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-        }
-    }
-}
-
 private fun routeKicker(route: String): String = when (route) {
     AppRoutes.DayPattern -> "Day"
     AppRoutes.Chronicle -> "Chronicle"
@@ -560,11 +531,10 @@ private fun routeKicker(route: String): String = when (route) {
     AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Battle Plan"
     AppRoutes.Types -> "Task types"
     AppRoutes.Settings -> "Settings"
-    AppRoutes.ReviewPattern -> "Review"
     else -> "Timebox"
 }
 
-internal fun routeTitle(route: String, day: String, chronicle: String, review: String): String =
+internal fun routeTitle(route: String, day: String, chronicle: String): String =
     when (route) {
         AppRoutes.DayPattern -> day
         AppRoutes.Chronicle -> chronicle
@@ -578,6 +548,5 @@ internal fun routeTitle(route: String, day: String, chronicle: String, review: S
         AppRoutes.RecurringEditPattern -> "Edit recurrence"
         AppRoutes.Types -> "Paths"
         AppRoutes.Settings -> "Preferences"
-        AppRoutes.ReviewPattern -> review
         else -> "Timebox"
     }

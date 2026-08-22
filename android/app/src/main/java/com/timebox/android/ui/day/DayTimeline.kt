@@ -1,5 +1,8 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -39,7 +42,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -87,6 +95,16 @@ fun DayTimeline(
     showActual: Boolean = true,
     planningPreview: PlanningDropPreview? = null,
     onPlannedLaneBoundsChanged: (Rect) -> Unit = {},
+    blockGesturesEnabled: Boolean = true,
+    planningDrafts: List<PlanningDraftPlacement> = emptyList(),
+    planningDraftGesturesEnabled: Boolean = true,
+    draggingPlanningTaskId: Int? = null,
+    onPlanningDraftDragStart: (PlanningDraftPlacement, Offset, Float) -> Unit = { _, _, _ -> },
+    onPlanningDraftDrag: (Offset) -> Unit = {},
+    onPlanningDraftDragEnd: (PlanningDraftPlacement, Offset) -> Unit = { _, _ -> },
+    onPlanningDraftDragCancel: () -> Unit = {},
+    onPlanningDraftResize: (Int, Int, Int) -> Unit = { _, _, _ -> },
+    onReturnPlanningDraft: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -121,6 +139,16 @@ fun DayTimeline(
                 onCommitMove = onCommitMove,
                 planningPreview = planningPreview,
                 onBoundsChanged = onPlannedLaneBoundsChanged,
+                blockGesturesEnabled = blockGesturesEnabled,
+                planningDrafts = planningDrafts,
+                planningDraftGesturesEnabled = planningDraftGesturesEnabled,
+                draggingPlanningTaskId = draggingPlanningTaskId,
+                onPlanningDraftDragStart = onPlanningDraftDragStart,
+                onPlanningDraftDrag = onPlanningDraftDrag,
+                onPlanningDraftDragEnd = onPlanningDraftDragEnd,
+                onPlanningDraftDragCancel = onPlanningDraftDragCancel,
+                onPlanningDraftResize = onPlanningDraftResize,
+                onReturnPlanningDraft = onReturnPlanningDraft,
                 modifier = Modifier.weight(1f).fillMaxSize(),
             )
             if (showActual) {
@@ -257,6 +285,16 @@ private fun LaneColumn(
     onCommitMove: (Int, Int, Int) -> Unit,
     planningPreview: PlanningDropPreview? = null,
     onBoundsChanged: ((Rect) -> Unit)? = null,
+    blockGesturesEnabled: Boolean = true,
+    planningDrafts: List<PlanningDraftPlacement> = emptyList(),
+    planningDraftGesturesEnabled: Boolean = true,
+    draggingPlanningTaskId: Int? = null,
+    onPlanningDraftDragStart: (PlanningDraftPlacement, Offset, Float) -> Unit = { _, _, _ -> },
+    onPlanningDraftDrag: (Offset) -> Unit = {},
+    onPlanningDraftDragEnd: (PlanningDraftPlacement, Offset) -> Unit = { _, _ -> },
+    onPlanningDraftDragCancel: () -> Unit = {},
+    onPlanningDraftResize: (Int, Int, Int) -> Unit = { _, _, _ -> },
+    onReturnPlanningDraft: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -311,6 +349,7 @@ private fun LaneColumn(
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
+                gesturesEnabled = blockGesturesEnabled,
                 onTap = { onSelectBlock(block.id) },
                 // Both callbacks recompute from the block's committed times and the raw
                 // gesture delta. Reading the drag state here instead would capture the
@@ -333,6 +372,27 @@ private fun LaneColumn(
                 visibleStart = day.visibleStart,
                 slotHeight = slotHeight,
             )
+        }
+
+        if (lane == Lane.Planned) {
+            planningDrafts.forEach { placement ->
+                PlanningDraftCard(
+                    placement = placement,
+                    visibleStart = day.visibleStart,
+                    visibleEnd = day.visibleEnd,
+                    slotHeight = slotHeight,
+                    dragging = placement.taskId == draggingPlanningTaskId,
+                    gesturesEnabled = planningDraftGesturesEnabled,
+                    onDragStart = { pointer, grabOffset ->
+                        onPlanningDraftDragStart(placement, pointer, grabOffset)
+                    },
+                    onDrag = onPlanningDraftDrag,
+                    onDragEnd = { pointer -> onPlanningDraftDragEnd(placement, pointer) },
+                    onDragCancel = onPlanningDraftDragCancel,
+                    onResize = { start, end -> onPlanningDraftResize(placement.taskId, start, end) },
+                    onReturn = { onReturnPlanningDraft(placement.taskId) },
+                )
+            }
         }
 
         if (draft != null && draft.lane == lane) {
@@ -439,6 +499,182 @@ private fun applyDrag(
 }
 
 @Composable
+private fun PlanningDraftCard(
+    placement: PlanningDraftPlacement,
+    visibleStart: Int,
+    visibleEnd: Int,
+    slotHeight: Dp,
+    dragging: Boolean,
+    gesturesEnabled: Boolean,
+    onDragStart: (Offset, Float) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: (Offset) -> Unit,
+    onDragCancel: () -> Unit,
+    onResize: (Int, Int) -> Unit,
+    onReturn: () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    var cardRoot by remember(placement.taskId) { mutableStateOf(Offset.Zero) }
+    var resizePreview by remember(placement.taskId) { mutableStateOf<Pair<Int, Int>?>(null) }
+    val startMinute = resizePreview?.first ?: placement.startMinute
+    val endMinute = resizePreview?.second ?: placement.endMinute
+    val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
+    val slotsTall = (endMinute - startMinute).toFloat() / SLOT_MINUTES
+    val height = max(slotHeight.value * slotsTall, slotHeight.value).dp
+    val innerHeight = height - TimeboxDimens.grooveHeight * 2
+    val animatedTop by animateDpAsState(
+        targetValue = top,
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = 520f),
+        label = "planning draft position",
+    )
+    val animatedHeight by animateDpAsState(
+        targetValue = height,
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = 520f),
+        label = "planning draft height",
+    )
+    val sourceAlpha by animateFloatAsState(
+        targetValue = if (dragging) 0.10f else 1f,
+        label = "planning draft source",
+    )
+
+    Box(
+        modifier = Modifier
+            .offset(y = if (resizePreview != null) top else animatedTop)
+            .padding(horizontal = 3.dp)
+            .fillMaxWidth()
+            .height(if (resizePreview != null) height else animatedHeight)
+            .onGloballyPositioned { cardRoot = it.positionInRoot() }
+            .graphicsLayer {
+                alpha = sourceAlpha
+                scaleX = if (dragging) 0.98f else 1f
+                scaleY = if (dragging) 0.98f else 1f
+            }
+            .shadow(if (dragging) 12.dp else 3.dp, TimeboxShapes.block, clip = false)
+            .clip(TimeboxShapes.block)
+            .background(colors.planned.copy(alpha = if (colors.isDark) 0.30f else 0.13f))
+            .border(1.5.dp, colors.planned, TimeboxShapes.block)
+            .semantics {
+                contentDescription = "Planning draft ${placement.taskTitle}"
+                customActions = if (gesturesEnabled) listOf(
+                    CustomAccessibilityAction("Move 30 minutes earlier") {
+                        onResize(placement.startMinute - SLOT_MINUTES, placement.endMinute - SLOT_MINUTES)
+                        true
+                    },
+                    CustomAccessibilityAction("Move 30 minutes later") {
+                        onResize(placement.startMinute + SLOT_MINUTES, placement.endMinute + SLOT_MINUTES)
+                        true
+                    },
+                    CustomAccessibilityAction("Return to Tasks to Plan") {
+                        onReturn()
+                        true
+                    },
+                ) else emptyList()
+            }
+            .pointerInput(
+                placement.taskId,
+                placement.startMinute,
+                placement.endMinute,
+                visibleStart,
+                visibleEnd,
+                gesturesEnabled,
+            ) {
+                if (!gesturesEnabled) return@pointerInput
+                val slop = viewConfiguration.touchSlop
+                val slotPx = slotHeight.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val grab = minOf(
+                        maxOf(TimeboxDimens.grooveHeight.toPx(), 14.dp.toPx()),
+                        size.height / 3f,
+                    )
+                    val mode = when {
+                        down.position.y < grab -> DragMode.ResizeStart
+                        down.position.y > size.height - grab -> DragMode.ResizeEnd
+                        else -> DragMode.Move
+                    }
+                    down.consume()
+                    var total = Offset.Zero
+                    var pointerRoot = cardRoot + down.position
+                    var isDrag = false
+                    while (true) {
+                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        total += change.positionChangeIgnoreConsumed()
+                        pointerRoot = cardRoot + change.position
+                        if (total.getDistance() > slop) {
+                            isDrag = true
+                            change.consume()
+                            break
+                        }
+                    }
+                    if (!isDrag) return@awaitEachGesture
+
+                    if (mode == DragMode.Move) {
+                        onDragStart(pointerRoot, down.position.y)
+                    }
+                    while (true) {
+                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed) break
+                        val moved = change.positionChangeIgnoreConsumed()
+                        total += moved
+                        pointerRoot = cardRoot + change.position
+                        change.consume()
+                        if (mode == DragMode.Move) {
+                            onDrag(pointerRoot)
+                        } else {
+                            val slotDelta = (total.y / slotPx).roundToInt() * SLOT_MINUTES
+                            resizePreview = when (mode) {
+                                DragMode.ResizeStart -> Pair(
+                                    (placement.startMinute + slotDelta)
+                                        .coerceIn(visibleStart, placement.endMinute - SLOT_MINUTES),
+                                    placement.endMinute,
+                                )
+                                DragMode.ResizeEnd -> Pair(
+                                    placement.startMinute,
+                                    (placement.endMinute + slotDelta)
+                                        .coerceIn(placement.startMinute + SLOT_MINUTES, visibleEnd),
+                                )
+                                DragMode.Move -> null
+                            }
+                        }
+                    }
+                    if (mode == DragMode.Move) {
+                        onDragEnd(pointerRoot)
+                    } else {
+                        resizePreview?.let { onResize(it.first, it.second) }
+                        resizePreview = null
+                    }
+                }
+            },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Groove()
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    placement.taskTitle,
+                    style = TimeboxTheme.type.blockTitleSelected,
+                    color = colors.on,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (innerHeight >= 30.dp) {
+                    Text(
+                        "${hhmm(startMinute)} – ${hhmm(endMinute)}",
+                        style = TimeboxTheme.type.monoSmall,
+                        color = colors.planned,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Groove()
+        }
+    }
+}
+
+@Composable
 private fun BlockCard(
     block: TimeBlock,
     startMinute: Int,
@@ -447,6 +683,7 @@ private fun BlockCard(
     slotHeight: Dp,
     selected: Boolean,
     dragging: Boolean,
+    gesturesEnabled: Boolean,
     onTap: () -> Unit,
     onDrag: (DragMode, Float) -> Unit,
     onDragEnd: (DragMode, Float) -> Unit,
@@ -477,7 +714,11 @@ private fun BlockCard(
             // card — fight over the pointer and neither wins reliably, so where the
             // press lands decides what the drag means. Move past the slop and it is a
             // drag; lift without moving and it is a tap.
-            .pointerInput(block.id, block.startMinute, block.endMinute) {
+            .pointerInput(block.id, block.startMinute, block.endMinute, gesturesEnabled) {
+                if (!gesturesEnabled) {
+                    detectTapGestures { onTap() }
+                    return@pointerInput
+                }
                 val slop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)

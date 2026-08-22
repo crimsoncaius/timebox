@@ -17,6 +17,65 @@ export type DeadlineBadge = {
   tone: DeadlineTone
 }
 
+export type PlannedDateTone = 'today' | 'future' | 'past'
+
+export type PlannedDateSummary = {
+  primaryDate: string
+  dateLabel: string
+  relativeLabel: 'Today' | 'Tomorrow' | 'Yesterday' | null
+  additionalCount: number
+  tone: PlannedDateTone
+}
+
+const ISO_CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+export function validPlannedDates(values: string[] | undefined): string[] {
+  return [...new Set((values ?? []).filter((value) => {
+    const match = ISO_CALENDAR_DATE.exec(value)
+    if (!match) return false
+    const date = new Date(`${value}T12:00:00Z`)
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  }))].sort()
+}
+
+export function orderedPlannedDates(values: string[] | undefined, today: string): string[] {
+  const dates = validPlannedDates(values)
+  return [
+    ...dates.filter((date) => date === today),
+    ...dates.filter((date) => date > today),
+    ...dates.filter((date) => date < today).reverse(),
+  ]
+}
+
+export function formatPlannedDate(date: string, today: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    ...(date.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T12:00:00Z`))
+}
+
+export function plannedDateSummary(
+  values: string[] | undefined,
+  serverNowIso: string,
+  timeZone: string,
+  locale?: string,
+): PlannedDateSummary | null {
+  const today = datePartsInTimeZone(serverNowIso, timeZone)
+  const dates = orderedPlannedDates(values, today)
+  const primaryDate = dates[0]
+  if (!primaryDate) return null
+  const difference = calendarDayDifference(primaryDate, today)
+  return {
+    primaryDate,
+    dateLabel: formatPlannedDate(primaryDate, today, locale),
+    relativeLabel: difference === 0 ? 'Today' : difference === 1 ? 'Tomorrow' : difference === -1 ? 'Yesterday' : null,
+    additionalCount: dates.length - 1,
+    tone: difference === 0 ? 'today' : difference > 0 ? 'future' : 'past',
+  }
+}
+
 function datePartsInTimeZone(instant: string | Date, timeZone: string) {
   const date = instant instanceof Date ? instant : new Date(instant)
   const parts = Object.fromEntries(

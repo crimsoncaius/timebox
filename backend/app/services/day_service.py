@@ -19,6 +19,7 @@ from app.schemas.day import (
     DayRead,
     DaySummaryRead,
     DaySummaryRow,
+    PlanningPlacementCreate,
 )
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch, TimeBlockRead
@@ -324,6 +325,80 @@ def create_time_block(db: Session, day: Day, body: TimeBlockCreate) -> TimeBlock
     db.refresh(block)
     db.refresh(day)
     return block
+
+
+def commit_planning_session(
+    db: Session,
+    placements: list[PlanningPlacementCreate],
+) -> list[Day]:
+    """Atomically turn one Plan-mode session into linked Planned blocks."""
+
+    task_ids = [placement.task_id for placement in placements]
+    if len(task_ids) != len(set(task_ids)):
+        raise ValueError("Each task can only be planned once per session")
+
+    days: dict[dt.date, Day] = {}
+    staged_intervals: dict[dt.date, list[tuple[int, int]]] = {}
+    resolved: list[tuple[PlanningPlacementCreate, Day, Task]] = []
+
+    for placement in placements:
+        _validate_minutes(placement.start_minute, placement.end_minute)
+        day = days.get(placement.date)
+        if day is None:
+            day = get_day_by_date(db, placement.date) or create_day(db, placement.date)
+            days[placement.date] = day
+
+        task = _active_task(db, placement.task_id)
+        assert task is not None
+        if not task.ready_to_plan:
+            raise ValueError(f"Task {task.id} is no longer ready to plan")
+        _validate_recurrence_schedule(task, day)
+
+        if task_type_service.get_task_type(db, placement.task_type_id) is None:
+            raise ValueError("Task type not found")
+        _assert_no_overlap(
+            day,
+            BlockLane.planned,
+            placement.start_minute,
+            placement.end_minute,
+        )
+        for other_start, other_end in staged_intervals.setdefault(placement.date, []):
+            if _intervals_overlap(
+                placement.start_minute,
+                placement.end_minute,
+                other_start,
+                other_end,
+            ):
+                raise ValueError("Planned tasks overlap each other")
+        staged_intervals[placement.date].append((placement.start_minute, placement.end_minute))
+        resolved.append((placement, day, task))
+
+    try:
+        for placement, day, task in resolved:
+            db.add(
+                TimeBlock(
+                    day_id=day.id,
+                    lane=BlockLane.planned,
+                    task_type_id=placement.task_type_id,
+                    task_id=task.id,
+                    note=None,
+                    start_minute=placement.start_minute,
+                    end_minute=placement.end_minute,
+                )
+            )
+            task.ready_to_plan = False
+            _touch_day(day)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    committed: list[Day] = []
+    for date in sorted(days):
+        day = get_day_by_date(db, date)
+        assert day is not None
+        committed.append(day)
+    return committed
 
 
 def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch) -> TimeBlock:

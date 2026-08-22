@@ -6,11 +6,32 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.time import parse_iso_date
 from app.db.session import get_db
-from app.schemas.day import DayListItem, DayPreviewRead, DayRead, DaySummaryRead
+from app.schemas.day import (
+    DayListItem,
+    DayPreviewRead,
+    DayRead,
+    DaySummaryRead,
+    PlanningCommitCreate,
+    PlanningCommitRead,
+)
 from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch
 from app.services import day_service
 
 router = APIRouter(prefix="/days", tags=["days"])
+
+
+@router.post("/plan", response_model=PlanningCommitRead)
+def commit_plan(
+    body: PlanningCommitCreate,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> PlanningCommitRead:
+    try:
+        days = day_service.commit_planning_session(db, body.placements)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return PlanningCommitRead(days=[day_service.to_day_read(day, settings) for day in days])
 
 
 @router.get("", response_model=list[DayListItem])

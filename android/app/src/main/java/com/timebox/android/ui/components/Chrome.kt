@@ -20,10 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Category
-import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Insights
-import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -44,17 +41,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.timebox.android.ui.theme.TimeboxTheme
 
-/** Kicker + large title, with the theme toggle and (on Day) the review shortcut. */
+/** Kicker + large title, with an optional screen-specific primary action. */
 @Composable
 fun TimeboxTopBar(
     kicker: String,
     title: String,
-    isDark: Boolean,
-    onToggleTheme: () -> Unit,
     primaryActionLabel: String? = null,
     onPrimaryAction: (() -> Unit)? = null,
-    onOpenReview: (() -> Unit)? = null,
-    onOpenSettings: (() -> Unit)? = null,
 ) {
     val colors = TimeboxTheme.colors
     Row(
@@ -87,25 +80,6 @@ fun TimeboxTopBar(
                 Text(primaryActionLabel, style = TimeboxTheme.type.label, color = colors.planned)
             }
         }
-        if (onOpenReview != null) {
-            RoundIconButton(
-                icon = Icons.Outlined.Insights,
-                contentDescription = "Day review",
-                onClick = onOpenReview,
-            )
-        }
-        if (onOpenSettings != null) {
-            RoundIconButton(
-                icon = Icons.Outlined.Settings,
-                contentDescription = "Settings",
-                onClick = onOpenSettings,
-            )
-        }
-        RoundIconButton(
-            icon = if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-            contentDescription = "Toggle theme",
-            onClick = onToggleTheme,
-        )
     }
 }
 
@@ -114,6 +88,7 @@ enum class TimeboxTab(val label: String, val icon: ImageVector) {
     Chronicle("Chronicle", Icons.Outlined.History),
     BattlePlan("Battle Plan", Icons.Outlined.Checklist),
     Types("Types", Icons.Outlined.Category),
+    Settings("Settings", Icons.Outlined.Settings),
 }
 
 @Composable

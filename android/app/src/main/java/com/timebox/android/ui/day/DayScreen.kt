@@ -13,36 +13,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.Lane
@@ -50,8 +39,6 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.Kicker
 import com.timebox.android.ui.components.LoadingState
-import com.timebox.android.ui.components.RoundIconButton
-import com.timebox.android.ui.formatDayStrip
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
@@ -75,32 +62,56 @@ fun DayScreen(
     onCompleteSelected: () -> Unit,
     onOpenLinkedTask: (Int) -> Unit,
     onSetPlanningMode: (Boolean) -> Unit,
+    onCommitPlanningMode: () -> Unit = {},
+    onCancelPlanningMode: () -> Unit = {},
     onPlanTask: (Int, Int) -> Unit,
+    onUpdatePlanningDraft: (Int, Int, Int) -> Unit = { _, _, _ -> },
+    onReturnPlanningDraft: (Int) -> Unit = {},
     onArmAccessibleTask: (Int?) -> Unit,
     onRetryReadyTasks: () -> Unit,
+    onNavigateToday: (LocalDate) -> Unit = {},
 ) {
-    BackHandler(enabled = state.isPlanningMode) { onSetPlanningMode(false) }
+    BackHandler(enabled = state.isPlanningMode) {
+        if (!state.saving) onCancelPlanningMode()
+    }
 
-    if (state.isPlanningMode) {
-        PlanningDayPage(
-            state = state,
-            onDateSettled = onDateSettled,
-            onRetry = onRetry,
-            onSelectBlock = onSelectBlock,
-            onCommitMove = onCommitMove,
-            onPlanTask = onPlanTask,
-            onArmAccessibleTask = onArmAccessibleTask,
-            onRetryReadyTasks = onRetryReadyTasks,
+    Column(Modifier.fillMaxSize()) {
+        DayCalendarHeader(
+            selectedDate = state.date,
+            today = state.today,
+            isPlanningMode = state.isPlanningMode,
+            planningActionEnabled = !state.saving,
+            onSetPlanningMode = { enabled ->
+                if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()
+            },
+            onSelectDate = onDateSettled,
+            onNavigateToday = onNavigateToday,
         )
-    } else {
-        InteractiveDayPager(
-            state = state,
-            onDateSettled = onDateSettled,
-            onRetry = onRetry,
-            onTapSlot = onTapSlot,
-            onSelectBlock = onSelectBlock,
-            onCommitMove = onCommitMove,
-        )
+
+        Box(Modifier.weight(1f)) {
+            if (state.isPlanningMode) {
+                PlanningDayPage(
+                    state = state,
+                    onRetry = onRetry,
+                    onSelectBlock = onSelectBlock,
+                    onCommitMove = onCommitMove,
+                    onPlanTask = onPlanTask,
+                    onUpdatePlanningDraft = onUpdatePlanningDraft,
+                    onReturnPlanningDraft = onReturnPlanningDraft,
+                    onArmAccessibleTask = onArmAccessibleTask,
+                    onRetryReadyTasks = onRetryReadyTasks,
+                )
+            } else {
+                InteractiveDayPager(
+                    state = state,
+                    onDateSettled = onDateSettled,
+                    onRetry = onRetry,
+                    onTapSlot = onTapSlot,
+                    onSelectBlock = onSelectBlock,
+                    onCommitMove = onCommitMove,
+                )
+            }
+        }
     }
 
     if (state.sheetOpen) {
@@ -122,22 +133,18 @@ fun DayScreen(
 @Composable
 private fun PlanningDayPage(
     state: DayUiState,
-    onDateSettled: (LocalDate) -> Unit,
     onRetry: (LocalDate) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
     onPlanTask: (Int, Int) -> Unit,
+    onUpdatePlanningDraft: (Int, Int, Int) -> Unit,
+    onReturnPlanningDraft: (Int) -> Unit,
     onArmAccessibleTask: (Int?) -> Unit,
     onRetryReadyTasks: () -> Unit,
 ) {
     val page = state.currentPage
     Column(Modifier.fillMaxSize()) {
-        DayStrip(
-            label = formatDayStrip(state.date),
-            onPrev = { onDateSettled(state.date.minusDays(1)) },
-            onNext = { onDateSettled(state.date.plusDays(1)) },
-        )
-        PlanningModeHeaders(Modifier.padding(bottom = 4.dp))
+        PlanningModeHeaders(Modifier.padding(bottom = 8.dp))
         val day = page.day
         when {
             page.loading && day == null -> LoadingState(Modifier.weight(1f))
@@ -152,6 +159,8 @@ private fun PlanningDayPage(
                 onSelectBlock = onSelectBlock,
                 onCommitMove = onCommitMove,
                 onPlanTask = onPlanTask,
+                onUpdatePlanningDraft = onUpdatePlanningDraft,
+                onReturnPlanningDraft = onReturnPlanningDraft,
                 onArmAccessibleTask = onArmAccessibleTask,
                 onRetryReadyTasks = onRetryReadyTasks,
                 modifier = Modifier.weight(1f),
@@ -236,29 +245,29 @@ private fun InteractiveDayPager(
             (-1..1).forEach { pagePosition ->
                 val date = state.date.plusDays(pagePosition.toLong())
                 val interactive = pagePosition == 0 && !settling
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .offset {
-                            IntOffset(
-                                x = (pagePosition * pageWidthPx + dragOffsetPx).roundToInt(),
-                                y = 0,
-                            )
-                        },
-                ) {
-                    DayPage(
-                        date = date,
-                        page = state.page(date),
-                        scrollState = timelineScroll,
-                        selectedBlockId = if (interactive) state.selectedBlockId else null,
-                        draft = if (interactive) state.draft else null,
-                        onPrev = if (interactive) ({ settle(-1) }) else ({ }),
-                        onNext = if (interactive) ({ settle(1) }) else ({ }),
-                        onRetry = { onRetry(date) },
-                        onTapSlot = if (interactive) onTapSlot else ({ _, _ -> }),
-                        onSelectBlock = if (interactive) onSelectBlock else ({ }),
-                        onCommitMove = if (interactive) onCommitMove else ({ _, _, _ -> }),
-                    )
+                key(date) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .offset {
+                                IntOffset(
+                                    x = (pagePosition * pageWidthPx + dragOffsetPx).roundToInt(),
+                                    y = 0,
+                                )
+                            },
+                    ) {
+                        DayPage(
+                            date = date,
+                            page = state.page(date),
+                            scrollState = timelineScroll,
+                            selectedBlockId = if (interactive) state.selectedBlockId else null,
+                            draft = if (interactive) state.draft else null,
+                            onRetry = { onRetry(date) },
+                            onTapSlot = if (interactive) onTapSlot else ({ _, _ -> }),
+                            onSelectBlock = if (interactive) onSelectBlock else ({ }),
+                            onCommitMove = if (interactive) onCommitMove else ({ _, _, _ -> }),
+                        )
+                    }
                 }
             }
         }
@@ -279,8 +288,6 @@ private fun DayPage(
     scrollState: ScrollState,
     selectedBlockId: Int?,
     draft: Draft?,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
     onRetry: () -> Unit,
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
@@ -288,17 +295,12 @@ private fun DayPage(
 ) {
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize()) {
-        DayStrip(
-            label = "${formatDayStrip(date)} · swipe to change day",
-            onPrev = onPrev,
-            onNext = onNext,
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = TimeboxDimens.screenPadding)
-                .padding(bottom = 4.dp),
+                .padding(top = 8.dp, bottom = 8.dp)
+                .testTag("day-lane-headers"),
             horizontalArrangement = Arrangement.spacedBy(TimeboxDimens.laneGap),
         ) {
             Spacer(Modifier.width(TimeboxDimens.gutterWidth))
@@ -331,49 +333,5 @@ private fun DayPage(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun DayStrip(
-    label: String,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-) {
-    val colors = TimeboxTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = TimeboxDimens.screenPadding)
-            .padding(bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RoundIconButton(
-            icon = Icons.Outlined.ChevronLeft,
-            contentDescription = "Previous day",
-            onClick = onPrev,
-            tint = colors.on,
-            diameter = 36.dp,
-            border = colors.hairline,
-            iconSize = 19.dp,
-        )
-        Text(
-            text = label,
-            style = TimeboxTheme.type.bodySmall,
-            color = colors.onVariant,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        RoundIconButton(
-            icon = Icons.Outlined.ChevronRight,
-            contentDescription = "Next day",
-            onClick = onNext,
-            tint = colors.on,
-            diameter = 36.dp,
-            border = colors.hairline,
-            iconSize = 19.dp,
-        )
     }
 }

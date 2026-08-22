@@ -3,7 +3,13 @@ import { OptimisticSortingPlugin } from '@dnd-kit/dom/sortable'
 import { KeyboardSensor, PointerSensor } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { useNavigate } from 'react-router-dom'
-import { deadlineBadge, STATUS_LABELS, type DeadlineBadge as DeadlineBadgeValue } from '../../lib/battlePlan'
+import {
+  deadlineBadge,
+  plannedDateSummary,
+  STATUS_LABELS,
+  type DeadlineBadge as DeadlineBadgeValue,
+  type PlannedDateSummary as PlannedDateSummaryValue,
+} from '../../lib/battlePlan'
 import type { BattleTask, TaskStatus } from '../../lib/api'
 
 const cardSensors = [
@@ -54,6 +60,7 @@ export function BattlePlanCard({
   const [addingSubtask, setAddingSubtask] = useState(false)
   const [busySubtaskId, setBusySubtaskId] = useState<number | null>(null)
   const due = deadlineBadge(task, serverNowIso, timezone)
+  const planned = plannedDateSummary(task.planned_dates, serverNowIso, timezone)
   const completed = task.subtasks.filter((subtask) => subtask.status === 'completed').length
   const progressLabel = task.subtasks.length === 0
     ? `Add a subtask to ${task.title}`
@@ -119,7 +126,9 @@ export function BattlePlanCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3">
+      {planned ? <div className="mt-3"><PlannedDateRow summary={planned} /></div> : null}
+
+      <div className={`${planned ? 'mt-1.5' : 'mt-3'} flex flex-wrap items-center justify-between gap-2`}>
         {due ? <DeadlineBadge badge={due} /> : <span />}
         <div className="flex items-center gap-1">
           <button
@@ -167,6 +176,7 @@ export function BattlePlanCard({
             <div className="space-y-1.5">
               {task.subtasks.map((subtask) => {
                 const subtaskDue = deadlineBadge(subtask, serverNowIso, timezone)
+                const subtaskPlanned = plannedDateSummary(subtask.planned_dates, serverNowIso, timezone)
                 const isCompleted = subtask.status === 'completed'
                 return (
                   <div key={subtask.id} className="rounded-xl bg-surface-container-low/70 p-2 dark:bg-dark-surface-container/70">
@@ -197,6 +207,7 @@ export function BattlePlanCard({
                         </span>
                       ) : null}
                     </div>
+                    {subtaskPlanned ? <div className="mt-1.5 pl-6"><PlannedDateRow summary={subtaskPlanned} /></div> : null}
                     {subtaskDue ? <div className="mt-1.5 pl-6"><DeadlineBadge badge={subtaskDue} /></div> : null}
                   </div>
                 )
@@ -236,6 +247,25 @@ export function BattlePlanCard({
         </section>
       ) : null}
     </article>
+  )
+}
+
+function PlannedDateRow({ summary }: { summary: PlannedDateSummaryValue }) {
+  const fullLabel = `Planned ${summary.relativeLabel ? `${summary.relativeLabel} · ` : ''}${summary.dateLabel}${summary.additionalCount ? ` +${summary.additionalCount}` : ''}`
+  const toneClass = {
+    today: 'bg-planned/10 text-planned dark:bg-planned/12',
+    future: 'bg-surface-container-low text-on-surface-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant',
+    past: 'bg-surface-container-low/55 text-on-surface-variant/65 dark:bg-dark-surface-container/55 dark:text-dark-on-surface-variant/65',
+  }[summary.tone]
+  return (
+    <span aria-label={fullLabel} className={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium ${toneClass}`}>
+      <span className="material-symbols-outlined text-[12px]" aria-hidden>event</span>
+      <span aria-hidden className="truncate">
+        Planned{' '}
+        {summary.relativeLabel ? <>{summary.relativeLabel} · </> : null}
+        {summary.dateLabel}{summary.additionalCount ? ` +${summary.additionalCount}` : ''}
+      </span>
+    </span>
   )
 }
 

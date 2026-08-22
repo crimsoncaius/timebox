@@ -138,6 +138,14 @@ fun TaskTypeDto.toModel() = TaskType(
     recurringTemplateUsageCount = recurringTemplateUsageCount,
 )
 
+data class PlanningCommitPlacement(
+    val date: LocalDate,
+    val taskId: Int,
+    val taskTypeId: Int,
+    val startMinute: Int,
+    val endMinute: Int,
+)
+
 fun TimeBlockDto.toModel() = TimeBlock(
     id = id,
     lane = Lane.fromWire(lane),

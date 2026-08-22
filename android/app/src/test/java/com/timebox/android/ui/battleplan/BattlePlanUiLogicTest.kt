@@ -6,12 +6,60 @@ import com.timebox.android.data.BattlePlanSort
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
 import com.timebox.android.data.TaskStatus
+import com.timebox.android.ui.theme.DarkTimeboxColors
+import com.timebox.android.ui.theme.LightTimeboxColors
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
+import java.util.Locale
 
 class BattlePlanUiLogicTest {
+    @Test
+    fun plannedDatesUseTodayThenNearestFutureThenNearestPast() {
+        val dates = listOf("2026-08-19", "2026-08-24", "2026-08-21", "2026-08-23", "2026-08-22")
+            .map(LocalDate::parse)
+        assertEquals(
+            listOf("2026-08-22", "2026-08-23", "2026-08-24", "2026-08-21", "2026-08-19"),
+            orderedPlannedDates(dates, LocalDate.parse("2026-08-22")).map(LocalDate::toString),
+        )
+    }
+
+    @Test
+    fun plannedSummaryFormatsRelativeLabelsCountsAndCrossYearDates() {
+        val now = Instant.parse("2026-08-22T12:00:00Z")
+        val today = plannedDateSummary(
+            listOf(LocalDate.parse("2026-08-22"), LocalDate.parse("2026-08-24"), LocalDate.parse("2026-08-21")),
+            now,
+            "UTC",
+            Locale.US,
+        )
+        assertEquals("Planned Today · Aug 22 +2", today?.label)
+        assertEquals(PlannedDateTone.Today, today?.tone)
+        assertEquals("Planned Tomorrow · Aug 23", plannedDateSummary(listOf(LocalDate.parse("2026-08-23")), now, "UTC", Locale.US)?.label)
+        assertEquals("Planned Yesterday · Aug 21", plannedDateSummary(listOf(LocalDate.parse("2026-08-21")), now, "UTC", Locale.US)?.label)
+        assertEquals("Planned Jan 2, 2027", plannedDateSummary(listOf(LocalDate.parse("2027-01-02")), now, "UTC", Locale.US)?.label)
+    }
+
+    @Test
+    fun plannedSummaryAndMidnightUseTheConfiguredTimezone() {
+        val now = Instant.parse("2026-08-22T15:59:59Z")
+        assertEquals(
+            PlannedDateTone.Today,
+            plannedDateSummary(listOf(LocalDate.parse("2026-08-22")), now, "Asia/Singapore", Locale.US)?.tone,
+        )
+        assertEquals(1000L, millisUntilNextAppMidnight(now, "Asia/Singapore"))
+        val anchor = AppClockAnchor(now, Instant.parse("2026-01-01T00:00:00Z"))
+        assertEquals(now.plusSeconds(2), anchor.current(Instant.parse("2026-01-01T00:00:02Z")))
+    }
+
+    @Test
+    fun darkTaskCardsUseASurfaceDistinctFromThePage() {
+        assertNotEquals(DarkTimeboxColors.bg, mobileTaskCardSurface(DarkTimeboxColors))
+        assertEquals(LightTimeboxColors.lowest, mobileTaskCardSurface(LightTimeboxColors))
+    }
+
     @Test
     fun scopesSeparateAdminAndProjects() {
         val admin = task(1, projectId = null)
@@ -207,6 +255,7 @@ internal fun task(
     subtasks: List<BattleTask> = emptyList(),
     urgency: PriorityLevel? = null,
     deadlineDate: LocalDate? = null,
+    plannedDates: List<LocalDate> = emptyList(),
 ) = BattleTask(
     id = id,
     parentId = null,
@@ -241,4 +290,5 @@ internal fun task(
     updatedAt = Instant.EPOCH,
     overdue = false,
     subtasks = subtasks,
+    plannedDates = plannedDates,
 )

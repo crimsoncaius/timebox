@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -297,5 +297,96 @@ describe('TaskTypesPage', () => {
     await user.tab()
 
     expect(await screen.findByLabelText('Task type development/ai')).toBeInTheDocument()
+  })
+
+  it('preserves an unused task type when permanent deletion is cancelled', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const method = init?.method ?? 'GET'
+      if (url.includes('/health')) {
+        return Promise.resolve(
+          jsonResponse({ status: 'ok', today: '2026-04-13', timezone: 'UTC' }),
+        )
+      }
+      if (url.includes('/task-types') && method === 'GET') {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              id: 2,
+              name: 'Deep work',
+              usage_count: 0,
+              task_usage_count: 0,
+              created_at: '',
+              updated_at: '',
+            },
+          ]),
+        )
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }))
+    }) as typeof fetch
+
+    renderPage()
+    expect(await screen.findByLabelText('Task type Deep work')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete Deep work' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Permanently delete “Deep work”? This cannot be undone.',
+    )
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(
+      expect.stringMatching(/\/task-types\/2$/),
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+    expect(screen.getByLabelText('Task type Deep work')).toBeInTheDocument()
+  })
+
+  it('permanently deletes an unused task type after confirmation', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let rows = [
+      {
+        id: 2,
+        name: 'Deep work',
+        usage_count: 0,
+        task_usage_count: 0,
+        created_at: '',
+        updated_at: '',
+      },
+    ]
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const method = init?.method ?? 'GET'
+      if (url.includes('/health')) {
+        return Promise.resolve(
+          jsonResponse({ status: 'ok', today: '2026-04-13', timezone: 'UTC' }),
+        )
+      }
+      if (url.includes('/task-types') && method === 'GET') {
+        return Promise.resolve(jsonResponse(rows))
+      }
+      if (url.match(/\/task-types\/2$/) && method === 'DELETE') {
+        rows = []
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }))
+    }) as typeof fetch
+
+    renderPage()
+    expect(await screen.findByLabelText('Task type Deep work')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete Deep work' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Permanently delete “Deep work”? This cannot be undone.',
+    )
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/task-types\/2$/),
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+      expect(screen.queryByLabelText('Task type Deep work')).not.toBeInTheDocument()
+    })
   })
 })

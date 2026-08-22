@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BattlePlanPage } from './BattlePlanPage'
 import type { BattleTask, Project, TaskType } from '../../lib/api'
@@ -56,6 +56,22 @@ function response(data: unknown, status = 200) {
   return status === 204
     ? new Response(null, { status })
     : new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+function shortDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    .format(new Date(`${value}T12:00:00Z`))
+}
+
+function HistoryControls() {
+  const navigate = useNavigate()
+  return (
+    <>
+      <button type="button" onClick={() => void navigate(-1)}>History back</button>
+      <button type="button" onClick={() => void navigate(1)}>History forward</button>
+      <button type="button" onClick={() => void navigate('/battle-plan?task=12')}>Open reminder task</button>
+    </>
+  )
 }
 
 describe('BattlePlanPage', () => {
@@ -148,6 +164,39 @@ describe('BattlePlanPage', () => {
     expect(screen.getByText('U · high')).toBeInTheDocument()
   })
 
+  it('renders planned metadata before Due and keeps the planned row passive', async () => {
+    const user = userEvent.setup()
+    activeTasks = [task({ planned_dates: ['2026-08-14', '2026-08-15', '2026-08-17'] })]
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+
+    const planned = await screen.findByLabelText(`Planned Today · ${shortDate('2026-08-15')} +2`)
+    const due = screen.getByText(shortDate('2099-08-15'))
+    expect(planned.compareDocumentPosition(due) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await user.click(planned)
+    expect(screen.getByRole('dialog', { name: 'Task details' })).toBeInTheDocument()
+  })
+
+  it('shows five planned dates in details, expands inline, and links every date to Day', async () => {
+    const user = userEvent.setup()
+    activeTasks = [task({
+      planned_dates: [
+        '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16',
+        '2026-08-17', '2026-08-18', '2026-08-19',
+      ],
+    })]
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+
+    const section = await screen.findByRole('region', { name: 'Planned Dates' })
+    expect(within(section).getAllByRole('link')).toHaveLength(5)
+    expect(within(section).getByRole('link', { name: `Today · ${shortDate('2026-08-15')}` })).toHaveAttribute('href', '/day/2026-08-15')
+    expect(within(section).getByRole('button', { name: 'Show all (7)' })).toBeInTheDocument()
+
+    await user.click(within(section).getByRole('button', { name: 'Show all (7)' }))
+    expect(within(section).getAllByRole('link')).toHaveLength(7)
+    expect(within(section).getByRole('button', { name: 'Show less' })).toBeInTheDocument()
+  })
+
   it('toggles Ready to Plan without changing work status', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
@@ -199,7 +248,9 @@ describe('BattlePlanPage', () => {
         body: expect.stringMatching(/"status":"blocked".*"urgency":"low"/),
       }),
     ))
-    expect(screen.queryByRole('dialog', { name: 'Task details' })).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Task details' })).not.toBeInTheDocument()
+    })
   })
 
   it('guards unsaved edits and restores focus after the dialog closes', async () => {
@@ -229,6 +280,67 @@ describe('BattlePlanPage', () => {
     await user.keyboard('{Enter}')
 
     expect(screen.getByRole('dialog', { name: 'Task details' })).toBeInTheDocument()
+  })
+
+  it('keeps task details synchronized with browser history', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/battle-plan']}>
+        <BattlePlanPage />
+        <HistoryControls />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByText('Draft launch brief'))
+    expect(screen.getByRole('dialog', { name: 'Task details' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'History back' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Task details' })).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'History forward' }))
+    expect(await screen.findByRole('dialog', { name: 'Task details' })).toBeInTheDocument()
+  })
+
+  it('keeps the selected collection synchronized with browser history', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/battle-plan']}>
+        <BattlePlanPage />
+        <HistoryControls />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Draft launch brief')
+    await user.click(screen.getByRole('button', { name: 'Archive' }))
+    expect(await screen.findByRole('heading', { name: 'Archive' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'History back' }))
+    expect(await screen.findByRole('heading', { name: 'All Tasks' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'History forward' }))
+    expect(await screen.findByRole('heading', { name: 'Archive' })).toBeInTheDocument()
+  })
+
+  it('opens the requested task when in-app navigation changes the query', async () => {
+    const user = userEvent.setup()
+    activeTasks = [
+      task(),
+      task({ id: 12, title: 'Follow up from reminder', position: 1 }),
+    ]
+    render(
+      <MemoryRouter initialEntries={['/battle-plan?task=11']}>
+        <BattlePlanPage />
+        <HistoryControls />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByLabelText('Title')).toHaveValue('Draft launch brief')
+    await user.click(screen.getByRole('button', { name: 'Open reminder task' }))
+    await waitFor(() => {
+      expect(screen.getByLabelText('Title')).toHaveValue('Follow up from reminder')
+    })
   })
 
   it('keeps task status dragging enabled when tasks are sorted by deadline', async () => {
@@ -292,7 +404,7 @@ describe('BattlePlanPage', () => {
     const user = userEvent.setup()
     activeTasks = [task({
       deadline_date: '2026-08-15',
-      subtasks: [task({ id: 21, parent_id: 11, title: 'Check figures', status: 'in_progress', deadline_date: '2026-08-16', subtasks: [] })],
+      subtasks: [task({ id: 21, parent_id: 11, title: 'Check figures', status: 'in_progress', deadline_date: '2026-08-16', planned_dates: ['2026-08-16'], subtasks: [] })],
     })]
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
 
@@ -301,6 +413,7 @@ describe('BattlePlanPage', () => {
     expect(within(checklist).getByText('In progress')).toBeInTheDocument()
     expect(screen.getByText('Today')).toBeInTheDocument()
     expect(within(checklist).getByText('Tomorrow')).toBeInTheDocument()
+    expect(within(checklist).getByLabelText(`Planned Tomorrow · ${shortDate('2026-08-16')}`)).toBeInTheDocument()
 
     await user.click(screen.getByLabelText('Complete subtask Check figures'))
     await waitFor(() => expect(screen.getByRole('button', { name: '1 of 1 subtasks completed for Draft launch brief' })).toBeInTheDocument())

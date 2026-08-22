@@ -9,6 +9,8 @@ import com.timebox.android.data.remote.RecurrenceRuleDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
 import com.timebox.android.data.remote.ProjectCreateDto
+import com.timebox.android.data.remote.PlanningCommitDto
+import com.timebox.android.data.remote.PlanningPlacementDto
 import com.timebox.android.data.remote.TaskIdsDto
 import com.timebox.android.data.remote.TaskPlacementDto
 import com.timebox.android.data.remote.TaskReorderDto
@@ -40,7 +42,8 @@ class BattlePlanContractTest {
                 "title":"Plan","description":"Details","ready_to_plan":true,"is_blocked":true,"blocking_reason":"Waiting for legal","status":"in_progress","urgency":"high","importance":"medium",
                 "deadline_date":null,"deadline_at":"2026-08-20T09:00:00+08:00","reminder_at":"2026-08-20T08:00:00+08:00","reminder_delivered_at":null,
                 "position":2,"archived_at":null,"deleted_at":null,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T02:00:00Z","overdue":false,
-                "subtasks":[{"id":11,"parent_id":10,"parent_title":"Plan","project_id":2,"task_type_id":null,"title":"Outline","description":"","ready_to_plan":false,"status":"open","position":0,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T01:00:00Z","subtasks":[]}]
+                "planned_dates":["2026-08-19","bad","2026-08-17","2026-08-17"],
+                "subtasks":[{"id":11,"parent_id":10,"parent_title":"Plan","project_id":2,"task_type_id":null,"title":"Outline","description":"","ready_to_plan":false,"status":"open","position":0,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T01:00:00Z","planned_dates":["2026-08-18"],"subtasks":[]}]
               }],"timezone":"Asia/Singapore","server_now_iso":"2026-08-17T12:00:00+08:00"
             }""",
         ).toModel()
@@ -53,6 +56,8 @@ class BattlePlanContractTest {
         assertEquals(LocalDate.parse("2026-08-17"), task.quotaPeriodStart)
         assertEquals(Instant.parse("2026-08-20T01:00:00Z"), task.deadlineAt)
         assertEquals("Outline", task.subtasks.single().title)
+        assertEquals(listOf(LocalDate.parse("2026-08-17"), LocalDate.parse("2026-08-19")), task.plannedDates)
+        assertEquals(listOf(LocalDate.parse("2026-08-18")), task.subtasks.single().plannedDates)
         assertEquals("Asia/Singapore", dto.timezone)
     }
 
@@ -65,6 +70,7 @@ class BattlePlanContractTest {
 
         assertEquals(TaskStatus.Open, dto.status)
         assertTrue(dto.isBlocked)
+        assertEquals(emptyList<LocalDate>(), dto.plannedDates)
     }
 
     @Test
@@ -114,6 +120,24 @@ class BattlePlanContractTest {
         val unlinked = json.encodeToString(TimeBlockCreateDto("planned", 3, null, null, 540, 570))
         assertTrue("task_id" !in unlinked)
         assertNull(json.decodeFromString(TimeBlockCreateDto.serializer(), unlinked).taskId)
+    }
+
+    @Test
+    fun `planning commit serializes an atomic multi-day session`() {
+        val encoded = json.encodeToString(
+            PlanningCommitDto.serializer(),
+            PlanningCommitDto(
+                listOf(
+                    PlanningPlacementDto("2026-08-24", 10, 3, 540, 570),
+                    PlanningPlacementDto("2026-08-25", 11, 4, 600, 660),
+                )
+            ),
+        )
+
+        assertTrue("\"task_id\":10" in encoded)
+        assertTrue("\"task_type_id\":4" in encoded)
+        assertTrue("\"date\":\"2026-08-25\"" in encoded)
+        assertTrue("\"end_minute\":660" in encoded)
     }
 
     @Test

@@ -23,6 +23,7 @@ import {
   type TaskType,
 } from '../../lib/api'
 import { BattlePlanCard } from './BattlePlanCard'
+import { useAppClock } from '../../lib/useAppClock'
 import { BattlePlanSidebar } from './BattlePlanSidebar'
 import { BATTLE_PLAN_STORAGE_KEY, type BattlePlanScope } from './battlePlanState'
 import { ProjectEditor } from './ProjectEditor'
@@ -87,26 +88,29 @@ function taskCount(tasks: BattleTask[], projectId: number) {
 
 export function BattlePlanPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const requestedCollectionParam = searchParams.get('collection')
+  const requestedCollection: TaskCollection = requestedCollectionParam === 'archived' || requestedCollectionParam === 'trash'
+    ? requestedCollectionParam
+    : 'active'
+  const requestedTaskIdValue = Number(searchParams.get('task'))
+  const requestedTaskId = Number.isFinite(requestedTaskIdValue) && requestedTaskIdValue > 0
+    ? requestedTaskIdValue
+    : null
   const [preferences, setPreferences] = useState<Preferences>(readPreferences)
-  const [collection, setCollection] = useState<TaskCollection>(() => {
-    const requested = searchParams.get('collection')
-    return requested === 'archived' || requested === 'trash' ? requested : 'active'
-  })
+  const collection = requestedCollection
+  const [loadedCollection, setLoadedCollection] = useState<TaskCollection | null>(null)
   const [tasks, setTasks] = useState<BattleTask[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [timezone, setTimezone] = useState('UTC')
   const [serverNowIso, setServerNowIso] = useState('1970-01-01T00:00:00Z')
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
-    const value = Number(searchParams.get('task'))
-    return Number.isFinite(value) && value > 0 ? value : null
-  })
+  const selectedTaskId = requestedTaskId
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [mobileSidebar, setMobileSidebar] = useState(false)
   const [undoTaskId, setUndoTaskId] = useState<number | null>(null)
+  const screenNowIso = useAppClock(serverNowIso, timezone)
 
   const setPrefs = useCallback((change: Partial<Preferences>) => {
     setPreferences((current) => {
@@ -140,20 +144,23 @@ export function BattlePlanPage() {
         setServerNowIso(taskResult.server_now_iso)
         setProjects(projectRows)
         setTaskTypes(typeRows)
+        setError(null)
+        setLoadedCollection(collection)
         if (preferences.scope.startsWith('project:')) {
           const id = Number(preferences.scope.slice(8))
           if (!projectRows.some((project) => project.id === id)) setPrefs({ scope: 'all' })
         }
       })
-      .catch((cause) => active && setError(errorMessage(cause)))
-      .finally(() => active && setLoading(false))
+      .catch((cause) => {
+        if (!active) return
+        setTasks([])
+        setError(errorMessage(cause))
+        setLoadedCollection(collection)
+      })
     return () => { active = false }
   }, [collection, preferences.scope, setPrefs])
 
   const switchCollection = (next: TaskCollection) => {
-    setLoading(true)
-    setCollection(next)
-    setSelectedTaskId(null)
     setSearchParams(next === 'active' ? {} : { collection: next })
     setError(null)
   }
@@ -264,12 +271,10 @@ export function BattlePlanPage() {
   }
 
   const openTask = (id: number) => {
-    setSelectedTaskId(id)
     setSearchParams({ task: String(id) })
   }
 
   const closeTask = () => {
-    setSelectedTaskId(null)
     setSearchParams({})
   }
 
@@ -334,8 +339,8 @@ export function BattlePlanPage() {
             ) : null}
           </header>
 
-          {error ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
-          {loading ? <p className="text-on-surface-variant">Loading Battle Plan…</p> : collection === 'active' ? (
+          {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
+          {loadedCollection !== collection ? <p className="text-on-surface-variant">Loading Battle Plan…</p> : collection === 'active' ? (
             <>
               <TaskFilters preferences={preferences} taskTypes={taskTypes} onChange={setPrefs} />
               <DragDropProvider onDragEnd={(event) => void handleDragEnd(event)}>
@@ -349,7 +354,7 @@ export function BattlePlanPage() {
                       taskTypes={taskTypes}
                       scope={preferences.scope}
                       timezone={timezone}
-                      serverNowIso={serverNowIso}
+                      serverNowIso={screenNowIso}
                       onCreate={createTask}
                       onOpen={openTask}
                       onAddSubtask={addSubtask}
@@ -364,7 +369,7 @@ export function BattlePlanPage() {
             <UtilityTaskList
               tasks={tasks}
               collection={collection}
-              serverNowIso={serverNowIso}
+              serverNowIso={screenNowIso}
               onRestore={async (task) => {
                 if (collection === 'archived') await api.unarchiveBattleTask(task.id)
                 else await api.restoreBattleTask(task.id)
@@ -382,10 +387,12 @@ export function BattlePlanPage() {
 
       {selectedTask && collection === 'active' ? (
         <TaskDetailPanel
+          key={selectedTask.parent_id ?? selectedTask.id}
           task={selectedTask.parent_id == null ? selectedTask : tasks.find((task) => task.id === selectedTask.parent_id) ?? selectedTask}
           projects={projects}
           taskTypes={taskTypes}
           timezone={timezone}
+          serverNowIso={screenNowIso}
           onClose={closeTask}
           onPatch={patchTask}
           onAddSubtask={addSubtask}

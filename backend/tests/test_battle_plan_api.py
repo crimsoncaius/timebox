@@ -15,6 +15,52 @@ def create_task(client, title="Task", **extra):
     return response.json()
 
 
+def create_block(client, date, task_id, task_type_id, lane="planned", start_minute=540):
+    response = client.post(
+        f"/days/{date}/blocks",
+        json={
+            "lane": lane,
+            "task_id": task_id,
+            "task_type_id": task_type_id,
+            "start_minute": start_minute,
+            "end_minute": start_minute + 30,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_task_responses_include_unique_sorted_planned_dates_for_roots_and_subtasks(client):
+    task_type = client.post("/task-types", json={"name": "Focus"}).json()
+    parent = create_task(client, "Parent", task_type_id=task_type["id"])
+    child = create_task(
+        client,
+        "Child",
+        parent_id=parent["id"],
+        task_type_id=task_type["id"],
+    )
+
+    create_block(client, "2026-08-24", parent["id"], task_type["id"])
+    create_block(client, "2026-08-22", parent["id"], task_type["id"])
+    create_block(client, "2026-08-22", parent["id"], task_type["id"], start_minute=600)
+    create_block(client, "2026-08-21", parent["id"], task_type["id"], lane="actual")
+    create_block(client, "2026-08-23", child["id"], task_type["id"])
+
+    rows = client.get("/tasks").json()["items"]
+    assert rows[0]["planned_dates"] == ["2026-08-22", "2026-08-24"]
+    assert rows[0]["subtasks"][0]["planned_dates"] == ["2026-08-23"]
+
+    patched = client.patch(f"/tasks/{parent['id']}", json={"description": "Updated"})
+    assert patched.json()["planned_dates"] == ["2026-08-22", "2026-08-24"]
+    assert patched.json()["subtasks"][0]["planned_dates"] == ["2026-08-23"]
+
+    trashed = client.delete(f"/tasks/{parent['id']}")
+    assert trashed.json()["planned_dates"] == ["2026-08-22", "2026-08-24"]
+    assert trashed.json()["subtasks"] == []
+
+    created_without_blocks = create_task(client, "Empty")
+    assert created_without_blocks["planned_dates"] == []
+
+
 def test_project_crud_and_permanent_cascade(client):
     created = client.post(
         "/projects",

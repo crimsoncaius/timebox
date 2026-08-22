@@ -98,20 +98,25 @@ export function TaskTypesPage() {
   }
 
   const attemptRemove = async (id: number) => {
-    setEditingId((cur) => (cur === id ? null : cur))
-    setSaveState('saving')
-    setError(null)
     const selected = types.find((t) => t.id === id)
-    if ((selected?.task_usage_count ?? 0) > 0) {
+    const name = selected?.name ?? `Task type #${id}`
+    const blockCount = selected?.usage_count ?? 0
+    const taskCount = selected?.task_usage_count ?? 0
+    if (blockCount > 0 || taskCount > 0) {
+      setEditingId((cur) => (cur === id ? null : cur))
       setResolveDelete({
         id,
-        name: selected?.name ?? `Task type #${id}`,
-        blockCount: selected?.usage_count ?? 0,
-        taskCount: selected?.task_usage_count ?? 0,
+        name,
+        blockCount,
+        taskCount,
       })
       setSaveState('idle')
       return
     }
+    if (!window.confirm(`Permanently delete “${name}”? This cannot be undone.`)) return
+    setEditingId((cur) => (cur === id ? null : cur))
+    setSaveState('saving')
+    setError(null)
     try {
       await api.deleteTaskType(id)
       await load()

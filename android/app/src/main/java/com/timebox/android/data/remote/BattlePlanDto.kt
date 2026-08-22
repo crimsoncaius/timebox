@@ -58,6 +58,7 @@ data class BattleTaskDto(
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     val overdue: Boolean = false,
+    @SerialName("planned_dates") val plannedDates: List<String> = emptyList(),
     val subtasks: List<BattleTaskDto> = emptyList(),
 )
 

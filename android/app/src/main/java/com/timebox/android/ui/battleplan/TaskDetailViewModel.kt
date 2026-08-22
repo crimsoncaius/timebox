@@ -19,6 +19,8 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +38,7 @@ data class TaskDetailUiState(
     val projects: List<Project> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
     val timezone: String = "UTC",
+    val serverNow: Instant = Instant.EPOCH,
     val title: String = "",
     val description: String = "",
     val status: TaskStatus = TaskStatus.Open,
@@ -66,6 +69,7 @@ data class TaskDetailUiState(
 class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel() {
     private val _state = MutableStateFlow(TaskDetailUiState())
     val state: StateFlow<TaskDetailUiState> = _state.asStateFlow()
+    private var clockJob: Job? = null
 
     fun load(taskId: Int) {
         _state.value = TaskDetailUiState(taskId = taskId)
@@ -98,6 +102,7 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
                 it.copy(
                     loading = false, task = resolvedTask, parentTask = parent?.takeIf { root -> root.id != resolvedTask.id },
                     projects = projectsResult.getOrThrow(), taskTypes = typesResult.getOrThrow(), timezone = resolvedList.timezone,
+                    serverNow = resolvedList.serverNow,
                     title = resolvedTask.title, description = resolvedTask.description, status = resolvedTask.status,
                     projectId = resolvedTask.projectId, taskTypeId = resolvedTask.taskTypeId, urgency = resolvedTask.urgency,
                     importance = resolvedTask.importance, deadlineMode = deadlineMode,
@@ -108,6 +113,19 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
                     reminderTime = reminderLocal?.toLocalTime()?.format(TIME_FORMAT).orEmpty(),
                     readyToPlan = resolvedTask.readyToPlan, error = null,
                 )
+            }
+            anchorClock(resolvedList.serverNow, resolvedList.timezone)
+        }
+    }
+
+    private fun anchorClock(serverNow: Instant, timezone: String) {
+        clockJob?.cancel()
+        val anchor = AppClockAnchor(serverNow)
+        clockJob = viewModelScope.launch {
+            while (true) {
+                val current = anchor.current()
+                delay(millisUntilNextAppMidnight(current, timezone))
+                _state.update { it.copy(serverNow = anchor.current()) }
             }
         }
     }

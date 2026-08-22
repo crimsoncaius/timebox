@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 import app.models  # noqa: F401
 from app.db.base import Base
-from app.db.session import get_db, get_engine
+from app.db.session import get_engine
 from app.main import app
 
 

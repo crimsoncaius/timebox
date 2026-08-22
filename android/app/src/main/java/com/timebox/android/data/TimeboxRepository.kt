@@ -3,6 +3,8 @@ package com.timebox.android.data
 import com.timebox.android.data.remote.ApiFactory
 import com.timebox.android.data.remote.BattleTaskCreateDto
 import com.timebox.android.data.remote.PatchField
+import com.timebox.android.data.remote.PlanningCommitDto
+import com.timebox.android.data.remote.PlanningPlacementDto
 import com.timebox.android.data.remote.ProjectCreateDto
 import com.timebox.android.data.remote.RecurrenceRuleDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
@@ -174,6 +176,22 @@ class TimeboxRepository private constructor(
             blockId,
             timeBlockPatchBody(taskTypeId, taskId, note, startMinute, endMinute),
         ).toModel()
+    }
+
+    suspend fun commitPlan(placements: List<PlanningCommitPlacement>): Result<List<Day>> = call {
+        api().commitPlan(
+            PlanningCommitDto(
+                placements.map {
+                    PlanningPlacementDto(
+                        date = it.date.toString(),
+                        taskId = it.taskId,
+                        taskTypeId = it.taskTypeId,
+                        startMinute = it.startMinute,
+                        endMinute = it.endMinute,
+                    )
+                }
+            )
+        ).days.map { it.toModel() }
     }
 
     suspend fun listProjects(): Result<List<Project>> =

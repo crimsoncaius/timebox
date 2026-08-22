@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import {
@@ -23,11 +23,6 @@ import { PriorityControl } from './TaskDetailPanel'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const buttonClass = 'rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
-
-function todayIso() {
-  const now = new Date()
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
-}
 
 function displayDate(value: string | null) {
   if (!value) return '—'
@@ -64,31 +59,44 @@ export function RecurringPage() {
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [timezone, setTimezone] = useState('UTC')
+  const [applicationToday, setApplicationToday] = useState<string | null>(null)
+  const latestLoadRequest = useRef(0)
   const selectedId = Number(searchParams.get('recurring')) || null
   const selected = templates.find((template) => template.id === selectedId) ?? null
+  const formApplicationToday = editing?.start_date ?? applicationToday
 
-  const load = useCallback(async (nextStatus: RecurrenceStatus = status) => {
+  const load = useCallback(async (nextStatus: RecurrenceStatus) => {
+    const requestId = ++latestLoadRequest.current
     setLoading(true)
     setError(null)
     try {
       const [rows, projectRows, typeRows] = await Promise.all([
         api.listRecurringTemplates(nextStatus), api.listProjects(), api.listTaskTypes(),
       ])
+      if (requestId !== latestLoadRequest.current) return
       setTemplates(rows)
       setProjects(projectRows)
       setTaskTypes(typeRows)
     } catch (cause) {
+      if (requestId !== latestLoadRequest.current) return
       setError(cause instanceof Error ? cause.message : 'Failed to load recurring templates')
     } finally {
-      setLoading(false)
+      if (requestId === latestLoadRequest.current) setLoading(false)
     }
-  }, [status])
+  }, [])
 
-  useEffect(() => { void load(status) }, [load, status])
+  useEffect(() => {
+    void load('active')
+    return () => { latestLoadRequest.current += 1 }
+  }, [load])
 
   useEffect(() => {
     let active = true
-    void api.health().then((health) => { if (active) setTimezone(health.timezone) }).catch(() => undefined)
+    void api.health().then((health) => {
+      if (!active) return
+      setTimezone(health.timezone)
+      setApplicationToday(health.today)
+    }).catch(() => undefined)
     return () => { active = false }
   }, [])
 
@@ -155,14 +163,14 @@ export function RecurringPage() {
             <h1 className="mt-2 font-headline text-[2.5rem] font-extralight leading-none tracking-tighter">Recurring</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-on-surface-variant">Templates create independent Battle Plan tasks seven days ahead.</p>
           </div>
-          <button type="button" className={`${buttonClass} bg-primary text-on-primary hover:bg-primary-dim`} onClick={() => setCreating(true)}>
+          <button type="button" disabled={!applicationToday} className={`${buttonClass} bg-primary text-on-primary hover:bg-primary-dim disabled:cursor-wait disabled:opacity-50`} onClick={() => { if (applicationToday) setCreating(true) }}>
             New recurring task
           </button>
           </header>
 
         <div className="mt-8 flex gap-1 rounded-xl bg-surface-container-low p-1 sm:w-fit dark:bg-dark-surface-container-low">
           {(['active', 'paused', 'ended'] as RecurrenceStatus[]).map((value) => (
-            <button key={value} type="button" onClick={() => { setStatus(value); setSearchParams({ view: 'recurring' }) }} className={`${buttonClass} capitalize ${status === value ? 'bg-surface-container-lowest shadow-sm dark:bg-dark-surface-container-high' : 'text-on-surface-variant'}`}>
+            <button key={value} type="button" onClick={() => { setStatus(value); setSearchParams({ view: 'recurring' }); void load(value) }} className={`${buttonClass} capitalize ${status === value ? 'bg-surface-container-lowest shadow-sm dark:bg-dark-surface-container-high' : 'text-on-surface-variant'}`}>
               {value[0].toUpperCase() + value.slice(1)}
             </button>
           ))}
@@ -193,10 +201,11 @@ export function RecurringPage() {
       </div>
 
       {selected ? <TemplateDetail template={selected} onClose={() => setSearchParams({ view: 'recurring' })} onEdit={() => setEditing(selected)} /> : null}
-      {creating || editing ? (
+      {(creating || editing) && formApplicationToday ? (
         <TemplateForm
           initialMode={editing?.mode ?? 'scheduled'}
           template={editing}
+          applicationToday={formApplicationToday}
           projects={projects}
           taskTypes={taskTypes}
           onClose={() => { setCreating(false); setEditing(null) }}
@@ -303,9 +312,14 @@ const QUOTA_PRESETS: Array<{ id: RecurrencePreset; label: string }> = [
 
 const recurringFieldClass = 'w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-[9px] text-sm text-[var(--task-detail-primary)] outline-none transition-colors duration-120 ease-out hover:border-[var(--task-detail-input-hover)] focus-visible:border-[var(--task-detail-input-hover)] focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]'
 
-function currentWeekdayIndex() {
-  const day = new Date().getDay()
+function weekdayIndexForIsoDate(value: string) {
+  const [year, month, dayOfMonth] = value.split('-').map(Number)
+  const day = new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay()
   return day === 0 ? 6 : day - 1
+}
+
+function dayOfMonthForIsoDate(value: string) {
+  return Number(value.slice(8, 10))
 }
 
 function initialPreset(mode: RecurrenceMode, frequency: RecurrenceFrequency, interval: number, weekdays: number[]): RecurrencePreset {
@@ -344,9 +358,10 @@ function recurrenceSummary({
   return `${cadence}, starting ${start}, ${endingText}.`
 }
 
-function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onSaved }: {
+function TemplateForm({ initialMode, template, applicationToday, projects, taskTypes, onClose, onSaved }: {
   initialMode: RecurrenceMode
   template: RecurringTemplate | null
+  applicationToday: string
   projects: Project[]
   taskTypes: TaskType[]
   onClose: () => void
@@ -361,10 +376,10 @@ function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onS
   const [importance, setImportance] = useState<PriorityLevel | null>(template?.importance ?? null)
   const [frequency, setFrequency] = useState<RecurrenceFrequency>(template?.frequency ?? 'daily')
   const [interval, setInterval] = useState(template?.interval ?? 1)
-  const [weekdays, setWeekdays] = useState<number[]>(template?.weekdays ?? [currentWeekdayIndex()])
-  const [monthDay, setMonthDay] = useState(template?.month_day ?? new Date().getDate())
+  const [weekdays, setWeekdays] = useState<number[]>(template?.weekdays ?? [weekdayIndexForIsoDate(applicationToday)])
+  const [monthDay, setMonthDay] = useState(template?.month_day ?? dayOfMonthForIsoDate(applicationToday))
   const [quotaCount, setQuotaCount] = useState(template?.quota_count ?? 3)
-  const [startDate, setStartDate] = useState(template?.start_date ?? todayIso())
+  const [startDate, setStartDate] = useState(template?.start_date ?? applicationToday)
   const [ending, setEnding] = useState<'never' | 'date' | 'cycles'>(template?.end_date ? 'date' : template?.cycle_limit ? 'cycles' : 'never')
   const [endDate, setEndDate] = useState(template?.end_date ?? '')
   const [cycleLimit, setCycleLimit] = useState(template?.cycle_limit ?? 10)
@@ -376,8 +391,33 @@ function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onS
     initialMode,
     template?.frequency ?? 'daily',
     template?.interval ?? 1,
-    template?.weekdays ?? [currentWeekdayIndex()],
+    template?.weekdays ?? [weekdayIndexForIsoDate(applicationToday)],
   ))
+
+  const isDirty = useMemo(() => (
+    mode !== initialMode
+    || title !== (template?.title ?? '')
+    || description !== (template?.description ?? '')
+    || projectId !== (template?.project_id ? String(template.project_id) : '')
+    || taskTypeId !== (template?.task_type_id ? String(template.task_type_id) : '')
+    || urgency !== (template?.urgency ?? null)
+    || importance !== (template?.importance ?? null)
+    || frequency !== (template?.frequency ?? 'daily')
+    || interval !== (template?.interval ?? 1)
+    || JSON.stringify(weekdays) !== JSON.stringify(template?.weekdays ?? [weekdayIndexForIsoDate(applicationToday)])
+    || monthDay !== (template?.month_day ?? dayOfMonthForIsoDate(applicationToday))
+    || quotaCount !== (template?.quota_count ?? 3)
+    || startDate !== (template?.start_date ?? applicationToday)
+    || ending !== (template?.end_date ? 'date' : template?.cycle_limit ? 'cycles' : 'never')
+    || endDate !== (template?.end_date ?? '')
+    || cycleLimit !== (template?.cycle_limit ?? 10)
+    || checklist !== (template?.checklist_items.map((item) => item.title).join('\n') ?? '')
+  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, mode, monthDay, projectId, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
+
+  const requestClose = useCallback(() => {
+    if (isDirty && !window.confirm('Discard your unsaved changes?')) return
+    onClose()
+  }, [isDirty, onClose])
 
   const rule = useMemo<RecurrenceRuleWrite>(() => ({
     mode, frequency, interval: mode === 'quota' ? 1 : interval,
@@ -400,11 +440,11 @@ function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onS
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') requestClose()
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
+  }, [requestClose])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -433,7 +473,7 @@ function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onS
     if (nextPreset === 'weekly' || nextPreset === 'weekdays' || nextPreset === 'week') setFrequency('weekly')
     if (nextPreset === 'monthly' || nextPreset === 'month') setFrequency('monthly')
     if (nextPreset === 'weekdays') setWeekdays([0, 1, 2, 3, 4])
-    if (nextPreset === 'weekly' && weekdays.length === 0) setWeekdays([currentWeekdayIndex()])
+    if (nextPreset === 'weekly' && weekdays.length === 0) setWeekdays([weekdayIndexForIsoDate(applicationToday)])
   }
 
   const summary = recurrenceSummary({
@@ -471,14 +511,14 @@ function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onS
   }
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center overflow-hidden bg-black/35 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="fixed inset-0 z-100 flex items-center justify-center overflow-hidden bg-black/35 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose() }}>
       <form role="dialog" aria-modal="true" aria-label={template ? `Edit ${template.title}` : 'New recurring task'} onSubmit={(event) => void submit(event)} className="task-detail-dialog max-h-[94vh] w-full max-w-[640px] overflow-y-auto rounded-3xl border border-[var(--task-detail-border)] bg-surface text-[var(--task-detail-primary)] shadow-[var(--task-detail-shadow)] dark:bg-dark-background">
         <header className="flex items-start justify-between gap-4 px-5 pt-[26px] pb-[18px] sm:px-7">
           <div>
             <p className="font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Recurring template</p>
             <h2 className="mt-2 font-headline text-[28px] font-light tracking-[-0.02em]">{template ? template.title : 'New recurring task'}</h2>
           </div>
-          <button type="button" aria-label="Close recurring form" onClick={onClose} className="border-0 bg-transparent p-1.5 text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]">
+          <button type="button" aria-label="Close recurring form" onClick={requestClose} className="border-0 bg-transparent p-1.5 text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]">
             <span className="material-symbols-outlined text-[20px]" aria-hidden>close</span>
           </button>
         </header>
@@ -594,7 +634,7 @@ function TemplateForm({ initialMode, template, projects, taskTypes, onClose, onS
         </section>
 
         <footer className="flex items-center justify-end gap-2.5 border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7">
-          <button type="button" className="border-0 bg-transparent px-2 py-[9px] text-[13px] text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" onClick={onClose}>Cancel</button>
+          <button type="button" className="border-0 bg-transparent px-2 py-[9px] text-[13px] text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" onClick={requestClose}>Cancel</button>
           <button type="submit" disabled={saving || !title.trim()} className="rounded-[10px] bg-primary px-5 py-[9px] text-[13px] font-medium text-on-primary transition-colors duration-120 ease-out hover:bg-primary-dim focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary">{saving ? 'Saving…' : template ? 'Save changes' : 'Create recurrence'}</button>
         </footer>
       </form>

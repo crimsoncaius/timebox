@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DayRead, TaskType, TimeBlock } from '../lib/api'
 import { TimeBlockModal } from './TimeBlockModal'
 
@@ -41,6 +41,10 @@ const emptyDay: DayRead = {
 }
 
 describe('TimeBlockModal', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shows read-only start and end as HH:MM', () => {
     render(
       <TimeBlockModal
@@ -183,5 +187,63 @@ describe('TimeBlockModal', () => {
     )
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument()
+  })
+
+  it('preserves the time block when permanent deletion is cancelled', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(
+      <TimeBlockModal
+        open
+        block={makeBlock()}
+        draft={null}
+        day={emptyDay}
+        taskTypes={taskTypes}
+        onClose={onClose}
+        onSave={vi.fn()}
+        onDelete={onDelete}
+        onCreateTaskTypePath={noopCreate}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Permanently delete this time block? This cannot be undone.',
+    )
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('permanently deletes and closes the time block after confirmation', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(
+      <TimeBlockModal
+        open
+        block={makeBlock()}
+        draft={null}
+        day={emptyDay}
+        taskTypes={taskTypes}
+        onClose={onClose}
+        onSave={vi.fn()}
+        onDelete={onDelete}
+        onCreateTaskTypePath={noopCreate}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Permanently delete this time block? This cannot be undone.',
+    )
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1))
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

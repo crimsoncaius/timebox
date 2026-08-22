@@ -41,7 +41,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Timebox API", lifespan=lifespan)
 
 _settings = get_settings()
-_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
 
 
 def cors_middleware_options(settings: Settings) -> dict[str, object]:

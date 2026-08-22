@@ -3,8 +3,10 @@ package com.timebox.android.ui.day
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import com.timebox.android.data.Day
+import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
+import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TimeBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,6 +14,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.Instant
 
 class PlanningLogicTest {
     @Test
@@ -32,8 +35,14 @@ class PlanningLogicTest {
     }
 
     @Test
-    fun `occupied planned slots and pending placements are unavailable`() {
+    fun `occupied planned slots and session drafts are unavailable`() {
         val day = dayWithBlocks(block(1, 10 * 60, 11 * 60))
+        val draft = PlanningDraftPlacement(
+            day.date,
+            task(7, "Draft"),
+            12 * 60,
+            12 * 60 + 30,
+        )
 
         assertFalse(isPlanningDropAvailable(day, 10 * 60))
         assertTrue(isPlanningDropAvailable(day, 11 * 60))
@@ -41,7 +50,8 @@ class PlanningLogicTest {
             isPlanningDropAvailable(
                 day,
                 12 * 60,
-                PendingPlanningPlacement(day.date, 7, "Pending", 12 * 60, 12 * 60 + 30),
+                12 * 60 + 30,
+                listOf(draft),
             ),
         )
     }
@@ -61,6 +71,18 @@ class PlanningLogicTest {
     fun `touching intervals do not overlap`() {
         assertFalse(blocksOverlap(480, 510, 510, 540))
         assertTrue(blocksOverlap(480, 510, 500, 530))
+    }
+
+    @Test
+    fun `a draft ignores itself but not other drafts and dates are independent`() {
+        val day = dayWithBlocks()
+        val current = PlanningDraftPlacement(day.date, task(7, "Current"), 540, 570)
+        val other = PlanningDraftPlacement(day.date, task(8, "Other"), 600, 630)
+        val anotherDate = PlanningDraftPlacement(day.date.plusDays(1), task(9, "Tomorrow"), 660, 690)
+
+        assertTrue(isPlanningDropAvailable(day, 540, 570, listOf(current, other), excludeTaskId = 7))
+        assertFalse(isPlanningDropAvailable(day, 600, 630, listOf(current, other), excludeTaskId = 7))
+        assertTrue(isPlanningDropAvailable(day, 660, 690, listOf(anotherDate)))
     }
 
     private fun dayWithBlocks(vararg blocks: TimeBlock) = Day(
@@ -85,5 +107,41 @@ class PlanningLogicTest {
         plannedBlockId = null,
         startMinute = start,
         endMinute = end,
+    )
+
+    private fun task(id: Int, title: String) = BattleTask(
+        id = id,
+        parentId = null,
+        parentTitle = null,
+        projectId = null,
+        project = null,
+        taskTypeId = null,
+        taskType = null,
+        recurringTemplateId = null,
+        recurringTemplateTitle = null,
+        occurrenceKey = null,
+        recurrenceKind = null,
+        quotaPeriodStart = null,
+        quotaPeriodEnd = null,
+        expectedSessions = null,
+        sessionIndex = null,
+        quotaCompleted = null,
+        title = title,
+        description = "",
+        readyToPlan = true,
+        status = TaskStatus.Open,
+        urgency = null,
+        importance = null,
+        deadlineDate = null,
+        deadlineAt = null,
+        reminderAt = null,
+        reminderDeliveredAt = null,
+        position = 0,
+        archivedAt = null,
+        deletedAt = null,
+        createdAt = Instant.EPOCH,
+        updatedAt = Instant.EPOCH,
+        overdue = false,
+        subtasks = emptyList(),
     )
 }

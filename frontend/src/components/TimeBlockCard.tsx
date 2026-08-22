@@ -140,10 +140,19 @@ export function TimeBlockCard({
     }
   }, [block.end_minute, block.start_minute, onDragSessionChange, onPatch, onSwipeComplete])
 
+  const cancelDrag = useCallback(() => {
+    const wasDragging = dragRef.current != null
+    dragRef.current = null
+    setDrag(null)
+    if (wasDragging) onDragSessionChange?.(false)
+  }, [onDragSessionChange])
+
   const startResize = useCallback(
     (edge: 'start' | 'end', e: React.PointerEvent) => {
       e.stopPropagation()
       e.preventDefault()
+      const el = e.currentTarget as HTMLElement
+      const pointerId = e.pointerId
       const initial: DragState = {
         kind: 'resize',
         edge,
@@ -155,6 +164,7 @@ export function TimeBlockCard({
       onDragSessionChange?.(true)
 
       const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
         setDrag((d) => {
           if (!d || d.kind !== 'resize') return d
           const m = getMinuteFromClientY(ev.clientY)
@@ -173,23 +183,42 @@ export function TimeBlockCard({
           return next
         })
       }
-      const onUp = (ev: PointerEvent) => {
+      const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onCancel)
+        el.removeEventListener('lostpointercapture', onLostPointerCapture)
+      }
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
         try {
-          ;(e.target as HTMLElement).releasePointerCapture(ev.pointerId)
+          el.releasePointerCapture(pointerId)
         } catch {
           /* ignore */
         }
         endDrag()
       }
+      const onCancel = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
+        cancelDrag()
+      }
+      const onLostPointerCapture = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
+        cancelDrag()
+      }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+      window.addEventListener('pointercancel', onCancel)
+      el.addEventListener('lostpointercapture', onLostPointerCapture)
+      el.setPointerCapture(pointerId)
     },
     [
       block.end_minute,
       block.start_minute,
+      cancelDrag,
       endDrag,
       getMinuteFromClientY,
       onDragSessionChange,
@@ -220,6 +249,8 @@ export function TimeBlockCard({
       const cleanupWindow = () => {
         window.removeEventListener('pointermove', onPointerMove)
         window.removeEventListener('pointerup', onPointerUp)
+        window.removeEventListener('pointercancel', onPointerCancel)
+        el.removeEventListener('lostpointercapture', onLostPointerCapture)
       }
 
       const onPointerMove = (ev: PointerEvent) => {
@@ -321,13 +352,34 @@ export function TimeBlockCard({
         }
       }
 
+      const onPointerCancel = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanupWindow()
+        if (bodyGesture !== 'none') {
+          suppressClickRef.current = true
+          cancelDrag()
+        }
+      }
+
+      const onLostPointerCapture = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanupWindow()
+        if (bodyGesture !== 'none') {
+          suppressClickRef.current = true
+          cancelDrag()
+        }
+      }
+
       window.addEventListener('pointermove', onPointerMove)
       window.addEventListener('pointerup', onPointerUp)
+      window.addEventListener('pointercancel', onPointerCancel)
+      el.addEventListener('lostpointercapture', onLostPointerCapture)
     },
     [
       block.end_minute,
       block.id,
       block.start_minute,
+      cancelDrag,
       endDrag,
       getMinuteFromClientY,
       onBlockClick,

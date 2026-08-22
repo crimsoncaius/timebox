@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
+  dateInTimeZone,
   defaultReminderIso,
+  formatPlannedDate,
   isoToZonedLocal,
+  orderedPlannedDates,
+  plannedDateSummary,
   PRIORITY_LEVELS,
   STATUS_LABELS,
   TASK_STATUSES,
@@ -53,6 +58,7 @@ export function TaskDetailPanel({
   projects,
   taskTypes,
   timezone,
+  serverNowIso,
   onClose,
   onPatch,
   onAddSubtask,
@@ -62,6 +68,7 @@ export function TaskDetailPanel({
   projects: Project[]
   taskTypes: TaskType[]
   timezone: string
+  serverNowIso: string
   onClose: () => void
   onPatch: (id: number, patch: Partial<BattleTaskWrite>) => Promise<void>
   onAddSubtask: (parentId: number, title: string) => Promise<void>
@@ -75,11 +82,15 @@ export function TaskDetailPanel({
   const [isSaving, setIsSaving] = useState(false)
   const [isReadyToPlan, setIsReadyToPlan] = useState(task.ready_to_plan)
   const [isTogglingPlan, setIsTogglingPlan] = useState(false)
+  const [showAllPlannedDates, setShowAllPlannedDates] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(
     typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null,
   )
+  const today = dateInTimeZone(serverNowIso, timezone)
+  const plannedDates = orderedPlannedDates(task.planned_dates, today)
+  const visiblePlannedDates = showAllPlannedDates ? plannedDates : plannedDates.slice(0, 5)
 
   const setDraftField = <Key extends keyof TaskDraft>(key: Key, value: TaskDraft[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -324,29 +335,6 @@ export function TaskDetailPanel({
 
           <aside className="flex min-w-0 flex-col border-t border-[var(--task-detail-divider)] bg-[var(--task-detail-rail)] min-[720px]:border-t-0 min-[720px]:border-l min-[720px]:pt-[52px]">
             <div className="flex flex-col px-6 pb-2">
-              <div className="border-b border-[var(--task-detail-divider)] py-4">
-                <button
-                  type="button"
-                  aria-pressed={isReadyToPlan}
-                  disabled={isTogglingPlan}
-                  onClick={async () => {
-                    const next = !isReadyToPlan
-                    setIsTogglingPlan(true)
-                    try {
-                      await onPatch(task.id, { ready_to_plan: next })
-                      setIsReadyToPlan(next)
-                    } finally {
-                      setIsTogglingPlan(false)
-                    }
-                  }}
-                  className={`flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:opacity-50 ${isReadyToPlan ? 'bg-primary/12 text-primary' : 'border border-[var(--task-detail-input-border)] text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}
-                >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>{isReadyToPlan ? 'event_available' : 'event_upcoming'}</span>
-                  {isReadyToPlan ? 'Ready to Plan' : 'Add to Ready to Plan'}
-                </button>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">Planning readiness is separate from work status.</p>
-              </div>
-
               <PropertySelect label="Status" value={draft.status} onChange={(value) => setDraftField('status', value as TaskStatus)}>
                 {TASK_STATUSES.map((status) => <option key={status} value={status}>{STATUS_LABELS[status]}</option>)}
               </PropertySelect>
@@ -392,6 +380,50 @@ export function TaskDetailPanel({
                     ) : null}
                   </div>
                 ) : null}
+              </div>
+
+              {plannedDates.length > 0 ? (
+                <section aria-label="Planned Dates" className="border-t border-[var(--task-detail-divider)] py-3">
+                  <h2 className="font-label text-[11px] uppercase tracking-[0.16em] text-[var(--task-detail-muted)]">Planned Dates</h2>
+                  <div className="mt-2 flex flex-col gap-1">
+                    {visiblePlannedDates.map((date) => {
+                      const relative = plannedDateSummary([date], serverNowIso, timezone)?.relativeLabel
+                      return (
+                        <Link key={date} to={`/day/${date}`} className="rounded-lg px-2 py-1.5 text-sm text-[var(--task-detail-secondary)] transition-colors hover:bg-[var(--task-detail-field-hover)] hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]">
+                          {relative ? `${relative} · ` : ''}{formatPlannedDate(date, today)}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                  {plannedDates.length > 5 ? (
+                    <button type="button" onClick={() => setShowAllPlannedDates((value) => !value)} className="mt-1 px-2 py-1 text-xs font-medium text-[var(--task-detail-secondary)] hover:text-[var(--task-detail-primary)]">
+                      {showAllPlannedDates ? 'Show less' : `Show all (${plannedDates.length})`}
+                    </button>
+                  ) : null}
+                </section>
+              ) : null}
+
+              <div className="border-t border-[var(--task-detail-divider)] py-4">
+                <button
+                  type="button"
+                  aria-pressed={isReadyToPlan}
+                  disabled={isTogglingPlan}
+                  onClick={async () => {
+                    const next = !isReadyToPlan
+                    setIsTogglingPlan(true)
+                    try {
+                      await onPatch(task.id, { ready_to_plan: next })
+                      setIsReadyToPlan(next)
+                    } finally {
+                      setIsTogglingPlan(false)
+                    }
+                  }}
+                  className={`flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:opacity-50 ${isReadyToPlan ? 'bg-primary/12 text-primary' : 'border border-[var(--task-detail-input-border)] text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>{isReadyToPlan ? 'event_available' : 'event_upcoming'}</span>
+                  {isReadyToPlan ? 'Ready to Plan' : 'Add to Ready to Plan'}
+                </button>
+                <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">Planning readiness is separate from work status.</p>
               </div>
             </div>
 

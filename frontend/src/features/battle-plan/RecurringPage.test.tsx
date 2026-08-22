@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,14 @@ function response(data: unknown, status = 200) {
   return status === 204
     ? new Response(null, { status })
     : new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
 }
 
 const template: RecurringTemplate = {
@@ -47,16 +55,18 @@ describe('RecurringPage', () => {
   const originalConfirm = window.confirm
   let active: RecurringTemplate[]
   let paused: RecurringTemplate[]
+  let applicationToday: string
 
   beforeEach(() => {
     localStorage.clear()
     active = [template]
     paused = []
+    applicationToday = '2099-08-16'
     window.confirm = vi.fn(() => true)
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
-      if (url.includes('/health')) return response({ status: 'ok', today: '2099-08-16', timezone: 'UTC' })
+      if (url.includes('/health')) return response({ status: 'ok', today: applicationToday, timezone: 'UTC' })
       if (url.endsWith('/projects')) return response([])
       if (url.endsWith('/task-types')) return response([])
       if (url.includes('/recurring-templates?status=active')) return response(active)
@@ -131,5 +141,99 @@ describe('RecurringPage', () => {
       expect.stringContaining('/recurring-templates'),
       expect.objectContaining({ method: 'POST' }),
     )
+    expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('keeps the latest status results when an older request resolves last', async () => {
+    const pausedResponse = deferred<Response>()
+    const endedResponse = deferred<Response>()
+    const baseFetch = globalThis.fetch
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/recurring-templates?status=paused')) return pausedResponse.promise
+      if (url.includes('/recurring-templates?status=ended')) return endedResponse.promise
+      return baseFetch(input, init)
+    }) as typeof fetch
+
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+    await screen.findByText('3 times per week')
+
+    await user.click(screen.getByRole('button', { name: 'Paused' }))
+    await user.click(screen.getByRole('button', { name: 'Ended' }))
+
+    endedResponse.resolve(response([{ ...template, id: 11, title: 'Finished review', status: 'ended' }]))
+    expect(await screen.findByText('Finished review')).toBeInTheDocument()
+
+    await act(async () => {
+      pausedResponse.resolve(response([{ ...template, id: 12, title: 'Stale paused review', status: 'paused' }]))
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 0))
+    })
+    expect(screen.queryByText('Stale paused review')).not.toBeInTheDocument()
+    expect(screen.getByText('Finished review')).toBeInTheDocument()
+  })
+
+  it('uses the application day for new recurrence defaults', async () => {
+    applicationToday = '1980-02-27'
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+
+    await screen.findByText('3 times per week')
+    await user.click(screen.getByRole('button', { name: 'New recurring task' }))
+    const form = screen.getByRole('dialog', { name: 'New recurring task' })
+
+    expect(within(form).getByLabelText('Start date')).toHaveValue('1980-02-27')
+
+    await user.click(within(form).getByRole('button', { name: 'Weekly' }))
+    expect(within(form).getByRole('button', { name: 'Wed' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(within(form).getByRole('button', { name: 'Monthly' }))
+    expect(within(form).getByLabelText('Day of month')).toHaveValue(27)
+  })
+
+  it('keeps a changed recurrence open when Escape dismissal is rejected', async () => {
+    window.confirm = vi.fn(() => false)
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+
+    await screen.findByText('3 times per week')
+    await user.click(screen.getByRole('button', { name: 'New recurring task' }))
+    const form = screen.getByRole('dialog', { name: 'New recurring task' })
+    await user.type(within(form).getByLabelText('Title'), 'Unsaved recurrence')
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByRole('dialog', { name: 'New recurring task' })).toBeInTheDocument()
+    expect(window.confirm).toHaveBeenCalledWith('Discard your unsaved changes?')
+    expect(window.confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes a pristine recurrence on Escape without prompting', async () => {
+    window.confirm = vi.fn(() => false)
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+
+    await screen.findByText('3 times per week')
+    await user.click(screen.getByRole('button', { name: 'New recurring task' }))
+    expect(screen.getByRole('dialog', { name: 'New recurring task' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog', { name: 'New recurring task' })).not.toBeInTheDocument()
+    expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('closes a changed recurrence from the close button after one confirmation', async () => {
+    window.confirm = vi.fn(() => true)
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+
+    await screen.findByText('3 times per week')
+    await user.click(screen.getByRole('button', { name: 'New recurring task' }))
+    const form = screen.getByRole('dialog', { name: 'New recurring task' })
+    await user.type(within(form).getByLabelText('Title'), 'Unsaved recurrence')
+    await user.click(within(form).getByRole('button', { name: 'Close recurring form' }))
+
+    expect(screen.queryByRole('dialog', { name: 'New recurring task' })).not.toBeInTheDocument()
+    expect(window.confirm).toHaveBeenCalledWith('Discard your unsaved changes?')
+    expect(window.confirm).toHaveBeenCalledTimes(1)
   })
 })

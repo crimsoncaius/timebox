@@ -9,7 +9,6 @@ class AppRoutesTest {
     @Test
     fun `existing destinations retain stable route builders`() {
         assertEquals("day/2026-08-17", AppRoutes.day(LocalDate.parse("2026-08-17")))
-        assertEquals("review/2026-08-17", AppRoutes.review(LocalDate.parse("2026-08-17")))
         assertEquals("chronicle", AppRoutes.Chronicle)
         assertEquals("types", AppRoutes.Types)
         assertEquals("settings", AppRoutes.Settings)
@@ -22,7 +21,7 @@ class AppRoutesTest {
         assertTrue(AppRoutes.TaskDetailPattern.contains("{${AppRoutes.TaskIdArg}}"))
         assertEquals(
             "Task details",
-            routeTitle(AppRoutes.TaskDetailPattern, "Day", "Month", "Review"),
+            routeTitle(AppRoutes.TaskDetailPattern, "Day", "Month"),
         )
     }
 

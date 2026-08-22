@@ -114,4 +114,19 @@ data class TimeBlockCreateDto(
 )
 
 @Serializable
+data class PlanningPlacementDto(
+    val date: String,
+    @SerialName("task_id") val taskId: Int,
+    @SerialName("task_type_id") val taskTypeId: Int,
+    @SerialName("start_minute") val startMinute: Int,
+    @SerialName("end_minute") val endMinute: Int,
+)
+
+@Serializable
+data class PlanningCommitDto(val placements: List<PlanningPlacementDto>)
+
+@Serializable
+data class PlanningCommitResponseDto(val days: List<DayDto>)
+
+@Serializable
 data class TaskTypeCreateDto(val name: String)

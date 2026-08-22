@@ -106,6 +106,7 @@ data class BattleTask(
     val updatedAt: Instant,
     val overdue: Boolean,
     val subtasks: List<BattleTask>,
+    val plannedDates: List<LocalDate> = emptyList(),
     val isBlocked: Boolean = false,
     val blockingReason: String? = null,
 )
@@ -278,6 +279,8 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         reminderAt = reminderAt?.let(::parseInstant), reminderDeliveredAt = reminderDeliveredAt?.let(::parseInstant),
         position = position, archivedAt = archivedAt?.let(::parseInstant), deletedAt = deletedAt?.let(::parseInstant),
         createdAt = parseInstant(createdAt), updatedAt = parseInstant(updatedAt), overdue = overdue,
+        plannedDates = plannedDates.mapNotNull { value -> runCatching { LocalDate.parse(value) }.getOrNull() }
+            .distinct().sorted(),
         subtasks = subtasks.map { it.toModel() },
         isBlocked = isBlocked || legacyStatus == TaskStatus.Blocked,
         blockingReason = blockingReason,

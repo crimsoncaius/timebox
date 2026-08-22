@@ -11,6 +11,9 @@ import retrofit2.http.Query
 
 interface TimeboxApi {
 
+    @POST("days/plan")
+    suspend fun commitPlan(@Body body: PlanningCommitDto): PlanningCommitResponseDto
+
     @GET("days")
     suspend fun listDays(@Query("limit") limit: Int = 120): List<DayListItemDto>
 

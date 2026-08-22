@@ -82,6 +82,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -121,6 +122,7 @@ import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
+import com.timebox.android.ui.theme.TimeboxColors
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
@@ -192,7 +194,7 @@ fun BattlePlanScreen(
                                 battlePlanStatuses.forEach { status ->
                                     TaskColumn(
                                         status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
-                                        true, onOpenTask, onToggleReady, onMoveTask,
+                                        true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onMoveTask,
                                         onReorderTask, onCreateSubtask, onToggleSubtask,
                                     )
                                 }
@@ -648,6 +650,8 @@ private fun MobileKanbanBoard(
                     tasks = tasks,
                     listState = laneListStates.getValue(status),
                     taskCount = { target -> state.filteredTasks.count { it.status == target } },
+                    serverNow = state.serverNow,
+                    timezone = state.timezone,
                     onOpen = onOpenTask,
                     onToggleReady = onToggleReady,
                     onDrop = onDropTask,
@@ -697,6 +701,8 @@ private fun MobileKanbanBoard(
                     pickupProgress = pickupProgress,
                     settleTargetTopLeftInRoot = settling?.targetTopLeftInRoot,
                     settleProgress = if (settling == null) 0f else settleProgress.value,
+                    serverNow = state.serverNow,
+                    timezone = state.timezone,
                 )
             }
         }
@@ -952,6 +958,8 @@ private fun MobileTaskLane(
     tasks: List<BattleTask>,
     listState: LazyListState,
     taskCount: (TaskStatus) -> Int,
+    serverNow: java.time.Instant,
+    timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
@@ -1025,6 +1033,8 @@ private fun MobileTaskLane(
                             index = index,
                             laneSize = visibleTasks.size,
                             taskCount = taskCount,
+                            serverNow = serverNow,
+                            timezone = timezone,
                             bottomSpacing = if (index < visibleTasks.lastIndex && insertionIndex != index + 1) 10.dp else 0.dp,
                             onOpen = onOpen,
                             onToggleReady = onToggleReady,
@@ -1077,6 +1087,8 @@ private fun MobileKanbanCard(
     index: Int,
     laneSize: Int,
     taskCount: (TaskStatus) -> Int,
+    serverNow: java.time.Instant,
+    timezone: String,
     bottomSpacing: Dp,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
@@ -1099,7 +1111,7 @@ private fun MobileKanbanCard(
                 .testTag("battle-plan-task-${task.id}")
                 .onGloballyPositioned { onBoundsChanged(task.id, it.boundsInRoot()) }
                 .clip(TimeboxShapes.card)
-                .background(colors.lowest)
+                .background(mobileTaskCardSurface(colors))
                 .clickable { onOpen(task.id) }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
@@ -1136,6 +1148,10 @@ private fun MobileKanbanCard(
             task.blockingReason?.takeIf { task.isBlocked }?.let {
                 Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
+            plannedDateSummary(task.plannedDates, serverNow, timezone)?.let { summary ->
+                Spacer(Modifier.height(3.dp))
+                PlannedDatePill(summary)
+            }
             val metadata = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.urgency?.let { add("U ${it.wire}") }
@@ -1158,6 +1174,35 @@ private fun MobileKanbanCard(
             dismissButton = { TextButton(onClick = { blockDialog = false }) { Text("Cancel") } },
         )
     }
+}
+
+internal fun mobileTaskCardSurface(colors: TimeboxColors): Color =
+    if (colors.isDark) colors.low else colors.lowest
+
+@Composable
+private fun PlannedDatePill(summary: PlannedDateSummary) {
+    val colors = TimeboxTheme.colors
+    val background = when (summary.tone) {
+        PlannedDateTone.Today -> colors.plannedSurface
+        PlannedDateTone.Future -> colors.low
+        PlannedDateTone.Past -> colors.low.copy(alpha = 0.55f)
+    }
+    val foreground = when (summary.tone) {
+        PlannedDateTone.Today -> colors.planned
+        PlannedDateTone.Future -> colors.onVariant
+        PlannedDateTone.Past -> colors.onVariant.copy(alpha = 0.65f)
+    }
+    Text(
+        text = summary.label,
+        style = TimeboxTheme.type.bodySmall,
+        color = foreground,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(background)
+            .padding(horizontal = 7.dp, vertical = 4.dp),
+    )
 }
 
 private data class MobileTaskDragState(
@@ -1260,6 +1305,8 @@ private fun MobileTaskDragPreview(
     pickupProgress: Float,
     settleTargetTopLeftInRoot: Offset?,
     settleProgress: Float,
+    serverNow: java.time.Instant,
+    timezone: String,
 ) {
     val colors = TimeboxTheme.colors
     val density = LocalDensity.current
@@ -1343,6 +1390,10 @@ private fun MobileTaskDragPreview(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        plannedDateSummary(drag.task.plannedDates, serverNow, timezone)?.let { summary ->
+            Spacer(Modifier.height(3.dp))
+            PlannedDatePill(summary)
+        }
         val metadata = buildList {
             drag.task.deadlineDate?.let { add("Due $it") }
             drag.task.urgency?.let { add("U ${it.wire}") }
@@ -1409,6 +1460,8 @@ private fun TaskColumn(
     tasks: List<BattleTask>,
     modifier: Modifier,
     manualOrder: Boolean,
+    serverNow: java.time.Instant,
+    timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onMove: (BattleTask, TaskStatus) -> Unit,
@@ -1418,7 +1471,7 @@ private fun TaskColumn(
 ) {
     Column(modifier.fillMaxSize().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(6.dp)) {
         Text("$title  ${tasks.size}", style = TimeboxTheme.type.label, modifier = Modifier.padding(8.dp))
-        TaskList(tasks, Modifier.fillMaxSize(), manualOrder, onOpen, onToggleReady, onMove, onReorder, onCreateSubtask, onToggleSubtask)
+        TaskList(tasks, Modifier.fillMaxSize(), manualOrder, serverNow, timezone, onOpen, onToggleReady, onMove, onReorder, onCreateSubtask, onToggleSubtask)
     }
 }
 
@@ -1427,6 +1480,8 @@ private fun TaskList(
     tasks: List<BattleTask>,
     modifier: Modifier,
     manualOrder: Boolean,
+    serverNow: java.time.Instant,
+    timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onMove: (BattleTask, TaskStatus) -> Unit,
@@ -1439,7 +1494,7 @@ private fun TaskList(
     } else {
         LazyColumn(modifier, contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp, 2.dp, 4.dp, 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(tasks, key = { it.id }) { task ->
-                BattleTaskCard(task, manualOrder, onOpen, onToggleReady, onMove, onReorder, onCreateSubtask, onToggleSubtask)
+                BattleTaskCard(task, manualOrder, serverNow, timezone, onOpen, onToggleReady, onMove, onReorder, onCreateSubtask, onToggleSubtask)
             }
         }
     }
@@ -1449,6 +1504,8 @@ private fun TaskList(
 private fun BattleTaskCard(
     task: BattleTask,
     manualOrder: Boolean,
+    serverNow: java.time.Instant,
+    timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onMove: (BattleTask, TaskStatus) -> Unit,
@@ -1483,9 +1540,19 @@ private fun BattleTaskCard(
                 task.taskType?.let { Text("· ${it.name}", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
                 if (task.overdue) Text("Overdue", color = colors.error, style = TimeboxTheme.type.bodySmall)
             }
-            val details = buildList {
+            val leadingDetails = buildList {
                 task.urgency?.let { add("Urgency ${it.wire}") }
                 task.importance?.let { add("Importance ${it.wire}") }
+            }
+            if (leadingDetails.isNotEmpty()) {
+                Spacer(Modifier.height(5.dp))
+                Text(leadingDetails.joinToString(" · "), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            }
+            plannedDateSummary(task.plannedDates, serverNow, timezone)?.let { summary ->
+                Spacer(Modifier.height(5.dp))
+                PlannedDatePill(summary)
+            }
+            val details = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.deadlineAt?.let { add("Due $it") }
                 task.recurringTemplateTitle?.let { add("Recurring: $it") }
@@ -1532,9 +1599,16 @@ private fun BattleTaskCard(
             TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide subtasks" else "Show ${task.subtasks.size} subtasks") }
             if (expanded) {
                 task.subtasks.forEach { child ->
-                    Row(Modifier.fillMaxWidth().clickable { onOpen(child.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (child.status == TaskStatus.Completed) "✓ ${child.title}" else child.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
-                        TextButton(onClick = { onToggleSubtask(child) }) { Text(if (child.status == TaskStatus.Completed) "Reopen" else "Complete") }
+                    Column(Modifier.fillMaxWidth().clickable { onOpen(child.id) }.padding(vertical = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (child.status == TaskStatus.Completed) "✓ ${child.title}" else child.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
+                            TextButton(onClick = { onToggleSubtask(child) }) { Text(if (child.status == TaskStatus.Completed) "Reopen" else "Complete") }
+                        }
+                        plannedDateSummary(child.plannedDates, serverNow, timezone)?.let { summary ->
+                            PlannedDatePill(summary)
+                        }
+                        child.deadlineDate?.let { Text("Due $it", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
+                        child.deadlineAt?.let { Text("Due $it", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1678,6 +1752,7 @@ fun TaskDetailScreen(
     onReminderDateChange: (String) -> Unit,
     onReminderTimeChange: (String) -> Unit,
     onReadyChange: (Boolean) -> Unit,
+    onOpenDay: (java.time.LocalDate) -> Unit,
     onAddSubtask: (String) -> Unit,
     onToggleSubtask: (BattleTask) -> Unit,
     onTrashSubtask: (BattleTask) -> Unit,
@@ -1702,12 +1777,12 @@ fun TaskDetailScreen(
             val expanded = maxWidth >= 840.dp
             if (expanded && !state.isSubtask) {
                 Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onRequestTrash, onSave)
+                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onSave)
                     SubtaskPanel(state, Modifier.weight(1f), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, onToggleSubtask, onTrashSubtask)
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onRequestTrash, onSave)
+                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onSave)
                     if (!state.isSubtask) SubtaskPanel(state, Modifier.fillMaxWidth(), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, onToggleSubtask, onTrashSubtask)
                 }
             }
@@ -1770,9 +1845,15 @@ private fun TaskEditForm(
     onReminderDate: (String) -> Unit,
     onReminderTime: (String) -> Unit,
     onReady: (Boolean) -> Unit,
+    onOpenDay: (java.time.LocalDate) -> Unit,
     onTrash: () -> Unit,
     onSave: () -> Unit,
 ) {
+    var showAllPlannedDates by remember(state.taskId) { mutableStateOf(false) }
+    val zone = runCatching { java.time.ZoneId.of(state.timezone) }.getOrDefault(java.time.ZoneId.of("UTC"))
+    val today = state.serverNow.atZone(zone).toLocalDate()
+    val plannedDates = orderedPlannedDates(state.task?.plannedDates.orEmpty(), today)
+    val visiblePlannedDates = if (showAllPlannedDates) plannedDates else plannedDates.take(5)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, null); Spacer(Modifier.width(5.dp)); Text("Battle Plan") }
         state.parentTask?.let { Text("Subtask of ${it.title}", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant) }
@@ -1799,6 +1880,28 @@ private fun TaskEditForm(
                 }
                 OutlinedTextField(state.reminderDate, onReminderDate, Modifier.fillMaxWidth(), label = { Text("Reminder date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
                 OutlinedTextField(state.reminderTime, onReminderTime, Modifier.fillMaxWidth(), label = { Text("Reminder time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
+            }
+        }
+        if (plannedDates.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("Planned Dates", style = TimeboxTheme.type.label)
+                visiblePlannedDates.forEach { date ->
+                    Text(
+                        text = formatPlannedDetailDate(date, today),
+                        style = TimeboxTheme.type.bodySmall,
+                        color = TimeboxTheme.colors.onVariant,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .clickable { onOpenDay(date) }.padding(horizontal = 8.dp, vertical = 7.dp),
+                    )
+                }
+                if (plannedDates.size > 5) {
+                    TextButton(onClick = { showAllPlannedDates = !showAllPlannedDates }) {
+                        Text(if (showAllPlannedDates) "Show less" else "Show all (${plannedDates.size})")
+                    }
+                }
             }
         }
         Row(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

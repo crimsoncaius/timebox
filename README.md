@@ -1,6 +1,8 @@
 # Timebox
 
-Dual-lane timeboxing app: **React + Tailwind** frontend, **FastAPI + Postgres** backend. Plan and track **planned** vs **actual** time blocks on a 30-minute grid; data is stored in Postgres with a **fixed app timezone** (`APP_TIMEZONE`) so every device agrees on “today”.
+Timebox combines a dual-lane daily planner with a task and project backlog. The **React + Tailwind** web app and native **Kotlin + Compose** Android app share a **FastAPI + Postgres** backend.
+
+Plan and track **planned** vs **actual** time blocks on a 30-minute grid, pull Ready to Plan tasks onto the day, and manage projects, subtasks, deadlines, reminders, recurring work, archives, and trash. The backend uses a **fixed app timezone** (`APP_TIMEZONE`) so every device agrees on “today”.
 
 There is also a native **Kotlin + Compose** Android client in [android/](android/README.md), talking to the same API.
 
@@ -13,7 +15,13 @@ There is also a native **Kotlin + Compose** Android client in [android/](android
 
 ## Environment
 
-Copy [.env.example](.env.example) to `.env` at the repo root (or set variables in your shell). Backend reads `DATABASE_URL`, `APP_TIMEZONE`, and `CORS_ORIGINS`. The Vite dev server proxies `/api` to `http://127.0.0.1:8000`, so the frontend can call paths like `/api/days/...` without CORS issues.
+[.env.example](.env.example) documents all supported variables. Environment files are resolved relative to the process working directory:
+
+- When starting the API from `backend/`, put backend values in `backend/.env` or export them in the shell.
+- When starting Vite from `frontend/`, put `VITE_*` values in `frontend/.env` or export them in the shell.
+- A repo-root `.env` is not loaded automatically by those commands.
+
+The backend reads `DATABASE_URL`, `APP_TIMEZONE`, `CORS_ORIGINS`, optional `CORS_ORIGIN_REGEX`, and optional `API_KEY`. Vite uses `VITE_API_BASE_URL` for direct API requests, or proxies `/api` to `VITE_API_PROXY_TARGET` during development.
 
 ## Database
 
@@ -25,7 +33,7 @@ uv sync --extra dev
 alembic upgrade head
 ```
 
-If you previously ran an older schema (with `hour_entries`), `alembic upgrade head` applies the follow-up migration that drops `hour_entries` and creates `time_blocks`. Later migrations add `app_settings` for the global day window and `task_types` (replacing freeform block titles with `task_type_id` plus optional `note`). Always back up production data before migrating.
+If you previously ran an older schema (with `hour_entries`), `alembic upgrade head` applies the follow-up migration that drops `hour_entries` and creates `time_blocks`. Later migrations add the global day window, hierarchical task types, linked planned/actual blocks, Battle Plan projects and tasks, Ready to Plan scheduling, recurring templates, and blocked-task state. Always back up production data before migrating.
 
 Without uv: `python -m pip install -e ".[dev]"` (from `backend/`).
 
@@ -36,46 +44,66 @@ Without uv: `python -m pip install -e ".[dev]"` (from `backend/`).
 ```bash
 cd backend
 uv sync --extra dev
-set DATABASE_URL=postgresql://user:pass@localhost:5432/timebox
-set APP_TIMEZONE=America/New_York
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-On macOS/Linux use `export` instead of `set`.
+Set `DATABASE_URL`, `APP_TIMEZONE`, and `CORS_ORIGINS=http://localhost:5176,http://127.0.0.1:5176` in `backend/.env` or the shell first. In PowerShell, temporary values use `$env:NAME="value"`; on macOS/Linux, use `export NAME="value"`.
 
 **Terminal 2 — UI**
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 5176
 ```
 
-Open `http://127.0.0.1:5174`.
+Set `VITE_API_PROXY_TARGET=http://127.0.0.1:8001` in `frontend/.env` or the shell, then open `http://127.0.0.1:5176`.
+
+These commands use the workspace's registered Timebox ports. The Android emulator's debug build also defaults to API port `8001`.
 
 ## Tests
 
 ```bash
 cd backend && uv run pytest
 cd frontend && npm test
+cd frontend && npm run lint
+cd frontend && npm run build
 cd frontend && npm run e2e
 ```
 
-`npm test` runs Vitest (unit/component tests). `npm run e2e` starts the API and dev server with test env and runs Playwright (requires Chromium via `npx playwright install chromium`). The Playwright spec seeds task types and blocks via the HTTP API, then drives Day, Chronicle, and Settings in the browser.
+`npm test` runs Vitest unit/component tests. `npm run e2e` starts isolated API and web servers with a SQLite test database, then runs Playwright across Day, Chronicle, Settings, Battle Plan, recurring work, and responsive layouts. Install its browser once with `npx playwright install chromium`. `npm run screenshots` regenerates the visual screenshot set.
 
-**E2E note:** Playwright may reuse an API already listening on port 8000. If E2E fails after backend schema changes, stop any manual `uvicorn` on that port (or delete `backend/e2e.sqlite` when using the default Playwright SQLite URL) so a fresh server runs migrations / `AUTO_CREATE_TABLES` logic.
+**E2E note:** Playwright uses the dedicated ports declared in [frontend/playwright.config.ts](frontend/playwright.config.ts) and may reuse listeners already occupying those exact ports outside CI. If a stale E2E server or schema causes failures, stop that listener or delete `backend/e2e.sqlite` so Playwright can start a fresh API using `AUTO_CREATE_TABLES=1`.
 
-## Product spec
+Android unit tests and builds are available after Android Studio has generated the Gradle wrapper:
 
-See [docs/superpowers/specs/2026-04-13-hourly-timebox-design.md](docs/superpowers/specs/2026-04-13-hourly-timebox-design.md).
+```bash
+cd android
+./gradlew testDebugUnitTest assembleDebug
+```
 
-## API assumptions and extensions
+## Design and behavior references
+
+The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and behavior are documented in [android/README.md](android/README.md). The retained technical notes under `docs/superpowers/specs/` cover the Chronicle calendar limit, hierarchical task-type semantics, and time-block drag hysteresis.
+
+## Product surfaces
+
+- **Day:** Planned and actual lanes, Ready to Plan scheduling, linked completions, notes, and overlap validation.
+- **Chronicle:** Browse and open recorded days.
+- **Battle Plan:** Projects and admin tasks, subtasks, status and priority metadata, deadlines, reminders, manual ordering, archive, and trash.
+- **Recurring:** Scheduled and quota-based templates with preview, pause, resume, end, and deletion workflows.
+- **Task types:** Reusable hierarchical slash-path categories shared by blocks, tasks, and recurring templates.
+- **Settings:** Global day window and client appearance preferences.
+
+## API assumptions
 
 - **Timezone:** The backend owns `APP_TIMEZONE`; the UI uses `meta` from day responses for “today” and server time.
-- **Auth:** Single-user `v1`; see [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for how to add login later. Setting `API_KEY` turns on a shared-secret `X-API-Key` check for `/days`, `/settings` and `/task-types` (`/health` stays open) — used by the Android client. The web frontend does not send the header, so leave it unset while relying on the browser UI.
-- **Day summary:** `GET /days/{date}/summary` returns planned/actual totals plus per-task-type minutes without creating the day. Added for the Android Review screen.
+- **Auth:** The application is single-user. Setting `API_KEY` turns on a shared-secret `X-API-Key` check for every application route, including days, settings, task types, projects, tasks, reminders, and recurring templates. `/health` stays open. The Android client sends the key; the web frontend does not, so leave it unset while relying on the browser UI.
+- **Day summary:** `GET /days/{date}/summary` returns planned/actual totals plus per-task-type minutes without creating the day. The old Android Day Review UI was removed while reporting is reconsidered; this endpoint remains as a possible reporting primitive.
 - **Day preview:** `GET /days/{date}/preview` returns renderable day data without creating a missing day. The Android client uses it for adjacent pages during an interactive swipe.
 - **Day list:** `GET /days` rows carry `block_count`. Simply opening a date creates the day, so the archive is mostly empty rows; the count is how a calendar tells those from days with real entries.
 - **E2E / SQLite:** Setting `AUTO_CREATE_TABLES=1` lets the API create tables on startup (used by Playwright). Do **not** use this for production Postgres; use Alembic instead.
 - **Day window:** Configure the visible hours under **Settings** (`GET`/`PATCH /settings`); changes apply to all days.
-- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Each time block references a `task_type_id` and may include an optional `note`. See [docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md) and the earlier [task types overview](docs/superpowers/specs/2026-04-14-task-types-design.md).
+- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Each time block references a `task_type_id` and may include an optional `note`. See the [hierarchical task-type design](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md).
+- **Battle Plan:** `/projects`, `/tasks`, and `/reminders` provide project organization, nested tasks, lifecycle actions, Ready to Plan state, and reminder delivery.
+- **Recurring work:** `/recurring-templates` supports previews and the complete template lifecycle. Generated tasks retain their recurrence metadata and can enter Ready to Plan like ordinary tasks.

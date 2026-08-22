@@ -7,6 +7,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.time_block import TimeBlockRead
 
 
+class PlanningPlacementCreate(BaseModel):
+    date: date
+    task_id: int
+    task_type_id: int
+    start_minute: int = Field(..., ge=0, le=1440)
+    end_minute: int = Field(..., ge=0, le=1440)
+
+
+class PlanningCommitCreate(BaseModel):
+    placements: list[PlanningPlacementCreate] = Field(..., min_length=1)
+
+
 class DayMeta(BaseModel):
     timezone: str
     today: date
@@ -25,6 +37,10 @@ class DayRead(BaseModel):
     updated_at: datetime
     time_blocks: list[TimeBlockRead]
     meta: DayMeta
+
+
+class PlanningCommitRead(BaseModel):
+    days: list[DayRead]
 
 
 class DayPreviewRead(BaseModel):

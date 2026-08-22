@@ -49,6 +49,8 @@ export const DayTimeline = forwardRef<
       },
     ) => Promise<void>
     onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
+    /** Planned blocks only: complete the block by swiping it right. */
+    onCompleteBlockAsPlanned?: (blockId: number) => Promise<void>
     /** While a block move/resize drag is active, parent may disable inspector hit-testing. */
     onBlockDragSessionChange?: (active: boolean) => void
   }
@@ -62,6 +64,7 @@ export const DayTimeline = forwardRef<
     onDraftTimeChange,
     onPatchBlock,
     onBlockClick,
+    onCompleteBlockAsPlanned,
     onBlockDragSessionChange,
   },
   ref,
@@ -160,6 +163,7 @@ export const DayTimeline = forwardRef<
         onLaneClick={(e) => onLaneClick('planned', e)}
         onPatchBlock={onPatchBlock}
         onBlockClick={onBlockClick}
+        onCompleteBlockAsPlanned={onCompleteBlockAsPlanned}
         onDraftTimeChange={onDraftTimeChange}
         selectedBlockId={selectedBlockId}
         onBlockDragSessionChange={onBlockDragSessionChange}
@@ -178,6 +182,7 @@ export const DayTimeline = forwardRef<
         onLaneClick={(e) => onLaneClick('actual', e)}
         onPatchBlock={onPatchBlock}
         onBlockClick={onBlockClick}
+        onCompleteBlockAsPlanned={onCompleteBlockAsPlanned}
         onDraftTimeChange={onDraftTimeChange}
         selectedBlockId={selectedBlockId}
         onBlockDragSessionChange={onBlockDragSessionChange}
@@ -259,6 +264,11 @@ function DraftBlockOverlay({
     onDraftTimeChange?.(start, end)
   }, [draft.end_minute, draft.start_minute, onDraftTimeChange])
 
+  const cancelDrag = useCallback(() => {
+    dragRef.current = null
+    setDrag(null)
+  }, [])
+
   const resizeBoundsRef = useRef({ minStartMinute: 0, maxEndMinute: MINUTES_PER_DAY })
 
   const startResize = useCallback(
@@ -266,6 +276,8 @@ function DraftBlockOverlay({
       if (readOnly || !onDraftTimeChange) return
       e.stopPropagation()
       e.preventDefault()
+      const el = e.currentTarget as HTMLElement
+      const pointerId = e.pointerId
       resizeBoundsRef.current = gapBoundsForDraft(blocks, draft.start_minute, draft.end_minute)
       const initial = {
         kind: 'resize' as const,
@@ -277,6 +289,7 @@ function DraftBlockOverlay({
       setDrag(initial)
 
       const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
         setDrag((cur) => {
           if (!cur || cur.kind !== 'resize') return cur
           const { minStartMinute, maxEndMinute } = resizeBoundsRef.current
@@ -296,22 +309,41 @@ function DraftBlockOverlay({
           return next
         })
       }
-      const onUp = (ev: PointerEvent) => {
+      const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onCancel)
+        el.removeEventListener('lostpointercapture', onLostPointerCapture)
+      }
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
         try {
-          ;(e.target as HTMLElement).releasePointerCapture(ev.pointerId)
+          el.releasePointerCapture(pointerId)
         } catch {
           /* ignore */
         }
         endDrag()
       }
+      const onCancel = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
+        cancelDrag()
+      }
+      const onLostPointerCapture = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return
+        cleanup()
+        cancelDrag()
+      }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+      window.addEventListener('pointercancel', onCancel)
+      el.addEventListener('lostpointercapture', onLostPointerCapture)
+      el.setPointerCapture(pointerId)
     },
     [
       blocks,
+      cancelDrag,
       draft.end_minute,
       draft.start_minute,
       endDrag,
@@ -382,6 +414,7 @@ function Lane({
   onLaneClick,
   onPatchBlock,
   onBlockClick,
+  onCompleteBlockAsPlanned,
   onDraftTimeChange,
   selectedBlockId,
   onBlockDragSessionChange,
@@ -407,6 +440,7 @@ function Lane({
     },
   ) => Promise<void>
   onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
+  onCompleteBlockAsPlanned?: (blockId: number) => Promise<void>
   onDraftTimeChange?: (startMin: number, endMin: number) => void
   selectedBlockId: number | null
   onBlockDragSessionChange?: (active: boolean) => void
@@ -474,6 +508,11 @@ function Lane({
               return minuteFromPointerYInVisibleLane(y, visibleStartMin, visibleEndMin, slotHeightPx)
             }}
             onPatch={(patch) => onPatchBlock(b.id, patch)}
+            onSwipeComplete={
+              lane === 'planned' && !readOnly && onCompleteBlockAsPlanned
+                ? () => onCompleteBlockAsPlanned(b.id)
+                : undefined
+            }
             onBlockClick={
               readOnly || !onBlockClick
                 ? undefined

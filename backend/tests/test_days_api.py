@@ -170,6 +170,103 @@ def test_delete_block(client):
     assert r2.json()["time_blocks"] == []
 
 
+def test_commit_plan_is_atomic_across_days(client):
+    task_type_id = _tid(client, "planning-session")
+    first = client.post("/tasks", json={"title": "First", "ready_to_plan": True}).json()
+    second = client.post("/tasks", json={"title": "Second", "ready_to_plan": True}).json()
+
+    response = client.post(
+        "/days/plan",
+        json={
+            "placements": [
+                {
+                    "date": "2026-08-24",
+                    "task_id": first["id"],
+                    "task_type_id": task_type_id,
+                    "start_minute": 540,
+                    "end_minute": 570,
+                },
+                {
+                    "date": "2026-08-25",
+                    "task_id": second["id"],
+                    "task_type_id": task_type_id,
+                    "start_minute": 600,
+                    "end_minute": 660,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    days = response.json()["days"]
+    assert [day["date"] for day in days] == ["2026-08-24", "2026-08-25"]
+    assert [day["time_blocks"][0]["task_id"] for day in days] == [first["id"], second["id"]]
+    tasks = {task["id"]: task for task in client.get("/tasks").json()["items"]}
+    assert tasks[first["id"]]["ready_to_plan"] is False
+    assert tasks[second["id"]]["ready_to_plan"] is False
+
+
+def test_commit_plan_rolls_back_every_placement_when_one_overlaps(client):
+    task_type_id = _tid(client, "planning-rollback")
+    existing = client.post(
+        "/days/2026-08-27/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": task_type_id,
+            "start_minute": 600,
+            "end_minute": 630,
+        },
+    )
+    assert existing.status_code == 200
+    first = client.post("/tasks", json={"title": "First", "ready_to_plan": True}).json()
+    second = client.post("/tasks", json={"title": "Second", "ready_to_plan": True}).json()
+
+    response = client.post(
+        "/days/plan",
+        json={
+            "placements": [
+                {
+                    "date": "2026-08-26",
+                    "task_id": first["id"],
+                    "task_type_id": task_type_id,
+                    "start_minute": 540,
+                    "end_minute": 570,
+                },
+                {
+                    "date": "2026-08-27",
+                    "task_id": second["id"],
+                    "task_type_id": task_type_id,
+                    "start_minute": 600,
+                    "end_minute": 630,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert client.get("/days/2026-08-26/preview").json()["time_blocks"] == []
+    tasks = {task["id"]: task for task in client.get("/tasks").json()["items"]}
+    assert tasks[first["id"]]["ready_to_plan"] is True
+    assert tasks[second["id"]]["ready_to_plan"] is True
+
+
+def test_commit_plan_rejects_duplicate_tasks_without_writing(client):
+    task_type_id = _tid(client, "planning-duplicate")
+    task = client.post("/tasks", json={"title": "Only once", "ready_to_plan": True}).json()
+    placement = {
+        "date": "2026-08-28",
+        "task_id": task["id"],
+        "task_type_id": task_type_id,
+        "start_minute": 540,
+        "end_minute": 570,
+    }
+
+    response = client.post("/days/plan", json={"placements": [placement, placement]})
+
+    assert response.status_code == 422
+    assert client.get("/days/2026-08-28/preview").json()["time_blocks"] == []
+
+
 def test_create_block_unknown_task_type(client):
     client.get("/days/2026-04-20")
     r = client.post(

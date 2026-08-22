@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { addCalendarDays, dateInTimeZone, deadlineBadge } from './battlePlan'
+import {
+  addCalendarDays,
+  dateInTimeZone,
+  deadlineBadge,
+  orderedPlannedDates,
+  plannedDateSummary,
+  validPlannedDates,
+} from './battlePlan'
 
 describe('deadlineBadge', () => {
   const now = '2026-08-15T16:30:00Z'
@@ -46,5 +53,47 @@ describe('calendar helpers', () => {
   it('derives the app date from the server instant and adds calendar days', () => {
     expect(dateInTimeZone('2026-08-15T16:30:00Z', 'Asia/Singapore')).toBe('2026-08-16')
     expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01')
+  })
+})
+
+describe('planned date presentation', () => {
+  const now = '2026-08-22T12:00:00Z'
+
+  it.each([
+    [['2026-08-20', '2026-08-22', '2026-08-24'], '2026-08-22', 'Today', 'today'],
+    [['2026-08-20', '2026-08-24', '2026-08-23'], '2026-08-23', 'Tomorrow', 'future'],
+    [['2026-08-20', '2026-08-21'], '2026-08-21', 'Yesterday', 'past'],
+    [['2026-08-20', '2026-08-24'], '2026-08-24', null, 'future'],
+  ])('chooses the primary date for %o', (dates, primaryDate, relativeLabel, tone) => {
+    expect(plannedDateSummary(dates, now, 'UTC', 'en-US')).toMatchObject({
+      primaryDate,
+      relativeLabel,
+      tone,
+      additionalCount: dates.length - 1,
+    })
+  })
+
+  it('orders today, ascending future dates, then descending past dates', () => {
+    expect(orderedPlannedDates(
+      ['2026-08-19', '2026-08-24', '2026-08-21', '2026-08-23', '2026-08-22'],
+      '2026-08-22',
+    )).toEqual(['2026-08-22', '2026-08-23', '2026-08-24', '2026-08-21', '2026-08-19'])
+  })
+
+  it('deduplicates dates, rejects invalid values, and adds a year only across years', () => {
+    expect(validPlannedDates(['2026-08-22', '2026-08-22', 'bad', '2026-02-30'])).toEqual(['2026-08-22'])
+    expect(plannedDateSummary(['2027-01-02'], now, 'UTC', 'en-US')).toMatchObject({
+      dateLabel: 'Jan 2, 2027',
+    })
+    expect(plannedDateSummary(undefined, now, 'UTC')).toBeNull()
+  })
+
+  it('uses the configured timezone at a calendar-day boundary', () => {
+    expect(plannedDateSummary(
+      ['2026-08-23'],
+      '2026-08-22T16:30:00Z',
+      'Asia/Singapore',
+      'en-US',
+    )).toMatchObject({ relativeLabel: 'Today', tone: 'today' })
   })
 })

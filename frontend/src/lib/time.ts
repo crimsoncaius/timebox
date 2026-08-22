@@ -10,9 +10,6 @@ export const MINUTES_PER_DAY = 24 * 60
  */
 export const MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES = Math.round(0.25 * SLOT_MINUTES)
 
-/** @deprecated Use {@link MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES}. */
-export const MOVE_PREVIEW_HYSTERESIS_MINUTES = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES
-
 /** Calendar math in UTC to match API `YYYY-MM-DD` dates. */
 export function addDaysIso(iso: string, delta: number): string {
   const [y, m, d] = iso.split('-').map(Number)
@@ -170,10 +167,6 @@ export function visibleMinuteRange(day: {
     start: day.start_hour * 60,
     end: day.end_hour * 60,
   }
-}
-
-export function slotCountInRange(startMin: number, endMin: number): number {
-  return Math.max(0, (endMin - startMin) / SLOT_MINUTES)
 }
 
 /**

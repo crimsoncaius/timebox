@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { isoToZonedLocal, zonedLocalToIso } from '../../lib/battlePlan'
 import type { Project, ProjectWrite } from '../../lib/api'
 
@@ -17,14 +17,26 @@ export function ProjectEditor({
   onDelete: (() => Promise<void>) | null
   onClose: () => void
 }) {
-  const [name, setName] = useState(project?.name ?? '')
-  const [description, setDescription] = useState(project?.description ?? '')
-  const [deadlineMode, setDeadlineMode] = useState<'none' | 'date' | 'datetime'>(
-    project?.deadline_at ? 'datetime' : project?.deadline_date ? 'date' : 'none',
-  )
-  const [deadlineDate, setDeadlineDate] = useState(project?.deadline_date ?? '')
-  const [deadlineAt, setDeadlineAt] = useState(isoToZonedLocal(project?.deadline_at ?? null, timezone))
+  const initialDraftRef = useRef({
+    name: project?.name ?? '',
+    description: project?.description ?? '',
+    deadlineMode: (project?.deadline_at ? 'datetime' : project?.deadline_date ? 'date' : 'none') as 'none' | 'date' | 'datetime',
+    deadlineDate: project?.deadline_date ?? '',
+    deadlineAt: isoToZonedLocal(project?.deadline_at ?? null, timezone),
+  })
+  const initialDraft = initialDraftRef.current
+  const [name, setName] = useState(initialDraft.name)
+  const [description, setDescription] = useState(initialDraft.description)
+  const [deadlineMode, setDeadlineMode] = useState(initialDraft.deadlineMode)
+  const [deadlineDate, setDeadlineDate] = useState(initialDraft.deadlineDate)
+  const [deadlineAt, setDeadlineAt] = useState(initialDraft.deadlineAt)
   const [busy, setBusy] = useState(false)
+  const isDirty = JSON.stringify({ name, description, deadlineMode, deadlineDate, deadlineAt }) !== JSON.stringify(initialDraft)
+
+  const requestClose = useCallback(() => {
+    if (isDirty && !window.confirm('Discard your unsaved changes?')) return
+    onClose()
+  }, [isDirty, onClose])
 
   const submit = async () => {
     if (!name.trim()) return
@@ -42,11 +54,11 @@ export function ProjectEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-90 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-90 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm" onMouseDown={requestClose}>
       <section className="w-full max-w-lg rounded-3xl bg-surface-container-lowest p-6 shadow-2xl dark:bg-dark-surface-container-lowest" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="font-headline text-2xl font-light tracking-tight">{project ? 'Edit project' : 'New project'}</h2>
-          <button type="button" className="rounded-full p-2" aria-label="Close project editor" onClick={onClose}>
+          <button type="button" className="rounded-full p-2" aria-label="Close project editor" onClick={requestClose}>
             <span className="material-symbols-outlined" aria-hidden>close</span>
           </button>
         </div>

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Launch Timebox"
+  short_description: "Launch Timebox web, API, and Android"
+  default_prompt: "Use $launch-timebox to launch the frontend, backend, and Android app."
+
+policy:
+  allow_implicit_invocation: false

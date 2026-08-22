@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Layout } from '../../components/Layout'
 import { api, type SettingsRead } from '../../lib/api'
 
@@ -11,17 +11,55 @@ function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
 const inputClassName =
   'min-w-[4.5rem] rounded-lg border border-outline-variant/15 bg-surface-container-lowest px-3 py-2 text-right font-body text-sm tabular-nums text-on-surface shadow-inner shadow-black/5 transition-[border-color,box-shadow] placeholder:text-outline focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/80 dark:text-dark-on-surface dark:shadow-black/20 dark:focus:border-dark-outline'
 
+type SettingsPatch = Partial<Pick<SettingsRead, 'start_hour' | 'end_hour' | 'show_full_day' | 'week_start'>>
+type SettingsField = keyof SettingsPatch
+type AcceptedSetting = { requestId: number; value: SettingsRead[SettingsField] }
+
+const settingsFields: SettingsField[] = ['start_hour', 'end_hour', 'show_full_day', 'week_start']
+
+function hasSetting(patch: SettingsPatch, field: SettingsField) {
+  return Object.prototype.hasOwnProperty.call(patch, field)
+}
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsRead | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const nextPatchRequestId = useRef(0)
+  const activePatchRequests = useRef(0)
+  const pendingPatches = useRef(new Map<number, SettingsPatch>())
+  const acceptedSettings = useRef<Partial<Record<SettingsField, AcceptedSetting>>>({})
+  const latestAcceptedMetadata = useRef({ requestId: 0, updatedAt: '' })
+  const saveError = useRef<string | null>(null)
+
+  const reconcileSettings = useCallback((current: SettingsRead | null) => {
+    if (!current) return current
+    const merged = { ...current, updated_at: latestAcceptedMetadata.current.updatedAt || current.updated_at }
+    for (const field of settingsFields) {
+      const accepted = acceptedSettings.current[field]
+      let winningRequestId = accepted?.requestId ?? 0
+      let winningValue = accepted?.value
+      for (const [requestId, patch] of pendingPatches.current) {
+        if (requestId > winningRequestId && hasSetting(patch, field)) {
+          winningRequestId = requestId
+          winningValue = patch[field]
+        }
+      }
+      if (winningValue !== undefined) Object.assign(merged, { [field]: winningValue })
+    }
+    return merged
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const s = await api.getSettings()
+      for (const field of settingsFields) {
+        acceptedSettings.current[field] = { requestId: 0, value: s[field] }
+      }
+      latestAcceptedMetadata.current = { requestId: 0, updatedAt: s.updated_at }
       setSettings(s)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load settings')
@@ -34,21 +72,45 @@ export function SettingsPage() {
     void load()
   }, [load])
 
-  const patchSettings = async (body: Partial<{
-    start_hour: number
-    end_hour: number
-    show_full_day: boolean
-    week_start: 'monday' | 'sunday'
-  }>) => {
+  const patchSettings = async (body: SettingsPatch) => {
+    const requestId = ++nextPatchRequestId.current
+    pendingPatches.current.set(requestId, body)
+    activePatchRequests.current += 1
+    saveError.current = null
     setSaveState('saving')
     setError(null)
+    setSettings(reconcileSettings)
     try {
       const next = await api.patchSettings(body)
-      setSettings(next)
-      setSaveState('saved')
+      for (const field of settingsFields) {
+        if (!hasSetting(body, field)) continue
+        const accepted = acceptedSettings.current[field]
+        if (!accepted || requestId > accepted.requestId) {
+          acceptedSettings.current[field] = { requestId, value: next[field] }
+        }
+      }
+      if (requestId > latestAcceptedMetadata.current.requestId) {
+        latestAcceptedMetadata.current = { requestId, updatedAt: next.updated_at }
+      }
     } catch (e) {
-      setSaveState('error')
-      setError(e instanceof Error ? e.message : 'Failed to save settings')
+      const isRelevant = settingsFields.some((field) => {
+        if (!hasSetting(body, field)) return false
+        const acceptedRequestId = acceptedSettings.current[field]?.requestId ?? 0
+        const laterPending = [...pendingPatches.current].some(([pendingId, patch]) => (
+          pendingId > requestId && hasSetting(patch, field)
+        ))
+        return requestId > acceptedRequestId && !laterPending
+      })
+      if (isRelevant) {
+        const message = e instanceof Error ? e.message : 'Failed to save settings'
+        saveError.current = message
+        setError(message)
+      }
+    } finally {
+      pendingPatches.current.delete(requestId)
+      activePatchRequests.current -= 1
+      setSettings(reconcileSettings)
+      setSaveState(activePatchRequests.current > 0 ? 'saving' : saveError.current ? 'error' : 'saved')
     }
   }
 

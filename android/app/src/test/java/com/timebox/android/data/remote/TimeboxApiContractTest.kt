@@ -11,6 +11,7 @@ class TimeboxApiContractTest {
     @Test
     fun `Battle Plan and recurring methods retain backend paths and verbs`() {
         val expected = mapOf(
+            "commitPlan" to "POST days/plan",
             "listProjects" to "GET projects",
             "createProject" to "POST projects",
             "patchProject" to "PATCH projects/{projectId}",

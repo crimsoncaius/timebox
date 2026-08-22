@@ -22,6 +22,7 @@ function renderCard(overrides?: {
   isSelected?: boolean
   onPatch?: (patch: { start_minute?: number; end_minute?: number }) => Promise<void>
   onBlockClick?: () => boolean | void
+  onDragSessionChange?: (active: boolean) => void
 }) {
   const onPatch = overrides?.onPatch ?? vi.fn(() => Promise.resolve())
   const onBlockClick = overrides?.onBlockClick ?? vi.fn(() => true)
@@ -41,6 +42,7 @@ function renderCard(overrides?: {
         getMinuteFromClientY={(clientY) => clientY}
         onPatch={onPatch}
         onBlockClick={onBlockClick}
+        onDragSessionChange={overrides?.onDragSessionChange}
         isSelected={overrides?.isSelected ?? false}
       />
     </div>,
@@ -97,6 +99,56 @@ describe('TimeBlockCard', () => {
     dragBlock(body)
 
     expect(onBlockClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels a move without persisting and remains draggable after pointer cancellation', () => {
+    const onPatch = vi.fn(() => Promise.resolve())
+    const onDragSessionChange = vi.fn()
+    const { body, shell } = renderCard({ onPatch, onDragSessionChange })
+
+    fireEvent.pointerDown(body, { button: 0, pointerId: 1, clientX: 10, clientY: 100 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 120 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 180 })
+    expect(shell).toHaveAttribute('data-dragging', 'true')
+
+    fireEvent.pointerCancel(window, { pointerId: 1, clientX: 10, clientY: 180 })
+
+    expect(shell).not.toHaveAttribute('data-dragging')
+    expect(shell.style.top).toBe('0px')
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(onDragSessionChange).toHaveBeenNthCalledWith(1, true)
+    expect(onDragSessionChange).toHaveBeenNthCalledWith(2, false)
+
+    dragBlock(body)
+
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 540, end_minute: 570 })
+    expect(onPatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels a resize without persisting and remains resizable after pointer capture is lost', () => {
+    const onPatch = vi.fn(() => Promise.resolve())
+    const onDragSessionChange = vi.fn()
+    const { shell } = renderCard({ onPatch, onDragSessionChange })
+    const resizeEnd = screen.getByRole('button', { name: 'Resize block end' })
+
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 2, clientY: 510 })
+    fireEvent.pointerMove(window, { pointerId: 2, clientY: 540 })
+    expect(shell).toHaveAttribute('data-dragging', 'true')
+
+    fireEvent.lostPointerCapture(resizeEnd, { pointerId: 2 })
+
+    expect(shell).not.toHaveAttribute('data-dragging')
+    expect(shell.style.height).toBe('20px')
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(onDragSessionChange).toHaveBeenNthCalledWith(1, true)
+    expect(onDragSessionChange).toHaveBeenNthCalledWith(2, false)
+
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 3, clientY: 510 })
+    fireEvent.pointerMove(window, { pointerId: 3, clientY: 540 })
+    fireEvent.pointerUp(window, { pointerId: 3, clientY: 540 })
+
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 480, end_minute: 540 })
+    expect(onPatch).toHaveBeenCalledTimes(1)
   })
 
   it('shows a time range under the title when the block is tall enough', () => {

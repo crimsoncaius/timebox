@@ -19,6 +19,8 @@ import com.timebox.android.data.remote.PatchField
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -125,6 +127,7 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
     private val _state = MutableStateFlow(BattlePlanUiState())
     val state: StateFlow<BattlePlanUiState> = _state.asStateFlow()
     private var preferencesLoaded = false
+    private var clockJob: Job? = null
 
     fun load(showSpinner: Boolean = _state.value.tasks.isEmpty()) {
         val collection = _state.value.collection
@@ -162,6 +165,19 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
                     taskTypeFilter = saved?.taskTypes ?: current.taskTypeFilter,
                     timezone = taskList.timezone, serverNow = taskList.serverNow, error = null,
                 )
+            }
+            anchorClock(taskList.serverNow, taskList.timezone)
+        }
+    }
+
+    private fun anchorClock(serverNow: Instant, timezone: String) {
+        clockJob?.cancel()
+        val anchor = AppClockAnchor(serverNow)
+        clockJob = viewModelScope.launch {
+            while (true) {
+                val current = anchor.current()
+                delay(millisUntilNextAppMidnight(current, timezone))
+                _state.update { it.copy(serverNow = anchor.current()) }
             }
         }
     }

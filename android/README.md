@@ -9,10 +9,15 @@ both talk to the same FastAPI backend, and neither shares code with the other.
 | Screen | Notes |
 | --- | --- |
 | **Day** | Dual-lane planned/actual timeline on the 30-minute grid, hour gutter, now line, tap-to-create, drag to move, grooves to resize, bottom sheet to edit. |
+| **Battle Plan** | Projects and admin tasks, subtasks, filters, deadlines, reminders, Ready to Plan, archive/trash, and task detail editing. |
+| **Recurring** | Scheduled and quota-based templates with preview, create/edit, pause, resume, end, and delete flows. |
 | **Chronicle** | Month grid; days that have at least one block show their window (e.g. `8–20`). Any cell opens that date in Day. |
 | **Types** | Slash-path task types grouped by root, with usage counts and delete. |
 | **Settings** | Day-window steppers, full-24h toggle, dark theme, and the server address / API key for this device. |
-| **Review** | Planned vs actual totals, per-root comparison bars, and drift copy. Reached from the chart icon on the Day top bar. |
+
+The earlier Day Review screen has been removed. Reporting is expected to be redesigned,
+and the old screen may not return; the read-only day-summary endpoint remains available
+as a possible reporting primitive.
 
 Deliberately **not** built (out of scope for this pass): the onboarding carousel,
 the quick-log FAB timer, and the lock-screen glance widget.
@@ -42,11 +47,12 @@ cd android && ./gradlew assembleDebug
 
 ## Pointing the app at your API
 
-Debug builds default to `http://10.0.2.2:8000/`, which is the emulator's alias for
-the host machine — run the backend on port 8000 and it connects with no setup.
+Debug builds default to `http://10.0.2.2:8001/`, which is the emulator's alias for
+the host machine — run the backend on the registered Timebox API port `8001` and it
+connects with no setup.
 
 For a physical device or another host, open **Settings → Server** in the app and set
-the address (for example `http://192.168.1.20:8000`). The value is stored in
+the address (for example `http://192.168.1.20:8001`). The value is stored in
 DataStore per device.
 
 Cleartext HTTP is permitted only for `localhost`, `127.0.0.1`, `10.0.2.2` and
@@ -56,8 +62,8 @@ HTTPS.
 ## API key
 
 The backend leaves the API open unless `API_KEY` is set. When you do set it, every
-`/days`, `/settings` and `/task-types` request must carry a matching `X-API-Key`
-header; `/health` stays open.
+application request—including days, settings, task types, projects, tasks, reminders,
+and recurring templates—must carry a matching `X-API-Key` header; `/health` stays open.
 
 ```bash
 API_KEY=some-long-random-string
@@ -74,12 +80,15 @@ browser UI.
   adjacent-page swipe. Missing dates stay read-only, so peeking and snapping back does
   not add an empty Chronicle row.
 - `GET /days/{date}/summary` — planned/actual totals plus per-task-type minutes for
-  the Review screen. Read-only: unlike `GET /days/{date}` it does not create the day,
-  so opening Review never adds a date to the archive.
+  future reporting. Read-only: unlike `GET /days/{date}` it does not create the day.
 - `GET /task-types` now includes `usage_count` per row, for the Types screen.
 - `GET /days` now includes `block_count` per row. Opening a date creates the day, so the
   archive fills with empty entries; the count is what lets Chronicle print a window label
   only for days that actually hold something.
+- `/projects`, `/tasks`, and `/reminders` provide the Battle Plan, Ready to Plan, and
+  notification workflows.
+- `/recurring-templates` provides preview and lifecycle operations for scheduled and
+  quota-based recurring work.
 
 ## Typography
 
@@ -112,5 +121,7 @@ webfont; the glyph names map one-to-one.
   keeps the keyboard down so Mark complete and delete stay reachable.
 - **Online only.** The Day screen keeps only its current and adjacent pages in memory
   for swiping; there is no persistent/offline cache. Reads show a retry on failure.
+- **Reminder delivery needs notification permission.** The app checks due reminders in
+  the background and acknowledges notifications after successful delivery.
 - **Overlaps are rejected by the server.** Dragging a block onto another in the same
   lane returns 422 and the timeline snaps back with a message.

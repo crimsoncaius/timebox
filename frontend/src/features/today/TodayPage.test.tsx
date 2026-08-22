@@ -62,6 +62,19 @@ describe('TodayPage inspector rail', () => {
         return Promise.resolve(jsonResponse(dayPayload))
       }
       if (url.includes('/days/2026-06-01/blocks') && method === 'POST') {
+        if (url.includes('/blocks/10/complete-as-planned')) {
+          return Promise.resolve(jsonResponse({
+            ...dayPayload,
+            time_blocks: [
+              ...dayPayload.time_blocks,
+              {
+                ...dayPayload.time_blocks[0],
+                id: 12,
+                lane: 'actual',
+              },
+            ],
+          }))
+        }
         const body = JSON.parse(String(init?.body)) as {
           task_id: number
           task_type_id: number
@@ -165,6 +178,42 @@ describe('TodayPage inspector rail', () => {
 
     expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('completes a planned block by swiping it right', async () => {
+    render(
+      <MemoryRouter initialEntries={['/day/2026-06-01']}>
+        <Routes>
+          <Route path="/day/:date" element={<TodayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const plannedBlock = (await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!
+    fireEvent.pointerDown(plannedBlock, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 100,
+    })
+    fireEvent.pointerMove(window, {
+      pointerId: 1,
+      clientX: 90,
+      clientY: 100,
+    })
+    fireEvent.pointerUp(window, {
+      pointerId: 1,
+      clientX: 90,
+      clientY: 100,
+    })
+
+    await waitFor(() => {
+      expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
+        '/api/days/2026-06-01/blocks/10/complete-as-planned',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+    expect(await screen.findByRole('button', { name: 'Edit actual block' })).toBeInTheDocument()
   })
 
   it('plans an untyped Ready to Plan task with the unspecified fallback', async () => {

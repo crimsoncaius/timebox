@@ -4,8 +4,16 @@ import { api, type DayListItem } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
 import { daysByDate, shiftMonth } from './historyCalendar'
 
+type CalendarMonth = { y: number; m: number }
+
+function calendarMonthFromIso(value: string): CalendarMonth {
+  const [y, m] = value.split('-').map(Number)
+  return { y, m }
+}
+
 export function HistoryPage() {
   const [rows, setRows] = useState<DayListItem[]>([])
+  const [applicationMonth, setApplicationMonth] = useState<CalendarMonth | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -13,8 +21,9 @@ export function HistoryPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.listDays(500)
+      const [data, health] = await Promise.all([api.listDays(500), api.health()])
       setRows(data)
+      setApplicationMonth(calendarMonthFromIso(health.today))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load history')
     } finally {
@@ -28,33 +37,31 @@ export function HistoryPage() {
 
   const derivedDefaultMonth = useMemo(() => {
     if (rows.length > 0) {
-      const [y, m] = rows[0].date.split('-').map(Number)
-      return { y, m }
+      return calendarMonthFromIso(rows[0].date)
     }
-    const t = new Date()
-    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1 }
-  }, [rows])
+    return applicationMonth
+  }, [applicationMonth, rows])
 
-  const [viewMonth, setViewMonth] = useState<{ y: number; m: number } | null>(null)
-  const year = viewMonth?.y ?? derivedDefaultMonth.y
-  const month = viewMonth?.m ?? derivedDefaultMonth.m
+  const [viewMonth, setViewMonth] = useState<CalendarMonth | null>(null)
+  const visibleMonth = viewMonth ?? derivedDefaultMonth
 
   const byDate = useMemo(() => daysByDate(rows), [rows])
 
   const onPrevMonth = useCallback(() => {
-    const n = shiftMonth(year, month, -1)
+    if (!visibleMonth) return
+    const n = shiftMonth(visibleMonth.y, visibleMonth.m, -1)
     setViewMonth({ y: n.year, m: n.month })
-  }, [year, month])
+  }, [visibleMonth])
 
   const onNextMonth = useCallback(() => {
-    const n = shiftMonth(year, month, 1)
+    if (!visibleMonth) return
+    const n = shiftMonth(visibleMonth.y, visibleMonth.m, 1)
     setViewMonth({ y: n.year, m: n.month })
-  }, [year, month])
+  }, [visibleMonth])
 
   const onThisMonth = useCallback(() => {
-    const t = new Date()
-    setViewMonth({ y: t.getUTCFullYear(), m: t.getUTCMonth() + 1 })
-  }, [])
+    if (applicationMonth) setViewMonth(applicationMonth)
+  }, [applicationMonth])
 
   return (
     <Layout>
@@ -81,10 +88,10 @@ export function HistoryPage() {
         <p className="mb-10 text-on-surface-variant">No days yet. Open Day to create your first day.</p>
       )}
 
-      {!loading && (
+      {!loading && visibleMonth && (
         <ChronicleMonthGrid
-          year={year}
-          month={month}
+          year={visibleMonth.y}
+          month={visibleMonth.m}
           byDate={byDate}
           onPrevMonth={onPrevMonth}
           onNextMonth={onNextMonth}

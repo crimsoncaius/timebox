@@ -541,6 +541,7 @@ export function TodayPage() {
               onDraftTimeChange={onDraftTimeChange}
               onPatchBlock={patchBlock}
               onBlockClick={(blockId) => onBlockClick(blockId)}
+              onCompleteBlockAsPlanned={completeBlockAsPlanned}
               onBlockDragSessionChange={setBlockDragActive}
             />
           </section>

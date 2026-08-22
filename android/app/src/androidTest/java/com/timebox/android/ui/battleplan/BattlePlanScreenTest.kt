@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
@@ -20,9 +21,79 @@ import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Rule
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 
 class BattlePlanScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun compactCardsRenderTheTimezoneAwarePlannedSummary() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(battleTask(1, listOf(LocalDate.parse("2026-08-21"), LocalDate.parse("2026-08-22"), LocalDate.parse("2026-08-24")))),
+                        timezone = "Asia/Singapore",
+                        serverNow = Instant.parse("2026-08-21T16:00:00Z"),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
+                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
+                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        val expected = checkNotNull(plannedDateSummary(
+            listOf(LocalDate.parse("2026-08-21"), LocalDate.parse("2026-08-22"), LocalDate.parse("2026-08-24")),
+            Instant.parse("2026-08-21T16:00:00Z"),
+            "Asia/Singapore",
+        )).label
+        compose.onNodeWithText(expected).fetchSemanticsNode()
+    }
+
+    @Test
+    fun taskDetailsShowFivePlannedDatesExpandAndOpenDay() {
+        val dates = (21..27).map { LocalDate.of(2026, 8, it) }
+        var openedDay: LocalDate? = null
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskDetailScreen(
+                    state = TaskDetailUiState(
+                        taskId = 1,
+                        loading = false,
+                        task = battleTask(1, dates),
+                        timezone = "UTC",
+                        serverNow = Instant.parse("2026-08-22T12:00:00Z"),
+                    ),
+                    onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
+                    onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
+                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = {},
+                    onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
+                    onReminderEnabledChange = {}, notificationsAllowed = true,
+                    onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = {},
+                    onOpenDay = { openedDay = it }, onAddSubtask = {}, onToggleSubtask = {},
+                    onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
+                    onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
+                    onConfirmTrash = {}, onTrashed = {}, onSave = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Planned Dates").fetchSemanticsNode()
+        compose.onNodeWithText("Show all (7)").performScrollTo().performClick()
+        compose.onNodeWithText(formatPlannedDetailDate(LocalDate.of(2026, 8, 21), LocalDate.of(2026, 8, 22))).performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithText(formatPlannedDetailDate(LocalDate.of(2026, 8, 22), LocalDate.of(2026, 8, 22))).performScrollTo().performClick()
+        compose.runOnIdle { check(openedDay == LocalDate.of(2026, 8, 22)) }
+        compose.onNodeWithText("Show less").fetchSemanticsNode()
+    }
 
     @Test
     fun compactActiveViewUsesOneLogicalNavigationGroup() {
@@ -379,7 +450,7 @@ private class RecordingHaptics : HapticFeedback {
     }
 }
 
-private fun battleTask(id: Int) = BattleTask(
+private fun battleTask(id: Int, plannedDates: List<LocalDate> = emptyList()) = BattleTask(
     id = id,
     parentId = null,
     parentTitle = null,
@@ -413,4 +484,5 @@ private fun battleTask(id: Int) = BattleTask(
     updatedAt = Instant.EPOCH,
     overdue = false,
     subtasks = emptyList(),
+    plannedDates = plannedDates,
 )

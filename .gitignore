@@ -15,7 +15,11 @@ frontend/dist/
 *.local
 
 # Agent skill copies (CLI installs; canonical under %USERPROFILE%\.agents)
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/launch-timebox/
+!.agents/skills/launch-timebox/**
 .claude/
 
 # IDE

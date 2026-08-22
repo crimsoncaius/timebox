@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.Day
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
+import com.timebox.android.data.PlanningCommitPlacement
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeBlock
@@ -26,13 +27,15 @@ data class Draft(
     val taskTypeId: Int? = null,
 )
 
-data class PendingPlanningPlacement(
+data class PlanningDraftPlacement(
     val date: LocalDate,
-    val taskId: Int,
-    val taskTitle: String,
+    val task: BattleTask,
     val startMinute: Int,
     val endMinute: Int,
-)
+) {
+    val taskId: Int get() = task.id
+    val taskTitle: String get() = task.title
+}
 
 data class DayPageState(
     val day: Day? = null,
@@ -45,6 +48,8 @@ data class DayPageState(
 data class DayUiState(
     /** The device's date until the backend's is known; see [DayViewModel.start]. */
     val date: LocalDate = LocalDate.now(),
+    /** Backend-resolved today, kept independently of whichever day page is visible. */
+    val today: LocalDate? = null,
     val pages: Map<LocalDate, DayPageState> = emptyMap(),
     val taskTypes: List<TaskType> = emptyList(),
     val saving: Boolean = false,
@@ -59,7 +64,7 @@ data class DayUiState(
     val readyTasksError: String? = null,
     val isPlanningMode: Boolean = false,
     val accessibilityPlanningTaskId: Int? = null,
-    val pendingPlanningPlacement: PendingPlanningPlacement? = null,
+    val planningDrafts: Map<Int, PlanningDraftPlacement> = emptyMap(),
 ) {
     fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
 
@@ -91,6 +96,9 @@ data class DayUiState(
 
     val accessibilityPlanningTask: BattleTask?
         get() = readyTasks.firstOrNull { it.id == accessibilityPlanningTaskId }
+
+    fun planningDrafts(date: LocalDate): List<PlanningDraftPlacement> =
+        planningDrafts.values.filter { it.date == date }
 }
 
 class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -122,6 +130,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         viewModelScope.launch {
             val today = repository.getDaySummary(_state.value.date).getOrNull()?.today
             todayResolved = today != null
+            if (today != null) _state.update { it.copy(today = today) }
             load(today ?: _state.value.date)
         }
     }
@@ -150,10 +159,27 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 
     fun setPlanningMode(enabled: Boolean) {
+        if (!enabled) {
+            cancelPlanningSession()
+            return
+        }
         _state.update {
             it.copy(
-                isPlanningMode = enabled,
+                isPlanningMode = true,
                 accessibilityPlanningTaskId = null,
+                planningDrafts = emptyMap(),
+                draft = null,
+                selectedBlockId = null,
+            )
+        }
+    }
+
+    fun cancelPlanningSession() {
+        _state.update {
+            it.copy(
+                isPlanningMode = false,
+                accessibilityPlanningTaskId = null,
+                planningDrafts = emptyMap(),
                 draft = null,
                 selectedBlockId = null,
             )
@@ -184,7 +210,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
-                            state.withPage(date) {
+                            state.copy(today = state.today ?: day.today).withPage(date) {
                                 DayPageState(
                                     day = day,
                                     loading = false,
@@ -236,7 +262,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
-                            state.withPage(date) {
+                            state.copy(today = state.today ?: day.today).withPage(date) {
                                 DayPageState(day = day, loading = false, materialized = false)
                             }
                         }
@@ -429,60 +455,96 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     fun planTaskAt(taskId: Int, startMinute: Int) {
         val current = _state.value
-        if (current.pendingPlanningPlacement != null) return
         val day = current.day ?: return
         val task = current.readyTasks.firstOrNull { it.id == taskId } ?: return
         val start = startMinute.coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
         val end = start + SLOT_MINUTES
-        if (day.lane(Lane.Planned).any { blocksOverlap(start, end, it.startMinute, it.endMinute) }) {
+        if (!planningRangeAvailable(current, current.date, taskId, start, end)) {
             _state.update { it.copy(message = "That time is already planned") }
             return
         }
-
-        val pending = PendingPlanningPlacement(
-            date = current.date,
-            taskId = task.id,
-            taskTitle = task.title,
-            startMinute = start,
-            endMinute = end,
-        )
         _state.update {
             it.copy(
-                saving = true,
-                pendingPlanningPlacement = pending,
+                planningDrafts = it.planningDrafts + (
+                    task.id to PlanningDraftPlacement(current.date, task, start, end)
+                ),
                 accessibilityPlanningTaskId = null,
             )
         }
+    }
+
+    fun updatePlanningDraft(taskId: Int, startMinute: Int, endMinute: Int) {
+        val current = _state.value
+        val draft = current.planningDrafts[taskId] ?: return
+        val day = current.page(draft.date).day ?: return
+        if (endMinute - startMinute < SLOT_MINUTES) return
+        if (startMinute < day.visibleStart || endMinute > day.visibleEnd) return
+        if (!planningRangeAvailable(current, draft.date, taskId, startMinute, endMinute)) return
+        _state.update { state ->
+            state.copy(
+                planningDrafts = state.planningDrafts + (
+                    taskId to draft.copy(startMinute = startMinute, endMinute = endMinute)
+                )
+            )
+        }
+    }
+
+    fun returnPlanningDraft(taskId: Int) {
+        _state.update { state ->
+            state.copy(planningDrafts = state.planningDrafts - taskId)
+        }
+    }
+
+    fun commitPlanningSession() {
+        val current = _state.value
+        if (!current.isPlanningMode || current.saving) return
+        val drafts = current.planningDrafts.values.toList()
+        if (drafts.isEmpty()) {
+            cancelPlanningSession()
+            return
+        }
+        _state.update { it.copy(saving = true, message = null) }
         viewModelScope.launch {
-            val taskTypeId = resolvePlanningTaskType(task)
-            if (taskTypeId == null) {
-                failPlanningPlacement(pending, "Could not create the unspecified task type")
-                return@launch
+            val placements = mutableListOf<PlanningCommitPlacement>()
+            for (draft in drafts) {
+                val taskTypeId = resolvePlanningTaskType(draft.task)
+                if (taskTypeId == null) {
+                    _state.update {
+                        it.copy(saving = false, message = "Could not create the unspecified task type")
+                    }
+                    return@launch
+                }
+                placements += PlanningCommitPlacement(
+                    date = draft.date,
+                    taskId = draft.taskId,
+                    taskTypeId = taskTypeId,
+                    startMinute = draft.startMinute,
+                    endMinute = draft.endMinute,
+                )
             }
-            repository.createBlock(
-                pending.date,
-                Lane.Planned,
-                taskTypeId,
-                pending.startMinute,
-                pending.endMinute,
-                note = null,
-                taskId = pending.taskId,
-            ).fold(
-                onSuccess = { updatedDay ->
+            repository.commitPlan(placements).fold(
+                onSuccess = { updatedDays ->
+                    val plannedTaskIds = drafts.mapTo(mutableSetOf()) { it.taskId }
                     _state.update { state ->
-                        state.copy(
-                            saving = false,
-                            pendingPlanningPlacement = null,
-                            readyTasks = state.readyTasks.filterNot { it.id == pending.taskId },
-                            message = "Task planned",
-                        ).withPage(pending.date) {
-                            DayPageState(day = updatedDay, loading = false, materialized = true)
+                        updatedDays.fold(
+                            state.copy(
+                                saving = false,
+                                isPlanningMode = false,
+                                planningDrafts = emptyMap(),
+                                readyTasks = state.readyTasks.filterNot { it.id in plannedTaskIds },
+                                accessibilityPlanningTaskId = null,
+                                message = "Plan saved",
+                            )
+                        ) { next, day ->
+                            next.withPage(day.date) {
+                                DayPageState(day = day, loading = false, materialized = true)
+                            }
                         }
                     }
                     refreshReadyToPlan()
                 },
                 onFailure = { error ->
-                    failPlanningPlacement(pending, error.apiError.message)
+                    _state.update { it.copy(saving = false, message = error.apiError.message) }
                 },
             )
         }
@@ -504,16 +566,6 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val afterConflict = repository.listTaskTypes().getOrNull().orEmpty()
         if (afterConflict.isNotEmpty()) _state.update { it.copy(taskTypes = afterConflict) }
         return afterConflict.unspecifiedTypeId()
-    }
-
-    private fun failPlanningPlacement(pending: PendingPlanningPlacement, message: String) {
-        _state.update { state ->
-            if (state.pendingPlanningPlacement != pending) state else state.copy(
-                saving = false,
-                pendingPlanningPlacement = null,
-                message = message,
-            )
-        }
     }
 
     /**
@@ -643,6 +695,25 @@ internal fun List<TaskType>.unspecifiedTypeId(): Int? =
 
 internal fun blocksOverlap(start: Int, end: Int, otherStart: Int, otherEnd: Int): Boolean =
     start < otherEnd && otherStart < end
+
+internal fun planningRangeAvailable(
+    state: DayUiState,
+    date: LocalDate,
+    taskId: Int,
+    startMinute: Int,
+    endMinute: Int,
+): Boolean {
+    val day = state.page(date).day ?: return false
+    if (startMinute < day.visibleStart || endMinute > day.visibleEnd || startMinute >= endMinute) return false
+    if (day.lane(Lane.Planned).any {
+            blocksOverlap(startMinute, endMinute, it.startMinute, it.endMinute)
+        }
+    ) return false
+    return state.planningDrafts.values.none {
+        it.date == date && it.taskId != taskId &&
+            blocksOverlap(startMinute, endMinute, it.startMinute, it.endMinute)
+    }
+}
 
 private inline fun DayUiState.withPage(
     date: LocalDate,

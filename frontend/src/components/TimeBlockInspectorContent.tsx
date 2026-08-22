@@ -188,6 +188,7 @@ export function TimeBlockInspectorContent({
   }, [flushNoteNow, onClose, onCompleteAsPlanned])
 
   const handleDelete = useCallback(async () => {
+    if (!window.confirm('Permanently delete this time block? This cannot be undone.')) return
     await flushNoteNow()
     setSaving(true)
     try {

@@ -1,5 +1,10 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -32,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -41,9 +47,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -68,6 +76,8 @@ private const val AUTO_SCROLL_FRAME_MILLIS = 16L
 private data class TaskDragState(
     val task: BattleTask,
     val pointerRoot: Offset,
+    val draft: PlanningDraftPlacement? = null,
+    val grabOffsetPx: Float = 0f,
 )
 
 @Composable
@@ -98,6 +108,8 @@ internal fun PlanningWorkspace(
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
     onPlanTask: (Int, Int) -> Unit,
+    onUpdatePlanningDraft: (Int, Int, Int) -> Unit,
+    onReturnPlanningDraft: (Int) -> Unit,
     onArmAccessibleTask: (Int?) -> Unit,
     onRetryReadyTasks: () -> Unit,
     modifier: Modifier = Modifier,
@@ -113,7 +125,11 @@ internal fun PlanningWorkspace(
     var rootPosition by remember { mutableStateOf(Offset.Zero) }
     var laneBounds by remember { mutableStateOf(Rect.Zero) }
     var viewportBounds by remember { mutableStateOf(Rect.Zero) }
+    var railBounds by remember { mutableStateOf(Rect.Zero) }
     var drag by remember { mutableStateOf<TaskDragState?>(null) }
+    var returningTaskId by remember { mutableStateOf<Int?>(null) }
+    val planningDrafts = state.planningDrafts(day.date)
+    val dragDuration = drag?.draft?.let { it.endMinute - it.startMinute } ?: SLOT_MINUTES
 
     val candidateStart = drag?.let {
         planningDropStart(
@@ -123,31 +139,36 @@ internal fun PlanningWorkspace(
             visibleStart = day.visibleStart,
             visibleEnd = day.visibleEnd,
             slotPx = slotPx,
+            durationMinutes = dragDuration,
+            grabOffsetPx = it.grabOffsetPx,
         )
     }
     val candidateValid = candidateStart?.let { start ->
-        isPlanningDropAvailable(day, start, state.pendingPlanningPlacement)
+        isPlanningDropAvailable(
+            day = day,
+            startMinute = start,
+            endMinute = start + dragDuration,
+            drafts = planningDrafts,
+            excludeTaskId = drag?.draft?.taskId,
+        )
     } ?: false
+    val returningDraft = drag?.draft != null && railBounds.contains(drag?.pointerRoot ?: Offset.Zero)
+    LaunchedEffect(returningTaskId) {
+        if (returningTaskId != null) {
+            delay(360)
+            returningTaskId = null
+        }
+    }
     val activePreview = drag?.let { active ->
         candidateStart?.let { start ->
             PlanningDropPreview(
                 title = active.task.title,
                 startMinute = start,
-                endMinute = start + SLOT_MINUTES,
+                endMinute = start + dragDuration,
                 state = if (candidateValid) PlanningPreviewState.Valid else PlanningPreviewState.Invalid,
             )
         }
     }
-    val pendingPreview = state.pendingPlanningPlacement
-        ?.takeIf { it.date == day.date }
-        ?.let {
-            PlanningDropPreview(
-                title = it.taskTitle,
-                startMinute = it.startMinute,
-                endMinute = it.endMinute,
-                state = PlanningPreviewState.Pending,
-            )
-        }
 
     LaunchedEffect(drag != null, viewportBounds) {
         while (drag != null) {
@@ -198,14 +219,64 @@ internal fun PlanningWorkspace(
                     onSelectBlock = onSelectBlock,
                     onCommitMove = onCommitMove,
                     showActual = false,
-                    planningPreview = activePreview ?: pendingPreview,
+                    planningPreview = activePreview,
                     onPlannedLaneBoundsChanged = { laneBounds = it },
+                    blockGesturesEnabled = false,
+                    planningDrafts = planningDrafts,
+                    planningDraftGesturesEnabled = !state.saving,
+                    draggingPlanningTaskId = drag?.draft?.taskId,
+                    onPlanningDraftDragStart = { draft, pointer, grabOffset ->
+                        drag = TaskDragState(draft.task, pointer, draft, grabOffset)
+                    },
+                    onPlanningDraftDrag = { pointer -> drag = drag?.copy(pointerRoot = pointer) },
+                    onPlanningDraftDragEnd = { draft, pointer ->
+                        val grabOffset = drag?.grabOffsetPx ?: 0f
+                        val start = planningDropStart(
+                            pointerRoot = pointer,
+                            laneBounds = laneBounds,
+                            viewportBounds = viewportBounds,
+                            visibleStart = day.visibleStart,
+                            visibleEnd = day.visibleEnd,
+                            slotPx = slotPx,
+                            durationMinutes = draft.endMinute - draft.startMinute,
+                            grabOffsetPx = grabOffset,
+                        )
+                        val returnToRail = railBounds.contains(pointer)
+                        val valid = start?.let {
+                            isPlanningDropAvailable(
+                                day,
+                                it,
+                                it + (draft.endMinute - draft.startMinute),
+                                planningDrafts,
+                                draft.taskId,
+                            )
+                        } ?: false
+                        drag = null
+                        when {
+                            returnToRail -> {
+                                returningTaskId = draft.taskId
+                                onReturnPlanningDraft(draft.taskId)
+                            }
+                            start != null && valid -> onUpdatePlanningDraft(
+                                draft.taskId,
+                                start,
+                                start + (draft.endMinute - draft.startMinute),
+                            )
+                        }
+                    },
+                    onPlanningDraftDragCancel = { drag = null },
+                    onPlanningDraftResize = onUpdatePlanningDraft,
+                    onReturnPlanningDraft = onReturnPlanningDraft,
                 )
             }
 
             PlanningTaskRail(
                 state = state,
-                enabled = state.pendingPlanningPlacement == null,
+                enabled = !state.saving,
+                draggingTaskId = drag?.takeIf { it.draft == null }?.task?.id,
+                returnDropActive = returningDraft,
+                appearingTaskId = returningTaskId,
+                onBoundsChanged = { railBounds = it },
                 onRetry = onRetryReadyTasks,
                 onArmAccessibleTask = onArmAccessibleTask,
                 onDragStart = { task, pointer -> drag = TaskDragState(task, pointer) },
@@ -218,9 +289,15 @@ internal fun PlanningWorkspace(
                         visibleStart = day.visibleStart,
                         visibleEnd = day.visibleEnd,
                         slotPx = slotPx,
+                        durationMinutes = SLOT_MINUTES,
                     )
                     val valid = start?.let {
-                        isPlanningDropAvailable(day, it, state.pendingPlanningPlacement)
+                        isPlanningDropAvailable(
+                            day,
+                            it,
+                            it + SLOT_MINUTES,
+                            planningDrafts,
+                        )
                     } ?: false
                     drag = null
                     if (start != null && valid) {
@@ -235,6 +312,7 @@ internal fun PlanningWorkspace(
         drag?.let { active ->
             DragGhost(
                 task = active.task,
+                draft = active.draft != null,
                 modifier = Modifier.offset {
                     val local = active.pointerRoot - rootPosition
                     IntOffset(
@@ -251,6 +329,10 @@ internal fun PlanningWorkspace(
 private fun PlanningTaskRail(
     state: DayUiState,
     enabled: Boolean,
+    draggingTaskId: Int?,
+    returnDropActive: Boolean,
+    appearingTaskId: Int?,
+    onBoundsChanged: (Rect) -> Unit,
     onRetry: () -> Unit,
     onArmAccessibleTask: (Int?) -> Unit,
     onDragStart: (BattleTask, Offset) -> Unit,
@@ -260,12 +342,17 @@ private fun PlanningTaskRail(
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
-    val visibleTasks = state.readyTasks.filterNot { it.id == state.pendingPlanningPlacement?.taskId }
+    val visibleTasks = state.readyTasks.filterNot { it.id in state.planningDrafts }
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(3.dp))
-            .background(colors.low)
-            .border(1.dp, colors.hairline, RoundedCornerShape(3.dp)),
+            .background(if (returnDropActive) colors.plannedSurface else colors.low)
+            .border(
+                if (returnDropActive) 2.dp else 1.dp,
+                if (returnDropActive) colors.planned else colors.hairline,
+                RoundedCornerShape(3.dp),
+            )
+            .onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
     ) {
         state.accessibilityPlanningTask?.let { task ->
             Column(
@@ -297,13 +384,14 @@ private fun PlanningTaskRail(
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(7.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 items(visibleTasks, key = BattleTask::id) { task ->
-                    PlanningTaskCard(
+                    CollapsiblePlanningTaskCard(
                         task = task,
                         enabled = enabled,
                         armed = task.id == state.accessibilityPlanningTaskId,
+                        dragging = task.id == draggingTaskId,
+                        appearing = task.id == appearingTaskId,
                         onArmAccessible = { onArmAccessibleTask(task.id) },
                         onDragStart = { onDragStart(task, it) },
                         onDrag = onDrag,
@@ -317,6 +405,76 @@ private fun PlanningTaskRail(
 }
 
 @Composable
+private fun CollapsiblePlanningTaskCard(
+    task: BattleTask,
+    enabled: Boolean,
+    armed: Boolean,
+    dragging: Boolean,
+    appearing: Boolean,
+    onArmAccessible: () -> Unit,
+    onDragStart: (Offset) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: (Offset) -> Unit,
+    onDragCancel: () -> Unit,
+) {
+    val density = LocalDensity.current
+    var expandedHeightPx by remember(task.id) { mutableIntStateOf(0) }
+    var waitingToAppear by remember(task.id) { mutableStateOf(appearing) }
+    LaunchedEffect(appearing) {
+        if (appearing) {
+            waitingToAppear = true
+            delay(16)
+            waitingToAppear = false
+        }
+    }
+    val targetHeight = with(density) {
+        if ((dragging || waitingToAppear) && expandedHeightPx > 0) 0.dp else expandedHeightPx.toDp()
+    }
+    val animatedHeight by animateDpAsState(
+        targetValue = targetHeight,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "planning task gap",
+    )
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (dragging || waitingToAppear) 0f else 1f,
+        animationSpec = tween(durationMillis = if (dragging) 120 else 180),
+        label = "planning task visibility",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (expandedHeightPx > 0) Modifier.height(animatedHeight)
+                else Modifier,
+            )
+            .clip(RoundedCornerShape(1.dp))
+            .onSizeChanged { size ->
+                if (!dragging && expandedHeightPx == 0) expandedHeightPx = size.height
+            },
+    ) {
+        PlanningTaskCard(
+            task = task,
+            enabled = enabled,
+            armed = armed,
+            onArmAccessible = onArmAccessible,
+            onDragStart = onDragStart,
+            onDrag = onDrag,
+            onDragEnd = onDragEnd,
+            onDragCancel = onDragCancel,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 7.dp)
+                .graphicsLayer {
+                    alpha = cardAlpha
+                    scaleX = 0.98f + (0.02f * cardAlpha)
+                    scaleY = 0.98f + (0.02f * cardAlpha)
+                },
+        )
+    }
+}
+
+@Composable
 private fun PlanningTaskCard(
     task: BattleTask,
     enabled: Boolean,
@@ -326,9 +484,10 @@ private fun PlanningTaskCard(
     onDrag: (Offset) -> Unit,
     onDragEnd: (Offset) -> Unit,
     onDragCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
-    var handleRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
+    var cardRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     var pointerRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     val currentOnArmAccessible by rememberUpdatedState(onArmAccessible)
     val currentOnDragStart by rememberUpdatedState(onDragStart)
@@ -336,11 +495,34 @@ private fun PlanningTaskCard(
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
     val currentOnDragCancel by rememberUpdatedState(onDragCancel)
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clip(TimeboxShapes.card)
             .background(if (armed) colors.plannedSurface else colors.lowest)
             .border(1.dp, if (armed) colors.plannedBorder else colors.hairline, TimeboxShapes.card)
+            .semantics {
+                contentDescription = "Schedule ${task.title}"
+                onClick {
+                    currentOnArmAccessible()
+                    true
+                }
+            }
+            .onGloballyPositioned { cardRoot = it.positionInRoot() }
+            .pointerInput(task.id, enabled) {
+                if (!enabled) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        pointerRoot = cardRoot + offset
+                        currentOnDragStart(pointerRoot)
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        pointerRoot += amount
+                        currentOnDrag(pointerRoot)
+                    },
+                    onDragEnd = { currentOnDragEnd(pointerRoot) },
+                    onDragCancel = currentOnDragCancel,
+                )
+            }
             .padding(start = 8.dp, top = 8.dp, bottom = 7.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -363,31 +545,7 @@ private fun PlanningTaskCard(
             )
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .semantics {
-                        contentDescription = "Schedule ${task.title}"
-                        onClick {
-                            currentOnArmAccessible()
-                            true
-                        }
-                    }
-                    .onGloballyPositioned { handleRoot = it.positionInRoot() }
-                    .pointerInput(task.id, enabled) {
-                        if (!enabled) return@pointerInput
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                pointerRoot = handleRoot + offset
-                                currentOnDragStart(pointerRoot)
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                pointerRoot += amount
-                                currentOnDrag(pointerRoot)
-                            },
-                            onDragEnd = { currentOnDragEnd(pointerRoot) },
-                            onDragCancel = currentOnDragCancel,
-                        )
-                    },
+                    .size(42.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -402,14 +560,32 @@ private fun PlanningTaskCard(
 }
 
 @Composable
-private fun DragGhost(task: BattleTask, modifier: Modifier = Modifier) {
+private fun DragGhost(task: BattleTask, draft: Boolean, modifier: Modifier = Modifier) {
     val colors = TimeboxTheme.colors
+    var lifted by remember(task.id) { mutableStateOf(false) }
+    val liftProgress by animateFloatAsState(
+        targetValue = if (lifted) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 520f),
+        label = "planning task lift",
+    )
+    LaunchedEffect(task.id) { lifted = true }
+
     Box(
         modifier = modifier
             .width(108.dp)
             .height(48.dp)
+            .graphicsLayer {
+                alpha = 0.86f + (0.14f * liftProgress)
+                scaleX = 0.96f + (0.04f * liftProgress)
+                scaleY = 0.96f + (0.04f * liftProgress)
+                shadowElevation = 14f * liftProgress
+                shape = TimeboxShapes.card
+            }
             .clip(TimeboxShapes.card)
-            .background(colors.paperRaised)
+            .background(
+                if (draft) colors.planned.copy(alpha = if (colors.isDark) 0.42f else 0.18f)
+                else colors.paperRaised
+            )
             .border(1.5.dp, colors.planned, TimeboxShapes.card)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.CenterStart,
@@ -431,25 +607,30 @@ internal fun planningDropStart(
     visibleStart: Int,
     visibleEnd: Int,
     slotPx: Float,
+    durationMinutes: Int = SLOT_MINUTES,
+    grabOffsetPx: Float = 0f,
 ): Int? {
     if (slotPx <= 0f || laneBounds == Rect.Zero || viewportBounds == Rect.Zero) return null
     if (pointerRoot.x < laneBounds.left || pointerRoot.x > laneBounds.right) return null
     if (pointerRoot.y < viewportBounds.top || pointerRoot.y > viewportBounds.bottom) return null
-    val slot = ((pointerRoot.y - laneBounds.top) / slotPx).roundToInt()
-    return (visibleStart + slot * SLOT_MINUTES).coerceIn(visibleStart, visibleEnd - SLOT_MINUTES)
+    val slot = ((pointerRoot.y - grabOffsetPx - laneBounds.top) / slotPx).roundToInt()
+    return (visibleStart + slot * SLOT_MINUTES).coerceIn(visibleStart, visibleEnd - durationMinutes)
 }
 
 internal fun isPlanningDropAvailable(
     day: Day,
     startMinute: Int,
-    pending: PendingPlanningPlacement? = null,
+    endMinute: Int = startMinute + SLOT_MINUTES,
+    drafts: List<PlanningDraftPlacement> = emptyList(),
+    excludeTaskId: Int? = null,
 ): Boolean {
-    val endMinute = startMinute + SLOT_MINUTES
     if (startMinute < day.visibleStart || endMinute > day.visibleEnd) return false
     if (day.lane(Lane.Planned).any {
             blocksOverlap(startMinute, endMinute, it.startMinute, it.endMinute)
         }
     ) return false
-    return pending == null || pending.date != day.date ||
-        !blocksOverlap(startMinute, endMinute, pending.startMinute, pending.endMinute)
+    return drafts.none {
+        it.date == day.date && it.taskId != excludeTaskId &&
+            blocksOverlap(startMinute, endMinute, it.startMinute, it.endMinute)
+    }
 }

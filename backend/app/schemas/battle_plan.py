@@ -80,6 +80,7 @@ class TaskRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     overdue: bool = False
+    planned_dates: list[date] = Field(default_factory=list)
     subtasks: list["TaskRead"] = Field(default_factory=list)
 
 
