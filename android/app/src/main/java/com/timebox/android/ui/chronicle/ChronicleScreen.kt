@@ -1,10 +1,14 @@
 package com.timebox.android.ui.chronicle
 
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,20 +16,34 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.ui.components.ErrorState
@@ -34,10 +52,16 @@ import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.math.roundToInt
 
 private val WEEKDAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+private val CHRONICLE_SWIPE_THRESHOLD = 55.dp
+private val monthTitleFormatter = DateTimeFormatter.ofPattern("MMMM uuuu", Locale.ENGLISH)
 
 @Composable
 fun ChronicleScreen(
@@ -63,13 +87,13 @@ fun ChronicleScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = TimeboxDimens.screenPadding)
-            .padding(bottom = TimeboxDimens.bottomInset),
+            .fillMaxSize(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TimeboxDimens.screenPadding)
+                .padding(top = 2.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -104,6 +128,132 @@ fun ChronicleScreen(
             )
         }
 
+        ChronicleMonthPager(
+            state = state,
+            onPrevMonth = onPrevMonth,
+            onNextMonth = onNextMonth,
+            onOpenDay = onOpenDay,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** A bounded three-page track that keeps the displayed month owned by [ChronicleUiState]. */
+@Composable
+private fun ChronicleMonthPager(
+    state: ChronicleUiState,
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onOpenDay: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    var settling by remember { mutableStateOf(false) }
+    val isSettling = rememberUpdatedState(settling)
+    val previousMonth = rememberUpdatedState(onPrevMonth)
+    val nextMonth = rememberUpdatedState(onNextMonth)
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val displayedMonth = YearMonth.from(state.monthStart)
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            .semantics { contentDescription = "Chronicle month content" },
+    ) {
+        val pageWidthPx = constraints.maxWidth.toFloat()
+        val thresholdPx = with(density) { CHRONICLE_SWIPE_THRESHOLD.toPx() }
+
+        fun settle(monthDelta: Long?) {
+            if (settling || pageWidthPx <= 0f) return
+            settling = true
+            scope.launch {
+                val target = monthDelta?.let { -it * pageWidthPx } ?: 0f
+                animate(
+                    initialValue = dragOffsetPx,
+                    targetValue = target,
+                    animationSpec = spring(dampingRatio = 1f, stiffness = 520f),
+                ) { value, _ ->
+                    dragOffsetPx = value
+                }
+                when (monthDelta) {
+                    -1L -> previousMonth.value()
+                    1L -> nextMonth.value()
+                }
+                dragOffsetPx = 0f
+                settling = false
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(displayedMonth, pageWidthPx) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            if (!isSettling.value) dragOffsetPx = 0f
+                        },
+                        onDragCancel = { settle(null) },
+                        onDragEnd = {
+                            val monthDelta = when {
+                                dragOffsetPx < -thresholdPx -> 1L
+                                dragOffsetPx > thresholdPx -> -1L
+                                else -> null
+                            }
+                            settle(monthDelta)
+                        },
+                        onHorizontalDrag = { change, amount ->
+                            if (!isSettling.value) {
+                                change.consume()
+                                dragOffsetPx = (dragOffsetPx + amount)
+                                    .coerceIn(-pageWidthPx, pageWidthPx)
+                            }
+                        },
+                    )
+                },
+        ) {
+            (-1..1).forEach { pagePosition ->
+                val pageMonth = displayedMonth.plusMonths(pagePosition.toLong())
+                val interactive = pagePosition == 0 && !settling
+                key(pageMonth) {
+                    ChronicleMonthPage(
+                        month = pageMonth,
+                        state = state,
+                        interactive = interactive,
+                        onOpenDay = onOpenDay,
+                        modifier = Modifier.offset {
+                            IntOffset(
+                                x = (pagePosition * pageWidthPx + dragOffsetPx).roundToInt(),
+                                y = 0,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChronicleMonthPage(
+    month: YearMonth,
+    state: ChronicleUiState,
+    interactive: Boolean,
+    onOpenDay: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = TimeboxTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .semantics {
+                contentDescription = "Chronicle ${month.format(monthTitleFormatter)}"
+            }
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = TimeboxDimens.screenPadding)
+            .padding(bottom = TimeboxDimens.bottomInset),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -119,13 +269,13 @@ fun ChronicleScreen(
             }
         }
 
-        monthGrid(state.monthStart).chunked(7).forEach { week ->
+        monthGrid(month.atDay(1)).chunked(7).forEach { week ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 week.forEach { date ->
-                    val inMonth = YearMonth.from(date) == YearMonth.from(state.monthStart)
+                    val inMonth = YearMonth.from(date) == month
                     val archived = state.archived[date]
                     DayCell(
                         date = date,
@@ -134,6 +284,7 @@ fun ChronicleScreen(
                         archived = archived != null,
                         windowLabel = archived?.windowLabel,
                         onClick = { onOpenDay(date) },
+                        enabled = interactive,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -158,6 +309,7 @@ private fun DayCell(
     /** Null for a day with nothing in it, so empty cells stay bare. */
     windowLabel: String?,
     onClick: () -> Unit,
+    enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -178,7 +330,7 @@ private fun DayCell(
                     Modifier
                 }
             )
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 5.dp),
     ) {
         Text(
