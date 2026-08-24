@@ -46,6 +46,7 @@ export function TimeBlockCard({
   onDragSessionChange,
   onSwipeComplete,
   isSelected = false,
+  timeCompleted = false,
 }: {
   block: TimeBlock
   lane: BlockLane
@@ -72,6 +73,8 @@ export function TimeBlockCard({
   onSwipeComplete?: () => Promise<void>
   /** True when this block is the active editor target (matches `selectedBlockId` on the day). */
   isSelected?: boolean
+  /** Planned Block has a paired Actual Block. */
+  timeCompleted?: boolean
 }) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const [pendingLayout, setPendingLayout] = useState<{
@@ -392,6 +395,11 @@ export function TimeBlockCard({
   )
 
   const label = block.task?.title?.trim() || block.task_type?.name?.trim() || '(No title)'
+  const completionState = [
+    timeCompleted ? 'Time ✓' : null,
+    block.task ? `Task ${block.task.status === 'completed' ? '✓' : '○'}` : null,
+  ].filter(Boolean).join(' · ')
+  const displayLabel = completionState ? `${label} · ${completionState}` : label
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
   const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
   const innerTextThreshold = block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME
@@ -445,7 +453,7 @@ export function TimeBlockCard({
     if (isSelected) {
       return `${base} z-20 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
     }
-    return `${base} z-10 border-0 bg-paper-soft [box-shadow:var(--shadow-engrave-rest)]`
+    return `${base} z-10 border-0 ${timeCompleted ? 'bg-tertiary-container/35' : 'bg-paper-soft'} [box-shadow:var(--shadow-engrave-rest)]`
   })()
 
   return (
@@ -491,7 +499,7 @@ export function TimeBlockCard({
               {sideTextTwoLines ? (
                 <>
                   <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                    {label}
+                    {displayLabel}
                   </p>
                   <p className="shrink-0 truncate font-body text-[10.5px] font-mono leading-tight text-on-surface-variant">
                     {timeRangeLabel}
@@ -499,7 +507,7 @@ export function TimeBlockCard({
                 </>
               ) : (
                 <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                  {label}
+                  {displayLabel}
                   <span className="font-normal text-on-surface-variant">
                     {' '}
                     · {timeRangeLabel}
@@ -514,7 +522,7 @@ export function TimeBlockCard({
         ) : (
           <div className="flex min-h-0 flex-1 flex-col items-stretch justify-center gap-0.5 overflow-hidden px-3 py-0">
             <p className="shrink-0 truncate font-body text-[12.5px] font-medium leading-tight text-on-surface">
-              {label}
+              {displayLabel}
             </p>
             {showTime ? (
               <p className="shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant">
@@ -572,7 +580,7 @@ export function TimeBlockCard({
                 {sideTextTwoLines ? (
                   <>
                     <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                      {label}
+                      {displayLabel}
                     </span>
                     <span className="shrink-0 truncate font-body text-[10.5px] font-mono leading-tight text-on-surface-variant">
                       {timeRangeLabel}
@@ -580,7 +588,7 @@ export function TimeBlockCard({
                   </>
                 ) : (
                   <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                    {label}
+                    {displayLabel}
                     <span className="font-normal text-on-surface-variant">
                       {' '}
                       · {timeRangeLabel}
@@ -597,7 +605,7 @@ export function TimeBlockCard({
           ) : (
             <>
               <span className={`shrink-0 truncate font-body leading-tight text-on-surface ${isSelected ? 'text-[13.5px] font-semibold' : 'text-[12.5px] font-medium'}`}>
-                {label}
+                {displayLabel}
               </span>
               {showTime ? (
                 <span className="shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant">

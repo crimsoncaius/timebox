@@ -20,6 +20,7 @@ import type {
   TaskStatus,
   TaskType,
 } from '../../lib/api'
+import { formatMinuteLabel24 } from '../../lib/time'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
 
@@ -61,6 +62,7 @@ export function TaskDetailPanel({
   serverNowIso,
   onClose,
   onPatch,
+  onSetCompletion,
   onAddSubtask,
   onTrash,
 }: {
@@ -71,6 +73,7 @@ export function TaskDetailPanel({
   serverNowIso: string
   onClose: () => void
   onPatch: (id: number, patch: Partial<BattleTaskWrite>) => Promise<void>
+  onSetCompletion: (id: number, completed: boolean) => Promise<void>
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onTrash: (id: number) => Promise<void>
 }) {
@@ -91,6 +94,11 @@ export function TaskDetailPanel({
   const today = dateInTimeZone(serverNowIso, timezone)
   const plannedDates = orderedPlannedDates(task.planned_dates, today)
   const visiblePlannedDates = showAllPlannedDates ? plannedDates : plannedDates.slice(0, 5)
+  const allocations = [...(task.allocations ?? [])].sort((left, right) =>
+    left.date.localeCompare(right.date) || left.start_minute - right.start_minute,
+  )
+  const currentAllocations = allocations.filter((allocation) => allocation.date >= today)
+  const pastAllocations = allocations.filter((allocation) => allocation.date < today).reverse()
 
   const setDraftField = <Key extends keyof TaskDraft>(key: Key, value: TaskDraft[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -187,10 +195,13 @@ export function TaskDetailPanel({
     if (!canSave) return
     setIsSaving(true)
     try {
+      if (task.status === 'completed' && draft.status !== 'completed') {
+        await onSetCompletion(task.id, false)
+      }
       await onPatch(task.id, {
         title: draft.title.trim(),
         description: draft.description,
-        status: draft.status,
+        ...(draft.status !== task.status && draft.status !== 'completed' ? { status: draft.status } : {}),
         project_id: draft.locationId ? Number(draft.locationId) : null,
         task_type_id: draft.taskTypeId ? Number(draft.taskTypeId) : null,
         urgency: draft.urgency,
@@ -203,6 +214,9 @@ export function TaskDetailPanel({
           ? zonedLocalToIso(draft.reminderAt, timezone)
           : null,
       })
+      if (task.status !== 'completed' && draft.status === 'completed') {
+        await onSetCompletion(task.id, true)
+      }
       onClose()
     } finally {
       setIsSaving(false)
@@ -280,7 +294,7 @@ export function TaskDetailPanel({
                         type="checkbox"
                         aria-label={`${subtask.status === 'completed' ? 'Reopen' : 'Complete'} subtask ${subtask.title}`}
                         checked={subtask.status === 'completed'}
-                        onChange={(event) => void onPatch(subtask.id, { status: event.target.checked ? 'completed' : 'open' })}
+                        onChange={(event) => void onSetCompletion(subtask.id, event.target.checked)}
                         className="size-4 accent-[var(--task-detail-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
                       />
                       <span className={`min-w-0 flex-1 text-sm ${subtask.status === 'completed' ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`}>
@@ -382,7 +396,16 @@ export function TaskDetailPanel({
                 ) : null}
               </div>
 
-              {plannedDates.length > 0 ? (
+              {allocations.length > 0 ? (
+                <section aria-label="Allocated time" className="border-t border-[var(--task-detail-divider)] py-3">
+                  <h2 className="font-label text-[11px] uppercase tracking-[0.16em] text-[var(--task-detail-muted)]">Allocated time</h2>
+                  <p className="mt-1 text-xs text-[var(--task-detail-muted)]">
+                    {task.allocation_completed ?? 0}/{task.allocation_total ?? allocations.length} time blocks completed
+                  </p>
+                  <AllocationGroup label="Today & upcoming" allocations={currentAllocations} today={today} />
+                  <AllocationGroup label="Past allocations" allocations={pastAllocations} today={today} />
+                </section>
+              ) : plannedDates.length > 0 ? (
                 <section aria-label="Planned Dates" className="border-t border-[var(--task-detail-divider)] py-3">
                   <h2 className="font-label text-[11px] uppercase tracking-[0.16em] text-[var(--task-detail-muted)]">Planned Dates</h2>
                   <div className="mt-2 flex flex-col gap-1">
@@ -401,6 +424,16 @@ export function TaskDetailPanel({
                     </button>
                   ) : null}
                 </section>
+              ) : null}
+
+              {task.subtasks.length > 0 && task.subtasks.every((subtask) => subtask.status === 'completed') && task.status !== 'completed' ? (
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-[10px] bg-primary/10 px-3 py-2 text-sm font-medium text-primary"
+                  onClick={() => void onSetCompletion(task.id, true)}
+                >
+                  All subtasks complete · Complete Parent Task
+                </button>
               ) : null}
 
               <div className="border-t border-[var(--task-detail-divider)] py-4">
@@ -439,6 +472,43 @@ export function TaskDetailPanel({
           </aside>
         </div>
       </section>
+    </div>
+  )
+}
+
+function AllocationGroup({
+  label,
+  allocations,
+  today,
+}: {
+  label: string
+  allocations: NonNullable<BattleTask['allocations']>
+  today: string
+}) {
+  if (allocations.length === 0) return null
+  return (
+    <div className="mt-3">
+      <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--task-detail-muted)]">{label}</h3>
+      <div className="mt-1 flex flex-col gap-1">
+        {allocations.map((allocation) => {
+          const dateLabel = allocation.date === today
+            ? 'Today'
+            : formatPlannedDate(allocation.date, today)
+          const timeLabel = `${formatMinuteLabel24(allocation.start_minute)}–${formatMinuteLabel24(allocation.end_minute)}`
+          const stateLabel = allocation.time_completed ? 'Time completed' : 'Time incomplete'
+          return (
+            <Link
+              key={allocation.block_id}
+              to={`/day/${allocation.date}?block=${allocation.block_id}`}
+              aria-label={`${dateLabel} · ${timeLabel} · ${stateLabel}`}
+              className="rounded-lg px-2 py-1.5 text-sm text-[var(--task-detail-secondary)] transition-colors hover:bg-[var(--task-detail-field-hover)] hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
+            >
+              <span className="block">{dateLabel} · {timeLabel}</span>
+              <span className="block text-xs text-[var(--task-detail-muted)]">{stateLabel}</span>
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import type { DayRead, TaskType, TimeBlock } from '../lib/api'
 import { TimeBlockModal } from './TimeBlockModal'
 
@@ -47,6 +48,7 @@ describe('TimeBlockModal', () => {
 
   it('shows read-only start and end as HH:MM', () => {
     render(
+      <MemoryRouter>
       <TimeBlockModal
         open
         block={makeBlock()}
@@ -57,7 +59,8 @@ describe('TimeBlockModal', () => {
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onCreateTaskTypePath={noopCreate}
-      />,
+      />
+      </MemoryRouter>,
     )
     expect(screen.getByText('08:30')).toBeInTheDocument()
     expect(screen.getByText('10:00')).toBeInTheDocument()
@@ -187,6 +190,41 @@ describe('TimeBlockModal', () => {
     )
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument()
+  })
+
+  it('shows independent Time and Task completion controls for linked blocks', async () => {
+    const user = userEvent.setup()
+    const onSetTimeCompleted = vi.fn().mockResolvedValue(undefined)
+    const onSetTaskCompleted = vi.fn().mockResolvedValue(undefined)
+    const planned = makeBlock({
+      task_id: 42,
+      task: { id: 42, title: 'Linked task', status: 'in_progress', task_type_id: 1 },
+    })
+    const actual = makeBlock({ id: 11, lane: 'actual', planned_block_id: planned.id })
+    render(
+      <MemoryRouter>
+      <TimeBlockModal
+        open
+        block={planned}
+        draft={null}
+        day={{ ...emptyDay, time_blocks: [planned, actual] }}
+        taskTypes={taskTypes}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onSetTimeCompleted={onSetTimeCompleted}
+        onSetTaskCompleted={onSetTaskCompleted}
+        onCreateTaskTypePath={noopCreate}
+      />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('checkbox', { name: 'Time completed' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Task completed' })).not.toBeChecked()
+    await user.click(screen.getByRole('checkbox', { name: 'Time completed' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Task completed' }))
+    expect(onSetTimeCompleted).toHaveBeenCalledWith(false)
+    expect(onSetTaskCompleted).toHaveBeenCalledWith(true)
   })
 
   it('preserves the time block when permanent deletion is cancelled', async () => {

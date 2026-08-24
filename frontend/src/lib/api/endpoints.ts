@@ -17,6 +17,7 @@ import type {
   RecurringTemplateWrite,
   SettingsRead,
   TaskCollection,
+  TaskCompletionResult,
   TaskStatus,
   TaskType,
 } from './types'
@@ -98,6 +99,11 @@ export const api = {
       method: 'POST',
     }),
 
+  reverseBlockCompletion: (date: string, blockId: number) =>
+    fetchJson<DayRead>(`/days/${date}/blocks/${blockId}/completion`, {
+      method: 'DELETE',
+    }),
+
   listDays: (limit = 60) => fetchJson<DayListItem[]>(`/days?limit=${limit}`),
 
   listProjects: () => fetchJson<Project[]>('/projects'),
@@ -118,6 +124,21 @@ export const api = {
 
   patchBattleTask: (id: number, body: Partial<BattleTaskWrite>) =>
     fetchJson<BattleTask>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  completeBattleTask: (id: number, plannedTime: 'keep' | 'remove') =>
+    fetchJson<TaskCompletionResult>(`/tasks/${id}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ planned_time: plannedTime }),
+    }),
+
+  reopenBattleTask: (id: number) =>
+    fetchJson<BattleTask>(`/tasks/${id}/reopen`, { method: 'POST' }),
+
+  undoBattleTaskCompletion: (id: number, undoToken: string) =>
+    fetchJson<BattleTask>(`/tasks/${id}/undo-completion`, {
+      method: 'POST',
+      body: JSON.stringify({ undo_token: undoToken }),
+    }),
 
   reorderBattleTasks: (
     placements: Array<{ task_id: number; status: TaskStatus; position: number }>,

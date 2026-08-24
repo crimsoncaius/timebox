@@ -23,12 +23,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -58,6 +60,11 @@ fun BlockSheet(
     onNoteChange: (String) -> Unit,
     onDelete: () -> Unit,
     onComplete: () -> Unit,
+    onReverseCompletion: () -> Unit,
+    onRequestTaskCompletion: () -> Unit,
+    onConfirmTaskCompletion: (removePlannedTime: Boolean) -> Unit,
+    onDismissTaskCompletion: () -> Unit,
+    onReopenTask: () -> Unit,
     onOpenLinkedTask: (Int) -> Unit,
     allowComplete: Boolean = true,
 ) {
@@ -213,6 +220,54 @@ fun BlockSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            val selected = state.selectedBlock
+            if (!isDraft && selected != null && (
+                    selected.lane == Lane.Planned || selected.task != null
+                )
+            ) {
+                Spacer(Modifier.height(18.dp))
+                Column(
+                    Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    if (selected.lane == Lane.Planned) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Time completed", style = TimeboxTheme.type.label)
+                                Text("This allocation was fulfilled.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                            }
+                            Checkbox(
+                                checked = state.selectedAlreadyCompleted,
+                                enabled = allowComplete && !state.saving,
+                                onCheckedChange = { completed ->
+                                    if (completed) onComplete() else onReverseCompletion()
+                                },
+                            )
+                        }
+                    }
+                    selected.task?.let { task ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Task completed", style = TimeboxTheme.type.label)
+                                Text(
+                                    if (task.isReadOnly) "Inactive Battle Plan tasks are read-only."
+                                    else "No further work remains for this task.",
+                                    style = TimeboxTheme.type.bodySmall,
+                                    color = colors.onVariant,
+                                )
+                            }
+                            Checkbox(
+                                checked = task.status == com.timebox.android.data.TaskStatus.Completed,
+                                enabled = !task.isReadOnly && !state.saving,
+                                onCheckedChange = { completed ->
+                                    if (completed) onRequestTaskCompletion() else onReopenTask()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (state.selectedBlock != null) {
@@ -225,27 +280,41 @@ fun BlockSheet(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                val selected = state.selectedBlock
-                if (allowComplete && selected != null && selected.lane == Lane.Planned) {
-                    PrimaryButton(
-                        text = if (state.selectedAlreadyCompleted) "Completed" else "Mark complete",
-                        onClick = onComplete,
-                        enabled = !state.selectedAlreadyCompleted,
-                        leading = {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = null,
-                                tint = colors.bg,
-                                modifier = Modifier.size(19.dp),
-                            )
-                        },
-                    )
-                }
                 if (isDraft) {
                     PrimaryButton(text = "Done", onClick = onDismiss)
                 }
             }
         }
+    }
+
+    state.taskCompletionPrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = onDismissTaskCompletion,
+            title = { Text(if (prompt.cascadesSubtasks) "Complete parent and subtasks?" else "Complete task?") },
+            text = {
+                Text(
+                    when {
+                        prompt.cascadesSubtasks && prompt.hasCurrentIncompletePlannedTime ->
+                            "This completes every Subtask. Choose what should happen to incomplete planned time today and later."
+                        prompt.cascadesSubtasks -> "This completes every Subtask."
+                        else -> "Choose what should happen to incomplete planned time today and later."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { onConfirmTaskCompletion(false) }) {
+                    Text(if (prompt.hasCurrentIncompletePlannedTime) "Keep time" else "Complete")
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (prompt.hasCurrentIncompletePlannedTime) {
+                        TextButton(onClick = { onConfirmTaskCompletion(true) }) { Text("Remove planned time") }
+                    }
+                    TextButton(onClick = onDismissTaskCompletion) { Text("Cancel") }
+                }
+            },
+        )
     }
 }
 

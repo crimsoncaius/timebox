@@ -11,6 +11,7 @@ import com.timebox.android.data.remote.PlanningCommitResponseDto
 import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.TimeboxApi
+import com.timebox.android.data.remote.TaskCompletionResponseDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -32,6 +33,9 @@ class BattlePlanRepositoryTest {
         repository.listBattleTasks(TaskCollection.Active).getOrThrow()
         repository.createBattleTask(BattleTaskCreate("Task")).getOrThrow()
         repository.patchBattleTask(10, BattleTaskPatch(projectId = PatchField.clear())).getOrThrow()
+        repository.completeBattleTask(10, removePlannedTime = false).getOrThrow()
+        repository.reopenBattleTask(10).getOrThrow()
+        repository.undoBattleTaskCompletion(10, "undo-token").getOrThrow()
         repository.reorderBattleTasks(listOf(TaskPlacement(10, TaskStatus.Open, 0))).getOrThrow()
         repository.archiveCompletedBattleTasks(listOf(10)).getOrThrow()
         repository.unarchiveBattleTask(10).getOrThrow()
@@ -64,6 +68,7 @@ class BattlePlanRepositoryTest {
             setOf(
                 "listProjects", "createProject", "patchProject", "deleteProject",
                 "listBattleTasks", "createBattleTask", "patchBattleTask", "reorderBattleTasks",
+                "completeBattleTask", "reopenBattleTask", "undoBattleTaskCompletion",
                 "archiveCompletedBattleTasks", "unarchiveBattleTask", "trashBattleTask",
                 "restoreBattleTask", "permanentlyDeleteBattleTask", "listDueReminders",
                 "commitPlan",
@@ -74,7 +79,7 @@ class BattlePlanRepositoryTest {
             ),
             calls.toSet(),
         )
-        assertEquals(25, calls.size)
+        assertEquals(28, calls.size)
     }
 
     @Test
@@ -100,7 +105,9 @@ class BattlePlanRepositoryTest {
                 "listBattleTasks" -> BattleTaskListDto(
                     listOf(task), "Asia/Singapore", "2026-08-17T12:00:00+08:00",
                 )
-                "createBattleTask", "patchBattleTask", "trashBattleTask" -> task
+                "createBattleTask", "patchBattleTask", "trashBattleTask", "reopenBattleTask",
+                "undoBattleTaskCompletion" -> task
+                "completeBattleTask" -> TaskCompletionResponseDto(task, "undo-token", emptyList())
                 "commitPlan" -> PlanningCommitResponseDto(
                     listOf(
                         DayDto(

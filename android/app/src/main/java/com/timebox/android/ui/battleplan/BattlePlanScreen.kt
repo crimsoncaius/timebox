@@ -122,6 +122,7 @@ import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
+import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.theme.TimeboxColors
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -164,6 +165,8 @@ fun BattlePlanScreen(
     onRequestPermanentDelete: (BattleTask) -> Unit,
     onDismissPermanentDelete: () -> Unit,
     onConfirmPermanentDelete: () -> Unit,
+    onDismissCompletion: () -> Unit = {},
+    onConfirmCompletion: (Boolean) -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     when {
@@ -254,6 +257,41 @@ fun BattlePlanScreen(
             text = { Text("This removes the task and its subtasks permanently. This cannot be undone.") },
             confirmButton = { TextButton(onClick = onConfirmPermanentDelete) { Text("Delete permanently") } },
             dismissButton = { TextButton(onClick = onDismissPermanentDelete) { Text("Cancel") } },
+        )
+    }
+    state.pendingCompletionTask?.let { task ->
+        val zone = runCatching { java.time.ZoneId.of(state.timezone) }.getOrDefault(java.time.ZoneId.of("UTC"))
+        val today = state.serverNow.atZone(zone).toLocalDate()
+        val affected = listOf(task) + task.subtasks
+        val hasCurrentIncompletePlannedTime = affected.any { affectedTask ->
+            affectedTask.allocations.any { !it.timeCompleted && it.date >= today }
+        }
+        AlertDialog(
+            onDismissRequest = onDismissCompletion,
+            title = { Text(if (task.subtasks.isNotEmpty()) "Complete parent and subtasks?" else "Complete task?") },
+            text = {
+                Text(
+                    when {
+                        task.subtasks.isNotEmpty() && hasCurrentIncompletePlannedTime ->
+                            "This completes every Subtask. Choose what should happen to incomplete planned time today and later."
+                        task.subtasks.isNotEmpty() -> "This completes every Subtask."
+                        else -> "Choose what should happen to incomplete planned time today and later."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { onConfirmCompletion(false) }) {
+                    Text(if (hasCurrentIncompletePlannedTime) "Keep time" else "Complete")
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (hasCurrentIncompletePlannedTime) {
+                        TextButton(onClick = { onConfirmCompletion(true) }) { Text("Remove planned time") }
+                    }
+                    TextButton(onClick = onDismissCompletion) { Text("Cancel") }
+                }
+            },
         )
     }
 }
@@ -1152,6 +1190,7 @@ private fun MobileKanbanCard(
                 Spacer(Modifier.height(3.dp))
                 PlannedDatePill(summary)
             }
+            AllocationProgress(task)
             val metadata = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.urgency?.let { add("U ${it.wire}") }
@@ -1394,6 +1433,7 @@ private fun MobileTaskDragPreview(
             Spacer(Modifier.height(3.dp))
             PlannedDatePill(summary)
         }
+        AllocationProgress(drag.task)
         val metadata = buildList {
             drag.task.deadlineDate?.let { add("Due $it") }
             drag.task.urgency?.let { add("U ${it.wire}") }
@@ -1552,6 +1592,7 @@ private fun BattleTaskCard(
                 Spacer(Modifier.height(5.dp))
                 PlannedDatePill(summary)
             }
+            AllocationProgress(task)
             val details = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.deadlineAt?.let { add("Due $it") }
@@ -1752,9 +1793,9 @@ fun TaskDetailScreen(
     onReminderDateChange: (String) -> Unit,
     onReminderTimeChange: (String) -> Unit,
     onReadyChange: (Boolean) -> Unit,
-    onOpenDay: (java.time.LocalDate) -> Unit,
+    onOpenDay: (java.time.LocalDate, Int?) -> Unit,
     onAddSubtask: (String) -> Unit,
-    onToggleSubtask: (BattleTask) -> Unit,
+    onToggleSubtask: (BattleTask, Boolean) -> Unit,
     onTrashSubtask: (BattleTask) -> Unit,
     onDismissSubtaskTrash: () -> Unit,
     onConfirmSubtaskTrash: () -> Unit,
@@ -1763,12 +1804,43 @@ fun TaskDetailScreen(
     onDismissTrash: () -> Unit,
     onConfirmTrash: () -> Unit,
     onTrashed: () -> Unit,
-    onSave: () -> Unit,
+    onSave: (Boolean) -> Unit,
 ) {
     LaunchedEffect(state.trashed) { if (state.trashed) onTrashed() }
     var confirmDiscard by remember { mutableStateOf(false) }
+    var confirmCompletion by remember { mutableStateOf(false) }
+    var pendingSubtaskCompletion by remember { mutableStateOf<BattleTask?>(null) }
     var newSubtask by remember { mutableStateOf("") }
+    val completionToday = state.serverNow.atZone(
+        runCatching { java.time.ZoneId.of(state.timezone) }.getOrDefault(java.time.ZoneId.of("UTC"))
+    ).toLocalDate()
+    val completionTasks = state.task?.let { task -> listOf(task) + task.subtasks }.orEmpty()
+    val hasCurrentIncompletePlannedTime = completionTasks.any { task ->
+        task.allocations.any { !it.timeCompleted && it.date >= completionToday }
+    }
+    val completionCascades = state.subtasks.isNotEmpty()
+    fun requestSubtaskToggle(task: BattleTask) {
+        val hasCurrentIncompletePlannedTime = task.allocations.any {
+            !it.timeCompleted && it.date >= completionToday
+        }
+        if (task.status != TaskStatus.Completed && hasCurrentIncompletePlannedTime) {
+            pendingSubtaskCompletion = task
+        } else {
+            onToggleSubtask(task, false)
+        }
+    }
     fun requestBack() { if (state.dirty) confirmDiscard = true else onBack() }
+    fun requestSave() {
+        if (
+            state.task?.status != TaskStatus.Completed &&
+            state.status == TaskStatus.Completed &&
+            (completionCascades || hasCurrentIncompletePlannedTime)
+        ) {
+            confirmCompletion = true
+        } else {
+            onSave(false)
+        }
+    }
     BackHandler(onBack = ::requestBack)
     when {
         state.loading -> LoadingState()
@@ -1777,13 +1849,13 @@ fun TaskDetailScreen(
             val expanded = maxWidth >= 840.dp
             if (expanded && !state.isSubtask) {
                 Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onSave)
-                    SubtaskPanel(state, Modifier.weight(1f), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, onToggleSubtask, onTrashSubtask)
+                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, ::requestSave)
+                    SubtaskPanel(state, Modifier.weight(1f), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, ::requestSubtaskToggle, onTrashSubtask)
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onSave)
-                    if (!state.isSubtask) SubtaskPanel(state, Modifier.fillMaxWidth(), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, onToggleSubtask, onTrashSubtask)
+                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, ::requestSave)
+                    if (!state.isSubtask) SubtaskPanel(state, Modifier.fillMaxWidth(), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, ::requestSubtaskToggle, onTrashSubtask)
                 }
             }
         }
@@ -1795,6 +1867,57 @@ fun TaskDetailScreen(
             text = { Text("Your task edits have not been saved.") },
             confirmButton = { TextButton(onClick = onBack) { Text("Discard") } },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+        )
+    }
+    if (confirmCompletion) {
+        AlertDialog(
+            onDismissRequest = { confirmCompletion = false },
+            title = { Text(if (state.subtasks.isNotEmpty()) "Complete parent and subtasks?" else "Complete task?") },
+            text = {
+                Text(
+                    when {
+                        completionCascades && hasCurrentIncompletePlannedTime ->
+                            "This completes every Subtask. Choose what should happen to incomplete planned time today and later."
+                        completionCascades -> "This completes every Subtask."
+                        else -> "Choose what should happen to incomplete planned time today and later."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmCompletion = false; onSave(false) }) {
+                    Text(if (hasCurrentIncompletePlannedTime) "Keep time" else "Complete")
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (hasCurrentIncompletePlannedTime) {
+                        TextButton(onClick = { confirmCompletion = false; onSave(true) }) { Text("Remove planned time") }
+                    }
+                    TextButton(onClick = { confirmCompletion = false }) { Text("Cancel") }
+                }
+            },
+        )
+    }
+    pendingSubtaskCompletion?.let { subtask ->
+        AlertDialog(
+            onDismissRequest = { pendingSubtaskCompletion = null },
+            title = { Text("Complete subtask?") },
+            text = { Text("Choose what should happen to incomplete planned time today and later.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingSubtaskCompletion = null
+                    onToggleSubtask(subtask, false)
+                }) { Text("Keep time") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        pendingSubtaskCompletion = null
+                        onToggleSubtask(subtask, true)
+                    }) { Text("Remove planned time") }
+                    TextButton(onClick = { pendingSubtaskCompletion = null }) { Text("Cancel") }
+                }
+            },
         )
     }
     if (state.confirmTrash) {
@@ -1845,7 +1968,7 @@ private fun TaskEditForm(
     onReminderDate: (String) -> Unit,
     onReminderTime: (String) -> Unit,
     onReady: (Boolean) -> Unit,
-    onOpenDay: (java.time.LocalDate) -> Unit,
+    onOpenDay: (java.time.LocalDate, Int?) -> Unit,
     onTrash: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -1860,6 +1983,16 @@ private fun TaskEditForm(
         OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") })
         OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
         SelectionMenu("Status", state.status.label, battlePlanStatuses.map { it.label to it }, onStatus)
+        if (
+            !state.isSubtask &&
+            state.status != TaskStatus.Completed &&
+            state.subtasks.isNotEmpty() &&
+            state.subtasks.all { it.status == TaskStatus.Completed }
+        ) {
+            TextButton(onClick = { onStatus(TaskStatus.Completed) }) {
+                Text("All subtasks complete · Complete Parent Task")
+            }
+        }
         if (!state.isSubtask) SelectionMenu("Project", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
         else Text("Project: ${state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin"} (inherited)", style = TimeboxTheme.type.bodySmall)
         SelectionMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset", listOf("Unset" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
@@ -1882,7 +2015,39 @@ private fun TaskEditForm(
                 OutlinedTextField(state.reminderTime, onReminderTime, Modifier.fillMaxWidth(), label = { Text("Reminder time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
             }
         }
-        if (plannedDates.isNotEmpty()) {
+        if (state.task?.allocations?.isNotEmpty() == true) {
+            val allocations = state.task.allocations.sortedWith(compareBy({ it.date }, { it.startMinute }))
+            val currentAllocations = allocations.filter { it.date >= today }
+            val pastAllocations = allocations.filter { it.date < today }.asReversed()
+            Column(
+                Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("Allocated time", style = TimeboxTheme.type.label)
+                Text(
+                    "${state.task.allocationCompleted}/${state.task.allocationTotal} time blocks completed",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = TimeboxTheme.colors.onVariant,
+                )
+                listOf("Today & upcoming" to currentAllocations, "Past allocations" to pastAllocations)
+                    .filter { it.second.isNotEmpty() }
+                    .forEach { (label, group) ->
+                        Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                        group.forEach { allocation ->
+                            Text(
+                                text = "${formatPlannedDetailDate(allocation.date, today)}  ·  " +
+                                    "${hhmm(allocation.startMinute)}–${hhmm(allocation.endMinute)}  ·  " +
+                                    if (allocation.timeCompleted) "Time completed" else "Time planned",
+                                style = TimeboxTheme.type.bodySmall,
+                                color = TimeboxTheme.colors.onVariant,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                    .clickable { onOpenDay(allocation.date, allocation.blockId) }
+                                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                }
+        } else if (plannedDates.isNotEmpty()) {
             Column(
                 Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1894,7 +2059,7 @@ private fun TaskEditForm(
                         style = TimeboxTheme.type.bodySmall,
                         color = TimeboxTheme.colors.onVariant,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                            .clickable { onOpenDay(date) }.padding(horizontal = 8.dp, vertical = 7.dp),
+                            .clickable { onOpenDay(date, null) }.padding(horizontal = 8.dp, vertical = 7.dp),
                     )
                 }
                 if (plannedDates.size > 5) {
@@ -1911,6 +2076,17 @@ private fun TaskEditForm(
         PrimaryButton("Save task", onSave, Modifier.fillMaxWidth(), enabled = state.dirty && !state.saving)
         TextButton(onClick = onTrash, enabled = !state.saving) { Icon(Icons.Outlined.Delete, null); Spacer(Modifier.width(5.dp)); Text("Move to Trash", color = TimeboxTheme.colors.error) }
     }
+}
+
+@Composable
+private fun AllocationProgress(task: BattleTask) {
+    if (task.allocationTotal == 0) return
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "${task.allocationCompleted}/${task.allocationTotal} time blocks",
+        style = TimeboxTheme.type.bodySmall,
+        color = TimeboxTheme.colors.onVariant,
+    )
 }
 
 @Composable

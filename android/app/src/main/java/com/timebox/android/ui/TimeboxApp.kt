@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -89,6 +90,7 @@ fun TimeboxApp(
         runCatching { LocalDate.parse(it) }.getOrNull()
     }
     val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
+    val routeBlockId = backStackEntry?.arguments?.getInt(AppRoutes.BlockIdArg)?.takeIf { it >= 0 }
     val routeProjectId = backStackEntry?.arguments?.getInt(AppRoutes.ProjectIdArg)
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -122,7 +124,29 @@ fun TimeboxApp(
         }
     }
     LaunchedEffect(dayState.message) {
-        dayState.message?.let { snackbarHostState.showSnackbar(it); dayViewModel.consumeMessage() }
+        dayState.message?.let { message ->
+            val hasCompletionUndo = dayState.completionUndoToken != null
+            dayViewModel.consumeMessage()
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = if (hasCompletionUndo) "Undo" else null,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                dayViewModel.undoLastTaskCompletion()
+            } else if (hasCompletionUndo) {
+                dayViewModel.dismissCompletionUndo()
+            }
+        }
+    }
+    LaunchedEffect(route, routeDate, routeBlockId, dayState.day) {
+        if (
+            route == AppRoutes.DayPattern &&
+            routeBlockId != null &&
+            dayState.day?.date == routeDate &&
+            dayState.selectedBlockId != routeBlockId
+        ) {
+            dayViewModel.selectBlock(routeBlockId)
+        }
     }
     LaunchedEffect(typesState.message) {
         typesState.message?.let { snackbarHostState.showSnackbar(it); typesViewModel.consumeMessage() }
@@ -131,10 +155,34 @@ fun TimeboxApp(
         settingsState.message?.let { snackbarHostState.showSnackbar(it); settingsViewModel.consumeMessage() }
     }
     LaunchedEffect(battlePlanState.message) {
-        battlePlanState.message?.let { snackbarHostState.showSnackbar(it); battlePlanViewModel.consumeMessage() }
+        battlePlanState.message?.let { message ->
+            val hasCompletionUndo = battlePlanState.completionUndoToken != null
+            battlePlanViewModel.consumeMessage()
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = if (hasCompletionUndo) "Undo" else null,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                battlePlanViewModel.undoLastTaskCompletion()
+            } else if (hasCompletionUndo) {
+                battlePlanViewModel.dismissCompletionUndo()
+            }
+        }
     }
     LaunchedEffect(taskDetailState.message) {
-        taskDetailState.message?.let { snackbarHostState.showSnackbar(it); taskDetailViewModel.consumeMessage() }
+        taskDetailState.message?.let { message ->
+            val hasCompletionUndo = taskDetailState.completionUndoToken != null
+            taskDetailViewModel.consumeMessage()
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = if (hasCompletionUndo) "Undo" else null,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                taskDetailViewModel.undoLastTaskCompletion()
+            } else if (hasCompletionUndo) {
+                taskDetailViewModel.dismissCompletionUndo()
+            }
+        }
     }
     LaunchedEffect(projectEditorState.message) {
         projectEditorState.message?.let { snackbarHostState.showSnackbar(it); projectEditorViewModel.consumeMessage() }
@@ -189,6 +237,9 @@ fun TimeboxApp(
                         arguments = listOf(navArgument(AppRoutes.DateArg) {
                             type = NavType.StringType
                             defaultValue = LocalDate.now().toString()
+                        }, navArgument(AppRoutes.BlockIdArg) {
+                            type = NavType.IntType
+                            defaultValue = -1
                         }),
                     ) {
                         DayScreen(
@@ -209,6 +260,11 @@ fun TimeboxApp(
                             onNoteChange = dayViewModel::onNoteChange,
                             onDeleteSelected = dayViewModel::deleteSelected,
                             onCompleteSelected = dayViewModel::completeSelected,
+                            onReverseSelectedCompletion = dayViewModel::reverseSelectedCompletion,
+                            onRequestSelectedTaskCompletion = dayViewModel::requestSelectedTaskCompletion,
+                            onConfirmSelectedTaskCompletion = dayViewModel::completeSelectedTask,
+                            onDismissTaskCompletion = dayViewModel::dismissTaskCompletionPrompt,
+                            onReopenSelectedTask = dayViewModel::reopenSelectedTask,
                             onOpenLinkedTask = { taskId ->
                                 dayViewModel.closeSheet()
                                 navController.navigate(AppRoutes.taskDetail(taskId))
@@ -268,6 +324,8 @@ fun TimeboxApp(
                             onRequestPermanentDelete = battlePlanViewModel::requestPermanentDelete,
                             onDismissPermanentDelete = battlePlanViewModel::dismissPermanentDelete,
                             onConfirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
+                            onDismissCompletion = battlePlanViewModel::dismissPendingCompletion,
+                            onConfirmCompletion = battlePlanViewModel::confirmPendingCompletion,
                         )
                     }
                     composable(
@@ -299,7 +357,7 @@ fun TimeboxApp(
                             onReminderDateChange = taskDetailViewModel::setReminderDate,
                             onReminderTimeChange = taskDetailViewModel::setReminderTime,
                             onReadyChange = taskDetailViewModel::setReady,
-                            onOpenDay = { navController.navigate(AppRoutes.day(it)) },
+                            onOpenDay = { date, blockId -> navController.navigate(AppRoutes.day(date, blockId)) },
                             onAddSubtask = taskDetailViewModel::addSubtask,
                             onToggleSubtask = taskDetailViewModel::toggleSubtask,
                             onTrashSubtask = taskDetailViewModel::requestSubtaskTrash,

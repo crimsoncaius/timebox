@@ -168,3 +168,24 @@ def complete_block_as_planned(
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
     return day_service.to_day_read(db_day, settings)
+
+
+@router.delete("/{date}/blocks/{block_id}/completion", response_model=DayRead)
+def reverse_block_completion(
+    date: str,
+    block_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> DayRead:
+    try:
+        d = parse_iso_date(date)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
+    day = day_service.get_or_create_day(db, d)
+    try:
+        day_service.reverse_planned_completion(db, day, block_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    db_day = day_service.get_day_by_date(db, d)
+    assert db_day is not None
+    return day_service.to_day_read(db_day, settings)

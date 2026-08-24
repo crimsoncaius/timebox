@@ -24,6 +24,8 @@ export function TimeBlockInspectorContent({
   onCreateFromDraft,
   onDelete,
   onCompleteAsPlanned,
+  onSetTimeCompleted,
+  onSetTaskCompleted,
   onCreateTaskTypePath,
   onDirtyChange,
 }: {
@@ -37,6 +39,8 @@ export function TimeBlockInspectorContent({
   onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onCompleteAsPlanned?: () => Promise<void>
+  onSetTimeCompleted?: (completed: boolean) => Promise<void>
+  onSetTaskCompleted?: (completed: boolean) => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
 }) {
@@ -173,19 +177,32 @@ export function TimeBlockInspectorContent({
     await saveNotePatchIfNeeded()
   }, [clearNoteDebounce, saveNotePatchIfNeeded])
 
-  const handleComplete = useCallback(async () => {
-    if (!onCompleteAsPlanned) return
+  const handleTimeCompletion = useCallback(async (completed: boolean) => {
+    if (!onSetTimeCompleted && !(completed && onCompleteAsPlanned)) return
     await flushNoteNow()
     setSaving(true)
     try {
-      await onCompleteAsPlanned()
-      onClose()
+      if (onSetTimeCompleted) await onSetTimeCompleted(completed)
+      else await onCompleteAsPlanned?.()
     } catch {
       /* parent shows error */
     } finally {
       setSaving(false)
     }
-  }, [flushNoteNow, onClose, onCompleteAsPlanned])
+  }, [flushNoteNow, onCompleteAsPlanned, onSetTimeCompleted])
+
+  const handleTaskCompletion = useCallback(async (completed: boolean) => {
+    if (!onSetTaskCompleted) return
+    await flushNoteNow()
+    setSaving(true)
+    try {
+      await onSetTaskCompleted(completed)
+    } catch {
+      /* parent shows error */
+    } finally {
+      setSaving(false)
+    }
+  }, [flushNoteNow, onSetTaskCompleted])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Permanently delete this time block? This cannot be undone.')) return
@@ -308,6 +325,48 @@ export function TimeBlockInspectorContent({
         />
       </div>
 
+      {!isCreateMode && block && (
+        (block.lane === 'planned' && (onSetTimeCompleted || onCompleteAsPlanned)) ||
+        (block.task && onSetTaskCompleted)
+      ) ? (
+        <section aria-label="Completion" className="rounded-xl border border-outline-variant/25 bg-surface-container-low px-3 py-2.5 dark:border-dark-outline-variant">
+          {block.lane === 'planned' && (onSetTimeCompleted || onCompleteAsPlanned) ? (
+            <label className="flex items-center justify-between gap-3 py-1 text-sm text-on-surface">
+              <span>
+                <span className="block font-medium">Time completed</span>
+                <span className="block text-xs text-on-surface-variant">This allocation was fulfilled.</span>
+              </span>
+              <input
+                type="checkbox"
+                aria-label="Time completed"
+                checked={Boolean(hasLinkedActual)}
+                disabled={saving || (Boolean(hasLinkedActual) && !onSetTimeCompleted)}
+                onChange={(event) => void handleTimeCompletion(event.target.checked)}
+              />
+            </label>
+          ) : null}
+          {block.task && onSetTaskCompleted ? (
+            <label className="flex items-center justify-between gap-3 border-t border-outline-variant/20 py-2 text-sm text-on-surface first:border-t-0 dark:border-dark-outline-variant">
+              <span>
+                <span className="block font-medium">Task completed</span>
+                <span className="block text-xs text-on-surface-variant">
+                  {block.task.archived_at || block.task.deleted_at
+                    ? 'Inactive Battle Plan tasks are read-only.'
+                    : 'No further work remains for this task.'}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                aria-label="Task completed"
+                checked={block.task.status === 'completed'}
+                disabled={saving || Boolean(block.task.archived_at || block.task.deleted_at)}
+                onChange={(event) => void handleTaskCompletion(event.target.checked)}
+              />
+            </label>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Action row */}
       <div className="mt-auto flex shrink-0 items-center">
         {!isCreateMode && (
@@ -324,19 +383,6 @@ export function TimeBlockInspectorContent({
           </button>
         )}
         <div className="flex-1" />
-        {!isCreateMode && block?.lane === 'planned' && onCompleteAsPlanned && (
-          <button
-            type="button"
-            disabled={!!hasLinkedActual || saving}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-on-surface px-[18px] text-[13px] font-medium text-surface transition-colors hover:bg-on-surface/85 disabled:opacity-50 dark:bg-dark-on-surface dark:text-dark-surface dark:hover:bg-dark-on-surface/85"
-            onClick={() => void handleComplete()}
-          >
-            <span className="material-symbols-outlined text-[18px]" aria-hidden>
-              check
-            </span>
-            {hasLinkedActual ? 'Completed' : 'Mark complete'}
-          </button>
-        )}
       </div>
     </div>
   )

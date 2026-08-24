@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import enum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -16,6 +16,9 @@ class BlockLane(str, enum.Enum):
 
 class TimeBlock(Base):
     __tablename__ = "time_blocks"
+    __table_args__ = (
+        UniqueConstraint("planned_block_id", name="uq_time_blocks_planned_completion"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     day_id: Mapped[int] = mapped_column(ForeignKey("days.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -53,3 +56,15 @@ class TimeBlock(Base):
     day: Mapped["Day"] = relationship("Day", back_populates="time_blocks")
     task_type: Mapped["TaskType"] = relationship("TaskType", back_populates="time_blocks")
     task: Mapped["Task | None"] = relationship("Task", back_populates="time_blocks")
+    planned_block: Mapped["TimeBlock | None"] = relationship(
+        "TimeBlock",
+        remote_side=[id],
+        foreign_keys=[planned_block_id],
+        back_populates="completion_actual",
+    )
+    completion_actual: Mapped["TimeBlock | None"] = relationship(
+        "TimeBlock",
+        foreign_keys=[planned_block_id],
+        back_populates="planned_block",
+        uselist=False,
+    )

@@ -58,7 +58,11 @@ data class LinkedTask(
     val title: String,
     val status: TaskStatus,
     val taskTypeId: Int?,
-)
+    val archivedAt: Instant?,
+    val deletedAt: Instant?,
+) {
+    val isReadOnly: Boolean get() = archivedAt != null || deletedAt != null
+}
 
 data class Day(
     val date: LocalDate,
@@ -158,6 +162,8 @@ fun TimeBlockDto.toModel() = TimeBlock(
             title = it.title,
             status = TaskStatus.fromWire(it.status),
             taskTypeId = it.taskTypeId,
+            archivedAt = it.archivedAt?.let(::parseInstant),
+            deletedAt = it.deletedAt?.let(::parseInstant),
         )
     },
     note = note,

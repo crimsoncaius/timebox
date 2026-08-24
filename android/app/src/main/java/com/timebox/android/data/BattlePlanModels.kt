@@ -107,8 +107,19 @@ data class BattleTask(
     val overdue: Boolean,
     val subtasks: List<BattleTask>,
     val plannedDates: List<LocalDate> = emptyList(),
+    val allocationTotal: Int = 0,
+    val allocationCompleted: Int = 0,
+    val allocations: List<TaskAllocation> = emptyList(),
     val isBlocked: Boolean = false,
     val blockingReason: String? = null,
+)
+
+data class TaskAllocation(
+    val blockId: Int,
+    val date: LocalDate,
+    val startMinute: Int,
+    val endMinute: Int,
+    val timeCompleted: Boolean,
 )
 
 data class BattleTaskList(
@@ -214,6 +225,12 @@ data class BattleTaskPatch(
 
 data class TaskPlacement(val taskId: Int, val status: TaskStatus, val position: Int)
 
+data class TaskCompletionResult(
+    val task: BattleTask,
+    val undoToken: String,
+    val removedPlannedBlockIds: List<Int>,
+)
+
 data class RecurrenceRule(
     val mode: RecurrenceMode,
     val frequency: RecurrenceFrequency,
@@ -281,6 +298,17 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         createdAt = parseInstant(createdAt), updatedAt = parseInstant(updatedAt), overdue = overdue,
         plannedDates = plannedDates.mapNotNull { value -> runCatching { LocalDate.parse(value) }.getOrNull() }
             .distinct().sorted(),
+        allocationTotal = allocationTotal,
+        allocationCompleted = allocationCompleted,
+        allocations = allocations.map {
+            TaskAllocation(
+                blockId = it.blockId,
+                date = LocalDate.parse(it.date),
+                startMinute = it.startMinute,
+                endMinute = it.endMinute,
+                timeCompleted = it.timeCompleted,
+            )
+        },
         subtasks = subtasks.map { it.toModel() },
         isBlocked = isBlocked || legacyStatus == TaskStatus.Blocked,
         blockingReason = blockingReason,

@@ -340,6 +340,8 @@ def test_linked_planned_block_clears_readiness_and_preserves_task_on_actual(clie
         "title": "Draft launch brief",
         "status": "in_progress",
         "task_type_id": tid,
+        "archived_at": None,
+        "deleted_at": None,
     }
 
     refreshed_task = client.get("/tasks").json()["items"][0]

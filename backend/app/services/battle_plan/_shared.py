@@ -70,13 +70,15 @@ def _load_task(db: Session, task_id: int) -> Task:
         select(Task)
         .options(
             selectinload(Task.subtasks),
+            selectinload(Task.subtasks).selectinload(Task.time_blocks).selectinload(TimeBlock.day),
             selectinload(Task.subtasks)
-            .selectinload(Task.time_blocks.and_(TimeBlock.lane == BlockLane.planned))
-            .selectinload(TimeBlock.day),
+            .selectinload(Task.time_blocks)
+            .selectinload(TimeBlock.completion_actual),
             selectinload(Task.project),
             selectinload(Task.task_type),
-            selectinload(Task.time_blocks.and_(TimeBlock.lane == BlockLane.planned))
-            .selectinload(TimeBlock.day),
+            selectinload(Task.time_blocks).selectinload(TimeBlock.day),
+            selectinload(Task.time_blocks)
+            .selectinload(TimeBlock.completion_actual),
         )
         .where(Task.id == task_id)
     ).scalar_one_or_none()
@@ -120,6 +122,10 @@ def _to_read(
             for child in sorted(task.subtasks, key=lambda item: (item.position, item.id))
             if child.deleted_at is None or include_deleted_children
         ]
+    planned_blocks = sorted(
+        (block for block in task.time_blocks if block.lane == BlockLane.planned),
+        key=lambda block: (block.day.date, block.start_minute, block.id),
+    )
     return TaskRead(
         id=task.id,
         parent_id=task.parent_id,
@@ -165,5 +171,17 @@ def _to_read(
                 if block.lane == BlockLane.planned
             }
         ),
+        allocation_total=len(planned_blocks),
+        allocation_completed=sum(block.completion_actual is not None for block in planned_blocks),
+        allocations=[
+            {
+                "block_id": block.id,
+                "date": block.day.date,
+                "start_minute": block.start_minute,
+                "end_minute": block.end_minute,
+                "time_completed": block.completion_actual is not None,
+            }
+            for block in planned_blocks
+        ],
         subtasks=children,
     )

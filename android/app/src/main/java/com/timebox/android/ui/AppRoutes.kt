@@ -6,10 +6,11 @@ import java.time.LocalDate
 object AppRoutes {
     const val DateArg = "date"
     const val TaskIdArg = "taskId"
+    const val BlockIdArg = "blockId"
     const val ProjectIdArg = "projectId"
     const val TemplateIdArg = "templateId"
 
-    const val DayPattern = "day/{$DateArg}"
+    const val DayPattern = "day/{$DateArg}?blockId={$BlockIdArg}"
     const val Chronicle = "chronicle"
     const val BattlePlan = "battle-plan"
     const val TaskDetailPattern = "battle-plan/task/{$TaskIdArg}"
@@ -24,7 +25,8 @@ object AppRoutes {
 
     const val TaskDeepLinkPattern = "timebox://battle-plan/task/{$TaskIdArg}"
 
-    fun day(date: LocalDate): String = "day/$date"
+    fun day(date: LocalDate, blockId: Int? = null): String =
+        "day/$date" + (blockId?.let { "?blockId=$it" } ?: "")
     fun taskDetail(taskId: Int): String = "battle-plan/task/$taskId"
     fun projectDetail(projectId: Int): String = "battle-plan/project/$projectId"
     fun recurringDetail(templateId: Int): String = "battle-plan/recurring/$templateId"

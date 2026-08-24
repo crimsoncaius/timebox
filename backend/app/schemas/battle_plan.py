@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -43,6 +44,14 @@ class ProjectPatch(BaseModel):
     deadline_at: datetime | None = None
 
 
+class TaskAllocationRead(BaseModel):
+    block_id: int
+    date: date
+    start_minute: int
+    end_minute: int
+    time_completed: bool
+
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
@@ -81,6 +90,9 @@ class TaskRead(BaseModel):
     updated_at: datetime
     overdue: bool = False
     planned_dates: list[date] = Field(default_factory=list)
+    allocation_total: int = 0
+    allocation_completed: int = 0
+    allocations: list[TaskAllocationRead] = Field(default_factory=list)
     subtasks: list["TaskRead"] = Field(default_factory=list)
 
 
@@ -141,6 +153,20 @@ class TaskReorder(BaseModel):
 
 class TaskIds(BaseModel):
     task_ids: list[int]
+
+
+class TaskCompletionCreate(BaseModel):
+    planned_time: Literal["keep", "remove"]
+
+
+class TaskCompletionRead(BaseModel):
+    task: TaskRead
+    undo_token: str
+    removed_planned_block_ids: list[int]
+
+
+class TaskCompletionUndo(BaseModel):
+    undo_token: str = Field(..., min_length=1)
 
 
 class ReminderRead(BaseModel):

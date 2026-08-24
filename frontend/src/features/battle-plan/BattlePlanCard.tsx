@@ -32,6 +32,7 @@ export function BattlePlanCard({
   onAddSubtask,
   onPatchSubtask,
   onToggleReady,
+  onSetTaskCompletion,
 }: {
   task: BattleTask
   index: number
@@ -42,6 +43,7 @@ export function BattlePlanCard({
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onPatchSubtask: (id: number, status: TaskStatus) => Promise<void>
   onToggleReady: (id: number, ready: boolean) => Promise<void>
+  onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
 }) {
   const navigate = useNavigate()
   const { ref, isDragging } = useSortable({
@@ -127,6 +129,11 @@ export function BattlePlanCard({
       </div>
 
       {planned ? <div className="mt-3"><PlannedDateRow summary={planned} /></div> : null}
+      {(task.allocation_total ?? 0) > 0 ? (
+        <div className="mt-1.5 text-[10px] font-medium text-on-surface-variant">
+          {task.allocation_completed ?? 0}/{task.allocation_total} time blocks
+        </div>
+      ) : null}
 
       <div className={`${planned ? 'mt-1.5' : 'mt-3'} flex flex-wrap items-center justify-between gap-2`}>
         {due ? <DeadlineBadge badge={due} /> : <span />}
@@ -245,6 +252,19 @@ export function BattlePlanCard({
             </button>
           </form>
         </section>
+      ) : null}
+      {task.subtasks.length > 0 && completed === task.subtasks.length && task.status !== 'completed' ? (
+        <button
+          type="button"
+          className="mt-3 w-full rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            void onSetTaskCompletion(task.id, true)
+          }}
+        >
+          All subtasks complete · Complete Parent Task
+        </button>
       ) : null}
     </article>
   )

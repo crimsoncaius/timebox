@@ -16,6 +16,8 @@ export function TimeBlockModal({
   onCreateFromDraft,
   onDelete,
   onCompleteAsPlanned,
+  onSetTimeCompleted,
+  onSetTaskCompleted,
   onCreateTaskTypePath,
   onDirtyChange,
   blockDragActive = false,
@@ -30,6 +32,8 @@ export function TimeBlockModal({
   onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onCompleteAsPlanned?: () => Promise<void>
+  onSetTimeCompleted?: (completed: boolean) => Promise<void>
+  onSetTaskCompleted?: (completed: boolean) => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
   /** Ignore pointer events so a timeline drag release does not hit sheet controls. */
@@ -65,6 +69,8 @@ export function TimeBlockModal({
         onCreateFromDraft={onCreateFromDraft}
         onDelete={onDelete}
         onCompleteAsPlanned={onCompleteAsPlanned}
+        onSetTimeCompleted={onSetTimeCompleted}
+        onSetTaskCompleted={onSetTaskCompleted}
         onCreateTaskTypePath={onCreateTaskTypePath}
         onDirtyChange={onDirtyChange}
       />

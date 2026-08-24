@@ -1,6 +1,6 @@
 import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DayCalendarPopover } from '../../components/DayCalendarPopover'
 import {
   DayTimeline,
@@ -39,12 +39,14 @@ function confirmDiscardUnsaved(): boolean {
 export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [day, setDay] = useState<DayRead | null>(null)
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [battleTasks, setBattleTasks] = useState<BattleTask[]>([])
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string } | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
   const [inspectorDirty, setInspectorDirty] = useState(false)
@@ -94,6 +96,20 @@ export function TodayPage() {
       setSelectedBlockId(null)
     }
   }, [day, selectedBlockId])
+
+  useEffect(() => {
+    if (!day) return
+    const requestedId = Number(searchParams.get('block'))
+    if (!Number.isInteger(requestedId) || !day.time_blocks.some((block) => block.id === requestedId)) return
+    setDraft(null)
+    setSelectedBlockId(requestedId)
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-block-id="${requestedId}"]`)?.scrollIntoView({
+        block: 'center',
+        behavior: 'smooth',
+      })
+    })
+  }, [day, searchParams])
 
   const tryDiscardIfNeeded = useCallback(() => {
     if (!inspectorDirty) return true
@@ -369,6 +385,77 @@ export function TodayPage() {
     [date],
   )
 
+  const setBlockTimeCompleted = useCallback(
+    async (blockId: number, completed: boolean) => {
+      if (!date) return
+      setError(null)
+      try {
+        const next = completed
+          ? await api.completeBlockAsPlanned(date, blockId)
+          : await api.reverseBlockCompletion(date, blockId)
+        setDay(next)
+        const refreshed = await api.listBattleTasks('active').catch(() => null)
+        if (refreshed) setBattleTasks(refreshed.items)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to update Time completion'
+        setError(msg)
+        throw e
+      }
+    },
+    [date],
+  )
+
+  const setLinkedTaskCompleted = useCallback(
+    async (taskId: number, completed: boolean) => {
+      if (!date || !day) return
+      setError(null)
+      try {
+        if (completed) {
+          const rootsAndChildren = battleTasks.flatMap((task) => [task, ...task.subtasks])
+          const selected = rootsAndChildren.find((task) => task.id === taskId)
+          const affected = selected?.parent_id == null && selected
+            ? [selected, ...selected.subtasks]
+            : selected ? [selected] : []
+          const futureIncomplete = affected.some((task) =>
+            task.allocations?.some(
+              (allocation) => !allocation.time_completed && allocation.date >= day.meta.today,
+            ),
+          )
+          if (selected && selected.parent_id == null && selected.subtasks.length > 0) {
+            if (!window.confirm(`Complete “${selected.title}” and all of its subtasks?`)) return
+          }
+          let plannedTime: 'keep' | 'remove' = 'keep'
+          if (futureIncomplete) {
+            const choice = window.prompt(
+              'This Task has incomplete planned time today or later. Type “keep” or “remove”; Cancel leaves the Task unchanged.',
+              'keep',
+            )
+            if (choice == null) return
+            const normalized = choice.trim().toLowerCase()
+            if (normalized !== 'keep' && normalized !== 'remove') return
+            plannedTime = normalized
+          }
+          const result = await api.completeBattleTask(taskId, plannedTime)
+          setCompletionUndo({ taskId, token: result.undo_token })
+        } else {
+          await api.reopenBattleTask(taskId)
+          setCompletionUndo(null)
+        }
+        const [nextDay, refreshed] = await Promise.all([
+          api.getDay(date),
+          api.listBattleTasks('active'),
+        ])
+        setDay(nextDay)
+        setBattleTasks(refreshed.items)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to update Task completion'
+        setError(msg)
+        throw e
+      }
+    },
+    [battleTasks, date, day],
+  )
+
   const createTaskTypePath = useCallback(async (name: string) => {
     setError(null)
     try {
@@ -436,6 +523,14 @@ export function TodayPage() {
             if (!selectedBlock) return Promise.resolve()
             return completeBlockAsPlanned(selectedBlock.id)
           }
+        : undefined,
+    onSetTimeCompleted:
+      selectedBlock?.lane === 'planned'
+        ? (completed: boolean) => setBlockTimeCompleted(selectedBlock.id, completed)
+        : undefined,
+    onSetTaskCompleted:
+      selectedBlock?.task
+        ? (completed: boolean) => setLinkedTaskCompleted(selectedBlock.task!.id, completed)
         : undefined,
     onCreateTaskTypePath: createTaskTypePath,
     onDirtyChange: setInspectorDirty,
@@ -509,6 +604,23 @@ export function TodayPage() {
               {error}
             </div>
           )}
+
+          {completionUndo ? (
+            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">
+              <span>Task completed.</span>
+              <button
+                type="button"
+                className="font-medium text-primary underline"
+                onClick={async () => {
+                  await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
+                  setCompletionUndo(null)
+                  await load()
+                }}
+              >
+                Undo
+              </button>
+            </div>
+          ) : null}
 
           <div className="mb-6 lg:hidden">
             <ReadyToPlanDrawer
@@ -610,6 +722,8 @@ export function TodayPage() {
             onCreateFromDraft={commitDraft}
             onDelete={inspectorSharedProps.onDelete}
             onCompleteAsPlanned={inspectorSharedProps.onCompleteAsPlanned}
+            onSetTimeCompleted={inspectorSharedProps.onSetTimeCompleted}
+            onSetTaskCompleted={inspectorSharedProps.onSetTaskCompleted}
             onCreateTaskTypePath={createTaskTypePath}
             onDirtyChange={setInspectorDirty}
             blockDragActive={blockDragActive}

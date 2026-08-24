@@ -106,6 +106,9 @@ export const DayTimeline = forwardRef<
 
   const blocksFor = (lane: BlockLane) =>
     day.time_blocks.filter((b) => b.lane === lane).sort((a, b) => a.start_minute - b.start_minute)
+  const timeCompletedPlannedIds = new Set(
+    day.time_blocks.flatMap((block) => block.planned_block_id == null ? [] : [block.planned_block_id]),
+  )
 
   const visibleRange = visibleEndMin - visibleStartMin
   const showNowLine =
@@ -158,6 +161,7 @@ export const DayTimeline = forwardRef<
         visibleStartMin={visibleStartMin}
         visibleEndMin={visibleEndMin}
         blocks={blocksFor('planned')}
+        timeCompletedPlannedIds={timeCompletedPlannedIds}
         draft={draft?.lane === 'planned' ? draft : null}
         readOnly={readOnly}
         onLaneClick={(e) => onLaneClick('planned', e)}
@@ -177,6 +181,7 @@ export const DayTimeline = forwardRef<
         visibleStartMin={visibleStartMin}
         visibleEndMin={visibleEndMin}
         blocks={blocksFor('actual')}
+        timeCompletedPlannedIds={timeCompletedPlannedIds}
         draft={draft?.lane === 'actual' ? draft : null}
         readOnly={readOnly}
         onLaneClick={(e) => onLaneClick('actual', e)}
@@ -409,6 +414,7 @@ function Lane({
   visibleStartMin,
   visibleEndMin,
   blocks,
+  timeCompletedPlannedIds,
   draft,
   readOnly,
   onLaneClick,
@@ -427,6 +433,7 @@ function Lane({
   visibleStartMin: number
   visibleEndMin: number
   blocks: TimeBlock[]
+  timeCompletedPlannedIds: Set<number>
   draft: BlockDraftPlacement | null
   readOnly: boolean
   onLaneClick: (e: React.MouseEvent<HTMLDivElement>) => void
@@ -492,6 +499,7 @@ function Lane({
           <TimeBlockCard
             key={b.id}
             block={b}
+            timeCompleted={lane === 'planned' && timeCompletedPlannedIds.has(b.id)}
             lane={lane}
             visibleStartMin={visibleStartMin}
             visibleEndMin={visibleEndMin}

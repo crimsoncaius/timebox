@@ -43,6 +43,11 @@ class BattlePlanContractTest {
                 "deadline_date":null,"deadline_at":"2026-08-20T09:00:00+08:00","reminder_at":"2026-08-20T08:00:00+08:00","reminder_delivered_at":null,
                 "position":2,"archived_at":null,"deleted_at":null,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T02:00:00Z","overdue":false,
                 "planned_dates":["2026-08-19","bad","2026-08-17","2026-08-17"],
+                "allocation_total":2,"allocation_completed":1,
+                "allocations":[
+                  {"block_id":31,"date":"2026-08-17","start_minute":540,"end_minute":570,"time_completed":true},
+                  {"block_id":32,"date":"2026-08-19","start_minute":600,"end_minute":660,"time_completed":false}
+                ],
                 "subtasks":[{"id":11,"parent_id":10,"parent_title":"Plan","project_id":2,"task_type_id":null,"title":"Outline","description":"","ready_to_plan":false,"status":"open","position":0,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T01:00:00Z","planned_dates":["2026-08-18"],"subtasks":[]}]
               }],"timezone":"Asia/Singapore","server_now_iso":"2026-08-17T12:00:00+08:00"
             }""",
@@ -57,6 +62,10 @@ class BattlePlanContractTest {
         assertEquals(Instant.parse("2026-08-20T01:00:00Z"), task.deadlineAt)
         assertEquals("Outline", task.subtasks.single().title)
         assertEquals(listOf(LocalDate.parse("2026-08-17"), LocalDate.parse("2026-08-19")), task.plannedDates)
+        assertEquals(2, task.allocationTotal)
+        assertEquals(1, task.allocationCompleted)
+        assertEquals(31, task.allocations.first().blockId)
+        assertTrue(task.allocations.first().timeCompleted)
         assertEquals(listOf(LocalDate.parse("2026-08-18")), task.subtasks.single().plannedDates)
         assertEquals("Asia/Singapore", dto.timezone)
     }
@@ -104,11 +113,12 @@ class BattlePlanContractTest {
 
         val block = json.decodeFromString(
             TimeBlockDto.serializer(),
-            """{"id":1,"lane":"planned","task_type_id":3,"task_type":{"id":3,"name":"coding"},"task_id":10,"task":{"id":10,"title":"Plan","status":"open","task_type_id":3},"start_minute":540,"end_minute":570}""",
+            """{"id":1,"lane":"planned","task_type_id":3,"task_type":{"id":3,"name":"coding"},"task_id":10,"task":{"id":10,"title":"Plan","status":"open","task_type_id":3,"archived_at":"2026-08-18T00:00:00Z","deleted_at":null},"start_minute":540,"end_minute":570}""",
         ).toModel()
         assertEquals(10, block.taskId)
         assertEquals("Plan", block.task?.title)
         assertEquals(TaskStatus.Open, block.task?.status)
+        assertTrue(block.task?.isReadOnly == true)
     }
 
     @Test

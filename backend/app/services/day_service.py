@@ -439,6 +439,12 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
     block = get_block(db, day, block_id)
     if block is None:
         raise ValueError("Block not found")
+    if block.lane == BlockLane.planned:
+        linked_actual = db.execute(
+            select(TimeBlock).where(TimeBlock.planned_block_id == block.id)
+        ).scalar_one_or_none()
+        if linked_actual is not None:
+            linked_actual.planned_block_id = None
     db.delete(block)
     _touch_day(day)
     db.commit()
@@ -503,6 +509,27 @@ def complete_planned_as_actual(db: Session, day: Day, planned_block_id: int) -> 
     db.refresh(block)
     db.refresh(drow)
     return block
+
+
+def reverse_planned_completion(db: Session, day: Day, planned_block_id: int) -> TimeBlock:
+    """Detach recorded Actual work so the Planned Block becomes Time-incomplete."""
+
+    planned = get_block(db, day, planned_block_id)
+    if planned is None:
+        raise ValueError("Block not found")
+    if planned.lane != BlockLane.planned:
+        raise ValueError("Only planned blocks have Time completion")
+    actual = db.execute(
+        select(TimeBlock).where(TimeBlock.planned_block_id == planned.id)
+    ).scalar_one_or_none()
+    if actual is None:
+        raise ValueError("Planned block is not Time-completed")
+    actual.planned_block_id = None
+    _touch_day(day)
+    db.commit()
+    db.refresh(actual)
+    db.refresh(day)
+    return actual
 
 
 def list_recent_days(db: Session, limit: int = 60) -> list[tuple[Day, int]]:

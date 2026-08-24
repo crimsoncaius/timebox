@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.Day
@@ -343,6 +344,7 @@ private fun LaneColumn(
             val end = live?.endMinute ?: block.endMinute
             BlockCard(
                 block = block,
+                timeCompleted = lane == Lane.Planned && day.blocks.any { it.plannedBlockId == block.id },
                 startMinute = start,
                 endMinute = end,
                 visibleStart = day.visibleStart,
@@ -677,6 +679,7 @@ private fun PlanningDraftCard(
 @Composable
 private fun BlockCard(
     block: TimeBlock,
+    timeCompleted: Boolean,
     startMinute: Int,
     endMinute: Int,
     visibleStart: Int,
@@ -708,7 +711,13 @@ private fun BlockCard(
             .graphicsLayer { if (dragging) rotationZ = -1f }
             .shadow(elevation, TimeboxShapes.block, clip = false)
             .clip(TimeboxShapes.block)
-            .background(if (dragging || selected) colors.paperRaised else colors.paper)
+            .background(
+                when {
+                    dragging || selected -> colors.paperRaised
+                    timeCompleted -> colors.plannedSurface
+                    else -> colors.paper
+                }
+            )
             // Tap, move and both resizes start with a press on the same card, so one
             // handler owns all of them. Detectors on nested nodes — a groove inside the
             // card — fight over the pointer and neither wins reliably, so where the
@@ -795,12 +804,17 @@ private fun BlockCard(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = block.task?.title ?: block.taskTypeName,
+                    text = buildString {
+                        append(block.task?.title ?: block.taskTypeName)
+                        if (timeCompleted) append(" · Time ✓")
+                        block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
+                    },
                     style = if (selected) {
                         TimeboxTheme.type.blockTitleSelected
                     } else {
                         TimeboxTheme.type.blockTitle
                     },
+                    textDecoration = if (timeCompleted) TextDecoration.LineThrough else TextDecoration.None,
                     color = colors.on,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

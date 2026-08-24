@@ -126,6 +126,40 @@ describe('BattlePlanPage', () => {
         }
         return response(created, 201)
       }
+      if (/\/tasks\/\d+\/complete$/.test(url) && method === 'POST') {
+        const id = Number(url.split('/').at(-2))
+        let completed: BattleTask | undefined
+        activeTasks = activeTasks.map((row) => {
+          if (row.id === id) {
+            completed = { ...row, status: 'completed' }
+            return completed
+          }
+          const subtasks = row.subtasks.map((subtask) => {
+            if (subtask.id !== id) return subtask
+            completed = { ...subtask, status: 'completed' }
+            return completed
+          })
+          return { ...row, subtasks }
+        })
+        return response({ task: completed, undo_token: `undo-${id}`, removed_planned_block_ids: [] })
+      }
+      if (/\/tasks\/\d+\/reopen$/.test(url) && method === 'POST') {
+        const id = Number(url.split('/').at(-2))
+        let reopened: BattleTask | undefined
+        activeTasks = activeTasks.map((row) => {
+          if (row.id === id) {
+            reopened = { ...row, status: 'open' }
+            return reopened
+          }
+          const subtasks = row.subtasks.map((subtask) => {
+            if (subtask.id !== id) return subtask
+            reopened = { ...subtask, status: 'open' }
+            return reopened
+          })
+          return { ...row, subtasks }
+        })
+        return response(reopened)
+      }
       if (/\/tasks\/\d+$/.test(url) && method === 'PATCH') {
         const body = JSON.parse(String(init?.body)) as Partial<BattleTask>
         const id = Number(url.split('/').pop())
@@ -175,6 +209,27 @@ describe('BattlePlanPage', () => {
 
     await user.click(planned)
     expect(screen.getByRole('dialog', { name: 'Task details' })).toBeInTheDocument()
+  })
+
+  it('shows allocation progress and links allocation details to the exact Day block', async () => {
+    activeTasks = [task({
+      allocation_total: 3,
+      allocation_completed: 2,
+      allocations: [
+        { block_id: 71, date: '2026-08-14', start_minute: 540, end_minute: 600, time_completed: true },
+        { block_id: 72, date: '2026-08-15', start_minute: 630, end_minute: 660, time_completed: false },
+        { block_id: 73, date: '2026-08-17', start_minute: 720, end_minute: 780, time_completed: true },
+      ],
+    })]
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+
+    expect(await screen.findByText('2/3 time blocks')).toBeInTheDocument()
+    const section = await screen.findByRole('region', { name: 'Allocated time' })
+    expect(within(section).getByText('2/3 time blocks completed')).toBeInTheDocument()
+    expect(within(section).getByRole('link', { name: /Today.*10:30–11:00.*Time incomplete/i }))
+      .toHaveAttribute('href', '/day/2026-08-15?block=72')
+    expect(within(section).getByRole('link', { name: /14 Aug.*09:00–10:00.*Time completed/i }))
+      .toHaveAttribute('href', '/day/2026-08-14?block=71')
   })
 
   it('shows five planned dates in details, expands inline, and links every date to Day', async () => {

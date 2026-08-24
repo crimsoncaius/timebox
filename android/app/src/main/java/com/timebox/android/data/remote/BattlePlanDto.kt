@@ -59,7 +59,19 @@ data class BattleTaskDto(
     @SerialName("updated_at") val updatedAt: String,
     val overdue: Boolean = false,
     @SerialName("planned_dates") val plannedDates: List<String> = emptyList(),
+    @SerialName("allocation_total") val allocationTotal: Int = 0,
+    @SerialName("allocation_completed") val allocationCompleted: Int = 0,
+    val allocations: List<TaskAllocationDto> = emptyList(),
     val subtasks: List<BattleTaskDto> = emptyList(),
+)
+
+@Serializable
+data class TaskAllocationDto(
+    @SerialName("block_id") val blockId: Int,
+    val date: String,
+    @SerialName("start_minute") val startMinute: Int,
+    @SerialName("end_minute") val endMinute: Int,
+    @SerialName("time_completed") val timeCompleted: Boolean,
 )
 
 @Serializable
@@ -99,6 +111,19 @@ data class TaskReorderDto(val placements: List<TaskPlacementDto>)
 
 @Serializable
 data class TaskIdsDto(@SerialName("task_ids") val taskIds: List<Int>)
+
+@Serializable
+data class TaskCompletionRequestDto(@SerialName("planned_time") val plannedTime: String)
+
+@Serializable
+data class TaskCompletionUndoDto(@SerialName("undo_token") val undoToken: String)
+
+@Serializable
+data class TaskCompletionResponseDto(
+    val task: BattleTaskDto,
+    @SerialName("undo_token") val undoToken: String,
+    @SerialName("removed_planned_block_ids") val removedPlannedBlockIds: List<Int>,
+)
 
 @Serializable
 data class DueReminderDto(

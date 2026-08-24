@@ -69,7 +69,22 @@ export interface BattleTask {
   updated_at: string
   overdue: boolean
   planned_dates?: string[]
+  allocation_total?: number
+  allocation_completed?: number
+  allocations?: Array<{
+    block_id: number
+    date: string
+    start_minute: number
+    end_minute: number
+    time_completed: boolean
+  }>
   subtasks: BattleTask[]
+}
+
+export interface TaskCompletionResult {
+  task: BattleTask
+  undo_token: string
+  removed_planned_block_ids: number[]
 }
 
 export interface BattleTaskList {
@@ -114,7 +129,10 @@ export interface TimeBlock {
   task_type_id: number
   task_type: TaskType
   task_id?: number | null
-  task?: Pick<BattleTask, 'id' | 'title' | 'status' | 'task_type_id'> | null
+  task?: (Pick<BattleTask, 'id' | 'title' | 'status' | 'task_type_id'> & {
+    archived_at?: string | null
+    deleted_at?: string | null
+  }) | null
   note: string | null
   /** Present on Actual blocks created via "complete as planned" from a Planned block. */
   planned_block_id?: number | null

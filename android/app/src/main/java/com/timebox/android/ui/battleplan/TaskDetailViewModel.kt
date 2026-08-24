@@ -59,6 +59,8 @@ data class TaskDetailUiState(
     val confirmTrash: Boolean = false,
     val pendingSubtaskTrash: BattleTask? = null,
     val undoSubtaskId: Int? = null,
+    val completionUndoTaskId: Int? = null,
+    val completionUndoToken: String? = null,
     val error: String? = null,
     val message: String? = null,
 ) {
@@ -147,6 +149,7 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
     fun setReminderTime(value: String) = edit { copy(reminderTime = value) }
     fun setReady(value: Boolean) = edit { copy(readyToPlan = value) }
     fun consumeMessage() = _state.update { it.copy(message = null) }
+    fun dismissCompletionUndo() = _state.update { it.copy(completionUndoTaskId = null, completionUndoToken = null) }
     fun requestTrash() = _state.update { it.copy(confirmTrash = true) }
     fun dismissTrash() = _state.update { it.copy(confirmTrash = false) }
 
@@ -156,8 +159,32 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
         mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id, projectId = parent.projectId)) }
     }
 
-    fun toggleSubtask(task: BattleTask) = mutate("Subtask updated") {
-        repository.patchBattleTask(task.id, BattleTaskPatch(status = PatchField.of(if (task.status == TaskStatus.Completed) TaskStatus.Open else TaskStatus.Completed)))
+    fun toggleSubtask(task: BattleTask, removePlannedTime: Boolean = false) {
+        if (_state.value.saving) return
+        val parentTaskId = _state.value.taskId ?: return
+        _state.update { it.copy(saving = true, message = null) }
+        viewModelScope.launch {
+            if (task.status == TaskStatus.Completed) {
+                repository.reopenBattleTask(task.id).fold(
+                    onSuccess = { dismissCompletionUndo(); load(parentTaskId) },
+                    onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                )
+            } else {
+                repository.completeBattleTask(task.id, removePlannedTime).fold(
+                    onSuccess = { result ->
+                        load(parentTaskId)
+                        _state.update {
+                            it.copy(
+                                completionUndoTaskId = task.id,
+                                completionUndoToken = result.undoToken,
+                                message = "Subtask completed",
+                            )
+                        }
+                    },
+                    onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                )
+            }
+        }
     }
 
     fun requestSubtaskTrash(task: BattleTask) = _state.update { it.copy(pendingSubtaskTrash = task) }
@@ -201,7 +228,7 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
         }
     }
 
-    fun save() {
+    fun save(removePlannedTime: Boolean = false) {
         val current = _state.value
         val original = current.task ?: return
         val parsed = validateTaskDraft(current)
@@ -212,21 +239,72 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
         parsed as TaskDraftValidation.Valid
         _state.update { it.copy(saving = true, message = null) }
         viewModelScope.launch {
-            repository.patchBattleTask(
+            val changes = repository.patchBattleTask(
                 original.id,
                 BattleTaskPatch(
                     title = PatchField.of(current.title.trim()), description = PatchField.of(current.description.trim()),
-                    status = PatchField.of(current.status),
+                    status = if (
+                        original.status != current.status &&
+                        original.status != TaskStatus.Completed &&
+                        current.status != TaskStatus.Completed
+                    ) PatchField.of(current.status) else PatchField.Absent,
                     projectId = if (current.isSubtask) PatchField.Absent else current.projectId.toPatchField(),
                     taskTypeId = current.taskTypeId.toPatchField(), urgency = current.urgency.toPatchField(),
                     importance = current.importance.toPatchField(),
                     deadlineDate = parsed.deadlineDate.toPatchField(), deadlineAt = parsed.deadlineAt.toPatchField(),
                     reminderAt = parsed.reminderAt.toPatchField(), readyToPlan = PatchField.of(current.readyToPlan),
                 ),
-            ).fold(
-                onSuccess = { updated ->
-                    _state.update { it.copy(saving = false, task = updated, dirty = false, saved = true, message = "Task saved") }
-                    load(original.id)
+            )
+            val changedTask = changes.getOrElse { error ->
+                _state.update { it.copy(saving = false, message = error.apiError.message) }
+                return@launch
+            }
+            var undoToken: String? = null
+            if (original.status != current.status && current.status == TaskStatus.Completed) {
+                val completion = repository.completeBattleTask(original.id, removePlannedTime).getOrElse { error ->
+                    _state.update { it.copy(saving = false, message = error.apiError.message) }
+                    return@launch
+                }
+                undoToken = completion.undoToken
+            } else if (original.status == TaskStatus.Completed && current.status != TaskStatus.Completed) {
+                val reopened = repository.reopenBattleTask(original.id).getOrElse { error ->
+                    _state.update { it.copy(saving = false, message = error.apiError.message) }
+                    return@launch
+                }
+                if (reopened.status != current.status) {
+                    repository.patchBattleTask(
+                        original.id,
+                        BattleTaskPatch(status = PatchField.of(current.status)),
+                    ).getOrElse { error ->
+                        _state.update { it.copy(saving = false, message = error.apiError.message) }
+                        return@launch
+                    }
+                }
+            }
+            load(original.id)
+            _state.update {
+                it.copy(
+                    saving = false,
+                    task = changedTask,
+                    dirty = false,
+                    saved = true,
+                    message = if (undoToken != null) "Task completed" else "Task saved",
+                    completionUndoTaskId = if (undoToken != null) original.id else null,
+                    completionUndoToken = undoToken,
+                )
+            }
+        }
+    }
+
+    fun undoLastTaskCompletion() {
+        val taskId = _state.value.completionUndoTaskId ?: return
+        val token = _state.value.completionUndoToken ?: return
+        _state.update { it.copy(saving = true, completionUndoTaskId = null, completionUndoToken = null) }
+        viewModelScope.launch {
+            repository.undoBattleTaskCompletion(taskId, token).fold(
+                onSuccess = {
+                    _state.update { it.copy(saving = false, message = "Task completion undone") }
+                    _state.value.taskId?.let(::load)
                 },
                 onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
             )

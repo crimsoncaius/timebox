@@ -12,6 +12,9 @@ from app.schemas.battle_plan import (
     ProjectRead,
     ReminderRead,
     TaskCreate,
+    TaskCompletionCreate,
+    TaskCompletionRead,
+    TaskCompletionUndo,
     TaskIds,
     TaskListRead,
     TaskPatch,
@@ -95,6 +98,53 @@ def patch_task(
 ) -> TaskRead:
     try:
         row = service.patch_task(db, task_id, body, settings)
+        return service._to_read(row, settings, now_in_tz(settings.app_timezone))
+    except ValueError as exc:
+        raise _not_found_or_unprocessable(exc) from exc
+
+
+@router.post("/tasks/{task_id}/complete", response_model=TaskCompletionRead)
+def complete_task(
+    task_id: int,
+    body: TaskCompletionCreate,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> TaskCompletionRead:
+    try:
+        row, token, removed_ids = service.complete_task(
+            db, task_id, body.planned_time, settings
+        )
+        return TaskCompletionRead(
+            task=service._to_read(row, settings, now_in_tz(settings.app_timezone)),
+            undo_token=token,
+            removed_planned_block_ids=removed_ids,
+        )
+    except ValueError as exc:
+        raise _not_found_or_unprocessable(exc) from exc
+
+
+@router.post("/tasks/{task_id}/reopen", response_model=TaskRead)
+def reopen_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> TaskRead:
+    try:
+        row = service.reopen_task(db, task_id)
+        return service._to_read(row, settings, now_in_tz(settings.app_timezone))
+    except ValueError as exc:
+        raise _not_found_or_unprocessable(exc) from exc
+
+
+@router.post("/tasks/{task_id}/undo-completion", response_model=TaskRead)
+def undo_task_completion(
+    task_id: int,
+    body: TaskCompletionUndo,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> TaskRead:
+    try:
+        row = service.undo_task_completion(db, task_id, body.undo_token)
         return service._to_read(row, settings, now_in_tz(settings.app_timezone))
     except ValueError as exc:
         raise _not_found_or_unprocessable(exc) from exc

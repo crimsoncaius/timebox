@@ -18,6 +18,8 @@ data class LinkedTaskDto(
     val title: String,
     val status: String,
     @SerialName("task_type_id") val taskTypeId: Int? = null,
+    @SerialName("archived_at") val archivedAt: String? = null,
+    @SerialName("deleted_at") val deletedAt: String? = null,
 )
 
 @Serializable

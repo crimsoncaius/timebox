@@ -11,6 +11,8 @@ import com.timebox.android.data.remote.RecurringTemplateCreateDto
 import com.timebox.android.data.remote.SettingsPatchDto
 import com.timebox.android.data.remote.TaskTypeCreateDto
 import com.timebox.android.data.remote.TaskIdsDto
+import com.timebox.android.data.remote.TaskCompletionRequestDto
+import com.timebox.android.data.remote.TaskCompletionUndoDto
 import com.timebox.android.data.remote.TaskPlacementDto
 import com.timebox.android.data.remote.TaskReorderDto
 import com.timebox.android.data.remote.TimeBlockCreateDto
@@ -243,6 +245,26 @@ class TimeboxRepository private constructor(
     suspend fun patchBattleTask(taskId: Int, patch: BattleTaskPatch): Result<BattleTask> =
         call { api().patchBattleTask(taskId, patch.toJson()).toModel() }
 
+    suspend fun completeBattleTask(taskId: Int, removePlannedTime: Boolean): Result<TaskCompletionResult> =
+        call {
+            api().completeBattleTask(
+                taskId,
+                TaskCompletionRequestDto(if (removePlannedTime) "remove" else "keep"),
+            ).let { response ->
+                TaskCompletionResult(
+                    response.task.toModel(),
+                    response.undoToken,
+                    response.removedPlannedBlockIds,
+                )
+            }
+        }
+
+    suspend fun reopenBattleTask(taskId: Int): Result<BattleTask> =
+        call { api().reopenBattleTask(taskId).toModel() }
+
+    suspend fun undoBattleTaskCompletion(taskId: Int, undoToken: String): Result<BattleTask> =
+        call { api().undoBattleTaskCompletion(taskId, TaskCompletionUndoDto(undoToken)).toModel() }
+
     suspend fun reorderBattleTasks(placements: List<TaskPlacement>): Result<Unit> = call {
         api().reorderBattleTasks(
             TaskReorderDto(placements.map { TaskPlacementDto(it.taskId, it.status.wire, it.position) })
@@ -327,6 +349,9 @@ class TimeboxRepository private constructor(
 
     suspend fun completeAsPlanned(date: LocalDate, blockId: Int): Result<Day> =
         call { api().completeAsPlanned(date.toString(), blockId).toModel() }
+
+    suspend fun reverseBlockCompletion(date: LocalDate, blockId: Int): Result<Day> =
+        call { api().reverseBlockCompletion(date.toString(), blockId).toModel() }
 
     suspend fun getWindowSettings(): Result<DayWindowSettings> =
         call { api().getSettings().toModel() }

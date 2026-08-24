@@ -15,6 +15,8 @@ class LinkedTaskRead(BaseModel):
     title: str
     status: str
     task_type_id: int | None
+    archived_at: datetime | None
+    deleted_at: datetime | None
 
 
 class TimeBlockRead(BaseModel):

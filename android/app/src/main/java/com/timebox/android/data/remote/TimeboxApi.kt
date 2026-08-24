@@ -51,6 +51,12 @@ interface TimeboxApi {
         @Path("blockId") blockId: Int,
     ): DayDto
 
+    @DELETE("days/{date}/blocks/{blockId}/completion")
+    suspend fun reverseBlockCompletion(
+        @Path("date") date: String,
+        @Path("blockId") blockId: Int,
+    ): DayDto
+
     @GET("settings")
     suspend fun getSettings(): SettingsDto
 
@@ -91,6 +97,21 @@ interface TimeboxApi {
 
     @PATCH("tasks/{taskId}")
     suspend fun patchBattleTask(@Path("taskId") taskId: Int, @Body body: JsonObject): BattleTaskDto
+
+    @POST("tasks/{taskId}/complete")
+    suspend fun completeBattleTask(
+        @Path("taskId") taskId: Int,
+        @Body body: TaskCompletionRequestDto,
+    ): TaskCompletionResponseDto
+
+    @POST("tasks/{taskId}/reopen")
+    suspend fun reopenBattleTask(@Path("taskId") taskId: Int): BattleTaskDto
+
+    @POST("tasks/{taskId}/undo-completion")
+    suspend fun undoBattleTaskCompletion(
+        @Path("taskId") taskId: Int,
+        @Body body: TaskCompletionUndoDto,
+    ): BattleTaskDto
 
     @POST("tasks/reorder")
     suspend fun reorderBattleTasks(@Body body: TaskReorderDto)

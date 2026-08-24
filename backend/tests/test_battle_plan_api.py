@@ -109,7 +109,7 @@ def test_subtasks_inherit_project_and_cannot_nest(client):
 def test_subtask_completion_does_not_complete_parent(client):
     parent = create_task(client, "Parent")
     child = create_task(client, "Child", parent_id=parent["id"])
-    assert client.patch(f"/tasks/{child['id']}", json={"status": "completed"}).status_code == 200
+    assert client.post(f"/tasks/{child['id']}/complete", json={"planned_time": "keep"}).status_code == 200
     refreshed = client.get("/tasks").json()["items"][0]
     assert refreshed["status"] == "open"
     assert refreshed["subtasks"][0]["status"] == "completed"
@@ -160,10 +160,10 @@ def test_blocked_is_an_open_task_condition_and_completed_clears_it(client):
     assert blocked.json()["is_blocked"] is True
     assert blocked.json()["blocking_reason"] == "Legal review"
 
-    completed = client.patch(f"/tasks/{task['id']}", json={"status": "completed"})
+    completed = client.post(f"/tasks/{task['id']}/complete", json={"planned_time": "keep"})
     assert completed.status_code == 200
-    assert completed.json()["is_blocked"] is False
-    assert completed.json()["blocking_reason"] is None
+    assert completed.json()["task"]["is_blocked"] is False
+    assert completed.json()["task"]["blocking_reason"] is None
 
 
 def test_archive_restore_trash_and_permanent_delete(client):
