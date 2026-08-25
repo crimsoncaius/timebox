@@ -1218,6 +1218,9 @@ private fun MobileKanbanCard(
 internal fun mobileTaskCardSurface(colors: TimeboxColors): Color =
     if (colors.isDark) colors.low else colors.lowest
 
+internal fun mobileTaskDragPreviewSurface(colors: TimeboxColors): Color =
+    if (colors.isDark) colors.surf else colors.lowest
+
 @Composable
 private fun PlannedDatePill(summary: PlannedDateSummary) {
     val colors = TimeboxTheme.colors
@@ -1269,6 +1272,8 @@ private const val MobileDropSettleDurationMillis = 220
 
 internal val MobilePickupProgressKey = SemanticsPropertyKey<Float>("MobilePickupProgress")
 private var SemanticsPropertyReceiver.mobilePickupProgress by MobilePickupProgressKey
+internal val MobileDragPreviewSurfaceKey = SemanticsPropertyKey<Color>("MobileDragPreviewSurface")
+private var SemanticsPropertyReceiver.mobileDragPreviewSurface by MobileDragPreviewSurfaceKey
 
 internal fun insertionIndexForPointer(
     pointerY: Float,
@@ -1348,6 +1353,7 @@ private fun MobileTaskDragPreview(
     timezone: String,
 ) {
     val colors = TimeboxTheme.colors
+    val previewSurface = mobileTaskDragPreviewSurface(colors)
     val density = LocalDensity.current
     val delta = drag.pointerInRoot - drag.startPointerInRoot
     val width = with(density) { drag.cardBoundsInRoot.width.toDp() }
@@ -1370,7 +1376,10 @@ private fun MobileTaskDragPreview(
             .width(width)
             .zIndex(4f)
             .testTag("battle-plan-drag-preview")
-            .semantics { mobilePickupProgress = pickupProgress }
+            .semantics {
+                mobilePickupProgress = pickupProgress
+                mobileDragPreviewSurface = previewSurface
+            }
             .graphicsLayer {
                 alpha = 1f - (0.25f * liftProgress)
                 scaleX = 1f + (0.02f * liftProgress)
@@ -1379,7 +1388,7 @@ private fun MobileTaskDragPreview(
                 shape = TimeboxShapes.card
             }
             .clip(TimeboxShapes.card)
-            .background(colors.lowest)
+            .background(previewSurface)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {

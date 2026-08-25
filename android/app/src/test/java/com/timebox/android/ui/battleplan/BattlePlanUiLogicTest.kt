@@ -61,6 +61,16 @@ class BattlePlanUiLogicTest {
     }
 
     @Test
+    fun dragPreviewUsesRaisedDarkSurfaceAndKeepsLightSurface() {
+        val darkPreviewSurface = mobileTaskDragPreviewSurface(DarkTimeboxColors)
+
+        assertEquals(DarkTimeboxColors.surf, darkPreviewSurface)
+        assertNotEquals(DarkTimeboxColors.bg, darkPreviewSurface)
+        assertNotEquals(mobileTaskCardSurface(DarkTimeboxColors), darkPreviewSurface)
+        assertEquals(LightTimeboxColors.lowest, mobileTaskDragPreviewSurface(LightTimeboxColors))
+    }
+
+    @Test
     fun scopesSeparateAdminAndProjects() {
         val admin = task(1, projectId = null)
         val project = task(2, projectId = 7)

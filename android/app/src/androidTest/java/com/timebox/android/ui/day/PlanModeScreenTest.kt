@@ -54,6 +54,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
                     onArmAccessibleTask = {}, onRetryReadyTasks = {},
                 )
@@ -86,6 +89,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {},
                     onCommitPlanningMode = { committed = true },
                     onCancelPlanningMode = { cancelled = true },
@@ -122,6 +128,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
                     onArmAccessibleTask = { armedTaskId = it }, onRetryReadyTasks = {},
                 )
@@ -155,6 +164,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {},
                     onPlanTask = { taskId, minute ->
                         placement = taskId to minute
@@ -214,6 +226,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {},
                     onPlanTask = { taskId, minute -> placement = taskId to minute },
                     onArmAccessibleTask = {}, onRetryReadyTasks = {},
@@ -266,6 +281,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> moved = true }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
                     onArmAccessibleTask = {}, onRetryReadyTasks = {},
                 )
@@ -303,6 +321,9 @@ class PlanModeScreenTest {
                     onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
                     onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
                     onNoteChange = {}, onDeleteSelected = {}, onCompleteSelected = {},
+                    onReverseSelectedCompletion = {}, onRequestSelectedTaskCompletion = {},
+                    onConfirmSelectedTaskCompletion = {}, onDismissTaskCompletion = {},
+                    onReopenSelectedTask = {},
                     onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
                     onUpdatePlanningDraft = { taskId, start, end ->
                         val draft = state.planningDrafts.getValue(taskId)

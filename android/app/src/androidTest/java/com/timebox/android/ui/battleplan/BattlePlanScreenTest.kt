@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performScrollTo
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
+import com.timebox.android.ui.theme.DarkTimeboxColors
 import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Rule
 import org.junit.Test
@@ -79,7 +80,8 @@ class BattlePlanScreenTest {
                     onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
                     onReminderEnabledChange = {}, notificationsAllowed = true,
                     onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = {},
-                    onOpenDay = { openedDay = it }, onAddSubtask = {}, onToggleSubtask = {},
+                    onOpenDay = { date, _ -> openedDay = date }, onAddSubtask = {},
+                    onToggleSubtask = { _, _ -> },
                     onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
                     onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
                     onConfirmTrash = {}, onTrashed = {}, onSave = {},
@@ -353,6 +355,71 @@ class BattlePlanScreenTest {
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
         check(dropped == Triple(1, TaskStatus.Open, 2))
+        check(compose.onAllNodesWithTag("battle-plan-drag-preview").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun darkDragPreviewKeepsRaisedSurfaceWhileHeldMovingAndSettling() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = true) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(
+                            battleTask(1).copy(readyToPlan = true, isBlocked = true),
+                            battleTask(2),
+                            battleTask(3),
+                        ),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onDropTask = { _, _, _ -> }, onCreateSubtask = { _, _ -> },
+                    onToggleSubtask = {}, onCreateTask = { _, _, _ -> }, onShowComposer = {},
+                    onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
+                    onDismissDeleteProject = {}, onConfirmDeleteProject = {}, onRestoreArchived = {},
+                    onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
+                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
+                    onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        fun previewSurface() = compose.onNodeWithTag("battle-plan-drag-preview")
+            .fetchSemanticsNode().config[MobileDragPreviewSurfaceKey]
+
+        val root = compose.onRoot()
+        val firstCenter = compose.onNodeWithTag("battle-plan-task-1")
+            .fetchSemanticsNode().boundsInRoot.center
+        root.performTouchInput {
+            down(firstCenter)
+            advanceEventTime(1_000)
+            moveBy(androidx.compose.ui.geometry.Offset(0f, 1f))
+        }
+        compose.waitForIdle()
+        check(previewSurface() == DarkTimeboxColors.surf)
+
+        val thirdCenter = compose.onNodeWithTag("battle-plan-task-3")
+            .fetchSemanticsNode().boundsInRoot.center
+        root.performTouchInput {
+            moveTo(thirdCenter)
+            advanceEventTime(32)
+        }
+        compose.waitForIdle()
+        check(previewSurface() == DarkTimeboxColors.surf)
+
+        compose.mainClock.autoAdvance = false
+        root.performTouchInput { up() }
+        compose.waitForIdle()
+        check(previewSurface() == DarkTimeboxColors.surf)
+
+        compose.mainClock.advanceTimeBy(80)
+        compose.waitForIdle()
+        check(previewSurface() == DarkTimeboxColors.surf)
+
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
         check(compose.onAllNodesWithTag("battle-plan-drag-preview").fetchSemanticsNodes().isEmpty())
     }
 
