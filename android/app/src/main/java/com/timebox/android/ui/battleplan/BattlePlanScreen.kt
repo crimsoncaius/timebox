@@ -22,11 +22,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -50,7 +52,10 @@ import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -99,6 +104,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.text.font.FontWeight
@@ -124,6 +130,7 @@ import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
 import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.theme.TimeboxColors
+import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
@@ -957,7 +964,9 @@ private fun MenuSectionLabel(label: String) {
         text = label.uppercase(),
         style = TimeboxTheme.type.laneLabel,
         color = TimeboxTheme.colors.onVariant,
-        modifier = Modifier.padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 4.dp),
+        modifier = Modifier
+            .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 4.dp)
+            .semantics { heading() },
     )
 }
 
@@ -1163,16 +1172,28 @@ private fun MobileKanbanCard(
                     )
                 }
                 Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.size(38.dp)) {
+                    IconButton(
+                        onClick = { menu = true },
+                        modifier = Modifier
+                            .size(TimeboxDimens.touchTarget)
+                            .clip(TimeboxShapes.chip)
+                            .background(if (menu) colors.surf else Color.Transparent)
+                            .semantics {
+                                stateDescription = if (menu) "Expanded" else "Collapsed"
+                            },
+                    ) {
                         Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
                     }
-                    DropdownMenu(menu, { menu = false }) {
-                        if (index > 0) DropdownMenuItem({ Text("Move earlier") }, { menu = false; onDrop(task, task.status, index - 1) })
-                        if (index < laneSize - 1) DropdownMenuItem({ Text("Move later") }, { menu = false; onDrop(task, task.status, index + 1) })
-                        battlePlanStatuses.filter { it != task.status }.forEach { target ->
-                            DropdownMenuItem({ Text("Move to ${target.label}") }, { menu = false; onDrop(task, target, taskCount(target)) })
-                        }
-                    }
+                    MobileTaskActionMenu(
+                        expanded = menu,
+                        status = task.status,
+                        canMoveEarlier = index > 0,
+                        canMoveLater = index < laneSize - 1,
+                        onDismiss = { menu = false },
+                        onMoveEarlier = { menu = false; onDrop(task, task.status, index - 1) },
+                        onMoveLater = { menu = false; onDrop(task, task.status, index + 1) },
+                        onMoveTo = { target -> menu = false; onDrop(task, target, taskCount(target)) },
+                    )
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1213,6 +1234,110 @@ private fun MobileKanbanCard(
             dismissButton = { TextButton(onClick = { blockDialog = false }) { Text("Cancel") } },
         )
     }
+}
+
+@Composable
+private fun MobileTaskActionMenu(
+    expanded: Boolean,
+    status: TaskStatus,
+    canMoveEarlier: Boolean,
+    canMoveLater: Boolean,
+    onDismiss: () -> Unit,
+    onMoveEarlier: () -> Unit,
+    onMoveLater: () -> Unit,
+    onMoveTo: (TaskStatus) -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    val hasReorderActions = canMoveEarlier || canMoveLater
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier
+            .widthIn(min = 264.dp, max = 320.dp)
+            .testTag("battle-plan-task-actions-menu"),
+        shape = TimeboxShapes.group,
+        containerColor = colors.lowest,
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp,
+    ) {
+        if (hasReorderActions) {
+            MenuSectionLabel("Reorder")
+            if (canMoveEarlier) {
+                MobileTaskActionMenuItem(
+                    label = "Move earlier",
+                    icon = Icons.Outlined.KeyboardArrowUp,
+                    onClick = onMoveEarlier,
+                )
+            }
+            if (canMoveLater) {
+                MobileTaskActionMenuItem(
+                    label = "Move later",
+                    icon = Icons.Outlined.KeyboardArrowDown,
+                    onClick = onMoveLater,
+                )
+            }
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                color = colors.hairline,
+            )
+        }
+
+        MenuSectionLabel("Move to")
+        battlePlanStatuses.filter { it != status }.forEach { target ->
+            MobileTaskActionMenuItem(
+                label = "Move to ${target.label}",
+                icon = when (target) {
+                    TaskStatus.Open -> Icons.Outlined.Inbox
+                    TaskStatus.InProgress -> Icons.Outlined.PlayArrow
+                    TaskStatus.Completed -> Icons.Outlined.CheckCircle
+                    TaskStatus.Blocked -> Icons.Outlined.Inbox
+                },
+                onClick = { onMoveTo(target) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MobileTaskActionMenuItem(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                style = TimeboxTheme.type.label,
+                color = colors.on,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingIcon = {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(TimeboxShapes.chip)
+                    .background(colors.low),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.onVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = TimeboxDimens.touchTarget),
+    )
 }
 
 internal fun mobileTaskCardSurface(colors: TimeboxColors): Color =
