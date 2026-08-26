@@ -39,11 +39,13 @@ The Gradle wrapper JAR is not committed, so use Android Studio for the first syn
 
 The build targets `compileSdk`/`targetSdk` 34 and `minSdk` 26.
 
-Once the wrapper exists you can also build from the terminal:
+Once the wrapper exists you can also build from PowerShell at the repository root. The launcher discovers a compatible JDK (including Android Studio's bundled JBR) and selects it only for the Gradle process:
 
-```bash
-cd android && ./gradlew assembleDebug
+```powershell
+.\scripts\android-gradle.ps1 assembleDebug
 ```
+
+On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `./gradlew assembleDebug` from this directory.
 
 ## Pointing the app at your API
 

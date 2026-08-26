@@ -75,12 +75,13 @@ cd frontend && npm run e2e
 
 **E2E note:** Playwright uses the dedicated ports declared in [frontend/playwright.config.ts](frontend/playwright.config.ts) and may reuse listeners already occupying those exact ports outside CI. If a stale E2E server or schema causes failures, stop that listener or delete `backend/e2e.sqlite` so Playwright can start a fresh API using `AUTO_CREATE_TABLES=1`.
 
-Android unit tests and builds are available after Android Studio has generated the Gradle wrapper:
+Android unit tests and builds are available after Android Studio has generated the Gradle wrapper. On Windows, use the repository launcher so Gradle automatically uses an installed JDK 17+ without changing the machine-wide Java configuration:
 
-```bash
-cd android
-./gradlew testDebugUnitTest assembleDebug
+```powershell
+.\scripts\android-gradle.ps1 testDebugUnitTest assembleDebug
 ```
+
+On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `cd android && ./gradlew testDebugUnitTest assembleDebug`.
 
 ## Design and behavior references
 
