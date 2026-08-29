@@ -11,6 +11,7 @@ import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { TimeBlockModal } from '../../components/TimeBlockModal'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
+import { WorkModePrototype } from './WorkModePrototype'
 import {
   addDaysIso,
   minuteFromPointerYInVisibleLane,
@@ -40,6 +41,7 @@ export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const workModePrototype = import.meta.env.DEV && searchParams.get('prototype') === 'work-mode'
   const [day, setDay] = useState<DayRead | null>(null)
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [battleTasks, setBattleTasks] = useState<BattleTask[]>([])
@@ -57,7 +59,7 @@ export function TodayPage() {
   const [planningTaskBusyId, setPlanningTaskBusyId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
-    if (!date) return
+    if (!date || workModePrototype) return
     setLoading(true)
     setError(null)
     try {
@@ -74,7 +76,7 @@ export function TodayPage() {
     } finally {
       setLoading(false)
     }
-  }, [date])
+  }, [date, workModePrototype])
 
   useEffect(() => {
     void load()
@@ -479,6 +481,10 @@ export function TodayPage() {
     },
     [tryDiscardIfNeeded],
   )
+
+  if (workModePrototype && date) {
+    return <WorkModePrototype date={date} />
+  }
 
   if (!date) {
     return (
