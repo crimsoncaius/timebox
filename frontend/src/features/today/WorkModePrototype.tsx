@@ -8,6 +8,7 @@ type ItemKind = 'task' | 'non-task'
 
 interface PrototypeState {
   kind: ItemKind
+  focusOpen: boolean
   running: boolean
   taskComplete: boolean
   futurePlansPresent: boolean
@@ -26,6 +27,7 @@ const variants: PrototypeVariant[] = [
 function initialState(kind: ItemKind = 'task'): PrototypeState {
   return {
     kind,
+    focusOpen: true,
     running: true,
     taskComplete: false,
     futurePlansPresent: true,
@@ -65,6 +67,7 @@ export function WorkModePrototype({ date }: { date: string }) {
     finish() {
       setState((current) => ({
         ...current,
+        focusOpen: false,
         running: false,
         actualEnd: '11:18',
         notice: 'Actual recorded · Task remains open',
@@ -73,6 +76,7 @@ export function WorkModePrototype({ date }: { date: string }) {
     finishAndComplete() {
       setState((current) => ({
         ...current,
+        focusOpen: false,
         running: false,
         actualEnd: '11:18',
         taskComplete: true,
@@ -91,6 +95,7 @@ export function WorkModePrototype({ date }: { date: string }) {
     startAnother() {
       setState((current) => ({
         ...current,
+        focusOpen: true,
         running: true,
         actualStart: '11:32',
         actualEnd: '',
@@ -159,6 +164,27 @@ function VariantA({ state, actions, date }: VariantProps) {
 }
 
 function VariantB({ state, actions, date }: VariantProps) {
+  if (!state.focusOpen) {
+    return (
+      <Layout mainClassName="w-full max-w-none px-5 py-8 lg:px-8">
+        <PrototypeBanner onReset={actions.reset} />
+        <DayHeading date={date} />
+        <div className="mt-6">
+          <Notice state={state} onUndo={actions.undoCompletion} />
+          {!state.taskComplete ? (
+            <button type="button" className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm font-medium text-on-primary" onClick={actions.startAnother}>
+              Start another Actual Block
+            </button>
+          ) : null}
+          <div className="mt-6">
+            <FakeTimeline state={state} />
+          </div>
+          <StateReadout state={state} />
+        </div>
+      </Layout>
+    )
+  }
+
   return (
     <Layout mainClassName="w-full max-w-none px-5 py-8 lg:px-8">
       <DayHeading date={date} />
