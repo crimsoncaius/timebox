@@ -5,24 +5,36 @@ Timebox plans intended work, records actual work, and tracks the tasks that thos
 ## Language
 
 **Battle Plan Task**:
-A unit of work tracked until no further work remains. It may be linked to planned periods of work, but its completion is independent of whether any one of those periods was completed.
+An independently meaningful unit of work that can be scheduled and completed in its own right. It may contain Subtasks and have zero or more Planned Blocks and Actual Blocks.
 _Avoid_: Time block, scheduled block
 
 **Parent Task**:
-A Battle Plan Task that contains first-level Subtasks and represents the complete unit of work. Completing it completes every Subtask, while its own completion remains explicit even when every Subtask is already complete.
+A Battle Plan Task whose execution is decomposed into first-level Subtasks. Its completion remains explicit and resolves its Subtasks without changing their checked states.
 _Avoid_: Epic, subtask group
 
 **Subtask**:
-A first-level unit of work contained by a Parent Task. A Subtask cannot contain further Subtasks, and its completion does not imply Parent Task completion.
+A non-exhaustive, first-level execution checkpoint within a Parent Task. It is not independently schedulable, and its checked state does not determine Parent Task completion.
 _Avoid_: Child task, nested task
 
+**Work Mode**:
+The execution surface for a Battle Plan Task, bringing its Subtasks and Actual-time actions together. It is not a Task status or a kind of Planned Block.
+_Avoid_: Task status, timer mode
+
+**Recurring Task Series**:
+A recurrence rule and template that produces Task Occurrences. It remains independent of the completion of any one occurrence.
+_Avoid_: Recurring template, recurring parent task
+
+**Task Occurrence**:
+A Battle Plan Task representing one instance of a Recurring Task Series, with its own completion, Subtask state, Planned Blocks, and Actual Blocks.
+_Avoid_: Recurring series, Quota Tracker
+
 **Quota Tracker**:
-A generated progress aggregate for a recurring quota, expressed as completed sessions out of required sessions. Its completion is derived from its Session Tasks rather than set explicitly.
-_Avoid_: Parent Task, completable task
+A generated progress aggregate for a recurring quota, expressed as completed Session Tasks out of required Session Tasks. It is derived rather than explicitly completed.
+_Avoid_: Recurring Task Series, Parent Task, completable task
 
 **Session Task**:
 An individually completable unit of work that contributes to a Quota Tracker.
-_Avoid_: Quota Tracker, quota parent
+_Avoid_: Actual Block, Task Occurrence, work session
 
 **Blocked**:
 A condition indicating that an incomplete Battle Plan Task cannot currently progress. It is not a completion status and is cleared when the task completes.
@@ -33,21 +45,13 @@ A queue condition indicating that an incomplete Battle Plan Task is available to
 _Avoid_: Open status, unscheduled task
 
 **Planned Block**:
-An allocation of time intended for work. Each Planned Block tracks whether its own allocation was fulfilled, independently of any linked Battle Plan Task.
-_Avoid_: Task, appointment
+An allocation of time intended for one primary item. It records the plan, not whether work occurred.
+_Avoid_: Planned timebox, Task, appointment
 
 **Actual Block**:
-A record of time that occurred. It may fulfill a Planned Block or stand alone without one.
-_Avoid_: Completed task
-
-**Time Block Completion**:
-Confirmation that an allocated period of work was fulfilled. It does not imply that a linked Battle Plan Task is complete.
-_Avoid_: Task completion
+A record of time that occurred. It may link to a Planned Block or stand alone and is authoritative for actual time.
+_Avoid_: Actual session, work session, completed block
 
 **Task Completion**:
-Confirmation that no further work remains for a Battle Plan Task. It does not imply that every linked period of planned work was fulfilled.
-_Avoid_: Time block completion
-
-**Allocation Progress**:
-The number of a Battle Plan Task's existing Planned Blocks that have been fulfilled, expressed against all of its existing Planned Blocks.
-_Avoid_: Task progress, time worked
+An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks.
+_Avoid_: Time completion, session completion
