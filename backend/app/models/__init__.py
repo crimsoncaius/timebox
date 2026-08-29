@@ -6,10 +6,10 @@ from app.models.battle_plan import (
 )
 from app.models.day import Day
 from app.models.task_type import TaskType
-from app.models.time_block import BlockLane, TimeBlock
+from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 
 __all__ = [
-    "AppSettings", "Day", "TaskType", "TimeBlock", "BlockLane",
+    "AppSettings", "Day", "TaskType", "TimeBlock", "ActualBlockRecordOperation", "BlockLane",
     "Project", "Task", "TaskCompletionOperation", "TaskStatus", "PriorityLevel",
     "RecurringTemplate", "RecurringChecklistItem", "RecurrenceOccurrence",
     "RecurrenceMode", "RecurrenceStatus", "RecurrenceFrequency",

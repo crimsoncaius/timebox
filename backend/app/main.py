@@ -68,6 +68,7 @@ app.include_router(task_types.router, dependencies=_protected)
 app.include_router(battle_plan.router, dependencies=_protected)
 app.include_router(recurring.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
+app.include_router(actual_blocks.planned_router, dependencies=_protected)
 
 
 @app.get("/health")

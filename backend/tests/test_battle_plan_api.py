@@ -16,6 +16,21 @@ def create_task(client, title="Task", **extra):
 
 
 def create_block(client, date, task_id, task_type_id, lane="planned", start_minute=540):
+    if lane == "actual":
+        start = dt.datetime.combine(
+            dt.date.fromisoformat(date), dt.time.min, tzinfo=dt.timezone.utc
+        ) + dt.timedelta(minutes=start_minute)
+        response = client.post(
+            "/actual-blocks",
+            json={
+                "task_id": task_id,
+                "task_type_id": task_type_id,
+                "start_at": start.isoformat(),
+                "end_at": (start + dt.timedelta(minutes=30)).isoformat(),
+            },
+        )
+        assert response.status_code == 201, response.text
+        return
     response = client.post(
         f"/days/{date}/blocks",
         json={

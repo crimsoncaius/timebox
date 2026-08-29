@@ -152,19 +152,22 @@ def test_delete_task_type_cascade_removes_planned_and_actual_pair(client):
         json={"lane": "planned", "task_type_id": tid, "start_minute": 60, "end_minute": 90},
     ).json()["time_blocks"][0]
     pid = planned["id"]
-    client.post(f"/days/2026-06-03/blocks/{pid}/complete-as-planned")
+    recorded = client.post(f"/planned-blocks/{pid}/record-actual-as-planned")
+    assert recorded.status_code == 201
     day_before = client.get("/days/2026-06-03").json()
-    assert len(day_before["time_blocks"]) == 2
-    actual = next(b for b in day_before["time_blocks"] if b["lane"] == "actual")
-    assert actual.get("planned_block_id") == pid
+    assert len(day_before["planned_blocks"]) == 1
+    assert len(day_before["actual_blocks"]) == 1
+    actual = day_before["actual_blocks"][0]["actual_block"]
+    assert actual["planned_block_id"] == pid
 
     r = client.delete(f"/task-types/{tid}?cascade_blocks=true")
     assert r.status_code == 204
     day_after = client.get("/days/2026-06-03").json()
     assert day_after["time_blocks"] == []
+    assert day_after["actual_blocks"] == []
 
 
-def test_delete_task_type_migrate_keeps_planned_block_link(client):
+def test_delete_task_type_migrate_detaches_correspondence_on_item_change(client):
     tid_a = client.post("/task-types", json={"name": "m-from"}).json()["id"]
     tid_b = client.post("/task-types", json={"name": "m-to"}).json()["id"]
     client.get("/days/2026-06-04")
@@ -173,15 +176,17 @@ def test_delete_task_type_migrate_keeps_planned_block_link(client):
         json={"lane": "planned", "task_type_id": tid_a, "start_minute": 120, "end_minute": 150},
     ).json()["time_blocks"][0]
     pid = planned["id"]
-    client.post(f"/days/2026-06-04/blocks/{pid}/complete-as-planned")
+    recorded = client.post(f"/planned-blocks/{pid}/record-actual-as-planned")
+    assert recorded.status_code == 201
     r = client.delete(f"/task-types/{tid_a}?migrate_blocks_to={tid_b}")
     assert r.status_code == 204
     day = client.get("/days/2026-06-04").json()
-    assert len(day["time_blocks"]) == 2
-    actual = next(b for b in day["time_blocks"] if b["lane"] == "actual")
+    assert len(day["planned_blocks"]) == 1
+    assert len(day["actual_blocks"]) == 1
+    actual = day["actual_blocks"][0]["actual_block"]
     assert actual["task_type_id"] == tid_b
-    assert actual.get("planned_block_id") == pid
-    planned2 = next(b for b in day["time_blocks"] if b["lane"] == "planned")
+    assert actual["planned_block_id"] is None
+    planned2 = day["planned_blocks"][0]
     assert planned2["task_type_id"] == tid_b
 
 

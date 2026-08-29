@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+
 
 def _tid(client, name: str) -> int:
     r = client.post("/task-types", json={"name": name})
@@ -8,6 +10,20 @@ def _tid(client, name: str) -> int:
 
 
 def _block(client, date: str, lane: str, tid: int, start: int, end: int) -> None:
+    if lane == "actual":
+        start_at = dt.datetime.combine(
+            dt.date.fromisoformat(date), dt.time.min, tzinfo=dt.timezone.utc
+        ) + dt.timedelta(minutes=start)
+        r = client.post(
+            "/actual-blocks",
+            json={
+                "task_type_id": tid,
+                "start_at": start_at.isoformat(),
+                "end_at": (start_at + dt.timedelta(minutes=end - start)).isoformat(),
+            },
+        )
+        assert r.status_code == 201, r.text
+        return
     r = client.post(
         f"/days/{date}/blocks",
         json={

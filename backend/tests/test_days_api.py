@@ -157,17 +157,21 @@ def test_reject_overlap_same_lane_on_patch(client):
     assert r3.status_code == 422
 
 
-def test_delete_block(client):
+def test_delete_actual_block(client):
     tid = _tid(client, "t")
     client.get("/days/2026-04-16")
     r = client.post(
-        "/days/2026-04-16/blocks",
-        json={"lane": "actual", "task_type_id": tid, "start_minute": 0, "end_minute": 30},
+        "/actual-blocks",
+        json={
+            "task_type_id": tid,
+            "start_at": "2026-04-16T00:00:00Z",
+            "end_at": "2026-04-16T00:30:00Z",
+        },
     )
-    bid = r.json()["time_blocks"][0]["id"]
-    r2 = client.delete(f"/days/2026-04-16/blocks/{bid}")
-    assert r2.status_code == 200
-    assert r2.json()["time_blocks"] == []
+    bid = r.json()["id"]
+    r2 = client.delete(f"/actual-blocks/{bid}")
+    assert r2.status_code == 204
+    assert client.get("/days/2026-04-16").json()["actual_blocks"] == []
 
 
 def test_commit_plan_is_atomic_across_days(client):
@@ -276,7 +280,7 @@ def test_create_block_unknown_task_type(client):
     assert r.status_code == 422
 
 
-def test_complete_planned_as_actual(client):
+def test_record_actual_as_planned_is_one_shot(client):
     tid = _tid(client, "planned-complete")
     client.get("/days/2026-04-21")
     r = client.post(
@@ -292,20 +296,19 @@ def test_complete_planned_as_actual(client):
     assert r.status_code == 200
     planned_id = r.json()["time_blocks"][0]["id"]
 
-    r2 = client.post(f"/days/2026-04-21/blocks/{planned_id}/complete-as-planned")
-    assert r2.status_code == 200
-    day = r2.json()
-    assert len(day["time_blocks"]) == 2
-    actual = next(b for b in day["time_blocks"] if b["lane"] == "actual")
+    r2 = client.post(f"/planned-blocks/{planned_id}/record-actual-as-planned")
+    assert r2.status_code == 201
+    actual = r2.json()["actual_block"]
     assert actual["planned_block_id"] == planned_id
-    assert actual["start_minute"] == 480
-    assert actual["end_minute"] == 510
+    assert actual["start_at"] == "2026-04-21T08:00:00Z"
+    assert actual["end_at"] == "2026-04-21T08:30:00Z"
     assert actual["note"] == "do it"
 
-    r3 = client.post(f"/days/2026-04-21/blocks/{planned_id}/complete-as-planned")
-    assert r3.status_code == 200
-    day3 = r3.json()
-    assert len(day3["time_blocks"]) == 2
+    r3 = client.post(f"/planned-blocks/{planned_id}/record-actual-as-planned")
+    assert r3.status_code == 422
+    day3 = client.get("/days/2026-04-21").json()
+    assert len(day3["planned_blocks"]) == 1
+    assert len(day3["actual_blocks"]) == 1
 
 
 def test_linked_planned_block_clears_readiness_and_preserves_task_on_actual(client):
@@ -348,13 +351,11 @@ def test_linked_planned_block_clears_readiness_and_preserves_task_on_actual(clie
     assert refreshed_task["ready_to_plan"] is False
     assert refreshed_task["status"] == "in_progress"
 
-    completed = client.post(
-        f"/days/2026-05-06/blocks/{planned['id']}/complete-as-planned"
+    recorded = client.post(
+        f"/planned-blocks/{planned['id']}/record-actual-as-planned"
     )
-    assert completed.status_code == 200
-    actual = next(
-        block for block in completed.json()["time_blocks"] if block["lane"] == "actual"
-    )
+    assert recorded.status_code == 201
+    actual = recorded.json()["actual_block"]
     assert actual["task_id"] == task["id"]
     assert actual["task"]["title"] == "Draft launch brief"
     assert client.get("/tasks").json()["items"][0]["status"] == "in_progress"
@@ -388,14 +389,11 @@ def test_patch_block_accepts_and_clears_task_link(client):
     assert unlinked.json()["time_blocks"][0]["task"] is None
 
 
-def test_complete_non_planned_block_rejected(client):
+def test_day_block_create_rejects_actual_lane(client):
     tid = _tid(client, "actual-only")
     client.get("/days/2026-04-22")
     r = client.post(
         "/days/2026-04-22/blocks",
         json={"lane": "actual", "task_type_id": tid, "start_minute": 0, "end_minute": 30},
     )
-    assert r.status_code == 200
-    aid = r.json()["time_blocks"][0]["id"]
-    r2 = client.post(f"/days/2026-04-22/blocks/{aid}/complete-as-planned")
-    assert r2.status_code == 422
+    assert r.status_code == 422

@@ -17,17 +17,25 @@ def test_usage_count_tracks_blocks(client):
     coding = _tid(client, "coding")
     _tid(client, "writing")
 
-    for lane, start, end in [("planned", 540, 600), ("actual", 600, 660)]:
-        r = client.post(
-            "/days/2026-04-13/blocks",
-            json={
-                "lane": lane,
-                "task_type_id": coding,
-                "start_minute": start,
-                "end_minute": end,
-            },
-        )
-        assert r.status_code == 200, r.text
+    planned = client.post(
+        "/days/2026-04-13/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": coding,
+            "start_minute": 540,
+            "end_minute": 600,
+        },
+    )
+    assert planned.status_code == 200, planned.text
+    actual = client.post(
+        "/actual-blocks",
+        json={
+            "task_type_id": coding,
+            "start_at": "2026-04-13T10:00:00Z",
+            "end_at": "2026-04-13T11:00:00Z",
+        },
+    )
+    assert actual.status_code == 201, actual.text
 
     by_name = {r["name"]: r["usage_count"] for r in client.get("/task-types").json()}
     assert by_name == {"coding": 2, "writing": 0}

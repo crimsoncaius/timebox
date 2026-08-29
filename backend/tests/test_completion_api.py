@@ -30,18 +30,16 @@ def _planned_block(client, date, task, task_type, start=540):
     return next(block for block in response.json()["time_blocks"] if block["lane"] == "planned")
 
 
-def test_time_completion_is_independent_and_reversal_preserves_actual_work(client):
+def test_actual_correspondence_is_independent_and_detach_preserves_actual_work(client):
     task_type = _task_type(client)
     task = _task(client, status="in_progress", task_type_id=task_type["id"])
     planned = _planned_block(client, "2099-01-04", task, task_type)
 
-    completed = client.post(
-        f"/days/2099-01-04/blocks/{planned['id']}/complete-as-planned"
+    recorded = client.post(
+        f"/planned-blocks/{planned['id']}/record-actual-as-planned"
     )
-    assert completed.status_code == 200, completed.text
-    actual = next(
-        block for block in completed.json()["time_blocks"] if block["lane"] == "actual"
-    )
+    assert recorded.status_code == 201, recorded.text
+    actual = recorded.json()["actual_block"]
     assert actual["planned_block_id"] == planned["id"]
     assert actual["task"]["status"] == "in_progress"
 
@@ -51,13 +49,9 @@ def test_time_completion_is_independent_and_reversal_preserves_actual_work(clien
     assert "allocation_completed" not in task_read
     assert "allocations" not in task_read
 
-    reversed_response = client.delete(
-        f"/days/2099-01-04/blocks/{planned['id']}/completion"
-    )
-    assert reversed_response.status_code == 200, reversed_response.text
-    blocks = reversed_response.json()["time_blocks"]
-    assert len(blocks) == 2
-    detached_actual = next(block for block in blocks if block["lane"] == "actual")
+    detached_response = client.post(f"/actual-blocks/{actual['id']}/detach")
+    assert detached_response.status_code == 200, detached_response.text
+    detached_actual = detached_response.json()
     assert detached_actual["id"] == actual["id"]
     assert detached_actual["planned_block_id"] is None
     assert "allocation_completed" not in client.get("/tasks").json()["items"][0]
@@ -65,43 +59,41 @@ def test_time_completion_is_independent_and_reversal_preserves_actual_work(clien
     # Deleting Planned intent later must not erase the recorded Actual work.
     deleted = client.delete(f"/days/2099-01-04/blocks/{planned['id']}")
     assert deleted.status_code == 200, deleted.text
-    assert [block["id"] for block in deleted.json()["time_blocks"]] == [actual["id"]]
+    assert deleted.json()["time_blocks"] == []
+    assert deleted.json()["actual_blocks"][0]["actual_block"]["id"] == actual["id"]
 
 
-def test_deleting_paired_actual_makes_planned_incomplete_and_overlap_is_atomic(client):
+def test_deleting_paired_actual_leaves_planned_and_record_overlap_is_atomic(client):
     task_type = _task_type(client)
     task = _task(client, task_type_id=task_type["id"])
     planned = _planned_block(client, "2099-03-01", task, task_type)
-    completed = client.post(
-        f"/days/2099-03-01/blocks/{planned['id']}/complete-as-planned"
+    recorded = client.post(
+        f"/planned-blocks/{planned['id']}/record-actual-as-planned"
     )
-    assert completed.status_code == 200, completed.text
-    actual = next(
-        block for block in completed.json()["time_blocks"] if block["lane"] == "actual"
-    )
+    assert recorded.status_code == 201, recorded.text
+    actual = recorded.json()["actual_block"]
 
-    deleted = client.delete(f"/days/2099-03-01/blocks/{actual['id']}")
-    assert deleted.status_code == 200, deleted.text
-    assert [block["id"] for block in deleted.json()["time_blocks"]] == [planned["id"]]
+    deleted = client.delete(f"/actual-blocks/{actual['id']}")
+    assert deleted.status_code == 204, deleted.text
+    assert [block["id"] for block in client.get("/days/2099-03-01").json()["time_blocks"]] == [planned["id"]]
     assert "allocation_completed" not in client.get("/tasks").json()["items"][0]
 
     overlapping = client.post(
-        "/days/2099-03-01/blocks",
+        "/actual-blocks",
         json={
-            "lane": "actual",
             "task_type_id": task_type["id"],
-            "start_minute": planned["start_minute"],
-            "end_minute": planned["end_minute"],
+            "start_at": "2099-03-01T09:00:00Z",
+            "end_at": "2099-03-01T09:30:00Z",
         },
     )
-    assert overlapping.status_code == 200, overlapping.text
-    before = overlapping.json()["time_blocks"]
+    assert overlapping.status_code == 201, overlapping.text
+    before = client.get("/days/2099-03-01").json()
     rejected = client.post(
-        f"/days/2099-03-01/blocks/{planned['id']}/complete-as-planned"
+        f"/planned-blocks/{planned['id']}/record-actual-as-planned"
     )
     assert rejected.status_code == 422
     assert "overlap" in rejected.json()["detail"].lower()
-    assert client.get("/days/2099-03-01").json()["time_blocks"] == before
+    assert client.get("/days/2099-03-01").json()["actual_blocks"] == before["actual_blocks"]
 
 
 def test_task_completion_is_independent_and_ordinary_reopen_uses_prior_work_status(client):
@@ -189,10 +181,10 @@ def test_parent_completion_removes_future_incomplete_time_and_undo_restores_exac
     parent_future = _planned_block(client, "2099-02-01", parent, task_type)
     child_future = _planned_block(client, "2099-02-02", first, task_type)
     completed_future = _planned_block(client, "2099-02-03", first, task_type)
-    completed = client.post(
-        f"/days/2099-02-03/blocks/{completed_future['id']}/complete-as-planned"
+    recorded = client.post(
+        f"/planned-blocks/{completed_future['id']}/record-actual-as-planned"
     )
-    assert completed.status_code == 200, completed.text
+    assert recorded.status_code == 201, recorded.text
     assert client.patch(
         f"/tasks/{parent['id']}", json={"ready_to_plan": True}
     ).status_code == 200
@@ -216,7 +208,9 @@ def test_parent_completion_removes_future_incomplete_time_and_undo_restores_exac
     assert client.get("/days/2000-01-01").json()["time_blocks"][0]["id"] == past["id"]
     assert client.get("/days/2099-02-01").json()["time_blocks"] == []
     assert client.get("/days/2099-02-02").json()["time_blocks"] == []
-    assert len(client.get("/days/2099-02-03").json()["time_blocks"]) == 2
+    completed_day = client.get("/days/2099-02-03").json()
+    assert len(completed_day["planned_blocks"]) == 1
+    assert len(completed_day["actual_blocks"]) == 1
 
     undone = client.post(
         f"/tasks/{parent['id']}/undo-completion",

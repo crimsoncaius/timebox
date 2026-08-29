@@ -22,7 +22,7 @@ from app.schemas.day import (
     PlanningPlacementCreate,
 )
 from app.schemas.settings import SettingsPatch
-from app.schemas.time_block import PlannedBlockRead, TimeBlockCreate, TimeBlockPatch, TimeBlockRead
+from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
 
 SLOT_MINUTES = 30
 DAY_END = 24 * 60  # 1440
@@ -320,16 +320,28 @@ def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
     return s
 
 
-def get_block(db: Session, day: Day, block_id: int) -> TimeBlock | None:
+def _day_block_select(day_id: int, block_id: int, *, for_update: bool = False):
     stmt = (
         select(TimeBlock)
-        .where(TimeBlock.id == block_id, TimeBlock.day_id == day.id)
+        .where(TimeBlock.id == block_id, TimeBlock.day_id == day_id)
         .limit(1)
     )
-    return db.execute(stmt).scalar_one_or_none()
+    return stmt.with_for_update() if for_update else stmt
 
 
-def create_time_block(db: Session, day: Day, body: TimeBlockCreate) -> TimeBlock:
+def get_block(
+    db: Session,
+    day: Day,
+    block_id: int,
+    *,
+    for_update: bool = False,
+) -> TimeBlock | None:
+    return db.execute(
+        _day_block_select(day.id, block_id, for_update=for_update)
+    ).scalar_one_or_none()
+
+
+def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBlock:
     _validate_minutes(body.start_minute, body.end_minute)
     _assert_no_overlap(day, body.lane, body.start_minute, body.end_minute)
     tt = task_type_service.get_task_type(db, body.task_type_id)
@@ -432,10 +444,12 @@ def commit_planning_session(
 
 
 def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch) -> TimeBlock:
-    block = get_block(db, day, block_id)
+    # Correspondence mutations always lock Planned before corresponding Actual.
+    block = get_block(db, day, block_id, for_update=True)
     if block is None:
         raise ValueError("Block not found")
     data = patch.model_dump(exclude_unset=True)
+    original_item = (block.task_type_id, block.task_id)
     start = data.get("start_minute", block.start_minute)
     end = data.get("end_minute", block.end_minute)
     if "start_minute" in data or "end_minute" in data:
@@ -458,108 +472,47 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         block.start_minute = data["start_minute"]
     if "end_minute" in data:
         block.end_minute = data["end_minute"]
+    if block.lane == BlockLane.planned and original_item != (
+        block.task_type_id,
+        block.task_id,
+    ):
+        linked_actual = db.execute(
+            select(TimeBlock)
+            .where(TimeBlock.planned_block_id == block.id)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if linked_actual is not None:
+            actual_block_service.invalidate_record_actual_undo(db, linked_actual.id)
+            linked_actual.planned_block_id = None
     _touch_day(day)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(block)
     db.refresh(day)
     return block
 
 
 def delete_time_block(db: Session, day: Day, block_id: int) -> None:
-    block = get_block(db, day, block_id)
+    # Same Planned -> Actual lock order as relink and Undo.
+    block = get_block(db, day, block_id, for_update=True)
     if block is None:
         raise ValueError("Block not found")
     if block.lane == BlockLane.planned:
         linked_actual = db.execute(
-            select(TimeBlock).where(TimeBlock.planned_block_id == block.id)
+            select(TimeBlock)
+            .where(TimeBlock.planned_block_id == block.id)
+            .with_for_update()
         ).scalar_one_or_none()
         if linked_actual is not None:
+            actual_block_service.invalidate_record_actual_undo(db, linked_actual.id)
             linked_actual.planned_block_id = None
     db.delete(block)
     _touch_day(day)
     db.commit()
     db.refresh(day)
-
-
-def complete_planned_as_actual(db: Session, day: Day, planned_block_id: int) -> TimeBlock:
-    """Create (or refresh) an Actual block that mirrors a Planned block, linked by planned_block_id."""
-    drow = get_day_by_date(db, day.date)
-    assert drow is not None
-    planned = get_block(db, drow, planned_block_id)
-    if planned is None:
-        raise ValueError("Block not found")
-    if planned.lane != BlockLane.planned:
-        raise ValueError("Only planned blocks can be completed as planned")
-
-    existing = next(
-        (
-            b
-            for b in drow.time_blocks
-            if b.lane == BlockLane.actual and b.planned_block_id == planned_block_id
-        ),
-        None,
-    )
-    start = planned.start_minute
-    end = planned.end_minute
-    _validate_minutes(start, end)
-    if existing is not None:
-        _assert_no_overlap(drow, BlockLane.actual, start, end, exclude_id=existing.id)
-        tt = task_type_service.get_task_type(db, planned.task_type_id)
-        if tt is None:
-            raise ValueError("Task type not found")
-        existing.task_type_id = planned.task_type_id
-        existing.task_id = planned.task_id
-        existing.note = (planned.note or "").strip() or None
-        existing.start_minute = start
-        existing.end_minute = end
-        _touch_day(drow)
-        db.commit()
-        db.refresh(existing)
-        db.refresh(drow)
-        return existing
-
-    _assert_no_overlap(drow, BlockLane.actual, start, end)
-    tt = task_type_service.get_task_type(db, planned.task_type_id)
-    if tt is None:
-        raise ValueError("Task type not found")
-    note_val = (planned.note or "").strip() or None
-    block = TimeBlock(
-        day_id=drow.id,
-        lane=BlockLane.actual,
-        task_type_id=planned.task_type_id,
-        task_id=planned.task_id,
-        note=note_val,
-        start_minute=start,
-        end_minute=end,
-        planned_block_id=planned.id,
-    )
-    db.add(block)
-    _touch_day(drow)
-    db.commit()
-    db.refresh(block)
-    db.refresh(drow)
-    return block
-
-
-def reverse_planned_completion(db: Session, day: Day, planned_block_id: int) -> TimeBlock:
-    """Detach recorded Actual work so the Planned Block becomes Time-incomplete."""
-
-    planned = get_block(db, day, planned_block_id)
-    if planned is None:
-        raise ValueError("Block not found")
-    if planned.lane != BlockLane.planned:
-        raise ValueError("Only planned blocks have Time completion")
-    actual = db.execute(
-        select(TimeBlock).where(TimeBlock.planned_block_id == planned.id)
-    ).scalar_one_or_none()
-    if actual is None:
-        raise ValueError("Planned block is not Time-completed")
-    actual.planned_block_id = None
-    _touch_day(day)
-    db.commit()
-    db.refresh(actual)
-    db.refresh(day)
-    return actual
 
 
 def list_recent_days(db: Session, limit: int = 60) -> list[tuple[Day, int]]:

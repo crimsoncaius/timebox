@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.day import Day
 from app.models.task_type import TaskType
-from app.models.time_block import TimeBlock
+from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 from app.schemas.task_type import TaskTypeCreate, TaskTypePatch
 from app.services.task_type_paths import canonicalize_task_type_path, path_prefixes
 
@@ -170,6 +170,39 @@ def delete_task_type(
             ).scalars().all()
         )
         if affected_day_ids:
+            changed_block_ids = list(
+                db.execute(
+                    select(TimeBlock.id).where(TimeBlock.task_type_id == task_type_id)
+                ).scalars()
+            )
+            affected_actual_ids = list(
+                db.execute(
+                    select(TimeBlock.id).where(
+                        TimeBlock.lane == BlockLane.actual,
+                        or_(
+                            TimeBlock.task_type_id == task_type_id,
+                            TimeBlock.planned_block_id.in_(changed_block_ids),
+                        ),
+                    )
+                ).scalars()
+            )
+            if affected_actual_ids:
+                db.execute(
+                    update(TimeBlock)
+                    .where(TimeBlock.id.in_(affected_actual_ids))
+                    .values(planned_block_id=None)
+                )
+                db.execute(
+                    update(ActualBlockRecordOperation)
+                    .where(
+                        ActualBlockRecordOperation.actual_block_id.in_(
+                            affected_actual_ids
+                        ),
+                        ActualBlockRecordOperation.invalidated_at.is_(None),
+                        ActualBlockRecordOperation.undone_at.is_(None),
+                    )
+                    .values(invalidated_at=_utc_now())
+                )
             db.execute(
                 update(TimeBlock)
                 .where(TimeBlock.task_type_id == task_type_id)

@@ -14,7 +14,7 @@ from app.schemas.day import (
     PlanningCommitCreate,
     PlanningCommitRead,
 )
-from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch
+from app.schemas.time_block import PlannedBlockCreate, TimeBlockPatch
 from app.services import day_service
 
 router = APIRouter(prefix="/days", tags=["days"])
@@ -88,7 +88,7 @@ def get_day_summary(
 @router.post("/{date}/blocks", response_model=DayRead)
 def create_block(
     date: str,
-    body: TimeBlockCreate,
+    body: PlannedBlockCreate,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> DayRead:
@@ -104,7 +104,6 @@ def create_block(
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
     return day_service.to_day_read(db, db_day, settings)
-
 
 @router.patch("/{date}/blocks/{block_id}", response_model=DayRead)
 def patch_block(
@@ -126,8 +125,6 @@ def patch_block(
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
     return day_service.to_day_read(db, db_day, settings)
-
-
 @router.delete("/{date}/blocks/{block_id}", response_model=DayRead)
 def delete_block(
     date: str,
@@ -142,48 +139,6 @@ def delete_block(
     day = day_service.get_or_create_day(db, d)
     try:
         day_service.delete_time_block(db, day, block_id)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    db_day = day_service.get_day_by_date(db, d)
-    assert db_day is not None
-    return day_service.to_day_read(db, db_day, settings)
-
-
-@router.post("/{date}/blocks/{block_id}/complete-as-planned", response_model=DayRead)
-def complete_block_as_planned(
-    date: str,
-    block_id: int,
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
-    day = day_service.get_or_create_day(db, d)
-    try:
-        day_service.complete_planned_as_actual(db, day, block_id)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    db_day = day_service.get_day_by_date(db, d)
-    assert db_day is not None
-    return day_service.to_day_read(db, db_day, settings)
-
-
-@router.delete("/{date}/blocks/{block_id}/completion", response_model=DayRead)
-def reverse_block_completion(
-    date: str,
-    block_id: int,
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
-    day = day_service.get_or_create_day(db, d)
-    try:
-        day_service.reverse_planned_completion(db, day, block_id)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)

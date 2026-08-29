@@ -210,7 +210,7 @@ def test_active_actual_and_explicit_correspondence_are_readable(client):
     assert day["planned_blocks"][0]["actual_block_id"] == actual_id
     assert day["planned_blocks"][0]["start_minute"] == 600
     assert day["planned_blocks"][0]["end_minute"] == 660
-    assert active.json()["start_at"] == "2026-08-30T10:00:00"
+    assert active.json()["start_at"] == "2026-08-30T10:00:00Z"
 
 
 def test_definitive_openapi_contract_has_no_allocation_or_time_completion_truth(client):
