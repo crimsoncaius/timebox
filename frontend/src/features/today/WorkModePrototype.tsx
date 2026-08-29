@@ -45,7 +45,8 @@ export function WorkModePrototype({ date }: { date: string }) {
   const [searchParams] = useSearchParams()
   const requested = (searchParams.get('variant') ?? 'A').toUpperCase()
   const variant = variants.some((entry) => entry.key === requested) ? requested : 'A'
-  const [state, setState] = useState<PrototypeState>(() => initialState())
+  const initialKind = searchParams.get('item') === 'non-task' ? 'non-task' : 'task'
+  const [state, setState] = useState<PrototypeState>(() => initialState(initialKind))
 
   const actions = {
     setKind(kind: ItemKind) {
@@ -164,7 +165,7 @@ function VariantB({ state, actions, date }: VariantProps) {
       <div className="pointer-events-none opacity-30 blur-[1px]">
         <FakeTimeline state={state} />
       </div>
-      <div className="fixed inset-0 z-60 overflow-y-auto bg-surface/96 px-4 py-6 backdrop-blur-xl dark:bg-dark-background/96 lg:left-64">
+      <div className="fixed inset-0 z-[90] overflow-y-auto bg-surface/98 px-4 py-6 backdrop-blur-xl dark:bg-dark-background/98">
         <div className="mx-auto flex min-h-full max-w-4xl flex-col">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -173,7 +174,6 @@ function VariantB({ state, actions, date }: VariantProps) {
             </div>
             <button type="button" className="rounded-full border border-outline-variant/30 px-4 py-2 text-xs" onClick={actions.reset}>Reset demo</button>
           </div>
-          <ScenarioTabs state={state} onSelect={actions.setKind} />
           <div className="flex flex-1 flex-col justify-center py-8">
             <div className="grid items-start gap-10 lg:grid-cols-[1fr_20rem]">
               <div>
