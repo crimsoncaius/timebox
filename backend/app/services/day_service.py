@@ -11,7 +11,7 @@ from app.models.app_settings import AppSettings
 from app.models.day import Day
 from app.models.battle_plan import Task
 from app.models.time_block import BlockLane, TimeBlock
-from app.services import task_type_service
+from app.services import actual_block_service, task_type_service
 from app.schemas.day import (
     DayListItem,
     DayMeta,
@@ -22,7 +22,7 @@ from app.schemas.day import (
     PlanningPlacementCreate,
 )
 from app.schemas.settings import SettingsPatch
-from app.schemas.time_block import TimeBlockCreate, TimeBlockPatch, TimeBlockRead
+from app.schemas.time_block import PlannedBlockRead, TimeBlockCreate, TimeBlockPatch, TimeBlockRead
 
 SLOT_MINUTES = 30
 DAY_END = 24 * 60  # 1440
@@ -100,6 +100,7 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
         .options(
             selectinload(Day.time_blocks).selectinload(TimeBlock.task_type),
             selectinload(Day.time_blocks).selectinload(TimeBlock.task),
+            selectinload(Day.time_blocks).selectinload(TimeBlock.completion_actual),
         )
     )
     return db.execute(stmt).scalar_one_or_none()
@@ -147,8 +148,10 @@ def get_or_create_day(db: Session, d: dt.date) -> Day:
     return day
 
 
-def to_day_read(day: Day, settings: Settings) -> DayRead:
+def to_day_read(db: Session, day: Day, settings: Settings) -> DayRead:
     blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
+    planned = [block for block in blocks if block.lane == BlockLane.planned]
+    actual = actual_block_service.project_actual_blocks_for_day(db, day.date, settings)
     meta = _day_meta(settings)
     return DayRead(
         id=day.id,
@@ -159,6 +162,12 @@ def to_day_read(day: Day, settings: Settings) -> DayRead:
         created_at=day.created_at,
         updated_at=day.updated_at,
         time_blocks=[TimeBlockRead.model_validate(b) for b in blocks],
+        planned_blocks=[PlannedBlockRead.model_validate(block) for block in planned],
+        actual_blocks=actual.actual_blocks,
+        planned_minutes=sum(
+            (block.end_minute or 0) - (block.start_minute or 0) for block in planned
+        ),
+        actual_minutes=actual.actual_minutes,
         meta=meta,
     )
 
@@ -188,12 +197,21 @@ def build_day_preview(
         show_full_day = day.show_full_day
         blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
 
+    planned = [block for block in blocks if block.lane == BlockLane.planned]
+    actual = actual_block_service.project_actual_blocks_for_day(db, d, settings)
+
     return DayPreviewRead(
         date=d,
         start_hour=start_hour,
         end_hour=end_hour,
         show_full_day=show_full_day,
         time_blocks=[TimeBlockRead.model_validate(block) for block in blocks],
+        planned_blocks=[PlannedBlockRead.model_validate(block) for block in planned],
+        actual_blocks=actual.actual_blocks,
+        planned_minutes=sum(
+            (block.end_minute or 0) - (block.start_minute or 0) for block in planned
+        ),
+        actual_minutes=actual.actual_minutes,
         meta=_day_meta(settings),
     )
 
@@ -207,7 +225,9 @@ def _day_meta(settings: Settings) -> DayMeta:
     )
 
 
-def build_day_summary(day: Day | None, d: dt.date, settings: Settings) -> DaySummaryRead:
+def build_day_summary(
+    db: Session, day: Day | None, d: dt.date, settings: Settings
+) -> DaySummaryRead:
     """Aggregate a day's blocks into planned/actual totals and per-task-type rows.
 
     `day` may be None for a date that was never opened; that yields an empty summary
@@ -218,10 +238,20 @@ def build_day_summary(day: Day | None, d: dt.date, settings: Settings) -> DaySum
     names: dict[int, str] = {}
 
     for block in day.time_blocks if day is not None else []:
+        if block.start_minute is None or block.end_minute is None:
+            continue
         minutes = block.end_minute - block.start_minute
         names[block.task_type_id] = block.task_type.name
         bucket = planned_by_type if block.lane == BlockLane.planned else actual_by_type
         bucket[block.task_type_id] = bucket.get(block.task_type_id, 0) + minutes
+
+    definitive_actual = actual_block_service.project_actual_blocks_for_day(db, d, settings)
+    for projection in definitive_actual.actual_blocks:
+        block = projection.actual_block
+        names[block.task_type_id] = block.task_type.name
+        actual_by_type[block.task_type_id] = (
+            actual_by_type.get(block.task_type_id, 0) + projection.duration_minutes
+        )
 
     rows = [
         DaySummaryRow(

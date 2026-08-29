@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import enum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -133,7 +133,10 @@ class RecurringChecklistItem(Base):
 
 class RecurrenceOccurrence(Base):
     __tablename__ = "recurrence_occurrences"
-    __table_args__ = (UniqueConstraint("template_id", "occurrence_key", name="uq_recurrence_occurrence_key"),)
+    __table_args__ = (
+        UniqueConstraint("template_id", "occurrence_key", name="uq_recurrence_occurrence_key"),
+        Index("uq_recurrence_occurrences_task_id", "task_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(
@@ -188,6 +191,22 @@ class Task(Base):
         nullable=False,
         default=TaskStatus.open,
     )
+    # `checked` is the durable Subtask fact.  It is intentionally independent of
+    # Task Completion so completing a Parent Task never has to rewrite checklist
+    # history.  The column also exists on Battle Plan Task rows because the
+    # coordinated migration keeps their existing identities in this table.
+    checked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    completed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Used by conflict-aware Task Completion Undo. SQLAlchemy increments this for
+    # ordinary ORM updates; completion operations can snapshot the exact version
+    # they produced and reject restoration over newer user intent.
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     last_non_completed_status: Mapped[TaskStatus | None] = mapped_column(
         Enum(TaskStatus, name="last_non_completed_task_status", native_enum=False, length=24),
         nullable=True,
@@ -224,6 +243,15 @@ class Task(Base):
     task_type: Mapped["TaskType | None"] = relationship("TaskType", back_populates="tasks")
     time_blocks: Mapped[list["TimeBlock"]] = relationship("TimeBlock", back_populates="task")
     recurring_template: Mapped[RecurringTemplate | None] = relationship("RecurringTemplate", foreign_keys=[recurring_template_id])
+    occurrence: Mapped["RecurrenceOccurrence | None"] = relationship(
+        "RecurrenceOccurrence",
+        primaryjoin="Task.id == RecurrenceOccurrence.task_id",
+        foreign_keys="RecurrenceOccurrence.task_id",
+        uselist=False,
+        viewonly=True,
+    )
+
+    __mapper_args__ = {"version_id_col": version}
 
 
 class TaskCompletionOperation(Base):
@@ -234,6 +262,7 @@ class TaskCompletionOperation(Base):
         ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
     snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    completed_task_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     undone_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

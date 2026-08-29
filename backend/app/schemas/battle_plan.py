@@ -44,12 +44,25 @@ class ProjectPatch(BaseModel):
     deadline_at: datetime | None = None
 
 
-class TaskAllocationRead(BaseModel):
-    block_id: int
-    date: date
-    start_minute: int
-    end_minute: int
-    time_completed: bool
+class TaskOccurrenceIdentityRead(BaseModel):
+    """Stable identity for one Task Occurrence within a Recurring Task Series."""
+
+    id: int
+    recurring_task_series_id: int
+    occurrence_key: str
+
+
+class SubtaskRead(BaseModel):
+    """Definitive Subtask contract, intentionally free of Task lifecycle state."""
+
+    id: int
+    parent_task_id: int
+    title: str
+    checked: bool
+    effectively_resolved: bool
+    position: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class TaskRead(BaseModel):
@@ -77,6 +90,8 @@ class TaskRead(BaseModel):
     is_blocked: bool
     blocking_reason: str | None
     status: TaskStatus
+    completed_at: datetime | None
+    version: int
     urgency: PriorityLevel | None
     importance: PriorityLevel | None
     deadline_date: date | None
@@ -90,10 +105,10 @@ class TaskRead(BaseModel):
     updated_at: datetime
     overdue: bool = False
     planned_dates: list[date] = Field(default_factory=list)
-    allocation_total: int = 0
-    allocation_completed: int = 0
-    allocations: list[TaskAllocationRead] = Field(default_factory=list)
-    subtasks: list["TaskRead"] = Field(default_factory=list)
+    occurrence: TaskOccurrenceIdentityRead | None = None
+    subtasks: list[SubtaskRead] = Field(default_factory=list)
+    # Quota Session Tasks are independently completable Tasks, not Subtasks.
+    session_tasks: list["TaskRead"] = Field(default_factory=list)
 
 
 class TaskListRead(BaseModel):

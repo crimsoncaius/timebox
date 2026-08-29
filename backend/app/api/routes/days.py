@@ -31,7 +31,7 @@ def commit_plan(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=422, detail=str(e)) from e
-    return PlanningCommitRead(days=[day_service.to_day_read(day, settings) for day in days])
+    return PlanningCommitRead(days=[day_service.to_day_read(db, day, settings) for day in days])
 
 
 @router.get("", response_model=list[DayListItem])
@@ -54,7 +54,7 @@ def get_day(
     except ValueError as e:
         raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
-    return day_service.to_day_read(day, settings)
+    return day_service.to_day_read(db, day, settings)
 
 
 @router.get("/{date}/preview", response_model=DayPreviewRead)
@@ -82,7 +82,7 @@ def get_day_summary(
     except ValueError as e:
         raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_day_by_date(db, d)
-    return day_service.build_day_summary(day, d, settings)
+    return day_service.build_day_summary(db, day, d, settings)
 
 
 @router.post("/{date}/blocks", response_model=DayRead)
@@ -103,7 +103,7 @@ def create_block(
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
-    return day_service.to_day_read(db_day, settings)
+    return day_service.to_day_read(db, db_day, settings)
 
 
 @router.patch("/{date}/blocks/{block_id}", response_model=DayRead)
@@ -125,7 +125,7 @@ def patch_block(
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
-    return day_service.to_day_read(db_day, settings)
+    return day_service.to_day_read(db, db_day, settings)
 
 
 @router.delete("/{date}/blocks/{block_id}", response_model=DayRead)
@@ -146,7 +146,7 @@ def delete_block(
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
-    return day_service.to_day_read(db_day, settings)
+    return day_service.to_day_read(db, db_day, settings)
 
 
 @router.post("/{date}/blocks/{block_id}/complete-as-planned", response_model=DayRead)
@@ -167,7 +167,7 @@ def complete_block_as_planned(
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
-    return day_service.to_day_read(db_day, settings)
+    return day_service.to_day_read(db, db_day, settings)
 
 
 @router.delete("/{date}/blocks/{block_id}/completion", response_model=DayRead)
@@ -188,4 +188,4 @@ def reverse_block_completion(
         raise HTTPException(status_code=422, detail=str(e)) from e
     db_day = day_service.get_day_by_date(db, d)
     assert db_day is not None
-    return day_service.to_day_read(db_day, settings)
+    return day_service.to_day_read(db, db_day, settings)

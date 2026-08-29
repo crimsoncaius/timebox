@@ -88,7 +88,7 @@ def test_generation_is_idempotent_and_copies_checklist(client):
     assert len(first) == len(second) == 8
     assert all(task["ready_to_plan"] for task in first)
     assert [child["title"] for child in first[0]["subtasks"]] == ["Inbox", "Calendar"]
-    assert all(not child["ready_to_plan"] for child in first[0]["subtasks"])
+    assert all("ready_to_plan" not in child for child in first[0]["subtasks"])
     assert first[0]["recurring_template_title"] == "Daily review"
 
 
@@ -115,10 +115,10 @@ def test_quota_sessions_drive_parent_and_cannot_be_scheduled_early(client):
     parent = client.get("/tasks").json()["items"][0]
     assert parent["recurrence_kind"] == "quota_parent"
     assert parent["quota_completed"] == 0
-    assert [child["title"] for child in parent["subtasks"]] == ["Session 1", "Session 2", "Session 3"]
-    assert all(child["ready_to_plan"] for child in parent["subtasks"])
+    assert [child["title"] for child in parent["session_tasks"]] == ["Session 1", "Session 2", "Session 3"]
+    assert all(child["ready_to_plan"] for child in parent["session_tasks"])
 
-    session = parent["subtasks"][0]
+    session = parent["session_tasks"][0]
     too_early = dt.date.fromisoformat(session["quota_period_start"]) - dt.timedelta(days=1)
     blocked = client.post(f"/days/{too_early.isoformat()}/blocks", json={
         "lane": "planned", "task_type_id": task_type["id"], "task_id": session["id"],
@@ -130,7 +130,7 @@ def test_quota_sessions_drive_parent_and_cannot_be_scheduled_early(client):
     refreshed = client.get("/tasks").json()["items"][0]
     assert refreshed["status"] == "in_progress"
     assert refreshed["quota_completed"] == 1
-    for child in refreshed["subtasks"][1:]:
+    for child in refreshed["session_tasks"][1:]:
         client.post(f"/tasks/{child['id']}/complete", json={"planned_time": "keep"})
     assert client.get("/tasks").json()["items"][0]["status"] == "completed"
 

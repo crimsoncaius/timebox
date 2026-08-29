@@ -36,6 +36,8 @@ def _completion_task_snapshot(task: Task) -> dict[str, object]:
     return {
         "id": task.id,
         "status": task.status.value,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "version": task.version,
         "last_non_completed_status": (
             task.last_non_completed_status.value if task.last_non_completed_status else None
         ),
@@ -113,11 +115,14 @@ def complete_task(
         root_task_id=row.id,
         snapshot_json=json.dumps(snapshot),
     )
+    completed_at = _utc_now()
     try:
         for task in affected:
             if task.status != TaskStatus.completed:
                 task.last_non_completed_status = task.status
             task.status = TaskStatus.completed
+            if task.parent_id is None or task.recurrence_kind == "quota_session":
+                task.completed_at = completed_at
             task.ready_to_plan = False
             task.is_blocked = False
             task.blocking_reason = None
@@ -131,6 +136,8 @@ def complete_task(
             from app.services import recurrence_service
 
             recurrence_service._derive_quota_parents(db)
+        db.flush()
+        operation.completed_task_version = row.version
         db.commit()
     except Exception:
         db.rollback()
@@ -155,6 +162,7 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
             if task is None:
                 raise ValueError("A Task changed after completion; Undo is no longer available")
             task.status = TaskStatus(task_state["status"])
+            task.completed_at = _parse_snapshot_datetime(task_state.get("completed_at"))
             prior = task_state["last_non_completed_status"]
             task.last_non_completed_status = TaskStatus(prior) if prior else None
             task.ready_to_plan = task_state["ready_to_plan"]
@@ -207,6 +215,7 @@ def reopen_task(db: Session, task_id: int) -> Task:
         raise ValueError("Only completed tasks can be reopened")
     prior = row.last_non_completed_status
     row.status = prior if prior in {TaskStatus.open, TaskStatus.in_progress} else TaskStatus.open
+    row.completed_at = None
     if row.recurrence_kind == "quota_session":
         from app.services import recurrence_service
 
@@ -252,6 +261,10 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
         is_blocked=is_blocked,
         blocking_reason=(body.blocking_reason.strip() or None) if is_blocked and body.blocking_reason else None,
         status=status,
+        checked=(parent is not None and status == TaskStatus.completed),
+        completed_at=(
+            _utc_now() if parent is None and status == TaskStatus.completed else None
+        ),
         project_id=project_id,
         parent_id=body.parent_id,
         task_type_id=body.task_type_id,
@@ -350,11 +363,13 @@ def list_tasks(db: Session, state: str, settings: Settings) -> list[TaskRead]:
         selectinload(Task.project),
         selectinload(Task.task_type),
         selectinload(Task.recurring_template),
+        selectinload(Task.occurrence),
         selectinload(Task.time_blocks).selectinload(TimeBlock.day),
         selectinload(Task.time_blocks)
         .selectinload(TimeBlock.completion_actual),
         selectinload(Task.subtasks).selectinload(Task.task_type),
         selectinload(Task.subtasks).selectinload(Task.recurring_template),
+        selectinload(Task.subtasks).selectinload(Task.occurrence),
         selectinload(Task.subtasks).selectinload(Task.time_blocks).selectinload(TimeBlock.day),
         selectinload(Task.subtasks)
         .selectinload(Task.time_blocks)

@@ -47,17 +47,9 @@ def test_time_completion_is_independent_and_reversal_preserves_actual_work(clien
 
     task_read = client.get("/tasks").json()["items"][0]
     assert task_read["status"] == "in_progress"
-    assert task_read["allocation_total"] == 1
-    assert task_read["allocation_completed"] == 1
-    assert task_read["allocations"] == [
-        {
-            "block_id": planned["id"],
-            "date": "2099-01-04",
-            "start_minute": 540,
-            "end_minute": 570,
-            "time_completed": True,
-        }
-    ]
+    assert "allocation_total" not in task_read
+    assert "allocation_completed" not in task_read
+    assert "allocations" not in task_read
 
     reversed_response = client.delete(
         f"/days/2099-01-04/blocks/{planned['id']}/completion"
@@ -68,7 +60,7 @@ def test_time_completion_is_independent_and_reversal_preserves_actual_work(clien
     detached_actual = next(block for block in blocks if block["lane"] == "actual")
     assert detached_actual["id"] == actual["id"]
     assert detached_actual["planned_block_id"] is None
-    assert client.get("/tasks").json()["items"][0]["allocation_completed"] == 0
+    assert "allocation_completed" not in client.get("/tasks").json()["items"][0]
 
     # Deleting Planned intent later must not erase the recorded Actual work.
     deleted = client.delete(f"/days/2099-01-04/blocks/{planned['id']}")
@@ -91,7 +83,7 @@ def test_deleting_paired_actual_makes_planned_incomplete_and_overlap_is_atomic(c
     deleted = client.delete(f"/days/2099-03-01/blocks/{actual['id']}")
     assert deleted.status_code == 200, deleted.text
     assert [block["id"] for block in deleted.json()["time_blocks"]] == [planned["id"]]
-    assert client.get("/tasks").json()["items"][0]["allocation_completed"] == 0
+    assert "allocation_completed" not in client.get("/tasks").json()["items"][0]
 
     overlapping = client.post(
         "/days/2099-03-01/blocks",
@@ -148,7 +140,7 @@ def test_task_completion_is_independent_and_ordinary_reopen_uses_prior_work_stat
     day = client.get("/days/2099-01-04").json()
     assert [block["lane"] for block in day["time_blocks"]] == ["planned"]
     assert day["time_blocks"][0]["task"]["status"] == "completed"
-    assert result["task"]["allocations"][0]["time_completed"] is False
+    assert "allocations" not in result["task"]
 
     reopened = client.post(f"/tasks/{task['id']}/reopen")
     assert reopened.status_code == 200, reopened.text
@@ -219,10 +211,8 @@ def test_parent_completion_removes_future_incomplete_time_and_undo_restores_exac
         child_future["id"],
     }
     assert result["task"]["status"] == "completed"
-    assert [child["status"] for child in result["task"]["subtasks"]] == [
-        "completed",
-        "completed",
-    ]
+    assert [child["checked"] for child in result["task"]["subtasks"]] == [False, True]
+    assert all(child["effectively_resolved"] for child in result["task"]["subtasks"])
     assert client.get("/days/2000-01-01").json()["time_blocks"][0]["id"] == past["id"]
     assert client.get("/days/2099-02-01").json()["time_blocks"] == []
     assert client.get("/days/2099-02-02").json()["time_blocks"] == []
@@ -238,8 +228,8 @@ def test_parent_completion_removes_future_incomplete_time_and_undo_restores_exac
     assert restored["ready_to_plan"] is True
     assert restored["is_blocked"] is True
     assert restored["blocking_reason"] == "External dependency"
-    assert [child["status"] for child in restored["subtasks"]] == ["open", "completed"]
-    assert restored["subtasks"][0]["ready_to_plan"] is True
+    assert [child["checked"] for child in restored["subtasks"]] == [False, True]
+    assert [child["effectively_resolved"] for child in restored["subtasks"]] == [False, True]
     assert client.get("/days/2099-02-01").json()["time_blocks"][0]["id"] == parent_future["id"]
     assert client.get("/days/2099-02-02").json()["time_blocks"][0]["id"] == child_future["id"]
 
@@ -266,7 +256,7 @@ def test_quota_tracker_completion_stays_derived_across_complete_reopen_and_undo(
     )
     assert created.status_code == 201, created.text
     tracker = client.get("/tasks").json()["items"][0]
-    session = tracker["subtasks"][0]
+    session = tracker["session_tasks"][0]
 
     rejected = client.post(
         f"/tasks/{tracker['id']}/complete",

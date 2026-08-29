@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.time_block import TimeBlockRead
+from app.schemas.time_block import ActualBlockDayProjectionRead, PlannedBlockRead, TimeBlockRead
 
 
 class PlanningPlacementCreate(BaseModel):
@@ -36,6 +36,10 @@ class DayRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     time_blocks: list[TimeBlockRead]
+    planned_blocks: list[PlannedBlockRead] = Field(default_factory=list)
+    actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)
+    planned_minutes: int = 0
+    actual_minutes: int = 0
     meta: DayMeta
 
 
@@ -51,6 +55,10 @@ class DayPreviewRead(BaseModel):
     end_hour: int = Field(..., ge=0, le=24)
     show_full_day: bool
     time_blocks: list[TimeBlockRead]
+    planned_blocks: list[PlannedBlockRead] = Field(default_factory=list)
+    actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)
+    planned_minutes: int = 0
+    actual_minutes: int = 0
     meta: DayMeta
 
 

@@ -10,7 +10,7 @@ from app.core.time import now_in_tz
 from app.models.battle_plan import Project, Task, TaskStatus
 from app.models.time_block import BlockLane, TimeBlock
 from app.models.task_type import TaskType
-from app.schemas.battle_plan import ProjectRead, TaskRead
+from app.schemas.battle_plan import ProjectRead, SubtaskRead, TaskOccurrenceIdentityRead, TaskRead
 
 TRASH_DAYS = 30
 
@@ -70,11 +70,13 @@ def _load_task(db: Session, task_id: int) -> Task:
         select(Task)
         .options(
             selectinload(Task.subtasks),
+            selectinload(Task.subtasks).selectinload(Task.occurrence),
             selectinload(Task.subtasks).selectinload(Task.time_blocks).selectinload(TimeBlock.day),
             selectinload(Task.subtasks)
             .selectinload(Task.time_blocks)
             .selectinload(TimeBlock.completion_actual),
             selectinload(Task.project),
+            selectinload(Task.occurrence),
             selectinload(Task.task_type),
             selectinload(Task.time_blocks).selectinload(TimeBlock.day),
             selectinload(Task.time_blocks)
@@ -115,16 +117,33 @@ def _to_read(
     include_children: bool = True,
     include_deleted_children: bool = False,
 ) -> TaskRead:
-    children = []
-    if include_children:
-        children = [
-            _to_read(child, settings, now, False)
-            for child in sorted(task.subtasks, key=lambda item: (item.position, item.id))
-            if child.deleted_at is None or include_deleted_children
+    visible_children = [
+        child
+        for child in sorted(task.subtasks, key=lambda item: (item.position, item.id))
+        if child.deleted_at is None or include_deleted_children
+    ] if include_children else []
+    is_quota_tracker = task.recurrence_kind == "quota_parent"
+    subtasks = (
+        [
+            SubtaskRead(
+                id=child.id,
+                parent_task_id=task.id,
+                title=child.title,
+                checked=child.checked,
+                effectively_resolved=(task.status == TaskStatus.completed or child.checked),
+                position=child.position,
+                created_at=child.created_at,
+                updated_at=child.updated_at,
+            )
+            for child in visible_children
         ]
-    planned_blocks = sorted(
-        (block for block in task.time_blocks if block.lane == BlockLane.planned),
-        key=lambda block: (block.day.date, block.start_minute, block.id),
+        if not is_quota_tracker
+        else []
+    )
+    session_tasks = (
+        [_to_read(child, settings, now, False) for child in visible_children]
+        if is_quota_tracker
+        else []
     )
     return TaskRead(
         id=task.id,
@@ -152,6 +171,8 @@ def _to_read(
         is_blocked=task.is_blocked,
         blocking_reason=task.blocking_reason,
         status=task.status,
+        completed_at=task.completed_at,
+        version=task.version,
         urgency=task.urgency,
         importance=task.importance,
         deadline_date=task.deadline_date,
@@ -171,17 +192,15 @@ def _to_read(
                 if block.lane == BlockLane.planned
             }
         ),
-        allocation_total=len(planned_blocks),
-        allocation_completed=sum(block.completion_actual is not None for block in planned_blocks),
-        allocations=[
-            {
-                "block_id": block.id,
-                "date": block.day.date,
-                "start_minute": block.start_minute,
-                "end_minute": block.end_minute,
-                "time_completed": block.completion_actual is not None,
-            }
-            for block in planned_blocks
-        ],
-        subtasks=children,
+        occurrence=(
+            TaskOccurrenceIdentityRead(
+                id=task.occurrence.id,
+                recurring_task_series_id=task.occurrence.template_id,
+                occurrence_key=task.occurrence.occurrence_key,
+            )
+            if task.occurrence is not None
+            else None
+        ),
+        subtasks=subtasks,
+        session_tasks=session_tasks,
     )

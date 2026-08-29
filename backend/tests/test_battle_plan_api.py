@@ -29,7 +29,7 @@ def create_block(client, date, task_id, task_type_id, lane="planned", start_minu
     assert response.status_code == 200, response.text
 
 
-def test_task_responses_include_unique_sorted_planned_dates_for_roots_and_subtasks(client):
+def test_task_responses_include_planned_dates_for_tasks_but_not_subtask_lifecycle(client):
     task_type = client.post("/task-types", json={"name": "Focus"}).json()
     parent = create_task(client, "Parent", task_type_id=task_type["id"])
     child = create_task(
@@ -47,11 +47,11 @@ def test_task_responses_include_unique_sorted_planned_dates_for_roots_and_subtas
 
     rows = client.get("/tasks").json()["items"]
     assert rows[0]["planned_dates"] == ["2026-08-22", "2026-08-24"]
-    assert rows[0]["subtasks"][0]["planned_dates"] == ["2026-08-23"]
+    assert "planned_dates" not in rows[0]["subtasks"][0]
 
     patched = client.patch(f"/tasks/{parent['id']}", json={"description": "Updated"})
     assert patched.json()["planned_dates"] == ["2026-08-22", "2026-08-24"]
-    assert patched.json()["subtasks"][0]["planned_dates"] == ["2026-08-23"]
+    assert "planned_dates" not in patched.json()["subtasks"][0]
 
     trashed = client.delete(f"/tasks/{parent['id']}")
     assert trashed.json()["planned_dates"] == ["2026-08-22", "2026-08-24"]
@@ -103,7 +103,7 @@ def test_subtasks_inherit_project_and_cannot_nest(client):
     assert moved.status_code == 200
     rows = client.get("/tasks").json()["items"]
     assert rows[0]["project_id"] is None
-    assert rows[0]["subtasks"][0]["project_id"] is None
+    assert "project_id" not in rows[0]["subtasks"][0]
 
 
 def test_subtask_completion_does_not_complete_parent(client):
@@ -112,7 +112,8 @@ def test_subtask_completion_does_not_complete_parent(client):
     assert client.post(f"/tasks/{child['id']}/complete", json={"planned_time": "keep"}).status_code == 200
     refreshed = client.get("/tasks").json()["items"][0]
     assert refreshed["status"] == "open"
-    assert refreshed["subtasks"][0]["status"] == "completed"
+    assert "status" not in refreshed["subtasks"][0]
+    assert refreshed["subtasks"][0]["checked"] is False
 
 
 def test_planning_readiness_is_persistent_and_separate_from_work_status(client):
