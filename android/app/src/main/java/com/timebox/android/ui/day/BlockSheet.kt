@@ -76,6 +76,9 @@ fun BlockSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        // ModalBottomSheet is hosted at the window level, outside the Day screen's
+        // weighted content bounds. Keep its actions above Timebox's own bottom nav.
+        modifier = Modifier.padding(bottom = 96.dp),
         containerColor = colors.sheet,
         contentColor = colors.on,
         scrimColor = colors.scrim,
