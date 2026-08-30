@@ -11,7 +11,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -282,6 +281,7 @@ fun TimeboxApp(
                             onReturnPlanningDraft = dayViewModel::returnPlanningDraft,
                             onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,
                             onRetryReadyTasks = dayViewModel::refreshReadyToPlan,
+                            onOpenWorkMode = dayViewModel::startWorkMode,
                         )
                     }
                     composable(AppRoutes.Chronicle) {
@@ -571,19 +571,6 @@ fun TimeboxApp(
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
                 }
-            }
-        }
-
-        if (!dayState.workModeVisible) {
-            TextButton(
-                onClick = {
-                    dayViewModel.startWorkMode()
-                    val target = AppRoutes.day(dayState.today ?: dayState.date)
-                    navController.navigate(target) { launchSingleTop = true }
-                },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 92.dp),
-            ) {
-                Text(if (dayState.workMode != null || dayState.activeActualAvailable) "Work Mode" else "Start Work Mode")
             }
         }
 

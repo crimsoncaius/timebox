@@ -13,7 +13,10 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.ui.components.TimeboxBottomNav
 import com.timebox.android.ui.components.TimeboxTab
+import com.timebox.android.ui.theme.DarkTimeboxColors
+import com.timebox.android.ui.theme.LightTimeboxColors
 import com.timebox.android.ui.theme.TimeboxTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -21,6 +24,15 @@ import java.time.LocalDate
 
 class BlockSheetTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun darkBlockSheetUsesOpaqueWarmSurfaceWithoutChangingLightTreatment() {
+        val darkSurface = blockSheetContainerColor(DarkTimeboxColors)
+
+        assertEquals(DarkTimeboxColors.low, darkSurface)
+        assertEquals(1f, darkSurface.alpha)
+        assertEquals(LightTimeboxColors.sheet, blockSheetContainerColor(LightTimeboxColors))
+    }
 
     @Test
     fun deleteActionStaysAboveBottomNavigation() {

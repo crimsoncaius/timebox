@@ -46,6 +46,7 @@ import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.duration
 import com.timebox.android.ui.hhmm
+import com.timebox.android.ui.theme.TimeboxColors
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 
@@ -78,7 +79,7 @@ fun BlockSheet(
         // ModalBottomSheet is hosted at the window level, outside the Day screen's
         // weighted content bounds. Keep its actions above Timebox's own bottom nav.
         modifier = Modifier.padding(bottom = 96.dp),
-        containerColor = colors.sheet,
+        containerColor = blockSheetContainerColor(colors),
         contentColor = colors.on,
         scrimColor = colors.scrim,
         shape = TimeboxShapes.sheet,
@@ -269,6 +270,9 @@ fun BlockSheet(
     }
 
 }
+
+internal fun blockSheetContainerColor(colors: TimeboxColors) =
+    if (colors.isDark) colors.low else colors.sheet
 
 @Composable
 private fun SheetLabel(text: String) {

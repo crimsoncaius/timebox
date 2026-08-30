@@ -260,6 +260,7 @@ class DayCalendarHeaderTest {
     @Test
     fun titleLedHeaderSeparatesDateNavigationPlanningAndCalendarMode() {
         var planning = false
+        var workModeOpened = false
 
         showDay(
             state = DayUiState(
@@ -267,6 +268,7 @@ class DayCalendarHeaderTest {
                 today = LocalDate.of(2026, 8, 30),
             ),
             onSetPlanningMode = { planning = it },
+            onOpenWorkMode = { workModeOpened = true },
         )
 
         compose.onNodeWithText("DAY").assertIsDisplayed()
@@ -274,12 +276,19 @@ class DayCalendarHeaderTest {
         compose.onNodeWithText("Today").assertIsDisplayed()
         compose.onNodeWithText("Week").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithText("Month").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Work Mode").assertIsDisplayed().performClick()
+        val workModeBounds = compose.onNodeWithTag("work-mode-action").fetchSemanticsNode().boundsInRoot
+        val planningBounds = compose.onNodeWithTag("planning-mode-action").fetchSemanticsNode().boundsInRoot
+        assertTrue(workModeBounds.right <= planningBounds.left)
         compose.onNodeWithText("Plan").performClick()
         compose.onNodeWithContentDescription("Day review").assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Toggle theme").assertDoesNotExist()
 
-        compose.runOnIdle { assertTrue(planning) }
+        compose.runOnIdle {
+            assertTrue(workModeOpened)
+            assertTrue(planning)
+        }
     }
 
     @Test
@@ -298,6 +307,7 @@ class DayCalendarHeaderTest {
         compose.onNodeWithText("Month").performClick()
         compose.onNodeWithText("August 2026").assertIsDisplayed()
         compose.onNodeWithText("Month").assertIsSelected()
+        compose.onNodeWithContentDescription("Work Mode").assertIsDisplayed()
         compose.onNodeWithText("Done").performClick()
         compose.runOnIdle { assertTrue(committed) }
     }
@@ -308,6 +318,7 @@ class DayCalendarHeaderTest {
         onNavigateToday: (LocalDate) -> Unit = {},
         onSetPlanningMode: (Boolean) -> Unit = {},
         onCommitPlanningMode: () -> Unit = {},
+        onOpenWorkMode: () -> Unit = {},
     ) {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
@@ -323,6 +334,7 @@ class DayCalendarHeaderTest {
                     onReopenSelectedTask = {}, onOpenLinkedTask = {},
                     onSetPlanningMode = onSetPlanningMode, onPlanTask = { _, _ -> },
                     onCommitPlanningMode = onCommitPlanningMode,
+                    onOpenWorkMode = onOpenWorkMode,
                     onArmAccessibleTask = {}, onRetryReadyTasks = {},
                 )
             }

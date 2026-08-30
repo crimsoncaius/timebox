@@ -1,11 +1,15 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
 import com.timebox.android.data.PriorityLevel
@@ -21,6 +25,32 @@ import org.junit.Test
 
 class WorkModeScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun headerStartsBelowTheStatusBar() {
+        var contentInsetTopPx = -1f
+        compose.setContent {
+            val density = LocalDensity.current
+            SideEffect { contentInsetTopPx = with(density) { 64.dp.toPx() } }
+            TimeboxTheme(darkTheme = false) {
+                WorkModeScreen(
+                    workMode(current = block(), task = task()),
+                    onToggleSubtask = {},
+                    onLeave = {},
+                    onExit = {},
+                    contentInsets = WindowInsets(top = 64.dp),
+                )
+            }
+        }
+
+        val headerTop = compose.onNodeWithText("WORK MODE").fetchSemanticsNode().boundsInRoot.top
+        compose.runOnIdle {
+            assertTrue(
+                "Work Mode header top ($headerTop) must be below content inset ($contentInsetTopPx)",
+                headerTop >= contentInsetTopPx,
+            )
+        }
+    }
 
     @Test
     fun taskContentShowsContextInteractiveSubtasksAndOnlyExit() {

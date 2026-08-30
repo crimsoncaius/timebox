@@ -47,7 +47,7 @@ def _actual_select(actual_block_id: int, *, for_update: bool = False):
             TimeBlock.start_at.is_not(None),
         )
     )
-    return statement.with_for_update() if for_update else statement
+    return statement.with_for_update(of=TimeBlock) if for_update else statement
 
 
 def _task_select(task_id: int, *, for_update: bool = False):

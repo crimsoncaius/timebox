@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -78,6 +79,7 @@ internal fun DayCalendarHeader(
     today: LocalDate?,
     isPlanningMode: Boolean,
     planningActionEnabled: Boolean = true,
+    onOpenWorkMode: () -> Unit,
     onSetPlanningMode: (Boolean) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onNavigateToday: (LocalDate) -> Unit,
@@ -120,11 +122,17 @@ internal fun DayCalendarHeader(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            PlanningModeAction(
-                isPlanningMode = isPlanningMode,
-                enabled = planningActionEnabled,
-                onClick = { onSetPlanningMode(!isPlanningMode) },
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                WorkModeAction(onClick = onOpenWorkMode)
+                PlanningModeAction(
+                    isPlanningMode = isPlanningMode,
+                    enabled = planningActionEnabled,
+                    onClick = { onSetPlanningMode(!isPlanningMode) },
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -176,6 +184,36 @@ internal fun DayCalendarHeader(
 }
 
 @Composable
+private fun WorkModeAction(onClick: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    val shape = RoundedCornerShape(percent = 50)
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .testTag("work-mode-action")
+            .clip(shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Work Mode" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(shape)
+                .border(1.dp, colors.outlineVariant, shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.PlayArrow,
+                contentDescription = null,
+                tint = colors.onVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun TodayAction(enabled: Boolean, onClick: () -> Unit) {
     val colors = TimeboxTheme.colors
     val contentColor = if (enabled) {
@@ -218,6 +256,7 @@ private fun PlanningModeAction(isPlanningMode: Boolean, enabled: Boolean, onClic
     Box(
         modifier = Modifier
             .height(48.dp)
+            .testTag("planning-mode-action")
             .clip(shape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .graphicsLayer { alpha = if (enabled) 1f else 0.62f },

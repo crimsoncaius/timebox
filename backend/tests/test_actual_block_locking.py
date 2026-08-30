@@ -33,3 +33,11 @@ def test_correspondence_mutation_selects_lock_rows_on_postgresql():
 
     for statement in statements:
         assert "FOR UPDATE" in _postgresql_sql(statement)
+
+
+def test_actual_block_select_locks_only_the_time_block_row_on_postgresql():
+    sql = _postgresql_sql(
+        actual_block_service._actual_select(22, for_update=True)
+    )
+
+    assert "FOR UPDATE OF time_blocks" in sql

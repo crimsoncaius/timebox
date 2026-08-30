@@ -71,6 +71,7 @@ fun DayScreen(
     onArmAccessibleTask: (Int?) -> Unit,
     onRetryReadyTasks: () -> Unit,
     onNavigateToday: (LocalDate) -> Unit = {},
+    onOpenWorkMode: () -> Unit = {},
 ) {
     BackHandler(enabled = state.isPlanningMode) {
         if (!state.saving) onCancelPlanningMode()
@@ -82,6 +83,7 @@ fun DayScreen(
             today = state.today,
             isPlanningMode = state.isPlanningMode,
             planningActionEnabled = !state.saving,
+            onOpenWorkMode = onOpenWorkMode,
             onSetPlanningMode = { enabled ->
                 if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()
             },

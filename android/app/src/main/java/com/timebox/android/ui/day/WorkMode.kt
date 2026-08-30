@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -33,6 +36,7 @@ fun WorkModeScreen(
     onToggleSubtask: (Subtask) -> Unit,
     onLeave: () -> Unit,
     onExit: () -> Unit,
+    contentInsets: WindowInsets = WindowInsets.statusBars,
 ) {
     BackHandler(enabled = !state.saving, onBack = onLeave)
     val colors = TimeboxTheme.colors
@@ -41,7 +45,7 @@ fun WorkModeScreen(
     val task = state.task
 
     Column(
-        Modifier.fillMaxSize().background(colors.bg).navigationBarsPadding()
+        Modifier.fillMaxSize().background(colors.bg).windowInsetsPadding(contentInsets).navigationBarsPadding()
             .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 18.dp)
             .testTag("work-mode"),
         verticalArrangement = Arrangement.spacedBy(16.dp),
