@@ -1,5 +1,7 @@
 package com.timebox.android.data
 
+import com.timebox.android.data.remote.ActualBlockDayProjectionDto
+import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.DayDto
 import com.timebox.android.data.remote.DayListItemDto
 import com.timebox.android.data.remote.DayPreviewDto
@@ -47,11 +49,32 @@ data class TimeBlock(
     val task: LinkedTask?,
     val note: String?,
     val plannedBlockId: Int?,
+    val actualBlockId: Int? = null,
     val startMinute: Int,
     val endMinute: Int,
 ) {
     val durationMinutes: Int get() = endMinute - startMinute
 }
+
+data class ActualBlock(
+    val id: Int,
+    val taskTypeId: Int,
+    val taskTypeName: String,
+    val taskId: Int?,
+    val task: LinkedTask?,
+    val note: String?,
+    val plannedBlockId: Int?,
+    val startAt: Instant,
+    val endAt: Instant?,
+)
+
+data class ActualBlockDayProjection(
+    val actualBlock: ActualBlock,
+    val date: LocalDate,
+    val startMinute: Int,
+    val endMinute: Int,
+    val durationMinutes: Int,
+)
 
 data class LinkedTask(
     val id: Int,
@@ -70,6 +93,7 @@ data class Day(
     val endHour: Int,
     val showFullDay: Boolean,
     val blocks: List<TimeBlock>,
+    val actualBlocks: List<ActualBlockDayProjection> = emptyList(),
     val timezone: String,
     val today: LocalDate,
     /** Minutes past midnight in the app timezone, or null when the clock is unknown. */
@@ -168,6 +192,62 @@ fun TimeBlockDto.toModel() = TimeBlock(
     },
     note = note,
     plannedBlockId = plannedBlockId,
+    actualBlockId = actualBlockId,
+    startMinute = startMinute,
+    endMinute = endMinute,
+)
+
+fun ActualBlockDto.toModel() = ActualBlock(
+    id = id,
+    taskTypeId = taskTypeId,
+    taskTypeName = taskType.name,
+    taskId = taskId,
+    task = task?.let {
+        LinkedTask(
+            id = it.id,
+            title = it.title,
+            status = TaskStatus.fromWire(it.status),
+            taskTypeId = it.taskTypeId,
+            archivedAt = it.archivedAt?.let(::parseInstant),
+            deletedAt = it.deletedAt?.let(::parseInstant),
+        )
+    },
+    note = note,
+    plannedBlockId = plannedBlockId,
+    startAt = parseInstant(startAt),
+    endAt = endAt?.let(::parseInstant),
+)
+
+fun ActualBlockDayProjectionDto.toModel() = ActualBlockDayProjection(
+    actualBlock = actualBlock.toModel(),
+    date = LocalDate.parse(date),
+    startMinute = startMinute,
+    endMinute = endMinute,
+    durationMinutes = durationMinutes,
+)
+
+private fun ActualBlockDayProjectionDto.toTimelineBlock() = TimeBlock(
+    // Planned and Actual Blocks use independent database sequences. Keep their
+    // UI identities disjoint so an Actual Block cannot select a Planned Block
+    // that happens to have the same authoritative id.
+    id = -actualBlock.id,
+    lane = Lane.Actual,
+    taskTypeId = actualBlock.taskTypeId,
+    taskTypeName = actualBlock.taskType.name,
+    taskId = actualBlock.taskId,
+    task = actualBlock.task?.let {
+        LinkedTask(
+            id = it.id,
+            title = it.title,
+            status = TaskStatus.fromWire(it.status),
+            taskTypeId = it.taskTypeId,
+            archivedAt = it.archivedAt?.let(::parseInstant),
+            deletedAt = it.deletedAt?.let(::parseInstant),
+        )
+    },
+    note = actualBlock.note,
+    plannedBlockId = actualBlock.plannedBlockId,
+    actualBlockId = actualBlock.id,
     startMinute = startMinute,
     endMinute = endMinute,
 )
@@ -177,7 +257,9 @@ fun DayDto.toModel() = Day(
     startHour = startHour,
     endHour = endHour,
     showFullDay = showFullDay,
-    blocks = timeBlocks.map { it.toModel() },
+    blocks = timeBlocks.filter { it.lane == Lane.Planned.wire }.map { it.toModel() } +
+        actualBlocks.map { it.toTimelineBlock() },
+    actualBlocks = actualBlocks.map { it.toModel() },
     timezone = meta.timezone,
     today = LocalDate.parse(meta.today),
     serverNowMinute = parseMinuteOfDay(meta.serverNowIso),
@@ -188,7 +270,9 @@ fun DayPreviewDto.toModel() = Day(
     startHour = startHour,
     endHour = endHour,
     showFullDay = showFullDay,
-    blocks = timeBlocks.map { it.toModel() },
+    blocks = timeBlocks.filter { it.lane == Lane.Planned.wire }.map { it.toModel() } +
+        actualBlocks.map { it.toTimelineBlock() },
+    actualBlocks = actualBlocks.map { it.toModel() },
     timezone = meta.timezone,
     today = LocalDate.parse(meta.today),
     serverNowMinute = parseMinuteOfDay(meta.serverNowIso),

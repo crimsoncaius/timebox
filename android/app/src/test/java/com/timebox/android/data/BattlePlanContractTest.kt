@@ -39,16 +39,12 @@ class BattlePlanContractTest {
                 "task_type_id":4,"task_type":{"id":4,"name":"coding"},
                 "recurring_template_id":7,"recurring_template_title":"Weekly planning","occurrence_key":"2026-08-17","recurrence_kind":"scheduled",
                 "quota_period_start":"2026-08-17","quota_period_end":"2026-08-23","expected_sessions":3,"session_index":1,"quota_completed":0,
-                "title":"Plan","description":"Details","ready_to_plan":true,"is_blocked":true,"blocking_reason":"Waiting for legal","status":"in_progress","urgency":"high","importance":"medium",
+                "title":"Plan","description":"Details","ready_to_plan":true,"is_blocked":true,"blocking_reason":"Waiting for legal","status":"in_progress","completed_at":null,"version":4,"urgency":"high","importance":"medium",
                 "deadline_date":null,"deadline_at":"2026-08-20T09:00:00+08:00","reminder_at":"2026-08-20T08:00:00+08:00","reminder_delivered_at":null,
                 "position":2,"archived_at":null,"deleted_at":null,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T02:00:00Z","overdue":false,
                 "planned_dates":["2026-08-19","bad","2026-08-17","2026-08-17"],
-                "allocation_total":2,"allocation_completed":1,
-                "allocations":[
-                  {"block_id":31,"date":"2026-08-17","start_minute":540,"end_minute":570,"time_completed":true},
-                  {"block_id":32,"date":"2026-08-19","start_minute":600,"end_minute":660,"time_completed":false}
-                ],
-                "subtasks":[{"id":11,"parent_id":10,"parent_title":"Plan","project_id":2,"task_type_id":null,"title":"Outline","description":"","ready_to_plan":false,"status":"open","position":0,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T01:00:00Z","planned_dates":["2026-08-18"],"subtasks":[]}]
+                "subtasks":[{"id":11,"parent_task_id":10,"title":"Outline","checked":false,"effectively_resolved":false,"position":0,"created_at":"2026-08-17T01:00:00Z","updated_at":"2026-08-17T01:00:00Z"}],
+                "session_tasks":[]
               }],"timezone":"Asia/Singapore","server_now_iso":"2026-08-17T12:00:00+08:00"
             }""",
         ).toModel()
@@ -61,12 +57,9 @@ class BattlePlanContractTest {
         assertEquals(LocalDate.parse("2026-08-17"), task.quotaPeriodStart)
         assertEquals(Instant.parse("2026-08-20T01:00:00Z"), task.deadlineAt)
         assertEquals("Outline", task.subtasks.single().title)
+        assertEquals(false, task.subtasks.single().checked)
+        assertEquals(4, task.version)
         assertEquals(listOf(LocalDate.parse("2026-08-17"), LocalDate.parse("2026-08-19")), task.plannedDates)
-        assertEquals(2, task.allocationTotal)
-        assertEquals(1, task.allocationCompleted)
-        assertEquals(31, task.allocations.first().blockId)
-        assertTrue(task.allocations.first().timeCompleted)
-        assertEquals(listOf(LocalDate.parse("2026-08-18")), task.subtasks.single().plannedDates)
         assertEquals("Asia/Singapore", dto.timezone)
     }
 

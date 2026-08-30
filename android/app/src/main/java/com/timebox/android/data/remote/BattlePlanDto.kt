@@ -46,6 +46,8 @@ data class BattleTaskDto(
     @SerialName("is_blocked") val isBlocked: Boolean = false,
     @SerialName("blocking_reason") val blockingReason: String? = null,
     val status: String,
+    @SerialName("completed_at") val completedAt: String? = null,
+    val version: Int = 1,
     val urgency: String? = null,
     val importance: String? = null,
     @SerialName("deadline_date") val deadlineDate: String? = null,
@@ -59,19 +61,20 @@ data class BattleTaskDto(
     @SerialName("updated_at") val updatedAt: String,
     val overdue: Boolean = false,
     @SerialName("planned_dates") val plannedDates: List<String> = emptyList(),
-    @SerialName("allocation_total") val allocationTotal: Int = 0,
-    @SerialName("allocation_completed") val allocationCompleted: Int = 0,
-    val allocations: List<TaskAllocationDto> = emptyList(),
-    val subtasks: List<BattleTaskDto> = emptyList(),
+    val subtasks: List<SubtaskDto> = emptyList(),
+    @SerialName("session_tasks") val sessionTasks: List<BattleTaskDto> = emptyList(),
 )
 
 @Serializable
-data class TaskAllocationDto(
-    @SerialName("block_id") val blockId: Int,
-    val date: String,
-    @SerialName("start_minute") val startMinute: Int,
-    @SerialName("end_minute") val endMinute: Int,
-    @SerialName("time_completed") val timeCompleted: Boolean,
+data class SubtaskDto(
+    val id: Int,
+    @SerialName("parent_task_id") val parentTaskId: Int,
+    val title: String,
+    val checked: Boolean,
+    @SerialName("effectively_resolved") val effectivelyResolved: Boolean,
+    val position: Int,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
 )
 
 @Serializable
@@ -111,9 +114,6 @@ data class TaskReorderDto(val placements: List<TaskPlacementDto>)
 
 @Serializable
 data class TaskIdsDto(@SerialName("task_ids") val taskIds: List<Int>)
-
-@Serializable
-data class TaskCompletionRequestDto(@SerialName("planned_time") val plannedTime: String)
 
 @Serializable
 data class TaskCompletionUndoDto(@SerialName("undo_token") val undoToken: String)

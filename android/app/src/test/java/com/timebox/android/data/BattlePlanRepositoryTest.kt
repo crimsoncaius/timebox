@@ -1,6 +1,7 @@
 package com.timebox.android.data
 
 import com.timebox.android.data.remote.BattleTaskDto
+import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.BattleTaskListDto
 import com.timebox.android.data.remote.DueReminderDto
 import com.timebox.android.data.remote.DayDto
@@ -12,12 +13,14 @@ import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.TimeboxApi
 import com.timebox.android.data.remote.TaskCompletionResponseDto
+import com.timebox.android.data.remote.SubtaskDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
 import java.time.LocalDate
+import java.time.Instant
 
 class BattlePlanRepositoryTest {
     private val calls = mutableListOf<String>()
@@ -33,7 +36,9 @@ class BattlePlanRepositoryTest {
         repository.listBattleTasks(TaskCollection.Active).getOrThrow()
         repository.createBattleTask(BattleTaskCreate("Task")).getOrThrow()
         repository.patchBattleTask(10, BattleTaskPatch(projectId = PatchField.clear())).getOrThrow()
-        repository.completeBattleTask(10, removePlannedTime = false).getOrThrow()
+        repository.completeBattleTask(10).getOrThrow()
+        repository.checkSubtask(11).getOrThrow()
+        repository.uncheckSubtask(11).getOrThrow()
         repository.reopenBattleTask(10).getOrThrow()
         repository.undoBattleTaskCompletion(10, "undo-token").getOrThrow()
         repository.reorderBattleTasks(listOf(TaskPlacement(10, TaskStatus.Open, 0))).getOrThrow()
@@ -45,6 +50,18 @@ class BattlePlanRepositoryTest {
         repository.commitPlan(
             listOf(PlanningCommitPlacement(LocalDate.parse("2026-08-20"), 10, 3, 540, 570))
         ).getOrThrow()
+        repository.startActualBlock(taskId = 10, plannedBlockId = 31).getOrThrow()
+        repository.createActualBlock(
+            startAt = Instant.parse("2026-08-20T01:00:00Z"),
+            endAt = Instant.parse("2026-08-20T02:00:00Z"),
+            taskTypeId = 3,
+            taskId = 10,
+        ).getOrThrow()
+        repository.getActualBlock(44).getOrThrow()
+        repository.getActiveActualBlock().getOrThrow()
+        repository.patchActualBlock(44, startAt = Instant.parse("2026-08-20T01:01:00Z")).getOrThrow()
+        repository.finishActualBlock(44).getOrThrow()
+        repository.deleteActualBlock(44).getOrThrow()
 
         repository.listDueReminders().getOrThrow()
         repository.acknowledgeReminder(10).getOrThrow()
@@ -69,9 +86,12 @@ class BattlePlanRepositoryTest {
                 "listProjects", "createProject", "patchProject", "deleteProject",
                 "listBattleTasks", "createBattleTask", "patchBattleTask", "reorderBattleTasks",
                 "completeBattleTask", "reopenBattleTask", "undoBattleTaskCompletion",
+                "checkSubtask", "uncheckSubtask",
                 "archiveCompletedBattleTasks", "unarchiveBattleTask", "trashBattleTask",
                 "restoreBattleTask", "permanentlyDeleteBattleTask", "listDueReminders",
                 "commitPlan",
+                "startActualBlock", "createActualBlock", "getActualBlock", "getActiveActualBlock",
+                "patchActualBlock", "finishActualBlock", "deleteActualBlock",
                 "acknowledgeReminder", "previewRecurrence", "listRecurringTemplates",
                 "createRecurringTemplate", "getRecurringTemplate", "patchRecurringTemplate",
                 "pauseRecurringTemplate", "resumeRecurringTemplate", "endRecurringTemplate",
@@ -79,7 +99,7 @@ class BattlePlanRepositoryTest {
             ),
             calls.toSet(),
         )
-        assertEquals(28, calls.size)
+        assertEquals(37, calls.size)
     }
 
     @Test
@@ -97,6 +117,8 @@ class BattlePlanRepositoryTest {
         val project = projectDto()
         val task = taskDto(project)
         val template = templateDto()
+        val actual = actualDto()
+        val subtask = SubtaskDto(11, 10, "Check contract", false, false, 0, "2026-08-17T00:00:00Z", "2026-08-17T00:00:00Z")
         val handler = java.lang.reflect.InvocationHandler { _, method, _ ->
             calls += method.name
             when (method.name) {
@@ -108,6 +130,9 @@ class BattlePlanRepositoryTest {
                 "createBattleTask", "patchBattleTask", "trashBattleTask", "reopenBattleTask",
                 "undoBattleTaskCompletion" -> task
                 "completeBattleTask" -> TaskCompletionResponseDto(task, "undo-token", emptyList())
+                "checkSubtask", "uncheckSubtask" -> subtask
+                "startActualBlock", "createActualBlock", "getActualBlock", "getActiveActualBlock",
+                "patchActualBlock", "finishActualBlock" -> actual
                 "commitPlan" -> PlanningCommitResponseDto(
                     listOf(
                         DayDto(
@@ -171,5 +196,16 @@ class BattlePlanRepositoryTest {
         createdAt = "2026-08-17T00:00:00Z",
         updatedAt = "2026-08-17T00:00:00Z",
         cadence = "Daily",
+    )
+
+    private fun actualDto() = ActualBlockDto(
+        id = 44,
+        taskTypeId = 3,
+        taskType = com.timebox.android.data.remote.TaskTypeDto(3, "coding"),
+        taskId = 10,
+        startAt = "2026-08-20T01:00:00Z",
+        endAt = "2026-08-20T02:00:00Z",
+        createdAt = "2026-08-20T01:00:00Z",
+        updatedAt = "2026-08-20T02:00:00Z",
     )
 }

@@ -10,6 +10,7 @@ import com.timebox.android.data.remote.RecurrenceWindowDto
 import com.timebox.android.data.remote.RecurringChecklistItemDto
 import com.timebox.android.data.remote.RecurringTaskLinkDto
 import com.timebox.android.data.remote.RecurringTemplateDto
+import com.timebox.android.data.remote.SubtaskDto
 import java.time.Instant
 import java.time.LocalDate
 
@@ -93,6 +94,8 @@ data class BattleTask(
     val description: String,
     val readyToPlan: Boolean,
     val status: TaskStatus,
+    val completedAt: Instant? = null,
+    val version: Int = 1,
     val urgency: PriorityLevel?,
     val importance: PriorityLevel?,
     val deadlineDate: LocalDate?,
@@ -105,21 +108,22 @@ data class BattleTask(
     val createdAt: Instant,
     val updatedAt: Instant,
     val overdue: Boolean,
-    val subtasks: List<BattleTask>,
+    val subtasks: List<Subtask>,
+    val sessionTasks: List<BattleTask> = emptyList(),
     val plannedDates: List<LocalDate> = emptyList(),
-    val allocationTotal: Int = 0,
-    val allocationCompleted: Int = 0,
-    val allocations: List<TaskAllocation> = emptyList(),
     val isBlocked: Boolean = false,
     val blockingReason: String? = null,
 )
 
-data class TaskAllocation(
-    val blockId: Int,
-    val date: LocalDate,
-    val startMinute: Int,
-    val endMinute: Int,
-    val timeCompleted: Boolean,
+data class Subtask(
+    val id: Int,
+    val parentTaskId: Int,
+    val title: String,
+    val checked: Boolean,
+    val effectivelyResolved: Boolean,
+    val position: Int,
+    val createdAt: Instant,
+    val updatedAt: Instant,
 )
 
 data class BattleTaskList(
@@ -291,6 +295,7 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         sessionIndex = sessionIndex, quotaCompleted = quotaCompleted, title = title,
         description = description, readyToPlan = readyToPlan,
         status = if (legacyStatus == TaskStatus.Blocked) TaskStatus.Open else legacyStatus,
+        completedAt = completedAt?.let(::parseInstant), version = version,
         urgency = urgency?.let(PriorityLevel::fromWire), importance = importance?.let(PriorityLevel::fromWire),
         deadlineDate = deadlineDate?.let(LocalDate::parse), deadlineAt = deadlineAt?.let(::parseInstant),
         reminderAt = reminderAt?.let(::parseInstant), reminderDeliveredAt = reminderDeliveredAt?.let(::parseInstant),
@@ -298,22 +303,23 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         createdAt = parseInstant(createdAt), updatedAt = parseInstant(updatedAt), overdue = overdue,
         plannedDates = plannedDates.mapNotNull { value -> runCatching { LocalDate.parse(value) }.getOrNull() }
             .distinct().sorted(),
-        allocationTotal = allocationTotal,
-        allocationCompleted = allocationCompleted,
-        allocations = allocations.map {
-            TaskAllocation(
-                blockId = it.blockId,
-                date = LocalDate.parse(it.date),
-                startMinute = it.startMinute,
-                endMinute = it.endMinute,
-                timeCompleted = it.timeCompleted,
-            )
-        },
         subtasks = subtasks.map { it.toModel() },
+        sessionTasks = sessionTasks.map { it.toModel() },
         isBlocked = isBlocked || legacyStatus == TaskStatus.Blocked,
         blockingReason = blockingReason,
     )
 }
+
+internal fun SubtaskDto.toModel() = Subtask(
+    id = id,
+    parentTaskId = parentTaskId,
+    title = title,
+    checked = checked,
+    effectivelyResolved = effectivelyResolved,
+    position = position,
+    createdAt = parseInstant(createdAt),
+    updatedAt = parseInstant(updatedAt),
+)
 
 internal fun BattleTaskListDto.toModel() = BattleTaskList(items.map { it.toModel() }, timezone, parseInstant(serverNowIso))
 internal fun DueReminderDto.toModel() = DueReminder(id, title, deadlineDate?.let(LocalDate::parse), deadlineAt?.let(::parseInstant), parseInstant(reminderAt))

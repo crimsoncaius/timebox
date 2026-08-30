@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -47,6 +48,7 @@ import com.timebox.android.ui.components.TimeboxTab
 import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayViewModel
+import com.timebox.android.ui.day.WorkModeScreen
 import com.timebox.android.ui.settings.SettingsScreen
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -218,7 +220,11 @@ fun TimeboxApp(
     val colors = TimeboxTheme.colors
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
-        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        Column(
+            modifier = Modifier.fillMaxSize().imePadding().then(
+                if (dayState.workMode != null) Modifier.clearAndSetSemantics { } else Modifier
+            )
+        ) {
             if (route != AppRoutes.DayPattern) {
                 TimeboxTopBar(
                     kicker = routeKicker(route),
@@ -259,11 +265,8 @@ fun TimeboxApp(
                             onCreateType = dayViewModel::createTaskTypeAndChoose,
                             onNoteChange = dayViewModel::onNoteChange,
                             onDeleteSelected = dayViewModel::deleteSelected,
-                            onCompleteSelected = dayViewModel::completeSelected,
-                            onReverseSelectedCompletion = dayViewModel::reverseSelectedCompletion,
-                            onRequestSelectedTaskCompletion = dayViewModel::requestSelectedTaskCompletion,
+                            onStartWorkMode = dayViewModel::startSelectedWorkMode,
                             onConfirmSelectedTaskCompletion = dayViewModel::completeSelectedTask,
-                            onDismissTaskCompletion = dayViewModel::dismissTaskCompletionPrompt,
                             onReopenSelectedTask = dayViewModel::reopenSelectedTask,
                             onOpenLinkedTask = { taskId ->
                                 dayViewModel.closeSheet()
@@ -324,8 +327,6 @@ fun TimeboxApp(
                             onRequestPermanentDelete = battlePlanViewModel::requestPermanentDelete,
                             onDismissPermanentDelete = battlePlanViewModel::dismissPermanentDelete,
                             onConfirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
-                            onDismissCompletion = battlePlanViewModel::dismissPendingCompletion,
-                            onConfirmCompletion = battlePlanViewModel::confirmPendingCompletion,
                         )
                     }
                     composable(
@@ -372,6 +373,7 @@ fun TimeboxApp(
                                 battlePlanViewModel.load(showSpinner = false)
                                 navController.popBackStack()
                             },
+                            onReopen = taskDetailViewModel::reopenTask,
                             onSave = taskDetailViewModel::save,
                         )
                     }
@@ -577,6 +579,19 @@ fun TimeboxApp(
             ) {
                 Text(data.visuals.message, style = TimeboxTheme.type.bodySmall, color = colors.bg)
             }
+        }
+
+        dayState.workMode?.let { workMode ->
+            WorkModeScreen(
+                state = workMode,
+                onStartChange = dayViewModel::updateWorkModeStart,
+                onEndChange = dayViewModel::updateWorkModeEnd,
+                onSaveActual = dayViewModel::saveWorkModeActual,
+                onToggleSubtask = dayViewModel::toggleWorkModeSubtask,
+                onFinish = { dayViewModel.finishWorkMode(completeTask = false) },
+                onFinishAndComplete = { dayViewModel.finishWorkMode(completeTask = true) },
+                onClose = dayViewModel::closeWorkMode,
+            )
         }
     }
 }

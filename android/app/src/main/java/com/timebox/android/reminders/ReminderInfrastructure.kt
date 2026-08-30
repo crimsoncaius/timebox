@@ -154,7 +154,7 @@ fun reminderSchedule(tasks: List<BattleTask>): List<ReminderScheduleEntry> = tas
     .toList()
 
 private fun BattleTask.flattenForReminders(): Sequence<BattleTask> =
-    sequenceOf(this) + subtasks.asSequence().flatMap { it.flattenForReminders() }
+    sequenceOf(this) + sessionTasks.asSequence().flatMap { it.flattenForReminders() }
 
 class ReminderScheduler(private val context: Context) {
     private val workManager get() = WorkManager.getInstance(context)

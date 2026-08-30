@@ -2,22 +2,29 @@ package com.timebox.android.ui.day
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.timebox.android.data.ActualBlock
 import com.timebox.android.data.Day
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
 import com.timebox.android.data.PlanningCommitPlacement
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TaskType
+import com.timebox.android.data.Subtask
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 
 /** A pending block the user sketched by tapping an empty slot. */
 data class Draft(
@@ -46,10 +53,17 @@ data class DayPageState(
     val materialized: Boolean = false,
 )
 
-data class TaskCompletionPrompt(
-    val cascadesSubtasks: Boolean,
-    val hasCurrentIncompletePlannedTime: Boolean,
-)
+data class WorkModeUiState(
+    val actualBlock: ActualBlock,
+    val task: BattleTask?,
+    val timezone: String,
+    val startInput: String,
+    val endInput: String,
+    val saving: Boolean = false,
+    val error: String? = null,
+) {
+    val isRunning: Boolean get() = actualBlock.endAt == null
+}
 
 data class DayUiState(
     /** The device's date until the backend's is known; see [DayViewModel.start]. */
@@ -73,7 +87,7 @@ data class DayUiState(
     val planningDrafts: Map<Int, PlanningDraftPlacement> = emptyMap(),
     val completionUndoTaskId: Int? = null,
     val completionUndoToken: String? = null,
-    val taskCompletionPrompt: TaskCompletionPrompt? = null,
+    val workMode: WorkModeUiState? = null,
 ) {
     fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
 
@@ -93,16 +107,6 @@ data class DayUiState(
     val sheetStart: Int get() = selectedBlock?.startMinute ?: draft?.startMinute ?: 0
     val sheetEnd: Int get() = selectedBlock?.endMinute ?: draft?.endMinute ?: 0
 
-    /** True once an actual block already mirrors the selected planned block. */
-    val selectedAlreadyCompleted: Boolean
-        get() {
-            val sel = selectedBlock ?: return false
-            if (sel.lane != Lane.Planned) return false
-            return day?.blocks.orEmpty().any {
-                it.lane == Lane.Actual && it.plannedBlockId == sel.id
-            }
-        }
-
     val accessibilityPlanningTask: BattleTask?
         get() = readyTasks.firstOrNull { it.id == accessibilityPlanningTaskId }
 
@@ -110,7 +114,12 @@ data class DayUiState(
         planningDrafts.values.filter { it.date == date }
 }
 
-class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
+class DayViewModel(
+    private val repository: TimeboxRepository,
+    private val injectedScope: CoroutineScope? = null,
+) : ViewModel() {
+
+    private val launchScope: CoroutineScope get() = injectedScope ?: viewModelScope
 
     private val _state = MutableStateFlow(DayUiState())
     val state: StateFlow<DayUiState> = _state.asStateFlow()
@@ -136,7 +145,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
             load()
             return
         }
-        viewModelScope.launch {
+        launchScope.launch {
             val today = repository.getDaySummary(_state.value.date).getOrNull()?.today
             todayResolved = today != null
             if (today != null) _state.update { it.copy(today = today) }
@@ -147,7 +156,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     /** Battle Plan is independent of the timeline: failure leaves Day fully usable. */
     fun refreshReadyToPlan() {
         _state.update { it.copy(readyTasksLoading = it.readyTasks.isEmpty(), readyTasksError = null) }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.listBattleTasks().fold(
                 onSuccess = { result ->
                     val ready = result.items.readyToPlanTasks()
@@ -214,7 +223,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 page.copy(loading = showSpinner && page.day == null, error = null)
             }
         }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.getDay(date).fold(
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
@@ -266,7 +275,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         _state.update { state ->
             state.withPage(date) { it.copy(loading = true, error = null) }
         }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.getDayPreview(date).fold(
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
@@ -306,7 +315,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     /** Re-read types after the Types screen may have changed them. */
     fun refreshTaskTypes() {
-        viewModelScope.launch { loadTaskTypes() }
+        launchScope.launch { loadTaskTypes() }
     }
 
     private suspend fun loadTaskTypes() {
@@ -341,7 +350,6 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 draft = null,
                 noteInput = block?.note.orEmpty(),
                 typeQuery = "",
-                taskCompletionPrompt = null,
             )
         }
     }
@@ -359,7 +367,6 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 selectedBlockId = null,
                 noteInput = "",
                 typeQuery = "",
-                taskCompletionPrompt = null,
             )
         }
     }
@@ -369,7 +376,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val selected = current.selectedBlock
         // The note field saves on dismiss rather than on every keystroke.
         if (selected != null && current.noteInput != selected.note.orEmpty()) {
-            saveNote(selected.id, current.noteInput)
+            saveNote(selected, current.noteInput)
         }
         _state.update {
             it.copy(
@@ -377,7 +384,6 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 draft = null,
                 noteInput = "",
                 typeQuery = "",
-                taskCompletionPrompt = null,
             )
         }
     }
@@ -404,6 +410,15 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
         val selected = current.selectedBlock ?: return
         if (selected.taskTypeId == taskType.id) return
+        if (selected.lane == Lane.Actual) {
+            launchScope.launch {
+                repository.patchActualBlock(selected.actualBlockId ?: selected.id, taskTypeId = taskType.id).fold(
+                    onSuccess = { refreshCurrentDay() },
+                    onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
+                )
+            }
+            return
+        }
         mutate(current.date, "Saved") {
             repository.patchBlock(current.date, selected.id, taskTypeId = taskType.id)
         }
@@ -417,7 +432,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
      */
     fun createTaskTypeAndChoose(path: String) {
         _state.update { it.copy(saving = true) }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.createTaskType(path).fold(
                 onSuccess = { created ->
                     loadTaskTypes()
@@ -440,9 +455,33 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         taskId: Int?,
     ) {
         val date = _state.value.date
+        val timezone = _state.value.day?.timezone ?: "UTC"
         _state.update { it.copy(saving = true) }
-        viewModelScope.launch {
-            repository.createBlock(date, lane, taskTypeId, start, end, note.ifBlank { null }, taskId).fold(
+        launchScope.launch {
+            val operation = if (lane == Lane.Actual) {
+                val zone = runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.of("UTC"))
+                val startAt = resolveActualMinute(date, start, zone)
+                val endAt = resolveActualMinute(date, end, zone)
+                if (startAt == null || endAt == null) {
+                    _state.update {
+                        it.copy(saving = false, message = "That local time does not exist in $timezone.")
+                    }
+                    return@launch
+                }
+                repository.createActualBlock(
+                    startAt = startAt,
+                    endAt = endAt,
+                    taskTypeId = taskTypeId,
+                    taskId = taskId,
+                    note = note.ifBlank { null },
+                ).map { actual ->
+                    loadWorkMode(actual)
+                    repository.getDay(date).getOrThrow()
+                }
+            } else {
+                repository.createBlock(date, lane, taskTypeId, start, end, note.ifBlank { null }, taskId)
+            }
+            operation.fold(
                 onSuccess = { day ->
                     // Picking the type is the whole draft flow, so the sheet is done: leaving
                     // it open on the fresh block would just hide the timeline it landed on.
@@ -453,7 +492,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                             selectedBlockId = if (state.date == date) null else state.selectedBlockId,
                             noteInput = if (state.date == date) "" else state.noteInput,
                             typeQuery = if (state.date == date) "" else state.typeQuery,
-                            message = "Block created",
+                            message = if (lane == Lane.Actual) null else "Block created",
                             accessibilityPlanningTaskId = if (state.date == date && taskId != null) {
                                 null
                             } else {
@@ -523,7 +562,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
             return
         }
         _state.update { it.copy(saving = true, message = null) }
-        viewModelScope.launch {
+        launchScope.launch {
             val placements = mutableListOf<PlanningCommitPlacement>()
             for (draft in drafts) {
                 val taskTypeId = resolvePlanningTaskType(draft.task)
@@ -606,7 +645,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                 page.copy(day = page.day?.withBlockTimes(blockId, startMinute, endMinute))
             }
         }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.patchBlock(
                 current.date,
                 blockId,
@@ -640,10 +679,17 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
     }
 
-    private fun saveNote(blockId: Int, note: String) {
+    private fun saveNote(block: TimeBlock, note: String) {
         val date = _state.value.date
-        viewModelScope.launch {
-            repository.patchBlock(date, blockId, note = note).onSuccess { day ->
+        launchScope.launch {
+            if (block.lane == Lane.Actual) {
+                repository.patchActualBlock(block.actualBlockId ?: block.id, note = note).fold(
+                    onSuccess = { refreshCurrentDay() },
+                    onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
+                )
+                return@launch
+            }
+            repository.patchBlock(date, block.id, note = note).onSuccess { day ->
                 _state.update { state ->
                     state.withPage(date) {
                         DayPageState(day = day, loading = false, materialized = true)
@@ -657,43 +703,35 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val current = _state.value
         val selected = current.selectedBlock ?: return
         _state.update { it.copy(selectedBlockId = null) }
+        if (selected.lane == Lane.Actual) {
+            launchScope.launch {
+                repository.deleteActualBlock(selected.actualBlockId ?: selected.id).fold(
+                    onSuccess = { _state.update { it.copy(message = "Actual Block deleted") }; refreshCurrentDay() },
+                    onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
+                )
+            }
+            return
+        }
         mutate(current.date, "Block deleted") {
             repository.deleteBlock(current.date, selected.id)
         }
     }
 
-    fun completeSelected() {
-        val current = _state.value
-        val selected = current.selectedBlock ?: return
-        if (selected.lane != Lane.Planned) return
-        mutate(current.date, "Time completed") {
-            repository.completeAsPlanned(current.date, selected.id)
-        }
-    }
-
-    fun reverseSelectedCompletion() {
-        val current = _state.value
-        val selected = current.selectedBlock ?: return
-        if (selected.lane != Lane.Planned) return
-        mutate(current.date, "Time completion removed; recorded Actual time was preserved") {
-            repository.reverseBlockCompletion(current.date, selected.id)
-        }
-    }
-
-    fun completeSelectedTask(removePlannedTime: Boolean) {
+    fun completeSelectedTask() {
         val current = _state.value
         val task = current.selectedBlock?.task ?: return
         if (task.isReadOnly) return
-        _state.update { it.copy(saving = true, message = null, taskCompletionPrompt = null) }
-        viewModelScope.launch {
-            repository.completeBattleTask(task.id, removePlannedTime).fold(
+        _state.update { it.copy(saving = true, message = null) }
+        launchScope.launch {
+            repository.completeBattleTask(task.id).fold(
                 onSuccess = { result ->
                     repository.getDay(current.date).fold(
                         onSuccess = { day ->
+                            val removed = result.removedPlannedBlockIds.size
                             _state.update { state ->
                                 state.copy(
                                     saving = false,
-                                    message = "Task completed",
+                                    message = completionMessage(removed),
                                     completionUndoTaskId = task.id,
                                     completionUndoToken = result.undoToken,
                                 ).withPage(current.date) {
@@ -714,57 +752,161 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         }
     }
 
-    fun requestSelectedTaskCompletion() {
-        val linkedTask = _state.value.selectedBlock?.task ?: return
-        if (linkedTask.isReadOnly || _state.value.saving) return
+    fun startSelectedWorkMode() {
+        val current = _state.value
+        val block = current.selectedBlock ?: return
+        if (current.saving) return
+        if (block.lane == Lane.Actual) {
+            openWorkMode(block.actualBlockId ?: block.id)
+            return
+        }
         _state.update { it.copy(saving = true, message = null) }
-        viewModelScope.launch {
-            repository.listBattleTasks().fold(
-                onSuccess = { list ->
-                    val task = list.items.firstNotNullOfOrNull { root ->
-                        root.takeIf { it.id == linkedTask.id }
-                            ?: root.subtasks.firstOrNull { it.id == linkedTask.id }
-                    }
-                    if (task == null) {
-                        _state.update { it.copy(saving = false, message = "Task not found") }
-                        return@fold
-                    }
-                    val zone = runCatching { ZoneId.of(list.timezone) }.getOrDefault(ZoneId.of("UTC"))
-                    val today = list.serverNow.atZone(zone).toLocalDate()
-                    val affected = listOf(task) + task.subtasks
-                    val hasCurrentIncompletePlannedTime = affected.any { affectedTask ->
-                        affectedTask.allocations.any { !it.timeCompleted && it.date >= today }
-                    }
-                    if (task.subtasks.isEmpty() && !hasCurrentIncompletePlannedTime) {
-                        _state.update { it.copy(saving = false) }
-                        completeSelectedTask(removePlannedTime = false)
-                    } else {
-                        _state.update {
-                            it.copy(
-                                saving = false,
-                                taskCompletionPrompt = TaskCompletionPrompt(
-                                    cascadesSubtasks = task.subtasks.isNotEmpty(),
-                                    hasCurrentIncompletePlannedTime = hasCurrentIncompletePlannedTime,
-                                ),
-                            )
-                        }
-                    }
+        launchScope.launch {
+            repository.startActualBlock(
+                taskTypeId = block.taskTypeId,
+                taskId = block.taskId,
+                note = block.note,
+                plannedBlockId = block.id,
+            ).fold(
+                onSuccess = { actual -> loadWorkMode(actual) },
+                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+            )
+        }
+    }
+
+    fun openWorkMode(actualBlockId: Int) {
+        if (_state.value.saving) return
+        _state.update { it.copy(saving = true, message = null, selectedBlockId = null, draft = null) }
+        launchScope.launch {
+            repository.getActualBlock(actualBlockId).fold(
+                onSuccess = { actual -> loadWorkMode(actual) },
+                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+            )
+        }
+    }
+
+    private suspend fun loadWorkMode(actual: ActualBlock) {
+        val list = repository.listBattleTasks().getOrNull()
+        val timezone = list?.timezone ?: _state.value.day?.timezone ?: "UTC"
+        val task = actual.taskId?.let { taskId -> list?.items?.findBattleTask(taskId) }
+        val zone = runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.of("UTC"))
+        _state.update {
+            it.copy(
+                saving = false,
+                selectedBlockId = null,
+                draft = null,
+                workMode = WorkModeUiState(
+                    actualBlock = actual,
+                    task = task,
+                    timezone = timezone,
+                    startInput = ACTUAL_INPUT_FORMAT.format(actual.startAt.atZone(zone)),
+                    endInput = actual.endAt?.let { end -> ACTUAL_INPUT_FORMAT.format(end.atZone(zone)) }.orEmpty(),
+                ),
+            )
+        }
+    }
+
+    fun updateWorkModeStart(value: String) = _state.update { state ->
+        state.copy(workMode = state.workMode?.copy(startInput = value, error = null))
+    }
+
+    fun updateWorkModeEnd(value: String) = _state.update { state ->
+        state.copy(workMode = state.workMode?.copy(endInput = value, error = null))
+    }
+
+    fun saveWorkModeActual() {
+        val work = _state.value.workMode ?: return
+        val zone = runCatching { ZoneId.of(work.timezone) }.getOrDefault(ZoneId.of("UTC"))
+        val start = parseActualInput(work.startInput, zone)
+        val end = work.endInput.takeIf { it.isNotBlank() }?.let { parseActualInput(it, zone) }
+        val validation = when {
+            start == null -> "Use YYYY-MM-DD HH:MM for Actual start."
+            !work.isRunning && end == null -> "Actual end is required."
+            end != null && !end.isAfter(start) -> "Actual end must be after start."
+            else -> null
+        }
+        if (validation != null) {
+            _state.update { it.copy(workMode = work.copy(error = validation)) }
+            return
+        }
+        _state.update { it.copy(workMode = work.copy(saving = true, error = null)) }
+        launchScope.launch {
+            repository.patchActualBlock(work.actualBlock.id, startAt = start, endAt = end).fold(
+                onSuccess = { actual ->
+                    loadWorkMode(actual)
+                    refreshCurrentDay()
                 },
                 onFailure = { error ->
-                    _state.update { it.copy(saving = false, message = error.apiError.message) }
+                    _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) }
                 },
             )
         }
     }
 
-    fun dismissTaskCompletionPrompt() = _state.update { it.copy(taskCompletionPrompt = null) }
+    fun toggleWorkModeSubtask(subtask: Subtask) {
+        val work = _state.value.workMode ?: return
+        if (work.saving || work.task?.status == com.timebox.android.data.TaskStatus.Completed) return
+        _state.update { it.copy(workMode = work.copy(saving = true, error = null)) }
+        launchScope.launch {
+            val result = if (subtask.checked) repository.uncheckSubtask(subtask.id) else repository.checkSubtask(subtask.id)
+            result.fold(
+                onSuccess = { loadWorkMode(work.actualBlock) },
+                onFailure = { error -> _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) } },
+            )
+        }
+    }
+
+    fun finishWorkMode(completeTask: Boolean) {
+        val work = _state.value.workMode ?: return
+        if (work.saving) return
+        if (completeTask && work.task == null) return
+        _state.update { it.copy(workMode = work.copy(saving = true, error = null)) }
+        launchScope.launch {
+            if (completeTask) {
+                repository.completeBattleTask(checkNotNull(work.task).id).fold(
+                    onSuccess = { completion ->
+                        val removed = completion.removedPlannedBlockIds.size
+                        _state.update {
+                            it.copy(
+                                workMode = null,
+                                message = completionMessage(removed),
+                                completionUndoTaskId = completion.task.id,
+                                completionUndoToken = completion.undoToken,
+                            )
+                        }
+                        refreshCurrentDay()
+                        refreshReadyToPlan()
+                    },
+                    onFailure = { error -> _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) } },
+                )
+            } else if (work.isRunning) {
+                repository.finishActualBlock(work.actualBlock.id).fold(
+                    onSuccess = {
+                        _state.update {
+                            it.copy(
+                                workMode = null,
+                                message = if (work.task != null) "Session finished · Task remains open" else "Session finished",
+                            )
+                        }
+                        refreshCurrentDay()
+                    },
+                    onFailure = { error -> _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) } },
+                )
+            } else {
+                _state.update { it.copy(workMode = null, message = "Actual time saved") }
+                refreshCurrentDay()
+            }
+        }
+    }
+
+    fun closeWorkMode() = _state.update { it.copy(workMode = null) }
 
     fun reopenSelectedTask() {
         val current = _state.value
         val task = current.selectedBlock?.task ?: return
         if (task.isReadOnly) return
         _state.update { it.copy(saving = true, message = null) }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.reopenBattleTask(task.id).fold(
                 onSuccess = {
                     repository.getDay(current.date).fold(
@@ -798,7 +940,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         val taskId = current.completionUndoTaskId ?: return
         val token = current.completionUndoToken ?: return
         _state.update { it.copy(saving = true, completionUndoTaskId = null, completionUndoToken = null) }
-        viewModelScope.launch {
+        launchScope.launch {
             repository.undoBattleTaskCompletion(taskId, token).fold(
                 onSuccess = {
                     repository.getDay(current.date).fold(
@@ -813,13 +955,31 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
                         onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
                     )
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onFailure = { error ->
+                    _state.update {
+                        it.copy(
+                            saving = false,
+                            message = error.apiError.message,
+                            completionUndoTaskId = taskId,
+                            completionUndoToken = token,
+                        )
+                    }
+                },
             )
         }
     }
 
     fun dismissCompletionUndo() = _state.update {
         it.copy(completionUndoTaskId = null, completionUndoToken = null)
+    }
+
+    private suspend fun refreshCurrentDay() {
+        val date = _state.value.date
+        repository.getDay(date).onSuccess { day ->
+            _state.update { state ->
+                state.withPage(date) { DayPageState(day = day, loading = false, materialized = true) }
+            }
+        }
     }
 
     /** A copy of the day with one block re-timed; unchanged if that block has gone. */
@@ -839,7 +999,7 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
         block: suspend () -> Result<Day>,
     ) {
         _state.update { it.copy(saving = true) }
-        viewModelScope.launch {
+        launchScope.launch {
             block().fold(
                 onSuccess = { day ->
                     _state.update { state ->
@@ -856,8 +1016,27 @@ class DayViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 }
 
+private val ACTUAL_INPUT_FORMAT: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm").withResolverStyle(ResolverStyle.STRICT)
+
+internal fun parseActualInput(value: String, zone: ZoneId): Instant? = runCatching {
+    val local = LocalDateTime.parse(value.trim(), ACTUAL_INPUT_FORMAT)
+    local.atZone(zone).takeIf { it.toLocalDateTime() == local }?.toInstant()
+}.getOrNull()
+
+internal fun resolveActualMinute(date: LocalDate, minute: Int, zone: ZoneId): Instant? {
+    val local = date.atStartOfDay().plusMinutes(minute.toLong())
+    return local.atZone(zone).takeIf { it.toLocalDateTime() == local }?.toInstant()
+}
+
+private fun List<BattleTask>.findBattleTask(id: Int): BattleTask? =
+    firstNotNullOfOrNull { task -> task.takeIf { it.id == id } ?: task.sessionTasks.findBattleTask(id) }
+
+private fun completionMessage(removed: Int): String =
+    if (removed == 0) "Task completed" else "Task completed · $removed future Planned ${if (removed == 1) "Block" else "Blocks"} removed"
+
 internal fun List<BattleTask>.readyToPlanTasks(): List<BattleTask> =
-    flatMap { listOf(it) + it.subtasks }.filter { it.readyToPlan }
+    flatMap { task -> listOf(task) + task.sessionTasks.readyToPlanTasks() }.filter { it.readyToPlan }
 
 internal fun List<TaskType>.unspecifiedTypeId(): Int? =
     firstOrNull { it.name.equals("unspecified", ignoreCase = true) }?.id

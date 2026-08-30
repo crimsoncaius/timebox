@@ -5,6 +5,7 @@ import com.timebox.android.data.BattleTask
 import com.timebox.android.data.BattlePlanSort
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
+import com.timebox.android.data.Subtask
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.ui.theme.DarkTimeboxColors
 import com.timebox.android.ui.theme.LightTimeboxColors
@@ -262,7 +263,8 @@ internal fun task(
     status: TaskStatus = TaskStatus.Open,
     position: Int = 0,
     ready: Boolean = false,
-    subtasks: List<BattleTask> = emptyList(),
+    subtasks: List<Subtask> = emptyList(),
+    sessionTasks: List<BattleTask> = emptyList(),
     urgency: PriorityLevel? = null,
     deadlineDate: LocalDate? = null,
     plannedDates: List<LocalDate> = emptyList(),
@@ -300,5 +302,6 @@ internal fun task(
     updatedAt = Instant.EPOCH,
     overdue = false,
     subtasks = subtasks,
+    sessionTasks = sessionTasks,
     plannedDates = plannedDates,
 )

@@ -7,10 +7,10 @@ import org.junit.Test
 
 class ReadyToPlanTest {
     @Test
-    fun readySelectorFlattensParentsAndSubtasksIndependently() {
-        val childReady = task(3, ready = true).copy(parentId = 1, parentTitle = "Parent")
-        val childNotReady = task(4).copy(parentId = 1)
-        val parent = task(1, ready = false, subtasks = listOf(childReady, childNotReady))
+    fun readySelectorIncludesSessionTasksButNeverSubtasks() {
+        val sessionReady = task(3, ready = true)
+        val sessionNotReady = task(4)
+        val parent = task(1, ready = false, sessionTasks = listOf(sessionReady, sessionNotReady))
         val standalone = task(2, status = TaskStatus.Blocked, ready = true)
 
         assertEquals(listOf(3, 2), listOf(parent, standalone).readyToPlanTasks().map { it.id })

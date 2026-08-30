@@ -6,6 +6,9 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Body
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 
 class TimeboxApiContractTest {
     @Test
@@ -19,6 +22,18 @@ class TimeboxApiContractTest {
             "listBattleTasks" to "GET tasks",
             "createBattleTask" to "POST tasks",
             "patchBattleTask" to "PATCH tasks/{taskId}",
+            "checkSubtask" to "POST subtasks/{subtaskId}/check",
+            "uncheckSubtask" to "POST subtasks/{subtaskId}/uncheck",
+            "completeBattleTask" to "POST tasks/{taskId}/complete",
+            "reopenBattleTask" to "POST tasks/{taskId}/reopen",
+            "undoBattleTaskCompletion" to "POST tasks/{taskId}/undo-completion",
+            "startActualBlock" to "POST actual-blocks/start",
+            "createActualBlock" to "POST actual-blocks",
+            "getActualBlock" to "GET actual-blocks/{actualBlockId}",
+            "getActiveActualBlock" to "GET actual-blocks/active",
+            "patchActualBlock" to "PATCH actual-blocks/{actualBlockId}",
+            "finishActualBlock" to "POST actual-blocks/{actualBlockId}/finish",
+            "deleteActualBlock" to "DELETE actual-blocks/{actualBlockId}",
             "reorderBattleTasks" to "POST tasks/reorder",
             "archiveCompletedBattleTasks" to "POST tasks/archive-completed",
             "unarchiveBattleTask" to "POST tasks/{taskId}/unarchive",
@@ -46,5 +61,9 @@ class TimeboxApiContractTest {
         }.toMap().filterKeys(expected::containsKey)
 
         assertEquals(expected, actual)
+
+        val completion = TimeboxApi::class.java.declaredMethods.single { it.name == "completeBattleTask" }
+        assertFalse(completion.parameterAnnotations.flatten().any { it is Body })
+        assertTrue(actual.values.none { "complete-as-planned" in it || it.endsWith("/completion") })
     }
 }

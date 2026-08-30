@@ -81,10 +81,10 @@ class BattlePlanScreenTest {
                     onReminderEnabledChange = {}, notificationsAllowed = true,
                     onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = {},
                     onOpenDay = { date, _ -> openedDay = date }, onAddSubtask = {},
-                    onToggleSubtask = { _, _ -> },
+                    onToggleSubtask = {},
                     onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
                     onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
-                    onConfirmTrash = {}, onTrashed = {}, onSave = {},
+                    onConfirmTrash = {}, onTrashed = {}, onReopen = {}, onSave = {},
                 )
             }
         }

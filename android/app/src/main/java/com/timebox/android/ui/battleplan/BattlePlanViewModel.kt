@@ -12,6 +12,7 @@ import com.timebox.android.data.Project
 import com.timebox.android.data.TaskCollection
 import com.timebox.android.data.TaskPlacement
 import com.timebox.android.data.TaskStatus
+import com.timebox.android.data.Subtask
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
@@ -73,7 +74,6 @@ data class BattlePlanUiState(
     val completionUndoTaskId: Int? = null,
     val completionUndoToken: String? = null,
     val permanentDeleteTask: BattleTask? = null,
-    val pendingCompletionTask: BattleTask? = null,
 ) {
     val scopes: List<BattlePlanScope>
         get() = listOf(BattlePlanScope.All, BattlePlanScope.Admin) + projects.map(BattlePlanScope::project)
@@ -218,20 +218,33 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
     }
 
     fun createSubtask(parent: BattleTask, title: String) {
-        if (title.isBlank()) return
+        if (title.isBlank() || parent.status == TaskStatus.Completed) return
         mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id, projectId = parent.projectId)) }
     }
 
-    fun toggleReady(task: BattleTask) = mutate(if (task.readyToPlan) "Removed from Ready to Plan" else "Ready to Plan") {
-        repository.patchBattleTask(task.id, BattleTaskPatch(readyToPlan = PatchField.of(!task.readyToPlan)))
+    fun toggleReady(task: BattleTask) {
+        if (task.status == TaskStatus.Completed) return
+        mutate(if (task.readyToPlan) "Removed from Ready to Plan" else "Ready to Plan") {
+            repository.patchBattleTask(task.id, BattleTaskPatch(readyToPlan = PatchField.of(!task.readyToPlan)))
+        }
     }
 
-    fun toggleSubtaskComplete(task: BattleTask) {
-        if (task.status == TaskStatus.Completed) setCompletion(task, false) else requestCompletion(task)
+    fun toggleSubtaskComplete(subtask: Subtask) {
+        if (_state.value.saving) return
+        _state.update { it.copy(saving = true, message = null) }
+        viewModelScope.launch {
+            val result = if (subtask.checked) repository.uncheckSubtask(subtask.id)
+            else repository.checkSubtask(subtask.id)
+            result.fold(
+                onSuccess = { load(showSpinner = false) },
+                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+            )
+        }
     }
 
     fun moveTask(task: BattleTask, target: TaskStatus) {
         if (task.status == target) return
+        if (task.status == TaskStatus.Completed && target != TaskStatus.Open) return
         if (target == TaskStatus.Completed || task.status == TaskStatus.Completed) {
             if (target == TaskStatus.Completed) requestCompletion(task) else setCompletion(task, false)
         } else {
@@ -241,6 +254,7 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
 
     fun dropTask(task: BattleTask, target: TaskStatus, targetIndex: Int) {
         if (target !in battlePlanStatuses) return
+        if (task.status == TaskStatus.Completed && target != TaskStatus.Open) return
         if (task.status != target && (target == TaskStatus.Completed || task.status == TaskStatus.Completed)) {
             if (target == TaskStatus.Completed) requestCompletion(task) else setCompletion(task, false)
             if (_state.value.selectedStatus != target) {
@@ -264,38 +278,20 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
     }
 
     private fun requestCompletion(task: BattleTask) {
-        val zone = runCatching { ZoneId.of(_state.value.timezone) }.getOrDefault(ZoneId.of("UTC"))
-        val today = _state.value.serverNow.atZone(zone).toLocalDate()
-        val affected = listOf(task) + task.subtasks
-        val hasCurrentIncompletePlannedTime = affected.any { affectedTask ->
-            affectedTask.allocations.any { !it.timeCompleted && it.date >= today }
-        }
-        if (task.subtasks.isNotEmpty() || hasCurrentIncompletePlannedTime) {
-            _state.update { it.copy(pendingCompletionTask = task) }
-        } else {
-            setCompletion(task, true)
-        }
+        setCompletion(task, true)
     }
 
-    fun dismissPendingCompletion() = _state.update { it.copy(pendingCompletionTask = null) }
-
-    fun confirmPendingCompletion(removePlannedTime: Boolean) {
-        val task = _state.value.pendingCompletionTask ?: return
-        _state.update { it.copy(pendingCompletionTask = null) }
-        setCompletion(task, true, removePlannedTime)
-    }
-
-    private fun setCompletion(task: BattleTask, completed: Boolean, removePlannedTime: Boolean = false) {
+    private fun setCompletion(task: BattleTask, completed: Boolean) {
         if (_state.value.saving) return
         _state.update { it.copy(saving = true, message = null) }
         viewModelScope.launch {
             if (completed) {
-                repository.completeBattleTask(task.id, removePlannedTime).fold(
+                repository.completeBattleTask(task.id).fold(
                     onSuccess = { result ->
                         _state.update {
                             it.copy(
                                 saving = false,
-                                message = "Task completed",
+                                message = completionMessage(result.removedPlannedBlockIds.size),
                                 completionUndoTaskId = task.id,
                                 completionUndoToken = result.undoToken,
                             )
@@ -327,21 +323,31 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
                     _state.update { it.copy(saving = false, message = "Task completion undone") }
                     load(showSpinner = false)
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onFailure = { error ->
+                    _state.update {
+                        it.copy(
+                            saving = false,
+                            message = error.apiError.message,
+                            completionUndoTaskId = taskId,
+                            completionUndoToken = token,
+                        )
+                    }
+                },
             )
         }
     }
 
-    fun setBlocked(task: BattleTask, blocked: Boolean, reason: String?) = mutate(
-        if (blocked) "Task blocked" else "Task unblocked"
-    ) {
-        repository.patchBattleTask(
-            task.id,
-            BattleTaskPatch(
-                isBlocked = PatchField.of(blocked),
-                blockingReason = if (blocked) PatchField.of(reason?.trim().orEmpty()) else PatchField.Null,
-            ),
-        )
+    fun setBlocked(task: BattleTask, blocked: Boolean, reason: String?) {
+        if (task.status == TaskStatus.Completed) return
+        mutate(if (blocked) "Task blocked" else "Task unblocked") {
+            repository.patchBattleTask(
+                task.id,
+                BattleTaskPatch(
+                    isBlocked = PatchField.of(blocked),
+                    blockingReason = if (blocked) PatchField.of(reason?.trim().orEmpty()) else PatchField.Null,
+                ),
+            )
+        }
     }
 
     fun reorderTask(task: BattleTask, offset: Int) {
@@ -477,15 +483,16 @@ internal fun dropTaskPlacements(
 
 private fun Set<String>.toggle(value: String): Set<String> = if (value in this) this - value else this + value
 
+private fun completionMessage(removed: Int): String =
+    if (removed == 0) "Task completed" else "Task completed · $removed future Planned ${if (removed == 1) "Block" else "Blocks"} removed"
+
 private fun BattlePlanPreferences.resolveScope(projects: List<Project>): BattlePlanScope = when {
     scope == "admin" -> BattlePlanScope.Admin
     scope.startsWith("project:") -> scope.substringAfter(':').toIntOrNull()?.let { id -> projects.firstOrNull { it.id == id } }?.let(BattlePlanScope::project) ?: BattlePlanScope.All
     else -> BattlePlanScope.All
 }
 
-private fun List<BattleTask>.countProjectTasks(projectId: Int): Int = sumOf { parent ->
-    (if (parent.projectId == projectId) 1 else 0) + parent.subtasks.count { it.projectId == projectId }
-}
+private fun List<BattleTask>.countProjectTasks(projectId: Int): Int = count { it.projectId == projectId }
 
 internal fun List<BattleTask>.inScope(scope: BattlePlanScope): List<BattleTask> = when (scope.kind) {
     BattlePlanScopeKind.All -> this

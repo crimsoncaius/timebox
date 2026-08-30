@@ -1,6 +1,9 @@
 package com.timebox.android.data
 
 import com.timebox.android.data.remote.ApiFactory
+import com.timebox.android.data.remote.ActualBlockCreateDto
+import com.timebox.android.data.remote.ActualBlockPatchDto
+import com.timebox.android.data.remote.ActualBlockStartDto
 import com.timebox.android.data.remote.BattleTaskCreateDto
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.data.remote.PlanningCommitDto
@@ -11,7 +14,6 @@ import com.timebox.android.data.remote.RecurringTemplateCreateDto
 import com.timebox.android.data.remote.SettingsPatchDto
 import com.timebox.android.data.remote.TaskTypeCreateDto
 import com.timebox.android.data.remote.TaskIdsDto
-import com.timebox.android.data.remote.TaskCompletionRequestDto
 import com.timebox.android.data.remote.TaskCompletionUndoDto
 import com.timebox.android.data.remote.TaskPlacementDto
 import com.timebox.android.data.remote.TaskReorderDto
@@ -33,6 +35,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import retrofit2.HttpException
 import java.io.IOException
+import java.time.Instant
 import java.time.LocalDate
 
 /** Message shown when a call fails, plus whether retrying makes sense. */
@@ -245,12 +248,9 @@ class TimeboxRepository private constructor(
     suspend fun patchBattleTask(taskId: Int, patch: BattleTaskPatch): Result<BattleTask> =
         call { api().patchBattleTask(taskId, patch.toJson()).toModel() }
 
-    suspend fun completeBattleTask(taskId: Int, removePlannedTime: Boolean): Result<TaskCompletionResult> =
+    suspend fun completeBattleTask(taskId: Int): Result<TaskCompletionResult> =
         call {
-            api().completeBattleTask(
-                taskId,
-                TaskCompletionRequestDto(if (removePlannedTime) "remove" else "keep"),
-            ).let { response ->
+            api().completeBattleTask(taskId).let { response ->
                 TaskCompletionResult(
                     response.task.toModel(),
                     response.undoToken,
@@ -258,6 +258,12 @@ class TimeboxRepository private constructor(
                 )
             }
         }
+
+    suspend fun checkSubtask(subtaskId: Int): Result<Subtask> =
+        call { api().checkSubtask(subtaskId).toModel() }
+
+    suspend fun uncheckSubtask(subtaskId: Int): Result<Subtask> =
+        call { api().uncheckSubtask(subtaskId).toModel() }
 
     suspend fun reopenBattleTask(taskId: Int): Result<BattleTask> =
         call { api().reopenBattleTask(taskId).toModel() }
@@ -347,11 +353,66 @@ class TimeboxRepository private constructor(
     suspend fun deleteBlock(date: LocalDate, blockId: Int): Result<Day> =
         call { api().deleteBlock(date.toString(), blockId).toModel() }
 
-    suspend fun completeAsPlanned(date: LocalDate, blockId: Int): Result<Day> =
-        call { api().completeAsPlanned(date.toString(), blockId).toModel() }
+    suspend fun startActualBlock(
+        taskTypeId: Int? = null,
+        taskId: Int? = null,
+        note: String? = null,
+        plannedBlockId: Int? = null,
+    ): Result<ActualBlock> = call {
+        api().startActualBlock(ActualBlockStartDto(taskTypeId, taskId, note, plannedBlockId)).toModel()
+    }
 
-    suspend fun reverseBlockCompletion(date: LocalDate, blockId: Int): Result<Day> =
-        call { api().reverseBlockCompletion(date.toString(), blockId).toModel() }
+    suspend fun createActualBlock(
+        startAt: Instant,
+        endAt: Instant,
+        taskTypeId: Int? = null,
+        taskId: Int? = null,
+        note: String? = null,
+        plannedBlockId: Int? = null,
+    ): Result<ActualBlock> = call {
+        api().createActualBlock(
+            ActualBlockCreateDto(
+                taskTypeId = taskTypeId,
+                taskId = taskId,
+                note = note,
+                plannedBlockId = plannedBlockId,
+                startAt = startAt.toString(),
+                endAt = endAt.toString(),
+            )
+        ).toModel()
+    }
+
+    suspend fun getActualBlock(actualBlockId: Int): Result<ActualBlock> =
+        call { api().getActualBlock(actualBlockId).toModel() }
+
+    suspend fun getActiveActualBlock(): Result<ActualBlock?> =
+        call { api().getActiveActualBlock()?.toModel() }
+
+    suspend fun patchActualBlock(
+        actualBlockId: Int,
+        startAt: Instant? = null,
+        endAt: Instant? = null,
+        taskTypeId: Int? = null,
+        taskId: Int? = null,
+        note: String? = null,
+    ): Result<ActualBlock> = call {
+        api().patchActualBlock(
+            actualBlockId,
+            ActualBlockPatchDto(
+                taskTypeId = taskTypeId,
+                taskId = taskId,
+                note = note,
+                startAt = startAt?.toString(),
+                endAt = endAt?.toString(),
+            )
+        ).toModel()
+    }
+
+    suspend fun finishActualBlock(actualBlockId: Int): Result<ActualBlock> =
+        call { api().finishActualBlock(actualBlockId).toModel() }
+
+    suspend fun deleteActualBlock(actualBlockId: Int): Result<Unit> =
+        call { api().deleteActualBlock(actualBlockId) }
 
     suspend fun getWindowSettings(): Result<DayWindowSettings> =
         call { api().getSettings().toModel() }

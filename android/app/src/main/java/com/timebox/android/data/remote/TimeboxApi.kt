@@ -45,17 +45,29 @@ interface TimeboxApi {
         @Path("blockId") blockId: Int,
     ): DayDto
 
-    @POST("days/{date}/blocks/{blockId}/complete-as-planned")
-    suspend fun completeAsPlanned(
-        @Path("date") date: String,
-        @Path("blockId") blockId: Int,
-    ): DayDto
+    @POST("actual-blocks/start")
+    suspend fun startActualBlock(@Body body: ActualBlockStartDto): ActualBlockDto
 
-    @DELETE("days/{date}/blocks/{blockId}/completion")
-    suspend fun reverseBlockCompletion(
-        @Path("date") date: String,
-        @Path("blockId") blockId: Int,
-    ): DayDto
+    @POST("actual-blocks")
+    suspend fun createActualBlock(@Body body: ActualBlockCreateDto): ActualBlockDto
+
+    @GET("actual-blocks/{actualBlockId}")
+    suspend fun getActualBlock(@Path("actualBlockId") actualBlockId: Int): ActualBlockDto
+
+    @GET("actual-blocks/active")
+    suspend fun getActiveActualBlock(): ActualBlockDto?
+
+    @PATCH("actual-blocks/{actualBlockId}")
+    suspend fun patchActualBlock(
+        @Path("actualBlockId") actualBlockId: Int,
+        @Body body: ActualBlockPatchDto,
+    ): ActualBlockDto
+
+    @POST("actual-blocks/{actualBlockId}/finish")
+    suspend fun finishActualBlock(@Path("actualBlockId") actualBlockId: Int): ActualBlockDto
+
+    @DELETE("actual-blocks/{actualBlockId}")
+    suspend fun deleteActualBlock(@Path("actualBlockId") actualBlockId: Int)
 
     @GET("settings")
     suspend fun getSettings(): SettingsDto
@@ -99,10 +111,13 @@ interface TimeboxApi {
     suspend fun patchBattleTask(@Path("taskId") taskId: Int, @Body body: JsonObject): BattleTaskDto
 
     @POST("tasks/{taskId}/complete")
-    suspend fun completeBattleTask(
-        @Path("taskId") taskId: Int,
-        @Body body: TaskCompletionRequestDto,
-    ): TaskCompletionResponseDto
+    suspend fun completeBattleTask(@Path("taskId") taskId: Int): TaskCompletionResponseDto
+
+    @POST("subtasks/{subtaskId}/check")
+    suspend fun checkSubtask(@Path("subtaskId") subtaskId: Int): SubtaskDto
+
+    @POST("subtasks/{subtaskId}/uncheck")
+    suspend fun uncheckSubtask(@Path("subtaskId") subtaskId: Int): SubtaskDto
 
     @POST("tasks/{taskId}/reopen")
     suspend fun reopenBattleTask(@Path("taskId") taskId: Int): BattleTaskDto

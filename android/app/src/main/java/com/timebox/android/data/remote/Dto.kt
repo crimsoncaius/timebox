@@ -32,8 +32,33 @@ data class TimeBlockDto(
     val task: LinkedTaskDto? = null,
     val note: String? = null,
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
+    @SerialName("actual_block_id") val actualBlockId: Int? = null,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
+)
+
+@Serializable
+data class ActualBlockDto(
+    val id: Int,
+    @SerialName("task_type_id") val taskTypeId: Int,
+    @SerialName("task_type") val taskType: TaskTypeDto,
+    @SerialName("task_id") val taskId: Int? = null,
+    val task: LinkedTaskDto? = null,
+    val note: String? = null,
+    @SerialName("planned_block_id") val plannedBlockId: Int? = null,
+    @SerialName("start_at") val startAt: String,
+    @SerialName("end_at") val endAt: String? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+data class ActualBlockDayProjectionDto(
+    @SerialName("actual_block") val actualBlock: ActualBlockDto,
+    val date: String,
+    @SerialName("start_minute") val startMinute: Int,
+    @SerialName("end_minute") val endMinute: Int,
+    @SerialName("duration_minutes") val durationMinutes: Int,
 )
 
 @Serializable
@@ -51,6 +76,9 @@ data class DayDto(
     @SerialName("end_hour") val endHour: Int,
     @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("time_blocks") val timeBlocks: List<TimeBlockDto>,
+    @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
+    @SerialName("planned_minutes") val plannedMinutes: Int = 0,
+    @SerialName("actual_minutes") val actualMinutes: Int = 0,
     val meta: DayMetaDto,
 )
 
@@ -61,6 +89,9 @@ data class DayPreviewDto(
     @SerialName("end_hour") val endHour: Int,
     @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("time_blocks") val timeBlocks: List<TimeBlockDto>,
+    @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
+    @SerialName("planned_minutes") val plannedMinutes: Int = 0,
+    @SerialName("actual_minutes") val actualMinutes: Int = 0,
     val meta: DayMetaDto,
 )
 
@@ -107,12 +138,39 @@ data class SettingsPatchDto(
 
 @Serializable
 data class TimeBlockCreateDto(
-    val lane: String,
+    val lane: String = "planned",
     @SerialName("task_type_id") val taskTypeId: Int,
     @SerialName("task_id") val taskId: Int? = null,
     val note: String? = null,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
+)
+
+@Serializable
+data class ActualBlockStartDto(
+    @SerialName("task_type_id") val taskTypeId: Int? = null,
+    @SerialName("task_id") val taskId: Int? = null,
+    val note: String? = null,
+    @SerialName("planned_block_id") val plannedBlockId: Int? = null,
+)
+
+@Serializable
+data class ActualBlockCreateDto(
+    @SerialName("task_type_id") val taskTypeId: Int? = null,
+    @SerialName("task_id") val taskId: Int? = null,
+    val note: String? = null,
+    @SerialName("planned_block_id") val plannedBlockId: Int? = null,
+    @SerialName("start_at") val startAt: String,
+    @SerialName("end_at") val endAt: String,
+)
+
+@Serializable
+data class ActualBlockPatchDto(
+    @SerialName("task_type_id") val taskTypeId: Int? = null,
+    @SerialName("task_id") val taskId: Int? = null,
+    val note: String? = null,
+    @SerialName("start_at") val startAt: String? = null,
+    @SerialName("end_at") val endAt: String? = null,
 )
 
 @Serializable

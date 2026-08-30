@@ -344,14 +344,13 @@ private fun LaneColumn(
             val end = live?.endMinute ?: block.endMinute
             BlockCard(
                 block = block,
-                timeCompleted = lane == Lane.Planned && day.blocks.any { it.plannedBlockId == block.id },
                 startMinute = start,
                 endMinute = end,
                 visibleStart = day.visibleStart,
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
-                gesturesEnabled = blockGesturesEnabled,
+                gesturesEnabled = blockGesturesEnabled && lane == Lane.Planned,
                 onTap = { onSelectBlock(block.id) },
                 // Both callbacks recompute from the block's committed times and the raw
                 // gesture delta. Reading the drag state here instead would capture the
@@ -679,7 +678,6 @@ private fun PlanningDraftCard(
 @Composable
 private fun BlockCard(
     block: TimeBlock,
-    timeCompleted: Boolean,
     startMinute: Int,
     endMinute: Int,
     visibleStart: Int,
@@ -714,7 +712,6 @@ private fun BlockCard(
             .background(
                 when {
                     dragging || selected -> colors.paperRaised
-                    timeCompleted -> colors.plannedSurface
                     else -> colors.paper
                 }
             )
@@ -806,7 +803,6 @@ private fun BlockCard(
                 Text(
                     text = buildString {
                         append(block.task?.title ?: block.taskTypeName)
-                        if (timeCompleted) append(" · Time ✓")
                         block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
                     },
                     style = if (selected) {
@@ -814,7 +810,6 @@ private fun BlockCard(
                     } else {
                         TimeboxTheme.type.blockTitle
                     },
-                    textDecoration = if (timeCompleted) TextDecoration.LineThrough else TextDecoration.None,
                     color = colors.on,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

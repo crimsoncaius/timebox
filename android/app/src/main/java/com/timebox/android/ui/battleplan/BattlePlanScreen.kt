@@ -118,6 +118,7 @@ import com.timebox.android.data.BattleTask
 import com.timebox.android.data.BattlePlanSort
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
+import com.timebox.android.data.Subtask
 import com.timebox.android.data.TaskCollection
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
@@ -157,7 +158,7 @@ fun BattlePlanScreen(
     onDropTask: (BattleTask, TaskStatus, Int) -> Unit = { _, _, _ -> },
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit = { _, _, _ -> },
     onCreateSubtask: (BattleTask, String) -> Unit,
-    onToggleSubtask: (BattleTask) -> Unit,
+    onToggleSubtask: (Subtask) -> Unit,
     onCreateTask: (String, String, Int?) -> Unit,
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
@@ -172,8 +173,6 @@ fun BattlePlanScreen(
     onRequestPermanentDelete: (BattleTask) -> Unit,
     onDismissPermanentDelete: () -> Unit,
     onConfirmPermanentDelete: () -> Unit,
-    onDismissCompletion: () -> Unit = {},
-    onConfirmCompletion: (Boolean) -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     when {
@@ -264,41 +263,6 @@ fun BattlePlanScreen(
             text = { Text("This removes the task and its subtasks permanently. This cannot be undone.") },
             confirmButton = { TextButton(onClick = onConfirmPermanentDelete) { Text("Delete permanently") } },
             dismissButton = { TextButton(onClick = onDismissPermanentDelete) { Text("Cancel") } },
-        )
-    }
-    state.pendingCompletionTask?.let { task ->
-        val zone = runCatching { java.time.ZoneId.of(state.timezone) }.getOrDefault(java.time.ZoneId.of("UTC"))
-        val today = state.serverNow.atZone(zone).toLocalDate()
-        val affected = listOf(task) + task.subtasks
-        val hasCurrentIncompletePlannedTime = affected.any { affectedTask ->
-            affectedTask.allocations.any { !it.timeCompleted && it.date >= today }
-        }
-        AlertDialog(
-            onDismissRequest = onDismissCompletion,
-            title = { Text(if (task.subtasks.isNotEmpty()) "Complete parent and subtasks?" else "Complete task?") },
-            text = {
-                Text(
-                    when {
-                        task.subtasks.isNotEmpty() && hasCurrentIncompletePlannedTime ->
-                            "This completes every Subtask. Choose what should happen to incomplete planned time today and later."
-                        task.subtasks.isNotEmpty() -> "This completes every Subtask."
-                        else -> "Choose what should happen to incomplete planned time today and later."
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { onConfirmCompletion(false) }) {
-                    Text(if (hasCurrentIncompletePlannedTime) "Keep time" else "Complete")
-                }
-            },
-            dismissButton = {
-                Row {
-                    if (hasCurrentIncompletePlannedTime) {
-                        TextButton(onClick = { onConfirmCompletion(true) }) { Text("Remove planned time") }
-                    }
-                    TextButton(onClick = onDismissCompletion) { Text("Cancel") }
-                }
-            },
         )
     }
 }
@@ -1164,7 +1128,11 @@ private fun MobileKanbanCard(
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 Text(task.title, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                IconButton(onClick = { onToggleReady(task) }, modifier = Modifier.size(38.dp)) {
+                IconButton(
+                    onClick = { onToggleReady(task) },
+                    modifier = Modifier.size(38.dp),
+                    enabled = task.status != TaskStatus.Completed,
+                ) {
                     Icon(
                         if (task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
                         contentDescription = if (task.readyToPlan) "Remove ${task.title} from Ready to Plan" else "Add ${task.title} to Ready to Plan",
@@ -1198,9 +1166,12 @@ private fun MobileKanbanCard(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(task.project?.name ?: "Admin", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                TextButton(onClick = {
-                    if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
-                }) {
+                TextButton(
+                    onClick = {
+                        if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
+                    },
+                    enabled = task.status != TaskStatus.Completed,
+                ) {
                     Text(if (task.isBlocked) "Blocked" else "Block", color = if (task.isBlocked) colors.error else colors.onVariant)
                 }
             }
@@ -1211,12 +1182,11 @@ private fun MobileKanbanCard(
                 Spacer(Modifier.height(3.dp))
                 PlannedDatePill(summary)
             }
-            AllocationProgress(task)
             val metadata = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.urgency?.let { add("U ${it.wire}") }
                 task.importance?.let { add("I ${it.wire}") }
-                if (task.subtasks.isNotEmpty()) add("${task.subtasks.count { it.status == TaskStatus.Completed }}/${task.subtasks.size} subtasks")
+                if (task.subtasks.isNotEmpty()) add("${task.subtasks.count { it.checked }}/${task.subtasks.size} subtasks")
             }
             if (metadata.isNotEmpty()) {
                 Spacer(Modifier.height(3.dp))
@@ -1261,40 +1231,49 @@ private fun MobileTaskActionMenu(
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
     ) {
-        if (hasReorderActions) {
-            MenuSectionLabel("Reorder")
-            if (canMoveEarlier) {
-                MobileTaskActionMenuItem(
-                    label = "Move earlier",
-                    icon = Icons.Outlined.KeyboardArrowUp,
-                    onClick = onMoveEarlier,
-                )
-            }
-            if (canMoveLater) {
-                MobileTaskActionMenuItem(
-                    label = "Move later",
-                    icon = Icons.Outlined.KeyboardArrowDown,
-                    onClick = onMoveLater,
-                )
-            }
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                color = colors.hairline,
-            )
-        }
-
-        MenuSectionLabel("Move to")
-        battlePlanStatuses.filter { it != status }.forEach { target ->
+        if (status == TaskStatus.Completed) {
+            MenuSectionLabel("Task")
             MobileTaskActionMenuItem(
-                label = "Move to ${target.label}",
-                icon = when (target) {
-                    TaskStatus.Open -> Icons.Outlined.Inbox
-                    TaskStatus.InProgress -> Icons.Outlined.PlayArrow
-                    TaskStatus.Completed -> Icons.Outlined.CheckCircle
-                    TaskStatus.Blocked -> Icons.Outlined.Inbox
-                },
-                onClick = { onMoveTo(target) },
+                label = "Reopen Task",
+                icon = Icons.Outlined.Inbox,
+                onClick = { onMoveTo(TaskStatus.Open) },
             )
+        } else {
+            if (hasReorderActions) {
+                MenuSectionLabel("Reorder")
+                if (canMoveEarlier) {
+                    MobileTaskActionMenuItem(
+                        label = "Move earlier",
+                        icon = Icons.Outlined.KeyboardArrowUp,
+                        onClick = onMoveEarlier,
+                    )
+                }
+                if (canMoveLater) {
+                    MobileTaskActionMenuItem(
+                        label = "Move later",
+                        icon = Icons.Outlined.KeyboardArrowDown,
+                        onClick = onMoveLater,
+                    )
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                    color = colors.hairline,
+                )
+            }
+
+            MenuSectionLabel("Move to")
+            battlePlanStatuses.filter { it != status }.forEach { target ->
+                MobileTaskActionMenuItem(
+                    label = "Move to ${target.label}",
+                    icon = when (target) {
+                        TaskStatus.Open -> Icons.Outlined.Inbox
+                        TaskStatus.InProgress -> Icons.Outlined.PlayArrow
+                        TaskStatus.Completed -> Icons.Outlined.CheckCircle
+                        TaskStatus.Blocked -> Icons.Outlined.Inbox
+                    },
+                    onClick = { onMoveTo(target) },
+                )
+            }
         }
     }
 }
@@ -1567,13 +1546,12 @@ private fun MobileTaskDragPreview(
             Spacer(Modifier.height(3.dp))
             PlannedDatePill(summary)
         }
-        AllocationProgress(drag.task)
         val metadata = buildList {
             drag.task.deadlineDate?.let { add("Due $it") }
             drag.task.urgency?.let { add("U ${it.wire}") }
             drag.task.importance?.let { add("I ${it.wire}") }
             if (drag.task.subtasks.isNotEmpty()) {
-                add("${drag.task.subtasks.count { it.status == TaskStatus.Completed }}/${drag.task.subtasks.size} subtasks")
+                add("${drag.task.subtasks.count { it.checked }}/${drag.task.subtasks.size} subtasks")
             }
         }
         if (metadata.isNotEmpty()) {
@@ -1641,7 +1619,7 @@ private fun TaskColumn(
     onMove: (BattleTask, TaskStatus) -> Unit,
     onReorder: (BattleTask, Int) -> Unit,
     onCreateSubtask: (BattleTask, String) -> Unit,
-    onToggleSubtask: (BattleTask) -> Unit,
+    onToggleSubtask: (Subtask) -> Unit,
 ) {
     Column(modifier.fillMaxSize().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(6.dp)) {
         Text("$title  ${tasks.size}", style = TimeboxTheme.type.label, modifier = Modifier.padding(8.dp))
@@ -1661,7 +1639,7 @@ private fun TaskList(
     onMove: (BattleTask, TaskStatus) -> Unit,
     onReorder: (BattleTask, Int) -> Unit,
     onCreateSubtask: (BattleTask, String) -> Unit,
-    onToggleSubtask: (BattleTask) -> Unit,
+    onToggleSubtask: (Subtask) -> Unit,
 ) {
     if (tasks.isEmpty()) {
         Box(modifier.padding(24.dp), contentAlignment = Alignment.Center) { Text("Nothing here.", color = TimeboxTheme.colors.onVariant) }
@@ -1685,7 +1663,7 @@ private fun BattleTaskCard(
     onMove: (BattleTask, TaskStatus) -> Unit,
     onReorder: (BattleTask, Int) -> Unit,
     onCreateSubtask: (BattleTask, String) -> Unit,
-    onToggleSubtask: (BattleTask) -> Unit,
+    onToggleSubtask: (Subtask) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     var menu by remember { mutableStateOf(false) }
@@ -1726,13 +1704,12 @@ private fun BattleTaskCard(
                 Spacer(Modifier.height(5.dp))
                 PlannedDatePill(summary)
             }
-            AllocationProgress(task)
             val details = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.deadlineAt?.let { add("Due $it") }
                 task.recurringTemplateTitle?.let { add("Recurring: $it") }
                 if (task.subtasks.isNotEmpty()) {
-                    add("${task.subtasks.count { it.status == TaskStatus.Completed }}/${task.subtasks.size} subtasks")
+                    add("${task.subtasks.count { it.checked }}/${task.subtasks.size} subtasks")
                 }
             }
             if (details.isNotEmpty()) {
@@ -1744,7 +1721,7 @@ private fun BattleTaskCard(
                 Text("Ready to Plan", style = TimeboxTheme.type.bodySmall, color = colors.planned)
             }
         }
-        IconButton(onClick = { onToggleReady(task) }) {
+        IconButton(onClick = { onToggleReady(task) }, enabled = task.status != TaskStatus.Completed) {
             Icon(
                 if (task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
                 contentDescription = if (task.readyToPlan) "Remove from Ready to Plan" else "Mark Ready to Plan",
@@ -1756,11 +1733,16 @@ private fun BattleTaskCard(
                 Icon(Icons.Outlined.MoreVert, contentDescription = "Task actions", tint = colors.onVariant)
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                if (manualOrder) {
+                if (task.status == TaskStatus.Completed) {
+                    DropdownMenuItem(
+                        text = { Text("Reopen Task") },
+                        onClick = { menu = false; onMove(task, TaskStatus.Open) },
+                    )
+                } else if (manualOrder) {
                     DropdownMenuItem(text = { Text("Move earlier") }, onClick = { menu = false; onReorder(task, -1) })
                     DropdownMenuItem(text = { Text("Move later") }, onClick = { menu = false; onReorder(task, 1) })
                 }
-                battlePlanStatuses.filter { it != task.status }.forEach { target ->
+                battlePlanStatuses.filter { task.status != TaskStatus.Completed && it != task.status }.forEach { target ->
                     DropdownMenuItem(
                         text = { Text("Move to ${target.label}") },
                         onClick = { menu = false; onMove(task, target) },
@@ -1774,25 +1756,33 @@ private fun BattleTaskCard(
             TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide subtasks" else "Show ${task.subtasks.size} subtasks") }
             if (expanded) {
                 task.subtasks.forEach { child ->
-                    Column(Modifier.fillMaxWidth().clickable { onOpen(child.id) }.padding(vertical = 6.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (child.status == TaskStatus.Completed) "✓ ${child.title}" else child.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
-                            TextButton(onClick = { onToggleSubtask(child) }) { Text(if (child.status == TaskStatus.Completed) "Reopen" else "Complete") }
+                            Text(if (child.checked) "✓ ${child.title}" else child.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
+                            TextButton(
+                                onClick = { onToggleSubtask(child) },
+                                enabled = task.status != TaskStatus.Completed,
+                            ) { Text(if (child.checked) "Uncheck" else "Check") }
                         }
-                        plannedDateSummary(child.plannedDates, serverNow, timezone)?.let { summary ->
-                            PlannedDatePill(summary)
-                        }
-                        child.deadlineDate?.let { Text("Due $it", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
-                        child.deadlineAt?.let { Text("Due $it", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(newSubtask, { newSubtask = it }, Modifier.weight(1f), label = { Text("New subtask") }, singleLine = true)
-                    TextButton(enabled = newSubtask.isNotBlank(), onClick = { onCreateSubtask(task, newSubtask); newSubtask = "" }) { Text("Add") }
+                    OutlinedTextField(
+                        newSubtask,
+                        { newSubtask = it },
+                        Modifier.weight(1f),
+                        enabled = task.status != TaskStatus.Completed,
+                        label = { Text("New subtask") },
+                        singleLine = true,
+                    )
+                    TextButton(
+                        enabled = newSubtask.isNotBlank() && task.status != TaskStatus.Completed,
+                        onClick = { onCreateSubtask(task, newSubtask); newSubtask = "" },
+                    ) { Text("Add") }
                 }
             }
         }
-    } else {
+    } else if (task.status != TaskStatus.Completed) {
         TextButton(onClick = { expanded = true }, modifier = Modifier.padding(start = 12.dp)) { Text("Add subtask") }
     }
 }
@@ -1929,8 +1919,8 @@ fun TaskDetailScreen(
     onReadyChange: (Boolean) -> Unit,
     onOpenDay: (java.time.LocalDate, Int?) -> Unit,
     onAddSubtask: (String) -> Unit,
-    onToggleSubtask: (BattleTask, Boolean) -> Unit,
-    onTrashSubtask: (BattleTask) -> Unit,
+    onToggleSubtask: (Subtask) -> Unit,
+    onTrashSubtask: (Subtask) -> Unit,
     onDismissSubtaskTrash: () -> Unit,
     onConfirmSubtaskTrash: () -> Unit,
     onUndoSubtaskTrash: () -> Unit,
@@ -1938,43 +1928,14 @@ fun TaskDetailScreen(
     onDismissTrash: () -> Unit,
     onConfirmTrash: () -> Unit,
     onTrashed: () -> Unit,
-    onSave: (Boolean) -> Unit,
+    onReopen: () -> Unit,
+    onSave: () -> Unit,
 ) {
     LaunchedEffect(state.trashed) { if (state.trashed) onTrashed() }
     var confirmDiscard by remember { mutableStateOf(false) }
-    var confirmCompletion by remember { mutableStateOf(false) }
-    var pendingSubtaskCompletion by remember { mutableStateOf<BattleTask?>(null) }
     var newSubtask by remember { mutableStateOf("") }
-    val completionToday = state.serverNow.atZone(
-        runCatching { java.time.ZoneId.of(state.timezone) }.getOrDefault(java.time.ZoneId.of("UTC"))
-    ).toLocalDate()
-    val completionTasks = state.task?.let { task -> listOf(task) + task.subtasks }.orEmpty()
-    val hasCurrentIncompletePlannedTime = completionTasks.any { task ->
-        task.allocations.any { !it.timeCompleted && it.date >= completionToday }
-    }
-    val completionCascades = state.subtasks.isNotEmpty()
-    fun requestSubtaskToggle(task: BattleTask) {
-        val hasCurrentIncompletePlannedTime = task.allocations.any {
-            !it.timeCompleted && it.date >= completionToday
-        }
-        if (task.status != TaskStatus.Completed && hasCurrentIncompletePlannedTime) {
-            pendingSubtaskCompletion = task
-        } else {
-            onToggleSubtask(task, false)
-        }
-    }
     fun requestBack() { if (state.dirty) confirmDiscard = true else onBack() }
-    fun requestSave() {
-        if (
-            state.task?.status != TaskStatus.Completed &&
-            state.status == TaskStatus.Completed &&
-            (completionCascades || hasCurrentIncompletePlannedTime)
-        ) {
-            confirmCompletion = true
-        } else {
-            onSave(false)
-        }
-    }
+    fun requestSave() = onSave()
     BackHandler(onBack = ::requestBack)
     when {
         state.loading -> LoadingState()
@@ -1983,13 +1944,13 @@ fun TaskDetailScreen(
             val expanded = maxWidth >= 840.dp
             if (expanded && !state.isSubtask) {
                 Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, ::requestSave)
-                    SubtaskPanel(state, Modifier.weight(1f), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, ::requestSubtaskToggle, onTrashSubtask)
+                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onReopen, ::requestSave)
+                    SubtaskPanel(state, Modifier.weight(1f), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onToggleSubtask, onTrashSubtask)
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, ::requestSave)
-                    if (!state.isSubtask) SubtaskPanel(state, Modifier.fillMaxWidth(), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onOpenTask, ::requestSubtaskToggle, onTrashSubtask)
+                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onReopen, ::requestSave)
+                    if (!state.isSubtask) SubtaskPanel(state, Modifier.fillMaxWidth(), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onToggleSubtask, onTrashSubtask)
                 }
             }
         }
@@ -2001,57 +1962,6 @@ fun TaskDetailScreen(
             text = { Text("Your task edits have not been saved.") },
             confirmButton = { TextButton(onClick = onBack) { Text("Discard") } },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
-        )
-    }
-    if (confirmCompletion) {
-        AlertDialog(
-            onDismissRequest = { confirmCompletion = false },
-            title = { Text(if (state.subtasks.isNotEmpty()) "Complete parent and subtasks?" else "Complete task?") },
-            text = {
-                Text(
-                    when {
-                        completionCascades && hasCurrentIncompletePlannedTime ->
-                            "This completes every Subtask. Choose what should happen to incomplete planned time today and later."
-                        completionCascades -> "This completes every Subtask."
-                        else -> "Choose what should happen to incomplete planned time today and later."
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { confirmCompletion = false; onSave(false) }) {
-                    Text(if (hasCurrentIncompletePlannedTime) "Keep time" else "Complete")
-                }
-            },
-            dismissButton = {
-                Row {
-                    if (hasCurrentIncompletePlannedTime) {
-                        TextButton(onClick = { confirmCompletion = false; onSave(true) }) { Text("Remove planned time") }
-                    }
-                    TextButton(onClick = { confirmCompletion = false }) { Text("Cancel") }
-                }
-            },
-        )
-    }
-    pendingSubtaskCompletion?.let { subtask ->
-        AlertDialog(
-            onDismissRequest = { pendingSubtaskCompletion = null },
-            title = { Text("Complete subtask?") },
-            text = { Text("Choose what should happen to incomplete planned time today and later.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingSubtaskCompletion = null
-                    onToggleSubtask(subtask, false)
-                }) { Text("Keep time") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        pendingSubtaskCompletion = null
-                        onToggleSubtask(subtask, true)
-                    }) { Text("Remove planned time") }
-                    TextButton(onClick = { pendingSubtaskCompletion = null }) { Text("Cancel") }
-                }
-            },
         )
     }
     if (state.confirmTrash) {
@@ -2104,6 +2014,7 @@ private fun TaskEditForm(
     onReady: (Boolean) -> Unit,
     onOpenDay: (java.time.LocalDate, Int?) -> Unit,
     onTrash: () -> Unit,
+    onReopen: () -> Unit,
     onSave: () -> Unit,
 ) {
     var showAllPlannedDates by remember(state.taskId) { mutableStateOf(false) }
@@ -2113,6 +2024,19 @@ private fun TaskEditForm(
     val visiblePlannedDates = if (showAllPlannedDates) plannedDates else plannedDates.take(5)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, null); Spacer(Modifier.width(5.dp)); Text("Battle Plan") }
+        if (state.task?.status == TaskStatus.Completed) {
+            Text(state.task.title, style = TimeboxTheme.type.display, color = TimeboxTheme.colors.on)
+            if (state.task.description.isNotBlank()) {
+                Text(state.task.description, style = TimeboxTheme.type.body, color = TimeboxTheme.colors.onVariant)
+            }
+            Text(
+                "Completed Tasks are frozen. Reopen to edit the Task or its Subtasks.",
+                style = TimeboxTheme.type.bodySmall,
+                color = TimeboxTheme.colors.onVariant,
+            )
+            PrimaryButton("Reopen Task", onReopen, Modifier.fillMaxWidth(), enabled = !state.saving)
+            return@Column
+        }
         state.parentTask?.let { Text("Subtask of ${it.title}", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant) }
         OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") })
         OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
@@ -2121,7 +2045,7 @@ private fun TaskEditForm(
             !state.isSubtask &&
             state.status != TaskStatus.Completed &&
             state.subtasks.isNotEmpty() &&
-            state.subtasks.all { it.status == TaskStatus.Completed }
+            state.subtasks.all { it.checked }
         ) {
             TextButton(onClick = { onStatus(TaskStatus.Completed) }) {
                 Text("All subtasks complete · Complete Parent Task")
@@ -2149,39 +2073,7 @@ private fun TaskEditForm(
                 OutlinedTextField(state.reminderTime, onReminderTime, Modifier.fillMaxWidth(), label = { Text("Reminder time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
             }
         }
-        if (state.task?.allocations?.isNotEmpty() == true) {
-            val allocations = state.task.allocations.sortedWith(compareBy({ it.date }, { it.startMinute }))
-            val currentAllocations = allocations.filter { it.date >= today }
-            val pastAllocations = allocations.filter { it.date < today }.asReversed()
-            Column(
-                Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text("Allocated time", style = TimeboxTheme.type.label)
-                Text(
-                    "${state.task.allocationCompleted}/${state.task.allocationTotal} time blocks completed",
-                    style = TimeboxTheme.type.bodySmall,
-                    color = TimeboxTheme.colors.onVariant,
-                )
-                listOf("Today & upcoming" to currentAllocations, "Past allocations" to pastAllocations)
-                    .filter { it.second.isNotEmpty() }
-                    .forEach { (label, group) ->
-                        Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-                        group.forEach { allocation ->
-                            Text(
-                                text = "${formatPlannedDetailDate(allocation.date, today)}  ·  " +
-                                    "${hhmm(allocation.startMinute)}–${hhmm(allocation.endMinute)}  ·  " +
-                                    if (allocation.timeCompleted) "Time completed" else "Time planned",
-                                style = TimeboxTheme.type.bodySmall,
-                                color = TimeboxTheme.colors.onVariant,
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                    .clickable { onOpenDay(allocation.date, allocation.blockId) }
-                                    .padding(horizontal = 8.dp, vertical = 7.dp),
-                            )
-                        }
-                    }
-                }
-        } else if (plannedDates.isNotEmpty()) {
+        if (plannedDates.isNotEmpty()) {
             Column(
                 Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -2213,39 +2105,43 @@ private fun TaskEditForm(
 }
 
 @Composable
-private fun AllocationProgress(task: BattleTask) {
-    if (task.allocationTotal == 0) return
-    Spacer(Modifier.height(4.dp))
-    Text(
-        "${task.allocationCompleted}/${task.allocationTotal} time blocks",
-        style = TimeboxTheme.type.bodySmall,
-        color = TimeboxTheme.colors.onVariant,
-    )
-}
-
-@Composable
 private fun SubtaskPanel(
     state: TaskDetailUiState,
     modifier: Modifier,
     newSubtask: String,
     onNewSubtask: (String) -> Unit,
     onAdd: () -> Unit,
-    onOpen: (Int) -> Unit,
-    onToggle: (BattleTask) -> Unit,
-    onTrash: (BattleTask) -> Unit,
+    onToggle: (Subtask) -> Unit,
+    onTrash: (Subtask) -> Unit,
 ) {
     Column(modifier.clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Subtasks ${state.subtasks.count { it.status == TaskStatus.Completed }}/${state.subtasks.size}", style = TimeboxTheme.type.sectionTitle)
+        Text("Subtasks ${state.subtasks.count { it.checked }}/${state.subtasks.size}", style = TimeboxTheme.type.sectionTitle)
         state.subtasks.forEach { task ->
-            Row(Modifier.fillMaxWidth().clickable { onOpen(task.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (task.status == TaskStatus.Completed) "✓ ${task.title}" else task.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
-                TextButton(onClick = { onToggle(task) }) { Text(if (task.status == TaskStatus.Completed) "Reopen" else "Complete") }
-                IconButton(onClick = { onTrash(task) }) { Icon(Icons.Outlined.Delete, "Move ${task.title} to Trash") }
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (task.checked) "✓ ${task.title}" else task.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
+                TextButton(
+                    onClick = { onToggle(task) },
+                    enabled = state.status != TaskStatus.Completed,
+                ) { Text(if (task.checked) "Uncheck" else "Check") }
+                IconButton(
+                    onClick = { onTrash(task) },
+                    enabled = state.status != TaskStatus.Completed,
+                ) { Icon(Icons.Outlined.Delete, "Move ${task.title} to Trash") }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(newSubtask, onNewSubtask, Modifier.weight(1f), label = { Text("New subtask") }, singleLine = true)
-            TextButton(onClick = onAdd, enabled = newSubtask.isNotBlank() && !state.saving) { Text("Add") }
+            OutlinedTextField(
+                newSubtask,
+                onNewSubtask,
+                Modifier.weight(1f),
+                enabled = state.status != TaskStatus.Completed,
+                label = { Text("New subtask") },
+                singleLine = true,
+            )
+            TextButton(
+                onClick = onAdd,
+                enabled = newSubtask.isNotBlank() && !state.saving && state.status != TaskStatus.Completed,
+            ) { Text("Add") }
         }
     }
 }

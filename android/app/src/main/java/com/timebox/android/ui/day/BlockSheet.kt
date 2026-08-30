@@ -25,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.Lane
+import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
@@ -59,11 +59,8 @@ fun BlockSheet(
     onCreateType: (String) -> Unit,
     onNoteChange: (String) -> Unit,
     onDelete: () -> Unit,
-    onComplete: () -> Unit,
-    onReverseCompletion: () -> Unit,
-    onRequestTaskCompletion: () -> Unit,
-    onConfirmTaskCompletion: (removePlannedTime: Boolean) -> Unit,
-    onDismissTaskCompletion: () -> Unit,
+    onStartWorkMode: () -> Unit,
+    onConfirmTaskCompletion: () -> Unit,
     onReopenTask: () -> Unit,
     onOpenLinkedTask: (Int) -> Unit,
     allowComplete: Boolean = true,
@@ -221,30 +218,19 @@ fun BlockSheet(
             )
 
             val selected = state.selectedBlock
-            if (!isDraft && selected != null && (
-                    selected.lane == Lane.Planned || selected.task != null
-                )
-            ) {
+            if (!isDraft && selected != null) {
                 Spacer(Modifier.height(18.dp))
                 Column(
                     Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    if (selected.lane == Lane.Planned) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("Time completed", style = TimeboxTheme.type.label)
-                                Text("This allocation was fulfilled.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                            }
-                            Checkbox(
-                                checked = state.selectedAlreadyCompleted,
-                                enabled = allowComplete && !state.saving,
-                                onCheckedChange = { completed ->
-                                    if (completed) onComplete() else onReverseCompletion()
-                                },
-                            )
-                        }
-                    }
+                    PrimaryButton(
+                        text = if (selected.lane == Lane.Planned) "Start Work Mode" else "Open Work Mode",
+                        onClick = onStartWorkMode,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = allowComplete && !state.saving &&
+                            (selected.lane == Lane.Actual || selected.task?.status != TaskStatus.Completed),
+                    )
                     selected.task?.let { task ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -260,7 +246,7 @@ fun BlockSheet(
                                 checked = task.status == com.timebox.android.data.TaskStatus.Completed,
                                 enabled = !task.isReadOnly && !state.saving,
                                 onCheckedChange = { completed ->
-                                    if (completed) onRequestTaskCompletion() else onReopenTask()
+                                    if (completed) onConfirmTaskCompletion() else onReopenTask()
                                 },
                             )
                         }
@@ -287,35 +273,6 @@ fun BlockSheet(
         }
     }
 
-    state.taskCompletionPrompt?.let { prompt ->
-        AlertDialog(
-            onDismissRequest = onDismissTaskCompletion,
-            title = { Text(if (prompt.cascadesSubtasks) "Complete parent and subtasks?" else "Complete task?") },
-            text = {
-                Text(
-                    when {
-                        prompt.cascadesSubtasks && prompt.hasCurrentIncompletePlannedTime ->
-                            "This completes every Subtask. Choose what should happen to incomplete planned time today and later."
-                        prompt.cascadesSubtasks -> "This completes every Subtask."
-                        else -> "Choose what should happen to incomplete planned time today and later."
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { onConfirmTaskCompletion(false) }) {
-                    Text(if (prompt.hasCurrentIncompletePlannedTime) "Keep time" else "Complete")
-                }
-            },
-            dismissButton = {
-                Row {
-                    if (prompt.hasCurrentIncompletePlannedTime) {
-                        TextButton(onClick = { onConfirmTaskCompletion(true) }) { Text("Remove planned time") }
-                    }
-                    TextButton(onClick = onDismissTaskCompletion) { Text("Cancel") }
-                }
-            },
-        )
-    }
 }
 
 @Composable
