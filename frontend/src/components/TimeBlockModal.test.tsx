@@ -233,7 +233,6 @@ describe('TimeBlockModal', () => {
 
   it('offers definitive Actual actions without completion bookkeeping', async () => {
     const user = userEvent.setup()
-    const onStartWorkMode = vi.fn().mockResolvedValue(undefined)
     const onRecordActualAsPlanned = vi.fn().mockResolvedValue(undefined)
     const planned = makeBlock({
       task_id: 42,
@@ -250,16 +249,14 @@ describe('TimeBlockModal', () => {
         onClose={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onStartWorkMode={onStartWorkMode}
         onRecordActualAsPlanned={onRecordActualAsPlanned}
         onCreateTaskTypePath={noopCreate}
       />
       </MemoryRouter>,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Start Work Mode' }))
+    expect(screen.queryByRole('button', { name: 'Start Work Mode' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Record Actual as planned' }))
-    expect(onStartWorkMode).toHaveBeenCalled()
     expect(onRecordActualAsPlanned).toHaveBeenCalled()
   })
 

@@ -107,7 +107,7 @@ export const api = {
 
   getActiveActualBlock: () => fetchJson<ActualBlock | null>('/actual-blocks/active'),
   getActualBlock: (id: number) => fetchJson<ActualBlock>(`/actual-blocks/${id}`),
-  startActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null }) =>
+  startActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null; start_at?: string }) =>
     fetchJson<ActualBlock>('/actual-blocks/start', { method: 'POST', body: JSON.stringify(body) }),
   createActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null; start_at: string; end_at: string }) =>
     fetchJson<ActualBlock>('/actual-blocks', { method: 'POST', body: JSON.stringify(body) }),

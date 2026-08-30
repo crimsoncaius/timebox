@@ -93,6 +93,43 @@ def test_live_actual_start_and_finish_capture_authoritative_instants(
     assert day["actual_blocks"][0]["actual_block"]["id"] == active["id"]
 
 
+def test_live_actual_start_accepts_an_explicit_past_instant(client, captured_instants):
+    task_type = _task_type(client, "Confirmed work")
+    planned = _planned_block(client, task_type["id"], note="Deep work")
+    captured_instants.append(dt.datetime(2026, 8, 30, 10, 1, tzinfo=UTC))
+
+    started = client.post(
+        "/actual-blocks/start",
+        json={
+            "planned_block_id": planned["id"],
+            "start_at": "2026-08-30T10:00:00Z",
+        },
+    )
+
+    assert started.status_code == 201, started.text
+    assert started.json()["start_at"] == "2026-08-30T10:00:00Z"
+    assert started.json()["planned_block_id"] == planned["id"]
+    assert started.json()["task_type_id"] == task_type["id"]
+    assert started.json()["task_id"] is None
+
+
+def test_live_actual_start_rejects_an_explicit_future_instant(client, captured_instants):
+    task_type = _task_type(client, "Future work")
+    captured_instants.append(dt.datetime(2026, 8, 30, 10, 0, tzinfo=UTC))
+
+    rejected = client.post(
+        "/actual-blocks/start",
+        json={
+            "task_type_id": task_type["id"],
+            "start_at": "2026-08-30T10:00:01Z",
+        },
+    )
+
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["detail"] == "Actual Block start cannot be in the future"
+    assert client.get("/actual-blocks/active").json() is None
+
+
 def test_retrospective_actual_correction_preserves_planned_data_and_correspondence(client):
     task_type = _task_type(client, "Client work")
     task = client.post(

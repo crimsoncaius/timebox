@@ -22,7 +22,6 @@ export function TimeBlockInspectorContent({
   onSave,
   onCreateFromDraft,
   onDelete,
-  onStartWorkMode,
   onRecordActualAsPlanned,
   onCreateTaskTypePath,
   onDirtyChange,
@@ -36,7 +35,6 @@ export function TimeBlockInspectorContent({
   onSave: (patch: { task_type_id?: number; note?: string | null }) => Promise<void>
   onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
-  onStartWorkMode?: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
@@ -303,7 +301,6 @@ export function TimeBlockInspectorContent({
 
       {!isCreateMode && block?.lane === 'planned' ? (
         <section aria-label="Actual time actions" className="grid gap-2 rounded-xl border border-outline-variant/25 bg-surface-container-low p-3 dark:border-dark-outline-variant">
-          {onStartWorkMode ? <button type="button" disabled={saving} onClick={() => void handleActualAction(onStartWorkMode)} className="rounded-xl bg-primary px-4 py-3 text-sm font-medium text-on-primary disabled:opacity-40">Start Work Mode</button> : null}
           {onRecordActualAsPlanned ? <button type="button" disabled={saving} onClick={() => void handleActualAction(onRecordActualAsPlanned)} className="rounded-xl border border-outline-variant/40 px-4 py-3 text-sm font-medium disabled:opacity-40">Record Actual as planned</button> : null}
         </section>
       ) : null}

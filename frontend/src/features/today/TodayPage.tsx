@@ -10,8 +10,10 @@ import {
 import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { TimeBlockModal } from '../../components/TimeBlockModal'
-import { api, type ActualBlock, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
+import { api, type ActualBlock, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType, type TimeBlock } from '../../lib/api'
 import { WorkMode } from './WorkMode'
+import { beginStoredWorkMode, readStoredWorkMode, writeStoredWorkMode, type StoredWorkMode } from './workModeState'
+import { dateInTimeZone } from '../../lib/battlePlan'
 import {
   addDaysIso,
   minuteFromPointerYInVisibleLane,
@@ -38,6 +40,20 @@ function confirmDiscardUnsaved(): boolean {
   return window.confirm('Discard unsaved changes?')
 }
 
+function minuteInTimeZone(instant: string, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(instant))
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return Number(values.hour) * 60 + Number(values.minute)
+}
+
+function blockInstant(date: string, minute: number, timezone: string) {
+  const hour = String(Math.floor(minute / 60)).padStart(2, '0')
+  const mins = String(minute % 60).padStart(2, '0')
+  return zonedLocalDateTimeToIso(`${date}T${hour}:${mins}`, timezone)
+}
+
 export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
@@ -51,20 +67,30 @@ export function TodayPage() {
   const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const [dayNotice, setDayNotice] = useState<string | null>(null)
   const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
+  const [workMode, setWorkMode] = useState<StoredWorkMode | null>(() => readStoredWorkMode())
+  const [workModeVisible, setWorkModeVisible] = useState(() => readStoredWorkMode() != null)
   const [workModeActual, setWorkModeActual] = useState<ActualBlock | null>(null)
   const [workModeBusy, setWorkModeBusy] = useState(false)
   const [workModeError, setWorkModeError] = useState<string | null>(null)
+  const [workModeGuard, setWorkModeGuard] = useState(false)
+  const [restoreWorkMode, setRestoreWorkMode] = useState(false)
+  const [planThenWork, setPlanThenWork] = useState(false)
+  const [nowIso, setNowIso] = useState<string | null>(null)
   const allBattleTasks = useMemo(
     () => battleTasks.flatMap((task) => [task, ...(task.session_tasks ?? [])]),
     [battleTasks],
   )
-  const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
+  const [selectedBlockRef, setSelectedBlockRef] = useState<{ id: number; lane: BlockLane } | null>(null)
+  const selectedBlockId = selectedBlockRef?.id ?? null
   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
   const [inspectorDirty, setInspectorDirty] = useState(false)
   const [blockDragActive, setBlockDragActive] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftCommitInFlightRef = useRef(false)
   const planningTaskInFlightRef = useRef(false)
+  const clockAnchorRef = useRef<{ server: number; client: number } | null>(null)
+  const workModeRequestRef = useRef<string | null>(null)
+  const workTransitionRef = useRef(false)
   const [planningTaskBusyId, setPlanningTaskBusyId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
@@ -91,29 +117,177 @@ export function TodayPage() {
     void load()
   }, [load])
 
+  const serverNowIso = day?.meta.server_now_iso
   useEffect(() => {
-    setSelectedBlockId(null)
+    if (!serverNowIso) return
+    const server = new Date(serverNowIso).getTime()
+    if (!Number.isFinite(server)) return
+    const anchor = { server, client: Date.now() }
+    clockAnchorRef.current = anchor
+    const update = () => setNowIso(new Date(anchor.server + Date.now() - anchor.client).toISOString())
+    update()
+    const interval = window.setInterval(update, 1000)
+    return () => window.clearInterval(interval)
+  }, [serverNowIso])
+
+  const presentInstant = useCallback(() => {
+    const anchor = clockAnchorRef.current
+    return anchor
+      ? new Date(anchor.server + Date.now() - anchor.client).toISOString()
+      : new Date().toISOString()
+  }, [])
+
+  const persistWorkMode = useCallback((next: StoredWorkMode | null) => {
+    setWorkMode(next)
+    writeStoredWorkMode(next)
+  }, [])
+
+  const enterWorkMode = useCallback((entryAt = presentInstant()) => {
+    const next = beginStoredWorkMode(entryAt)
+    setWorkMode(next)
+    setWorkModeGuard(false)
+    setRestoreWorkMode(false)
+    setWorkModeVisible(true)
+    setSelectedBlockRef(null)
+    setDraft(null)
+    setWorkModeError(null)
+    return next
+  }, [presentInstant])
+
+  useEffect(() => {
+    setSelectedBlockRef(null)
     setDraft(null)
     setInspectorDirty(false)
   }, [date])
 
   const selectedBlock = useMemo(() => {
-    if (selectedBlockId == null || !day) return null
-    return day.time_blocks.find((b) => b.id === selectedBlockId) ?? null
-  }, [day, selectedBlockId])
+    if (!selectedBlockRef || !day) return null
+    if (selectedBlockRef.lane === 'planned') {
+      return day.time_blocks.find((block) => block.id === selectedBlockRef.id && block.lane === 'planned') ?? null
+    }
+    const projection = day.actual_blocks.find(({ actual_block }) => actual_block.id === selectedBlockRef.id)
+    if (!projection) return null
+    return {
+      ...projection.actual_block,
+      lane: 'actual' as const,
+      start_minute: projection.start_minute,
+      end_minute: projection.end_minute,
+    }
+  }, [day, selectedBlockRef])
+
+  const nowMinute = day && nowIso ? minuteInTimeZone(nowIso, day.meta.timezone) : 0
+  const todayPlannedBlocks = useMemo(
+    () => day && nowIso && dateInTimeZone(nowIso, day.meta.timezone) === day.date
+      ? day.time_blocks.filter((block) => block.lane === 'planned').sort((a, b) => a.start_minute - b.start_minute)
+      : [],
+    [day, nowIso],
+  )
+  const currentWorkBlock = todayPlannedBlocks.find(
+    (block) => block.start_minute <= nowMinute && nowMinute < block.end_minute,
+  ) ?? null
+  const nextWorkBlock = todayPlannedBlocks.find((block) => block.start_minute > nowMinute) ?? null
+
+  const workModeCurrentBlock = useMemo<TimeBlock | null>(() => {
+    if (!workModeActual || workModeActual.end_at != null) return currentWorkBlock
+    const linked = workModeActual.planned_block_id == null
+      ? null
+      : day?.time_blocks.find((block) => block.id === workModeActual.planned_block_id && block.lane === 'planned') ?? null
+    if (linked) return linked
+    const startMinute = day ? minuteInTimeZone(workModeActual.start_at, day.meta.timezone) : nowMinute
+    return {
+      ...workModeActual,
+      lane: 'actual',
+      start_minute: startMinute,
+      end_minute: Math.max(startMinute + 1, nowMinute),
+    }
+  }, [currentWorkBlock, day, nowMinute, workModeActual])
+
+  const workModeNextBlock = workModeActual
+    ? (nextWorkBlock?.id === workModeActual.planned_block_id ? null : nextWorkBlock)
+    : nextWorkBlock
+
+  const workModeTask = workModeCurrentBlock?.task_id == null
+    ? null
+    : allBattleTasks.find((task) => task.id === workModeCurrentBlock.task_id) ?? null
 
   useEffect(() => {
-    if (selectedBlockId != null && day && !day.time_blocks.some((b) => b.id === selectedBlockId)) {
-      setSelectedBlockId(null)
+    if (!selectedBlockRef || !day) return
+    const exists = selectedBlockRef.lane === 'actual'
+      ? day.actual_blocks.some(({ actual_block }) => actual_block.id === selectedBlockRef.id)
+      : day.time_blocks.some((block) => block.id === selectedBlockRef.id && block.lane === 'planned')
+    if (!exists) setSelectedBlockRef(null)
+  }, [day, selectedBlockRef])
+
+  useEffect(() => {
+    if (!day || !nowIso) return
+    const stored = readStoredWorkMode()
+    if (stored && new Date(nowIso).getTime() - new Date(stored.lastObservedAt).getTime() > 10 * 60_000) {
+      setWorkMode(stored)
+      setRestoreWorkMode(true)
     }
-  }, [day, selectedBlockId])
+  }, [day, nowIso])
+
+  useEffect(() => {
+    if (!workMode || workMode.activeActualId == null || workModeActual?.id === workMode.activeActualId) return
+    let cancelled = false
+    void api.getActiveActualBlock().then((active) => {
+      if (!cancelled && active?.id === workMode.activeActualId) setWorkModeActual(active)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [workMode, workModeActual])
+
+  useEffect(() => {
+    if (!day || !nowIso || !workMode) return
+    const currentDate = dateInTimeZone(nowIso, day.meta.timezone)
+    if (currentDate !== day.date) navigate(`/day/${currentDate}?workMode=start`, { replace: true })
+  }, [day, navigate, nowIso, workMode])
+
+  useEffect(() => {
+    if (searchParams.get('workMode') !== 'start') {
+      workModeRequestRef.current = null
+      return
+    }
+    if (!day || !nowIso || restoreWorkMode) return
+    if (workMode && new Date(nowIso).getTime() - new Date(workMode.lastObservedAt).getTime() > 10 * 60_000) return
+    const requestKey = `${day.date}|${searchParams.toString()}`
+    if (workModeRequestRef.current === requestKey) return
+    workModeRequestRef.current = requestKey
+    void (async () => {
+      const active = await api.getActiveActualBlock().catch(() => null)
+      if (active) {
+        setWorkModeVisible(true)
+        setWorkModeActual(active)
+        const existing = readStoredWorkMode()
+        const next = existing ?? beginStoredWorkMode(active.start_at)
+        const restored = {
+          ...next,
+          activeActualId: active.id,
+          activePlannedBlockId: active.planned_block_id,
+          activePlannedEndAt: (() => {
+            if (active.planned_block_id == null) return next.activePlannedEndAt
+            const block = day.time_blocks.find((candidate) => candidate.id === active.planned_block_id && candidate.lane === 'planned')
+            return block ? blockInstant(day.date, block.end_minute, day.meta.timezone) : next.activePlannedEndAt
+          })(),
+          lastObservedAt: nowIso,
+          lastConfirmedAt: nowIso,
+        }
+        persistWorkMode(restored)
+      } else if (!workMode) {
+        const near = currentWorkBlock != null || (nextWorkBlock != null && nextWorkBlock.start_minute - nowMinute <= 10)
+        if (near) enterWorkMode(nowIso)
+        else setWorkModeGuard(true)
+      } else setWorkModeVisible(true)
+      navigate(`/day/${day.meta.today}`, { replace: true })
+    })()
+  }, [currentWorkBlock, day, enterWorkMode, navigate, nextWorkBlock, nowIso, nowMinute, persistWorkMode, restoreWorkMode, searchParams, workMode])
 
   useEffect(() => {
     if (!day) return
     const requestedId = Number(searchParams.get('block'))
     if (!Number.isInteger(requestedId) || !day.time_blocks.some((block) => block.id === requestedId)) return
     setDraft(null)
-    setSelectedBlockId(requestedId)
+    const requested = day.time_blocks.find((block) => block.id === requestedId)
+    if (requested) setSelectedBlockRef({ id: requested.id, lane: requested.lane })
     requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-block-id="${requestedId}"]`)?.scrollIntoView({
         block: 'center',
@@ -129,8 +303,9 @@ export function TodayPage() {
 
   const tryClosePanel = useCallback(() => {
     if (!tryDiscardIfNeeded()) return
-    setSelectedBlockId(null)
+    setSelectedBlockRef(null)
     setDraft(null)
+    setPlanThenWork(false)
   }, [tryDiscardIfNeeded])
 
   const resolvePlanningTaskType = useCallback(
@@ -197,7 +372,7 @@ export function TodayPage() {
         setDay(next)
         setPlanningTaskId(null)
         setDraft(null)
-        setSelectedBlockId(null)
+        setSelectedBlockRef(null)
         setBattleTasks((items) =>
           items.map((item) => ({
             ...item,
@@ -235,7 +410,7 @@ export function TodayPage() {
         task_id: lane === 'planned' ? planningTask?.id ?? null : null,
         task_type_id: lane === 'planned' ? planningTask?.task_type_id ?? null : null,
       })
-      setSelectedBlockId(null)
+      setSelectedBlockRef(null)
     },
     [allBattleTasks, planReadyTaskAt, planningTaskId, tryDiscardIfNeeded],
   )
@@ -306,7 +481,7 @@ export function TodayPage() {
         if (draft.lane === 'actual') {
           if (!day) return
           const local = (minute: number) => `${date}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
-          const actual = await api.createActualBlock({
+          await api.createActualBlock({
             task_type_id: payload.task_type_id,
             task_id: draft.task_id ?? null,
             note: payload.note,
@@ -315,7 +490,6 @@ export function TodayPage() {
           })
           setDay(await api.getDay(date))
           setDraft(null)
-          setWorkModeActual(actual)
           return
         }
         const next = await api.createBlock(date, {
@@ -336,7 +510,18 @@ export function TodayPage() {
           setPlanningTaskId(null)
         }
         setDraft(null)
-        if (created) setSelectedBlockId(created.id)
+        if (created) setSelectedBlockRef({ id: created.id, lane: created.lane })
+        if (created && planThenWork) {
+          const completedAt = presentInstant()
+          const completedMinute = minuteInTimeZone(completedAt, next.meta.timezone)
+          if (
+            (created.start_minute <= completedMinute && completedMinute < created.end_minute) ||
+            (created.start_minute > completedMinute && created.start_minute - completedMinute <= 10)
+          ) {
+            enterWorkMode(completedAt)
+          }
+          setPlanThenWork(false)
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to create block')
         throw e
@@ -344,7 +529,7 @@ export function TodayPage() {
         draftCommitInFlightRef.current = false
       }
     },
-    [date, day, draft],
+    [date, day, draft, enterWorkMode, planThenWork, presentInstant],
   )
 
   const patchBlock = useCallback(
@@ -388,6 +573,36 @@ export function TodayPage() {
     [date],
   )
 
+  const patchActual = useCallback(
+    async (blockId: number, patch: { task_type_id?: number; note?: string | null }) => {
+      if (!date) return
+      setError(null)
+      try {
+        await api.patchActualBlock(blockId, patch)
+        setDay(await api.getDay(date))
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Failed to update Actual block')
+        throw cause
+      }
+    },
+    [date],
+  )
+
+  const deleteActual = useCallback(
+    async (blockId: number) => {
+      if (!date) return
+      setError(null)
+      try {
+        await api.deleteActualBlock(blockId)
+        setDay(await api.getDay(date))
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Failed to delete Actual block')
+        throw cause
+      }
+    },
+    [date],
+  )
+
   const recordActualAsPlanned = useCallback(
     async (blockId: number) => {
       if (!date) return
@@ -405,17 +620,228 @@ export function TodayPage() {
     [date],
   )
 
-  const startWorkMode = useCallback(async (block: NonNullable<typeof selectedBlock>) => {
-    setError(null)
-    try {
-      const actual = await api.startActualBlock({ planned_block_id: block.id })
-      setWorkModeActual(actual)
-      setSelectedBlockId(null)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to start Work Mode')
-      throw cause
+  useEffect(() => {
+    if (!workMode || !day || !nowIso || restoreWorkMode || workTransitionRef.current) return
+    if (new Date(nowIso).getTime() - new Date(workMode.lastObservedAt).getTime() > 10 * 60_000) return
+    const run = async () => {
+      workTransitionRef.current = true
+      try {
+        let nextState = workMode
+        const nowMs = new Date(nowIso).getTime()
+
+        if (nextState.activeActualId != null && nextState.activePlannedEndAt) {
+          const boundaryMs = new Date(nextState.activePlannedEndAt).getTime()
+          if (nowMs >= boundaryMs) {
+            await api.patchActualBlock(nextState.activeActualId, { end_at: nextState.activePlannedEndAt })
+            setWorkModeActual(null)
+            nextState = {
+              ...nextState,
+              activeActualId: null,
+              activePlannedBlockId: null,
+              activePlannedEndAt: null,
+              confirmingPlannedBlockId: null,
+              confirmationStartedAt: null,
+              lastConfirmedAt: nextState.activePlannedEndAt,
+            }
+          }
+        }
+
+        if (
+          nextState.activeActualId == null &&
+          nextState.confirmingPlannedBlockId != null &&
+          nextState.confirmationStartedAt != null
+        ) {
+          const confirmed = day.time_blocks.find(
+            (block) => block.id === nextState.confirmingPlannedBlockId && block.lane === 'planned',
+          )
+          if (confirmed) {
+            const blockStartAt = blockInstant(day.date, confirmed.start_minute, day.meta.timezone)
+            const blockEndAt = blockInstant(day.date, confirmed.end_minute, day.meta.timezone)
+            const actualStartAt = new Date(blockStartAt) > new Date(nextState.entryAt) ? blockStartAt : nextState.entryAt
+            const blockEndMs = new Date(blockEndAt).getTime()
+            const confirmedDurationMs = Math.min(nowMs, blockEndMs) - new Date(nextState.confirmationStartedAt).getTime()
+            if (confirmedDurationMs < 60_000 && nowMs >= blockEndMs) {
+              nextState = { ...nextState, confirmingPlannedBlockId: null, confirmationStartedAt: null }
+            } else if (confirmedDurationMs >= 60_000 && nowMs >= blockEndMs) {
+              await api.createActualBlock({
+                planned_block_id: confirmed.id,
+                start_at: actualStartAt,
+                end_at: blockEndAt,
+              })
+              nextState = {
+                ...nextState,
+                confirmingPlannedBlockId: null,
+                confirmationStartedAt: null,
+                lastConfirmedAt: blockEndAt,
+              }
+            } else if (confirmedDurationMs >= 60_000) {
+              const actual = await api.startActualBlock({ planned_block_id: confirmed.id, start_at: actualStartAt })
+              setWorkModeActual(actual)
+              nextState = {
+                ...nextState,
+                activeActualId: actual.id,
+                activePlannedBlockId: confirmed.id,
+                activePlannedEndAt: blockEndAt,
+                confirmingPlannedBlockId: null,
+                confirmationStartedAt: null,
+                lastConfirmedAt: nowIso,
+              }
+            }
+          } else {
+            nextState = { ...nextState, confirmingPlannedBlockId: null, confirmationStartedAt: null }
+          }
+        }
+
+        if (nextState.activeActualId != null) {
+          if (nextState.lastConfirmedAt !== nowIso) nextState = { ...nextState, lastConfirmedAt: nowIso }
+        } else if (!currentWorkBlock) {
+          if (nextState.confirmingPlannedBlockId != null) {
+            nextState = { ...nextState, confirmingPlannedBlockId: null, confirmationStartedAt: null }
+          }
+        } else if (nextState.activePlannedBlockId !== currentWorkBlock.id) {
+          const blockStartAt = blockInstant(day.date, currentWorkBlock.start_minute, day.meta.timezone)
+          if (nextState.confirmingPlannedBlockId !== currentWorkBlock.id || !nextState.confirmationStartedAt) {
+            const confirmationStartedAt = new Date(blockStartAt) > new Date(nextState.entryAt)
+              ? blockStartAt
+              : nextState.entryAt
+            nextState = {
+              ...nextState,
+              confirmingPlannedBlockId: currentWorkBlock.id,
+              confirmationStartedAt,
+            }
+          } else if (nowMs - new Date(nextState.confirmationStartedAt).getTime() >= 60_000) {
+            const actualStartAt = new Date(blockStartAt) > new Date(nextState.entryAt) ? blockStartAt : nextState.entryAt
+            const actual = await api.startActualBlock({ planned_block_id: currentWorkBlock.id, start_at: actualStartAt })
+            setWorkModeActual(actual)
+            nextState = {
+              ...nextState,
+              activeActualId: actual.id,
+              activePlannedBlockId: currentWorkBlock.id,
+              activePlannedEndAt: blockInstant(day.date, currentWorkBlock.end_minute, day.meta.timezone),
+              confirmingPlannedBlockId: null,
+              confirmationStartedAt: null,
+              lastConfirmedAt: nowIso,
+            }
+          }
+        }
+
+        if (nowMs - new Date(nextState.lastObservedAt).getTime() >= 30_000) {
+          nextState = { ...nextState, lastObservedAt: nowIso }
+        }
+        if (nextState !== workMode) persistWorkMode(nextState)
+      } catch (cause) {
+        setWorkModeError(cause instanceof Error ? cause.message : 'Work Mode could not update Actual time')
+        const active = await api.getActiveActualBlock().catch(() => null)
+        if (active) {
+          setWorkModeActual(active)
+          persistWorkMode({
+            ...workMode,
+            activeActualId: active.id,
+            activePlannedBlockId: active.planned_block_id,
+            lastObservedAt: nowIso,
+          })
+        }
+      } finally {
+        workTransitionRef.current = false
+      }
     }
-  }, [])
+    void run()
+  }, [currentWorkBlock, day, nowIso, persistWorkMode, restoreWorkMode, workMode])
+
+  const exitWorkMode = useCallback(async () => {
+    if (!workMode) return
+    setWorkModeBusy(true)
+    setWorkModeError(null)
+    try {
+      const activeId = workModeActual?.id ?? workMode.activeActualId
+      if (activeId != null) await api.patchActualBlock(activeId, { end_at: presentInstant() })
+      setWorkModeActual(null)
+      persistWorkMode(null)
+      setDayNotice('Actual time preserved · Task remains open.')
+      await load()
+    } catch (cause) {
+      setWorkModeError(cause instanceof Error ? cause.message : 'Failed to exit Work Mode')
+    } finally {
+      setWorkModeBusy(false)
+    }
+  }, [load, persistWorkMode, presentInstant, workMode, workModeActual])
+
+  const continueAfterAbsence = useCallback(async () => {
+    if (!workMode || !day) return
+    setWorkModeBusy(true)
+    setWorkModeError(null)
+    const resumedAt = presentInstant()
+    try {
+      let nextState = workMode
+      let endedActivePlannedBlockId: number | null = null
+      const resumedMs = new Date(resumedAt).getTime()
+      const cutoffMs = new Date(workMode.lastConfirmedAt).getTime()
+
+      if (nextState.activeActualId != null && nextState.activePlannedEndAt && new Date(nextState.activePlannedEndAt).getTime() <= resumedMs) {
+        endedActivePlannedBlockId = nextState.activePlannedBlockId
+        await api.patchActualBlock(nextState.activeActualId, { end_at: nextState.activePlannedEndAt })
+        nextState = { ...nextState, activeActualId: null, activePlannedBlockId: null, activePlannedEndAt: null }
+        setWorkModeActual(null)
+      }
+
+      for (const block of todayPlannedBlocks) {
+        if (block.id === nextState.activePlannedBlockId || block.id === endedActivePlannedBlockId) continue
+        const startAt = blockInstant(day.date, block.start_minute, day.meta.timezone)
+        const endAt = blockInstant(day.date, block.end_minute, day.meta.timezone)
+        const startMs = Math.max(new Date(startAt).getTime(), cutoffMs, new Date(workMode.entryAt).getTime())
+        const endMs = Math.min(new Date(endAt).getTime(), resumedMs)
+        if (endMs <= startMs) continue
+        if (new Date(endAt).getTime() <= resumedMs) {
+          await api.createActualBlock({
+            planned_block_id: block.id,
+            start_at: new Date(startMs).toISOString(),
+            end_at: new Date(endMs).toISOString(),
+          })
+        } else {
+          const actual = await api.startActualBlock({
+            planned_block_id: block.id,
+            start_at: new Date(startMs).toISOString(),
+          })
+          setWorkModeActual(actual)
+          nextState = {
+            ...nextState,
+            activeActualId: actual.id,
+            activePlannedBlockId: block.id,
+            activePlannedEndAt: endAt,
+          }
+        }
+      }
+      persistWorkMode({
+        ...nextState,
+        lastObservedAt: resumedAt,
+        lastConfirmedAt: resumedAt,
+        confirmingPlannedBlockId: null,
+        confirmationStartedAt: null,
+      })
+      setRestoreWorkMode(false)
+      setDay(await api.getDay(day.date))
+    } catch (cause) {
+      setWorkModeError(cause instanceof Error ? cause.message : 'Failed to backfill Work Mode')
+    } finally {
+      setWorkModeBusy(false)
+    }
+  }, [day, persistWorkMode, presentInstant, todayPlannedBlocks, workMode])
+
+  const declineAfterAbsence = useCallback(async () => {
+    if (!workMode) return
+    setWorkModeBusy(true)
+    try {
+      const activeId = workModeActual?.id ?? workMode.activeActualId
+      if (activeId != null) await api.patchActualBlock(activeId, { end_at: workMode.lastConfirmedAt })
+      setWorkModeActual(null)
+      persistWorkMode(null)
+      setRestoreWorkMode(false)
+    } catch (cause) {
+      setWorkModeError(cause instanceof Error ? cause.message : 'Failed to restore Work Mode')
+    } finally {
+      setWorkModeBusy(false)
+    }
+  }, [persistWorkMode, workMode, workModeActual])
 
   const createTaskTypePath = useCallback(async (name: string) => {
     setError(null)
@@ -437,14 +863,31 @@ export function TodayPage() {
       setDraft(null)
       if (lane === 'actual' && day) {
         const actual = day.actual_blocks.find((projection) => projection.actual_block.id === blockId)?.actual_block
-        if (actual) setWorkModeActual(actual)
-        setSelectedBlockId(null)
+        if (actual && actual.end_at == null) {
+          const resumed = readStoredWorkMode() ?? beginStoredWorkMode(actual.start_at)
+          persistWorkMode({
+            ...resumed,
+            activeActualId: actual.id,
+            activePlannedBlockId: actual.planned_block_id,
+            activePlannedEndAt: (() => {
+              if (actual.planned_block_id == null) return resumed.activePlannedEndAt
+              const planned = day.time_blocks.find((candidate) => candidate.id === actual.planned_block_id && candidate.lane === 'planned')
+              return planned ? blockInstant(day.date, planned.end_minute, day.meta.timezone) : resumed.activePlannedEndAt
+            })(),
+            lastObservedAt: presentInstant(),
+            lastConfirmedAt: presentInstant(),
+          })
+          setWorkModeActual(actual)
+          setSelectedBlockRef(null)
+          return true
+        }
+        setSelectedBlockRef(actual ? { id: blockId, lane: 'actual' } : null)
         return Boolean(actual)
       }
-      setSelectedBlockId(blockId)
+      setSelectedBlockRef({ id: blockId, lane })
       return true
     },
-    [day, tryDiscardIfNeeded],
+    [day, persistWorkMode, presentInstant, tryDiscardIfNeeded],
   )
 
   if (!date) {
@@ -477,17 +920,17 @@ export function TodayPage() {
     onClose: tryClosePanel,
     onSave: (patch: { task_type_id?: number; note?: string | null }) => {
       if (!selectedBlock) return Promise.resolve()
-      return patchBlock(selectedBlock.id, patch)
+      return selectedBlock.lane === 'actual'
+        ? patchActual(selectedBlock.id, patch)
+        : patchBlock(selectedBlock.id, patch)
     },
     onCreateFromDraft: commitDraft,
     onDelete: () => {
       if (!selectedBlock) return Promise.resolve()
-      return deleteBlock(selectedBlock.id)
+      return selectedBlock.lane === 'actual'
+        ? deleteActual(selectedBlock.id)
+        : deleteBlock(selectedBlock.id)
     },
-    onStartWorkMode:
-      selectedBlock?.lane === 'planned'
-        ? () => selectedBlock ? startWorkMode(selectedBlock) : Promise.resolve()
-        : undefined,
     onRecordActualAsPlanned:
       selectedBlock?.lane === 'planned'
         ? () => selectedBlock ? recordActualAsPlanned(selectedBlock.id) : Promise.resolve()
@@ -499,9 +942,6 @@ export function TodayPage() {
   const mobileSheetOpen = selectedBlock != null || draft != null
   const readyTasks = allBattleTasks.filter((task) => task.ready_to_plan)
   const planningTask = readyTasks.find((task) => task.id === planningTaskId) ?? null
-  const workModeTask = workModeActual?.task_id == null
-    ? null
-    : allBattleTasks.find((task) => task.id === workModeActual.task_id) ?? null
 
   return (
     <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
@@ -609,7 +1049,7 @@ export function TodayPage() {
               onSelect={(taskId) => {
                 setPlanningTaskId(taskId)
                 setDraft(null)
-                setSelectedBlockId(null)
+                setSelectedBlockRef(null)
               }}
             />
           </div>
@@ -656,7 +1096,7 @@ export function TodayPage() {
                 onSelect={(taskId) => {
                   setPlanningTaskId(taskId)
                   setDraft(null)
-                  setSelectedBlockId(null)
+                  setSelectedBlockRef(null)
                 }}
               />
             ) : (
@@ -698,7 +1138,6 @@ export function TodayPage() {
             onSave={inspectorSharedProps.onSave}
             onCreateFromDraft={commitDraft}
             onDelete={inspectorSharedProps.onDelete}
-            onStartWorkMode={inspectorSharedProps.onStartWorkMode}
             onRecordActualAsPlanned={inspectorSharedProps.onRecordActualAsPlanned}
             onCreateTaskTypePath={createTaskTypePath}
             onDirtyChange={setInspectorDirty}
@@ -707,26 +1146,16 @@ export function TodayPage() {
         </div>
       </div>
       </DragDropProvider>
-      {workModeActual ? (
+      {workMode && workModeVisible && !restoreWorkMode ? (
         <WorkMode
-          actual={workModeActual}
+          current={workModeCurrentBlock}
+          next={workModeNextBlock}
           task={workModeTask}
-          timezone={day.meta.timezone}
+          nowMinute={nowMinute}
+          confirming={workMode.confirmingPlannedBlockId != null}
+          recording={workMode.activeActualId != null}
           busy={workModeBusy}
           error={workModeError}
-          onClose={() => setWorkModeActual(null)}
-          onSave={async ({ startLocal, endLocal }) => {
-            setWorkModeBusy(true); setWorkModeError(null)
-            try {
-              const updated = await api.patchActualBlock(workModeActual.id, {
-                start_at: zonedLocalDateTimeToIso(startLocal, day.meta.timezone),
-                ...(endLocal ? { end_at: zonedLocalDateTimeToIso(endLocal, day.meta.timezone) } : {}),
-              })
-              setWorkModeActual(updated)
-              setDay(await api.getDay(date))
-            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to update Actual time') }
-            finally { setWorkModeBusy(false) }
-          }}
           onSetSubtask={async (id, checked) => {
             setWorkModeBusy(true); setWorkModeError(null)
             try {
@@ -735,29 +1164,40 @@ export function TodayPage() {
             } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to update Subtask') }
             finally { setWorkModeBusy(false) }
           }}
-          onFinish={async () => {
-            setWorkModeBusy(true); setWorkModeError(null)
-            try {
-              await api.finishActualBlock(workModeActual.id)
-              setWorkModeActual(null)
-              setDayNotice(workModeTask ? 'Actual recorded · Task remains open.' : 'Actual recorded.')
-              setDay(await api.getDay(date))
-            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to finish session') }
-            finally { setWorkModeBusy(false) }
-          }}
-          onFinishAndComplete={async () => {
-            if (!workModeTask) return
-            setWorkModeBusy(true); setWorkModeError(null)
-            try {
-              const result = await api.completeBattleTask(workModeTask.id)
-              setCompletionUndo({ taskId: workModeTask.id, token: result.undo_token, removed: result.removed_planned_block_ids.length })
-              setDayNotice(null)
-              setWorkModeActual(null)
-              await load()
-            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to complete Task') }
-            finally { setWorkModeBusy(false) }
-          }}
+          onLeave={() => setWorkModeVisible(false)}
+          onExit={exitWorkMode}
         />
+      ) : null}
+      {workModeGuard ? (
+        <section role="dialog" aria-modal="true" aria-label="Start Work Mode" className="fixed inset-0 z-[125] grid place-items-center bg-black/35 p-5">
+          <div className="w-full max-w-md rounded-3xl bg-surface p-7 shadow-xl dark:bg-dark-surface-container">
+            <h2 className="font-headline text-2xl font-light">No immediate planned work</h2>
+            <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">There is no planned work for the immediate future. You can plan something at the current time or continue anyway.</p>
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              <button type="button" className="rounded-xl border border-outline-variant/40 px-4 py-3 text-sm" onClick={() => {
+                const range = visibleMinuteRange(day)
+                const start = Math.max(range.start, Math.min(Math.floor(nowMinute / SLOT_MINUTES) * SLOT_MINUTES, range.end - SLOT_MINUTES))
+                setPlanThenWork(true)
+                setDraft({ lane: 'planned', start_minute: start, end_minute: start + SLOT_MINUTES, task_id: null, task_type_id: null })
+                setSelectedBlockRef(null)
+                setWorkModeGuard(false)
+              }}>Plan something first</button>
+              <button type="button" className="rounded-xl bg-primary px-4 py-3 text-sm font-medium text-on-primary" onClick={() => enterWorkMode(presentInstant())}>Continue</button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+      {restoreWorkMode && workMode ? (
+        <section role="dialog" aria-modal="true" aria-label="Restore Work Mode" className="fixed inset-0 z-[126] grid place-items-center bg-black/35 p-5">
+          <div className="w-full max-w-md rounded-3xl bg-surface p-7 shadow-xl dark:bg-dark-surface-container">
+            <h2 className="font-headline text-2xl font-light">Were you still working?</h2>
+            <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">The application was away for more than ten minutes. Confirm before Work Mode records that interval.</p>
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              <button type="button" disabled={workModeBusy} className="rounded-xl border border-outline-variant/40 px-4 py-3 text-sm" onClick={() => void declineAfterAbsence()}>No, stop at last confirmed time</button>
+              <button type="button" disabled={workModeBusy} className="rounded-xl bg-primary px-4 py-3 text-sm font-medium text-on-primary" onClick={() => void continueAfterAbsence()}>Yes, I continued</button>
+            </div>
+          </div>
+        </section>
       ) : null}
     </Layout>
   )

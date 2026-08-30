@@ -22,7 +22,7 @@ A major product principle throughout this specification is:
 
 > **Couple the interaction when it reduces cognitive load; decouple the underlying state when the concepts are semantically different.**
 
-In particular, a single user action may update both a work-session record and a task-completion record, even though those are separate pieces of state internally.
+In particular, the product may automate related records while preserving the semantic distinction between planned work, Actual time, and Task Completion.
 
 ---
 
@@ -153,9 +153,45 @@ This is acceptable because that case is less common than the primary workflow an
 
 # 5. Work Mode
 
-The application should have a dedicated **Work Mode** for a scheduled task.
+The application should have a dedicated **Work Mode** for present-tense execution. Work Mode follows the current time and today's Planned Blocks; it is not owned by a Battle Plan Task or entered through a Planned Block.
 
-When a task's timebox is active or expanded, Work Mode should expose the parent task and its subtasks.
+Web and Android should expose a persistent app-level **Start Work Mode** action. While Work Mode is active, that affordance becomes **Return to Work Mode**. The Planned Block inspector should remain a plan-editing surface and should not own a Work Mode start action.
+
+Starting Work Mode always means:
+
+> **I am working now.**
+
+It cannot be started retrospectively or scheduled to begin later.
+
+## 5.1 Entry guard
+
+Work Mode opens directly when either:
+
+- A Planned Block is active now, or
+- Today's next Planned Block begins within ten minutes, including exactly ten minutes
+
+If neither condition is true, entry remains allowed but the application warns that there is no planned work for the immediate future. The warning offers:
+
+- **Plan something first** — open Plan Mode at the current time
+- **Continue** — enter Work Mode without changing the plan
+
+Finishing the planning flow automatically enters Work Mode only when the newly placed Planned Block is active or begins within ten minutes. Work Mode's entry time is the time planning finishes, not the time the original start action was pressed.
+
+When no Planned Block is active, Work Mode shows today's next Planned Block as **Up next**. If today has no later Planned Block, it shows **No more planned work today**. Work Mode does not use tomorrow's plan as today's next work.
+
+## 5.2 Active presentation
+
+When a task-backed Planned Block is active, Work Mode exposes:
+
+- The Battle Plan Task title
+- Its Task Type
+- Its notes
+- Its Subtasks
+- Controls to check and uncheck Subtasks
+
+A taskless Planned Block participates normally and shows its Task Type as the primary label with its optional note as detail. **Up next** uses a compact title, time, and countdown presentation.
+
+Work Mode assumes the active Planned Block is being performed. It does not provide **Skip this block**. If that assumption is wrong, the user can explicitly exit Work Mode. Work Mode also does not provide a combined Task Completion action in the current scope.
 
 Example:
 
@@ -169,16 +205,30 @@ Example:
 > - ○ Write conclusion
 > - ○ Proofread
 
-The user can check subtasks while working.
+The primary purposes of Work Mode are:
 
-The primary purpose of Work Mode is:
+- Surface the work planned for the current time
+- Show what is up next today
+- Let the user tick Subtasks during execution
+- Derive Actual Blocks from sustained work against active Planned Blocks
+- Let the user explicitly exit present-tense work
 
-- Show the task being worked on
-- Surface its subtasks
-- Let the user tick subtasks during execution
-- Track actual time
-- End the work session
-- Optionally complete the task
+## 5.3 Local lifecycle
+
+Entering Work Mode initially creates client-side presentation state only. The backend does not need a Work Mode record or start event.
+
+The local state includes the Work Mode entry time and survives ordinary navigation, backgrounding, refresh, and accidental application restart on the same device. Navigation away from the screen does not end Work Mode. Only **Exit Work Mode** clears that state and ends any active Actual Block.
+
+If the application was absent for more than ten minutes, restoring Work Mode asks whether the user was still working:
+
+- Confirming backfills Actual Blocks for applicable Planned Blocks
+- Declining ends recorded work at the last confirmed point
+
+Before an Actual Block exists, Work Mode state is device-local. Once an Actual Block exists, another device can detect it and offer **Return to Work Mode**. If an active Actual Block already exists when the user starts Work Mode, the application returns to Work Mode around that record instead of creating a conflicting Actual Block.
+
+At midnight, Work Mode remains open and begins evaluating the new current day. If the final Planned Block for a day ends without another current block, Work Mode stays open in its no-work state until explicitly exited.
+
+Changes to Planned Blocks take effect immediately for future assumptions in Work Mode. Already-recorded Actual time remains unchanged.
 
 The UI does not need to be a literal workflow diagram unless future requirements justify that complexity.
 
@@ -271,28 +321,41 @@ Actual time can be recorded in two ways:
 
 ## 8.1 Live tracking
 
-The user starts a session and later ends it.
+Live tracking is derived from Work Mode and the current Planned Block.
 
 Example:
 
-At 10:12:
+The user enters Work Mode at 10:12 during a Planned Block that began at 10:00. Entry creates local Work Mode state but no backend record.
 
-> Start
+After the Planned Block has been current during Work Mode for one uninterrupted minute, the application creates an Actual Block retroactively:
 
 Internally:
 
 ```text
-actual_start = 10:12
+actual_start = max(work_mode_entry, planned_block_start)
+             = 10:12
 ```
 
-At 11:18:
+If Work Mode opens at 9:55 for a Planned Block beginning at 10:00, the block remains **Up next** and assumed work begins at 10:00. Its one-minute confirmation period begins only when the Planned Block becomes current.
 
-> Finish
+Exiting before confirmation creates no Actual Block. After confirmation, partial Actual time is valid and remains independent of Task Completion.
+
+At a Planned Block boundary:
+
+- End the current Actual Block at the boundary
+- Record nothing during a schedule gap
+- Begin a fresh one-minute confirmation when the next Planned Block becomes current
+- After confirmation, create that next Actual Block retroactively from its boundary or the later Work Mode entry
+
+Taskless Planned Blocks follow the same behavior using their Task Type and note. Work Mode never records Actual time when no Planned Block is current.
+
+When the user selects **Exit Work Mode**, the application ends any active Actual Block at the current time and clears the local Work Mode state. Exiting Work Mode does not complete its Battle Plan Task.
 
 Internally:
 
 ```text
-actual_end = 11:18
+actual_end = work_mode_exit
+task_completion = unchanged
 ```
 
 ## 8.2 Retrospective editing
@@ -357,52 +420,36 @@ But none of this is required for the current core implementation.
 
 ---
 
-# 10. Completing a Work Session vs Completing a Task
+# 10. Exiting Work Mode vs Completing a Task
 
-These are separate states internally, but they should be combined into low-friction interactions.
+These are separate actions and remain separate in the current Work Mode scope.
 
-The user should have two primary outcomes at the end of a work session:
-
-## Option A: Finish session
+## Exit Work Mode
 
 Meaning:
 
-- End the actual work session
-- Record actual end time
-- Leave the task open
+- Clear the local Work Mode state
+- End any active Actual Block
+- Record its Actual end time
+- Leave the Battle Plan Task open
 
-Use when:
+This expresses:
 
 > "I am done working for now, but the task itself is not finished."
 
-## Option B: Finish session + complete task
+## Complete Task
 
-Meaning:
+Task Completion remains an explicit global domain action available outside the redesigned Work Mode. Work Mode does not currently provide an action that both ends the Actual Block and completes the Battle Plan Task, or special handling for completing the active Task early.
 
-- End the actual work session
-- Record actual end time
-- Mark the task complete
-- Resolve remaining subtasks
-- Remove future planned timeboxes for that task occurrence
-- Preserve historical plan and actual records
-
-This creates a one-action workflow for the common case.
-
-## Core interaction principle
-
-> **The user should not have to perform two bookkeeping actions just because the underlying data model has two separate states.**
+This keeps the Work Mode lifecycle tied to present-tense execution without collapsing it into Task Completion.
 
 Internally:
 
 ```text
-Finish session
-  actual_session.end = now
-
-Finish session + complete task
-  actual_session.end = now
-  task.status = completed
-  resolve_subtasks()
-  remove_future_planned_timeboxes()
+Exit Work Mode
+  work_mode.local_state = cleared
+  active_actual_block.end = now, if one exists
+  task.completion = unchanged
 ```
 
 ---
@@ -434,7 +481,6 @@ The parent task requires an explicit completion action by the user.
 Examples:
 
 - Complete task
-- Finish session + complete task
 
 ---
 
@@ -459,10 +505,6 @@ The user may have completed the real-world task without interacting with every c
 If the user explicitly chooses:
 
 > Complete task
-
-or:
-
-> Finish session + complete task
 
 then the task is complete and its remaining subtasks are considered **resolved**.
 
@@ -589,7 +631,6 @@ Completing a task should behave consistently regardless of where the action orig
 Possible locations:
 
 - Task list
-- Work Mode
 - Search
 - Task detail screen
 - Any future completion surface
@@ -601,13 +642,12 @@ Task completion always means:
 - Remove future planned timeboxes for that task occurrence
 - Preserve historical plan and actual data
 
-The only difference in Work Mode is that the application also has an active actual work session to end.
-
 ## Rule
 
-> **Task completion is a global domain action. Work Mode simply adds session-ending behavior.**
+> **Task completion is a global domain action with the same meaning wherever it is offered.**
 
 Do not create different definitions of "complete" depending on the screen.
+The redesigned Work Mode is not currently a Task Completion surface.
 
 ---
 
@@ -750,16 +790,18 @@ There is no separate "task completed" concept.
 
 ## Interaction difference
 
-For a task-linked session:
+For a task-backed Planned Block, Work Mode can surface:
 
-- Finish session
-- Finish session + complete task
+- The Battle Plan Task title and notes
+- Its Subtasks
+- Its Task Type
 
-For a non-task item:
+For a taskless Planned Block, Work Mode can surface:
 
-- Finish session
+- Its Task Type
+- Its note
 
-The UI should adapt to the underlying object type.
+Both use the same **Exit Work Mode** action. Taskless work has no Task Completion state.
 
 ---
 
@@ -837,7 +879,6 @@ Each occurrence should have its own:
 - Planned timeboxes
 - Actual sessions
 - Subtask checked state
-- Work Mode lifecycle
 
 The recurring series itself is not completed when one occurrence is completed.
 
@@ -1091,7 +1132,7 @@ For recurring tasks, the `taskId` should refer to a specific occurrence instance
 
 ---
 
-# 27. Suggested Completion Flow
+# 27. Suggested Work Mode Exit Flow
 
 ## In Work Mode
 
@@ -1102,7 +1143,8 @@ User is actively working on:
 Current state:
 
 ```text
-Session active
+Work Mode active
+Actual Block active
 Task open
 Some subtasks checked
 Some subtasks unchecked
@@ -1110,34 +1152,20 @@ Some subtasks unchecked
 
 User chooses:
 
-### Finish session
+### Exit Work Mode
 
 Result:
 
 ```text
-Session ended
+Work Mode local state cleared
+Actual Block ended
 Actual time recorded
 Task remains open
 Subtask states preserved
 Future planned timeboxes remain
 ```
 
-### Finish session + complete task
-
-Result:
-
-```text
-Session ended
-Actual time recorded
-Task completed
-Remaining subtasks resolved
-Explicit subtask check state preserved internally
-Future planned timeboxes for this task occurrence removed
-Undo available for future-timebox removal/completion action as appropriate
-Historical plan and actual data preserved
-```
-
-No extra warning should be required for unchecked subtasks.
+Work Mode does not offer a Task Completion action in the current scope.
 
 ---
 
@@ -1153,10 +1181,9 @@ Subtasks resolved
 Future planned timeboxes for this task occurrence removed
 Historical plan preserved
 Historical actual preserved
-No active actual session is affected because there is no Work Mode session
 ```
 
-Completion semantics must be identical to completion from Work Mode.
+Completion semantics must be identical across every surface where Task Completion is offered. Behavior for completing the active Task early elsewhere while Work Mode remains active is deferred.
 
 ---
 
@@ -1354,11 +1381,11 @@ The most important invariant is:
 
 > **Subtask = execution checkpoint inside a task.**
 
-> **Timebox = planned allocation of time to an item.**
+> **Planned Block = planned allocation of time to one primary item.**
 
-> **Actual session = what actually happened.**
+> **Actual Block = authoritative record of time that occurred.**
 
-> **Work Mode = execution surface for the current task.**
+> **Work Mode = present-tense execution surface for today's current or next Planned Block.**
 
 ---
 
@@ -1375,8 +1402,16 @@ When implementing or modifying features related to this system, the agent should
 - Never auto-complete the parent when all subtasks are checked.
 - Treat subtasks as non-schedulable execution checkpoints.
 - Surface subtasks in Work Mode.
-- Allow session completion without task completion.
-- Allow a combined session completion + task completion action.
+- Expose Work Mode through an app-level action rather than a Planned Block-owned action.
+- Keep pre-confirmation Work Mode state local to the starting device.
+- Preserve Work Mode across navigation, backgrounding, refresh, and accidental restart until explicit exit.
+- Warn without blocking when no Planned Block is current or begins within ten minutes.
+- Limit **Up next** to the current day.
+- Wait one uninterrupted minute of current planned work before creating an Actual Block.
+- Start an automatically derived Actual Block at the later of Work Mode entry and Planned Block start.
+- Record no Actual time during schedule gaps.
+- End any active Actual Block when Work Mode is explicitly exited.
+- Keep Task Completion independent from exiting Work Mode.
 - Apply task completion semantics consistently across all UI surfaces.
 - Resolve subtasks when the parent is explicitly completed.
 - Preserve explicit subtask checked state if practical.
@@ -1393,6 +1428,8 @@ When implementing or modifying features related to this system, the agent should
 - Keep actual time editable.
 - Avoid confirmation dialogs for normal completion.
 - Keep Work Mode lightweight.
+- Offer **Return to Work Mode** when Work Mode or an active Actual Block already exists.
+- Ask whether work continued after more than ten minutes of application absence before backfilling Actual Blocks.
 - Avoid overbuilding recurrence editing until needed.
 - Preserve enough history for future retrospective/reporting features.
 - Use domain actions for completion semantics instead of duplicating logic across screens.
@@ -1403,6 +1440,10 @@ When implementing or modifying features related to this system, the agent should
 - Auto-complete parent tasks based on subtask state.
 - Force users to manually check every subtask before completing the parent.
 - Ask users to classify skipped/missed blocks in V1.
+- Require a Battle Plan Task before entering Work Mode.
+- Show tomorrow's Planned Blocks as today's **Up next** work.
+- Provide **Skip this block** in the current Work Mode scope.
+- Auto-complete a Battle Plan Task from elapsed planned or Actual time.
 - Delete historical actual data when task state changes.
 - Complete future recurring occurrences when one occurrence is completed.
 - Make recurring-series completion equivalent to occurrence completion.
@@ -1441,9 +1482,92 @@ Editing Actual must not overwrite Plan.
 
 The user can:
 
-- Start and finish a session live.
-- Create an actual session retrospectively.
+- Enter and exit Work Mode live.
+- Create an Actual Block retrospectively.
 - Edit actual start/end after recording.
+
+---
+
+## Work Mode entry
+
+Given no current Planned Block and today's next Planned Block beginning eleven minutes from now:
+
+- Starting Work Mode warns without blocking entry.
+- Choosing **Continue** shows that Planned Block as **Up next**.
+- Choosing **Plan something first** opens Plan Mode at the current time.
+
+Given today's next Planned Block beginning exactly ten minutes from now:
+
+- Starting Work Mode enters directly without the warning.
+
+Given **Plan something first** produces a Planned Block beginning more than ten minutes from now:
+
+- Planning completes normally.
+- Work Mode does not enter automatically.
+
+Given no remaining Planned Block today:
+
+- Continuing into Work Mode shows **No more planned work today**.
+- Tomorrow's Planned Blocks are not shown as **Up next**.
+
+---
+
+## Work Mode recording
+
+Given Work Mode entered at 10:12 during a Planned Block from 10:00 to 10:30:
+
+- No backend Work Mode start record is created.
+- Exiting before 10:13 creates no Actual Block.
+- Remaining in Work Mode through 10:13 creates an Actual Block beginning at 10:12.
+- Exiting Work Mode ends that Actual Block without completing its Battle Plan Task.
+
+Given Work Mode entered at 9:55 for a Planned Block beginning at 10:00:
+
+- The Planned Block is **Up next** until 10:00.
+- Its one-minute confirmation begins at 10:00.
+- Confirmation creates an Actual Block beginning at 10:00.
+
+Given adjacent Planned Blocks from 10:00–10:30 and 10:30–11:00:
+
+- The first Actual Block ends at 10:30.
+- The second block gets a fresh one-minute confirmation.
+- Confirmation creates a separate Actual Block beginning at 10:30.
+
+Given a schedule gap:
+
+- Work Mode records no Actual time during the gap.
+- Work Mode remains open and shows today's next Planned Block or the no-work state.
+
+Given a taskless Planned Block with a Task Type and optional note:
+
+- Work Mode presents that Task Type and note.
+- It derives Actual time using the same confirmation and boundary rules.
+
+---
+
+## Work Mode lifecycle
+
+Given locally active Work Mode:
+
+- Navigation, backgrounding, refresh, and an accidental restart preserve its entry time.
+- The app-level action reads **Return to Work Mode**.
+- Explicit exit clears the local state and ends any active Actual Block.
+
+Given the application was absent for more than ten minutes:
+
+- Restoration asks whether work continued.
+- Confirming backfills Actual Blocks for applicable Planned Blocks.
+- Declining ends recorded work at the last confirmed point.
+
+Given pre-confirmation Work Mode on one device:
+
+- Another device does not discover that local state.
+- After an Actual Block exists, another device can offer **Return to Work Mode**.
+
+Given Work Mode remains active across midnight:
+
+- It stays open.
+- It begins evaluating the new current day's Planned Blocks.
 
 ---
 
@@ -1562,7 +1686,7 @@ These are intentionally not blockers for the current implementation.
 - Whether reopening should optionally restore removed future timeboxes
 - Whether recurring-series template edits affect current, future, or all occurrences
 - Whether non-task event types need custom completion semantics
-- Whether actual sessions can exist without any planned timebox
+- How Work Mode should react when its active Battle Plan Task is completed early from another surface
 - Whether Work Mode should support adding subtasks during a live session
 - Whether Work Mode should optionally highlight a subset of subtasks as the focus of the current session
 

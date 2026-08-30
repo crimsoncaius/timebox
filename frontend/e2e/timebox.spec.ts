@@ -107,14 +107,12 @@ test('plan blocks and history', async ({ page, request }) => {
 
   const actualId = (await r2.json()).id as number
   await page.locator(`[data-block-id="${actualId}"]`).click()
-  const workMode = page.getByRole('dialog', { name: 'Work Mode' })
-  await expect(workMode).toBeVisible()
-  await expect(workMode.getByRole('heading', { name: 'e2e actual' })).toBeVisible()
-  await expect(workMode.getByLabel('Actual start')).toHaveValue('2026-06-01T23:30')
-  await expect(workMode.getByLabel('Actual end')).toHaveValue('2026-06-02T00:20')
-  await expect(workMode.getByRole('button', { name: /complete Task/i })).toHaveCount(0)
-  await workMode.getByRole('button', { name: 'Close Work Mode' }).click()
-  await expect(workMode).toHaveCount(0)
+  await expect(inspector).toBeVisible()
+  await expect(inspector.getByRole('heading', { name: 'Actual' })).toBeVisible()
+  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveValue('e2e actual')
+  await expect(page.getByRole('dialog', { name: 'Work Mode' })).toHaveCount(0)
+  await inspector.getByRole('button', { name: 'Close' }).click()
+  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveCount(0)
 
   await page.getByTestId('day-nav').getByRole('button', { name: 'Next day' }).click()
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-02')
@@ -157,109 +155,28 @@ test('plan blocks and history', async ({ page, request }) => {
   })
 })
 
-test('Work Mode finishes a Task session, then completes and exactly undoes the Task', async ({
-  page,
-  request,
-}) => {
-  const date = '2026-06-05'
-  const unique = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
-  const taskTitle = `Work Mode Task ${unique}`
-  await clearDayBlocks(request, apiBase, date)
-  await clearDayBlocks(request, apiBase, '2099-01-01')
+test('Work Mode starts globally, survives leaving its surface, and exits explicitly', async ({ page, request }) => {
+  const health = (await (await request.get(`${apiBase}/health`)).json()) as { today: string }
+  await clearDayBlocks(request, apiBase, health.today)
+  const active = (await (await request.get(`${apiBase}/actual-blocks/active`)).json()) as { id: number } | null
+  if (active) await request.post(`${apiBase}/actual-blocks/${active.id}/finish`)
+  await page.addInitScript(() => localStorage.clear())
+  await page.goto(`/day/${health.today}`)
 
-  const activeResponse = await request.get(`${apiBase}/actual-blocks/active`)
-  expect(activeResponse.ok()).toBeTruthy()
-  const existingActive = (await activeResponse.json()) as { id: number } | null
-  if (existingActive) {
-    const finished = await request.post(`${apiBase}/actual-blocks/${existingActive.id}/finish`)
-    expect(finished.ok()).toBeTruthy()
-  }
+  await page.getByRole('link', { name: 'Start Work Mode' }).click()
+  const guard = page.getByRole('dialog', { name: 'Start Work Mode' })
+  await expect(guard).toBeVisible()
+  await guard.getByRole('button', { name: 'Continue' }).click()
 
-  const taskTypeId = await ensureTaskType(request, apiBase, `Work Mode ${unique}`)
-  const taskResponse = await request.post(`${apiBase}/tasks`, {
-    data: {
-      title: taskTitle,
-      task_type_id: taskTypeId,
-      ready_to_plan: true,
-    },
-  })
-  expect(taskResponse.ok()).toBeTruthy()
-  const taskId = ((await taskResponse.json()) as { id: number }).id
-
-  const createPlanned = async (plannedDate: string, startMinute: number) => {
-    const response = await request.post(`${apiBase}/days/${plannedDate}/blocks`, {
-      data: {
-        lane: 'planned',
-        task_type_id: taskTypeId,
-        task_id: taskId,
-        start_minute: startMinute,
-        end_minute: startMinute + 30,
-      },
-    })
-    expect(response.ok()).toBeTruthy()
-    const day = (await response.json()) as {
-      time_blocks: Array<{ id: number; task_id: number | null; start_minute: number }>
-    }
-    const block = day.time_blocks.find(
-      (candidate) => candidate.task_id === taskId && candidate.start_minute === startMinute,
-    )
-    expect(block).toBeTruthy()
-    return block!.id
-  }
-
-  const firstPlannedId = await createPlanned(date, 480)
-  const secondPlannedId = await createPlanned(date, 540)
-  const futurePlannedId = await createPlanned('2099-01-01', 480)
-
-  await page.goto(`/day/${date}`)
-  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
-  const inspector = page.getByRole('complementary', { name: 'Block details' })
-
-  await page.locator(`[data-block-id="${firstPlannedId}"]`).click()
-  await inspector.getByRole('button', { name: 'Start Work Mode' }).click()
   const workMode = page.getByRole('dialog', { name: 'Work Mode' })
+  await expect(workMode.getByRole('heading', { name: 'No more planned work today' })).toBeVisible()
+  await workMode.getByRole('button', { name: 'Back to app' }).click()
+  await expect(workMode).not.toBeVisible()
+  await page.getByRole('link', { name: 'Return to Work Mode' }).click()
   await expect(workMode).toBeVisible()
-  await expect(workMode.getByRole('heading', { name: taskTitle })).toBeVisible()
-  await expect(workMode.getByRole('button', { name: 'Finish session + complete Task' })).toBeVisible()
-  const firstActive = (await (await request.get(`${apiBase}/actual-blocks/active`)).json()) as {
-    id: number
-  }
-  await workMode.getByRole('button', { name: 'Finish session', exact: true }).click()
-  await expect(page.getByText('Actual recorded · Task remains open.')).toBeVisible()
-  const firstEnded = (await (
-    await request.get(`${apiBase}/actual-blocks/${firstActive.id}`)
-  ).json()) as { end_at: string | null }
-  expect(firstEnded.end_at).not.toBeNull()
-
-  await page.locator(`[data-block-id="${secondPlannedId}"]`).click()
-  await inspector.getByRole('button', { name: 'Start Work Mode' }).click()
-  await expect(workMode).toBeVisible()
-  const secondActive = (await (await request.get(`${apiBase}/actual-blocks/active`)).json()) as {
-    id: number
-  }
-  await workMode.getByRole('button', { name: 'Finish session + complete Task' }).click()
-  await expect(page.getByText('Task completed · 1 future Planned Block removed.')).toBeVisible()
-  const endedBeforeUndo = (await (
-    await request.get(`${apiBase}/actual-blocks/${secondActive.id}`)
-  ).json()) as { end_at: string | null }
-  expect(endedBeforeUndo.end_at).not.toBeNull()
-
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(page.getByText('Task completed · 1 future Planned Block removed.')).toHaveCount(0)
-  const tasksAfterUndo = await request.get(`${apiBase}/tasks?state=active`)
-  expect(tasksAfterUndo.ok()).toBeTruthy()
-  const restoredTask = ((await tasksAfterUndo.json()) as {
-    items: Array<{ id: number; status: string }>
-  }).items.find((task) => task.id === taskId)
-  expect(restoredTask?.status).toBe('open')
-  const futureDay = (await (await request.get(`${apiBase}/days/2099-01-01`)).json()) as {
-    planned_blocks: Array<{ id: number }>
-  }
-  expect(futureDay.planned_blocks.some((block) => block.id === futurePlannedId)).toBe(true)
-  const endedAfterUndo = (await (
-    await request.get(`${apiBase}/actual-blocks/${secondActive.id}`)
-  ).json()) as { end_at: string | null }
-  expect(endedAfterUndo.end_at).toBe(endedBeforeUndo.end_at)
+  await workMode.getByRole('button', { name: 'Exit Work Mode' }).first().click()
+  await expect(workMode).not.toBeVisible()
+  expect(await (await request.get(`${apiBase}/actual-blocks/active`)).json()).toBeNull()
 })
 
 test('resize planned block stops at next block in same lane', async ({ page, request }) => {

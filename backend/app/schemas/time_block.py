@@ -85,6 +85,7 @@ class ActualBlockStart(BaseModel):
     task_id: int | None = None
     note: str | None = None
     planned_block_id: int | None = None
+    start_at: AwareDatetime | None = None
 
 
 class ActualBlockCreate(ActualBlockStart):

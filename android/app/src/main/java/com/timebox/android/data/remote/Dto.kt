@@ -152,6 +152,7 @@ data class ActualBlockStartDto(
     @SerialName("task_id") val taskId: Int? = null,
     val note: String? = null,
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
+    @SerialName("start_at") val startAt: String? = null,
 )
 
 @Serializable

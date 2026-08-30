@@ -59,7 +59,6 @@ fun BlockSheet(
     onCreateType: (String) -> Unit,
     onNoteChange: (String) -> Unit,
     onDelete: () -> Unit,
-    onStartWorkMode: () -> Unit,
     onConfirmTaskCompletion: () -> Unit,
     onReopenTask: () -> Unit,
     onOpenLinkedTask: (Int) -> Unit,
@@ -227,13 +226,6 @@ fun BlockSheet(
                     Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    PrimaryButton(
-                        text = if (selected.lane == Lane.Planned) "Start Work Mode" else "Open Work Mode",
-                        onClick = onStartWorkMode,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = allowComplete && !state.saving &&
-                            (selected.lane == Lane.Actual || selected.task?.status != TaskStatus.Completed),
-                    )
                     selected.task?.let { task ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {

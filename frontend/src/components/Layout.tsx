@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { ThemeToggle } from "./ThemeToggle";
+import { readStoredWorkMode, writeStoredWorkMode, WORK_MODE_CHANGED_EVENT } from "../features/today/workModeState";
 
 function isTodayPath(pathname: string, today: string | null) {
   if (!today) return pathname === "/";
@@ -19,13 +20,39 @@ export function Layout({
 }) {
   const location = useLocation();
   const [today, setToday] = useState<string | null>(null);
+  const [workModeAvailable, setWorkModeAvailable] = useState(() => readStoredWorkMode() != null);
 
   useEffect(() => {
-    void api
-      .health()
-      .then((h) => setToday(h.today))
+    void Promise.all([api.health(), api.getActiveActualBlock().catch(() => null)])
+      .then(([health, active]) => {
+        setToday(health.today);
+        setWorkModeAvailable(readStoredWorkMode() != null || active != null);
+      })
       .catch(() => setToday(null));
+    const refresh = () => setWorkModeAvailable(readStoredWorkMode() != null)
+    window.addEventListener(WORK_MODE_CHANGED_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(WORK_MODE_CHANGED_EVENT, refresh)
+      window.removeEventListener('storage', refresh)
+    }
   }, []);
+
+  useEffect(() => {
+    const touch = () => {
+      const stored = readStoredWorkMode()
+      if (!stored) return
+      const observedAt = new Date().toISOString()
+      writeStoredWorkMode({
+        ...stored,
+        lastObservedAt: observedAt,
+        lastConfirmedAt: stored.activeActualId != null ? observedAt : stored.lastConfirmedAt,
+      })
+    }
+    touch()
+    const interval = window.setInterval(touch, 30_000)
+    return () => window.clearInterval(interval)
+  }, [location.pathname]);
 
   const todayHref = today ? `/day/${today}` : "/";
 
@@ -118,6 +145,12 @@ export function Layout({
             </h2>
           </div>
           <div className="flex items-center gap-3 text-on-surface dark:text-dark-on-surface">
+            <NavLink
+              to={`${todayHref}?workMode=start`}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-opacity hover:opacity-90"
+            >
+              {workModeAvailable ? "Return to Work Mode" : "Start Work Mode"}
+            </NavLink>
             <NavLink
               to="/settings"
               aria-label="Settings"

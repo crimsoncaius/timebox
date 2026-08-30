@@ -34,6 +34,18 @@ data class BattlePlanPreferences(
     val taskTypes: Set<String> = emptySet(),
 )
 
+/** Device-local Work Mode lifecycle. Actual Blocks remain authoritative server data. */
+data class WorkModeSnapshot(
+    val entryAt: String,
+    val lastConfirmedAt: String,
+    val lastObservedAt: String,
+    val confirmingPlannedBlockId: Int? = null,
+    val confirmationStartedAt: String? = null,
+    val activeActualId: Int? = null,
+    val activePlannedBlockId: Int? = null,
+    val activePlannedEndAt: String? = null,
+)
+
 enum class BattlePlanSort(val wire: String) {
     Manual("manual"), Deadline("deadline"), Urgency("urgency"), Importance("importance");
 
@@ -56,6 +68,14 @@ class AppPreferences(private val context: Context) {
         val battlePlanUrgency = stringPreferencesKey("battle_plan_urgency")
         val battlePlanImportance = stringPreferencesKey("battle_plan_importance")
         val battlePlanTaskTypes = stringPreferencesKey("battle_plan_task_types")
+        val workModeEntryAt = stringPreferencesKey("work_mode_entry_at")
+        val workModeLastConfirmedAt = stringPreferencesKey("work_mode_last_confirmed_at")
+        val workModeLastObservedAt = stringPreferencesKey("work_mode_last_observed_at")
+        val workModeConfirmingPlannedId = stringPreferencesKey("work_mode_confirming_planned_id")
+        val workModeConfirmationStartedAt = stringPreferencesKey("work_mode_confirmation_started_at")
+        val workModeActiveActualId = stringPreferencesKey("work_mode_active_actual_id")
+        val workModeActivePlannedId = stringPreferencesKey("work_mode_active_planned_id")
+        val workModeActivePlannedEndAt = stringPreferencesKey("work_mode_active_planned_end_at")
     }
 
     val battlePlanPreferences: Flow<BattlePlanPreferences> = context.dataStore.data.map { prefs ->
@@ -77,6 +97,22 @@ class AppPreferences(private val context: Context) {
             baseUrl = prefs[Keys.baseUrl] ?: BuildConfig.DEFAULT_BASE_URL,
             apiKey = prefs[Keys.apiKey].orEmpty(),
             darkTheme = if (prefs[Keys.darkThemeSet] == true) prefs[Keys.darkTheme] else null,
+        )
+    }
+
+    val workMode: Flow<WorkModeSnapshot?> = context.dataStore.data.map { prefs ->
+        val entryAt = prefs[Keys.workModeEntryAt] ?: return@map null
+        val confirmedAt = prefs[Keys.workModeLastConfirmedAt] ?: entryAt
+        val observedAt = prefs[Keys.workModeLastObservedAt] ?: confirmedAt
+        WorkModeSnapshot(
+            entryAt = entryAt,
+            lastConfirmedAt = confirmedAt,
+            lastObservedAt = observedAt,
+            confirmingPlannedBlockId = prefs[Keys.workModeConfirmingPlannedId]?.toIntOrNull(),
+            confirmationStartedAt = prefs[Keys.workModeConfirmationStartedAt],
+            activeActualId = prefs[Keys.workModeActiveActualId]?.toIntOrNull(),
+            activePlannedBlockId = prefs[Keys.workModeActivePlannedId]?.toIntOrNull(),
+            activePlannedEndAt = prefs[Keys.workModeActivePlannedEndAt],
         )
     }
 
@@ -103,6 +139,26 @@ class AppPreferences(private val context: Context) {
             prefs[Keys.battlePlanUrgency] = preferences.urgency.toPreferenceString()
             prefs[Keys.battlePlanImportance] = preferences.importance.toPreferenceString()
             prefs[Keys.battlePlanTaskTypes] = preferences.taskTypes.toPreferenceString()
+        }
+    }
+
+    suspend fun setWorkMode(snapshot: WorkModeSnapshot?) {
+        context.dataStore.edit { prefs ->
+            val keys = listOf(
+                Keys.workModeEntryAt, Keys.workModeLastConfirmedAt, Keys.workModeLastObservedAt,
+                Keys.workModeConfirmingPlannedId, Keys.workModeConfirmationStartedAt,
+                Keys.workModeActiveActualId, Keys.workModeActivePlannedId, Keys.workModeActivePlannedEndAt,
+            )
+            keys.forEach(prefs::remove)
+            snapshot ?: return@edit
+            prefs[Keys.workModeEntryAt] = snapshot.entryAt
+            prefs[Keys.workModeLastConfirmedAt] = snapshot.lastConfirmedAt
+            prefs[Keys.workModeLastObservedAt] = snapshot.lastObservedAt
+            snapshot.confirmingPlannedBlockId?.let { prefs[Keys.workModeConfirmingPlannedId] = it.toString() }
+            snapshot.confirmationStartedAt?.let { prefs[Keys.workModeConfirmationStartedAt] = it }
+            snapshot.activeActualId?.let { prefs[Keys.workModeActiveActualId] = it.toString() }
+            snapshot.activePlannedBlockId?.let { prefs[Keys.workModeActivePlannedId] = it.toString() }
+            snapshot.activePlannedEndAt?.let { prefs[Keys.workModeActivePlannedEndAt] = it }
         }
     }
 }

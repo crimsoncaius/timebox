@@ -16,9 +16,13 @@ _Avoid_: Epic, subtask group
 A non-exhaustive, first-level execution checkpoint within a Parent Task. It is not independently schedulable, and its checked state does not determine Parent Task completion.
 _Avoid_: Child task, nested task
 
+**Task Type**:
+The category of work represented by a Planned Block or Actual Block. It remains required when no Battle Plan Task is linked and serves as the primary label for that taskless Block.
+_Avoid_: Task, tag
+
 **Work Mode**:
-The execution surface for a Battle Plan Task, bringing its Subtasks and Actual-time actions together. It is not a Task status or a kind of Planned Block.
-_Avoid_: Task status, timer mode
+A present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
+_Avoid_: Task detail, Task status, timer mode
 
 **Recurring Task Series**:
 A recurrence rule and template that produces Task Occurrences. It remains independent of the completion of any one occurrence.

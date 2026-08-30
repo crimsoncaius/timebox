@@ -12,11 +12,15 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.data.TimeboxRepository
+import com.timebox.android.data.WorkModeSnapshot
 import com.timebox.android.data.apiError
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -54,15 +58,21 @@ data class DayPageState(
 )
 
 data class WorkModeUiState(
-    val actualBlock: ActualBlock,
+    val entryAt: Instant,
+    val lastConfirmedAt: Instant,
+    val lastObservedAt: Instant,
+    val currentBlock: TimeBlock? = null,
+    val nextBlock: TimeBlock? = null,
     val task: BattleTask?,
     val timezone: String,
-    val startInput: String,
-    val endInput: String,
+    val activeActual: ActualBlock? = null,
+    val confirmingPlannedBlockId: Int? = null,
+    val confirmationStartedAt: Instant? = null,
+    val activePlannedEndAt: Instant? = null,
     val saving: Boolean = false,
     val error: String? = null,
 ) {
-    val isRunning: Boolean get() = actualBlock.endAt == null
+    val isRecording: Boolean get() = activeActual != null
 }
 
 data class DayUiState(
@@ -88,6 +98,10 @@ data class DayUiState(
     val completionUndoTaskId: Int? = null,
     val completionUndoToken: String? = null,
     val workMode: WorkModeUiState? = null,
+    val workModeVisible: Boolean = false,
+    val activeActualAvailable: Boolean = false,
+    val workModeEntryWarning: Boolean = false,
+    val workModeRestorePrompt: Boolean = false,
 ) {
     fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
 
@@ -114,9 +128,24 @@ data class DayUiState(
         planningDrafts.values.filter { it.date == date }
 }
 
+interface WorkModePersistence {
+    suspend fun load(): WorkModeSnapshot?
+    suspend fun save(snapshot: WorkModeSnapshot?)
+}
+
+private class RepositoryWorkModePersistence(
+    private val repository: TimeboxRepository,
+) : WorkModePersistence {
+    override suspend fun load(): WorkModeSnapshot? = repository.workMode.first()
+    override suspend fun save(snapshot: WorkModeSnapshot?) = repository.setWorkMode(snapshot)
+}
+
 class DayViewModel(
     private val repository: TimeboxRepository,
     private val injectedScope: CoroutineScope? = null,
+    private val clock: () -> Instant = Instant::now,
+    private val workModeTickMillis: Long = 1_000L,
+    private val workModePersistence: WorkModePersistence = RepositoryWorkModePersistence(repository),
 ) : ViewModel() {
 
     private val launchScope: CoroutineScope get() = injectedScope ?: viewModelScope
@@ -127,6 +156,9 @@ class DayViewModel(
     private var typesLoaded = false
     private var todayResolved = false
     private val pageRequestVersions = mutableMapOf<LocalDate, Int>()
+    private var workModeJob: Job? = null
+    private var workModeRestoreChecked = false
+    private var planThenWork = false
 
     /**
      * Open the Day tab on the backend's today rather than the device's.
@@ -141,6 +173,10 @@ class DayViewModel(
      * date the user navigated to instead of yanking them back to today.
      */
     fun start() {
+        launchScope.launch {
+            val active = repository.getActiveActualBlock().getOrNull()
+            _state.update { it.copy(activeActualAvailable = active != null) }
+        }
         if (todayResolved) {
             load()
             return
@@ -193,6 +229,7 @@ class DayViewModel(
     }
 
     fun cancelPlanningSession() {
+        planThenWork = false
         _state.update {
             it.copy(
                 isPlanningMode = false,
@@ -237,6 +274,7 @@ class DayViewModel(
                                 )
                             }
                         }
+                        restoreStoredWorkMode(day)
                         if (_state.value.date == date) prefetchAdjacent(date)
                     }
                 },
@@ -344,6 +382,17 @@ class DayViewModel(
 
     fun selectBlock(blockId: Int) {
         val block = _state.value.day?.blocks?.firstOrNull { it.id == blockId }
+        if (block?.lane == Lane.Actual) {
+            launchScope.launch {
+                val actual = repository.getActualBlock(block.actualBlockId ?: block.id).getOrNull()
+                if (actual != null && actual.endAt == null) {
+                    _state.value.day?.let { enterWorkMode(it, actual.startAt, actual) }
+                } else {
+                    _state.update { it.copy(selectedBlockId = blockId, draft = null, noteInput = block.note.orEmpty(), typeQuery = "") }
+                }
+            }
+            return
+        }
         _state.update {
             it.copy(
                 selectedBlockId = blockId,
@@ -355,6 +404,7 @@ class DayViewModel(
     }
 
     fun startDraft(lane: Lane, startMinute: Int) {
+        planThenWork = false
         val day = _state.value.day ?: return
         val start = startMinute.coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
         _state.update { state ->
@@ -372,6 +422,7 @@ class DayViewModel(
     }
 
     fun closeSheet() {
+        planThenWork = false
         val current = _state.value
         val selected = current.selectedBlock
         // The note field saves on dismiss rather than on every keystroke.
@@ -474,8 +525,7 @@ class DayViewModel(
                     taskTypeId = taskTypeId,
                     taskId = taskId,
                     note = note.ifBlank { null },
-                ).map { actual ->
-                    loadWorkMode(actual)
+                ).map {
                     repository.getDay(date).getOrThrow()
                 }
             } else {
@@ -503,6 +553,7 @@ class DayViewModel(
                         }
                     }
                     if (taskId != null) refreshReadyToPlan()
+                    if (lane == Lane.Planned && planThenWork) finishPlanningIntoWorkMode(day)
                 },
                 onFailure = { e ->
                     _state.update { it.copy(saving = false, message = e.apiError.message) }
@@ -752,95 +803,262 @@ class DayViewModel(
         }
     }
 
-    fun startSelectedWorkMode() {
-        val current = _state.value
-        val block = current.selectedBlock ?: return
-        if (current.saving) return
-        if (block.lane == Lane.Actual) {
-            openWorkMode(block.actualBlockId ?: block.id)
+    /** App-level entry: present time and today's plan always win over navigation context. */
+    fun startWorkMode() {
+        if (_state.value.workMode != null) {
+            _state.update { it.copy(workModeVisible = true) }
             return
         }
-        _state.update { it.copy(saving = true, message = null) }
-        launchScope.launch {
-            repository.startActualBlock(
-                taskTypeId = block.taskTypeId,
-                taskId = block.taskId,
-                note = block.note,
-                plannedBlockId = block.id,
-            ).fold(
-                onSuccess = { actual -> loadWorkMode(actual) },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
-            )
-        }
-    }
-
-    fun openWorkMode(actualBlockId: Int) {
-        if (_state.value.saving) return
         _state.update { it.copy(saving = true, message = null, selectedBlockId = null, draft = null) }
         launchScope.launch {
-            repository.getActualBlock(actualBlockId).fold(
-                onSuccess = { actual -> loadWorkMode(actual) },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+            val now = clock()
+            val targetDate = _state.value.today ?: _state.value.day?.today ?: _state.value.date
+            val day = _state.value.page(targetDate).day ?: repository.getDay(targetDate).getOrElse {
+                _state.update { state -> state.copy(saving = false, message = it.apiError.message) }
+                return@launch
+            }
+            _state.update { state ->
+                state.copy(date = targetDate).withPage(targetDate) {
+                    DayPageState(day = day, loading = false, materialized = true)
+                }
+            }
+            val active = repository.getActiveActualBlock().getOrNull()
+            if (active != null) {
+                enterWorkMode(day, active.startAt, active)
+                return@launch
+            }
+            val (current, next) = workSelection(day, now)
+            val nowMinute = minuteOfDay(now, day.timezone)
+            if (current != null || (next != null && next.startMinute - nowMinute <= 10)) {
+                enterWorkMode(day, now)
+            } else {
+                _state.update { it.copy(saving = false, workModeEntryWarning = true) }
+            }
+        }
+    }
+
+    fun continueWorkModeEntry() {
+        val day = _state.value.day ?: return
+        _state.update { it.copy(workModeEntryWarning = false) }
+        launchScope.launch { enterWorkMode(day, clock()) }
+    }
+
+    fun planSomethingBeforeWorkMode() {
+        val day = _state.value.day ?: return
+        val nowMinute = minuteOfDay(clock(), day.timezone)
+        val start = (nowMinute / SLOT_MINUTES * SLOT_MINUTES)
+            .coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
+        planThenWork = true
+        _state.update {
+            it.copy(
+                workModeEntryWarning = false,
+                draft = Draft(Lane.Planned, start, start + SLOT_MINUTES),
+                selectedBlockId = null,
             )
         }
     }
 
-    private suspend fun loadWorkMode(actual: ActualBlock) {
+    private suspend fun finishPlanningIntoWorkMode(day: Day) {
+        planThenWork = false
+        val completedAt = clock()
+        val (current, next) = workSelection(day, completedAt)
+        val nowMinute = minuteOfDay(completedAt, day.timezone)
+        if (current != null || (next != null && next.startMinute - nowMinute <= 10)) {
+            enterWorkMode(day, completedAt)
+        }
+    }
+
+    private suspend fun enterWorkMode(day: Day, entryAt: Instant, active: ActualBlock? = null) {
+        val now = clock()
+        val (clockCurrent, clockNext) = workSelection(day, now)
+        val current = active?.let { activeWorkBlock(day, it, now) } ?: clockCurrent
+        val next = if (active == null) clockNext else day.lane(Lane.Planned)
+            .sortedBy { it.startMinute }
+            .firstOrNull { it.startMinute >= (current?.endMinute ?: minuteOfDay(now, day.timezone)) && it.id != current?.id }
         val list = repository.listBattleTasks().getOrNull()
-        val timezone = list?.timezone ?: _state.value.day?.timezone ?: "UTC"
-        val task = actual.taskId?.let { taskId -> list?.items?.findBattleTask(taskId) }
-        val zone = runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.of("UTC"))
+        val taskId = current?.taskId ?: active?.taskId
+        val task = taskId?.let { list?.items?.findBattleTask(it) }
+        val activeEnd = active?.plannedBlockId?.let { plannedId ->
+            day.lane(Lane.Planned).firstOrNull { it.id == plannedId }
+                ?.let { blockInstant(day, it.endMinute) }
+        }
+        val work = WorkModeUiState(
+            entryAt = entryAt,
+            lastConfirmedAt = now,
+            lastObservedAt = now,
+            currentBlock = current,
+            nextBlock = next,
+            task = task,
+            timezone = day.timezone,
+            activeActual = active,
+            activePlannedEndAt = activeEnd,
+        )
         _state.update {
             it.copy(
                 saving = false,
                 selectedBlockId = null,
                 draft = null,
-                workMode = WorkModeUiState(
-                    actualBlock = actual,
-                    task = task,
-                    timezone = timezone,
-                    startInput = ACTUAL_INPUT_FORMAT.format(actual.startAt.atZone(zone)),
-                    endInput = actual.endAt?.let { end -> ACTUAL_INPUT_FORMAT.format(end.atZone(zone)) }.orEmpty(),
-                ),
+                workMode = work,
+                workModeVisible = true,
+                activeActualAvailable = active != null,
+                workModeEntryWarning = false,
+                workModeRestorePrompt = false,
             )
         }
+        persistWorkMode(work)
+        startWorkModeTicker()
     }
 
-    fun updateWorkModeStart(value: String) = _state.update { state ->
-        state.copy(workMode = state.workMode?.copy(startInput = value, error = null))
-    }
-
-    fun updateWorkModeEnd(value: String) = _state.update { state ->
-        state.copy(workMode = state.workMode?.copy(endInput = value, error = null))
-    }
-
-    fun saveWorkModeActual() {
-        val work = _state.value.workMode ?: return
-        val zone = runCatching { ZoneId.of(work.timezone) }.getOrDefault(ZoneId.of("UTC"))
-        val start = parseActualInput(work.startInput, zone)
-        val end = work.endInput.takeIf { it.isNotBlank() }?.let { parseActualInput(it, zone) }
-        val validation = when {
-            start == null -> "Use YYYY-MM-DD HH:MM for Actual start."
-            !work.isRunning && end == null -> "Actual end is required."
-            end != null && !end.isAfter(start) -> "Actual end must be after start."
-            else -> null
+    private fun startWorkModeTicker() {
+        workModeJob?.cancel()
+        workModeJob = launchScope.launch {
+            while (_state.value.workMode != null && !_state.value.workModeRestorePrompt) {
+                reconcileWorkMode()
+                delay(workModeTickMillis)
+            }
         }
-        if (validation != null) {
-            _state.update { it.copy(workMode = work.copy(error = validation)) }
-            return
+    }
+
+    private suspend fun reconcileWorkMode() {
+        var work = _state.value.workMode ?: return
+        val now = clock()
+        var day = _state.value.day ?: return
+        val today = now.atZone(ZoneId.of(day.timezone)).toLocalDate()
+        if (
+            work.activeActual == null &&
+            work.confirmingPlannedBlockId != null &&
+            work.confirmationStartedAt != null
+        ) {
+            val confirmed = work.currentBlock?.takeIf { it.id == work.confirmingPlannedBlockId }
+            if (confirmed != null) {
+                val startAt = maxOf(work.entryAt, blockInstant(day, confirmed.startMinute))
+                val endAt = blockInstant(day, confirmed.endMinute)
+                val confirmedThrough = minOf(now, endAt)
+                val minuteConfirmed = !confirmedThrough.isBefore(work.confirmationStartedAt.plusSeconds(60))
+                work = if (!minuteConfirmed && !now.isBefore(endAt)) {
+                    work.copy(
+                        currentBlock = null,
+                        confirmingPlannedBlockId = null,
+                        confirmationStartedAt = null,
+                    )
+                } else if (minuteConfirmed && !now.isBefore(endAt)) {
+                    repository.createActualBlock(
+                        startAt = startAt,
+                        endAt = endAt,
+                        plannedBlockId = confirmed.id,
+                    ).getOrElse { error ->
+                        _state.update { it.copy(workMode = work.copy(error = error.apiError.message)) }
+                        return
+                    }
+                    work.copy(
+                        currentBlock = null,
+                        confirmingPlannedBlockId = null,
+                        confirmationStartedAt = null,
+                        lastConfirmedAt = endAt,
+                    )
+                } else if (minuteConfirmed) {
+                    val actual = repository.startActualBlock(
+                        plannedBlockId = confirmed.id,
+                        startAt = startAt,
+                    ).getOrElse { error ->
+                        _state.update { it.copy(workMode = work.copy(error = error.apiError.message)) }
+                        return
+                    }
+                    work.copy(
+                        activeActual = actual,
+                        activePlannedEndAt = endAt,
+                        confirmingPlannedBlockId = null,
+                        confirmationStartedAt = null,
+                        lastConfirmedAt = now,
+                    )
+                } else work
+            }
         }
-        _state.update { it.copy(workMode = work.copy(saving = true, error = null)) }
-        launchScope.launch {
-            repository.patchActualBlock(work.actualBlock.id, startAt = start, endAt = end).fold(
-                onSuccess = { actual ->
-                    loadWorkMode(actual)
-                    refreshCurrentDay()
-                },
-                onFailure = { error ->
-                    _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) }
-                },
+        if (day.date != today) {
+            day = repository.getDay(today).getOrElse { error ->
+                _state.update { it.copy(workMode = work.copy(error = error.apiError.message)) }
+                return
+            }
+            _state.update { state -> state.copy(date = today).withPage(today) { DayPageState(day = day, loading = false, materialized = true) } }
+        }
+
+        if (work.activeActual != null && work.activePlannedEndAt != null && !now.isBefore(work.activePlannedEndAt)) {
+            repository.patchActualBlock(work.activeActual.id, endAt = work.activePlannedEndAt).getOrElse { error ->
+                _state.update { it.copy(workMode = work.copy(error = error.apiError.message)) }
+                return
+            }
+            work = work.copy(activeActual = null, activePlannedEndAt = null, lastConfirmedAt = work.activePlannedEndAt)
+        }
+
+        val (current, next) = workSelection(day, now)
+        work = when {
+            work.activeActual != null -> {
+                val activeBlock = activeWorkBlock(day, work.activeActual, now)
+                val activeNext = day.lane(Lane.Planned).sortedBy { it.startMinute }
+                    .firstOrNull { it.startMinute >= activeBlock.endMinute && it.id != activeBlock.id }
+                work.copy(
+                    currentBlock = activeBlock,
+                    nextBlock = activeNext,
+                    confirmingPlannedBlockId = null,
+                    confirmationStartedAt = null,
+                    lastConfirmedAt = now,
+                    lastObservedAt = now,
+                )
+            }
+            current == null -> work.copy(
+                currentBlock = null,
+                nextBlock = next,
+                task = null,
+                confirmingPlannedBlockId = null,
+                confirmationStartedAt = null,
+                lastObservedAt = now,
             )
+            work.activeActual?.plannedBlockId == current.id -> work.copy(
+                currentBlock = current,
+                nextBlock = next,
+                lastConfirmedAt = now,
+                lastObservedAt = now,
+            )
+            work.confirmingPlannedBlockId != current.id || work.confirmationStartedAt == null -> {
+                val started = maxOf(work.entryAt, blockInstant(day, current.startMinute))
+                work.copy(
+                    currentBlock = current,
+                    nextBlock = next,
+                    confirmingPlannedBlockId = current.id,
+                    confirmationStartedAt = started,
+                    lastObservedAt = now,
+                )
+            }
+            !now.isBefore(work.confirmationStartedAt.plusSeconds(60)) -> {
+                val startAt = maxOf(work.entryAt, blockInstant(day, current.startMinute))
+                val actual = repository.startActualBlock(plannedBlockId = current.id, startAt = startAt).getOrElse { error ->
+                    val active = repository.getActiveActualBlock().getOrNull()
+                    if (active != null) active else {
+                        _state.update { it.copy(workMode = work.copy(error = error.apiError.message)) }
+                        return
+                    }
+                }
+                work.copy(
+                    currentBlock = current,
+                    nextBlock = next,
+                    activeActual = actual,
+                    activePlannedEndAt = blockInstant(day, current.endMinute),
+                    confirmingPlannedBlockId = null,
+                    confirmationStartedAt = null,
+                    lastConfirmedAt = now,
+                    lastObservedAt = now,
+                )
+            }
+            else -> work.copy(currentBlock = current, nextBlock = next, lastObservedAt = now)
         }
+
+        val taskId = work.currentBlock?.taskId
+        if (taskId != work.task?.id) {
+            val list = repository.listBattleTasks().getOrNull()
+            work = work.copy(task = taskId?.let { list?.items?.findBattleTask(it) })
+        }
+        _state.update { it.copy(workMode = work, activeActualAvailable = work.activeActual != null) }
+        persistWorkMode(work)
     }
 
     fun toggleWorkModeSubtask(subtask: Subtask) {
@@ -850,56 +1068,169 @@ class DayViewModel(
         launchScope.launch {
             val result = if (subtask.checked) repository.uncheckSubtask(subtask.id) else repository.checkSubtask(subtask.id)
             result.fold(
-                onSuccess = { loadWorkMode(work.actualBlock) },
+                onSuccess = {
+                    val tasks = repository.listBattleTasks().getOrNull()
+                    val task = work.task?.id?.let { tasks?.items?.findBattleTask(it) }
+                    _state.update { it.copy(workMode = work.copy(task = task, saving = false)) }
+                },
                 onFailure = { error -> _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) } },
             )
         }
     }
 
-    fun finishWorkMode(completeTask: Boolean) {
+    fun exitWorkMode() {
         val work = _state.value.workMode ?: return
         if (work.saving) return
-        if (completeTask && work.task == null) return
         _state.update { it.copy(workMode = work.copy(saving = true, error = null)) }
         launchScope.launch {
-            if (completeTask) {
-                repository.completeBattleTask(checkNotNull(work.task).id).fold(
-                    onSuccess = { completion ->
-                        val removed = completion.removedPlannedBlockIds.size
-                        _state.update {
-                            it.copy(
-                                workMode = null,
-                                message = completionMessage(removed),
-                                completionUndoTaskId = completion.task.id,
-                                completionUndoToken = completion.undoToken,
-                            )
-                        }
-                        refreshCurrentDay()
-                        refreshReadyToPlan()
-                    },
-                    onFailure = { error -> _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) } },
-                )
-            } else if (work.isRunning) {
-                repository.finishActualBlock(work.actualBlock.id).fold(
-                    onSuccess = {
-                        _state.update {
-                            it.copy(
-                                workMode = null,
-                                message = if (work.task != null) "Session finished · Task remains open" else "Session finished",
-                            )
-                        }
-                        refreshCurrentDay()
-                    },
-                    onFailure = { error -> _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) } },
-                )
-            } else {
-                _state.update { it.copy(workMode = null, message = "Actual time saved") }
-                refreshCurrentDay()
+            val active = work.activeActual
+            if (active != null) {
+                repository.patchActualBlock(active.id, endAt = clock()).getOrElse { error ->
+                    _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) }
+                    return@launch
+                }
             }
+            workModePersistence.save(null)
+            workModeJob?.cancel()
+            _state.update { it.copy(workMode = null, workModeVisible = false, activeActualAvailable = false, message = "Actual time preserved · Task remains open") }
+            refreshCurrentDay()
         }
     }
 
-    fun closeWorkMode() = _state.update { it.copy(workMode = null) }
+    fun confirmWorkContinued() {
+        val work = _state.value.workMode ?: return
+        _state.update { it.copy(workMode = work.copy(saving = true, error = null)) }
+        launchScope.launch {
+            val now = clock()
+            val day = _state.value.day ?: return@launch
+            var resumed = work
+            var endedActivePlannedBlockId: Int? = null
+            if (resumed.activeActual != null && resumed.activePlannedEndAt != null && !now.isBefore(resumed.activePlannedEndAt)) {
+                endedActivePlannedBlockId = resumed.activeActual.plannedBlockId
+                repository.patchActualBlock(resumed.activeActual.id, endAt = resumed.activePlannedEndAt).getOrElse { error ->
+                    _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) }
+                    return@launch
+                }
+                resumed = resumed.copy(activeActual = null, activePlannedEndAt = null)
+            }
+            day.lane(Lane.Planned).sortedBy { it.startMinute }.forEach { block ->
+                if (block.id == resumed.activeActual?.plannedBlockId || block.id == endedActivePlannedBlockId) return@forEach
+                val blockStart = blockInstant(day, block.startMinute)
+                val blockEnd = blockInstant(day, block.endMinute)
+                val start = maxOf(blockStart, work.lastConfirmedAt, work.entryAt)
+                val end = minOf(blockEnd, now)
+                if (!end.isAfter(start)) return@forEach
+                if (!blockEnd.isAfter(now)) {
+                    repository.createActualBlock(startAt = start, endAt = end, plannedBlockId = block.id).getOrElse { error ->
+                        _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) }
+                        return@launch
+                    }
+                } else {
+                    val actual = repository.startActualBlock(plannedBlockId = block.id, startAt = start).getOrElse { error ->
+                        _state.update { it.copy(workMode = work.copy(saving = false, error = error.apiError.message)) }
+                        return@launch
+                    }
+                    resumed = resumed.copy(activeActual = actual, activePlannedEndAt = blockEnd)
+                }
+            }
+            val (current, next) = workSelection(day, now)
+            resumed = resumed.copy(
+                currentBlock = current,
+                nextBlock = next,
+                lastConfirmedAt = now,
+                lastObservedAt = now,
+                confirmingPlannedBlockId = null,
+                confirmationStartedAt = null,
+                saving = false,
+            )
+            _state.update {
+                it.copy(
+                    workMode = resumed,
+                    workModeRestorePrompt = false,
+                    activeActualAvailable = resumed.activeActual != null,
+                )
+            }
+            persistWorkMode(resumed)
+            startWorkModeTicker()
+        }
+    }
+
+    fun declineWorkContinued() {
+        val work = _state.value.workMode ?: return
+        launchScope.launch {
+            work.activeActual?.let { repository.patchActualBlock(it.id, endAt = work.lastConfirmedAt).getOrNull() }
+            workModePersistence.save(null)
+            _state.update { it.copy(workMode = null, workModeVisible = false, workModeRestorePrompt = false) }
+        }
+    }
+
+    private suspend fun restoreStoredWorkMode(day: Day) {
+        if (workModeRestoreChecked) return
+        workModeRestoreChecked = true
+        val snapshot = workModePersistence.load() ?: return
+        val now = clock()
+        val active = repository.getActiveActualBlock().getOrNull()
+        val (clockCurrent, next) = workSelection(day, now)
+        val current = snapshot.confirmingPlannedBlockId?.let { confirmingId ->
+            day.lane(Lane.Planned).firstOrNull { it.id == confirmingId }
+        } ?: clockCurrent
+        val taskId = current?.taskId ?: active?.taskId
+        val tasks = repository.listBattleTasks().getOrNull()
+        val work = snapshot.toUiState(
+            currentBlock = current,
+            nextBlock = next,
+            task = taskId?.let { tasks?.items?.findBattleTask(it) },
+            timezone = day.timezone,
+            activeActual = active,
+        )
+        val absentTooLong = now.isAfter(work.lastObservedAt.plusSeconds(10 * 60))
+        _state.update { it.copy(workMode = work, workModeVisible = true, activeActualAvailable = active != null, workModeRestorePrompt = absentTooLong) }
+        if (!absentTooLong) startWorkModeTicker()
+    }
+
+    private suspend fun persistWorkMode(work: WorkModeUiState) {
+        workModePersistence.save(work.toSnapshot())
+    }
+
+    private fun workSelection(day: Day, now: Instant): Pair<TimeBlock?, TimeBlock?> {
+        val minute = minuteOfDay(now, day.timezone)
+        val planned = day.lane(Lane.Planned).sortedBy { it.startMinute }
+        return planned.firstOrNull { minute >= it.startMinute && minute < it.endMinute } to
+            planned.firstOrNull { it.startMinute > minute }
+    }
+
+    private fun activeWorkBlock(day: Day, active: ActualBlock, now: Instant): TimeBlock {
+        val linked = active.plannedBlockId?.let { plannedId ->
+            day.lane(Lane.Planned).firstOrNull { it.id == plannedId }
+        }
+        if (linked != null) return linked
+        val start = minuteOfDay(active.startAt, day.timezone)
+        val end = maxOf(start + 1, minuteOfDay(now, day.timezone))
+        return TimeBlock(
+            id = active.id,
+            lane = Lane.Actual,
+            taskTypeId = active.taskTypeId,
+            taskTypeName = active.taskTypeName,
+            taskId = active.taskId,
+            task = active.task,
+            note = active.note,
+            plannedBlockId = null,
+            actualBlockId = active.id,
+            startMinute = start,
+            endMinute = end,
+        )
+    }
+
+    private fun minuteOfDay(now: Instant, timezone: String): Int {
+        val local = now.atZone(runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.of("UTC")))
+        return local.hour * 60 + local.minute
+    }
+
+    private fun blockInstant(day: Day, minute: Int): Instant =
+        day.date.atStartOfDay(runCatching { ZoneId.of(day.timezone) }.getOrDefault(ZoneId.of("UTC")))
+            .plusMinutes(minute.toLong()).toInstant()
+
+    fun leaveWorkModeVisible() = _state.update { it.copy(workModeVisible = false) }
 
     fun reopenSelectedTask() {
         val current = _state.value
@@ -1015,6 +1346,37 @@ class DayViewModel(
         }
     }
 }
+
+private fun WorkModeSnapshot.toUiState(
+    currentBlock: TimeBlock?,
+    nextBlock: TimeBlock?,
+    task: BattleTask?,
+    timezone: String,
+    activeActual: ActualBlock?,
+) = WorkModeUiState(
+    entryAt = Instant.parse(entryAt),
+    lastConfirmedAt = Instant.parse(lastConfirmedAt),
+    lastObservedAt = Instant.parse(lastObservedAt),
+    currentBlock = currentBlock,
+    nextBlock = nextBlock,
+    task = task,
+    timezone = timezone,
+    activeActual = activeActual,
+    confirmingPlannedBlockId = confirmingPlannedBlockId,
+    confirmationStartedAt = confirmationStartedAt?.let(Instant::parse),
+    activePlannedEndAt = activePlannedEndAt?.let(Instant::parse),
+)
+
+private fun WorkModeUiState.toSnapshot() = WorkModeSnapshot(
+    entryAt = entryAt.toString(),
+    lastConfirmedAt = lastConfirmedAt.toString(),
+    lastObservedAt = lastObservedAt.toString(),
+    confirmingPlannedBlockId = confirmingPlannedBlockId,
+    confirmationStartedAt = confirmationStartedAt?.toString(),
+    activeActualId = activeActual?.id,
+    activePlannedBlockId = activeActual?.plannedBlockId,
+    activePlannedEndAt = activePlannedEndAt?.toString(),
+)
 
 private val ACTUAL_INPUT_FORMAT: DateTimeFormatter =
     DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm").withResolverStyle(ResolverStyle.STRICT)

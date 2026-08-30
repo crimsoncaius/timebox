@@ -15,7 +15,6 @@ export function TimeBlockModal({
   onSave,
   onCreateFromDraft,
   onDelete,
-  onStartWorkMode,
   onRecordActualAsPlanned,
   onCreateTaskTypePath,
   onDirtyChange,
@@ -30,7 +29,6 @@ export function TimeBlockModal({
   onSave: (patch: { task_type_id?: number; note?: string | null }) => Promise<void>
   onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
-  onStartWorkMode?: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
@@ -66,7 +64,6 @@ export function TimeBlockModal({
         onSave={onSave}
         onCreateFromDraft={onCreateFromDraft}
         onDelete={onDelete}
-        onStartWorkMode={onStartWorkMode}
         onRecordActualAsPlanned={onRecordActualAsPlanned}
         onCreateTaskTypePath={onCreateTaskTypePath}
         onDirtyChange={onDirtyChange}

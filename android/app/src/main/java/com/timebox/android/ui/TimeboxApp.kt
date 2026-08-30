@@ -11,6 +11,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +50,8 @@ import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayViewModel
 import com.timebox.android.ui.day.WorkModeScreen
+import com.timebox.android.ui.day.WorkModeEntryDialog
+import com.timebox.android.ui.day.WorkModeRestoreDialog
 import com.timebox.android.ui.settings.SettingsScreen
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -222,7 +225,7 @@ fun TimeboxApp(
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         Column(
             modifier = Modifier.fillMaxSize().imePadding().then(
-                if (dayState.workMode != null) Modifier.clearAndSetSemantics { } else Modifier
+                if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
         ) {
             if (route != AppRoutes.DayPattern) {
@@ -265,7 +268,6 @@ fun TimeboxApp(
                             onCreateType = dayViewModel::createTaskTypeAndChoose,
                             onNoteChange = dayViewModel::onNoteChange,
                             onDeleteSelected = dayViewModel::deleteSelected,
-                            onStartWorkMode = dayViewModel::startSelectedWorkMode,
                             onConfirmSelectedTaskCompletion = dayViewModel::completeSelectedTask,
                             onReopenSelectedTask = dayViewModel::reopenSelectedTask,
                             onOpenLinkedTask = { taskId ->
@@ -572,6 +574,19 @@ fun TimeboxApp(
             }
         }
 
+        if (!dayState.workModeVisible) {
+            TextButton(
+                onClick = {
+                    dayViewModel.startWorkMode()
+                    val target = AppRoutes.day(dayState.today ?: dayState.date)
+                    navController.navigate(target) { launchSingleTop = true }
+                },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 92.dp),
+            ) {
+                Text(if (dayState.workMode != null || dayState.activeActualAvailable) "Return to Work Mode" else "Start Work Mode")
+            }
+        }
+
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp)) { data ->
             Box(
                 Modifier.padding(horizontal = 16.dp).background(colors.on, RoundedCornerShape(12.dp))
@@ -581,16 +596,24 @@ fun TimeboxApp(
             }
         }
 
-        dayState.workMode?.let { workMode ->
+        dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
             WorkModeScreen(
                 state = workMode,
-                onStartChange = dayViewModel::updateWorkModeStart,
-                onEndChange = dayViewModel::updateWorkModeEnd,
-                onSaveActual = dayViewModel::saveWorkModeActual,
                 onToggleSubtask = dayViewModel::toggleWorkModeSubtask,
-                onFinish = { dayViewModel.finishWorkMode(completeTask = false) },
-                onFinishAndComplete = { dayViewModel.finishWorkMode(completeTask = true) },
-                onClose = dayViewModel::closeWorkMode,
+                onLeave = dayViewModel::leaveWorkModeVisible,
+                onExit = dayViewModel::exitWorkMode,
+            )
+        }
+        if (dayState.workModeEntryWarning) {
+            WorkModeEntryDialog(
+                onPlanFirst = dayViewModel::planSomethingBeforeWorkMode,
+                onContinue = dayViewModel::continueWorkModeEntry,
+            )
+        }
+        if (dayState.workModeRestorePrompt) {
+            WorkModeRestoreDialog(
+                onDecline = dayViewModel::declineWorkContinued,
+                onConfirm = dayViewModel::confirmWorkContinued,
             )
         }
     }

@@ -208,6 +208,11 @@ def start_actual_block(
 ) -> ActualBlockRead:
     """Atomically create the sole active Actual Block."""
 
+    authoritative_now = _as_utc(captured_at)
+    started_at = _as_utc(body.start_at) if body.start_at is not None else authoritative_now
+    if started_at > authoritative_now:
+        raise ValueError("Actual Block start cannot be in the future")
+
     task_type_id, task_id = _resolve_origin_item(
         db,
         task_type_id=body.task_type_id,
@@ -225,7 +230,7 @@ def start_actual_block(
         day_id=None,
         start_minute=None,
         end_minute=None,
-        start_at=_as_utc(captured_at),
+        start_at=started_at,
         end_at=None,
         planned_block_id=body.planned_block_id,
     )

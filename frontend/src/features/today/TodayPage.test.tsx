@@ -286,40 +286,12 @@ describe('TodayPage inspector rail', () => {
     })
   })
 
-  it('finishes Work Mode and reports that the Task remains open', async () => {
+  it('keeps the Planned Block inspector focused on planning', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
     await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
-    await user.click((await screen.findAllByRole('button', { name: 'Start Work Mode' }))[0]!)
-    await user.click(await screen.findByRole('button', { name: 'Finish session' }))
-    expect(await screen.findByText('Actual recorded · Task remains open.')).toBeVisible()
-  })
-
-  it('atomically completes from Work Mode and offers Task Undo on Day', async () => {
-    const user = userEvent.setup()
-    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
-    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
-    await user.click((await screen.findAllByRole('button', { name: 'Start Work Mode' }))[0]!)
-    await user.click(await screen.findByRole('button', { name: 'Finish session + complete Task' }))
-    expect(await screen.findByText(/2 future Planned Blocks removed/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Undo' }))
-    await waitFor(() => expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith('/api/tasks/77/undo-completion', expect.objectContaining({ method: 'POST' })))
-  })
-
-  it('renders an Undo conflict and keeps the completion token available for retry', async () => {
-    rejectNextTaskUndo = true
-    const user = userEvent.setup()
-    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
-    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
-    await user.click((await screen.findAllByRole('button', { name: 'Start Work Mode' }))[0]!)
-    await user.click(await screen.findByRole('button', { name: 'Finish session + complete Task' }))
-
-    await user.click(await screen.findByRole('button', { name: 'Undo' }))
-    expect(await screen.findByText('Task completion changed on another surface')).toBeVisible()
-    const retry = screen.getByRole('button', { name: 'Undo' })
-    expect(retry).toBeVisible()
-    await user.click(retry)
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Start Work Mode' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]).toBeVisible()
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {

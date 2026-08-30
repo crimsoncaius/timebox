@@ -73,7 +73,6 @@ class BlockSheetTest {
                             onCreateType = {},
                             onNoteChange = {},
                             onDelete = {},
-                            onStartWorkMode = {},
                             onConfirmTaskCompletion = {},
                             onReopenTask = {},
                             onOpenLinkedTask = {},

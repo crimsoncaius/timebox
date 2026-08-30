@@ -90,6 +90,12 @@ class TimeboxRepository private constructor(
     val battlePlanPreferences: Flow<BattlePlanPreferences> = preferences?.battlePlanPreferences
         ?: flowOf(BattlePlanPreferences())
 
+    val workMode: Flow<WorkModeSnapshot?> = preferences?.workMode ?: flowOf(null)
+
+    suspend fun setWorkMode(snapshot: WorkModeSnapshot?) {
+        preferences?.setWorkMode(snapshot)
+    }
+
     @Volatile
     private var cachedApiKey: String = ""
 
@@ -358,8 +364,9 @@ class TimeboxRepository private constructor(
         taskId: Int? = null,
         note: String? = null,
         plannedBlockId: Int? = null,
+        startAt: Instant? = null,
     ): Result<ActualBlock> = call {
-        api().startActualBlock(ActualBlockStartDto(taskTypeId, taskId, note, plannedBlockId)).toModel()
+        api().startActualBlock(ActualBlockStartDto(taskTypeId, taskId, note, plannedBlockId, startAt?.toString())).toModel()
     }
 
     suspend fun createActualBlock(
