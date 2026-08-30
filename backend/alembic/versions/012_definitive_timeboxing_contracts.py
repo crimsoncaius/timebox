@@ -21,6 +21,18 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Alembic creates version_num as VARCHAR(32), but this revision identifier is
+    # longer. PostgreSQL enforces that limit when Alembic records the completed
+    # revision after this function returns; SQLite does not enforce it.
+    if op.get_bind().dialect.name == "postgresql":
+        op.alter_column(
+            "alembic_version",
+            "version_num",
+            existing_type=sa.String(length=32),
+            type_=sa.String(length=255),
+            existing_nullable=False,
+        )
+
     op.add_column(
         "tasks",
         sa.Column("checked", sa.Boolean(), server_default=sa.false(), nullable=False),
@@ -168,3 +180,12 @@ def downgrade() -> None:
     op.drop_column("tasks", "version")
     op.drop_column("tasks", "completed_at")
     op.drop_column("tasks", "checked")
+
+    if op.get_bind().dialect.name == "postgresql":
+        op.alter_column(
+            "alembic_version",
+            "version_num",
+            existing_type=sa.String(length=255),
+            type_=sa.String(length=32),
+            existing_nullable=False,
+        )
