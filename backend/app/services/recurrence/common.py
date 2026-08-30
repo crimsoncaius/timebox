@@ -53,10 +53,13 @@ def _month_date(year: int, month: int, day: int) -> dt.date:
 
 
 def _rule_value(rule, name: str):
+    if name == "start_date" and hasattr(rule, "generation_start_date"):
+        # Persisted series keep their historical start for provenance while the
+        # generation anchor advances when cadence is edited.
+        return rule.generation_start_date
     if name == "weekdays":
         raw = getattr(rule, "weekdays", None)
         if raw is not None:
             return sorted(set(raw))
         return sorted(set(_json_list(rule.weekdays_json)))
     return getattr(rule, name)
-

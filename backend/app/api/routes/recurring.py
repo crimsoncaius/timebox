@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -112,12 +112,3 @@ def resume_template(template_id: int, db: Session = Depends(get_db), settings: S
 @router.post("/{template_id}/end", response_model=RecurringTemplateRead)
 def end_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
     return _lifecycle(service.end_template, template_id, db, settings)
-
-
-@router.delete("/{template_id}", status_code=204)
-def delete_template(template_id: int, db: Session = Depends(get_db)) -> Response:
-    try:
-        service.delete_template(db, template_id)
-    except ValueError as exc:
-        raise _error(exc) from exc
-    return Response(status_code=204)

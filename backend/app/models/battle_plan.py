@@ -149,6 +149,9 @@ class RecurrenceOccurrence(Base):
         ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
     suppressed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    structurally_protected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     template: Mapped[RecurringTemplate] = relationship("RecurringTemplate", back_populates="occurrences")
     task: Mapped["Task | None"] = relationship("Task", foreign_keys=[task_id])

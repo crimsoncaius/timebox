@@ -36,6 +36,7 @@ from app.services.recurrence.preview import _windows_for_preview
 from app.services.recurrence.synchronization import (
     _cleanup_future,
     _propagate_template_fields,
+    _rebuild_unprotected_subtasks,
     _suppress_pause_interval,
     synchronize,
 )
@@ -90,14 +91,11 @@ def patch_template(db: Session, template_id: int, body: RecurringTemplatePatch, 
             return before != after
         return getattr(row, field) != getattr(body, field)
 
-    schedule_changed = any(schedule_value_changed(field) for field in fields & SCHEDULE_FIELDS)
-    latest_preserved: dt.date | None = None
-    if schedule_changed:
+    cadence_fields = SCHEDULE_FIELDS - {"checklist_titles"}
+    cadence_changed = any(schedule_value_changed(field) for field in fields & cadence_fields)
+    checklist_changed = "checklist_titles" in fields and schedule_value_changed("checklist_titles")
+    if cadence_changed:
         _cleanup_future(db, row, today, suppress=False)
-        db.flush()
-        latest_preserved = db.execute(select(func.max(RecurrenceOccurrence.cycle_end)).where(
-            RecurrenceOccurrence.template_id == row.id,
-        )).scalar_one_or_none()
     for field in fields - {"weekdays", "checklist_titles"}:
         value = getattr(body, field)
         if field == "title" and value is not None:
@@ -107,9 +105,10 @@ def patch_template(db: Session, template_id: int, body: RecurringTemplatePatch, 
         row.weekdays_json = json.dumps(sorted(set(body.weekdays or [])))
     if "checklist_titles" in fields:
         _replace_checklist(db, row, body.checklist_titles or [])
-    if schedule_changed:
-        after_history = latest_preserved + dt.timedelta(days=1) if latest_preserved else today
-        row.generation_start_date = max(row.start_date, today, after_history)
+    if cadence_changed:
+        # New cadence starts now. Protected old-cadence occurrences coexist as
+        # exceptions; they must never push the new generation window forward.
+        row.generation_start_date = max(row.start_date, today)
     # Validate the complete edited rule through the same Pydantic contract used for creation.
     RecurrencePreviewRequest(
         mode=row.mode, frequency=row.frequency, interval=row.interval,
@@ -118,6 +117,8 @@ def patch_template(db: Session, template_id: int, body: RecurringTemplatePatch, 
         end_date=row.end_date, cycle_limit=row.cycle_limit,
     )
     _propagate_template_fields(db, row, today)
+    if checklist_changed and row.mode == RecurrenceMode.scheduled:
+        _rebuild_unprotected_subtasks(db, row, today, body.checklist_titles or [])
     db.commit()
     synchronize(db, settings, today=today)
     return _load_template(db, row.id)
@@ -161,24 +162,6 @@ def end_template(db: Session, template_id: int, settings: Settings) -> Recurring
     row.ended_at = _utc_now()
     db.commit()
     return _load_template(db, row.id)
-
-
-def delete_template(db: Session, template_id: int) -> None:
-    row = _load_template(db, template_id)
-    if row.status != RecurrenceStatus.ended:
-        raise ValueError("Only ended templates can be permanently deleted")
-    tasks = list(db.execute(select(Task).where(Task.recurring_template_id == row.id)).scalars())
-    for task in tasks:
-        task.recurring_template_id = None
-        task.occurrence_key = None
-        task.recurrence_kind = None
-        task.quota_period_start = None
-        task.quota_period_end = None
-        task.expected_sessions = None
-        task.session_index = None
-        task.recurrence_overrides_json = "[]"
-    db.delete(row)
-    db.commit()
 
 
 def _to_read_current_tasks(tasks_window: list[Task], today: dt.date) -> list[RecurringTaskLink]:

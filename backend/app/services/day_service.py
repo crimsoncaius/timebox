@@ -12,6 +12,7 @@ from app.models.day import Day
 from app.models.battle_plan import Task
 from app.models.time_block import BlockLane, TimeBlock
 from app.services import actual_block_service, task_type_service
+from app.services.recurrence.protection import protect_task_occurrence
 from app.schemas.day import (
     DayListItem,
     DayMeta,
@@ -388,6 +389,7 @@ def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBl
     db.add(block)
     if task is not None and body.lane == BlockLane.planned:
         task.ready_to_plan = False
+        protect_task_occurrence(db, task)
     _touch_day(day)
     db.commit()
     db.refresh(block)
@@ -470,6 +472,7 @@ def commit_planning_session(
                 )
             )
             task.ready_to_plan = False
+            protect_task_occurrence(db, task)
             _touch_day(day)
         db.commit()
     except Exception:
@@ -497,6 +500,8 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
     if block is None:
         raise ValueError("Block not found")
     original_item = (block.task_type_id, block.task_id)
+    if block.lane == BlockLane.planned and block.task_id is not None:
+        protect_task_occurrence(db, block.task_id)
     start = data.get("start_minute", block.start_minute)
     end = data.get("end_minute", block.end_minute)
     if "start_minute" in data or "end_minute" in data:
@@ -512,6 +517,9 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         block.task_id = data["task_id"]
         if target_task is not None and block.lane == BlockLane.planned:
             target_task.ready_to_plan = False
+            protect_task_occurrence(db, target_task)
+    if block.lane == BlockLane.planned and block.task_id is not None:
+        protect_task_occurrence(db, block.task_id)
     if "note" in data:
         block.note = str(data["note"] or "").strip() or None
     if "start_minute" in data:
@@ -547,6 +555,8 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
     if block is None:
         raise ValueError("Block not found")
     if block.lane == BlockLane.planned:
+        if block.task_id is not None:
+            protect_task_occurrence(db, block.task_id)
         linked_actual = db.execute(
             select(TimeBlock)
             .where(TimeBlock.planned_block_id == block.id)

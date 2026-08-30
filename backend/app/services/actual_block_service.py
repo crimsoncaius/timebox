@@ -20,6 +20,7 @@ from app.schemas.time_block import (
     ActualBlockRead,
     ActualBlockPatch,
 )
+from app.services.recurrence.protection import protect_task_occurrence
 
 
 def _as_utc(value: dt.datetime) -> dt.datetime:
@@ -230,6 +231,8 @@ def start_actual_block(
     )
     try:
         db.add(row)
+        if task_id is not None:
+            protect_task_occurrence(db, task_id)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -245,6 +248,8 @@ def finish_actual_block(
     row = _load_actual(db, actual_block_id, for_update=True)
     if row.end_at is not None:
         raise ValueError("Actual Block is already finished")
+    if row.task_id is not None:
+        protect_task_occurrence(db, row.task_id)
     finished_at = _as_utc(captured_at)
     assert row.start_at is not None
     if finished_at <= _as_utc(row.start_at):
@@ -289,6 +294,8 @@ def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead
     )
     try:
         db.add(row)
+        if task_id is not None:
+            protect_task_occurrence(db, task_id)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -349,6 +356,11 @@ def patch_actual_block(
     if data:
         invalidate_record_actual_undo(db, row.id)
 
+    if row.task_id is not None:
+        protect_task_occurrence(db, row.task_id)
+    if task_id is not None:
+        protect_task_occurrence(db, task_id)
+
     row.task_type_id = task_type_id
     row.task_id = task_id
     if "note" in data:
@@ -369,6 +381,8 @@ def detach_actual_block(db: Session, actual_block_id: int) -> ActualBlockRead:
     row = _load_actual(db, actual_block_id, for_update=True)
     if row.planned_block_id is None:
         raise ValueError("Actual Block is not linked to a Planned Block")
+    if row.task_id is not None:
+        protect_task_occurrence(db, row.task_id)
     invalidate_record_actual_undo(db, row.id)
     row.planned_block_id = None
     try:
@@ -419,6 +433,8 @@ def relink_actual_block(
             )
     invalidate_record_actual_undo(db, row.id)
     row.planned_block_id = planned.id
+    if row.task_id is not None:
+        protect_task_occurrence(db, row.task_id)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -481,6 +497,8 @@ def record_actual_as_planned(
     )
     try:
         db.add(actual)
+        if planned.task_id is not None:
+            protect_task_occurrence(db, planned.task_id)
         db.flush()
         db.add(
             ActualBlockRecordOperation(
@@ -533,6 +551,8 @@ def undo_record_actual_as_planned(
     ):
         raise ValueError("Actual Block changed; Record Actual Undo is no longer available")
     try:
+        if actual.task_id is not None:
+            protect_task_occurrence(db, actual.task_id)
         operation.actual_block_id = None
         operation.undone_at = dt.datetime.now(dt.timezone.utc)
         db.delete(actual)
@@ -544,6 +564,8 @@ def undo_record_actual_as_planned(
 
 def delete_actual_block(db: Session, actual_block_id: int) -> None:
     row = _load_actual(db, actual_block_id, for_update=True)
+    if row.task_id is not None:
+        protect_task_occurrence(db, row.task_id)
     invalidate_record_actual_undo(db, row.id)
     try:
         db.delete(row)

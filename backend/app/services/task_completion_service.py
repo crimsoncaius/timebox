@@ -16,6 +16,7 @@ from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.battle_plan import SubtaskRead
 from app.services.battle_plan._shared import _load_task
+from app.services.recurrence.protection import protect_task_occurrence
 
 
 def _is_subtask(task: Task) -> bool:
@@ -187,6 +188,7 @@ def set_subtask_checked(
         raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
 
     row.checked = checked
+    protect_task_occurrence(db, row)
     db.commit()
     return _subtask_read(row)
 
@@ -297,6 +299,7 @@ def complete_task(
             active.end_at = completed_at
 
         row.last_non_completed_status = row.status
+        protect_task_occurrence(db, row)
         row.status = TaskStatus.completed
         row.completed_at = completed_at
         row.ready_to_plan = False
@@ -333,6 +336,7 @@ def reopen_task(db: Session, task_id: int) -> Task:
         raise ValueError("Only completed tasks can be reopened")
 
     row.status = TaskStatus.open
+    protect_task_occurrence(db, row)
     row.completed_at = None
     _derive_quota(db, row)
     db.commit()
@@ -465,6 +469,7 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
                 actuals[actual_id].planned_block_id = restored[state["id"]].id
 
         row.status = TaskStatus(task_state["status"])
+        protect_task_occurrence(db, row)
         row.completed_at = _parse_datetime(task_state["completed_at"])
         prior = task_state["last_non_completed_status"]
         row.last_non_completed_status = TaskStatus(prior) if prior else None

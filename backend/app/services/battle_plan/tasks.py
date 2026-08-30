@@ -13,6 +13,7 @@ from app.models.battle_plan import (
 )
 from app.models.time_block import TimeBlock
 from app.schemas.battle_plan import TaskCreate, TaskPatch, TaskPlacement, TaskRead
+from app.services.recurrence.protection import protect_task_occurrence
 from app.services.battle_plan._shared import (
     TRASH_DAYS,
     _clean_title,
@@ -35,6 +36,11 @@ def _purge_expired_trash(db: Session) -> None:
     expired_ids = {row.id for row in expired}
     for row in expired:
         if row.parent_id not in expired_ids:
+            db.execute(
+                update(RecurrenceOccurrence)
+                .where(RecurrenceOccurrence.task_id == row.id)
+                .values(task_id=None, suppressed=True, structurally_protected=True)
+            )
             db.delete(row)
     if expired:
         db.commit()
@@ -109,6 +115,8 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
     )
     _validate_reminder(row, settings)
     db.add(row)
+    if parent is not None:
+        protect_task_occurrence(db, parent)
     db.commit()
     return _load_task(db, row.id)
 
@@ -187,6 +195,8 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     from app.services import recurrence_service
 
     recurrence_service.record_task_overrides(row, fields)
+    if fields:
+        protect_task_occurrence(db, row)
     db.commit()
     if row.parent_id is not None and row.recurrence_kind == "quota_session":
         recurrence_service._derive_quota_parents(db)
@@ -285,6 +295,7 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
             row.is_blocked = False
             row.blocking_reason = None
         row.position = item.position
+        protect_task_occurrence(db, row)
     db.commit()
 
 
@@ -304,6 +315,7 @@ def archive_tasks(db: Session, task_ids: list[int]) -> None:
         if row.parent_id is not None or row.status != TaskStatus.completed or row.deleted_at is not None:
             raise ValueError("Only completed parent tasks can be archived")
         row.archived_at = now
+        protect_task_occurrence(db, row)
         for child in row.subtasks:
             child.archived_at = now
     db.commit()
@@ -314,6 +326,7 @@ def unarchive_task(db: Session, task_id: int) -> None:
     if row.parent_id is not None:
         raise ValueError("Subtasks are restored with their parent")
     row.archived_at = None
+    protect_task_occurrence(db, row)
     for child in row.subtasks:
         child.archived_at = None
     db.commit()
@@ -325,6 +338,7 @@ def trash_task(db: Session, task_id: int) -> Task:
         raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     now = _utc_now()
     row.deleted_at = now
+    protect_task_occurrence(db, row)
     row.reminder_delivered_at = None
     if row.parent_id is None:
         for child in row.subtasks:
@@ -339,6 +353,7 @@ def restore_task(db: Session, task_id: int) -> None:
     if row.parent is not None and row.parent.status == TaskStatus.completed:
         raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     row.deleted_at = None
+    protect_task_occurrence(db, row)
     if row.parent_id is None:
         for child in row.subtasks:
             child.deleted_at = None
@@ -353,7 +368,12 @@ def permanently_delete_task(db: Session, task_id: int) -> None:
         raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     if row.deleted_at is None:
         raise ValueError("Only trashed tasks can be permanently deleted")
-    db.execute(update(RecurrenceOccurrence).where(RecurrenceOccurrence.task_id == row.id).values(task_id=None))
+    protect_task_occurrence(db, row)
+    db.execute(
+        update(RecurrenceOccurrence)
+        .where(RecurrenceOccurrence.task_id == row.id)
+        .values(task_id=None, suppressed=True, structurally_protected=True)
+    )
     db.delete(row)
     db.commit()
 

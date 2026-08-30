@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from app.models.time_block import BlockLane, TimeBlock
 
 from app.services.recurrence.common import LEAD_DAYS, _json_list
 from app.services.recurrence.helpers import _next_position, _task_kwargs
+from app.services.recurrence.protection import occurrence_is_protected
 from app.services.recurrence.windows import iter_windows
 
 
@@ -112,6 +113,8 @@ def _materialize(db: Session, template: RecurringTemplate, window) -> None:
 
 
 def _is_pristine(db: Session, task: Task) -> bool:
+    if occurrence_is_protected(db, task.id):
+        return False
     if task.status != TaskStatus.open or task.archived_at is not None or task.deleted_at is not None:
         return False
     if _json_list(task.recurrence_overrides_json):
@@ -120,7 +123,12 @@ def _is_pristine(db: Session, task: Task) -> bool:
     if db.execute(select(TimeBlock.id).where(TimeBlock.task_id.in_(ids)).limit(1)).scalar_one_or_none() is not None:
         return False
     children = list(db.execute(select(Task).where(Task.parent_id == task.id)).scalars())
-    return all(child.status == TaskStatus.open and not _json_list(child.recurrence_overrides_json) for child in children)
+    return all(
+        child.status == TaskStatus.open
+        and not child.checked
+        and not _json_list(child.recurrence_overrides_json)
+        for child in children
+    )
 
 
 def _cleanup_future(db: Session, template: RecurringTemplate, today: dt.date, *, suppress: bool) -> None:
@@ -142,12 +150,19 @@ def _cleanup_future(db: Session, template: RecurringTemplate, today: dt.date, *,
 
 
 def _propagate_template_fields(db: Session, template: RecurringTemplate, today: dt.date) -> None:
-    rows = list(db.execute(select(Task).where(
-        Task.recurring_template_id == template.id,
-        Task.deadline_date >= today,
-        Task.status != TaskStatus.completed,
-        Task.deleted_at.is_(None),
-    )).scalars())
+    eligible_roots = select(RecurrenceOccurrence.task_id).where(
+        RecurrenceOccurrence.template_id == template.id,
+        RecurrenceOccurrence.cycle_end >= today,
+        RecurrenceOccurrence.task_id.is_not(None),
+    )
+    rows = list(db.execute(
+        select(Task)
+        .where(
+            or_(Task.id.in_(eligible_roots), Task.parent_id.in_(eligible_roots)),
+            Task.status != TaskStatus.completed,
+            Task.deleted_at.is_(None),
+        )
+    ).scalars())
     values = {
         "title": template.title,
         "description": template.description,
@@ -162,6 +177,49 @@ def _propagate_template_fields(db: Session, template: RecurringTemplate, today: 
             if field in overrides or (field == "title" and task.recurrence_kind in {"checklist", "quota_session"}):
                 continue
             setattr(task, field, value)
+
+
+def _rebuild_unprotected_subtasks(
+    db: Session,
+    template: RecurringTemplate,
+    today: dt.date,
+    titles: list[str],
+) -> None:
+    """Replace complete Subtask snapshots without replacing Task Occurrences."""
+
+    rows = list(db.execute(
+        select(Task)
+        .join(RecurrenceOccurrence, RecurrenceOccurrence.task_id == Task.id)
+        .where(
+            RecurrenceOccurrence.template_id == template.id,
+            RecurrenceOccurrence.cycle_start >= today,
+            RecurrenceOccurrence.structurally_protected.is_(False),
+            Task.recurrence_kind == "scheduled",
+            Task.status != TaskStatus.completed,
+            Task.deleted_at.is_(None),
+        )
+        .order_by(Task.id)
+    ).scalars())
+    cleaned = [title.strip() for title in titles if title.strip()]
+    for task in rows:
+        db.execute(delete(Task).where(Task.parent_id == task.id))
+        for position, title in enumerate(cleaned):
+            db.add(Task(
+                parent_id=task.id,
+                project_id=task.project_id,
+                task_type_id=task.task_type_id,
+                recurring_template_id=task.recurring_template_id,
+                occurrence_key=task.occurrence_key,
+                recurrence_kind="checklist",
+                title=title,
+                description="",
+                ready_to_plan=False,
+                status=TaskStatus.open,
+                checked=False,
+                urgency=task.urgency,
+                importance=task.importance,
+                position=position,
+            ))
 
 
 def _derive_quota_parents(db: Session) -> None:
