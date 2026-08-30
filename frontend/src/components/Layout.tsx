@@ -149,7 +149,7 @@ export function Layout({
               to={`${todayHref}?workMode=start`}
               className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-opacity hover:opacity-90"
             >
-              {workModeAvailable ? "Return to Work Mode" : "Start Work Mode"}
+              {workModeAvailable ? "Work Mode" : "Start Work Mode"}
             </NavLink>
             <NavLink
               to="/settings"

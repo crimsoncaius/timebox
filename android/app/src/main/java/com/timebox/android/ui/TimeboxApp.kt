@@ -583,7 +583,7 @@ fun TimeboxApp(
                 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 92.dp),
             ) {
-                Text(if (dayState.workMode != null || dayState.activeActualAvailable) "Return to Work Mode" else "Start Work Mode")
+                Text(if (dayState.workMode != null || dayState.activeActualAvailable) "Work Mode" else "Start Work Mode")
             }
         }
 

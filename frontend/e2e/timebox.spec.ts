@@ -172,7 +172,7 @@ test('Work Mode starts globally, survives leaving its surface, and exits explici
   await expect(workMode.getByRole('heading', { name: 'No more planned work today' })).toBeVisible()
   await workMode.getByRole('button', { name: 'Back to app' }).click()
   await expect(workMode).not.toBeVisible()
-  await page.getByRole('link', { name: 'Return to Work Mode' }).click()
+  await page.getByRole('link', { name: 'Work Mode', exact: true }).click()
   await expect(workMode).toBeVisible()
   await workMode.getByRole('button', { name: 'Exit Work Mode' }).first().click()
   await expect(workMode).not.toBeVisible()
