@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
-import uuid
-
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import now_in_tz, today_in_tz
-from app.models.day import Day
+from app.core.time import now_in_tz
 from app.models.battle_plan import (
     RecurrenceOccurrence,
     Task,
-    TaskCompletionOperation,
     TaskStatus,
 )
-from app.models.time_block import BlockLane, TimeBlock
+from app.models.time_block import TimeBlock
 from app.schemas.battle_plan import TaskCreate, TaskPatch, TaskPlacement, TaskRead
 from app.services.battle_plan._shared import (
     TRASH_DAYS,
@@ -32,198 +27,6 @@ from app.services.battle_plan._shared import (
 )
 
 
-def _completion_task_snapshot(task: Task) -> dict[str, object]:
-    return {
-        "id": task.id,
-        "status": task.status.value,
-        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-        "version": task.version,
-        "last_non_completed_status": (
-            task.last_non_completed_status.value if task.last_non_completed_status else None
-        ),
-        "ready_to_plan": task.ready_to_plan,
-        "is_blocked": task.is_blocked,
-        "blocking_reason": task.blocking_reason,
-        "reminder_at": task.reminder_at.isoformat() if task.reminder_at else None,
-        "reminder_delivered_at": (
-            task.reminder_delivered_at.isoformat() if task.reminder_delivered_at else None
-        ),
-    }
-
-
-def _completion_block_snapshot(block: TimeBlock) -> dict[str, object]:
-    return {
-        "id": block.id,
-        "day_id": block.day_id,
-        "lane": block.lane.value,
-        "task_type_id": block.task_type_id,
-        "task_id": block.task_id,
-        "note": block.note,
-        "planned_block_id": block.planned_block_id,
-        "start_minute": block.start_minute,
-        "end_minute": block.end_minute,
-        "created_at": block.created_at.isoformat(),
-        "updated_at": block.updated_at.isoformat(),
-    }
-
-
-def _parse_snapshot_datetime(value: str | None) -> dt.datetime | None:
-    return dt.datetime.fromisoformat(value) if value else None
-
-
-def _assert_completion_editable(task: Task) -> None:
-    if task.archived_at is not None or task.deleted_at is not None:
-        raise ValueError("Inactive tasks are read-only")
-    if task.recurrence_kind == "quota_parent":
-        raise ValueError("Quota Tracker completion is derived from Session Tasks")
-
-
-def complete_task(
-    db: Session,
-    task_id: int,
-    planned_time: str,
-    settings: Settings,
-) -> tuple[Task, str, list[int]]:
-    row = _load_task(db, task_id)
-    _assert_completion_editable(row)
-    if row.status == TaskStatus.completed:
-        raise ValueError("Task is already completed")
-
-    affected = [row]
-    if row.parent_id is None:
-        affected.extend(child for child in row.subtasks if child.deleted_at is None)
-
-    today = today_in_tz(settings.app_timezone)
-    removed_blocks = [
-        block
-        for task in affected
-        for block in task.time_blocks
-        if (
-            planned_time == "remove"
-            and block.lane == BlockLane.planned
-            and block.day.date >= today
-            and block.completion_actual is None
-        )
-    ]
-    token = uuid.uuid4().hex
-    snapshot = {
-        "tasks": [_completion_task_snapshot(task) for task in affected],
-        "removed_planned_blocks": [_completion_block_snapshot(block) for block in removed_blocks],
-    }
-    operation = TaskCompletionOperation(
-        token=token,
-        root_task_id=row.id,
-        snapshot_json=json.dumps(snapshot),
-    )
-    completed_at = _utc_now()
-    try:
-        for task in affected:
-            if task.status != TaskStatus.completed:
-                task.last_non_completed_status = task.status
-            task.status = TaskStatus.completed
-            if task.parent_id is None or task.recurrence_kind == "quota_session":
-                task.completed_at = completed_at
-            task.ready_to_plan = False
-            task.is_blocked = False
-            task.blocking_reason = None
-            task.reminder_at = None
-            task.reminder_delivered_at = None
-        for block in removed_blocks:
-            block.day.updated_at = _utc_now()
-            db.delete(block)
-        db.add(operation)
-        if row.recurrence_kind == "quota_session":
-            from app.services import recurrence_service
-
-            recurrence_service._derive_quota_parents(db)
-        db.flush()
-        operation.completed_task_version = row.version
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
-    return _load_task(db, task_id), token, [block.id for block in removed_blocks]
-
-
-def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
-    operation = db.get(TaskCompletionOperation, token)
-    if operation is None or operation.root_task_id != task_id:
-        raise ValueError("Completion Undo not found")
-    if operation.undone_at is not None:
-        raise ValueError("Completion has already been undone")
-
-    row = _load_task(db, task_id)
-    _assert_completion_editable(row)
-    snapshot = json.loads(operation.snapshot_json)
-    try:
-        for task_state in snapshot["tasks"]:
-            task = db.get(Task, task_state["id"])
-            if task is None:
-                raise ValueError("A Task changed after completion; Undo is no longer available")
-            task.status = TaskStatus(task_state["status"])
-            task.completed_at = _parse_snapshot_datetime(task_state.get("completed_at"))
-            prior = task_state["last_non_completed_status"]
-            task.last_non_completed_status = TaskStatus(prior) if prior else None
-            task.ready_to_plan = task_state["ready_to_plan"]
-            task.is_blocked = task_state["is_blocked"]
-            task.blocking_reason = task_state["blocking_reason"]
-            task.reminder_at = _parse_snapshot_datetime(task_state["reminder_at"])
-            task.reminder_delivered_at = _parse_snapshot_datetime(
-                task_state["reminder_delivered_at"]
-            )
-
-        for block_state in snapshot["removed_planned_blocks"]:
-            if db.get(TimeBlock, block_state["id"]) is not None:
-                raise ValueError("Planned time changed after completion; Undo is no longer available")
-            day = db.get(Day, block_state["day_id"])
-            if day is None:
-                raise ValueError("Planned time changed after completion; Undo is no longer available")
-            db.add(
-                TimeBlock(
-                    id=block_state["id"],
-                    day_id=block_state["day_id"],
-                    lane=BlockLane(block_state["lane"]),
-                    task_type_id=block_state["task_type_id"],
-                    task_id=block_state["task_id"],
-                    note=block_state["note"],
-                    planned_block_id=block_state["planned_block_id"],
-                    start_minute=block_state["start_minute"],
-                    end_minute=block_state["end_minute"],
-                    created_at=_parse_snapshot_datetime(block_state["created_at"]),
-                    updated_at=_parse_snapshot_datetime(block_state["updated_at"]),
-                )
-            )
-            day.updated_at = _utc_now()
-        operation.undone_at = _utc_now()
-        if row.recurrence_kind == "quota_session":
-            from app.services import recurrence_service
-
-            recurrence_service._derive_quota_parents(db)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
-    return _load_task(db, task_id)
-
-
-def reopen_task(db: Session, task_id: int) -> Task:
-    row = _load_task(db, task_id)
-    _assert_completion_editable(row)
-    if row.status != TaskStatus.completed:
-        raise ValueError("Only completed tasks can be reopened")
-    prior = row.last_non_completed_status
-    row.status = prior if prior in {TaskStatus.open, TaskStatus.in_progress} else TaskStatus.open
-    row.completed_at = None
-    if row.recurrence_kind == "quota_session":
-        from app.services import recurrence_service
-
-        recurrence_service._derive_quota_parents(db)
-    db.commit()
-    return _load_task(db, task_id)
-
-
 def _purge_expired_trash(db: Session) -> None:
     cutoff = _utc_now() - dt.timedelta(days=TRASH_DAYS)
     expired = list(
@@ -237,21 +40,52 @@ def _purge_expired_trash(db: Session) -> None:
         db.commit()
 
 
+def _load_task_for_mutation(db: Session, task_id: int) -> Task:
+    """Lock Parent before ordinary Subtask; otherwise lock the Task itself."""
+
+    snapshot = db.execute(
+        select(Task.id, Task.parent_id, Task.recurrence_kind).where(Task.id == task_id)
+    ).one_or_none()
+    if snapshot is None:
+        raise ValueError("Task not found")
+    if snapshot.parent_id is not None and snapshot.recurrence_kind != "quota_session":
+        _load_task(db, snapshot.parent_id, for_update=True)
+    return _load_task(db, task_id, for_update=True)
+
+
 def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
     title = _clean_title(body.title)
     _validate_deadline(body.deadline_date, body.deadline_at)
     status = TaskStatus.open if body.status == TaskStatus.blocked else body.status
+    if status == TaskStatus.completed:
+        raise ValueError("Use the Task completion command to complete a Task")
     is_blocked = body.is_blocked or body.status == TaskStatus.blocked
     if status == TaskStatus.completed:
         is_blocked = False
     parent = None
     project_id = body.project_id
     if body.parent_id is not None:
-        parent = _load_task(db, body.parent_id)
+        parent = _load_task(db, body.parent_id, for_update=True)
         if parent.parent_id is not None:
             raise ValueError("Subtasks cannot contain subtasks")
         if parent.deleted_at is not None or parent.archived_at is not None:
             raise ValueError("Cannot add a subtask to an inactive task")
+        if parent.status == TaskStatus.completed:
+            raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
+        if (
+            body.ready_to_plan
+            or body.is_blocked
+            or body.blocking_reason is not None
+            or status != TaskStatus.open
+            or body.deadline_date is not None
+            or body.deadline_at is not None
+            or body.reminder_at is not None
+            or body.project_id is not None
+            or body.task_type_id is not None
+            or body.urgency is not None
+            or body.importance is not None
+        ):
+            raise ValueError("Subtasks do not have a Task lifecycle")
         project_id = parent.project_id
     _validate_refs(db, project_id, body.task_type_id)
     row = Task(
@@ -261,10 +95,8 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
         is_blocked=is_blocked,
         blocking_reason=(body.blocking_reason.strip() or None) if is_blocked and body.blocking_reason else None,
         status=status,
-        checked=(parent is not None and status == TaskStatus.completed),
-        completed_at=(
-            _utc_now() if parent is None and status == TaskStatus.completed else None
-        ),
+        checked=False,
+        completed_at=None,
         project_id=project_id,
         parent_id=body.parent_id,
         task_type_id=body.task_type_id,
@@ -282,8 +114,17 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
 
 
 def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -> Task:
-    row = _load_task(db, task_id)
+    row = _load_task_for_mutation(db, task_id)
     fields = body.model_fields_set
+    if row.archived_at is not None or row.deleted_at is not None:
+        raise ValueError("Inactive tasks are read-only")
+    if row.status == TaskStatus.completed or (
+        row.parent is not None and row.parent.status == TaskStatus.completed
+    ):
+        raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
+    is_subtask = row.parent_id is not None and row.recurrence_kind != "quota_session"
+    if is_subtask and not fields <= {"title", "description"}:
+        raise ValueError("Subtasks do not have a Task lifecycle")
     if row.recurrence_kind == "quota_parent" and "status" in fields:
         raise ValueError("Quota parent status is derived from its sessions")
     old_deadline = (row.deadline_date, row.deadline_at, row.reminder_at)
@@ -412,7 +253,15 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
     ids = [item.task_id for item in placements]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate task in reorder request")
-    rows = {row.id: row for row in db.execute(select(Task).where(Task.id.in_(ids))).scalars()}
+    rows = {
+        row.id: row
+        for row in db.execute(
+            select(Task)
+            .where(Task.id.in_(ids))
+            .order_by(Task.id)
+            .with_for_update()
+        ).scalars()
+    }
     if len(rows) != len(ids):
         raise ValueError("Task not found")
     if any(
@@ -425,6 +274,8 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
         row = rows[item.task_id]
         if row.parent_id is not None or row.archived_at is not None or row.deleted_at is not None:
             raise ValueError("Only active parent tasks can be reordered")
+        if row.status == TaskStatus.completed:
+            raise ValueError("Completed Tasks are read-only until reopen")
         if item.status == TaskStatus.blocked:
             row.status = TaskStatus.open
             row.is_blocked = True
@@ -439,7 +290,14 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
 
 def archive_tasks(db: Session, task_ids: list[int]) -> None:
     now = _utc_now()
-    rows = list(db.execute(select(Task).where(Task.id.in_(task_ids))).scalars())
+    rows = list(
+        db.execute(
+            select(Task)
+            .where(Task.id.in_(task_ids))
+            .order_by(Task.id)
+            .with_for_update()
+        ).scalars()
+    )
     if len(rows) != len(set(task_ids)):
         raise ValueError("Task not found")
     for row in rows:
@@ -452,7 +310,7 @@ def archive_tasks(db: Session, task_ids: list[int]) -> None:
 
 
 def unarchive_task(db: Session, task_id: int) -> None:
-    row = _load_task(db, task_id)
+    row = _load_task_for_mutation(db, task_id)
     if row.parent_id is not None:
         raise ValueError("Subtasks are restored with their parent")
     row.archived_at = None
@@ -462,7 +320,9 @@ def unarchive_task(db: Session, task_id: int) -> None:
 
 
 def trash_task(db: Session, task_id: int) -> Task:
-    row = _load_task(db, task_id)
+    row = _load_task_for_mutation(db, task_id)
+    if row.parent is not None and row.parent.status == TaskStatus.completed:
+        raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     now = _utc_now()
     row.deleted_at = now
     row.reminder_delivered_at = None
@@ -475,7 +335,9 @@ def trash_task(db: Session, task_id: int) -> Task:
 
 
 def restore_task(db: Session, task_id: int) -> None:
-    row = _load_task(db, task_id)
+    row = _load_task_for_mutation(db, task_id)
+    if row.parent is not None and row.parent.status == TaskStatus.completed:
+        raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     row.deleted_at = None
     if row.parent_id is None:
         for child in row.subtasks:
@@ -486,7 +348,9 @@ def restore_task(db: Session, task_id: int) -> None:
 
 
 def permanently_delete_task(db: Session, task_id: int) -> None:
-    row = _load_task(db, task_id)
+    row = _load_task_for_mutation(db, task_id)
+    if row.parent is not None and row.parent.status == TaskStatus.completed:
+        raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     if row.deleted_at is None:
         raise ValueError("Only trashed tasks can be permanently deleted")
     db.execute(update(RecurrenceOccurrence).where(RecurrenceOccurrence.task_id == row.id).values(task_id=None))

@@ -51,14 +51,23 @@ def test_task_responses_include_planned_dates_for_tasks_but_not_subtask_lifecycl
         client,
         "Child",
         parent_id=parent["id"],
-        task_type_id=task_type["id"],
     )
 
     create_block(client, "2026-08-24", parent["id"], task_type["id"])
     create_block(client, "2026-08-22", parent["id"], task_type["id"])
     create_block(client, "2026-08-22", parent["id"], task_type["id"], start_minute=600)
     create_block(client, "2026-08-21", parent["id"], task_type["id"], lane="actual")
-    create_block(client, "2026-08-23", child["id"], task_type["id"])
+    rejected_subtask_plan = client.post(
+        "/days/2026-08-23/blocks",
+        json={
+            "lane": "planned",
+            "task_id": child["id"],
+            "task_type_id": task_type["id"],
+            "start_minute": 540,
+            "end_minute": 570,
+        },
+    )
+    assert rejected_subtask_plan.status_code == 422
 
     rows = client.get("/tasks").json()["items"]
     assert rows[0]["planned_dates"] == ["2026-08-22", "2026-08-24"]
@@ -121,14 +130,14 @@ def test_subtasks_inherit_project_and_cannot_nest(client):
     assert "project_id" not in rows[0]["subtasks"][0]
 
 
-def test_subtask_completion_does_not_complete_parent(client):
+def test_subtask_check_does_not_complete_parent(client):
     parent = create_task(client, "Parent")
     child = create_task(client, "Child", parent_id=parent["id"])
-    assert client.post(f"/tasks/{child['id']}/complete", json={"planned_time": "keep"}).status_code == 200
+    assert client.post(f"/subtasks/{child['id']}/check").status_code == 200
     refreshed = client.get("/tasks").json()["items"][0]
     assert refreshed["status"] == "open"
     assert "status" not in refreshed["subtasks"][0]
-    assert refreshed["subtasks"][0]["checked"] is False
+    assert refreshed["subtasks"][0]["checked"] is True
 
 
 def test_planning_readiness_is_persistent_and_separate_from_work_status(client):
@@ -176,14 +185,15 @@ def test_blocked_is_an_open_task_condition_and_completed_clears_it(client):
     assert blocked.json()["is_blocked"] is True
     assert blocked.json()["blocking_reason"] == "Legal review"
 
-    completed = client.post(f"/tasks/{task['id']}/complete", json={"planned_time": "keep"})
+    completed = client.post(f"/tasks/{task['id']}/complete")
     assert completed.status_code == 200
     assert completed.json()["task"]["is_blocked"] is False
     assert completed.json()["task"]["blocking_reason"] is None
 
 
 def test_archive_restore_trash_and_permanent_delete(client):
-    task = create_task(client, status="completed")
+    task = create_task(client)
+    assert client.post(f"/tasks/{task['id']}/complete").status_code == 200
     assert client.post("/tasks/archive-completed", json={"task_ids": [task["id"]]}).status_code == 204
     assert client.get("/tasks").json()["items"] == []
     assert len(client.get("/tasks?state=archived").json()["items"]) == 1

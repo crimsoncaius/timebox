@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import Settings
 from app.core.time import get_zone
-from app.models.battle_plan import Task
+from app.models.battle_plan import Task, TaskStatus
 from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 from app.models.task_type import TaskType
 from app.schemas.time_block import (
@@ -46,6 +46,11 @@ def _actual_select(actual_block_id: int, *, for_update: bool = False):
             TimeBlock.start_at.is_not(None),
         )
     )
+    return statement.with_for_update() if for_update else statement
+
+
+def _task_select(task_id: int, *, for_update: bool = False):
+    statement = select(Task).where(Task.id == task_id)
     return statement.with_for_update() if for_update else statement
 
 
@@ -86,16 +91,40 @@ def _load_actual(
     return row
 
 
-def _validate_item(db: Session, task_type_id: int, task_id: int | None) -> None:
+def _validate_item(
+    db: Session,
+    task_type_id: int,
+    task_id: int | None,
+    *,
+    for_update: bool = False,
+    retrospective_end: dt.datetime | None = None,
+    allow_completed: bool = False,
+) -> Task | None:
     if db.get(TaskType, task_type_id) is None:
         raise ValueError("Task type not found")
     if task_id is None:
-        return
-    task = db.get(Task, task_id)
+        return None
+    task = db.execute(
+        _task_select(task_id, for_update=for_update)
+    ).scalar_one_or_none()
     if task is None:
         raise ValueError("Task not found")
     if task.archived_at is not None or task.deleted_at is not None:
         raise ValueError("Only active tasks can record Actual time")
+    if task.parent_id is not None and task.recurrence_kind != "quota_session":
+        raise ValueError("Subtasks cannot record Actual time")
+    if task.recurrence_kind == "quota_parent":
+        raise ValueError("Quota Trackers cannot record Actual time")
+    if task.status == TaskStatus.completed and not allow_completed:
+        if (
+            retrospective_end is None
+            or task.completed_at is None
+            or _as_utc(retrospective_end) > _as_utc(task.completed_at)
+        ):
+            raise ValueError(
+                "Actual work after Task Completion requires ordinary reopen"
+            )
+    return task
 
 
 def _planned_row(
@@ -115,19 +144,42 @@ def _resolve_origin_item(
     task_type_id: int | None,
     task_id: int | None,
     planned_block_id: int | None,
+    retrospective_end: dt.datetime | None = None,
 ) -> tuple[int, int | None]:
     if planned_block_id is None:
         if task_type_id is None:
             raise ValueError("task_type_id is required for standalone Actual")
-        _validate_item(db, task_type_id, task_id)
+        _validate_item(
+            db,
+            task_type_id,
+            task_id,
+            for_update=True,
+            retrospective_end=retrospective_end,
+        )
         return task_type_id, task_id
 
+    planned_snapshot = _planned_row(db, planned_block_id)
+    if task_type_id is not None and task_type_id != planned_snapshot.task_type_id:
+        raise ValueError("Linked Actual must use the Planned Block primary item")
+    if task_id is not None and task_id != planned_snapshot.task_id:
+        raise ValueError("Linked Actual must use the Planned Block primary item")
+    _validate_item(
+        db,
+        planned_snapshot.task_type_id,
+        planned_snapshot.task_id,
+        for_update=True,
+        retrospective_end=retrospective_end,
+    )
     planned = _planned_row(db, planned_block_id, for_update=True)
+    if (planned.task_type_id, planned.task_id) != (
+        planned_snapshot.task_type_id,
+        planned_snapshot.task_id,
+    ):
+        raise ValueError("Planned Block changed while recording Actual time")
     if task_type_id is not None and task_type_id != planned.task_type_id:
         raise ValueError("Linked Actual must use the Planned Block primary item")
     if task_id is not None and task_id != planned.task_id:
         raise ValueError("Linked Actual must use the Planned Block primary item")
-    _validate_item(db, planned.task_type_id, planned.task_id)
     return planned.task_type_id, planned.task_id
 
 
@@ -160,6 +212,7 @@ def start_actual_block(
         task_type_id=body.task_type_id,
         task_id=body.task_id,
         planned_block_id=body.planned_block_id,
+        retrospective_end=None,
     )
     if get_active_actual_block(db) is not None:
         raise ValueError("An Actual Block is already active")
@@ -220,6 +273,7 @@ def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead
         task_type_id=body.task_type_id,
         task_id=body.task_id,
         planned_block_id=body.planned_block_id,
+        retrospective_end=body.end_at,
     )
     row = TimeBlock(
         lane=BlockLane.actual,
@@ -247,8 +301,24 @@ def patch_actual_block(
 ) -> ActualBlockRead:
     """Correct Actual facts without rewriting its corresponding Planned Block."""
 
-    row = _load_actual(db, actual_block_id, for_update=True)
+    snapshot = _load_actual(db, actual_block_id)
     data = body.model_dump(exclude_unset=True)
+    target_task_type_id = data.get("task_type_id", snapshot.task_type_id)
+    target_task_id = data.get("task_id", snapshot.task_id)
+    if target_task_type_id is None:
+        raise ValueError("task_type_id is required for Actual")
+    target_task = _validate_item(
+        db,
+        target_task_type_id,
+        target_task_id,
+        for_update=True,
+        allow_completed=True,
+    )
+    row = _load_actual(db, actual_block_id, for_update=True)
+    if "task_id" not in data and row.task_id != snapshot.task_id:
+        raise ValueError("Actual Block changed while it was being corrected")
+    if "task_type_id" not in data and row.task_type_id != snapshot.task_type_id:
+        raise ValueError("Actual Block changed while it was being corrected")
     start_at = data.get("start_at", row.start_at)
     end_at = data.get("end_at", row.end_at)
     if start_at is None:
@@ -262,7 +332,18 @@ def patch_actual_block(
     task_id = data.get("task_id", row.task_id)
     if task_type_id is None:
         raise ValueError("task_type_id is required for Actual")
-    _validate_item(db, task_type_id, task_id)
+    if target_task is not None and target_task.status == TaskStatus.completed:
+        if task_id != row.task_id:
+            if (
+                end_at is None
+                or target_task.completed_at is None
+                or end_at > _as_utc(target_task.completed_at)
+            ):
+                raise ValueError(
+                    "Actual work after Task Completion requires ordinary reopen"
+                )
+        elif end_at is None:
+            raise ValueError("Completed Task Actual Blocks cannot be reactivated")
     item_changed = task_type_id != row.task_type_id or task_id != row.task_id
 
     if data:
@@ -301,9 +382,22 @@ def detach_actual_block(db: Session, actual_block_id: int) -> ActualBlockRead:
 def relink_actual_block(
     db: Session, actual_block_id: int, planned_block_id: int
 ) -> ActualBlockRead:
-    # All multi-row correspondence commands lock Planned before Actual. Planned
-    # patch/delete use the same order, avoiding an Actual->Planned deadlock.
+    planned_snapshot = _planned_row(db, planned_block_id)
+    target_task = _validate_item(
+        db,
+        planned_snapshot.task_type_id,
+        planned_snapshot.task_id,
+        for_update=True,
+        allow_completed=True,
+    )
+    # Commands that involve Task eligibility prepend Task to the established
+    # Planned -> Actual correspondence order.
     planned = _planned_row(db, planned_block_id, for_update=True)
+    if (planned.task_type_id, planned.task_id) != (
+        planned_snapshot.task_type_id,
+        planned_snapshot.task_id,
+    ):
+        raise ValueError("Planned Block changed while relinking Actual time")
     row = _load_actual(db, actual_block_id, for_update=True)
     if row.planned_block_id is not None:
         raise ValueError("Detach Actual from its current Planned Block before relinking")
@@ -314,6 +408,15 @@ def relink_actual_block(
         raise ValueError("Planned Block already has corresponding Actual")
     if (row.task_type_id, row.task_id) != (planned.task_type_id, planned.task_id):
         raise ValueError("Actual and Planned Blocks must have the same primary item")
+    if target_task is not None and target_task.status == TaskStatus.completed:
+        if (
+            row.end_at is None
+            or target_task.completed_at is None
+            or _as_utc(row.end_at) > _as_utc(target_task.completed_at)
+        ):
+            raise ValueError(
+                "Actual work after Task Completion requires ordinary reopen"
+            )
     invalidate_record_actual_undo(db, row.id)
     row.planned_block_id = planned.id
     try:
@@ -334,6 +437,21 @@ def record_actual_as_planned(
 ) -> tuple[ActualBlockRead, str]:
     """Create the Planned Block's exact current interval as authoritative Actual."""
 
+    planned_snapshot = _planned_row(db, planned_block_id)
+    assert planned_snapshot.day is not None
+    assert planned_snapshot.start_minute is not None and planned_snapshot.end_minute is not None
+    zone = get_zone(settings.app_timezone)
+    local_midnight = dt.datetime.combine(planned_snapshot.day.date, dt.time.min, tzinfo=zone)
+    retrospective_end = (
+        local_midnight + dt.timedelta(minutes=planned_snapshot.end_minute)
+    ).astimezone(dt.timezone.utc)
+    _resolve_origin_item(
+        db,
+        task_type_id=None,
+        task_id=None,
+        planned_block_id=planned_block_id,
+        retrospective_end=retrospective_end,
+    )
     planned = _planned_row(db, planned_block_id, for_update=True)
     if db.execute(
         select(TimeBlock.id).where(TimeBlock.planned_block_id == planned.id)
@@ -341,7 +459,6 @@ def record_actual_as_planned(
         raise ValueError("Planned Block already has corresponding Actual")
     assert planned.day is not None
     assert planned.start_minute is not None and planned.end_minute is not None
-    zone = get_zone(settings.app_timezone)
     local_midnight = dt.datetime.combine(planned.day.date, dt.time.min, tzinfo=zone)
     start_at = (local_midnight + dt.timedelta(minutes=planned.start_minute)).astimezone(
         dt.timezone.utc

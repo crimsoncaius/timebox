@@ -126,12 +126,12 @@ def test_quota_sessions_drive_parent_and_cannot_be_scheduled_early(client):
     })
     assert blocked.status_code == 422
 
-    assert client.post(f"/tasks/{session['id']}/complete", json={"planned_time": "keep"}).status_code == 200
+    assert client.post(f"/tasks/{session['id']}/complete").status_code == 200
     refreshed = client.get("/tasks").json()["items"][0]
     assert refreshed["status"] == "in_progress"
     assert refreshed["quota_completed"] == 1
     for child in refreshed["session_tasks"][1:]:
-        client.post(f"/tasks/{child['id']}/complete", json={"planned_time": "keep"})
+        client.post(f"/tasks/{child['id']}/complete")
     assert client.get("/tasks").json()["items"][0]["status"] == "completed"
 
 

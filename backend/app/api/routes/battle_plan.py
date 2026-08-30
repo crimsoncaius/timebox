@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
@@ -12,7 +14,6 @@ from app.schemas.battle_plan import (
     ProjectRead,
     ReminderRead,
     TaskCreate,
-    TaskCompletionCreate,
     TaskCompletionRead,
     TaskCompletionUndo,
     TaskIds,
@@ -20,10 +21,18 @@ from app.schemas.battle_plan import (
     TaskPatch,
     TaskRead,
     TaskReorder,
+    SubtaskRead,
 )
 from app.services import battle_plan_service as service
+from app.services import task_completion_service
 
 router = APIRouter(tags=["battle-plan"])
+
+
+def capture_utc_now() -> dt.datetime:
+    """Clock seam for the single Task Completion instant."""
+
+    return dt.datetime.now(dt.timezone.utc)
 
 
 def _not_found_or_unprocessable(exc: ValueError) -> HTTPException:
@@ -103,16 +112,32 @@ def patch_task(
         raise _not_found_or_unprocessable(exc) from exc
 
 
+@router.post("/subtasks/{subtask_id}/check", response_model=SubtaskRead)
+def check_subtask(subtask_id: int, db: Session = Depends(get_db)) -> SubtaskRead:
+    try:
+        return task_completion_service.set_subtask_checked(db, subtask_id, checked=True)
+    except ValueError as exc:
+        raise _not_found_or_unprocessable(exc) from exc
+
+
+@router.post("/subtasks/{subtask_id}/uncheck", response_model=SubtaskRead)
+def uncheck_subtask(subtask_id: int, db: Session = Depends(get_db)) -> SubtaskRead:
+    try:
+        return task_completion_service.set_subtask_checked(db, subtask_id, checked=False)
+    except ValueError as exc:
+        raise _not_found_or_unprocessable(exc) from exc
+
+
 @router.post("/tasks/{task_id}/complete", response_model=TaskCompletionRead)
 def complete_task(
     task_id: int,
-    body: TaskCompletionCreate,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    captured_at: dt.datetime = Depends(capture_utc_now),
 ) -> TaskCompletionRead:
     try:
-        row, token, removed_ids = service.complete_task(
-            db, task_id, body.planned_time, settings
+        row, token, removed_ids = task_completion_service.complete_task(
+            db, task_id, captured_at, settings
         )
         return TaskCompletionRead(
             task=service._to_read(row, settings, now_in_tz(settings.app_timezone)),
@@ -130,7 +155,7 @@ def reopen_task(
     settings: Settings = Depends(get_settings),
 ) -> TaskRead:
     try:
-        row = service.reopen_task(db, task_id)
+        row = task_completion_service.reopen_task(db, task_id)
         return service._to_read(row, settings, now_in_tz(settings.app_timezone))
     except ValueError as exc:
         raise _not_found_or_unprocessable(exc) from exc
@@ -144,7 +169,7 @@ def undo_task_completion(
     settings: Settings = Depends(get_settings),
 ) -> TaskRead:
     try:
-        row = service.undo_task_completion(db, task_id, body.undo_token)
+        row = task_completion_service.undo_task_completion(db, task_id, body.undo_token)
         return service._to_read(row, settings, now_in_tz(settings.app_timezone))
     except ValueError as exc:
         raise _not_found_or_unprocessable(exc) from exc

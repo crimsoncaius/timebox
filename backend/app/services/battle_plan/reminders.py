@@ -38,7 +38,13 @@ def due_reminders(db: Session, settings: Settings) -> list[ReminderRead]:
 
 
 def acknowledge_reminder(db: Session, task_id: int) -> None:
-    row = _load_task(db, task_id)
+    row = _load_task(db, task_id, for_update=True)
+    if row.parent_id is not None and row.recurrence_kind != "quota_session":
+        raise ValueError("Subtasks do not have reminders")
+    if row.status == TaskStatus.completed:
+        raise ValueError("Completed Tasks are read-only until reopen")
+    if row.archived_at is not None or row.deleted_at is not None:
+        raise ValueError("Inactive tasks are read-only")
     if row.reminder_at is None:
         raise ValueError("Task has no reminder")
     row.reminder_delivered_at = _utc_now()

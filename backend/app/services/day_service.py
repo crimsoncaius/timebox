@@ -28,6 +28,22 @@ SLOT_MINUTES = 30
 DAY_END = 24 * 60  # 1440
 
 
+def _task_select(task_id: int, *, for_update: bool = False):
+    statement = select(Task).where(Task.id == task_id)
+    return statement.with_for_update() if for_update else statement
+
+
+def _assert_schedulable_task(task: Task, *, allow_completed: bool) -> None:
+    if task.archived_at is not None or task.deleted_at is not None:
+        raise ValueError("Only active tasks can be scheduled")
+    if task.parent_id is not None and task.recurrence_kind != "quota_session":
+        raise ValueError("Subtasks cannot be scheduled")
+    if task.recurrence_kind == "quota_parent":
+        raise ValueError("Schedule quota sessions individually")
+    if task.status.value == "completed" and not allow_completed:
+        raise ValueError("Completed Tasks cannot receive new Planned Blocks")
+
+
 def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
@@ -43,14 +59,21 @@ def _validate_minutes(start: int, end: int) -> None:
         raise ValueError("Invalid range: require 0 <= start < end <= 1440")
 
 
-def _active_task(db: Session, task_id: int | None) -> Task | None:
+def _active_task(
+    db: Session,
+    task_id: int | None,
+    *,
+    for_update: bool = False,
+    allow_completed: bool = False,
+) -> Task | None:
     if task_id is None:
         return None
-    task = db.get(Task, task_id)
+    task = db.execute(
+        _task_select(task_id, for_update=for_update)
+    ).scalar_one_or_none()
     if task is None:
         raise ValueError("Task not found")
-    if task.archived_at is not None or task.deleted_at is not None:
-        raise ValueError("Only active tasks can be scheduled")
+    _assert_schedulable_task(task, allow_completed=allow_completed)
     return task
 
 
@@ -343,11 +366,14 @@ def get_block(
 
 def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBlock:
     _validate_minutes(body.start_minute, body.end_minute)
+    task = _active_task(db, body.task_id, for_update=True)
+    day = db.execute(
+        select(Day).where(Day.id == day.id).with_for_update()
+    ).scalar_one()
     _assert_no_overlap(day, body.lane, body.start_minute, body.end_minute)
     tt = task_type_service.get_task_type(db, body.task_type_id)
     if tt is None:
         raise ValueError("Task type not found")
-    task = _active_task(db, body.task_id)
     _validate_recurrence_schedule(task, day)
     note_val = (body.note or "").strip() or None
     block = TimeBlock(
@@ -379,19 +405,34 @@ def commit_planning_session(
     if len(task_ids) != len(set(task_ids)):
         raise ValueError("Each task can only be planned once per session")
 
+    locked_tasks = {
+        task.id: task
+        for task in db.execute(
+            select(Task)
+            .where(Task.id.in_(sorted(task_ids)))
+            .order_by(Task.id)
+            .with_for_update()
+        ).scalars()
+    }
+    if len(locked_tasks) != len(task_ids):
+        raise ValueError("Task not found")
+    for task in locked_tasks.values():
+        _assert_schedulable_task(task, allow_completed=False)
+
     days: dict[dt.date, Day] = {}
     staged_intervals: dict[dt.date, list[tuple[int, int]]] = {}
     resolved: list[tuple[PlanningPlacementCreate, Day, Task]] = []
 
+    for date in sorted({placement.date for placement in placements}):
+        day = db.execute(
+            select(Day).where(Day.date == date).with_for_update()
+        ).scalar_one_or_none()
+        days[date] = day or create_day(db, date)
+
     for placement in placements:
         _validate_minutes(placement.start_minute, placement.end_minute)
-        day = days.get(placement.date)
-        if day is None:
-            day = get_day_by_date(db, placement.date) or create_day(db, placement.date)
-            days[placement.date] = day
-
-        task = _active_task(db, placement.task_id)
-        assert task is not None
+        day = days[placement.date]
+        task = locked_tasks[placement.task_id]
         if not task.ready_to_plan:
             raise ValueError(f"Task {task.id} is no longer ready to plan")
         _validate_recurrence_schedule(task, day)
@@ -444,11 +485,17 @@ def commit_planning_session(
 
 
 def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch) -> TimeBlock:
-    # Correspondence mutations always lock Planned before corresponding Actual.
+    data = patch.model_dump(exclude_unset=True)
+    target_task = None
+    if "task_id" in data:
+        target_task = _active_task(
+            db, data["task_id"], for_update=True, allow_completed=True
+        )
+    # Task eligibility is locked before Planned; correspondence mutations then
+    # retain the Planned -> Actual order.
     block = get_block(db, day, block_id, for_update=True)
     if block is None:
         raise ValueError("Block not found")
-    data = patch.model_dump(exclude_unset=True)
     original_item = (block.task_type_id, block.task_id)
     start = data.get("start_minute", block.start_minute)
     end = data.get("end_minute", block.end_minute)
@@ -461,11 +508,10 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
             raise ValueError("Task type not found")
         block.task_type_id = tid
     if "task_id" in data:
-        task = _active_task(db, data["task_id"])
-        _validate_recurrence_schedule(task, day)
+        _validate_recurrence_schedule(target_task, day)
         block.task_id = data["task_id"]
-        if task is not None and block.lane == BlockLane.planned:
-            task.ready_to_plan = False
+        if target_task is not None and block.lane == BlockLane.planned:
+            target_task.ready_to_plan = False
     if "note" in data:
         block.note = str(data["note"] or "").strip() or None
     if "start_minute" in data:

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Literal
+from datetime import date, datetime, timezone
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.battle_plan import (
     PriorityLevel, RecurrenceFrequency, RecurrenceMode, RecurrenceStatus, TaskStatus,
@@ -110,6 +109,17 @@ class TaskRead(BaseModel):
     # Quota Session Tasks are independently completable Tasks, not Subtasks.
     session_tasks: list["TaskRead"] = Field(default_factory=list)
 
+    @field_validator("completed_at")
+    @classmethod
+    def expose_completion_instant_as_utc(
+        cls, value: datetime | None
+    ) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
 
 class TaskListRead(BaseModel):
     items: list[TaskRead]
@@ -168,10 +178,6 @@ class TaskReorder(BaseModel):
 
 class TaskIds(BaseModel):
     task_ids: list[int]
-
-
-class TaskCompletionCreate(BaseModel):
-    planned_time: Literal["keep", "remove"]
 
 
 class TaskCompletionRead(BaseModel):

@@ -137,7 +137,7 @@ def test_retrospective_actual_correction_preserves_planned_data_and_corresponden
     }
 
 
-def test_planned_time_and_note_edits_preserve_link_but_primary_item_change_detaches(client):
+def test_planned_interval_and_note_edits_preserve_link_but_primary_item_change_detaches(client):
     first_type = _task_type(client, "First kind")
     second_type = _task_type(client, "Second kind")
     first_task = client.post("/tasks", json={"title": "First task"}).json()

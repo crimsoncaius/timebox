@@ -65,8 +65,8 @@ def _validate_reminder(task: Task, settings: Settings) -> None:
         raise ValueError("Reminder must be before the deadline")
 
 
-def _load_task(db: Session, task_id: int) -> Task:
-    row = db.execute(
+def _task_select(task_id: int, *, for_update: bool = False):
+    statement = (
         select(Task)
         .options(
             selectinload(Task.subtasks),
@@ -83,6 +83,17 @@ def _load_task(db: Session, task_id: int) -> Task:
             .selectinload(TimeBlock.completion_actual),
         )
         .where(Task.id == task_id)
+    )
+    return (
+        statement.execution_options(populate_existing=True).with_for_update()
+        if for_update
+        else statement
+    )
+
+
+def _load_task(db: Session, task_id: int, *, for_update: bool = False) -> Task:
+    row = db.execute(
+        _task_select(task_id, for_update=for_update)
     ).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")

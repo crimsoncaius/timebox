@@ -51,13 +51,12 @@ def test_parent_completion_preserves_explicit_subtask_checks_and_exposes_resolut
     ).json()
     checked = client.post(
         "/tasks",
-        json={"title": "Checked", "parent_id": parent["id"], "status": "completed"},
+        json={"title": "Checked", "parent_id": parent["id"]},
     ).json()
     assert checked["subtasks"] == []
+    assert client.post(f"/subtasks/{checked['id']}/check").status_code == 200
 
-    completed = client.post(
-        f"/tasks/{parent['id']}/complete", json={"planned_time": "keep"}
-    )
+    completed = client.post(f"/tasks/{parent['id']}/complete")
     assert completed.status_code == 200, completed.text
     task = completed.json()["task"]
     assert task["completed_at"] is not None
