@@ -55,7 +55,11 @@ export interface BattleTask {
   title: string
   description: string
   ready_to_plan?: boolean
+  is_blocked?: boolean
+  blocking_reason?: string | null
   status: TaskStatus
+  completed_at?: string | null
+  version?: number
   urgency: PriorityLevel | null
   importance: PriorityLevel | null
   deadline_date: string | null
@@ -69,16 +73,20 @@ export interface BattleTask {
   updated_at: string
   overdue: boolean
   planned_dates?: string[]
-  allocation_total?: number
-  allocation_completed?: number
-  allocations?: Array<{
-    block_id: number
-    date: string
-    start_minute: number
-    end_minute: number
-    time_completed: boolean
-  }>
-  subtasks: BattleTask[]
+  occurrence?: { id: number; recurring_task_series_id: number; occurrence_key: string } | null
+  subtasks: Subtask[]
+  session_tasks?: BattleTask[]
+}
+
+export interface Subtask {
+  id: number
+  parent_task_id: number
+  title: string
+  checked: boolean
+  effectively_resolved: boolean
+  position: number
+  created_at: string
+  updated_at: string
 }
 
 export interface TaskCompletionResult {
@@ -134,12 +142,34 @@ export interface TimeBlock {
     deleted_at?: string | null
   }) | null
   note: string | null
-  /** Present on Actual blocks created via "complete as planned" from a Planned block. */
+  /** Present when this Actual is linked to its source Planned Block. */
   planned_block_id?: number | null
   start_minute: number
   end_minute: number
   created_at: string
   updated_at: string
+}
+
+export interface ActualBlock {
+  id: number
+  task_type_id: number
+  task_type: TaskType
+  task_id: number | null
+  task: TimeBlock['task']
+  note: string | null
+  planned_block_id: number | null
+  start_at: string
+  end_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ActualBlockDayProjection {
+  actual_block: ActualBlock
+  date: string
+  start_minute: number
+  end_minute: number
+  duration_minutes: number
 }
 
 export interface DayMeta {
@@ -157,6 +187,21 @@ export interface DayRead {
   created_at: string
   updated_at: string
   time_blocks: TimeBlock[]
+  planned_blocks?: Array<{
+    id: number
+    day_id: number
+    task_type_id: number
+    task_id: number | null
+    note: string | null
+    start_minute: number
+    end_minute: number
+    actual_block_id: number | null
+    created_at: string
+    updated_at: string
+  }>
+  actual_blocks: ActualBlockDayProjection[]
+  planned_minutes?: number
+  actual_minutes?: number
   meta: DayMeta
 }
 

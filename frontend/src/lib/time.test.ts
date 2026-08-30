@@ -19,9 +19,20 @@ import {
   visibleMinuteRange,
   formatTimeRangeGcal12,
   formatHourLabelGcal12,
+  zonedLocalDateTimeToIso,
 } from './time'
 
 describe('time helpers', () => {
+  it('converts minute-accurate wall-clock values in the configured timezone', () => {
+    expect(zonedLocalDateTimeToIso('2026-08-30T09:17', 'Asia/Singapore')).toBe('2026-08-30T01:17:00.000Z')
+    expect(zonedLocalDateTimeToIso('2026-08-31T00:20', 'Asia/Singapore')).toBe('2026-08-30T16:20:00.000Z')
+  })
+
+  it('rejects invalid and nonexistent wall-clock values', () => {
+    expect(() => zonedLocalDateTimeToIso('2026-02-30T09:00', 'UTC')).toThrow(/valid local date/i)
+    expect(() => zonedLocalDateTimeToIso('2026-03-08T02:30', 'America/New_York')).toThrow(/does not exist/i)
+  })
+
   it('snapToSlot rounds to 30 minutes', () => {
     expect(snapToSlot(0)).toBe(0)
     expect(snapToSlot(29)).toBe(30)

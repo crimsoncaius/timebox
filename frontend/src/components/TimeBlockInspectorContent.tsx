@@ -16,16 +16,14 @@ const NOTE_DEBOUNCE_MS = 450
 export function TimeBlockInspectorContent({
   block,
   draft,
-  day,
   taskTypes,
   variant,
   onClose,
   onSave,
   onCreateFromDraft,
   onDelete,
-  onCompleteAsPlanned,
-  onSetTimeCompleted,
-  onSetTaskCompleted,
+  onStartWorkMode,
+  onRecordActualAsPlanned,
   onCreateTaskTypePath,
   onDirtyChange,
 }: {
@@ -38,9 +36,8 @@ export function TimeBlockInspectorContent({
   onSave: (patch: { task_type_id?: number; note?: string | null }) => Promise<void>
   onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
-  onCompleteAsPlanned?: () => Promise<void>
-  onSetTimeCompleted?: (completed: boolean) => Promise<void>
-  onSetTaskCompleted?: (completed: boolean) => Promise<void>
+  onStartWorkMode?: () => Promise<void>
+  onRecordActualAsPlanned?: () => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
 }) {
@@ -59,7 +56,7 @@ export function TimeBlockInspectorContent({
     }
   }, [])
 
-  /** Reset local fields when selection or draft changes. Layout effect so task-type auto-save useEffects see a consistent taskTypeId on first paint after open. */
+  /** Keep both responsive inspector instances aligned with the authoritative block. */
   useLayoutEffect(() => {
     if (block) {
       setTaskTypeId(block.task_type_id)
@@ -70,8 +67,9 @@ export function TimeBlockInspectorContent({
       setTaskTypeId(draft.task_type_id ?? 0)
       setNote('')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when selection `block.id` or `draft` changes; omitting `block` avoids wiping local state on every parent day refresh for the same block id.
-  }, [block?.id, draft])
+    // Note remains locally editable; only an authoritative task-type change for the same block is synchronized.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid wiping a pending note on unrelated block refreshes.
+  }, [block?.id, block?.task_type_id, draft])
 
   const dirty = useMemo(() => {
     if (isCreateMode) {
@@ -88,10 +86,6 @@ export function TimeBlockInspectorContent({
   useEffect(() => {
     onDirtyChange?.(dirty)
   }, [dirty, onDirtyChange])
-
-  const hasLinkedActual =
-    block &&
-    day.time_blocks.some((b) => b.lane === 'actual' && b.planned_block_id === block.id)
 
   const canSaveCreate =
     isCreateMode &&
@@ -114,26 +108,23 @@ export function TimeBlockInspectorContent({
     }
   }, [block, isCreateMode, note, onSave])
 
-  useEffect(() => {
-    if (!block || isCreateMode) return
-    if (taskTypeId < 1) return
-    if (taskTypeId === block.task_type_id) return
+  const selectTaskType = useCallback((nextTaskTypeId: number) => {
+    if (nextTaskTypeId === taskTypeId) return
+    setTaskTypeId(nextTaskTypeId)
+    if (!block || isCreateMode || nextTaskTypeId < 1) return
     clearNoteDebounce()
-    let cancelled = false
     setSaving(true)
     void (async () => {
       try {
-        await onSave({ task_type_id: taskTypeId })
+        await onSave({ task_type_id: nextTaskTypeId })
       } catch {
+        setTaskTypeId(block.task_type_id)
         /* parent shows error */
       } finally {
-        if (!cancelled) setSaving(false)
+        setSaving(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
-  }, [block, isCreateMode, taskTypeId, block?.task_type_id, onSave, clearNoteDebounce])
+  }, [block, isCreateMode, taskTypeId, onSave, clearNoteDebounce])
 
   useEffect(() => {
     if (!block || isCreateMode) return
@@ -177,32 +168,17 @@ export function TimeBlockInspectorContent({
     await saveNotePatchIfNeeded()
   }, [clearNoteDebounce, saveNotePatchIfNeeded])
 
-  const handleTimeCompletion = useCallback(async (completed: boolean) => {
-    if (!onSetTimeCompleted && !(completed && onCompleteAsPlanned)) return
+  const handleActualAction = useCallback(async (action: () => Promise<void>) => {
     await flushNoteNow()
     setSaving(true)
     try {
-      if (onSetTimeCompleted) await onSetTimeCompleted(completed)
-      else await onCompleteAsPlanned?.()
+      await action()
     } catch {
       /* parent shows error */
     } finally {
       setSaving(false)
     }
-  }, [flushNoteNow, onCompleteAsPlanned, onSetTimeCompleted])
-
-  const handleTaskCompletion = useCallback(async (completed: boolean) => {
-    if (!onSetTaskCompleted) return
-    await flushNoteNow()
-    setSaving(true)
-    try {
-      await onSetTaskCompleted(completed)
-    } catch {
-      /* parent shows error */
-    } finally {
-      setSaving(false)
-    }
-  }, [flushNoteNow, onSetTaskCompleted])
+  }, [flushNoteNow])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Permanently delete this time block? This cannot be undone.')) return
@@ -305,7 +281,7 @@ export function TimeBlockInspectorContent({
         label="Task type"
         taskTypes={taskTypes}
         valueTaskTypeId={taskTypeId}
-        onSelectTaskTypeId={setTaskTypeId}
+        onSelectTaskTypeId={selectTaskType}
         onCreateTaskTypePath={onCreateTaskTypePath}
       />
 
@@ -325,45 +301,10 @@ export function TimeBlockInspectorContent({
         />
       </div>
 
-      {!isCreateMode && block && (
-        (block.lane === 'planned' && (onSetTimeCompleted || onCompleteAsPlanned)) ||
-        (block.task && onSetTaskCompleted)
-      ) ? (
-        <section aria-label="Completion" className="rounded-xl border border-outline-variant/25 bg-surface-container-low px-3 py-2.5 dark:border-dark-outline-variant">
-          {block.lane === 'planned' && (onSetTimeCompleted || onCompleteAsPlanned) ? (
-            <label className="flex items-center justify-between gap-3 py-1 text-sm text-on-surface">
-              <span>
-                <span className="block font-medium">Time completed</span>
-                <span className="block text-xs text-on-surface-variant">This allocation was fulfilled.</span>
-              </span>
-              <input
-                type="checkbox"
-                aria-label="Time completed"
-                checked={Boolean(hasLinkedActual)}
-                disabled={saving || (Boolean(hasLinkedActual) && !onSetTimeCompleted)}
-                onChange={(event) => void handleTimeCompletion(event.target.checked)}
-              />
-            </label>
-          ) : null}
-          {block.task && onSetTaskCompleted ? (
-            <label className="flex items-center justify-between gap-3 border-t border-outline-variant/20 py-2 text-sm text-on-surface first:border-t-0 dark:border-dark-outline-variant">
-              <span>
-                <span className="block font-medium">Task completed</span>
-                <span className="block text-xs text-on-surface-variant">
-                  {block.task.archived_at || block.task.deleted_at
-                    ? 'Inactive Battle Plan tasks are read-only.'
-                    : 'No further work remains for this task.'}
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                aria-label="Task completed"
-                checked={block.task.status === 'completed'}
-                disabled={saving || Boolean(block.task.archived_at || block.task.deleted_at)}
-                onChange={(event) => void handleTaskCompletion(event.target.checked)}
-              />
-            </label>
-          ) : null}
+      {!isCreateMode && block?.lane === 'planned' ? (
+        <section aria-label="Actual time actions" className="grid gap-2 rounded-xl border border-outline-variant/25 bg-surface-container-low p-3 dark:border-dark-outline-variant">
+          {onStartWorkMode ? <button type="button" disabled={saving} onClick={() => void handleActualAction(onStartWorkMode)} className="rounded-xl bg-primary px-4 py-3 text-sm font-medium text-on-primary disabled:opacity-40">Start Work Mode</button> : null}
+          {onRecordActualAsPlanned ? <button type="button" disabled={saving} onClick={() => void handleActualAction(onRecordActualAsPlanned)} className="rounded-xl border border-outline-variant/40 px-4 py-3 text-sm font-medium disabled:opacity-40">Record Actual as planned</button> : null}
         </section>
       ) : null}
 

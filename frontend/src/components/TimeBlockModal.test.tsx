@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import type { DayRead, TaskType, TimeBlock } from '../lib/api'
 import { TimeBlockModal } from './TimeBlockModal'
+import { TimeBlockInspectorContent } from './TimeBlockInspectorContent'
 
 const taskTypes: TaskType[] = [
   { id: 1, name: 'work', created_at: '', updated_at: '' },
@@ -38,6 +39,7 @@ const emptyDay: DayRead = {
   created_at: '',
   updated_at: '',
   time_blocks: [],
+  actual_blocks: [],
   meta: { timezone: 'UTC', today: '2026-06-01', server_now_iso: '2026-06-01T12:00:00Z' },
 }
 
@@ -144,6 +146,43 @@ describe('TimeBlockModal', () => {
     })
   })
 
+  it('does not let a second responsive inspector overwrite a task type selection', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const sharedProps = {
+      draft: null,
+      day: emptyDay,
+      taskTypes,
+      onClose: vi.fn(),
+      onSave,
+      onDelete: vi.fn().mockResolvedValue(undefined),
+      onCreateTaskTypePath: noopCreate,
+    }
+    const { rerender } = render(
+      <MemoryRouter>
+        <TimeBlockInspectorContent variant="rail" block={makeBlock()} {...sharedProps} />
+        <TimeBlockInspectorContent variant="sheet" block={makeBlock()} {...sharedProps} />
+      </MemoryRouter>,
+    )
+
+    const firstTaskType = screen.getAllByRole('combobox')[0]!
+    await user.click(firstTaskType)
+    await user.clear(firstTaskType)
+    await user.click(screen.getByRole('option', { name: /^break$/i }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ task_type_id: 2 }))
+
+    const updated = makeBlock({ task_type_id: 2, task_type: taskTypes[1]! })
+    rerender(
+      <MemoryRouter>
+        <TimeBlockInspectorContent variant="rail" block={updated} {...sharedProps} />
+        <TimeBlockInspectorContent variant="sheet" block={updated} {...sharedProps} />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getAllByRole('combobox')).toHaveLength(2))
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave).not.toHaveBeenCalledWith({ task_type_id: 1 })
+  })
+
   it('draft mode creates the block when a task type is chosen (no Save button)', async () => {
     const user = userEvent.setup()
     const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
@@ -184,7 +223,7 @@ describe('TimeBlockModal', () => {
         onSave={vi.fn()}
         onCreateFromDraft={vi.fn()}
         onDelete={vi.fn()}
-        onCompleteAsPlanned={vi.fn()}
+        onRecordActualAsPlanned={vi.fn()}
         onCreateTaskTypePath={noopCreate}
       />,
     )
@@ -192,39 +231,36 @@ describe('TimeBlockModal', () => {
     expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument()
   })
 
-  it('shows independent Time and Task completion controls for linked blocks', async () => {
+  it('offers definitive Actual actions without completion bookkeeping', async () => {
     const user = userEvent.setup()
-    const onSetTimeCompleted = vi.fn().mockResolvedValue(undefined)
-    const onSetTaskCompleted = vi.fn().mockResolvedValue(undefined)
+    const onStartWorkMode = vi.fn().mockResolvedValue(undefined)
+    const onRecordActualAsPlanned = vi.fn().mockResolvedValue(undefined)
     const planned = makeBlock({
       task_id: 42,
       task: { id: 42, title: 'Linked task', status: 'in_progress', task_type_id: 1 },
     })
-    const actual = makeBlock({ id: 11, lane: 'actual', planned_block_id: planned.id })
     render(
       <MemoryRouter>
       <TimeBlockModal
         open
         block={planned}
         draft={null}
-        day={{ ...emptyDay, time_blocks: [planned, actual] }}
+        day={{ ...emptyDay, time_blocks: [planned] }}
         taskTypes={taskTypes}
         onClose={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onSetTimeCompleted={onSetTimeCompleted}
-        onSetTaskCompleted={onSetTaskCompleted}
+        onStartWorkMode={onStartWorkMode}
+        onRecordActualAsPlanned={onRecordActualAsPlanned}
         onCreateTaskTypePath={noopCreate}
       />
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('checkbox', { name: 'Time completed' })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: 'Task completed' })).not.toBeChecked()
-    await user.click(screen.getByRole('checkbox', { name: 'Time completed' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Task completed' }))
-    expect(onSetTimeCompleted).toHaveBeenCalledWith(false)
-    expect(onSetTaskCompleted).toHaveBeenCalledWith(true)
+    await user.click(screen.getByRole('button', { name: 'Start Work Mode' }))
+    await user.click(screen.getByRole('button', { name: 'Record Actual as planned' }))
+    expect(onStartWorkMode).toHaveBeenCalled()
+    expect(onRecordActualAsPlanned).toHaveBeenCalled()
   })
 
   it('preserves the time block when permanent deletion is cancelled', async () => {

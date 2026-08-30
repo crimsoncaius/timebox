@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   deadlineBadge,
   plannedDateSummary,
-  STATUS_LABELS,
   type DeadlineBadge as DeadlineBadgeValue,
   type PlannedDateSummary as PlannedDateSummaryValue,
 } from '../../lib/battlePlan'
@@ -30,7 +29,7 @@ export function BattlePlanCard({
   serverNowIso,
   onOpen,
   onAddSubtask,
-  onPatchSubtask,
+  onSetSubtaskChecked,
   onToggleReady,
   onSetTaskCompletion,
 }: {
@@ -41,7 +40,7 @@ export function BattlePlanCard({
   serverNowIso: string
   onOpen: (id?: number) => void
   onAddSubtask: (parentId: number, title: string) => Promise<void>
-  onPatchSubtask: (id: number, status: TaskStatus) => Promise<void>
+  onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
   onToggleReady: (id: number, ready: boolean) => Promise<void>
   onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
 }) {
@@ -56,6 +55,7 @@ export function BattlePlanCard({
     // React owns cross-column placement. Optimistic DOM reparenting can make
     // React remove a card from the wrong column after a successful drop.
     plugins: (defaults) => defaults.filter((plugin) => plugin !== OptimisticSortingPlugin),
+    disabled: task.status === 'completed',
   })
   const [subtasksOpen, setSubtasksOpen] = useState(false)
   const [subtaskTitle, setSubtaskTitle] = useState('')
@@ -63,7 +63,7 @@ export function BattlePlanCard({
   const [busySubtaskId, setBusySubtaskId] = useState<number | null>(null)
   const due = deadlineBadge(task, serverNowIso, timezone)
   const planned = plannedDateSummary(task.planned_dates, serverNowIso, timezone)
-  const completed = task.subtasks.filter((subtask) => subtask.status === 'completed').length
+  const completed = task.subtasks.filter((subtask) => subtask.checked).length
   const progressLabel = task.subtasks.length === 0
     ? `Add a subtask to ${task.title}`
     : `${completed} of ${task.subtasks.length} subtasks completed for ${task.title}`
@@ -74,8 +74,8 @@ export function BattlePlanCard({
       data-task-id={task.id}
       data-dragging={isDragging ? 'true' : undefined}
       tabIndex={0}
-      aria-label={`Move ${task.title}`}
-      title="Drag task to change its status"
+      aria-label={task.status === 'completed' ? task.title : `Move ${task.title}`}
+      title={task.status === 'completed' ? 'Completed Task' : 'Drag task to change its status'}
       onClick={() => onOpen()}
       onKeyDown={(event) => {
         if (event.currentTarget !== event.target || event.key !== 'Enter') return
@@ -83,7 +83,7 @@ export function BattlePlanCard({
         onOpen()
       }}
       className={[
-        'group cursor-grab rounded-2xl bg-surface-container-lowest p-4 shadow-[0_0_32px_rgba(45,52,53,0.045)] transition-opacity active:cursor-grabbing dark:bg-dark-surface-container-lowest',
+        `group rounded-2xl bg-surface-container-lowest p-4 shadow-[0_0_32px_rgba(45,52,53,0.045)] transition-opacity dark:bg-dark-surface-container-lowest ${task.status === 'completed' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`,
         isDragging ? 'opacity-45' : 'opacity-100',
       ].join(' ')}
     >
@@ -129,12 +129,6 @@ export function BattlePlanCard({
       </div>
 
       {planned ? <div className="mt-3"><PlannedDateRow summary={planned} /></div> : null}
-      {(task.allocation_total ?? 0) > 0 ? (
-        <div className="mt-1.5 text-[10px] font-medium text-on-surface-variant">
-          {task.allocation_completed ?? 0}/{task.allocation_total} time blocks
-        </div>
-      ) : null}
-
       <div className={`${planned ? 'mt-1.5' : 'mt-3'} flex flex-wrap items-center justify-between gap-2`}>
         {due ? <DeadlineBadge badge={due} /> : <span />}
         <div className="flex items-center gap-1">
@@ -142,6 +136,7 @@ export function BattlePlanCard({
             type="button"
             aria-label={`${task.ready_to_plan ? 'Remove' : 'Add'} ${task.title} ${task.ready_to_plan ? 'from' : 'to'} Ready to Plan`}
             aria-pressed={task.ready_to_plan}
+            disabled={task.status === 'completed'}
             title={task.ready_to_plan ? 'Remove from Ready to Plan' : 'Add to Ready to Plan'}
             className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium uppercase tracking-wide transition ${task.ready_to_plan ? 'bg-primary/12 text-primary' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}`}
             onPointerDown={(event) => event.stopPropagation()}
@@ -182,9 +177,7 @@ export function BattlePlanCard({
           {task.subtasks.length > 0 ? (
             <div className="space-y-1.5">
               {task.subtasks.map((subtask) => {
-                const subtaskDue = deadlineBadge(subtask, serverNowIso, timezone)
-                const subtaskPlanned = plannedDateSummary(subtask.planned_dates, serverNowIso, timezone)
-                const isCompleted = subtask.status === 'completed'
+                const isCompleted = subtask.checked
                 return (
                   <div key={subtask.id} className="rounded-xl bg-surface-container-low/70 p-2 dark:bg-dark-surface-container/70">
                     <div className="flex items-start gap-2">
@@ -192,12 +185,12 @@ export function BattlePlanCard({
                         type="checkbox"
                         className="mt-0.5 shrink-0"
                         checked={isCompleted}
-                        disabled={busySubtaskId === subtask.id}
-                        aria-label={`${isCompleted ? 'Reopen' : 'Complete'} subtask ${subtask.title}`}
+                        disabled={task.status === 'completed' || busySubtaskId === subtask.id}
+                        aria-label={`${isCompleted ? 'Uncheck' : 'Check'} subtask ${subtask.title}`}
                         onChange={async () => {
                           setBusySubtaskId(subtask.id)
                           try {
-                            await onPatchSubtask(subtask.id, isCompleted ? 'open' : 'completed')
+                            await onSetSubtaskChecked(subtask.id, !isCompleted)
                           } catch {
                             // The page presents the request error and the server state remains authoritative.
                           } finally {
@@ -205,17 +198,10 @@ export function BattlePlanCard({
                           }
                         }}
                       />
-                      <button type="button" className={`min-w-0 flex-1 text-left text-sm leading-snug ${isCompleted ? 'text-on-surface-variant line-through' : ''}`} onClick={() => onOpen(subtask.id)}>
+                      <span className={`min-w-0 flex-1 text-left text-sm leading-snug ${isCompleted ? 'text-on-surface-variant line-through' : ''}`}>
                         {subtask.title}
-                      </button>
-                      {subtask.status !== 'open' && subtask.status !== 'completed' ? (
-                        <span className="shrink-0 rounded-full bg-surface-container-lowest px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-on-surface-variant dark:bg-dark-surface-container-lowest">
-                          {STATUS_LABELS[subtask.status]}
-                        </span>
-                      ) : null}
+                      </span>
                     </div>
-                    {subtaskPlanned ? <div className="mt-1.5 pl-6"><PlannedDateRow summary={subtaskPlanned} /></div> : null}
-                    {subtaskDue ? <div className="mt-1.5 pl-6"><DeadlineBadge badge={subtaskDue} /></div> : null}
                   </div>
                 )
               })}
@@ -223,7 +209,7 @@ export function BattlePlanCard({
           ) : (
             <p className="text-xs text-on-surface-variant">No subtasks yet.</p>
           )}
-          <form
+          {task.status !== 'completed' ? <form
             className="mt-2 flex gap-1.5"
             onSubmit={async (event) => {
               event.preventDefault()
@@ -250,22 +236,20 @@ export function BattlePlanCard({
             <button type="submit" aria-label={`Add subtask to ${task.title}`} disabled={addingSubtask || !subtaskTitle.trim()} className="rounded-lg bg-primary px-2 py-1.5 text-xs text-on-primary disabled:opacity-40">
               Add
             </button>
-          </form>
+          </form> : null}
         </section>
       ) : null}
-      {task.subtasks.length > 0 && completed === task.subtasks.length && task.status !== 'completed' ? (
-        <button
-          type="button"
-          className="mt-3 w-full rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation()
-            void onSetTaskCompletion(task.id, true)
-          }}
-        >
-          All subtasks complete · Complete Parent Task
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="mt-3 w-full rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          void onSetTaskCompletion(task.id, task.status !== 'completed')
+        }}
+      >
+        {task.status === 'completed' ? 'Reopen Task' : 'Complete Task'}
+      </button>
     </article>
   )
 }

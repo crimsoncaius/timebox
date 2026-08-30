@@ -46,11 +46,9 @@ export const DayTimeline = forwardRef<
         note?: string | null
         start_minute?: number
         end_minute?: number
-      },
+      }, lane: BlockLane,
     ) => Promise<void>
     onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
-    /** Planned blocks only: complete the block by swiping it right. */
-    onCompleteBlockAsPlanned?: (blockId: number) => Promise<void>
     /** While a block move/resize drag is active, parent may disable inspector hit-testing. */
     onBlockDragSessionChange?: (active: boolean) => void
   }
@@ -64,7 +62,6 @@ export const DayTimeline = forwardRef<
     onDraftTimeChange,
     onPatchBlock,
     onBlockClick,
-    onCompleteBlockAsPlanned,
     onBlockDragSessionChange,
   },
   ref,
@@ -104,11 +101,25 @@ export const DayTimeline = forwardRef<
     onLaneSlotClick(lane, start, end)
   }
 
-  const blocksFor = (lane: BlockLane) =>
-    day.time_blocks.filter((b) => b.lane === lane).sort((a, b) => a.start_minute - b.start_minute)
-  const timeCompletedPlannedIds = new Set(
-    day.time_blocks.flatMap((block) => block.planned_block_id == null ? [] : [block.planned_block_id]),
-  )
+  const blocksFor = (lane: BlockLane) => {
+    if (lane === 'planned') return day.time_blocks.filter((block) => block.lane === 'planned').sort((a, b) => a.start_minute - b.start_minute)
+    return day.actual_blocks.map(({ actual_block: actual, start_minute, end_minute }) => ({
+      id: actual.id,
+      lane: 'actual' as const,
+      task_type_id: actual.task_type_id,
+      task_type: actual.task_type,
+      task_id: actual.task_id,
+      task: actual.task,
+      note: actual.note,
+      planned_block_id: actual.planned_block_id,
+      start_minute,
+      end_minute,
+      start_at: actual.start_at,
+      end_at: actual.end_at,
+      created_at: actual.created_at,
+      updated_at: actual.updated_at,
+    })).sort((a, b) => a.start_minute - b.start_minute)
+  }
 
   const visibleRange = visibleEndMin - visibleStartMin
   const showNowLine =
@@ -161,13 +172,11 @@ export const DayTimeline = forwardRef<
         visibleStartMin={visibleStartMin}
         visibleEndMin={visibleEndMin}
         blocks={blocksFor('planned')}
-        timeCompletedPlannedIds={timeCompletedPlannedIds}
         draft={draft?.lane === 'planned' ? draft : null}
         readOnly={readOnly}
         onLaneClick={(e) => onLaneClick('planned', e)}
         onPatchBlock={onPatchBlock}
         onBlockClick={onBlockClick}
-        onCompleteBlockAsPlanned={onCompleteBlockAsPlanned}
         onDraftTimeChange={onDraftTimeChange}
         selectedBlockId={selectedBlockId}
         onBlockDragSessionChange={onBlockDragSessionChange}
@@ -181,13 +190,11 @@ export const DayTimeline = forwardRef<
         visibleStartMin={visibleStartMin}
         visibleEndMin={visibleEndMin}
         blocks={blocksFor('actual')}
-        timeCompletedPlannedIds={timeCompletedPlannedIds}
         draft={draft?.lane === 'actual' ? draft : null}
         readOnly={readOnly}
         onLaneClick={(e) => onLaneClick('actual', e)}
         onPatchBlock={onPatchBlock}
         onBlockClick={onBlockClick}
-        onCompleteBlockAsPlanned={onCompleteBlockAsPlanned}
         onDraftTimeChange={onDraftTimeChange}
         selectedBlockId={selectedBlockId}
         onBlockDragSessionChange={onBlockDragSessionChange}
@@ -414,13 +421,11 @@ function Lane({
   visibleStartMin,
   visibleEndMin,
   blocks,
-  timeCompletedPlannedIds,
   draft,
   readOnly,
   onLaneClick,
   onPatchBlock,
   onBlockClick,
-  onCompleteBlockAsPlanned,
   onDraftTimeChange,
   selectedBlockId,
   onBlockDragSessionChange,
@@ -433,7 +438,6 @@ function Lane({
   visibleStartMin: number
   visibleEndMin: number
   blocks: TimeBlock[]
-  timeCompletedPlannedIds: Set<number>
   draft: BlockDraftPlacement | null
   readOnly: boolean
   onLaneClick: (e: React.MouseEvent<HTMLDivElement>) => void
@@ -444,10 +448,9 @@ function Lane({
       note?: string | null
       start_minute?: number
       end_minute?: number
-    },
+    }, lane: BlockLane,
   ) => Promise<void>
   onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
-  onCompleteBlockAsPlanned?: (blockId: number) => Promise<void>
   onDraftTimeChange?: (startMin: number, endMin: number) => void
   selectedBlockId: number | null
   onBlockDragSessionChange?: (active: boolean) => void
@@ -499,12 +502,12 @@ function Lane({
           <TimeBlockCard
             key={b.id}
             block={b}
-            timeCompleted={lane === 'planned' && timeCompletedPlannedIds.has(b.id)}
             lane={lane}
             visibleStartMin={visibleStartMin}
             visibleEndMin={visibleEndMin}
             slotHeightPx={slotHeightPx}
             readOnly={readOnly}
+            timeEditingDisabled={lane === 'actual'}
             sameLaneBlocks={blocks}
             resizeMinStartMinute={minStartMinute}
             resizeMaxEndMinute={maxEndMinute}
@@ -515,12 +518,7 @@ function Lane({
               const y = cy - top
               return minuteFromPointerYInVisibleLane(y, visibleStartMin, visibleEndMin, slotHeightPx)
             }}
-            onPatch={(patch) => onPatchBlock(b.id, patch)}
-            onSwipeComplete={
-              lane === 'planned' && !readOnly && onCompleteBlockAsPlanned
-                ? () => onCompleteBlockAsPlanned(b.id)
-                : undefined
-            }
+            onPatch={(patch) => onPatchBlock(b.id, patch, lane)}
             onBlockClick={
               readOnly || !onBlockClick
                 ? undefined

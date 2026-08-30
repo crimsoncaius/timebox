@@ -2,7 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { TIMELINE_SLOT_HEIGHT_PX } from '../src/lib/time'
 
-const apiBase = 'http://127.0.0.1:18002'
+const apiBase = 'http://127.0.0.1:18001'
 
 async function today(request: APIRequestContext) {
   const response = await request.get(`${apiBase}/health`)
@@ -118,15 +118,15 @@ test('creates a weekly quota, schedules sessions, derives progress, and pauses w
   })
 
   const taskResult = await request.get(`${apiBase}/tasks?state=active`)
-  const parent = ((await taskResult.json()) as { items: Array<{ id: number; title: string; subtasks: Array<{ id: number }> }> }).items.find((task) => task.title === title)
+  const parent = ((await taskResult.json()) as { items: Array<{ id: number; title: string; session_tasks: Array<{ id: number }> }> }).items.find((task) => task.title === title)
   expect(parent).toBeTruthy()
-  expect(parent!.subtasks).toHaveLength(3)
+  expect(parent!.session_tasks).toHaveLength(3)
 
   await page.getByRole('link', { name: 'Day', exact: true }).click()
   await scheduleReadyTask(page, new RegExp(`${title} · Session 1`), 4)
   await scheduleReadyTask(page, new RegExp(`${title} · Session 2`), 6)
 
-  await request.patch(`${apiBase}/tasks/${parent!.subtasks[0].id}`, { data: { status: 'completed' } })
+  await request.post(`${apiBase}/tasks/${parent!.session_tasks[0].id}/complete`)
   await expect.poll(async () => {
     const response = await request.get(`${apiBase}/tasks?state=active`)
     const item = ((await response.json()) as { items: Array<{ id: number; status: string; quota_completed: number }> }).items.find((task) => task.id === parent!.id)
@@ -135,8 +135,8 @@ test('creates a weekly quota, schedules sessions, derives progress, and pauses w
   await page.goto('/battle-plan')
   await expect(page.getByRole('region', { name: 'In progress tasks' }).getByText(title, { exact: true }).first()).toBeVisible()
 
-  await request.patch(`${apiBase}/tasks/${parent!.subtasks[1].id}`, { data: { status: 'completed' } })
-  await request.patch(`${apiBase}/tasks/${parent!.subtasks[2].id}`, { data: { status: 'completed' } })
+  await request.post(`${apiBase}/tasks/${parent!.session_tasks[1].id}/complete`)
+  await request.post(`${apiBase}/tasks/${parent!.session_tasks[2].id}/complete`)
   await expect.poll(async () => {
     const response = await request.get(`${apiBase}/tasks?state=active`)
     const item = ((await response.json()) as { items: Array<{ id: number; status: string }> }).items.find((task) => task.id === parent!.id)

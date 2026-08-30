@@ -8,14 +8,8 @@ import {
 } from '../lib/time'
 import type { TimeBlockLike } from '../lib/time'
 
-/** Drag far enough right before release counts as complete-as-planned. */
-const SWIPE_COMPLETE_COMMIT_PX = 72
-/** Show the complete affordance copy once the user has pulled this far. */
-const SWIPE_COMPLETE_HINT_PX = 28
-/** Ignore tiny jitter before choosing move vs swipe-complete. */
+/** Ignore tiny jitter before moving a block. */
 const SWIPE_AXIS_DEAD_ZONE_PX = 8
-/** Horizontal pull must beat vertical by this ratio to arm swipe-complete. */
-const SWIPE_COMPLETE_DOMINANCE = 1.15
 
 /** Resize handle row height (`h-2`) in px; two handles when editable. */
 const RESIZE_HANDLE_ROWS_PX = 16
@@ -28,7 +22,6 @@ const MIN_INNER_PX_SIDE_TEXT_TWO_LINES = 30
 type DragState =
   | { kind: 'resize'; edge: 'start' | 'end'; start: number; end: number }
   | { kind: 'move'; start: number; end: number }
-  | { kind: 'complete'; start: number; end: number; pullPx: number }
 
 export function TimeBlockCard({
   block,
@@ -37,6 +30,7 @@ export function TimeBlockCard({
   visibleEndMin,
   slotHeightPx,
   readOnly,
+  timeEditingDisabled = false,
   sameLaneBlocks,
   resizeMinStartMinute,
   resizeMaxEndMinute,
@@ -44,9 +38,7 @@ export function TimeBlockCard({
   onPatch,
   onBlockClick,
   onDragSessionChange,
-  onSwipeComplete,
   isSelected = false,
-  timeCompleted = false,
 }: {
   block: TimeBlock
   lane: BlockLane
@@ -55,6 +47,7 @@ export function TimeBlockCard({
   visibleEndMin: number
   slotHeightPx: number
   readOnly: boolean
+  timeEditingDisabled?: boolean
   sameLaneBlocks: TimeBlockLike[]
   resizeMinStartMinute: number
   resizeMaxEndMinute: number
@@ -69,12 +62,8 @@ export function TimeBlockCard({
   onBlockClick?: () => boolean | void
   /** Fires when a move or resize drag session begins/ends (for global UI such as disabling inspector hit-testing). */
   onDragSessionChange?: (active: boolean) => void
-  /** Planned blocks only: swipe right to complete (same as inspector Complete). */
-  onSwipeComplete?: () => Promise<void>
   /** True when this block is the active editor target (matches `selectedBlockId` on the day). */
   isSelected?: boolean
-  /** Planned Block has a paired Actual Block. */
-  timeCompleted?: boolean
 }) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const [pendingLayout, setPendingLayout] = useState<{
@@ -110,21 +99,12 @@ export function TimeBlockCard({
   const displayHeight = ((displayEnd - displayStart) / SLOT_MINUTES) * slotHeightPx
   const heightPx = Math.max(displayHeight, slotHeightPx)
 
-  const swipeNudgePx =
-    drag?.kind === 'complete' ? Math.min(drag.pullPx * 0.2, 18) : 0
-
   const endDrag = useCallback(() => {
     const d = dragRef.current
     dragRef.current = null
     setDrag(null)
     if (!d) return
     try {
-      if (d.kind === 'complete') {
-        if (d.pullPx >= SWIPE_COMPLETE_COMMIT_PX) {
-          void onSwipeComplete?.()
-        }
-        return
-      }
       const { start, end } = d
       if (end - start < SLOT_MINUTES) return
       if (start % SLOT_MINUTES !== 0 || end % SLOT_MINUTES !== 0) return
@@ -141,7 +121,7 @@ export function TimeBlockCard({
     } finally {
       onDragSessionChange?.(false)
     }
-  }, [block.end_minute, block.start_minute, onDragSessionChange, onPatch, onSwipeComplete])
+  }, [block.end_minute, block.start_minute, onDragSessionChange, onPatch])
 
   const cancelDrag = useCallback(() => {
     const wasDragging = dragRef.current != null
@@ -238,6 +218,7 @@ export function TimeBlockCard({
         if (onBlockClick() === false) return
         suppressNextClickSelectRef.current = true
       }
+      if (timeEditingDisabled) return
       const el = e.currentTarget
       const pointerId = e.pointerId
       const pointerDownX = e.clientX
@@ -245,8 +226,7 @@ export function TimeBlockCard({
       const originStart = block.start_minute
       const originEnd = block.end_minute
       const duration = originEnd - originStart
-      /** none: finger still in dead zone; move: vertical reposition; complete: swipe-right to complete */
-      let bodyGesture: 'none' | 'move' | 'complete' = 'none'
+      let bodyGesture: 'none' | 'move' = 'none'
       let anchorMinute = 0
 
       const cleanupWindow = () => {
@@ -263,29 +243,6 @@ export function TimeBlockCard({
 
         if (bodyGesture === 'none') {
           if (Math.abs(dx) < SWIPE_AXIS_DEAD_ZONE_PX && Math.abs(dy) < SWIPE_AXIS_DEAD_ZONE_PX) return
-          const favorSwipeComplete =
-            !!onSwipeComplete &&
-            dx > 0 &&
-            dx > Math.abs(dy) * SWIPE_COMPLETE_DOMINANCE &&
-            dx >= SWIPE_AXIS_DEAD_ZONE_PX
-          if (favorSwipeComplete) {
-            bodyGesture = 'complete'
-            const initial: DragState = {
-              kind: 'complete',
-              start: originStart,
-              end: originEnd,
-              pullPx: Math.max(0, dx),
-            }
-            dragRef.current = initial
-            setDrag(initial)
-            onDragSessionChange?.(true)
-            try {
-              el.setPointerCapture(pointerId)
-            } catch {
-              /* ignore */
-            }
-            return
-          }
           bodyGesture = 'move'
           anchorMinute = getMinuteFromClientY(ev.clientY)
           prevBlockRef.current = originStart
@@ -302,19 +259,6 @@ export function TimeBlockCard({
           } catch {
             /* ignore */
           }
-        }
-
-        if (bodyGesture === 'complete') {
-          const pullPx = Math.max(0, ev.clientX - pointerDownX)
-          const next: DragState = {
-            kind: 'complete',
-            start: originStart,
-            end: originEnd,
-            pullPx,
-          }
-          dragRef.current = next
-          setDrag(next)
-          return
         }
 
         const deltaMin = getMinuteFromClientY(ev.clientY) - anchorMinute
@@ -390,16 +334,12 @@ export function TimeBlockCard({
       visibleEndMin,
       visibleStartMin,
       onDragSessionChange,
-      onSwipeComplete,
+      timeEditingDisabled,
     ],
   )
 
   const label = block.task?.title?.trim() || block.task_type?.name?.trim() || '(No title)'
-  const completionState = [
-    timeCompleted ? 'Time ✓' : null,
-    block.task ? `Task ${block.task.status === 'completed' ? '✓' : '○'}` : null,
-  ].filter(Boolean).join(' · ')
-  const displayLabel = completionState ? `${label} · ${completionState}` : label
+  const displayLabel = label
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
   const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
   const innerTextThreshold = block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME
@@ -413,11 +353,7 @@ export function TimeBlockCard({
   const dragKind =
     drag?.kind === 'move'
       ? 'move'
-      : drag?.kind === 'resize'
-        ? 'resize'
-        : drag?.kind === 'complete'
-          ? 'complete'
-          : undefined
+      : drag?.kind === 'resize' ? 'resize' : undefined
 
   const laneStripeColor =
     lane === 'planned' ? 'bg-planned' : 'bg-actual'
@@ -436,24 +372,13 @@ export function TimeBlockCard({
     if (dragKind === 'move') {
       return `${base} z-30 cursor-grabbing border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-drag)] rotate-[-1.2deg]`
     }
-    if (dragKind === 'complete') {
-      const armed =
-        drag &&
-        drag.kind === 'complete' &&
-        drag.pullPx >= SWIPE_COMPLETE_COMMIT_PX
-      return `${base} z-30 cursor-grabbing ${
-        armed
-          ? 'border-0 bg-tertiary-container/55 [box-shadow:var(--shadow-engrave-drag)]'
-          : 'border border-solid border-[rgba(80,70,50,0.25)] dark:border-[rgba(255,250,240,0.18)] bg-paper-raised'
-      }`
-    }
     if (dragKind === 'resize') {
       return `${base} z-30 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
     }
     if (isSelected) {
       return `${base} z-20 border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-raise)]`
     }
-    return `${base} z-10 border-0 ${timeCompleted ? 'bg-tertiary-container/35' : 'bg-paper-soft'} [box-shadow:var(--shadow-engrave-rest)]`
+    return `${base} z-10 border-0 bg-paper-soft [box-shadow:var(--shadow-engrave-rest)]`
   })()
 
   return (
@@ -467,10 +392,9 @@ export function TimeBlockCard({
       style={{
         top: displayTop,
         height: heightPx,
-        transform: swipeNudgePx ? `translateX(${swipeNudgePx}px)` : undefined,
       }}
     >
-      {!readOnly && dragKind !== 'move' && (
+      {!readOnly && !timeEditingDisabled && dragKind !== 'move' && (
         <button
           type="button"
           aria-label="Resize block start"
@@ -543,7 +467,7 @@ export function TimeBlockCard({
               ? 'flex-row items-stretch gap-2 overflow-hidden px-1.5 py-0.5'
               : 'flex-col items-stretch justify-center gap-0.5 overflow-hidden px-3 py-0'
           } ${
-            drag?.kind === 'move' || drag?.kind === 'complete' ? 'cursor-grabbing' : 'cursor-grab'
+            drag?.kind === 'move' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={onBodyPointerDown}
           onClick={(e) => {
@@ -621,17 +545,7 @@ export function TimeBlockCard({
           )}
         </button>
       )}
-      {drag?.kind === 'complete' && drag.pullPx >= SWIPE_COMPLETE_HINT_PX ? (
-        <div
-          className="pointer-events-none absolute inset-0 z-1 flex items-center justify-center rounded-md bg-surface/75 px-1 dark:bg-dark-background/70"
-          aria-hidden
-        >
-          <span className="text-center font-headline text-[10px] font-medium uppercase tracking-wide text-on-surface">
-            {drag.pullPx >= SWIPE_COMPLETE_COMMIT_PX ? 'Release to complete' : 'Complete'}
-          </span>
-        </div>
-      ) : null}
-      {!readOnly && dragKind !== 'move' && (
+      {!readOnly && !timeEditingDisabled && dragKind !== 'move' && (
         <button
           type="button"
           aria-label="Resize block end"

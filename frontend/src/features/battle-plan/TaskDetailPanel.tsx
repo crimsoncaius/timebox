@@ -20,7 +20,6 @@ import type {
   TaskStatus,
   TaskType,
 } from '../../lib/api'
-import { formatMinuteLabel24 } from '../../lib/time'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
 
@@ -63,6 +62,7 @@ export function TaskDetailPanel({
   onClose,
   onPatch,
   onSetCompletion,
+  onSetSubtaskChecked,
   onAddSubtask,
   onTrash,
 }: {
@@ -74,6 +74,7 @@ export function TaskDetailPanel({
   onClose: () => void
   onPatch: (id: number, patch: Partial<BattleTaskWrite>) => Promise<void>
   onSetCompletion: (id: number, completed: boolean) => Promise<void>
+  onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onTrash: (id: number) => Promise<void>
 }) {
@@ -94,11 +95,6 @@ export function TaskDetailPanel({
   const today = dateInTimeZone(serverNowIso, timezone)
   const plannedDates = orderedPlannedDates(task.planned_dates, today)
   const visiblePlannedDates = showAllPlannedDates ? plannedDates : plannedDates.slice(0, 5)
-  const allocations = [...(task.allocations ?? [])].sort((left, right) =>
-    left.date.localeCompare(right.date) || left.start_minute - right.start_minute,
-  )
-  const currentAllocations = allocations.filter((allocation) => allocation.date >= today)
-  const pastAllocations = allocations.filter((allocation) => allocation.date < today).reverse()
 
   const setDraftField = <Key extends keyof TaskDraft>(key: Key, value: TaskDraft[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -239,6 +235,26 @@ export function TaskDetailPanel({
     </button>
   )
 
+  if (task.status === 'completed') {
+    return (
+      <div className="fixed inset-0 z-80 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-10" onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose() }}>
+        <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Task details" className="w-full max-w-2xl rounded-2xl bg-surface p-6 shadow-2xl dark:bg-dark-surface">
+          <header className="flex items-start justify-between gap-4">
+            <div><p className="text-xs uppercase tracking-widest text-on-surface-variant">Completed Task</p><h1 className="mt-2 font-headline text-3xl font-light">{task.title}</h1></div>
+            {closeButton}
+          </header>
+          {task.description ? <p className="mt-4 whitespace-pre-wrap text-sm text-on-surface-variant">{task.description}</p> : null}
+          <section className="mt-6" aria-label="Subtasks">
+            <h2 className="text-xs uppercase tracking-widest text-on-surface-variant">Subtasks</h2>
+            <div className="mt-2 space-y-2">{task.subtasks.map((item) => <p key={item.id} className="rounded-xl bg-surface-container-low px-3 py-2 text-sm">{item.checked ? '✓' : '○'} {item.title}</p>)}</div>
+          </section>
+          {plannedDates.length ? <section className="mt-6"><h2 className="text-xs uppercase tracking-widest text-on-surface-variant">Planned Dates</h2><div className="mt-2 flex flex-wrap gap-2">{plannedDates.map((value) => <Link key={value} to={`/day/${value}`} className="rounded-lg bg-surface-container-low px-3 py-2 text-sm">{formatPlannedDate(value, today)}</Link>)}</div></section> : null}
+          <button type="button" onClick={() => void onSetCompletion(task.id, false)} className="mt-8 w-full rounded-xl bg-primary px-4 py-3 text-sm font-medium text-on-primary">Reopen Task</button>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div
       className="fixed inset-0 z-80 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-6 min-[720px]:px-6 min-[720px]:py-14"
@@ -292,23 +308,15 @@ export function TaskDetailPanel({
                     <div key={subtask.id} className="group flex items-center gap-3 py-3">
                       <input
                         type="checkbox"
-                        aria-label={`${subtask.status === 'completed' ? 'Reopen' : 'Complete'} subtask ${subtask.title}`}
-                        checked={subtask.status === 'completed'}
-                        onChange={(event) => void onSetCompletion(subtask.id, event.target.checked)}
+                        aria-label={`${subtask.checked ? 'Uncheck' : 'Check'} subtask ${subtask.title}`}
+                        checked={subtask.checked}
+                        disabled={task.status === 'completed'}
+                        onChange={(event) => void onSetSubtaskChecked(subtask.id, event.target.checked)}
                         className="size-4 accent-[var(--task-detail-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
                       />
-                      <span className={`min-w-0 flex-1 text-sm ${subtask.status === 'completed' ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`}>
+                      <span className={`min-w-0 flex-1 text-sm ${subtask.checked ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`}>
                         {subtask.title}
                       </span>
-                      <span className="text-xs text-[var(--task-detail-muted)]">{STATUS_LABELS[subtask.status]}</span>
-                      <button
-                        type="button"
-                        aria-label={`Move subtask ${subtask.title} to Trash`}
-                        onClick={() => void confirmTrash(subtask)}
-                        className="rounded-full p-1 text-[var(--task-detail-muted)] opacity-70 transition-colors hover:text-[#b8514d] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] group-hover:opacity-100"
-                      >
-                        <span className="material-symbols-outlined text-[17px]" aria-hidden>delete</span>
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -396,16 +404,7 @@ export function TaskDetailPanel({
                 ) : null}
               </div>
 
-              {allocations.length > 0 ? (
-                <section aria-label="Allocated time" className="border-t border-[var(--task-detail-divider)] py-3">
-                  <h2 className="font-label text-[11px] uppercase tracking-[0.16em] text-[var(--task-detail-muted)]">Allocated time</h2>
-                  <p className="mt-1 text-xs text-[var(--task-detail-muted)]">
-                    {task.allocation_completed ?? 0}/{task.allocation_total ?? allocations.length} time blocks completed
-                  </p>
-                  <AllocationGroup label="Today & upcoming" allocations={currentAllocations} today={today} />
-                  <AllocationGroup label="Past allocations" allocations={pastAllocations} today={today} />
-                </section>
-              ) : plannedDates.length > 0 ? (
+              {plannedDates.length > 0 ? (
                 <section aria-label="Planned Dates" className="border-t border-[var(--task-detail-divider)] py-3">
                   <h2 className="font-label text-[11px] uppercase tracking-[0.16em] text-[var(--task-detail-muted)]">Planned Dates</h2>
                   <div className="mt-2 flex flex-col gap-1">
@@ -426,15 +425,6 @@ export function TaskDetailPanel({
                 </section>
               ) : null}
 
-              {task.subtasks.length > 0 && task.subtasks.every((subtask) => subtask.status === 'completed') && task.status !== 'completed' ? (
-                <button
-                  type="button"
-                  className="mt-3 w-full rounded-[10px] bg-primary/10 px-3 py-2 text-sm font-medium text-primary"
-                  onClick={() => void onSetCompletion(task.id, true)}
-                >
-                  All subtasks complete · Complete Parent Task
-                </button>
-              ) : null}
 
               <div className="border-t border-[var(--task-detail-divider)] py-4">
                 <button
@@ -472,43 +462,6 @@ export function TaskDetailPanel({
           </aside>
         </div>
       </section>
-    </div>
-  )
-}
-
-function AllocationGroup({
-  label,
-  allocations,
-  today,
-}: {
-  label: string
-  allocations: NonNullable<BattleTask['allocations']>
-  today: string
-}) {
-  if (allocations.length === 0) return null
-  return (
-    <div className="mt-3">
-      <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--task-detail-muted)]">{label}</h3>
-      <div className="mt-1 flex flex-col gap-1">
-        {allocations.map((allocation) => {
-          const dateLabel = allocation.date === today
-            ? 'Today'
-            : formatPlannedDate(allocation.date, today)
-          const timeLabel = `${formatMinuteLabel24(allocation.start_minute)}–${formatMinuteLabel24(allocation.end_minute)}`
-          const stateLabel = allocation.time_completed ? 'Time completed' : 'Time incomplete'
-          return (
-            <Link
-              key={allocation.block_id}
-              to={`/day/${allocation.date}?block=${allocation.block_id}`}
-              aria-label={`${dateLabel} · ${timeLabel} · ${stateLabel}`}
-              className="rounded-lg px-2 py-1.5 text-sm text-[var(--task-detail-secondary)] transition-colors hover:bg-[var(--task-detail-field-hover)] hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
-            >
-              <span className="block">{dateLabel} · {timeLabel}</span>
-              <span className="block text-xs text-[var(--task-detail-muted)]">{stateLabel}</span>
-            </Link>
-          )
-        })}
-      </div>
     </div>
   )
 }

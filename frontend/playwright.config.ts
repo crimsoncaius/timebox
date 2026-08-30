@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const backendDir = path.join(__dirname, '..', 'backend')
-const apiPort = 18002
-const webPort = 15175
+const viteBin = path.join(__dirname, 'node_modules', 'vite', 'bin', 'vite.js')
+const apiPort = 18001
+const webPort = 15174
 
 export default defineConfig({
   testDir: './e2e',
@@ -35,7 +36,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: `npm run dev -- --host 127.0.0.1 --port ${webPort}`,
+      command: `"${process.execPath}" "${viteBin}" --host 127.0.0.1 --port ${webPort}`,
       cwd: __dirname,
       env: {
         ...process.env,

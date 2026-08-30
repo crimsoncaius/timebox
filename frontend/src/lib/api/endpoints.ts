@@ -3,7 +3,7 @@ import type {
   BattleTask,
   BattleTaskList,
   BattleTaskWrite,
-  BlockLane,
+  ActualBlock,
   DayListItem,
   DayRead,
   DueReminder,
@@ -20,6 +20,7 @@ import type {
   TaskCompletionResult,
   TaskStatus,
   TaskType,
+  Subtask,
 } from './types'
 
 export const api = {
@@ -66,7 +67,7 @@ export const api = {
   createBlock: (
     date: string,
     body: {
-      lane: BlockLane
+      lane: 'planned'
       task_type_id: number
       task_id?: number | null
       note?: string | null
@@ -94,15 +95,26 @@ export const api = {
       method: 'DELETE',
     }),
 
-  completeBlockAsPlanned: (date: string, blockId: number) =>
-    fetchJson<DayRead>(`/days/${date}/blocks/${blockId}/complete-as-planned`, {
+  recordActualAsPlanned: (plannedBlockId: number) =>
+    fetchJson<{ actual_block: ActualBlock; undo_token: string }>(`/planned-blocks/${plannedBlockId}/record-actual-as-planned`, {
       method: 'POST',
     }),
 
-  reverseBlockCompletion: (date: string, blockId: number) =>
-    fetchJson<DayRead>(`/days/${date}/blocks/${blockId}/completion`, {
-      method: 'DELETE',
+  undoRecordActualAsPlanned: (plannedBlockId: number, undoToken: string) =>
+    fetchVoid(`/planned-blocks/${plannedBlockId}/undo-record-actual-as-planned`, {
+      method: 'POST', body: JSON.stringify({ undo_token: undoToken }),
     }),
+
+  getActiveActualBlock: () => fetchJson<ActualBlock | null>('/actual-blocks/active'),
+  getActualBlock: (id: number) => fetchJson<ActualBlock>(`/actual-blocks/${id}`),
+  startActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null }) =>
+    fetchJson<ActualBlock>('/actual-blocks/start', { method: 'POST', body: JSON.stringify(body) }),
+  createActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null; start_at: string; end_at: string }) =>
+    fetchJson<ActualBlock>('/actual-blocks', { method: 'POST', body: JSON.stringify(body) }),
+  finishActualBlock: (id: number) => fetchJson<ActualBlock>(`/actual-blocks/${id}/finish`, { method: 'POST' }),
+  patchActualBlock: (id: number, body: Partial<{ task_type_id: number; task_id: number | null; note: string | null; start_at: string; end_at: string }>) =>
+    fetchJson<ActualBlock>(`/actual-blocks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteActualBlock: (id: number) => fetchVoid(`/actual-blocks/${id}`, { method: 'DELETE' }),
 
   listDays: (limit = 60) => fetchJson<DayListItem[]>(`/days?limit=${limit}`),
 
@@ -125,11 +137,13 @@ export const api = {
   patchBattleTask: (id: number, body: Partial<BattleTaskWrite>) =>
     fetchJson<BattleTask>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
-  completeBattleTask: (id: number, plannedTime: 'keep' | 'remove') =>
+  completeBattleTask: (id: number) =>
     fetchJson<TaskCompletionResult>(`/tasks/${id}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ planned_time: plannedTime }),
     }),
+
+  checkSubtask: (id: number) => fetchJson<Subtask>(`/subtasks/${id}/check`, { method: 'POST' }),
+  uncheckSubtask: (id: number) => fetchJson<Subtask>(`/subtasks/${id}/uncheck`, { method: 'POST' }),
 
   reopenBattleTask: (id: number) =>
     fetchJson<BattleTask>(`/tasks/${id}/reopen`, { method: 'POST' }),
@@ -201,6 +215,4 @@ export const api = {
   endRecurringTemplate: (id: number) =>
     fetchJson<RecurringTemplate>(`/recurring-templates/${id}/end`, { method: 'POST' }),
 
-  deleteRecurringTemplate: (id: number) =>
-    fetchVoid(`/recurring-templates/${id}`, { method: 'DELETE' }),
 }

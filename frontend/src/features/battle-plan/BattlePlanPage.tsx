@@ -71,12 +71,7 @@ function errorMessage(error: unknown) {
 
 function findTask(tasks: BattleTask[], id: number | null) {
   if (id == null) return null
-  for (const task of tasks) {
-    if (task.id === id) return task
-    const subtask = task.subtasks.find((item) => item.id === id)
-    if (subtask) return subtask
-  }
-  return null
+  return tasks.find((task) => task.id === id) ?? null
 }
 
 function taskCount(tasks: BattleTask[], projectId: number) {
@@ -110,7 +105,7 @@ export function BattlePlanPage() {
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [mobileSidebar, setMobileSidebar] = useState(false)
   const [undoTaskId, setUndoTaskId] = useState<number | null>(null)
-  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string } | null>(null)
+  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const screenNowIso = useAppClock(serverNowIso, timezone)
 
   const setPrefs = useCallback((change: Partial<Preferences>) => {
@@ -284,6 +279,17 @@ export function BattlePlanPage() {
     setSearchParams({ task: String(id) })
   }
 
+  const setSubtaskChecked = async (id: number, checked: boolean) => {
+    setError(null)
+    try {
+      if (checked) await api.checkSubtask(id); else await api.uncheckSubtask(id)
+      await loadActive()
+    } catch (cause) {
+      setError(errorMessage(cause))
+      throw cause
+    }
+  }
+
   const setTaskCompletion = async (id: number, completed: boolean) => {
     setError(null)
     try {
@@ -293,37 +299,8 @@ export function BattlePlanPage() {
         await loadActive()
         return
       }
-      const selected = findTask(tasks, id)
-      const affected = selected?.parent_id == null && selected
-        ? [selected, ...selected.subtasks]
-        : selected ? [selected] : []
-      if (selected && selected.parent_id == null && selected.subtasks.length > 0) {
-        if (!window.confirm(`Complete “${selected.title}” and all of its subtasks?`)) return
-      }
-      const today = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date(screenNowIso))
-      const futureIncomplete = affected.some((task) =>
-        task.allocations?.some(
-          (allocation) => !allocation.time_completed && allocation.date >= today,
-        ),
-      )
-      let plannedTime: 'keep' | 'remove' = 'keep'
-      if (futureIncomplete) {
-        const choice = window.prompt(
-          'This Task has incomplete planned time today or later. Type “keep” or “remove”; Cancel leaves the Task unchanged.',
-          'keep',
-        )
-        if (choice == null) return
-        const normalized = choice.trim().toLowerCase()
-        if (normalized !== 'keep' && normalized !== 'remove') return
-        plannedTime = normalized
-      }
-      const result = await api.completeBattleTask(id, plannedTime)
-      setCompletionUndo({ taskId: id, token: result.undo_token })
+      const result = await api.completeBattleTask(id)
+      setCompletionUndo({ taskId: id, token: result.undo_token, removed: result.removed_planned_block_ids.length })
       await loadActive()
     } catch (cause) {
       setError(errorMessage(cause))
@@ -399,11 +376,14 @@ export function BattlePlanPage() {
           {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
           {completionUndo ? (
             <div className="mb-5 flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3 text-sm">
-              <span>Task completed.</span>
+              <span>Task completed · {completionUndo.removed} future Planned {completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.</span>
               <button type="button" className="font-medium text-primary underline" onClick={async () => {
-                await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
-                setCompletionUndo(null)
-                await loadActive()
+                setError(null)
+                try {
+                  await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
+                  setCompletionUndo(null)
+                  await loadActive()
+                } catch (cause) { setError(errorMessage(cause)) }
               }}>Undo</button>
             </div>
           ) : null}
@@ -425,7 +405,7 @@ export function BattlePlanPage() {
                       onCreate={createTask}
                       onOpen={openTask}
                       onAddSubtask={addSubtask}
-                      onPatchSubtask={(id, nextStatus) => setTaskCompletion(id, nextStatus === 'completed')}
+                      onSetSubtaskChecked={setSubtaskChecked}
                       onToggleReady={(id, ready) => patchTask(id, { ready_to_plan: ready })}
                       onSetTaskCompletion={setTaskCompletion}
                     />
@@ -455,8 +435,8 @@ export function BattlePlanPage() {
 
       {selectedTask && collection === 'active' ? (
         <TaskDetailPanel
-          key={selectedTask.parent_id ?? selectedTask.id}
-          task={selectedTask.parent_id == null ? selectedTask : tasks.find((task) => task.id === selectedTask.parent_id) ?? selectedTask}
+          key={selectedTask.id}
+          task={selectedTask}
           projects={projects}
           taskTypes={taskTypes}
           timezone={timezone}
@@ -464,12 +444,12 @@ export function BattlePlanPage() {
           onClose={closeTask}
           onPatch={patchTask}
           onSetCompletion={setTaskCompletion}
+          onSetSubtaskChecked={setSubtaskChecked}
           onAddSubtask={addSubtask}
           onTrash={async (id) => {
             await api.trashBattleTask(id)
             setUndoTaskId(id)
-            const openTaskId = selectedTask.parent_id == null ? selectedTask.id : selectedTask.parent_id
-            if (id === openTaskId) closeTask()
+            if (id === selectedTask.id) closeTask()
             await loadActive()
           }}
         />
@@ -508,7 +488,7 @@ export function BattlePlanPage() {
   )
 }
 
-function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onPatchSubtask, onToggleReady, onSetTaskCompletion }: {
+function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion }: {
   status: TaskStatus
   tasks: BattleTask[]
   projects: Project[]
@@ -519,7 +499,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   onCreate: (task: BattleTaskWrite) => Promise<void>
   onOpen: (id: number) => void
   onAddSubtask: (parentId: number, title: string) => Promise<void>
-  onPatchSubtask: (id: number, status: TaskStatus) => Promise<void>
+  onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
   onToggleReady: (id: number, ready: boolean) => Promise<void>
   onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
 }) {
@@ -556,7 +536,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
             serverNowIso={serverNowIso}
             onOpen={(id = task.id) => onOpen(id)}
             onAddSubtask={onAddSubtask}
-            onPatchSubtask={onPatchSubtask}
+            onSetSubtaskChecked={onSetSubtaskChecked}
             onToggleReady={onToggleReady}
             onSetTaskCompletion={onSetTaskCompletion}
           />

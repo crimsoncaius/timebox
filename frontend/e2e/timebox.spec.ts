@@ -2,13 +2,22 @@ import type { APIRequestContext } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { TIMELINE_SLOT_HEIGHT_PX } from '../src/lib/time'
 
+const apiBase = 'http://127.0.0.1:18001'
+
 /** E2E uses a persistent SQLite file; clear blocks so seed POSTs stay idempotent. */
 async function clearDayBlocks(request: APIRequestContext, base: string, date: string) {
   const r = await request.get(`${base}/days/${date}`)
   if (!r.ok()) return
-  const data = (await r.json()) as { time_blocks: Array<{ id: number }> }
+  const data = (await r.json()) as {
+    time_blocks: Array<{ id: number }>
+    actual_blocks: Array<{ actual_block: { id: number } }>
+  }
   for (const b of data.time_blocks) {
     const del = await request.delete(`${base}/days/${date}/blocks/${b.id}`)
+    expect(del.ok()).toBeTruthy()
+  }
+  for (const id of new Set(data.actual_blocks.map((projection) => projection.actual_block.id))) {
+    const del = await request.delete(`${base}/actual-blocks/${id}`)
     expect(del.ok()).toBeTruthy()
   }
 }
@@ -41,7 +50,10 @@ async function ensureTaskType(request: APIRequestContext, base: string, name: st
  */
 test('plan blocks and history', async ({ page, request }) => {
   const date = '2026-06-01'
-  const base = 'http://127.0.0.1:18002'
+  const base = apiBase
+  await request.patch(`${base}/settings`, {
+    data: { start_hour: 8, end_hour: 20, show_full_day: true },
+  })
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -60,12 +72,11 @@ test('plan blocks and history', async ({ page, request }) => {
   })
   expect(r1.ok()).toBeTruthy()
 
-  const r2 = await request.post(`${base}/days/${date}/blocks`, {
+  const r2 = await request.post(`${base}/actual-blocks`, {
     data: {
-      lane: 'actual',
       task_type_id: tidActual,
-      start_minute: 540,
-      end_minute: 570,
+      start_at: '2026-06-01T23:30:00Z',
+      end_at: '2026-06-02T00:20:00Z',
     },
     headers: { 'Content-Type': 'application/json' },
   })
@@ -94,10 +105,16 @@ test('plan blocks and history', async ({ page, request }) => {
   await page.keyboard.press('Escape')
   await expect(inspector.getByLabel('Task type', { exact: true })).toHaveCount(0)
 
-  await page.locator('[data-block-id]').nth(1).click()
-  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveValue('e2e actual')
-  await page.keyboard.press('Escape')
-  await expect(inspector.getByLabel('Task type', { exact: true })).toHaveCount(0)
+  const actualId = (await r2.json()).id as number
+  await page.locator(`[data-block-id="${actualId}"]`).click()
+  const workMode = page.getByRole('dialog', { name: 'Work Mode' })
+  await expect(workMode).toBeVisible()
+  await expect(workMode.getByRole('heading', { name: 'e2e actual' })).toBeVisible()
+  await expect(workMode.getByLabel('Actual start')).toHaveValue('2026-06-01T23:30')
+  await expect(workMode.getByLabel('Actual end')).toHaveValue('2026-06-02T00:20')
+  await expect(workMode.getByRole('button', { name: /complete Task/i })).toHaveCount(0)
+  await workMode.getByRole('button', { name: 'Close Work Mode' }).click()
+  await expect(workMode).toHaveCount(0)
 
   await page.getByTestId('day-nav').getByRole('button', { name: 'Next day' }).click()
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-02')
@@ -109,15 +126,18 @@ test('plan blocks and history', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/day\/2026-06-10$/)
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-10')
 
+  const chronicleDate = '2099-12-31'
+  const chronicleDay = await request.get(`${base}/days/${chronicleDate}`)
+  expect(chronicleDay.ok()).toBeTruthy()
   await page.getByRole('link', { name: 'Chronicle' }).click()
   await expect(page.getByRole('heading', { name: /Chronicle of focus/i })).toBeVisible()
   await expect(page.getByTestId('chronicle-calendar')).toBeVisible()
-  await expect(page.getByTestId('chronicle-month-heading')).toContainText(/June 2026/i)
-  await page.getByTestId('chronicle-day-2026-06-01').click()
-  await expect(page).toHaveURL(/\/day\/2026-06-01$/)
+  await expect(page.getByTestId('chronicle-month-heading')).toContainText(/December 2099/i)
+  await page.getByTestId(`chronicle-day-${chronicleDate}`).click()
+  await expect(page).toHaveURL(new RegExp(`/day/${chronicleDate}$`))
 
   await page.getByRole('link', { name: 'Chronicle' }).click()
-  await page.getByRole('link', { name: 'Day' }).click()
+  await page.getByRole('link', { name: 'Day', exact: true }).click()
   await expect(page.getByTestId('day-timeline')).toBeVisible()
 
   await page.getByRole('link', { name: 'Settings' }).click()
@@ -137,9 +157,114 @@ test('plan blocks and history', async ({ page, request }) => {
   })
 })
 
+test('Work Mode finishes a Task session, then completes and exactly undoes the Task', async ({
+  page,
+  request,
+}) => {
+  const date = '2026-06-05'
+  const unique = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
+  const taskTitle = `Work Mode Task ${unique}`
+  await clearDayBlocks(request, apiBase, date)
+  await clearDayBlocks(request, apiBase, '2099-01-01')
+
+  const activeResponse = await request.get(`${apiBase}/actual-blocks/active`)
+  expect(activeResponse.ok()).toBeTruthy()
+  const existingActive = (await activeResponse.json()) as { id: number } | null
+  if (existingActive) {
+    const finished = await request.post(`${apiBase}/actual-blocks/${existingActive.id}/finish`)
+    expect(finished.ok()).toBeTruthy()
+  }
+
+  const taskTypeId = await ensureTaskType(request, apiBase, `Work Mode ${unique}`)
+  const taskResponse = await request.post(`${apiBase}/tasks`, {
+    data: {
+      title: taskTitle,
+      task_type_id: taskTypeId,
+      ready_to_plan: true,
+    },
+  })
+  expect(taskResponse.ok()).toBeTruthy()
+  const taskId = ((await taskResponse.json()) as { id: number }).id
+
+  const createPlanned = async (plannedDate: string, startMinute: number) => {
+    const response = await request.post(`${apiBase}/days/${plannedDate}/blocks`, {
+      data: {
+        lane: 'planned',
+        task_type_id: taskTypeId,
+        task_id: taskId,
+        start_minute: startMinute,
+        end_minute: startMinute + 30,
+      },
+    })
+    expect(response.ok()).toBeTruthy()
+    const day = (await response.json()) as {
+      time_blocks: Array<{ id: number; task_id: number | null; start_minute: number }>
+    }
+    const block = day.time_blocks.find(
+      (candidate) => candidate.task_id === taskId && candidate.start_minute === startMinute,
+    )
+    expect(block).toBeTruthy()
+    return block!.id
+  }
+
+  const firstPlannedId = await createPlanned(date, 480)
+  const secondPlannedId = await createPlanned(date, 540)
+  const futurePlannedId = await createPlanned('2099-01-01', 480)
+
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  const inspector = page.getByRole('complementary', { name: 'Block details' })
+
+  await page.locator(`[data-block-id="${firstPlannedId}"]`).click()
+  await inspector.getByRole('button', { name: 'Start Work Mode' }).click()
+  const workMode = page.getByRole('dialog', { name: 'Work Mode' })
+  await expect(workMode).toBeVisible()
+  await expect(workMode.getByRole('heading', { name: taskTitle })).toBeVisible()
+  await expect(workMode.getByRole('button', { name: 'Finish session + complete Task' })).toBeVisible()
+  const firstActive = (await (await request.get(`${apiBase}/actual-blocks/active`)).json()) as {
+    id: number
+  }
+  await workMode.getByRole('button', { name: 'Finish session', exact: true }).click()
+  await expect(page.getByText('Actual recorded · Task remains open.')).toBeVisible()
+  const firstEnded = (await (
+    await request.get(`${apiBase}/actual-blocks/${firstActive.id}`)
+  ).json()) as { end_at: string | null }
+  expect(firstEnded.end_at).not.toBeNull()
+
+  await page.locator(`[data-block-id="${secondPlannedId}"]`).click()
+  await inspector.getByRole('button', { name: 'Start Work Mode' }).click()
+  await expect(workMode).toBeVisible()
+  const secondActive = (await (await request.get(`${apiBase}/actual-blocks/active`)).json()) as {
+    id: number
+  }
+  await workMode.getByRole('button', { name: 'Finish session + complete Task' }).click()
+  await expect(page.getByText('Task completed · 1 future Planned Block removed.')).toBeVisible()
+  const endedBeforeUndo = (await (
+    await request.get(`${apiBase}/actual-blocks/${secondActive.id}`)
+  ).json()) as { end_at: string | null }
+  expect(endedBeforeUndo.end_at).not.toBeNull()
+
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(page.getByText('Task completed · 1 future Planned Block removed.')).toHaveCount(0)
+  const tasksAfterUndo = await request.get(`${apiBase}/tasks?state=active`)
+  expect(tasksAfterUndo.ok()).toBeTruthy()
+  const restoredTask = ((await tasksAfterUndo.json()) as {
+    items: Array<{ id: number; status: string }>
+  }).items.find((task) => task.id === taskId)
+  expect(restoredTask?.status).toBe('open')
+  const futureDay = (await (await request.get(`${apiBase}/days/2099-01-01`)).json()) as {
+    planned_blocks: Array<{ id: number }>
+  }
+  expect(futureDay.planned_blocks.some((block) => block.id === futurePlannedId)).toBe(true)
+  const endedAfterUndo = (await (
+    await request.get(`${apiBase}/actual-blocks/${secondActive.id}`)
+  ).json()) as { end_at: string | null }
+  expect(endedAfterUndo.end_at).toBe(endedBeforeUndo.end_at)
+})
+
 test('resize planned block stops at next block in same lane', async ({ page, request }) => {
   const date = '2026-06-02'
-  const base = 'http://127.0.0.1:18002'
+  const base = apiBase
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -195,7 +320,11 @@ test('resize planned block stops at next block in same lane', async ({ page, req
   })
   await page.mouse.up()
 
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const blocks = (await response.json()) as { time_blocks: Array<{ id: number; end_minute: number }> }
+    return blocks.time_blocks.find((block) => block.id === idA)?.end_minute
+  }).toBe(540)
 
   await page.locator(`[data-block-id="${idA}"]`).click()
   await expect(inspectorResize).toBeVisible()
@@ -210,7 +339,7 @@ test('resize planned block stops at next block in same lane', async ({ page, req
 
 test('move planned block preserves duration and jumps past blocker', async ({ page, request }) => {
   const date = '2026-06-03'
-  const base = 'http://127.0.0.1:18002'
+  const base = apiBase
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -252,7 +381,7 @@ test('move planned block preserves duration and jumps past blocker', async ({ pa
   await page.mouse.move(cx, cy)
   await page.mouse.down()
   // Any movement starts move mode (no long-press).
-  await page.mouse.move(cx, cy + 1)
+  await page.mouse.move(cx, cy + 10)
   await expect(page.locator(`[data-block-id="${idA}"]`)).toHaveAttribute('data-dragging', 'true')
   await expect(page.locator(`[data-block-id="${idA}"]`)).toHaveAttribute('data-drag-kind', 'move')
   // Drag down past blocker B (9:00–10:00) so A can land at 10:00–10:30 (duration preserved).
@@ -260,11 +389,11 @@ test('move planned block preserves duration and jumps past blocker', async ({ pa
   await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 4, { steps: 12 })
   await page.mouse.up()
 
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
-  await expect(
-    page.getByRole('complementary', { name: 'Block details' }).getByLabel('Task type', { exact: true }),
-  ).toHaveCount(0)
-
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const blocks = (await response.json()) as { time_blocks: Array<{ id: number; start_minute: number }> }
+    return blocks.time_blocks.find((block) => block.id === idA)?.start_minute
+  }).toBe(600)
   const rDay = await request.get(`${base}/days/${date}`)
   expect(rDay.ok()).toBeTruthy()
   const blocks = (await rDay.json()).time_blocks as Array<{
@@ -282,7 +411,7 @@ test('move planned block: preview stays stable while pointer wiggles in the inva
   request,
 }) => {
   const date = '2026-06-25'
-  const base = 'http://127.0.0.1:18002'
+  const base = apiBase
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -323,7 +452,7 @@ test('move planned block: preview stays stable while pointer wiggles in the inva
   const cy = box!.y + box!.height / 2
   await page.mouse.move(cx, cy)
   await page.mouse.down()
-  await page.mouse.move(cx, cy + 1)
+  await page.mouse.move(cx, cy + 10)
 
   /** Hover in the invalid strip above blocker B without crossing the 600-preview threshold. */
   await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 2.2, { steps: 8 })
@@ -337,7 +466,11 @@ test('move planned block: preview stays stable while pointer wiggles in the inva
   await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX * 4, { steps: 12 })
   await page.mouse.up()
 
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const blocks = (await response.json()) as { time_blocks: Array<{ id: number; start_minute: number }> }
+    return blocks.time_blocks.find((block) => block.id === idA)?.start_minute
+  }).toBe(600)
 
   const rDay = await request.get(`${base}/days/${date}`)
   expect(rDay.ok()).toBeTruthy()
@@ -356,7 +489,7 @@ test('creates a hierarchical task type from the block editor and renames parent 
   request,
 }) => {
   const date = '2026-06-04'
-  const base = 'http://127.0.0.1:18002'
+  const base = apiBase
   const uniq = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
   const rootPath = `e2ehp${uniq}`
   const childPath = `${rootPath}/x`
@@ -381,11 +514,21 @@ test('creates a hierarchical task type from the block editor and renames parent 
 
   await page.getByLabel('Task type', { exact: true }).fill(childPath)
   await page.getByRole('option', { name: `Create "${childPath}"` }).click()
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/task-types`)
+    return ((await response.json()) as Array<{ name: string }>).some((row) => row.name === childPath)
+  }).toBe(true)
 
   const rows = (await (await request.get(`${base}/task-types`)).json()) as Array<{ id: number; name: string }>
   expect(rows.map((x) => x.name)).toContain(rootPath)
   expect(rows.map((x) => x.name)).toContain(childPath)
+  const childRow = rows.find((row) => row.name === childPath)
+  expect(childRow).toBeTruthy()
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const blocks = (await response.json()) as { time_blocks: Array<{ id: number; task_type_id: number }> }
+    return blocks.time_blocks.find((block) => block.id === blockId)?.task_type_id
+  }).toBe(childRow!.id)
 
   const rootRow = rows.find((row) => row.name === rootPath)
   expect(rootRow).toBeTruthy()
@@ -408,6 +551,15 @@ test('creates a hierarchical task type from the block editor and renames parent 
   const afterRows = (await (await request.get(`${base}/task-types`)).json()) as Array<{ name: string }>
   expect(afterRows.map((x) => x.name)).toContain(renamedChild)
 
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const blocks = (await response.json()) as {
+      time_blocks: Array<{ id: number; task_type_id: number; task_type: { name: string } }>
+    }
+    const block = blocks.time_blocks.find((candidate) => candidate.id === blockId)
+    return block ? { taskTypeId: block.task_type_id, taskTypeName: block.task_type.name } : null
+  }).toEqual({ taskTypeId: childRow!.id, taskTypeName: renamedChild })
+
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await page.locator(`[data-block-id="${blockId}"]`).click()
@@ -419,7 +571,7 @@ test('draft-first: lane click shows ghost; block is created when task type is ch
   request,
 }) => {
   const date = '2026-06-20'
-  const base = 'http://127.0.0.1:18002'
+  const base = apiBase
   await page.goto(`/day/${date}`)
   await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
   await clearDayBlocks(request, base, date)
@@ -453,7 +605,10 @@ test('draft-first: lane click shows ghost; block is created when task type is ch
 
   await page.getByLabel('Task type', { exact: true }).fill('e2e draft')
   await page.getByRole('option', { name: /e2e draft/i }).click()
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    return ((await response.json()) as { time_blocks: Array<unknown> }).time_blocks.length
+  }).toBe(1)
 
   const rDay = await request.get(`${base}/days/${date}`)
   expect(rDay.ok()).toBeTruthy()
@@ -481,8 +636,8 @@ test('draft cleared when clicking outside the timeline', async ({ page }) => {
   await expect(page.getByTestId('draft-block')).toHaveCount(0)
 })
 
-test('Battle Plan creates a dated project task, persists subtask progress, moves, and restores it', async ({ page, request }) => {
-  const base = 'http://127.0.0.1:18002'
+test('Battle Plan creates a dated project task, persists subtask progress, trashes, and restores it', async ({ page, request }) => {
+  const base = apiBase
   const uniq = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
   const projectName = `Atlas ${uniq}`
   const taskTitle = `Launch brief ${uniq}`
@@ -514,28 +669,15 @@ test('Battle Plan creates a dated project task, persists subtask progress, moves
   await page.getByLabel(`New subtask for ${taskTitle}`).fill('Review sources')
   await page.getByLabel(`Add subtask to ${taskTitle}`).click()
   await expect(page.getByText('Review sources', { exact: true })).toBeVisible()
-  await page.getByLabel('Complete subtask Review sources').click()
+  await page.getByLabel('Check subtask Review sources').click()
   await expect(page.getByRole('button', { name: `1 of 1 subtasks completed for ${taskTitle}` })).toBeVisible()
 
   await page.reload()
   await expect(page.getByRole('button', { name: `1 of 1 subtasks completed for ${taskTitle}` })).toBeVisible()
 
-  const blocked = page.getByRole('region', { name: 'Blocked tasks' })
   const taskCard = page.locator('article[data-task-id]').filter({ hasText: taskTitle }).first()
-  const cardBox = await taskCard.boundingBox()
-  const blockedBox = await blocked.boundingBox()
-  expect(cardBox).toBeTruthy()
-  expect(blockedBox).toBeTruthy()
-  await page.mouse.move(cardBox!.x + cardBox!.width / 2, cardBox!.y + cardBox!.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(cardBox!.x + cardBox!.width / 2 + 2, cardBox!.y + cardBox!.height / 2 + 2)
-  await expect(taskCard).toHaveAttribute('data-dragging', 'true')
-  await page.mouse.move(blockedBox!.x + blockedBox!.width / 2, blockedBox!.y + 120, { steps: 12 })
-  await page.mouse.up()
-  const movedCard = blocked.getByRole('button', { name: `Move ${taskTitle}` })
-  await expect(movedCard).toBeVisible()
-
-  await movedCard.click()
+  await taskCard.click()
+  page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: 'Move to Trash' }).click()
   await expect(page.getByText('Moved to Trash')).toBeVisible()
   await page.getByRole('button', { name: 'Undo', exact: true }).click()

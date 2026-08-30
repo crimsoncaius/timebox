@@ -26,6 +26,8 @@ const dayPayload = {
       lane: 'planned' as const,
       task_type_id: 1,
       task_type: { id: 1, name: 'alpha', created_at: '', updated_at: '' },
+      task_id: 77,
+      task: { id: 77, title: 'Write launch narrative', status: 'open', task_type_id: 1 },
       note: null,
       start_minute: 480,
       end_minute: 510,
@@ -44,6 +46,7 @@ const dayPayload = {
       updated_at: '',
     },
   ],
+  actual_blocks: [],
 }
 
 const taskTypes = [
@@ -53,28 +56,37 @@ const taskTypes = [
 
 describe('TodayPage inspector rail', () => {
   const originalFetch = globalThis.fetch
+  let rejectNextTaskUndo = false
 
   beforeEach(() => {
+    rejectNextTaskUndo = false
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
+      if (url.includes('/planned-blocks/10/record-actual-as-planned') && method === 'POST') {
+        return Promise.resolve(jsonResponse({ actual_block: { id: 12 }, undo_token: 'record-undo' }, 201))
+      }
+      if (url.includes('/actual-blocks/start') && method === 'POST') {
+        return Promise.resolve(jsonResponse({
+          id: 40, task_type_id: 1, task_type: taskTypes[0], task_id: 77,
+          task: { id: 77, title: 'Write launch narrative', status: 'open', task_type_id: 1 },
+          note: null, planned_block_id: 10, start_at: '2026-06-01T12:00:00Z', end_at: null,
+          created_at: '', updated_at: '',
+        }, 201))
+      }
+      if (url.includes('/actual-blocks/40/finish') && method === 'POST') return Promise.resolve(jsonResponse({}))
+      if (url.includes('/tasks/77/complete') && method === 'POST') return Promise.resolve(jsonResponse({ task: {}, undo_token: 'task-undo', removed_planned_block_ids: [99, 100] }))
+      if (url.includes('/tasks/77/undo-completion') && method === 'POST') {
+        if (rejectNextTaskUndo) {
+          rejectNextTaskUndo = false
+          return Promise.resolve(jsonResponse({ detail: 'Task completion changed on another surface' }, 409))
+        }
+        return Promise.resolve(jsonResponse({}))
+      }
       if (url.includes('/days/2026-06-01') && !url.includes('/blocks')) {
         return Promise.resolve(jsonResponse(dayPayload))
       }
       if (url.includes('/days/2026-06-01/blocks') && method === 'POST') {
-        if (url.includes('/blocks/10/complete-as-planned')) {
-          return Promise.resolve(jsonResponse({
-            ...dayPayload,
-            time_blocks: [
-              ...dayPayload.time_blocks,
-              {
-                ...dayPayload.time_blocks[0],
-                id: 12,
-                lane: 'actual',
-              },
-            ],
-          }))
-        }
         const body = JSON.parse(String(init?.body)) as {
           task_id: number
           task_type_id: number
@@ -118,6 +130,15 @@ describe('TodayPage inspector rail', () => {
               task_type_id: 1,
               task_type: taskTypes[0],
               subtasks: [],
+              session_tasks: [{
+                id: 79,
+                title: 'Gym · Session 1',
+                ready_to_plan: true,
+                task_type_id: 1,
+                task_type: taskTypes[0],
+                status: 'open',
+                subtasks: [],
+              }],
             },
             {
               id: 78,
@@ -180,7 +201,30 @@ describe('TodayPage inspector rail', () => {
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('completes a planned block by swiping it right', async () => {
+  it('places a nested quota Session Task as an ordinary Planned Task', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+
+    const sessionTitle = (await screen.findAllByText('Gym · Session 1'))[0]!
+    await user.click(sessionTitle.closest('button')!)
+    const plannedLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')
+    expect(plannedLane).not.toBeNull()
+    fireEvent.click(plannedLane!, { clientY: 47 })
+
+    await waitFor(() => {
+      const createBlock = vi.mocked(globalThis.fetch).mock.calls.find(([input, init]) =>
+        String(input).includes('/days/2026-06-01/blocks') && init?.method === 'POST' &&
+        JSON.parse(String(init.body)).task_id === 79,
+      )
+      expect(createBlock).toBeDefined()
+      expect(JSON.parse(String(createBlock?.[1]?.body))).toMatchObject({
+        lane: 'planned', task_id: 79, task_type_id: 1,
+      })
+    })
+  })
+
+  it('records an Actual from a Planned Block with exact Undo', async () => {
+    const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/day/2026-06-01']}>
         <Routes>
@@ -189,31 +233,16 @@ describe('TodayPage inspector rail', () => {
       </MemoryRouter>,
     )
 
-    const plannedBlock = (await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!
-    fireEvent.pointerDown(plannedBlock, {
-      button: 0,
-      pointerId: 1,
-      clientX: 10,
-      clientY: 100,
-    })
-    fireEvent.pointerMove(window, {
-      pointerId: 1,
-      clientX: 90,
-      clientY: 100,
-    })
-    fireEvent.pointerUp(window, {
-      pointerId: 1,
-      clientX: 90,
-      clientY: 100,
-    })
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    await user.click((await screen.findAllByRole('button', { name: 'Record Actual as planned' }))[0]!)
 
     await waitFor(() => {
       expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
-        '/api/days/2026-06-01/blocks/10/complete-as-planned',
+        '/api/planned-blocks/10/record-actual-as-planned',
         expect.objectContaining({ method: 'POST' }),
       )
     })
-    expect(await screen.findByRole('button', { name: 'Edit actual block' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
 
   it('plans an untyped Ready to Plan task with the unspecified fallback', async () => {
@@ -255,6 +284,42 @@ describe('TodayPage inspector rail', () => {
         end_minute: 540,
       })
     })
+  })
+
+  it('finishes Work Mode and reports that the Task remains open', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    await user.click((await screen.findAllByRole('button', { name: 'Start Work Mode' }))[0]!)
+    await user.click(await screen.findByRole('button', { name: 'Finish session' }))
+    expect(await screen.findByText('Actual recorded · Task remains open.')).toBeVisible()
+  })
+
+  it('atomically completes from Work Mode and offers Task Undo on Day', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    await user.click((await screen.findAllByRole('button', { name: 'Start Work Mode' }))[0]!)
+    await user.click(await screen.findByRole('button', { name: 'Finish session + complete Task' }))
+    expect(await screen.findByText(/2 future Planned Blocks removed/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith('/api/tasks/77/undo-completion', expect.objectContaining({ method: 'POST' })))
+  })
+
+  it('renders an Undo conflict and keeps the completion token available for retry', async () => {
+    rejectNextTaskUndo = true
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    await user.click((await screen.findAllByRole('button', { name: 'Start Work Mode' }))[0]!)
+    await user.click(await screen.findByRole('button', { name: 'Finish session + complete Task' }))
+
+    await user.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(await screen.findByText('Task completion changed on another surface')).toBeVisible()
+    const retry = screen.getByRole('button', { name: 'Undo' })
+    expect(retry).toBeVisible()
+    await user.click(retry)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument())
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {

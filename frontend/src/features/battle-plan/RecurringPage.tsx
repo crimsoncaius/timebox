@@ -100,7 +100,7 @@ export function RecurringPage() {
     return () => { active = false }
   }, [])
 
-  const lifecycle = async (template: RecurringTemplate, action: 'pause' | 'resume' | 'end' | 'delete') => {
+  const lifecycle = async (template: RecurringTemplate, action: 'pause' | 'resume' | 'end') => {
     setError(null)
     try {
       if (action === 'pause') await api.pauseRecurringTemplate(template.id)
@@ -108,10 +108,6 @@ export function RecurringPage() {
       if (action === 'end') {
         if (!window.confirm(`End “${template.title}”? Future pristine tasks will be removed.`)) return
         await api.endRecurringTemplate(template.id)
-      }
-      if (action === 'delete') {
-        if (!window.confirm(`Permanently delete “${template.title}”? Generated tasks will be kept as ordinary tasks.`)) return
-        await api.deleteRecurringTemplate(template.id)
       }
       setSearchParams({ view: 'recurring' })
       await load(status)
@@ -246,7 +242,7 @@ function TemplateRow({ template, selected, onSelect, onEdit, onLifecycle }: {
   selected: boolean
   onSelect: () => void
   onEdit: () => void
-  onLifecycle: (action: 'pause' | 'resume' | 'end' | 'delete') => void
+  onLifecycle: (action: 'pause' | 'resume' | 'end') => void
 }) {
   return (
     <article className={`grid gap-3 border-b border-outline-variant/15 bg-surface-container-lowest px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(8rem,.7fr)_auto] sm:items-center dark:border-dark-outline-variant/30 dark:bg-dark-surface-container-lowest ${selected ? 'ring-1 ring-inset ring-primary/25' : ''}`}>
@@ -265,7 +261,6 @@ function TemplateRow({ template, selected, onSelect, onEdit, onLifecycle }: {
         {template.status === 'active' ? <button type="button" className={`${buttonClass} px-2.5 py-1.5 text-xs hover:bg-surface-container-low`} onClick={() => onLifecycle('pause')}>Pause</button> : null}
         {template.status === 'paused' ? <button type="button" className={`${buttonClass} px-2.5 py-1.5 text-xs hover:bg-surface-container-low`} onClick={() => onLifecycle('resume')}>Resume</button> : null}
         {template.status !== 'ended' ? <button type="button" className={`${buttonClass} px-2.5 py-1.5 text-xs text-error hover:bg-error-container/10`} onClick={() => onLifecycle('end')}>End</button> : null}
-        {template.status === 'ended' ? <button type="button" className={`${buttonClass} px-2.5 py-1.5 text-xs text-error hover:bg-error-container/10`} onClick={() => onLifecycle('delete')}>Delete</button> : null}
       </div>
     </article>
   )

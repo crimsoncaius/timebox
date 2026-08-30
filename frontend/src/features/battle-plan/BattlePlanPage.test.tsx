@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BattlePlanPage } from './BattlePlanPage'
-import type { BattleTask, Project, TaskType } from '../../lib/api'
+import type { BattleTask, Project, Subtask, TaskType } from '../../lib/api'
 
 const project: Project = {
   id: 7,
@@ -56,6 +56,10 @@ function response(data: unknown, status = 200) {
   return status === 204
     ? new Response(null, { status })
     : new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+function subtask(overrides: Partial<Subtask> = {}): Subtask {
+  return { id: 21, parent_task_id: 11, title: 'Check figures', checked: false, effectively_resolved: false, position: 0, created_at: '', updated_at: '', ...overrides }
 }
 
 function shortDate(value: string) {
@@ -119,7 +123,7 @@ describe('BattlePlanPage', () => {
         })
         if (body.parent_id != null) {
           activeTasks = activeTasks.map((row) => row.id === body.parent_id
-            ? { ...row, subtasks: [...row.subtasks, { ...created, project_id: row.project_id, project: row.project }] }
+            ? { ...row, subtasks: [...row.subtasks, subtask({ id: created.id, parent_task_id: row.id, title: created.title, position: row.subtasks.length })] }
             : row)
         } else {
           activeTasks = [...activeTasks, created]
@@ -134,12 +138,7 @@ describe('BattlePlanPage', () => {
             completed = { ...row, status: 'completed' }
             return completed
           }
-          const subtasks = row.subtasks.map((subtask) => {
-            if (subtask.id !== id) return subtask
-            completed = { ...subtask, status: 'completed' }
-            return completed
-          })
-          return { ...row, subtasks }
+          return row
         })
         return response({ task: completed, undo_token: `undo-${id}`, removed_planned_block_ids: [] })
       }
@@ -151,12 +150,7 @@ describe('BattlePlanPage', () => {
             reopened = { ...row, status: 'open' }
             return reopened
           }
-          const subtasks = row.subtasks.map((subtask) => {
-            if (subtask.id !== id) return subtask
-            reopened = { ...subtask, status: 'open' }
-            return reopened
-          })
-          return { ...row, subtasks }
+          return row
         })
         return response(reopened)
       }
@@ -169,14 +163,17 @@ describe('BattlePlanPage', () => {
             patched = { ...row, ...body }
             return patched
           }
-          const subtasks = row.subtasks.map((subtask) => {
-            if (subtask.id !== id) return subtask
-            patched = { ...subtask, ...body }
-            return patched
-          })
-          return { ...row, subtasks }
+          return row
         })
         return response(patched)
+      }
+      const subtaskAction = /\/subtasks\/(\d+)\/(check|uncheck)$/.exec(url)
+      if (subtaskAction && method === 'POST') {
+        const id = Number(subtaskAction[1])
+        const checked = subtaskAction[2] === 'check'
+        let updated: Subtask | undefined
+        activeTasks = activeTasks.map((row) => ({ ...row, subtasks: row.subtasks.map((item) => item.id === id ? (updated = { ...item, checked, effectively_resolved: checked }) : item) }))
+        return response(updated)
       }
       return response({ detail: 'not found' }, 404)
     }) as typeof fetch
@@ -209,27 +206,6 @@ describe('BattlePlanPage', () => {
 
     await user.click(planned)
     expect(screen.getByRole('dialog', { name: 'Task details' })).toBeInTheDocument()
-  })
-
-  it('shows allocation progress and links allocation details to the exact Day block', async () => {
-    activeTasks = [task({
-      allocation_total: 3,
-      allocation_completed: 2,
-      allocations: [
-        { block_id: 71, date: '2026-08-14', start_minute: 540, end_minute: 600, time_completed: true },
-        { block_id: 72, date: '2026-08-15', start_minute: 630, end_minute: 660, time_completed: false },
-        { block_id: 73, date: '2026-08-17', start_minute: 720, end_minute: 780, time_completed: true },
-      ],
-    })]
-    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
-
-    expect(await screen.findByText('2/3 time blocks')).toBeInTheDocument()
-    const section = await screen.findByRole('region', { name: 'Allocated time' })
-    expect(within(section).getByText('2/3 time blocks completed')).toBeInTheDocument()
-    expect(within(section).getByRole('link', { name: /Today.*10:30–11:00.*Time incomplete/i }))
-      .toHaveAttribute('href', '/day/2026-08-15?block=72')
-    expect(within(section).getByRole('link', { name: /14 Aug.*09:00–10:00.*Time completed/i }))
-      .toHaveAttribute('href', '/day/2026-08-14?block=71')
   })
 
   it('shows five planned dates in details, expands inline, and links every date to Day', async () => {
@@ -459,18 +435,15 @@ describe('BattlePlanPage', () => {
     const user = userEvent.setup()
     activeTasks = [task({
       deadline_date: '2026-08-15',
-      subtasks: [task({ id: 21, parent_id: 11, title: 'Check figures', status: 'in_progress', deadline_date: '2026-08-16', planned_dates: ['2026-08-16'], subtasks: [] })],
+      subtasks: [subtask()],
     })]
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
 
     await user.click(await screen.findByRole('button', { name: '0 of 1 subtasks completed for Draft launch brief' }))
-    const checklist = screen.getByRole('region', { name: 'Subtasks for Draft launch brief' })
-    expect(within(checklist).getByText('In progress')).toBeInTheDocument()
+    screen.getByRole('region', { name: 'Subtasks for Draft launch brief' })
     expect(screen.getByText('Today')).toBeInTheDocument()
-    expect(within(checklist).getByText('Tomorrow')).toBeInTheDocument()
-    expect(within(checklist).getByLabelText(`Planned Tomorrow · ${shortDate('2026-08-16')}`)).toBeInTheDocument()
 
-    await user.click(screen.getByLabelText('Complete subtask Check figures'))
+    await user.click(screen.getByLabelText('Check subtask Check figures'))
     await waitFor(() => expect(screen.getByRole('button', { name: '1 of 1 subtasks completed for Draft launch brief' })).toBeInTheDocument())
     expect(screen.queryByRole('dialog', { name: 'Task details' })).not.toBeInTheDocument()
 

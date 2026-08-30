@@ -16,6 +16,7 @@ const day: DayRead = {
   created_at: '',
   updated_at: '',
   time_blocks: [],
+  actual_blocks: [],
   meta: { timezone: 'UTC', today: '2026-06-01', server_now_iso: '2026-06-01T12:00:00Z' },
 }
 

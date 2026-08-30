@@ -4,6 +4,41 @@ export const SLOT_MINUTES = 30
 export const TIMELINE_SLOT_HEIGHT_PX = 46
 export const MINUTES_PER_DAY = 24 * 60
 
+/** Convert an IANA-zone wall-clock minute to an authoritative UTC instant. */
+export function zonedLocalDateTimeToIso(local: string, timezone: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local)
+  if (!match) throw new Error('Use a complete date and minute')
+  const desired = match.slice(1).map(Number)
+  const wanted = Date.UTC(desired[0], desired[1] - 1, desired[2], desired[3], desired[4])
+  const normalized = new Date(wanted)
+  if (
+    normalized.getUTCFullYear() !== desired[0]
+    || normalized.getUTCMonth() !== desired[1] - 1
+    || normalized.getUTCDate() !== desired[2]
+    || normalized.getUTCHours() !== desired[3]
+    || normalized.getUTCMinutes() !== desired[4]
+  ) throw new Error('Use a valid local date and minute')
+
+  let instant = wanted
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  })
+  const partsAt = (value: number) => {
+    const values = Object.fromEntries(formatter.formatToParts(new Date(value)).map((part) => [part.type, part.value]))
+    return [Number(values.year), Number(values.month), Number(values.day), Number(values.hour), Number(values.minute)]
+  }
+  for (let pass = 0; pass < 4; pass += 1) {
+    const observedParts = partsAt(instant)
+    const observed = Date.UTC(observedParts[0], observedParts[1] - 1, observedParts[2], observedParts[3], observedParts[4])
+    instant += wanted - observed
+  }
+  if (partsAt(instant).some((value, index) => value !== desired[index])) {
+    throw new Error('That local time does not exist in the configured timezone')
+  }
+  return new Date(instant).toISOString()
+}
+
 /**
  * Minute band during move-drag: ~25% of a slot before snapping to the next valid landing
  * (stable preview at slot boundaries).

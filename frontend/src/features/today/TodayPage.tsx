@@ -10,14 +10,15 @@ import {
 import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { TimeBlockModal } from '../../components/TimeBlockModal'
-import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
-import { WorkModePrototype } from './WorkModePrototype'
+import { api, type ActualBlock, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
+import { WorkMode } from './WorkMode'
 import {
   addDaysIso,
   minuteFromPointerYInVisibleLane,
   SLOT_MINUTES,
   TIMELINE_SLOT_HEIGHT_PX,
   visibleMinuteRange,
+  zonedLocalDateTimeToIso,
 } from '../../lib/time'
 
 function formatDisplayDate(isoDate: string): string {
@@ -41,14 +42,22 @@ export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const workModePrototype = import.meta.env.DEV && searchParams.get('prototype') === 'work-mode'
   const [day, setDay] = useState<DayRead | null>(null)
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [battleTasks, setBattleTasks] = useState<BattleTask[]>([])
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string } | null>(null)
+  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
+  const [dayNotice, setDayNotice] = useState<string | null>(null)
+  const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
+  const [workModeActual, setWorkModeActual] = useState<ActualBlock | null>(null)
+  const [workModeBusy, setWorkModeBusy] = useState(false)
+  const [workModeError, setWorkModeError] = useState<string | null>(null)
+  const allBattleTasks = useMemo(
+    () => battleTasks.flatMap((task) => [task, ...(task.session_tasks ?? [])]),
+    [battleTasks],
+  )
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null)
   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
   const [inspectorDirty, setInspectorDirty] = useState(false)
@@ -59,7 +68,7 @@ export function TodayPage() {
   const [planningTaskBusyId, setPlanningTaskBusyId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
-    if (!date || workModePrototype) return
+    if (!date) return
     setLoading(true)
     setError(null)
     try {
@@ -76,7 +85,7 @@ export function TodayPage() {
     } finally {
       setLoading(false)
     }
-  }, [date, workModePrototype])
+  }, [date])
 
   useEffect(() => {
     void load()
@@ -158,9 +167,7 @@ export function TodayPage() {
   const planReadyTaskAt = useCallback(
     async (taskId: number, startMinute: number) => {
       if (!date || !day || planningTaskInFlightRef.current) return
-      const task = battleTasks
-        .flatMap((item) => [item, ...item.subtasks])
-        .find((item) => item.id === taskId && item.ready_to_plan)
+      const task = allBattleTasks.find((item) => item.id === taskId && item.ready_to_plan)
       if (!task) return
 
       const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
@@ -195,9 +202,10 @@ export function TodayPage() {
           items.map((item) => ({
             ...item,
             ready_to_plan: item.id === task.id ? false : item.ready_to_plan,
-            subtasks: item.subtasks.map((subtask) =>
-              subtask.id === task.id ? { ...subtask, ready_to_plan: false } : subtask,
-            ),
+            session_tasks: item.session_tasks?.map((session) => ({
+              ...session,
+              ready_to_plan: session.id === task.id ? false : session.ready_to_plan,
+            })),
           })),
         )
         const refreshed = await api.listBattleTasks('active').catch(() => null)
@@ -209,15 +217,13 @@ export function TodayPage() {
         setPlanningTaskBusyId(null)
       }
     },
-    [battleTasks, date, day, resolvePlanningTaskType],
+    [allBattleTasks, date, day, resolvePlanningTaskType],
   )
 
   const onLaneSlotClick = useCallback(
     (lane: BlockLane, startMin: number, endMin: number) => {
       if (!tryDiscardIfNeeded()) return
-      const planningTask = battleTasks
-        .flatMap((task) => [task, ...task.subtasks])
-        .find((task) => task.id === planningTaskId)
+      const planningTask = allBattleTasks.find((task) => task.id === planningTaskId)
       if (lane === 'planned' && planningTask) {
         void planReadyTaskAt(planningTask.id, startMin)
         return
@@ -231,7 +237,7 @@ export function TodayPage() {
       })
       setSelectedBlockId(null)
     },
-    [battleTasks, planReadyTaskAt, planningTaskId, tryDiscardIfNeeded],
+    [allBattleTasks, planReadyTaskAt, planningTaskId, tryDiscardIfNeeded],
   )
 
   const onReadyTaskDragEnd = useCallback(
@@ -297,13 +303,24 @@ export function TodayPage() {
       draftCommitInFlightRef.current = true
       setError(null)
       try {
+        if (draft.lane === 'actual') {
+          if (!day) return
+          const local = (minute: number) => `${date}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
+          const actual = await api.createActualBlock({
+            task_type_id: payload.task_type_id,
+            task_id: draft.task_id ?? null,
+            note: payload.note,
+            start_at: zonedLocalDateTimeToIso(local(draft.start_minute), day.meta.timezone),
+            end_at: zonedLocalDateTimeToIso(local(draft.end_minute), day.meta.timezone),
+          })
+          setDay(await api.getDay(date))
+          setDraft(null)
+          setWorkModeActual(actual)
+          return
+        }
         const next = await api.createBlock(date, {
-          lane: draft.lane,
-          task_type_id: payload.task_type_id,
-          task_id: draft.task_id ?? null,
-          note: payload.note ?? undefined,
-          start_minute: draft.start_minute,
-          end_minute: draft.end_minute,
+          lane: 'planned', task_type_id: payload.task_type_id, task_id: draft.task_id ?? null,
+          note: payload.note ?? undefined, start_minute: draft.start_minute, end_minute: draft.end_minute,
         })
         setDay(next)
         const created = next.time_blocks.find(
@@ -327,7 +344,7 @@ export function TodayPage() {
         draftCommitInFlightRef.current = false
       }
     },
-    [date, draft],
+    [date, day, draft],
   )
 
   const patchBlock = useCallback(
@@ -371,15 +388,16 @@ export function TodayPage() {
     [date],
   )
 
-  const completeBlockAsPlanned = useCallback(
+  const recordActualAsPlanned = useCallback(
     async (blockId: number) => {
       if (!date) return
       setError(null)
       try {
-        const next = await api.completeBlockAsPlanned(date, blockId)
-        setDay(next)
+        const result = await api.recordActualAsPlanned(blockId)
+        setRecordActualUndo({ plannedBlockId: blockId, token: result.undo_token })
+        setDay(await api.getDay(date))
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to complete block'
+        const msg = e instanceof Error ? e.message : 'Failed to record Actual as planned'
         setError(msg)
         throw e
       }
@@ -387,76 +405,17 @@ export function TodayPage() {
     [date],
   )
 
-  const setBlockTimeCompleted = useCallback(
-    async (blockId: number, completed: boolean) => {
-      if (!date) return
-      setError(null)
-      try {
-        const next = completed
-          ? await api.completeBlockAsPlanned(date, blockId)
-          : await api.reverseBlockCompletion(date, blockId)
-        setDay(next)
-        const refreshed = await api.listBattleTasks('active').catch(() => null)
-        if (refreshed) setBattleTasks(refreshed.items)
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to update Time completion'
-        setError(msg)
-        throw e
-      }
-    },
-    [date],
-  )
-
-  const setLinkedTaskCompleted = useCallback(
-    async (taskId: number, completed: boolean) => {
-      if (!date || !day) return
-      setError(null)
-      try {
-        if (completed) {
-          const rootsAndChildren = battleTasks.flatMap((task) => [task, ...task.subtasks])
-          const selected = rootsAndChildren.find((task) => task.id === taskId)
-          const affected = selected?.parent_id == null && selected
-            ? [selected, ...selected.subtasks]
-            : selected ? [selected] : []
-          const futureIncomplete = affected.some((task) =>
-            task.allocations?.some(
-              (allocation) => !allocation.time_completed && allocation.date >= day.meta.today,
-            ),
-          )
-          if (selected && selected.parent_id == null && selected.subtasks.length > 0) {
-            if (!window.confirm(`Complete “${selected.title}” and all of its subtasks?`)) return
-          }
-          let plannedTime: 'keep' | 'remove' = 'keep'
-          if (futureIncomplete) {
-            const choice = window.prompt(
-              'This Task has incomplete planned time today or later. Type “keep” or “remove”; Cancel leaves the Task unchanged.',
-              'keep',
-            )
-            if (choice == null) return
-            const normalized = choice.trim().toLowerCase()
-            if (normalized !== 'keep' && normalized !== 'remove') return
-            plannedTime = normalized
-          }
-          const result = await api.completeBattleTask(taskId, plannedTime)
-          setCompletionUndo({ taskId, token: result.undo_token })
-        } else {
-          await api.reopenBattleTask(taskId)
-          setCompletionUndo(null)
-        }
-        const [nextDay, refreshed] = await Promise.all([
-          api.getDay(date),
-          api.listBattleTasks('active'),
-        ])
-        setDay(nextDay)
-        setBattleTasks(refreshed.items)
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to update Task completion'
-        setError(msg)
-        throw e
-      }
-    },
-    [battleTasks, date, day],
-  )
+  const startWorkMode = useCallback(async (block: NonNullable<typeof selectedBlock>) => {
+    setError(null)
+    try {
+      const actual = await api.startActualBlock({ planned_block_id: block.id })
+      setWorkModeActual(actual)
+      setSelectedBlockId(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Failed to start Work Mode')
+      throw cause
+    }
+  }, [])
 
   const createTaskTypePath = useCallback(async (name: string) => {
     setError(null)
@@ -473,18 +432,20 @@ export function TodayPage() {
   }, [])
 
   const onBlockClick = useCallback(
-    (blockId: number): boolean => {
+    (blockId: number, lane: BlockLane): boolean => {
       if (!tryDiscardIfNeeded()) return false
       setDraft(null)
+      if (lane === 'actual' && day) {
+        const actual = day.actual_blocks.find((projection) => projection.actual_block.id === blockId)?.actual_block
+        if (actual) setWorkModeActual(actual)
+        setSelectedBlockId(null)
+        return Boolean(actual)
+      }
       setSelectedBlockId(blockId)
       return true
     },
-    [tryDiscardIfNeeded],
+    [day, tryDiscardIfNeeded],
   )
-
-  if (workModePrototype && date) {
-    return <WorkModePrototype date={date} />
-  }
 
   if (!date) {
     return (
@@ -523,30 +484,24 @@ export function TodayPage() {
       if (!selectedBlock) return Promise.resolve()
       return deleteBlock(selectedBlock.id)
     },
-    onCompleteAsPlanned:
+    onStartWorkMode:
       selectedBlock?.lane === 'planned'
-        ? () => {
-            if (!selectedBlock) return Promise.resolve()
-            return completeBlockAsPlanned(selectedBlock.id)
-          }
+        ? () => selectedBlock ? startWorkMode(selectedBlock) : Promise.resolve()
         : undefined,
-    onSetTimeCompleted:
+    onRecordActualAsPlanned:
       selectedBlock?.lane === 'planned'
-        ? (completed: boolean) => setBlockTimeCompleted(selectedBlock.id, completed)
-        : undefined,
-    onSetTaskCompleted:
-      selectedBlock?.task
-        ? (completed: boolean) => setLinkedTaskCompleted(selectedBlock.task!.id, completed)
+        ? () => selectedBlock ? recordActualAsPlanned(selectedBlock.id) : Promise.resolve()
         : undefined,
     onCreateTaskTypePath: createTaskTypePath,
     onDirtyChange: setInspectorDirty,
   }
 
   const mobileSheetOpen = selectedBlock != null || draft != null
-  const readyTasks = battleTasks
-    .flatMap((task) => [task, ...task.subtasks])
-    .filter((task) => task.ready_to_plan)
+  const readyTasks = allBattleTasks.filter((task) => task.ready_to_plan)
   const planningTask = readyTasks.find((task) => task.id === planningTaskId) ?? null
+  const workModeTask = workModeActual?.task_id == null
+    ? null
+    : allBattleTasks.find((task) => task.id === workModeActual.task_id) ?? null
 
   return (
     <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
@@ -613,18 +568,35 @@ export function TodayPage() {
 
           {completionUndo ? (
             <div className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">
-              <span>Task completed.</span>
+              <span>Task completed · {completionUndo.removed} future Planned {completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.</span>
               <button
                 type="button"
                 className="font-medium text-primary underline"
                 onClick={async () => {
-                  await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
-                  setCompletionUndo(null)
-                  await load()
+                  setError(null)
+                  try {
+                    await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
+                    setCompletionUndo(null)
+                    await load()
+                  } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo Task Completion') }
                 }}
               >
                 Undo
               </button>
+            </div>
+          ) : null}
+          {dayNotice ? <div role="status" className="mb-6 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">{dayNotice}</div> : null}
+          {recordActualUndo ? (
+            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">
+              <span>Actual recorded as planned.</span>
+              <button type="button" className="font-medium text-primary underline" onClick={async () => {
+                setError(null)
+                try {
+                  await api.undoRecordActualAsPlanned(recordActualUndo.plannedBlockId, recordActualUndo.token)
+                  setRecordActualUndo(null)
+                  setDay(await api.getDay(date))
+                } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo recorded Actual') }
+              }}>Undo</button>
             </div>
           ) : null}
 
@@ -658,8 +630,7 @@ export function TodayPage() {
               onLaneSlotClick={onLaneSlotClick}
               onDraftTimeChange={onDraftTimeChange}
               onPatchBlock={patchBlock}
-              onBlockClick={(blockId) => onBlockClick(blockId)}
-              onCompleteBlockAsPlanned={completeBlockAsPlanned}
+              onBlockClick={onBlockClick}
               onBlockDragSessionChange={setBlockDragActive}
             />
           </section>
@@ -727,9 +698,8 @@ export function TodayPage() {
             onSave={inspectorSharedProps.onSave}
             onCreateFromDraft={commitDraft}
             onDelete={inspectorSharedProps.onDelete}
-            onCompleteAsPlanned={inspectorSharedProps.onCompleteAsPlanned}
-            onSetTimeCompleted={inspectorSharedProps.onSetTimeCompleted}
-            onSetTaskCompleted={inspectorSharedProps.onSetTaskCompleted}
+            onStartWorkMode={inspectorSharedProps.onStartWorkMode}
+            onRecordActualAsPlanned={inspectorSharedProps.onRecordActualAsPlanned}
             onCreateTaskTypePath={createTaskTypePath}
             onDirtyChange={setInspectorDirty}
             blockDragActive={blockDragActive}
@@ -737,6 +707,58 @@ export function TodayPage() {
         </div>
       </div>
       </DragDropProvider>
+      {workModeActual ? (
+        <WorkMode
+          actual={workModeActual}
+          task={workModeTask}
+          timezone={day.meta.timezone}
+          busy={workModeBusy}
+          error={workModeError}
+          onClose={() => setWorkModeActual(null)}
+          onSave={async ({ startLocal, endLocal }) => {
+            setWorkModeBusy(true); setWorkModeError(null)
+            try {
+              const updated = await api.patchActualBlock(workModeActual.id, {
+                start_at: zonedLocalDateTimeToIso(startLocal, day.meta.timezone),
+                ...(endLocal ? { end_at: zonedLocalDateTimeToIso(endLocal, day.meta.timezone) } : {}),
+              })
+              setWorkModeActual(updated)
+              setDay(await api.getDay(date))
+            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to update Actual time') }
+            finally { setWorkModeBusy(false) }
+          }}
+          onSetSubtask={async (id, checked) => {
+            setWorkModeBusy(true); setWorkModeError(null)
+            try {
+              if (checked) await api.checkSubtask(id); else await api.uncheckSubtask(id)
+              setBattleTasks((await api.listBattleTasks('active')).items)
+            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to update Subtask') }
+            finally { setWorkModeBusy(false) }
+          }}
+          onFinish={async () => {
+            setWorkModeBusy(true); setWorkModeError(null)
+            try {
+              await api.finishActualBlock(workModeActual.id)
+              setWorkModeActual(null)
+              setDayNotice(workModeTask ? 'Actual recorded · Task remains open.' : 'Actual recorded.')
+              setDay(await api.getDay(date))
+            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to finish session') }
+            finally { setWorkModeBusy(false) }
+          }}
+          onFinishAndComplete={async () => {
+            if (!workModeTask) return
+            setWorkModeBusy(true); setWorkModeError(null)
+            try {
+              const result = await api.completeBattleTask(workModeTask.id)
+              setCompletionUndo({ taskId: workModeTask.id, token: result.undo_token, removed: result.removed_planned_block_ids.length })
+              setDayNotice(null)
+              setWorkModeActual(null)
+              await load()
+            } catch (cause) { setWorkModeError(cause instanceof Error ? cause.message : 'Failed to complete Task') }
+            finally { setWorkModeBusy(false) }
+          }}
+        />
+      ) : null}
     </Layout>
   )
 }
