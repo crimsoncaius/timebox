@@ -509,43 +509,69 @@ private fun MobileKanbanBoard(
                 DropdownMenu(
                     expanded = scopeMenu,
                     onDismissRequest = { scopeMenu = false },
-                    modifier = Modifier.width(280.dp),
+                    modifier = Modifier
+                        .width(304.dp)
+                        .testTag("battle-plan-scope-menu"),
+                    shape = TimeboxShapes.group,
+                    containerColor = colors.raised,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
                 ) {
-                    MenuSectionLabel("Tasks")
-                    state.scopes.filter { it.kind != BattlePlanScopeKind.Project }.forEach { scope ->
-                        ScopeMenuItem(
-                            label = scope.label,
-                            icon = when (scope.kind) {
-                                BattlePlanScopeKind.All -> Icons.AutoMirrored.Outlined.ListAlt
-                                BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
-                                BattlePlanScopeKind.Project -> Icons.Outlined.Folder
-                            },
-                            selected = scope.preferenceKey == state.selectedScope.preferenceKey,
-                            onClick = { scopeMenu = false; onSelectScope(scope) },
-                        )
-                    }
-                    MenuSectionLabel("Projects")
-                    state.scopes.filter { it.kind == BattlePlanScopeKind.Project }.forEach { scope ->
-                        ScopeMenuItem(
-                            label = scope.label,
-                            icon = Icons.Outlined.Folder,
-                            selected = scope.preferenceKey == state.selectedScope.preferenceKey,
-                            onClick = { scopeMenu = false; onSelectScope(scope) },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text("New project", style = TimeboxTheme.type.label) },
-                        leadingIcon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                        onClick = { scopeMenu = false; onNewProject() },
-                    )
+                    Column(
+                        modifier = Modifier.padding(11.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        val taskScopes = state.scopes.filter { it.kind != BattlePlanScopeKind.Project }
+                        ScopeMenuInsetSection("Tasks", "battle-plan-scope-menu-tasks") {
+                            taskScopes.forEachIndexed { index, scope ->
+                                ScopeMenuItem(
+                                    label = scope.label,
+                                    icon = when (scope.kind) {
+                                        BattlePlanScopeKind.All -> Icons.AutoMirrored.Outlined.ListAlt
+                                        BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
+                                        BattlePlanScopeKind.Project -> Icons.Outlined.Folder
+                                    },
+                                    selected = scope.preferenceKey == state.selectedScope.preferenceKey,
+                                    onClick = { scopeMenu = false; onSelectScope(scope) },
+                                )
+                                if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
+                            }
+                        }
 
-                    HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = colors.hairline)
-                    MenuSectionLabel("Library")
-                    ScopeMenuItem("Recurring", Icons.Outlined.Repeat) { scopeMenu = false; onOpenRecurring() }
-                    ScopeMenuItem("Archive", Icons.Outlined.Archive) { scopeMenu = false; onSelectCollection(TaskCollection.Archived) }
-                    ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
-                        scopeMenu = false
-                        onSelectCollection(TaskCollection.Trash)
+                        val projectScopes = state.scopes.filter { it.kind == BattlePlanScopeKind.Project }
+                        ScopeMenuInsetSection("Projects", "battle-plan-scope-menu-projects") {
+                            projectScopes.forEach { scope ->
+                                ScopeMenuItem(
+                                    label = scope.label,
+                                    icon = Icons.Outlined.Folder,
+                                    selected = scope.preferenceKey == state.selectedScope.preferenceKey,
+                                    onClick = { scopeMenu = false; onSelectScope(scope) },
+                                )
+                                ScopeMenuInsetDivider()
+                            }
+                            ScopeMenuItem(
+                                label = "New project",
+                                icon = Icons.Outlined.Add,
+                                onClick = { scopeMenu = false; onNewProject() },
+                            )
+                        }
+
+                        ScopeMenuInsetSection("Library", "battle-plan-scope-menu-library") {
+                            ScopeMenuItem("Recurring", Icons.Outlined.Repeat) {
+                                scopeMenu = false
+                                onOpenRecurring()
+                            }
+                            ScopeMenuInsetDivider()
+                            ScopeMenuItem("Archive", Icons.Outlined.Archive) {
+                                scopeMenu = false
+                                onSelectCollection(TaskCollection.Archived)
+                            }
+                            ScopeMenuInsetDivider()
+                            ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
+                                scopeMenu = false
+                                onSelectCollection(TaskCollection.Trash)
+                            }
+                        }
                     }
                 }
             }
@@ -938,6 +964,42 @@ private fun MenuSectionLabel(label: String) {
 }
 
 @Composable
+private fun ScopeMenuInsetSection(
+    label: String,
+    testTag: String,
+    content: @Composable () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    Column {
+        Text(
+            text = label.uppercase(),
+            style = TimeboxTheme.type.laneLabel,
+            color = colors.onVariant,
+            modifier = Modifier
+                .padding(start = 4.dp, bottom = 6.dp)
+                .semantics { heading() },
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(TimeboxShapes.card)
+                .background(colors.low)
+                .testTag(testTag),
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ScopeMenuInsetDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 48.dp),
+        color = TimeboxTheme.colors.hairline,
+    )
+}
+
+@Composable
 private fun ScopeMenuItem(
     label: String,
     icon: ImageVector,
@@ -953,16 +1015,35 @@ private fun ScopeMenuItem(
                 text = label,
                 style = TimeboxTheme.type.label,
                 color = contentColor,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        leadingIcon = { Icon(icon, contentDescription = null, tint = contentColor) },
+        leadingIcon = {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(TimeboxShapes.chip)
+                    .background(if (selected) colors.lowest else colors.raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+        },
         trailingIcon = if (selected) {
             { Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = colors.on) }
         } else null,
         onClick = onClick,
-        modifier = Modifier.background(if (selected) colors.surf else colors.lowest),
+        contentPadding = PaddingValues(horizontal = 13.dp, vertical = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = TimeboxDimens.touchTarget)
+            .background(if (selected) colors.selected else Color.Transparent),
     )
 }
 

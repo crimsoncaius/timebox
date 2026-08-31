@@ -121,7 +121,15 @@ class BattlePlanScreenTest {
         }
 
         compose.onNodeWithText("All Tasks", substring = true).performClick()
+        compose.onNodeWithTag("battle-plan-scope-menu").fetchSemanticsNode()
+        compose.onNodeWithTag("battle-plan-scope-menu-tasks").fetchSemanticsNode()
+        compose.onNodeWithTag("battle-plan-scope-menu-projects").fetchSemanticsNode()
+        compose.onNodeWithTag("battle-plan-scope-menu-library").fetchSemanticsNode()
+        compose.onNodeWithContentDescription("Selected").fetchSemanticsNode()
         compose.onNodeWithText("Admin").fetchSemanticsNode()
+        compose.onNodeWithText("New project").fetchSemanticsNode()
+        compose.onNodeWithText("Archive").fetchSemanticsNode()
+        compose.onNodeWithText("Trash").fetchSemanticsNode()
         compose.onNodeWithText("Recurring").performClick()
         compose.runOnIdle { check(recurringOpened) }
         compose.onNodeWithText("Open", substring = true).fetchSemanticsNode()
