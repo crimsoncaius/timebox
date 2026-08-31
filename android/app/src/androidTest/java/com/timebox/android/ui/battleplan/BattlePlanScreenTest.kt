@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.timebox.android.data.BattleTask
+import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.theme.DarkTimeboxColors
@@ -95,6 +96,47 @@ class BattlePlanScreenTest {
         compose.onNodeWithText(formatPlannedDetailDate(LocalDate.of(2026, 8, 22), LocalDate.of(2026, 8, 22))).performScrollTo().performClick()
         compose.runOnIdle { check(openedDay == LocalDate.of(2026, 8, 22)) }
         compose.onNodeWithText("Show less").fetchSemanticsNode()
+    }
+
+    @Test
+    fun taskDetailsEditModeRevealsFieldsAndForwardsDashboardChanges() {
+        var readyToPlan: Boolean? = null
+        var importance: PriorityLevel? = null
+        val task = battleTask(1)
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskDetailScreen(
+                    state = TaskDetailUiState(
+                        taskId = task.id,
+                        loading = false,
+                        task = task,
+                        title = task.title,
+                        description = "Draft the launch brief.",
+                    ),
+                    onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
+                    onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
+                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = { importance = it },
+                    onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
+                    onReminderEnabledChange = {}, notificationsAllowed = true,
+                    onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = { readyToPlan = it },
+                    onOpenDay = { _, _ -> }, onAddSubtask = {}, onToggleSubtask = {},
+                    onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
+                    onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
+                    onConfirmTrash = {}, onTrashed = {}, onReopen = {}, onSave = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Edit details").performClick()
+        compose.onNodeWithText("Tap a block or chip below to change that detail.").fetchSemanticsNode()
+        compose.onNodeWithText("Ready to Plan").performClick()
+        compose.onNodeWithContentDescription("Change importance").performClick()
+        compose.onNodeWithText("High").performClick()
+
+        compose.runOnIdle {
+            check(readyToPlan == true)
+            check(importance == PriorityLevel.High)
+        }
     }
 
     @Test
