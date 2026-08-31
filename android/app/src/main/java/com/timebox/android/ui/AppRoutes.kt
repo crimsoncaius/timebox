@@ -22,6 +22,7 @@ object AppRoutes {
     const val RecurringEditPattern = "battle-plan/recurring/{$TemplateIdArg}/edit"
     const val Types = "types"
     const val Settings = "settings"
+    const val ThemePreview = "settings/theme-preview"
 
     const val TaskDeepLinkPattern = "timebox://battle-plan/task/{$TaskIdArg}"
 

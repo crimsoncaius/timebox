@@ -2,10 +2,12 @@ package com.timebox.android.ui.theme
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.timebox.android.R
 
 /**
  * The design uses three families:
@@ -14,14 +16,22 @@ import androidx.compose.ui.unit.sp
  *  - Inter for body, labels and buttons
  *  - a monospace face for times, durations and paths
  *
- * Manrope and Inter are not bundled: adding them means dropping binary font files
- * into `res/font`. Until then both fall back to the platform sans face, which keeps
- * every weight and size from the design intact. To switch on the real faces, drop
- * `manrope_*.ttf` / `inter_*.ttf` into `app/src/main/res/font` and replace the two
- * families below with `FontFamily(Font(R.font.manrope_extralight, FontWeight.ExtraLight), ...)`.
+ * Manrope and Inter are bundled as their official Google Fonts variable builds.
+ * Declaring the weights here lets Compose resolve the requested axis consistently
+ * without falling back to the device's system sans face.
  */
-val HeadlineFamily: FontFamily = FontFamily.SansSerif
-val BodyFamily: FontFamily = FontFamily.SansSerif
+val HeadlineFamily: FontFamily = FontFamily(
+    Font(R.font.manrope_variable, FontWeight.ExtraLight),
+    Font(R.font.manrope_variable, FontWeight.Light),
+    Font(R.font.manrope_variable, FontWeight.Normal),
+    Font(R.font.manrope_variable, FontWeight.Medium),
+    Font(R.font.manrope_variable, FontWeight.SemiBold),
+)
+val BodyFamily: FontFamily = FontFamily(
+    Font(R.font.inter_variable, FontWeight.Normal),
+    Font(R.font.inter_variable, FontWeight.Medium),
+    Font(R.font.inter_variable, FontWeight.SemiBold),
+)
 val MonoFamily: FontFamily = FontFamily.Monospace
 
 @Immutable

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.ErrorState
+import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.Hairline
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.leafOf
@@ -86,8 +87,8 @@ fun TypesScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onAdd() }),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = colors.lowest,
-                    unfocusedContainerColor = colors.lowest,
+                    focusedContainerColor = colors.field,
+                    unfocusedContainerColor = colors.field,
                     focusedIndicatorColor = colors.outline,
                     unfocusedIndicatorColor = colors.hairline,
                     cursorColor = colors.on,
@@ -98,14 +99,14 @@ fun TypesScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(TimeboxShapes.field)
-                    .background(colors.on)
+                    .background(colors.action)
                     .clickable(enabled = !state.saving, onClick = onAdd),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Add,
                     contentDescription = "Add task type",
-                    tint = colors.bg,
+                    tint = colors.onAction,
                     modifier = Modifier.size(21.dp),
                 )
             }
@@ -118,16 +119,11 @@ fun TypesScreen(
                 onRetry = onRetry,
                 modifier = Modifier.weight(1f),
             )
-            state.groups.isEmpty() -> Box(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "No task types yet. Add a path like coding/ai to get started.",
-                    style = TimeboxTheme.type.body,
-                    color = colors.onVariant,
-                )
-            }
+            state.groups.isEmpty() -> EmptyStateCard(
+                title = "No Task Types yet",
+                description = "Add a path such as coding/ai to organize Blocks and Tasks.",
+                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding, vertical = 8.dp),
+            )
             else -> LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(

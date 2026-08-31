@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.ErrorState
+import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.Kicker
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.theme.TimeboxDimens
@@ -147,8 +148,16 @@ private fun PlanningDayPage(
     onRetryReadyTasks: () -> Unit,
 ) {
     val page = state.currentPage
+    val showTaskRail = state.hasPlanningRailContent(state.date)
     Column(Modifier.fillMaxSize()) {
-        PlanningModeHeaders(Modifier.padding(bottom = 8.dp))
+        PlanningModeHeaders(showTaskRail, Modifier.padding(bottom = 8.dp))
+        if (!showTaskRail) {
+            EmptyStateCard(
+                title = "Your planning queue is clear",
+                description = "Mark a Battle Plan Task Ready to Plan when you want to schedule it.",
+                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding, vertical = 4.dp),
+            )
+        }
         val day = page.day
         when {
             page.loading && day == null -> LoadingState(Modifier.weight(1f))

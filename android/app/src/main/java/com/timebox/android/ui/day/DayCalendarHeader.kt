@@ -219,7 +219,7 @@ private fun TodayAction(enabled: Boolean, onClick: () -> Unit) {
     val contentColor = if (enabled) {
         colors.onVariant
     } else {
-        colors.outlineVariant.copy(alpha = 0.58f)
+        colors.disabledContent
     }
     Box(
         modifier = Modifier
@@ -233,7 +233,7 @@ private fun TodayAction(enabled: Boolean, onClick: () -> Unit) {
             modifier = Modifier
                 .height(34.dp)
                 .clip(RoundedCornerShape(percent = 50))
-                .background(if (enabled) colors.low else colors.low.copy(alpha = 0.48f))
+                .background(if (enabled) colors.low else colors.disabledContainer)
                 .padding(horizontal = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -507,21 +507,20 @@ private fun MonthDateCell(
     val colors = TimeboxTheme.colors
     val shape = RoundedCornerShape(14.dp)
     val background = when {
-        selected -> colors.planned
+        selected -> colors.selected
         today -> colors.plannedSurface
         else -> Color.Transparent
     }
-    val textColor = when {
-        selected && colors.isDark -> colors.bg
-        selected -> colors.lowest
-        today -> colors.planned
-        inDisplayedMonth -> colors.onVariant
-        else -> colors.onVariant.copy(alpha = 0.32f)
-    }
-    val borderModifier = if (today && !selected) {
-        Modifier.border(1.dp, colors.plannedBorder, shape)
-    } else {
-        Modifier
+    val textColor = monthDateTextColor(
+        colors = colors,
+        selected = selected,
+        today = today,
+        inDisplayedMonth = inDisplayedMonth,
+    )
+    val borderModifier = when {
+        selected -> Modifier.border(1.dp, colors.plannedBorder, shape)
+        today -> Modifier.border(1.dp, colors.planned, shape)
+        else -> Modifier
     }
 
     Box(
@@ -543,12 +542,26 @@ private fun MonthDateCell(
     ) {
         Text(
             text = date.dayOfMonth.toString(),
-            style = TimeboxTheme.type.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            style = TimeboxTheme.type.bodySmall.copy(
+                fontWeight = if (inDisplayedMonth) FontWeight.SemiBold else FontWeight.Normal,
+            ),
             color = textColor,
             textAlign = TextAlign.Center,
         )
     }
 }
+
+internal fun monthDateTextColor(
+    colors: com.timebox.android.ui.theme.TimeboxColors,
+    selected: Boolean,
+    today: Boolean,
+    inDisplayedMonth: Boolean,
+): Color = when {
+        selected -> colors.onSelected
+        today -> colors.planned
+        inDisplayedMonth -> colors.onVariant
+        else -> colors.onVariant
+    }
 
 @Composable
 private fun WeekRow(
@@ -656,20 +669,19 @@ private fun WeekDateCell(
     val colors = TimeboxTheme.colors
     val shape = RoundedCornerShape(16.dp)
     val background = when {
-        selected -> colors.planned
+        selected -> colors.selected
         today -> colors.plannedSurface
         else -> Color.Transparent
     }
     val textColor = when {
-        selected && colors.isDark -> colors.bg
-        selected -> colors.lowest
+        selected -> colors.onSelected
         today -> colors.planned
         else -> colors.onVariant
     }
-    val borderModifier = if (today && !selected) {
-        Modifier.border(1.dp, colors.plannedBorder, shape)
-    } else {
-        Modifier
+    val borderModifier = when {
+        selected -> Modifier.border(1.dp, colors.plannedBorder, shape)
+        today -> Modifier.border(1.dp, colors.planned, shape)
+        else -> Modifier
     }
 
     Column(

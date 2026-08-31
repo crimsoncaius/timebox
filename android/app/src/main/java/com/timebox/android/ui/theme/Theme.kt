@@ -3,6 +3,8 @@ package com.timebox.android.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -60,44 +62,94 @@ fun TimeboxTheme(
 ) {
     val colors = if (darkTheme) DarkTimeboxColors else LightTimeboxColors
 
-    // Material3 components (sheets, text fields, ripples) read the standard scheme,
-    // so map the tokens onto it rather than letting them fall back to purple.
-    val scheme = if (darkTheme) {
-        darkColorScheme(
-            primary = colors.on,
-            onPrimary = colors.bg,
-            background = colors.bg,
-            onBackground = colors.on,
-            surface = colors.low,
-            onSurface = colors.on,
-            surfaceVariant = colors.surf,
-            onSurfaceVariant = colors.onVariant,
-            outline = colors.outline,
-            outlineVariant = colors.outlineVariant,
-            error = colors.error,
-            scrim = colors.scrim,
-        )
-    } else {
-        lightColorScheme(
-            primary = colors.on,
-            onPrimary = colors.bg,
-            background = colors.bg,
-            onBackground = colors.on,
-            surface = colors.low,
-            onSurface = colors.on,
-            surfaceVariant = colors.surf,
-            onSurfaceVariant = colors.onVariant,
-            outline = colors.outline,
-            outlineVariant = colors.outlineVariant,
-            error = colors.error,
-            scrim = colors.scrim,
-        )
-    }
-
     CompositionLocalProvider(
         LocalTimeboxColors provides colors,
         LocalTimeboxType provides TimeboxType,
     ) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = timeboxColorScheme(colors)) {
+            CompositionLocalProvider(LocalContentColor provides colors.on, content = content)
+        }
     }
 }
+
+/** Maps Timebox tokens to the Material roles consumed by stock Compose controls. */
+internal fun timeboxColorScheme(colors: TimeboxColors): ColorScheme =
+    if (colors.isDark) {
+        darkColorScheme(
+            primary = colors.primary,
+            onPrimary = colors.onPrimary,
+            primaryContainer = colors.primaryContainer,
+            onPrimaryContainer = colors.onPrimaryContainer,
+            secondary = colors.secondary,
+            onSecondary = colors.onSecondary,
+            secondaryContainer = colors.secondaryContainer,
+            onSecondaryContainer = colors.onSecondaryContainer,
+            tertiary = colors.tertiary,
+            onTertiary = colors.onTertiary,
+            tertiaryContainer = colors.tertiaryContainer,
+            onTertiaryContainer = colors.onTertiaryContainer,
+            background = colors.bg,
+            onBackground = colors.on,
+            surface = colors.bg,
+            onSurface = colors.on,
+            surfaceVariant = colors.high,
+            onSurfaceVariant = colors.onVariant,
+            surfaceDim = colors.surfaceDim,
+            surfaceBright = colors.surfaceBright,
+            surfaceContainerLowest = colors.lowest,
+            surfaceContainerLow = colors.low,
+            surfaceContainer = colors.surf,
+            surfaceContainerHigh = colors.high,
+            surfaceContainerHighest = colors.highest,
+            outline = colors.outline,
+            outlineVariant = colors.outlineVariant,
+            error = colors.error,
+            onError = colors.onError,
+            errorContainer = colors.errorContainer,
+            onErrorContainer = colors.onErrorContainer,
+            inverseSurface = colors.inverseSurface,
+            inverseOnSurface = colors.inverseOnSurface,
+            inversePrimary = colors.inversePrimary,
+            surfaceTint = colors.primary,
+            scrim = colors.scrim,
+        )
+    } else {
+        lightColorScheme(
+            primary = colors.primary,
+            onPrimary = colors.onPrimary,
+            primaryContainer = colors.primaryContainer,
+            onPrimaryContainer = colors.onPrimaryContainer,
+            secondary = colors.secondary,
+            onSecondary = colors.onSecondary,
+            secondaryContainer = colors.secondaryContainer,
+            onSecondaryContainer = colors.onSecondaryContainer,
+            tertiary = colors.tertiary,
+            onTertiary = colors.onTertiary,
+            tertiaryContainer = colors.tertiaryContainer,
+            onTertiaryContainer = colors.onTertiaryContainer,
+            background = colors.bg,
+            onBackground = colors.on,
+            surface = colors.bg,
+            onSurface = colors.on,
+            surfaceVariant = colors.high,
+            onSurfaceVariant = colors.onVariant,
+            surfaceDim = colors.surfaceDim,
+            surfaceBright = colors.surfaceBright,
+            surfaceContainerLowest = colors.lowest,
+            surfaceContainerLow = colors.low,
+            surfaceContainer = colors.surf,
+            surfaceContainerHigh = colors.high,
+            surfaceContainerHighest = colors.highest,
+            outline = colors.outline,
+            outlineVariant = colors.outlineVariant,
+            error = colors.error,
+            onError = colors.onError,
+            errorContainer = colors.errorContainer,
+            onErrorContainer = colors.onErrorContainer,
+            inverseSurface = colors.inverseSurface,
+            inverseOnSurface = colors.inverseOnSurface,
+            inversePrimary = colors.inversePrimary,
+            surfaceTint = colors.primary,
+            scrim = colors.scrim,
+        )
+    }

@@ -67,6 +67,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -127,6 +128,8 @@ import com.timebox.android.ui.components.Hairline
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
+import com.timebox.android.ui.components.SectionCard
+import com.timebox.android.ui.components.SectionHeader
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
 import com.timebox.android.ui.hhmm
@@ -700,7 +703,7 @@ private fun MobileKanbanBoard(
                 onClick = { onShowComposer(true) },
                 enabled = !state.saving,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
-                leading = { Icon(Icons.Outlined.Add, null, tint = colors.bg, modifier = Modifier.size(18.dp)) },
+                leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
             )
             visualDrag?.let { drag ->
                 val settling = settlingDrop?.takeIf { it.drag.task.id == drag.task.id }
@@ -2037,48 +2040,49 @@ private fun TaskEditForm(
             PrimaryButton("Reopen Task", onReopen, Modifier.fillMaxWidth(), enabled = !state.saving)
             return@Column
         }
-        state.parentTask?.let { Text("Subtask of ${it.title}", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant) }
-        OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") })
-        OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
-        SelectionMenu("Status", state.status.label, battlePlanStatuses.map { it.label to it }, onStatus)
-        if (
-            !state.isSubtask &&
-            state.status != TaskStatus.Completed &&
-            state.subtasks.isNotEmpty() &&
-            state.subtasks.all { it.checked }
-        ) {
-            TextButton(onClick = { onStatus(TaskStatus.Completed) }) {
-                Text("All subtasks complete · Complete Parent Task")
+        EditorSection("Details") {
+            state.parentTask?.let {
+                Text("Subtask of ${it.title}", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
             }
+            OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") })
+            OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
         }
-        if (!state.isSubtask) SelectionMenu("Project", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
-        else Text("Project: ${state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin"} (inherited)", style = TimeboxTheme.type.bodySmall)
-        SelectionMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset", listOf("Unset" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
-        SelectionMenu("Urgency", state.urgency?.wire?.replaceFirstChar(Char::uppercase) ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.wire.replaceFirstChar(Char::uppercase) to it }, onUrgency)
-        SelectionMenu("Importance", state.importance?.wire?.replaceFirstChar(Char::uppercase) ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.wire.replaceFirstChar(Char::uppercase) to it }, onImportance)
-        SelectionMenu("Deadline", when (state.deadlineMode) { TaskDeadlineMode.None -> "None"; TaskDeadlineMode.DateOnly -> "Date only"; TaskDeadlineMode.DateTime -> "Date and time" }, listOf("None" to TaskDeadlineMode.None, "Date only" to TaskDeadlineMode.DateOnly, "Date and time" to TaskDeadlineMode.DateTime), onDeadlineMode)
-        if (state.deadlineMode != TaskDeadlineMode.None) OutlinedTextField(state.deadlineDate, onDeadlineDate, Modifier.fillMaxWidth(), label = { Text("Deadline date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
-        if (state.deadlineMode == TaskDeadlineMode.DateTime) OutlinedTextField(state.deadlineTime, onDeadlineTime, Modifier.fillMaxWidth(), label = { Text("Deadline time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
-        if (state.deadlineMode != TaskDeadlineMode.None) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Text("Reminder", modifier = Modifier.weight(1f)); Switch(state.reminderEnabled, onReminderEnabled) }
-            if (state.reminderEnabled) {
-                if (!notificationsAllowed) {
-                    Text(
-                        "This reminder will be saved, but this device cannot display it until notifications are enabled in Settings.",
-                        style = TimeboxTheme.type.bodySmall,
-                        color = TimeboxTheme.colors.error,
-                    )
+        EditorSection("Organization") {
+            SelectionMenu("Status", state.status.label, battlePlanStatuses.map { it.label to it }, onStatus)
+            if (!state.isSubtask && state.status != TaskStatus.Completed && state.subtasks.isNotEmpty() && state.subtasks.all { it.checked }) {
+                TextButton(onClick = { onStatus(TaskStatus.Completed) }) {
+                    Text("All subtasks complete · Complete Parent Task")
                 }
-                OutlinedTextField(state.reminderDate, onReminderDate, Modifier.fillMaxWidth(), label = { Text("Reminder date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
-                OutlinedTextField(state.reminderTime, onReminderTime, Modifier.fillMaxWidth(), label = { Text("Reminder time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
+            }
+            if (!state.isSubtask) {
+                SelectionMenu("Project", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
+            } else {
+                Text("Project: ${state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin"} (inherited)", style = TimeboxTheme.type.bodySmall)
+            }
+            SelectionMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset", listOf("Unset" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) { SelectionMenu("Urgency", state.urgency?.wire?.replaceFirstChar(Char::uppercase) ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.wire.replaceFirstChar(Char::uppercase) to it }, onUrgency) }
+                Box(Modifier.weight(1f)) { SelectionMenu("Importance", state.importance?.wire?.replaceFirstChar(Char::uppercase) ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.wire.replaceFirstChar(Char::uppercase) to it }, onImportance) }
             }
         }
-        if (plannedDates.isNotEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text("Planned Dates", style = TimeboxTheme.type.label)
+        EditorSection("Schedule") {
+            SelectionMenu("Deadline", when (state.deadlineMode) { TaskDeadlineMode.None -> "None"; TaskDeadlineMode.DateOnly -> "Date only"; TaskDeadlineMode.DateTime -> "Date and time" }, listOf("None" to TaskDeadlineMode.None, "Date only" to TaskDeadlineMode.DateOnly, "Date and time" to TaskDeadlineMode.DateTime), onDeadlineMode)
+            if (state.deadlineMode != TaskDeadlineMode.None) OutlinedTextField(state.deadlineDate, onDeadlineDate, Modifier.fillMaxWidth(), label = { Text("Deadline date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
+            if (state.deadlineMode == TaskDeadlineMode.DateTime) OutlinedTextField(state.deadlineTime, onDeadlineTime, Modifier.fillMaxWidth(), label = { Text("Deadline time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
+            if (state.deadlineMode != TaskDeadlineMode.None) {
+                Row(verticalAlignment = Alignment.CenterVertically) { Text("Reminder", modifier = Modifier.weight(1f)); Switch(state.reminderEnabled, onReminderEnabled) }
+                if (state.reminderEnabled) {
+                    if (!notificationsAllowed) {
+                        Text("This reminder will be saved, but this device cannot display it until notifications are enabled in Settings.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.error)
+                    }
+                    OutlinedTextField(state.reminderDate, onReminderDate, Modifier.fillMaxWidth(), label = { Text("Reminder date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
+                    OutlinedTextField(state.reminderTime, onReminderTime, Modifier.fillMaxWidth(), label = { Text("Reminder time (${state.timezone})") }, placeholder = { Text("HH:MM") }, singleLine = true)
+                }
+            }
+        }
+        EditorSection("Planning") {
+            if (plannedDates.isNotEmpty()) {
+                Text("Planned dates", style = TimeboxTheme.type.label, color = TimeboxTheme.colors.on)
                 visiblePlannedDates.forEach { date ->
                     Text(
                         text = formatPlannedDetailDate(date, today),
@@ -2094,10 +2098,13 @@ private fun TaskEditForm(
                     }
                 }
             }
-        }
-        Row(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text("Ready to Plan", style = TimeboxTheme.type.label); Text("Offer this task when creating a Planned block.", style = TimeboxTheme.type.bodySmall) }
-            Switch(state.readyToPlan, onReady)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Ready to Plan", style = TimeboxTheme.type.label)
+                    Text("Offer this task when creating a Planned Block.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                }
+                Switch(state.readyToPlan, onReady)
+            }
         }
         PrimaryButton("Save task", onSave, Modifier.fillMaxWidth(), enabled = state.dirty && !state.saving)
         TextButton(onClick = onTrash, enabled = !state.saving) { Icon(Icons.Outlined.Delete, null); Spacer(Modifier.width(5.dp)); Text("Move to Trash", color = TimeboxTheme.colors.error) }
@@ -2114,34 +2121,54 @@ private fun SubtaskPanel(
     onToggle: (Subtask) -> Unit,
     onTrash: (Subtask) -> Unit,
 ) {
-    Column(modifier.clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Subtasks ${state.subtasks.count { it.checked }}/${state.subtasks.size}", style = TimeboxTheme.type.sectionTitle)
-        state.subtasks.forEach { task ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (task.checked) "✓ ${task.title}" else task.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
+    Surface(
+        modifier = modifier,
+        shape = TimeboxShapes.card,
+        color = TimeboxTheme.colors.low,
+        contentColor = TimeboxTheme.colors.on,
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Subtasks ${state.subtasks.count { it.checked }}/${state.subtasks.size}", style = TimeboxTheme.type.sectionTitle)
+            state.subtasks.forEach { task ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (task.checked) "✓ ${task.title}" else task.title, modifier = Modifier.weight(1f), style = TimeboxTheme.type.bodySmall)
+                    TextButton(
+                        onClick = { onToggle(task) },
+                        enabled = state.status != TaskStatus.Completed,
+                    ) { Text(if (task.checked) "Uncheck" else "Check") }
+                    IconButton(
+                        onClick = { onTrash(task) },
+                        enabled = state.status != TaskStatus.Completed,
+                    ) { Icon(Icons.Outlined.Delete, "Move ${task.title} to Trash") }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    newSubtask,
+                    onNewSubtask,
+                    Modifier.weight(1f),
+                    enabled = state.status != TaskStatus.Completed,
+                    label = { Text("New subtask") },
+                    singleLine = true,
+                )
                 TextButton(
-                    onClick = { onToggle(task) },
-                    enabled = state.status != TaskStatus.Completed,
-                ) { Text(if (task.checked) "Uncheck" else "Check") }
-                IconButton(
-                    onClick = { onTrash(task) },
-                    enabled = state.status != TaskStatus.Completed,
-                ) { Icon(Icons.Outlined.Delete, "Move ${task.title} to Trash") }
+                    onClick = onAdd,
+                    enabled = newSubtask.isNotBlank() && !state.saving && state.status != TaskStatus.Completed,
+                ) { Text("Add") }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                newSubtask,
-                onNewSubtask,
-                Modifier.weight(1f),
-                enabled = state.status != TaskStatus.Completed,
-                label = { Text("New subtask") },
-                singleLine = true,
-            )
-            TextButton(
-                onClick = onAdd,
-                enabled = newSubtask.isNotBlank() && !state.saving && state.status != TaskStatus.Completed,
-            ) { Text("Add") }
+    }
+}
+
+@Composable
+private fun EditorSection(title: String, content: @Composable () -> Unit) {
+    SectionCard {
+        SectionHeader(title)
+        Column(
+            Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            content()
         }
     }
 }

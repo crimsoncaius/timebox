@@ -100,7 +100,7 @@ fun TimeboxSwitch(
     }
 }
 
-/** Rounded selectable chip; filled when active, hairline outline when not. */
+/** Rounded selectable chip; a quiet tonal selection, hairline outline when inactive. */
 @Composable
 fun TimeboxChip(
     label: String,
@@ -114,17 +114,17 @@ fun TimeboxChip(
 ) {
     val colors = TimeboxTheme.colors
     val fill by animateColorAsState(
-        targetValue = if (selected) colors.on else Color.Transparent,
+        targetValue = if (selected) colors.selected else Color.Transparent,
         animationSpec = tween(durationMillis = 150),
         label = "chipFill",
     )
     val outline by animateColorAsState(
-        targetValue = if (selected) Color.Transparent else colors.hairline,
+        targetValue = if (selected) colors.outlineVariant else colors.hairline,
         animationSpec = tween(durationMillis = 150),
         label = "chipOutline",
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) colors.bg else colors.on,
+        targetValue = if (selected) colors.onSelected else colors.on,
         animationSpec = tween(durationMillis = 150),
         label = "chipContent",
     )
@@ -158,7 +158,8 @@ fun SectionCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(TimeboxShapes.group)
-            .background(TimeboxTheme.colors.low)
+            .background(TimeboxTheme.colors.card)
+            .border(1.dp, TimeboxTheme.colors.hairline, TimeboxShapes.group)
             .padding(contentPadding),
         content = content,
     )
@@ -190,7 +191,7 @@ fun SettingRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(TimeboxShapes.card)
-            .background(TimeboxTheme.colors.lowest)
+            .background(TimeboxTheme.colors.raised)
             .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -207,6 +208,28 @@ fun SettingRow(
             }
         }
         trailing()
+    }
+}
+
+/** Compact, consistently placed guidance for an empty collection. */
+@Composable
+fun EmptyStateCard(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = TimeboxTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(TimeboxShapes.card)
+            .background(colors.card)
+            .border(1.dp, colors.hairline, TimeboxShapes.card)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(title, style = TimeboxTheme.type.label, color = colors.on)
+        Text(description, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
     }
 }
 
@@ -254,7 +277,7 @@ fun ErrorState(
     }
 }
 
-/** Dark filled pill button; the design's main action. */
+/** Filled pill using dedicated action and disabled-state tokens. */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -270,14 +293,18 @@ fun PrimaryButton(
         modifier = modifier
             .height(height)
             .clip(shape)
-            .background(if (enabled) colors.on else colors.outlineVariant)
+            .background(if (enabled) colors.action else colors.disabledContainer)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
     ) {
         leading?.invoke()
-        Text(text, style = TimeboxTheme.type.button, color = colors.bg)
+        Text(
+            text,
+            style = TimeboxTheme.type.button,
+            color = if (enabled) colors.onAction else colors.disabledContent,
+        )
     }
 }
 

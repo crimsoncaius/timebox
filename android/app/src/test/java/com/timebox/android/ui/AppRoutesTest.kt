@@ -12,6 +12,8 @@ class AppRoutesTest {
         assertEquals("chronicle", AppRoutes.Chronicle)
         assertEquals("types", AppRoutes.Types)
         assertEquals("settings", AppRoutes.Settings)
+        assertEquals("settings/theme-preview", AppRoutes.ThemePreview)
+        assertEquals("Theme preview", routeTitle(AppRoutes.ThemePreview, "Day", "Month"))
     }
 
     @Test

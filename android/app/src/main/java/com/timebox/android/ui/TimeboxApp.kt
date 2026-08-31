@@ -54,6 +54,7 @@ import com.timebox.android.ui.day.WorkModeRestoreDialog
 import com.timebox.android.ui.settings.SettingsScreen
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
+import com.timebox.android.ui.theme.ThemePreviewScreen
 import com.timebox.android.ui.types.TypesScreen
 import com.timebox.android.ui.types.TypesViewModel
 import java.time.LocalDate
@@ -216,7 +217,7 @@ fun TimeboxApp(
         AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
         AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> TimeboxTab.BattlePlan
         AppRoutes.Types -> TimeboxTab.Types
-        AppRoutes.Settings -> TimeboxTab.Settings
+        AppRoutes.Settings, AppRoutes.ThemePreview -> TimeboxTab.Settings
         else -> null
     }
     val colors = TimeboxTheme.colors
@@ -553,8 +554,12 @@ fun TimeboxApp(
                             notificationsAllowed = notificationsAllowed,
                             onRequestNotificationPermission = onRequestNotificationPermission,
                             onOpenNotificationSettings = onOpenNotificationSettings,
+                            onOpenThemePreview = { navController.navigate(AppRoutes.ThemePreview) },
                             onRetry = { settingsViewModel.load(dayState.day?.timezone) },
                         )
+                    }
+                    composable(AppRoutes.ThemePreview) {
+                        ThemePreviewScreen(onBack = { navController.popBackStack() })
                     }
                 }
             }
@@ -613,7 +618,7 @@ private fun routeKicker(route: String): String = when (route) {
     AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
     AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Battle Plan"
     AppRoutes.Types -> "Task types"
-    AppRoutes.Settings -> "Settings"
+    AppRoutes.Settings, AppRoutes.ThemePreview -> "Settings"
     else -> "Timebox"
 }
 
@@ -631,5 +636,6 @@ internal fun routeTitle(route: String, day: String, chronicle: String): String =
         AppRoutes.RecurringEditPattern -> "Edit recurrence"
         AppRoutes.Types -> "Paths"
         AppRoutes.Settings -> "Preferences"
+        AppRoutes.ThemePreview -> "Theme preview"
         else -> "Timebox"
     }

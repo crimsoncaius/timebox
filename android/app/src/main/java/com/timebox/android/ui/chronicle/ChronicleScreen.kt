@@ -42,6 +42,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -335,12 +336,11 @@ private fun DayCell(
     ) {
         Text(
             text = date.dayOfMonth.toString(),
-            style = TimeboxTheme.type.sectionTitle.copy(fontSize = 14.sp),
-            color = when {
-                isToday && inMonth -> colors.planned
-                inMonth -> colors.on
-                else -> colors.outlineVariant
-            },
+            style = TimeboxTheme.type.sectionTitle.copy(
+                fontSize = 14.sp,
+                fontWeight = if (inMonth) TimeboxTheme.type.sectionTitle.fontWeight else FontWeight.Normal,
+            ),
+            color = chronicleDateTextColor(colors, isToday, inMonth),
         )
         if (windowLabel != null && inMonth) {
             Spacer(Modifier.weight(1f))
@@ -351,6 +351,16 @@ private fun DayCell(
             )
         }
     }
+}
+
+internal fun chronicleDateTextColor(
+    colors: com.timebox.android.ui.theme.TimeboxColors,
+    isToday: Boolean,
+    inMonth: Boolean,
+): Color = when {
+    isToday && inMonth -> colors.planned
+    inMonth -> colors.on
+    else -> colors.onVariant
 }
 
 /** Six-week grid starting Monday, trimmed to five weeks when the sixth is empty. */

@@ -47,6 +47,21 @@ Once the wrapper exists you can also build from PowerShell at the repository roo
 
 On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `./gradlew assembleDebug` from this directory.
 
+## Dark-theme visual regression screenshots
+
+With an emulator connected, regenerate the deterministic Task Details, menu,
+dialog, Day calendar, and Chronicle dark-theme screenshots from the repository
+root:
+
+```powershell
+.\scripts\android-dark-theme-screenshots.ps1
+```
+
+The script runs only `DarkThemeScreenshotTest` and pulls its PNGs into
+`artifacts/android-dark-theme/` for side-by-side review. The deterministic set also
+covers grouped editors, collapsed empty Plan Mode, and both themes of the component
+gallery.
+
 ## Pointing the app at your API
 
 Debug builds default to `http://10.0.2.2:8001/`, which is the emulator's alias for
@@ -94,13 +109,14 @@ browser UI.
 
 ## Typography
 
-The design specifies Manrope for headlines and Inter for body text. Neither is
-bundled — that would mean committing binary font files — so both fall back to the
-platform sans face while keeping every weight, size and tracking value from the
-design. To switch on the real faces, drop the TTFs into `app/src/main/res/font` and
-replace `HeadlineFamily` / `BodyFamily` in
-[`ui/theme/Type.kt`](app/src/main/java/com/timebox/android/ui/theme/Type.kt) with
-`FontFamily(Font(R.font.…, FontWeight.…), …)`. Nothing else needs to change.
+The design's Manrope headlines and Inter body text are bundled as the official Google
+Fonts variable builds under `app/src/main/res/font`. Their SIL Open Font License texts
+are kept in `app/src/main/res/raw`. Weight resolution lives in
+[`ui/theme/Type.kt`](app/src/main/java/com/timebox/android/ui/theme/Type.kt).
+
+The in-app component gallery is available at **Settings → Appearance → Theme preview**.
+It provides a data-free reference for the surface ladder, typography, fields, chips,
+primary and disabled actions, and compact empty states in either theme.
 
 Icons come from `material-icons-extended` rather than the design's Material Symbols
 webfont; the glyph names map one-to-one.

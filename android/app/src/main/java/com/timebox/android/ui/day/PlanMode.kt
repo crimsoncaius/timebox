@@ -81,7 +81,7 @@ private data class TaskDragState(
 )
 
 @Composable
-internal fun PlanningModeHeaders(modifier: Modifier = Modifier) {
+internal fun PlanningModeHeaders(showTaskRail: Boolean, modifier: Modifier = Modifier) {
     val colors = TimeboxTheme.colors
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val contentWidth = maxWidth - TimeboxDimens.screenPadding * 2
@@ -96,7 +96,9 @@ internal fun PlanningModeHeaders(modifier: Modifier = Modifier) {
                 Box(Modifier.width(TimeboxDimens.gutterWidth))
                 Kicker("Planned", colors.planned, Modifier.weight(1f))
             }
-            Kicker("Tasks to plan", colors.planned, Modifier.width(railWidth))
+            if (showTaskRail) {
+                Kicker("Tasks to plan", colors.planned, Modifier.width(railWidth))
+            }
         }
     }
 }
@@ -129,6 +131,7 @@ internal fun PlanningWorkspace(
     var drag by remember { mutableStateOf<TaskDragState?>(null) }
     var returningTaskId by remember { mutableStateOf<Int?>(null) }
     val planningDrafts = state.planningDrafts(day.date)
+    val showTaskRail = state.hasPlanningRailContent(day.date)
     val dragDuration = drag?.draft?.let { it.endMinute - it.startMinute } ?: SLOT_MINUTES
 
     val candidateStart = drag?.let {
@@ -270,7 +273,7 @@ internal fun PlanningWorkspace(
                 )
             }
 
-            PlanningTaskRail(
+            if (showTaskRail) PlanningTaskRail(
                 state = state,
                 enabled = !state.saving,
                 draggingTaskId = drag?.takeIf { it.draft == null }?.task?.id,
@@ -323,6 +326,12 @@ internal fun PlanningWorkspace(
             )
         }
     }
+}
+
+internal fun DayUiState.hasPlanningRailContent(date: java.time.LocalDate): Boolean {
+    if (readyTasksLoading || readyTasksError != null || accessibilityPlanningTaskId != null) return true
+    val drafted = planningDrafts(date).mapTo(mutableSetOf()) { it.taskId }
+    return readyTasks.any { it.id !in drafted }
 }
 
 @Composable

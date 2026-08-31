@@ -54,6 +54,7 @@ import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrenceStatus
 import com.timebox.android.data.RecurringTemplate
 import com.timebox.android.ui.components.ErrorState
+import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.SectionCard
@@ -85,15 +86,21 @@ fun RecurringScreen(
             PrimaryButton(
                 "New recurrence",
                 onNew,
-                leading = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = colors.bg) },
+                leading = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = colors.onAction) },
             )
         }
         when {
             state.loading -> LoadingState()
             state.error != null && state.templates.isEmpty() -> ErrorState(state.error, onRetry)
-            state.templates.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No ${state.selectedStatus.label.lowercase()} recurring templates.", color = colors.onVariant)
-            }
+            state.templates.isEmpty() -> EmptyStateCard(
+                title = "No ${state.selectedStatus.label.lowercase()} series",
+                description = if (state.selectedStatus == RecurrenceStatus.Active) {
+                    "Create a recurrence to generate Tasks on a schedule or quota."
+                } else {
+                    "Recurring Task Series appear here when their lifecycle changes."
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
             else -> LazyColumn(
                 Modifier.fillMaxSize().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -288,7 +295,7 @@ private fun RecurringDetailContent(
             }
         }
         PrimaryButton("Edit template", { onEdit(template.id) }, Modifier.fillMaxWidth(), enabled = !busy, leading = {
-            Icon(Icons.Outlined.Edit, null, Modifier.size(18.dp), tint = colors.bg)
+            Icon(Icons.Outlined.Edit, null, Modifier.size(18.dp), tint = colors.onAction)
         })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (template.status == RecurrenceStatus.Active) LifecycleButton("Pause", Icons.Outlined.Pause, onPause, busy)
@@ -365,50 +372,44 @@ fun RecurringEditorScreen(
                 Spacer(Modifier.width(5.dp))
                 Text("Recurring")
             }
-            Text(
-                if (state.templateId == null) "New recurring template" else "Edit recurring template",
-                style = TimeboxTheme.type.screenTitle,
-                color = TimeboxTheme.colors.on,
-            )
-            OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
-            OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
-            RecurrenceMenu("Location", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
-            RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset", listOf("Unset" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
-            RecurrenceMenu("Urgency", state.urgency?.label ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.label to it }, onUrgency)
-            RecurrenceMenu("Importance", state.importance?.label ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.label to it }, onImportance)
-            Text("Mode", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RecurrenceMode.entries.forEach { mode ->
-                    TimeboxChip(mode.label, state.mode == mode, { onMode(mode) })
+            RecurringEditorSection("Definition", "What this Recurring Task Series creates.") {
+                OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
+                RecurrenceMenu("Location", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
+                RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset", listOf("Unset" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f)) { RecurrenceMenu("Urgency", state.urgency?.label ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.label to it }, onUrgency) }
+                    Box(Modifier.weight(1f)) { RecurrenceMenu("Importance", state.importance?.label ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.label to it }, onImportance) }
                 }
             }
-            if (state.templateId != null) Text("Mode cannot be changed after creation.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-            Text("Period", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RecurrenceFrequency.entries.forEach { frequency ->
-                    TimeboxChip(frequency.label, state.frequency == frequency, { onFrequency(frequency) })
+            RecurringEditorSection("Schedule", "Choose how often Tasks are generated.") {
+                Text("Mode", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RecurrenceMode.entries.forEach { mode -> TimeboxChip(mode.label, state.mode == mode, { onMode(mode) }) }
+                }
+                if (state.templateId != null) Text("Mode cannot be changed after creation.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                Text("Period", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RecurrenceFrequency.entries.forEach { frequency -> TimeboxChip(frequency.label, state.frequency == frequency, { onFrequency(frequency) }) }
+                }
+                if (state.mode == RecurrenceMode.Scheduled) {
+                    OutlinedTextField(state.interval, onInterval, Modifier.fillMaxWidth(), label = { Text("Repeat every (periods)") }, singleLine = true)
+                    if (state.frequency == RecurrenceFrequency.Weekly) WeekdayPicker(state.weekdays, onToggleWeekday)
+                    if (state.frequency == RecurrenceFrequency.Monthly) OutlinedTextField(state.monthDay, onMonthDay, Modifier.fillMaxWidth(), label = { Text("Day of month (1–31)") }, singleLine = true)
+                } else {
+                    OutlinedTextField(state.quotaCount, onQuotaCount, Modifier.fillMaxWidth(), label = { Text("Times per period") }, singleLine = true)
+                    Text("Quota sessions are generated Ready to Plan. The server controls calendar period boundaries.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
                 }
             }
-            if (state.mode == RecurrenceMode.Scheduled) {
-                OutlinedTextField(state.interval, onInterval, Modifier.fillMaxWidth(), label = { Text("Repeat every (periods)") }, singleLine = true)
-                if (state.frequency == RecurrenceFrequency.Weekly) WeekdayPicker(state.weekdays, onToggleWeekday)
-                if (state.frequency == RecurrenceFrequency.Monthly) OutlinedTextField(state.monthDay, onMonthDay, Modifier.fillMaxWidth(), label = { Text("Day of month (1–31)") }, singleLine = true)
-            } else {
-                OutlinedTextField(state.quotaCount, onQuotaCount, Modifier.fillMaxWidth(), label = { Text("Times per period") }, singleLine = true)
-                Text("Quota sessions are generated Ready to Plan. The server controls calendar period boundaries.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+            RecurringEditorSection("End", "Set the active range for this series.") {
+                OutlinedTextField(state.startDate, onStartDate, Modifier.fillMaxWidth(), label = { Text("Start date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
+                RecurrenceMenu("Ends", state.endMode.label, RecurrenceEndMode.entries.map { it.label to it }, onEndMode)
+                if (state.endMode == RecurrenceEndMode.EndDate) OutlinedTextField(state.endDate, onEndDate, Modifier.fillMaxWidth(), label = { Text("Inclusive end date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
+                if (state.endMode == RecurrenceEndMode.CycleLimit) OutlinedTextField(state.cycleLimit, onCycleLimit, Modifier.fillMaxWidth(), label = { Text("Number of cycles") }, singleLine = true)
             }
-            OutlinedTextField(state.startDate, onStartDate, Modifier.fillMaxWidth(), label = { Text("Start date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
-            RecurrenceMenu("Ends", state.endMode.label, RecurrenceEndMode.entries.map { it.label to it }, onEndMode)
-            if (state.endMode == RecurrenceEndMode.EndDate) OutlinedTextField(state.endDate, onEndDate, Modifier.fillMaxWidth(), label = { Text("Inclusive end date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true)
-            if (state.endMode == RecurrenceEndMode.CycleLimit) OutlinedTextField(state.cycleLimit, onCycleLimit, Modifier.fillMaxWidth(), label = { Text("Number of cycles") }, singleLine = true)
-            OutlinedTextField(
-                state.checklistText,
-                onChecklist,
-                Modifier.fillMaxWidth(),
-                label = { Text("Checklist") },
-                placeholder = { Text("One item per line") },
-                minLines = 3,
-            )
+            RecurringEditorSection("Checklist", "One reusable Subtask per line.") {
+                OutlinedTextField(state.checklistText, onChecklist, Modifier.fillMaxWidth(), placeholder = { Text("One item per line") }, minLines = 3)
+            }
             PreviewCard(state, onRefreshPreview)
             PrimaryButton(
                 if (state.templateId == null) "Create recurrence" else "Save changes",
@@ -435,6 +436,21 @@ fun RecurringEditorScreen(
         confirmButton = { TextButton(onClick = onBack) { Text("Discard") } },
         dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
     )
+}
+
+@Composable
+private fun RecurringEditorSection(
+    title: String,
+    description: String,
+    content: @Composable () -> Unit,
+) {
+    SectionCard {
+        SectionHeader(title, description)
+        Column(
+            Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) { content() }
+    }
 }
 
 @Composable

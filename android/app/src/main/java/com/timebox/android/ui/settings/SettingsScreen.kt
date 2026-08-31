@@ -56,6 +56,7 @@ fun SettingsScreen(
     notificationsAllowed: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onOpenThemePreview: () -> Unit = {},
     onRetry: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -135,12 +136,21 @@ fun SettingsScreen(
 
         SectionCard {
             SectionHeader(title = "Appearance")
-            Box(modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 SettingRow(
                     title = "Dark theme",
                     description = "Charcoal surfaces, brighter lanes.",
                 ) {
                     TimeboxSwitch(checked = isDark, onCheckedChange = { onToggleDark() })
+                }
+                SettingRow(
+                    title = "Theme preview",
+                    description = "Inspect surfaces, type, controls, and states.",
+                ) {
+                    androidx.compose.material3.TextButton(onClick = onOpenThemePreview) { Text("Open") }
                 }
             }
         }
@@ -310,8 +320,8 @@ private fun ConnectionField(
         shape = TimeboxShapes.field,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = colors.lowest,
-            unfocusedContainerColor = colors.lowest,
+            focusedContainerColor = colors.field,
+            unfocusedContainerColor = colors.field,
             focusedIndicatorColor = colors.outline,
             unfocusedIndicatorColor = colors.hairline,
             cursorColor = colors.on,
