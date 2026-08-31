@@ -1,14 +1,18 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.test.espresso.Espresso.pressBack
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +47,7 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
+            readyTasks = listOf(task(42, "Write brief")),
             isPlanningMode = true,
         )
 
@@ -66,7 +71,7 @@ class PlanModeScreenTest {
         compose.onNodeWithText("Done").fetchSemanticsNode()
         compose.onNodeWithText("Tasks to plan", ignoreCase = true).fetchSemanticsNode()
         check(compose.onAllNodesWithText("Actual", ignoreCase = true).fetchSemanticsNodes().isEmpty())
-        compose.onNodeWithText("Nothing waiting to be planned.").fetchSemanticsNode()
+        compose.onNodeWithContentDescription("Schedule Write brief").fetchSemanticsNode()
     }
 
     @Test
@@ -143,6 +148,7 @@ class PlanModeScreenTest {
     fun draggingTaskCardOntoOpenPlannedTimeRequestsPlacement() {
         val date = LocalDate.of(2026, 8, 20)
         var placement: Pair<Int, Int>? = null
+        val haptics = RecordingHaptics()
         val readyTask = task(42, "Write brief")
         var state by mutableStateOf(
             DayUiState(
@@ -155,34 +161,48 @@ class PlanModeScreenTest {
 
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                DayScreen(
-                    state = state,
-                    onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
-                    onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
-                    onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
-                    onNoteChange = {}, onDeleteSelected = {},
-                    onConfirmSelectedTaskCompletion = {},
-                    onReopenSelectedTask = {},
-                    onOpenLinkedTask = {}, onSetPlanningMode = {},
-                    onPlanTask = { taskId, minute ->
-                        placement = taskId to minute
-                        state = state.copy(
-                            planningDrafts = state.planningDrafts + (
-                                taskId to PlanningDraftPlacement(date, readyTask, minute, minute + 30)
+                CompositionLocalProvider(LocalHapticFeedback provides haptics) {
+                    DayScreen(
+                        state = state,
+                        onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
+                        onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
+                        onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
+                        onNoteChange = {}, onDeleteSelected = {},
+                        onConfirmSelectedTaskCompletion = {},
+                        onReopenSelectedTask = {},
+                        onOpenLinkedTask = {}, onSetPlanningMode = {},
+                        onPlanTask = { taskId, minute ->
+                            placement = taskId to minute
+                            state = state.copy(
+                                planningDrafts = state.planningDrafts + (
+                                    taskId to PlanningDraftPlacement(date, readyTask, minute, minute + 30)
+                                )
                             )
-                        )
-                    },
-                    onArmAccessibleTask = {}, onRetryReadyTasks = {},
-                )
+                        },
+                        onArmAccessibleTask = {}, onRetryReadyTasks = {},
+                    )
+                }
             }
         }
 
         compose.onNodeWithText("Write brief").performTouchInput {
-            swipe(center, center + Offset(-500f, 0f), durationMillis = 700)
+            swipe(center, center + Offset(-500f, 0f), durationMillis = 200)
+        }
+        compose.runOnIdle {
+            check(placement == null)
+            check(haptics.events.isEmpty())
+        }
+
+        compose.onNodeWithText("Write brief").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(-500f, 0f))
+            up()
         }
         compose.runOnIdle {
             check(placement?.first == 42)
             check(placement?.second != null)
+            check(haptics.events == listOf(HapticFeedbackType.LongPress))
         }
         compose.onNodeWithContentDescription("Planning draft Write brief").fetchSemanticsNode()
     }
@@ -232,7 +252,10 @@ class PlanModeScreenTest {
         }
 
         compose.onNodeWithText("Write brief").performTouchInput {
-            swipe(center, center + Offset(-500f, 0f), durationMillis = 700)
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(-500f, 0f))
+            up()
         }
         compose.runOnIdle { check(placement == null) }
     }
@@ -241,6 +264,7 @@ class PlanModeScreenTest {
     fun persistedPlannedCardIsLockedInPlanMode() {
         val date = LocalDate.of(2026, 8, 20)
         var moved = false
+        val haptics = RecordingHaptics()
         val state = DayUiState(
             date = date,
             pages = mapOf(
@@ -270,36 +294,173 @@ class PlanModeScreenTest {
 
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                DayScreen(
-                    state = state,
-                    onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
-                    onSelectBlock = {}, onCommitMove = { _, _, _ -> moved = true }, onDismissSheet = {},
-                    onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
-                    onNoteChange = {}, onDeleteSelected = {},
-                    onConfirmSelectedTaskCompletion = {},
-                    onReopenSelectedTask = {},
-                    onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
-                    onArmAccessibleTask = {}, onRetryReadyTasks = {},
-                )
+                CompositionLocalProvider(LocalHapticFeedback provides haptics) {
+                    DayScreen(
+                        state = state,
+                        onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
+                        onSelectBlock = {}, onCommitMove = { _, _, _ -> moved = true }, onDismissSheet = {},
+                        onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
+                        onNoteChange = {}, onDeleteSelected = {},
+                        onConfirmSelectedTaskCompletion = {},
+                        onReopenSelectedTask = {},
+                        onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
+                        onArmAccessibleTask = {}, onRetryReadyTasks = {},
+                    )
+                }
             }
         }
 
-        compose.onNodeWithText("Locked work").performTouchInput {
-            swipe(center, center + Offset(0f, 180f), durationMillis = 500)
+        compose.onNodeWithTag("day-block-1").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, 180f))
+            up()
         }
-        compose.runOnIdle { check(!moved) }
+        compose.runOnIdle {
+            check(!moved)
+            check(haptics.events.isEmpty())
+        }
+    }
+
+    @Test
+    fun planningDraftResizeGroovesRequireLongPress() {
+        val date = LocalDate.of(2026, 8, 20)
+        val draftTask = task(42, "Resize me")
+        var updated: Triple<Int, Int, Int>? = null
+        val haptics = RecordingHaptics()
+        val state = DayUiState(
+            date = date,
+            pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
+            readyTasks = listOf(draftTask, task(43, "Other task")),
+            planningDrafts = mapOf(
+                draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+            ),
+            isPlanningMode = true,
+        )
+        setPlanningContent(
+            state = state,
+            haptics = haptics,
+            onUpdatePlanningDraft = { id, start, end -> updated = Triple(id, start, end) },
+        )
+
+        val draft = compose.onNodeWithContentDescription("Planning draft Resize me")
+        draft.performTouchInput {
+            val topGroove = Offset(center.x, 2f)
+            swipe(topGroove, topGroove + Offset(0f, 150f), durationMillis = 200)
+        }
+        compose.runOnIdle {
+            check(updated == null)
+            check(haptics.events.isEmpty())
+        }
+
+        draft.performTouchInput {
+            val topGroove = Offset(center.x, 2f)
+            down(topGroove)
+            advanceEventTime(1_000)
+            moveTo(topGroove + Offset(0f, 150f))
+            up()
+        }
+        compose.runOnIdle {
+            check(updated?.first == 42)
+            check(updated?.second != 9 * 60)
+            check(updated?.third == 10 * 60)
+            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+            updated = null
+            haptics.events.clear()
+        }
+
+        draft.performTouchInput {
+            val bottomGroove = Offset(center.x, height - 2f)
+            down(bottomGroove)
+            advanceEventTime(1_000)
+            moveTo(bottomGroove + Offset(0f, -150f))
+            up()
+        }
+        compose.runOnIdle {
+            check(updated?.first == 42)
+            check(updated?.second == 9 * 60)
+            check(updated?.third != 10 * 60)
+            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+        }
+    }
+
+    @Test
+    fun savingDisabledPlanningDraftDoesNotArm() {
+        val date = LocalDate.of(2026, 8, 20)
+        val draftTask = task(42, "Saving draft")
+        var changed = false
+        val haptics = RecordingHaptics()
+        val state = DayUiState(
+            date = date,
+            pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
+            readyTasks = listOf(draftTask, task(43, "Other task")),
+            planningDrafts = mapOf(
+                draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+            ),
+            isPlanningMode = true,
+            saving = true,
+        )
+        setPlanningContent(
+            state = state,
+            haptics = haptics,
+            onUpdatePlanningDraft = { _, _, _ -> changed = true },
+            onReturnPlanningDraft = { _ -> changed = true },
+        )
+
+        compose.onNodeWithContentDescription("Planning draft Saving draft").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, 150f))
+            up()
+        }
+        compose.runOnIdle {
+            check(!changed)
+            check(haptics.events.isEmpty())
+        }
+    }
+
+    @Test
+    fun taskRailEarlyVerticalMovementScrollsWithoutArming() {
+        val date = LocalDate.of(2026, 8, 20)
+        var placed = false
+        val haptics = RecordingHaptics()
+        val state = DayUiState(
+            date = date,
+            pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
+            readyTasks = (1..15).map { task(it, "Task $it") },
+            isPlanningMode = true,
+        )
+        setPlanningContent(
+            state = state,
+            haptics = haptics,
+            onPlanTask = { _, _ -> placed = true },
+        )
+
+        val card = compose.onNodeWithContentDescription("Schedule Task 5")
+        val before = card.fetchSemanticsNode().boundsInRoot.top
+        card.performTouchInput {
+            swipe(center, center + Offset(0f, -180f), durationMillis = 200)
+        }
+        val after = compose.onNodeWithContentDescription("Schedule Task 5")
+            .fetchSemanticsNode().boundsInRoot.top
+        compose.runOnIdle {
+            check(after < before)
+            check(!placed)
+            check(haptics.events.isEmpty())
+        }
     }
 
     @Test
     fun bluePlanningDraftCanReturnToTaskRail() {
         val date = LocalDate.of(2026, 8, 20)
         val draftTask = task(42, "Return me")
+        val haptics = RecordingHaptics()
         var returnedTaskId: Int? = null
         var state by mutableStateOf(
             DayUiState(
                 date = date,
                 pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-                readyTasks = listOf(draftTask),
+                readyTasks = listOf(draftTask, task(43, "Other task")),
                 planningDrafts = mapOf(
                     draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
                 ),
@@ -309,29 +470,31 @@ class PlanModeScreenTest {
 
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                DayScreen(
-                    state = state,
-                    onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
-                    onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
-                    onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
-                    onNoteChange = {}, onDeleteSelected = {},
-                    onConfirmSelectedTaskCompletion = {},
-                    onReopenSelectedTask = {},
-                    onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
-                    onUpdatePlanningDraft = { taskId, start, end ->
-                        val draft = state.planningDrafts.getValue(taskId)
-                        state = state.copy(
-                            planningDrafts = state.planningDrafts + (
-                                taskId to draft.copy(startMinute = start, endMinute = end)
+                CompositionLocalProvider(LocalHapticFeedback provides haptics) {
+                    DayScreen(
+                        state = state,
+                        onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
+                        onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
+                        onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
+                        onNoteChange = {}, onDeleteSelected = {},
+                        onConfirmSelectedTaskCompletion = {},
+                        onReopenSelectedTask = {},
+                        onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = { _, _ -> },
+                        onUpdatePlanningDraft = { taskId, start, end ->
+                            val draft = state.planningDrafts.getValue(taskId)
+                            state = state.copy(
+                                planningDrafts = state.planningDrafts + (
+                                    taskId to draft.copy(startMinute = start, endMinute = end)
+                                )
                             )
-                        )
-                    },
-                    onReturnPlanningDraft = { taskId ->
-                        returnedTaskId = taskId
-                        state = state.copy(planningDrafts = state.planningDrafts - taskId)
-                    },
-                    onArmAccessibleTask = {}, onRetryReadyTasks = {},
-                )
+                        },
+                        onReturnPlanningDraft = { taskId ->
+                            returnedTaskId = taskId
+                            state = state.copy(planningDrafts = state.planningDrafts - taskId)
+                        },
+                        onArmAccessibleTask = {}, onRetryReadyTasks = {},
+                    )
+                }
             }
         }
 
@@ -343,13 +506,54 @@ class PlanModeScreenTest {
 
         val draftNode = compose.onNodeWithContentDescription("Planning draft Return me")
         val draftBounds = draftNode.fetchSemanticsNode().boundsInRoot
-        val railCenter = compose.onNodeWithText("Nothing waiting to be planned.")
+        val railCenter = compose.onNodeWithTag("planning-task-rail")
             .fetchSemanticsNode().boundsInRoot.center
         draftNode.performTouchInput {
-            swipe(center, railCenter - draftBounds.topLeft, durationMillis = 700)
+            swipe(center, railCenter - draftBounds.topLeft, durationMillis = 200)
         }
-        compose.runOnIdle { check(returnedTaskId == 42) }
+        compose.runOnIdle {
+            check(returnedTaskId == null)
+            check(haptics.events.isEmpty())
+        }
+
+        draftNode.performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(railCenter - draftBounds.topLeft)
+            up()
+        }
+        compose.runOnIdle {
+            check(returnedTaskId == 42)
+            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+        }
         compose.onNodeWithContentDescription("Schedule Return me").fetchSemanticsNode()
+    }
+
+    private fun setPlanningContent(
+        state: DayUiState,
+        haptics: RecordingHaptics,
+        onPlanTask: (Int, Int) -> Unit = { _, _ -> },
+        onUpdatePlanningDraft: (Int, Int, Int) -> Unit = { _, _, _ -> },
+        onReturnPlanningDraft: (Int) -> Unit = {},
+    ) {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                CompositionLocalProvider(LocalHapticFeedback provides haptics) {
+                    DayScreen(
+                        state = state,
+                        onDateSettled = {}, onRetry = {}, onTapSlot = { _, _ -> },
+                        onSelectBlock = {}, onCommitMove = { _, _, _ -> }, onDismissSheet = {},
+                        onChooseType = {}, onTypeQueryChange = {}, onCreateType = {},
+                        onNoteChange = {}, onDeleteSelected = {},
+                        onConfirmSelectedTaskCompletion = {}, onReopenSelectedTask = {},
+                        onOpenLinkedTask = {}, onSetPlanningMode = {}, onPlanTask = onPlanTask,
+                        onUpdatePlanningDraft = onUpdatePlanningDraft,
+                        onReturnPlanningDraft = onReturnPlanningDraft,
+                        onArmAccessibleTask = {}, onRetryReadyTasks = {},
+                    )
+                }
+            }
+        }
     }
 
     private fun emptyDay(date: LocalDate) = Day(

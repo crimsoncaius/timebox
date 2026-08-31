@@ -8,7 +8,7 @@ both talk to the same FastAPI backend, and neither shares code with the other.
 
 | Screen | Notes |
 | --- | --- |
-| **Day** | Dual-lane planned/actual timeline on the 30-minute grid, hour gutter, now line, tap-to-create, drag to move, grooves to resize, bottom sheet to edit. |
+| **Day** | Dual-lane planned/actual timeline on the 30-minute grid, hour gutter, now line, tap-to-create, long-press then drag to move, grooves to resize, bottom sheet to edit. |
 | **Battle Plan** | Projects and admin tasks, subtasks, filters, deadlines, reminders, Ready to Plan, archive/trash, and task detail editing. |
 | **Recurring** | Scheduled and quota-based templates with preview, create/edit, pause, resume, end, and delete flows. |
 | **Chronicle** | Month grid; days that have at least one block show their window (e.g. `8–20`). Any cell opens that date in Day. |
@@ -123,9 +123,10 @@ webfont; the glyph names map one-to-one.
 
 ## Known behaviours worth knowing
 
-- **Blocks capture vertical drags.** As in the design (`touch-action: none` on
-  blocks), starting a drag on a block moves it rather than scrolling the timeline.
-  Scroll from the gutter or an empty part of a lane.
+- **Direct manipulation is armed by a long press.** Touch and stylus users hold a
+  movable Planned Block, Planning Draft, or Tasks-to-Plan card until the haptic,
+  then drag to move or resize it. Movement before the haptic remains available to
+  timeline scrolling and day swiping; mouse dragging remains immediate.
 - **Notes save on dismiss.** Choosing a task type and dragging save immediately; the
   note field writes when the sheet closes, to avoid a request per keystroke.
 - **The type picker can create types.** Typing a path that does not exist offers a

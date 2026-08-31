@@ -7,7 +7,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,12 +47,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -354,6 +356,7 @@ private fun PlanningTaskRail(
     val visibleTasks = state.readyTasks.filterNot { it.id in state.planningDrafts }
     Column(
         modifier = modifier
+            .testTag("planning-task-rail")
             .clip(RoundedCornerShape(3.dp))
             .background(if (returnDropActive) colors.plannedSurface else colors.low)
             .border(
@@ -496,6 +499,7 @@ private fun PlanningTaskCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
+    val haptics = LocalHapticFeedback.current
     var cardRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     var pointerRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     val currentOnArmAccessible by rememberUpdatedState(onArmAccessible)
@@ -518,13 +522,15 @@ private fun PlanningTaskCard(
             .onGloballyPositioned { cardRoot = it.positionInRoot() }
             .pointerInput(task.id, enabled) {
                 if (!enabled) return@pointerInput
-                detectDragGestures(
+                detectLongPressArmedDragGestures(
+                    onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
                     onDragStart = { offset ->
                         pointerRoot = cardRoot + offset
                         currentOnDragStart(pointerRoot)
                     },
-                    onDrag = { change, amount ->
-                        change.consume()
+                    onDrag = { _, amount ->
                         pointerRoot += amount
                         currentOnDrag(pointerRoot)
                     },

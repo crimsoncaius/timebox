@@ -5,8 +5,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,12 +36,15 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -63,7 +64,6 @@ import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -75,6 +75,18 @@ private data class DragState(
 )
 
 private enum class DragMode { Move, ResizeStart, ResizeEnd }
+
+private fun PointerInputScope.dragModeForPress(pressY: Float): DragMode {
+    val grab = minOf(
+        maxOf(TimeboxDimens.grooveHeight.toPx(), 14.dp.toPx()),
+        size.height / 3f,
+    )
+    return when {
+        pressY < grab -> DragMode.ResizeStart
+        pressY > size.height - grab -> DragMode.ResizeEnd
+        else -> DragMode.Move
+    }
+}
 
 enum class PlanningPreviewState { Valid, Invalid, Pending }
 
@@ -364,6 +376,7 @@ private fun LaneColumn(
                     val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
                     onCommitMove(block.id, start, end)
                 },
+                onDragCancel = { onDragChange(null) },
             )
         }
 
@@ -515,6 +528,7 @@ private fun PlanningDraftCard(
     onReturn: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
+    val haptics = LocalHapticFeedback.current
     var cardRoot by remember(placement.taskId) { mutableStateOf(Offset.Zero) }
     var resizePreview by remember(placement.taskId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val startMinute = resizePreview?.first ?: placement.startMinute
@@ -580,46 +594,23 @@ private fun PlanningDraftCard(
                 gesturesEnabled,
             ) {
                 if (!gesturesEnabled) return@pointerInput
-                val slop = viewConfiguration.touchSlop
                 val slotPx = slotHeight.toPx()
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val grab = minOf(
-                        maxOf(TimeboxDimens.grooveHeight.toPx(), 14.dp.toPx()),
-                        size.height / 3f,
-                    )
-                    val mode = when {
-                        down.position.y < grab -> DragMode.ResizeStart
-                        down.position.y > size.height - grab -> DragMode.ResizeEnd
-                        else -> DragMode.Move
-                    }
-                    down.consume()
-                    var total = Offset.Zero
-                    var pointerRoot = cardRoot + down.position
-                    var isDrag = false
-                    while (true) {
-                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) break
-                        total += change.positionChangeIgnoreConsumed()
-                        pointerRoot = cardRoot + change.position
-                        if (total.getDistance() > slop) {
-                            isDrag = true
-                            change.consume()
-                            break
-                        }
-                    }
-                    if (!isDrag) return@awaitEachGesture
-
-                    if (mode == DragMode.Move) {
-                        onDragStart(pointerRoot, down.position.y)
-                    }
-                    while (true) {
-                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
-                        if (change == null || !change.pressed) break
-                        val moved = change.positionChangeIgnoreConsumed()
+                var mode = DragMode.Move
+                var total = Offset.Zero
+                var pointerRoot = Offset.Zero
+                detectLongPressArmedDragGestures(
+                    onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onDragStart = { down ->
+                        mode = dragModeForPress(down.y)
+                        total = Offset.Zero
+                        pointerRoot = cardRoot + down
+                        if (mode == DragMode.Move) onDragStart(pointerRoot, down.y)
+                    },
+                    onDrag = { _, moved ->
                         total += moved
-                        pointerRoot = cardRoot + change.position
-                        change.consume()
+                        pointerRoot += moved
                         if (mode == DragMode.Move) {
                             onDrag(pointerRoot)
                         } else {
@@ -638,14 +629,20 @@ private fun PlanningDraftCard(
                                 DragMode.Move -> null
                             }
                         }
-                    }
-                    if (mode == DragMode.Move) {
-                        onDragEnd(pointerRoot)
-                    } else {
-                        resizePreview?.let { onResize(it.first, it.second) }
+                    },
+                    onDragEnd = {
+                        if (mode == DragMode.Move) {
+                            onDragEnd(pointerRoot)
+                        } else {
+                            resizePreview?.let { onResize(it.first, it.second) }
+                            resizePreview = null
+                        }
+                    },
+                    onDragCancel = {
+                        if (mode == DragMode.Move) onDragCancel()
                         resizePreview = null
-                    }
-                }
+                    },
+                )
             },
     ) {
         Column(Modifier.fillMaxSize()) {
@@ -688,8 +685,10 @@ private fun BlockCard(
     onTap: () -> Unit,
     onDrag: (DragMode, Float) -> Unit,
     onDragEnd: (DragMode, Float) -> Unit,
+    onDragCancel: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
+    val haptics = LocalHapticFeedback.current
     val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
     val slotsTall = (endMinute - startMinute).toFloat() / SLOT_MINUTES
     val height = max(slotHeight.value * slotsTall, slotHeight.value).dp
@@ -706,6 +705,7 @@ private fun BlockCard(
             .padding(horizontal = 3.dp)
             .fillMaxWidth()
             .height(height)
+            .testTag("day-block-${block.id}")
             .graphicsLayer { if (dragging) rotationZ = -1f }
             .shadow(elevation, TimeboxShapes.block, clip = false)
             .clip(TimeboxShapes.block)
@@ -716,79 +716,35 @@ private fun BlockCard(
                 }
             )
             // Tap, move and both resizes start with a press on the same card, so one
-            // handler owns all of them. Detectors on nested nodes — a groove inside the
-            // card — fight over the pointer and neither wins reliably, so where the
-            // press lands decides what the drag means. Move past the slop and it is a
-            // drag; lift without moving and it is a tap.
+            // handler owns all of them. Where the armed press began decides what the
+            // manipulation means; movement before arming remains available to the
+            // surrounding timeline scroll and day pager.
             .pointerInput(block.id, block.startMinute, block.endMinute, gesturesEnabled) {
                 if (!gesturesEnabled) {
                     detectTapGestures { onTap() }
                     return@pointerInput
                 }
-                val slop = viewConfiguration.touchSlop
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    // The drawn groove is only 8dp, so the grab zone is given a little
-                    // more reach than the paint — but never more than a third of the
-                    // card, or a one-slot block would have nothing left to move by.
-                    val grab = minOf(
-                        maxOf(TimeboxDimens.grooveHeight.toPx(), 14.dp.toPx()),
-                        size.height / 3f,
-                    )
-                    val mode = when {
-                        down.position.y < grab -> DragMode.ResizeStart
-                        down.position.y > size.height - grab -> DragMode.ResizeEnd
-                        else -> DragMode.Move
-                    }
-                    // Claim the press so the lane underneath does not also treat it as a
-                    // tap on empty space and open a draft over the top of our selection.
-                    down.consume()
-                    var total = 0f
-                    var sideways = 0f
-                    var isDrag = false
-                    var swiping = false
-
-                    // The timeline's own vertical scroll claims these moves, and a claimed
-                    // change reports a zero delta to `positionChange`. Reading past the
-                    // claim is what lets a block outrank the scroll it sits in — without it
-                    // the total never grows and every drag decays into a tap.
-                    while (true) {
-                        val change = awaitPointerEvent().changes
-                            .firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) break
-                        val moved = change.positionChangeIgnoreConsumed()
+                var mode = DragMode.Move
+                var total = 0f
+                detectLongPressArmedDragGestures(
+                    onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onTap = { onTap() },
+                    onDragStart = { down ->
+                        // The drawn groove is only 8dp, so the grab zone is given a
+                        // little more reach than the paint — but never more than a third
+                        // of the card, or a one-slot block would have no move surface.
+                        mode = dragModeForPress(down.y)
+                        total = 0f
+                    },
+                    onDrag = { _, moved ->
                         total += moved.y
-                        sideways += moved.x
-                        // A sideways drag is the screen's day swipe passing through. Reading
-                        // past the claim means that swipe cannot cancel this gesture the way
-                        // it cancels an ordinary tap, so the card has to stand down itself —
-                        // otherwise the lift lands as a tap and the sheet opens over the day
-                        // the user just swiped to.
-                        if (abs(sideways) > slop && abs(sideways) > abs(total)) {
-                            swiping = true
-                            break
-                        }
-                        if (abs(total) > slop) {
-                            isDrag = true
-                            change.consume()
-                            break
-                        }
-                    }
-
-                    if (isDrag) {
-                        while (true) {
-                            val change = awaitPointerEvent().changes
-                                .firstOrNull { it.id == down.id }
-                            if (change == null || !change.pressed) break
-                            total += change.positionChangeIgnoreConsumed().y
-                            change.consume()
-                            onDrag(mode, total)
-                        }
-                        onDragEnd(mode, total)
-                    } else if (!swiping) {
-                        onTap()
-                    }
-                }
+                        onDrag(mode, total)
+                    },
+                    onDragEnd = { onDragEnd(mode, total) },
+                    onDragCancel = onDragCancel,
+                )
             },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
