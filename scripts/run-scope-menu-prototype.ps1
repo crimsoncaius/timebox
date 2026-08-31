@@ -23,7 +23,7 @@ if ($LASTEXITCODE -ne 0) { throw "Debug build or install failed." }
 if ($LASTEXITCODE -ne 0) { throw "Could not stop the existing debug app instance." }
 
 & $adb shell am start -W -a android.intent.action.VIEW `
-    -d "timebox://prototype/task-actions-menu?variant=$Variant" com.timebox.android
+    -d "timebox://prototype/scope-menu?variant=$Variant" com.timebox.android
 if ($LASTEXITCODE -ne 0) { throw "Could not open the prototype activity." }
 
-Write-Output "Opened task-actions menu prototype variant $Variant."
+Write-Output "Opened scope-menu prototype variant $Variant."

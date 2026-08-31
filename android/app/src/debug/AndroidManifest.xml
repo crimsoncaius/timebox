@@ -3,9 +3,9 @@
 
     <application>
         <activity
-            android:name=".ui.battleplan.prototype.TaskActionsMenuPrototypeActivity"
+            android:name=".ui.battleplan.prototype.ScopeMenuPrototypeActivity"
             android:exported="true"
-            android:label="Task actions menu prototype"
+            android:label="Scope menu prototype"
             android:theme="@style/Theme.Timebox">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -15,7 +15,7 @@
 
                 <data
                     android:host="prototype"
-                    android:pathPrefix="/task-actions-menu"
+                    android:pathPrefix="/scope-menu"
                     android:scheme="timebox" />
             </intent-filter>
         </activity>

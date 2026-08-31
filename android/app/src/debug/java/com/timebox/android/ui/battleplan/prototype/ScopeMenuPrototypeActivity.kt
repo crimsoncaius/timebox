@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,13 +28,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.automirrored.outlined.ListAlt
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.HorizontalDivider
@@ -52,7 +55,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,12 +67,12 @@ import java.util.Locale
 /**
  * PROTOTYPE — throwaway code.
  *
- * Three variants of the Battle Plan task-actions dropdown, switchable via
- * timebox://prototype/task-actions-menu?variant=A on this debug-only host.
+ * Three variants of the mobile Battle Plan scope dropdown opened from “All Tasks”,
+ * switchable via timebox://prototype/scope-menu?variant=A in a debug build.
  */
-class TaskActionsMenuPrototypeActivity : ComponentActivity() {
+class ScopeMenuPrototypeActivity : ComponentActivity() {
     private var activeVariant by mutableStateOf(PrototypeVariant.A)
-    private var darkTheme by mutableStateOf(true)
+    private var darkTheme by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,7 +82,7 @@ class TaskActionsMenuPrototypeActivity : ComponentActivity() {
 
         setContent {
             TimeboxTheme(darkTheme = darkTheme) {
-                TaskActionsMenuPrototype(
+                ScopeMenuPrototype(
                     variant = activeVariant,
                     darkTheme = darkTheme,
                     onVariantChange = ::showVariant,
@@ -111,7 +113,7 @@ class TaskActionsMenuPrototypeActivity : ComponentActivity() {
 
     private fun readIntent(intent: Intent) {
         activeVariant = PrototypeVariant.from(intent.data)
-        darkTheme = intent.data?.getQueryParameter("theme") != "light"
+        darkTheme = intent.data?.getQueryParameter("theme") == "dark"
     }
 
     private fun showVariant(variant: PrototypeVariant) {
@@ -129,7 +131,7 @@ class TaskActionsMenuPrototypeActivity : ComponentActivity() {
         setIntent(
             Intent(intent).setData(
                 Uri.parse(
-                    "timebox://prototype/task-actions-menu" +
+                    "timebox://prototype/scope-menu" +
                         "?variant=${activeVariant.key}&theme=${if (darkTheme) "dark" else "light"}",
                 ),
             ),
@@ -145,9 +147,9 @@ class TaskActionsMenuPrototypeActivity : ComponentActivity() {
 }
 
 private enum class PrototypeVariant(val key: String, val label: String) {
-    A("A", "Section bands"),
-    B("B", "Grouped controls"),
-    C("C", "Action rail");
+    A("A", "Reference table"),
+    B("B", "Inset groups"),
+    C("C", "Section rail");
 
     fun previous(): PrototypeVariant = entries[(ordinal - 1 + entries.size) % entries.size]
     fun next(): PrototypeVariant = entries[(ordinal + 1) % entries.size]
@@ -160,33 +162,42 @@ private enum class PrototypeVariant(val key: String, val label: String) {
     }
 }
 
-private data class PrototypeAction(
+private data class ScopeAction(
     val label: String,
     val icon: ImageVector,
-    val tone: ActionTone = ActionTone.Neutral,
+    val selectable: Boolean = false,
+    val destructive: Boolean = false,
 )
 
-private enum class ActionTone { Neutral, Open, Active, Complete }
-
-private val reorderActions = listOf(
-    PrototypeAction("Move earlier", Icons.Outlined.KeyboardArrowUp),
-    PrototypeAction("Move later", Icons.Outlined.KeyboardArrowDown),
+private val taskActions = listOf(
+    ScopeAction("All Tasks", Icons.AutoMirrored.Outlined.ListAlt, selectable = true),
+    ScopeAction("Admin", Icons.Outlined.Inbox, selectable = true),
 )
 
-private val destinationActions = listOf(
-    PrototypeAction("Move to In Progress", Icons.Outlined.PlayArrow, ActionTone.Active),
-    PrototypeAction("Move to Completed", Icons.Outlined.CheckCircle, ActionTone.Complete),
+private val projectActions = listOf(
+    ScopeAction("New project", Icons.Outlined.Add),
+)
+
+private val libraryActions = listOf(
+    ScopeAction("Recurring", Icons.Outlined.Repeat),
+    ScopeAction("Archive", Icons.Outlined.Archive),
+    ScopeAction("Trash", Icons.Outlined.Delete, destructive = true),
 )
 
 @Composable
-private fun TaskActionsMenuPrototype(
+private fun ScopeMenuPrototype(
     variant: PrototypeVariant,
     darkTheme: Boolean,
     onVariantChange: (PrototypeVariant) -> Unit,
     onThemeChange: (Boolean) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    var lastAction by remember { mutableStateOf("No action chosen") }
+    var selectedScope by remember { mutableStateOf("All Tasks") }
+    var lastAction by remember { mutableStateOf("Menu open") }
+    val onAction: (ScopeAction) -> Unit = { action ->
+        if (action.selectable) selectedScope = action.label
+        lastAction = action.label
+    }
 
     Box(Modifier.fillMaxSize().background(colors.bg)) {
         Column(
@@ -200,19 +211,19 @@ private fun TaskActionsMenuPrototype(
                 darkTheme = darkTheme,
                 onThemeChange = onThemeChange,
             )
-            BattlePlanContext()
+            BattlePlanContext(selectedScope = selectedScope)
         }
 
         Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .statusBarsPadding()
-                .padding(top = 218.dp, end = 14.dp),
+                .padding(start = 12.dp, top = 218.dp),
         ) {
             when (variant) {
-                PrototypeVariant.A -> SectionBandsMenu(onAction = { lastAction = it })
-                PrototypeVariant.B -> GroupedControlsMenu(onAction = { lastAction = it })
-                PrototypeVariant.C -> ActionRailMenu(onAction = { lastAction = it })
+                PrototypeVariant.A -> ReferenceTableMenu(selectedScope, onAction)
+                PrototypeVariant.B -> InsetGroupsMenu(selectedScope, onAction)
+                PrototypeVariant.C -> SectionRailMenu(selectedScope, onAction)
             }
         }
 
@@ -239,16 +250,13 @@ private fun PrototypeHeader(
                 Text("Tasks", style = TimeboxTheme.type.screenTitle, color = colors.on)
             }
             Row(
-                modifier = Modifier
-                    .clip(TimeboxShapes.chip)
-                    .background(colors.low)
-                    .padding(2.dp),
+                modifier = Modifier.clip(TimeboxShapes.chip).background(colors.low).padding(2.dp),
             ) {
                 ThemeChoice("Light", selected = !darkTheme) { onThemeChange(false) }
                 ThemeChoice("Dark", selected = darkTheme) { onThemeChange(true) }
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(9.dp))
         Text(
             "PROTOTYPE STATE  ·  $lastAction",
             style = TimeboxTheme.type.navLabel,
@@ -279,61 +287,59 @@ private fun ThemeChoice(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BattlePlanContext() {
+private fun BattlePlanContext(selectedScope: String) {
     val colors = TimeboxTheme.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Outlined.Inbox, contentDescription = null, tint = colors.on, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("All Tasks", style = TimeboxTheme.type.sectionTitle, color = colors.on)
+            Row(
+                modifier = Modifier
+                    .heightIn(min = TimeboxDimens.touchTarget)
+                    .clip(TimeboxShapes.chip)
+                    .clickable { }
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    if (selectedScope == "Admin") Icons.Outlined.Inbox else Icons.AutoMirrored.Outlined.ListAlt,
+                    contentDescription = null,
+                    tint = colors.on,
+                    modifier = Modifier.size(19.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(selectedScope, style = TimeboxTheme.type.label, color = colors.on)
+                Spacer(Modifier.width(2.dp))
+                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = colors.onVariant)
+            }
             Spacer(Modifier.weight(1f))
-            Text("OPEN  3", style = TimeboxTheme.type.laneLabel, color = colors.onVariant)
+            IconButton(onClick = {}) {
+                Icon(Icons.Outlined.FilterList, contentDescription = "Filter tasks", tint = colors.on)
+            }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = TimeboxShapes.card,
-            color = colors.card,
-        ) {
-            Row(Modifier.padding(start = 16.dp, top = 14.dp, bottom = 16.dp, end = 4.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Prepare the quarterly planning review",
-                        style = TimeboxTheme.type.label,
-                        color = colors.on,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text("Admin  ·  2/4 subtasks", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                    Spacer(Modifier.height(9.dp))
-                    Text("Ready to Plan", style = TimeboxTheme.type.bodySmall, color = colors.planned)
-                }
-                IconButton(onClick = {}) {
-                    Icon(
-                        Icons.Outlined.EventAvailable,
-                        contentDescription = "Remove from Ready to Plan",
-                        tint = colors.planned,
-                    )
-                }
-                IconButton(onClick = {}) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "Task actions", tint = colors.onVariant)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+            listOf("Open  3", "In Progress  1", "Completed  0").forEachIndexed { index, label ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(label, style = TimeboxTheme.type.bodySmall, color = if (index == 0) colors.on else colors.onVariant)
+                    Spacer(Modifier.height(5.dp))
+                    Box(Modifier.width(38.dp).height(2.dp).background(if (index == 0) colors.on else colors.bg))
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
         repeat(2) { index ->
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                 shape = TimeboxShapes.card,
-                color = colors.card.copy(alpha = if (index == 0) 0.72f else 0.5f),
+                color = colors.card.copy(alpha = if (index == 0) 0.76f else 0.52f),
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Box(Modifier.fillMaxWidth(0.62f).height(13.dp).clip(TimeboxShapes.chip).background(colors.high))
+                    Box(Modifier.fillMaxWidth(if (index == 0) 0.68f else 0.52f).height(13.dp).clip(TimeboxShapes.chip).background(colors.high))
                     Spacer(Modifier.height(9.dp))
-                    Box(Modifier.fillMaxWidth(0.38f).height(9.dp).clip(TimeboxShapes.chip).background(colors.low))
+                    Box(Modifier.fillMaxWidth(0.36f).height(9.dp).clip(TimeboxShapes.chip).background(colors.low))
                 }
             }
         }
@@ -341,200 +347,186 @@ private fun BattlePlanContext() {
 }
 
 @Composable
-private fun SectionBandsMenu(onAction: (String) -> Unit) {
+private fun ReferenceTableMenu(selectedScope: String, onAction: (ScopeAction) -> Unit) {
     val colors = TimeboxTheme.colors
     Surface(
-        modifier = Modifier.widthIn(min = 286.dp, max = 304.dp).shadow(12.dp, TimeboxShapes.group),
-        shape = TimeboxShapes.group,
+        modifier = Modifier.width(304.dp).shadow(10.dp, RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
         color = colors.lowest,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.hairline),
+        border = BorderStroke(1.dp, colors.hairline),
     ) {
-        Column(Modifier.padding(vertical = 6.dp)) {
-            SectionBand("Reorder")
-            reorderActions.forEach { action -> BandMenuItem(action, onAction) }
+        Column(Modifier.padding(vertical = 5.dp)) {
+            TableSectionBand("Tasks")
+            taskActions.forEach { TableMenuItem(it, selectedScope, onAction) }
+            TableSectionBand("Projects")
+            projectActions.forEach { TableMenuItem(it, selectedScope, onAction) }
             HorizontalDivider(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), color = colors.hairline)
-            SectionBand("Move to")
-            destinationActions.forEach { action -> BandMenuItem(action, onAction) }
+            TableSectionBand("Library")
+            libraryActions.forEach { TableMenuItem(it, selectedScope, onAction) }
         }
     }
 }
 
 @Composable
-private fun SectionBand(label: String) {
+private fun TableSectionBand(label: String) {
     val colors = TimeboxTheme.colors
-    Box(
-        modifier = Modifier.fillMaxWidth().background(colors.low).padding(horizontal = 16.dp, vertical = 9.dp),
-    ) {
+    Box(Modifier.fillMaxWidth().background(colors.low).padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(label.uppercase(Locale.ENGLISH), style = TimeboxTheme.type.laneLabel, color = colors.onVariant)
     }
 }
 
 @Composable
-private fun BandMenuItem(action: PrototypeAction, onAction: (String) -> Unit) {
-    val colors = TimeboxTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = TimeboxDimens.touchTarget)
-            .clickable { onAction(action.label) }
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp).clip(TimeboxShapes.chip).background(colors.low),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(action.icon, contentDescription = null, tint = toneColor(action.tone), modifier = Modifier.size(18.dp))
-        }
-        Text(
-            action.label,
-            style = TimeboxTheme.type.label,
-            color = colors.on,
-            modifier = Modifier.weight(1f),
-            maxLines = 2,
-        )
-    }
-}
-
-@Composable
-private fun GroupedControlsMenu(onAction: (String) -> Unit) {
-    val colors = TimeboxTheme.colors
-    Surface(
-        modifier = Modifier.widthIn(min = 300.dp, max = 316.dp).shadow(14.dp, TimeboxShapes.group),
-        shape = TimeboxShapes.group,
-        color = colors.raised,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Text("REORDER", style = TimeboxTheme.type.laneLabel, color = colors.onVariant, modifier = Modifier.padding(start = 3.dp, bottom = 7.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                reorderActions.forEach { action ->
-                    CompactActionTile(action = action, onAction = onAction, modifier = Modifier.weight(1f))
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Text("MOVE TO", style = TimeboxTheme.type.laneLabel, color = colors.onVariant, modifier = Modifier.padding(start = 3.dp, bottom = 7.dp))
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(TimeboxShapes.card)
-                    .background(colors.low),
-            ) {
-                destinationActions.forEachIndexed { index, action ->
-                    DestinationRow(action, onAction)
-                    if (index != destinationActions.lastIndex) {
-                        HorizontalDivider(Modifier.padding(start = 46.dp), color = colors.hairline)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactActionTile(
-    action: PrototypeAction,
-    onAction: (String) -> Unit,
-    modifier: Modifier = Modifier,
+private fun TableMenuItem(
+    action: ScopeAction,
+    selectedScope: String,
+    onAction: (ScopeAction) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    Column(
-        modifier = modifier
-            .height(68.dp)
-            .clip(TimeboxShapes.card)
-            .background(colors.low)
-            .clickable { onAction(action.label) }
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Icon(action.icon, contentDescription = null, tint = colors.onVariant, modifier = Modifier.size(19.dp))
-        Text(action.label, style = TimeboxTheme.type.bodySmall, color = colors.on, maxLines = 2)
-    }
-}
-
-@Composable
-private fun DestinationRow(action: PrototypeAction, onAction: (String) -> Unit) {
-    val colors = TimeboxTheme.colors
+    val selected = action.label == selectedScope
+    val contentColor = if (action.destructive) colors.error else colors.on
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .clickable { onAction(action.label) }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .heightIn(min = 48.dp)
+            .background(if (selected) colors.surf else colors.lowest)
+            .clickable { onAction(action) }
+            .padding(horizontal = 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(8.dp).clip(TimeboxShapes.chip).background(toneColor(action.tone)))
-        Spacer(Modifier.width(12.dp))
-        Text(action.label, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.weight(1f), maxLines = 2)
-        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.onVariant, modifier = Modifier.size(19.dp))
+        Icon(action.icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(19.dp))
+        Spacer(Modifier.width(13.dp))
+        Text(action.label, style = TimeboxTheme.type.label, color = contentColor, modifier = Modifier.weight(1f), maxLines = 2)
+        if (selected) Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = colors.on, modifier = Modifier.size(20.dp))
     }
 }
 
 @Composable
-private fun ActionRailMenu(onAction: (String) -> Unit) {
+private fun InsetGroupsMenu(selectedScope: String, onAction: (ScopeAction) -> Unit) {
     val colors = TimeboxTheme.colors
     Surface(
-        modifier = Modifier.widthIn(min = 306.dp, max = 322.dp).shadow(12.dp, RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        color = colors.lowest,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.hairline),
+        modifier = Modifier.width(316.dp).shadow(12.dp, TimeboxShapes.group),
+        shape = TimeboxShapes.group,
+        color = colors.raised,
+        border = BorderStroke(1.dp, colors.outlineVariant),
     ) {
-        Column(Modifier.padding(vertical = 8.dp)) {
-            RailGroup("REORDER", reorderActions, onAction)
-            HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = colors.hairline)
-            RailGroup("MOVE TO", destinationActions, onAction)
+        Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            InsetSection("Tasks", taskActions, selectedScope, onAction)
+            InsetSection("Projects", projectActions, selectedScope, onAction)
+            InsetSection("Library", libraryActions, selectedScope, onAction)
         }
     }
 }
 
 @Composable
-private fun RailGroup(
+private fun InsetSection(
     label: String,
-    actions: List<PrototypeAction>,
-    onAction: (String) -> Unit,
+    actions: List<ScopeAction>,
+    selectedScope: String,
+    onAction: (ScopeAction) -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    Column {
+        Text(
+            label.uppercase(Locale.ENGLISH),
+            style = TimeboxTheme.type.laneLabel,
+            color = colors.onVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+        )
+        Column(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low)) {
+            actions.forEachIndexed { index, action ->
+                InsetMenuItem(action, selectedScope, onAction)
+                if (index != actions.lastIndex) {
+                    HorizontalDivider(Modifier.padding(start = 48.dp), color = colors.hairline)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsetMenuItem(
+    action: ScopeAction,
+    selectedScope: String,
+    onAction: (ScopeAction) -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    val selected = action.label == selectedScope
+    val contentColor = if (action.destructive) colors.error else colors.on
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .background(if (selected) colors.selected else Color.Transparent)
+            .clickable { onAction(action) }
+            .padding(horizontal = 13.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(28.dp).clip(TimeboxShapes.chip).background(if (selected) colors.lowest else colors.raised),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(action.icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(17.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(action.label, style = TimeboxTheme.type.label, color = contentColor, modifier = Modifier.weight(1f), maxLines = 2)
+        if (selected) Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = colors.on, modifier = Modifier.size(19.dp))
+    }
+}
+
+@Composable
+private fun SectionRailMenu(selectedScope: String, onAction: (ScopeAction) -> Unit) {
+    val colors = TimeboxTheme.colors
+    Surface(
+        modifier = Modifier.widthIn(min = 316.dp, max = 324.dp).shadow(10.dp, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
+        color = colors.lowest,
+        border = BorderStroke(1.dp, colors.hairline),
+    ) {
+        Column(Modifier.padding(vertical = 7.dp)) {
+            RailSection("TASKS", taskActions, selectedScope, onAction)
+            HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = colors.hairline)
+            RailSection("PROJECTS", projectActions, selectedScope, onAction)
+            HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = colors.hairline)
+            RailSection("LIBRARY", libraryActions, selectedScope, onAction)
+        }
+    }
+}
+
+@Composable
+private fun RailSection(
+    label: String,
+    actions: List<ScopeAction>,
+    selectedScope: String,
+    onAction: (ScopeAction) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     Row(Modifier.fillMaxWidth()) {
         Box(
-            modifier = Modifier.width(72.dp).height((actions.size * 52).dp).padding(start = 12.dp, top = 13.dp),
+            modifier = Modifier.width(78.dp).height((actions.size * 48).dp).padding(start = 13.dp, top = 16.dp),
         ) {
             Text(label, style = TimeboxTheme.type.laneLabel, color = colors.onVariant)
         }
         Column(Modifier.weight(1f)) {
-            actions.forEach { action -> RailMenuItem(action, onAction) }
+            actions.forEach { action ->
+                val selected = action.label == selectedScope
+                val contentColor = if (action.destructive) colors.error else colors.on
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp))
+                        .background(if (selected) colors.surf else Color.Transparent)
+                        .clickable { onAction(action) }
+                        .padding(start = 10.dp, end = 13.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(action.icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(11.dp))
+                    Text(action.label, style = TimeboxTheme.type.label, color = contentColor, modifier = Modifier.weight(1f), maxLines = 2)
+                    if (selected) Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = colors.on, modifier = Modifier.size(19.dp))
+                }
+            }
         }
-    }
-}
-
-@Composable
-private fun RailMenuItem(action: PrototypeAction, onAction: (String) -> Unit) {
-    val colors = TimeboxTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .clickable { onAction(action.label) }
-            .padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.width(3.dp).height(28.dp).clip(TimeboxShapes.chip).background(toneColor(action.tone)),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(action.label, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.weight(1f), maxLines = 2)
-        Icon(action.icon, contentDescription = null, tint = colors.onVariant, modifier = Modifier.size(18.dp))
-    }
-}
-
-@Composable
-private fun toneColor(tone: ActionTone): Color {
-    val colors = TimeboxTheme.colors
-    return when (tone) {
-        ActionTone.Neutral -> colors.onVariant
-        ActionTone.Open -> colors.onVariant
-        ActionTone.Active -> colors.actual
-        ActionTone.Complete -> colors.planned
     }
 }
 
