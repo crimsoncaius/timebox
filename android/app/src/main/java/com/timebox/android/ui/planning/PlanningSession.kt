@@ -3,8 +3,8 @@ package com.timebox.android.ui.planning
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
+import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.PlanningCommitPlacement
-import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -159,8 +159,11 @@ class PlanningSession internal constructor(
         if (!current.active || current.saving || taskId in current.drafts) {
             return reject("That Task cannot be planned right now")
         }
-        val start = startMinute.coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
-        val end = start + SLOT_MINUTES
+        val start = startMinute.coerceIn(
+            day.visibleStart,
+            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
+        )
+        val end = start + MIN_PLANNED_BLOCK_MINUTES
         if (!planningRangeAvailable(day, current.drafts.values, taskId, start, end)) {
             return reject("That time is already planned")
         }
@@ -253,7 +256,7 @@ internal fun planningRangeAvailable(
     startMinute: Int,
     endMinute: Int,
 ): Boolean {
-    if (endMinute - startMinute < SLOT_MINUTES) return false
+    if (endMinute - startMinute < MIN_PLANNED_BLOCK_MINUTES) return false
     if (startMinute < day.visibleStart || endMinute > day.visibleEnd || startMinute >= endMinute) return false
     if (day.lane(Lane.Planned).any {
             intervalsOverlap(startMinute, endMinute, it.startMinute, it.endMinute)

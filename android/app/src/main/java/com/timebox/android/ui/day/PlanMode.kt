@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
+import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.ui.planning.PlanningDraftPlacement
 import com.timebox.android.ui.planning.planningRangeAvailable
@@ -136,7 +137,8 @@ internal fun PlanningWorkspace(
     var returningTaskId by remember { mutableStateOf<Int?>(null) }
     val planningDrafts = state.planningDrafts(day.date)
     val showTaskRail = state.hasPlanningRailContent(day.date)
-    val dragDuration = drag?.draft?.let { it.endMinute - it.startMinute } ?: SLOT_MINUTES
+    val dragDuration = drag?.draft?.let { it.endMinute - it.startMinute }
+        ?: MIN_PLANNED_BLOCK_MINUTES
 
     val candidateStart = drag?.let {
         planningDropStart(
@@ -148,6 +150,7 @@ internal fun PlanningWorkspace(
             slotPx = slotPx,
             durationMinutes = dragDuration,
             grabOffsetPx = it.grabOffsetPx,
+            originalStartMinute = it.draft?.startMinute,
         )
     }
     val candidateValid = candidateStart?.let { start ->
@@ -247,6 +250,7 @@ internal fun PlanningWorkspace(
                             slotPx = slotPx,
                             durationMinutes = draft.endMinute - draft.startMinute,
                             grabOffsetPx = grabOffset,
+                            originalStartMinute = draft.startMinute,
                         )
                         val returnToRail = railBounds.contains(pointer)
                         val valid = start?.let {
@@ -296,13 +300,13 @@ internal fun PlanningWorkspace(
                         visibleStart = day.visibleStart,
                         visibleEnd = day.visibleEnd,
                         slotPx = slotPx,
-                        durationMinutes = SLOT_MINUTES,
+                        durationMinutes = MIN_PLANNED_BLOCK_MINUTES,
                     )
                     val valid = start?.let {
                         isPlanningDropAvailable(
                             day,
                             it,
-                            it + SLOT_MINUTES,
+                            it + MIN_PLANNED_BLOCK_MINUTES,
                             planningDrafts,
                         )
                     } ?: false
@@ -622,20 +626,27 @@ internal fun planningDropStart(
     visibleStart: Int,
     visibleEnd: Int,
     slotPx: Float,
-    durationMinutes: Int = SLOT_MINUTES,
+    durationMinutes: Int = MIN_PLANNED_BLOCK_MINUTES,
     grabOffsetPx: Float = 0f,
+    originalStartMinute: Int? = null,
 ): Int? {
     if (slotPx <= 0f || laneBounds == Rect.Zero || viewportBounds == Rect.Zero) return null
     if (pointerRoot.x < laneBounds.left || pointerRoot.x > laneBounds.right) return null
     if (pointerRoot.y < viewportBounds.top || pointerRoot.y > viewportBounds.bottom) return null
-    val slot = ((pointerRoot.y - grabOffsetPx - laneBounds.top) / slotPx).roundToInt()
-    return (visibleStart + slot * SLOT_MINUTES).coerceIn(visibleStart, visibleEnd - durationMinutes)
+    val rawStart = visibleStart +
+        (pointerRoot.y - grabOffsetPx - laneBounds.top) / slotPx * SLOT_MINUTES
+    val start = if (originalStartMinute == null) {
+        snapToBlockInteractionStep(rawStart)
+    } else {
+        originalStartMinute + snapToBlockInteractionStep(rawStart - originalStartMinute)
+    }
+    return start.coerceIn(visibleStart, visibleEnd - durationMinutes)
 }
 
 internal fun isPlanningDropAvailable(
     day: Day,
     startMinute: Int,
-    endMinute: Int = startMinute + SLOT_MINUTES,
+    endMinute: Int = startMinute + MIN_PLANNED_BLOCK_MINUTES,
     drafts: List<PlanningDraftPlacement> = emptyList(),
     excludeTaskId: Int? = null,
 ): Boolean {

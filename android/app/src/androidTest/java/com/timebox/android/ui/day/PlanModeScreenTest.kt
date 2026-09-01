@@ -22,6 +22,8 @@ import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TimeBlock
+import com.timebox.android.ui.planning.PlanningDraftPlacement
+import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Rule
 import org.junit.Test
@@ -47,8 +49,10 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
-            readyTasks = listOf(task(42, "Write brief")),
-            isPlanningMode = true,
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(task(42, "Write brief")),
+            ),
         )
 
         compose.setContent {
@@ -82,7 +86,7 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-            isPlanningMode = true,
+            planning = PlanningSessionState(active = true),
         )
 
         compose.setContent {
@@ -119,8 +123,10 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
-            readyTasks = listOf(task(42, "Write brief")),
-            isPlanningMode = true,
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(task(42, "Write brief")),
+            ),
         )
 
         compose.setContent {
@@ -154,8 +160,10 @@ class PlanModeScreenTest {
             DayUiState(
                 date = date,
                 pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-                readyTasks = listOf(readyTask),
-                isPlanningMode = true,
+                planning = PlanningSessionState(
+                    active = true,
+                    readyTasks = listOf(readyTask),
+                ),
             )
         )
 
@@ -174,9 +182,11 @@ class PlanModeScreenTest {
                         onPlanTask = { taskId, minute ->
                             placement = taskId to minute
                             state = state.copy(
-                                planningDrafts = state.planningDrafts + (
-                                    taskId to PlanningDraftPlacement(date, readyTask, minute, minute + 30)
-                                )
+                                planning = state.planning.copy(
+                                    drafts = state.planningDrafts + (
+                                        taskId to PlanningDraftPlacement(date, readyTask, minute, minute + 30)
+                                    ),
+                                ),
                             )
                         },
                         onArmAccessibleTask = {}, onRetryReadyTasks = {},
@@ -230,8 +240,10 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = occupied, loading = false, materialized = true)),
-            readyTasks = listOf(task(42, "Write brief")),
-            isPlanningMode = true,
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(task(42, "Write brief")),
+            ),
         )
 
         compose.setContent {
@@ -289,7 +301,7 @@ class PlanModeScreenTest {
                     materialized = true,
                 )
             ),
-            isPlanningMode = true,
+            planning = PlanningSessionState(active = true),
         )
 
         compose.setContent {
@@ -331,11 +343,13 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-            readyTasks = listOf(draftTask, task(43, "Other task")),
-            planningDrafts = mapOf(
-                draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(draftTask, task(43, "Other task")),
+                drafts = mapOf(
+                    draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+                ),
             ),
-            isPlanningMode = true,
         )
         setPlanningContent(
             state = state,
@@ -357,12 +371,12 @@ class PlanModeScreenTest {
             val topGroove = Offset(center.x, 2f)
             down(topGroove)
             advanceEventTime(1_000)
-            moveTo(topGroove + Offset(0f, 150f))
+            moveTo(topGroove + Offset(0f, height / 12f))
             up()
         }
         compose.runOnIdle {
             check(updated?.first == 42)
-            check(updated?.second != 9 * 60)
+            check(updated?.second == 9 * 60 + 5)
             check(updated?.third == 10 * 60)
             check(haptics.events == listOf(HapticFeedbackType.LongPress))
             updated = null
@@ -373,13 +387,13 @@ class PlanModeScreenTest {
             val bottomGroove = Offset(center.x, height - 2f)
             down(bottomGroove)
             advanceEventTime(1_000)
-            moveTo(bottomGroove + Offset(0f, -150f))
+            moveTo(bottomGroove - Offset(0f, height / 12f))
             up()
         }
         compose.runOnIdle {
             check(updated?.first == 42)
             check(updated?.second == 9 * 60)
-            check(updated?.third != 10 * 60)
+            check(updated?.third == 10 * 60 - 5)
             check(haptics.events == listOf(HapticFeedbackType.LongPress))
         }
     }
@@ -393,12 +407,14 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-            readyTasks = listOf(draftTask, task(43, "Other task")),
-            planningDrafts = mapOf(
-                draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(draftTask, task(43, "Other task")),
+                drafts = mapOf(
+                    draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+                ),
+                saving = true,
             ),
-            isPlanningMode = true,
-            saving = true,
         )
         setPlanningContent(
             state = state,
@@ -427,8 +443,10 @@ class PlanModeScreenTest {
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-            readyTasks = (1..15).map { task(it, "Task $it") },
-            isPlanningMode = true,
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = (1..15).map { task(it, "Task $it") },
+            ),
         )
         setPlanningContent(
             state = state,
@@ -460,11 +478,13 @@ class PlanModeScreenTest {
             DayUiState(
                 date = date,
                 pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
-                readyTasks = listOf(draftTask, task(43, "Other task")),
-                planningDrafts = mapOf(
-                    draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+                planning = PlanningSessionState(
+                    active = true,
+                    readyTasks = listOf(draftTask, task(43, "Other task")),
+                    drafts = mapOf(
+                        draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+                    ),
                 ),
-                isPlanningMode = true,
             )
         )
 
@@ -483,14 +503,20 @@ class PlanModeScreenTest {
                         onUpdatePlanningDraft = { taskId, start, end ->
                             val draft = state.planningDrafts.getValue(taskId)
                             state = state.copy(
-                                planningDrafts = state.planningDrafts + (
-                                    taskId to draft.copy(startMinute = start, endMinute = end)
-                                )
+                                planning = state.planning.copy(
+                                    drafts = state.planningDrafts + (
+                                        taskId to draft.copy(startMinute = start, endMinute = end)
+                                    ),
+                                ),
                             )
                         },
                         onReturnPlanningDraft = { taskId ->
                             returnedTaskId = taskId
-                            state = state.copy(planningDrafts = state.planningDrafts - taskId)
+                            state = state.copy(
+                                planning = state.planning.copy(
+                                    drafts = state.planningDrafts - taskId,
+                                ),
+                            )
                         },
                         onArmAccessibleTask = {}, onRetryReadyTasks = {},
                     )
@@ -500,9 +526,9 @@ class PlanModeScreenTest {
 
         val moveLater = compose.onNodeWithContentDescription("Planning draft Return me")
             .fetchSemanticsNode().config[SemanticsActions.CustomActions]
-            .first { it.label == "Move 30 minutes later" }
+            .first { it.label == "Move 5 minutes later" }
         check(moveLater.action())
-        compose.runOnIdle { check(state.planningDrafts.getValue(42).startMinute == 9 * 60 + 30) }
+        compose.runOnIdle { check(state.planningDrafts.getValue(42).startMinute == 9 * 60 + 5) }
 
         val draftNode = compose.onNodeWithContentDescription("Planning draft Return me")
         val draftBounds = draftNode.fetchSemanticsNode().boundsInRoot

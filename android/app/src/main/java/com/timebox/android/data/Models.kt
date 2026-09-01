@@ -16,6 +16,8 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
 const val SLOT_MINUTES = 30
+const val MIN_ACTUAL_BLOCK_MINUTES = 1
+const val MIN_PLANNED_BLOCK_MINUTES = 30
 const val DAY_END_MINUTES = 24 * 60
 
 enum class Lane(val wire: String) {

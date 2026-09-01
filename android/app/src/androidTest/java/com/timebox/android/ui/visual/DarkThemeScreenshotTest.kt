@@ -33,6 +33,7 @@ import com.timebox.android.ui.chronicle.ChronicleUiState
 import com.timebox.android.ui.day.DayPageState
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayUiState
+import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.theme.TimeboxTheme
 import com.timebox.android.ui.theme.DarkTimeboxColors
 import com.timebox.android.ui.theme.ThemePreviewScreen
@@ -259,7 +260,7 @@ class DarkThemeScreenshotTest {
                     state = DayUiState(
                         date = date,
                         today = date,
-                        isPlanningMode = true,
+                        planning = PlanningSessionState(active = true),
                         pages = mapOf(date to DayPageState(
                             day = Day(
                                 date = date,

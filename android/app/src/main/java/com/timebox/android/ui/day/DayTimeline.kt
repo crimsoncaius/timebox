@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
+import com.timebox.android.data.MIN_ACTUAL_BLOCK_MINUTES
+import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.ui.gutterLabel
@@ -76,8 +78,6 @@ private data class DragState(
 )
 
 private enum class DragMode { Move, ResizeStart, ResizeEnd }
-
-private const val BLOCK_GESTURE_STEP_MINUTES = 15
 
 private fun PointerInputScope.dragModeForPress(pressY: Float): DragMode {
     val grab = minOf(
@@ -324,6 +324,7 @@ private fun LaneColumn(
             .clip(RoundedCornerShape(3.dp))
             .background(surface)
             .border(1.dp, borderColor, RoundedCornerShape(3.dp))
+            .testTag("day-lane-${lane.name.lowercase()}")
             .then(
                 if (onBoundsChanged != null) {
                     Modifier.onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) }
@@ -333,8 +334,10 @@ private fun LaneColumn(
             )
             .pointerInput(day.visibleStart, day.visibleEnd, lane) {
                 detectTapGestures { offset ->
-                    val index = (offset.y / slotPx).toInt()
-                    onTapSlot(lane, day.visibleStart + index * SLOT_MINUTES)
+                    val rawMinute = day.visibleStart + offset.y / slotPx * SLOT_MINUTES
+                    val minute = snapToBlockInteractionStep(rawMinute)
+                        .coerceIn(day.visibleStart, day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES)
+                    onTapSlot(lane, minute)
                 }
             },
     ) {
@@ -468,7 +471,7 @@ private fun PlanningPreviewCard(
     }
 }
 
-/** Snap a raw pixel delta to 15-minute boundaries and apply it to the block's saved times. */
+/** Snap a raw pixel delta to five-minute steps and apply it to the block's saved times. */
 private fun resolveDrag(
     mode: DragMode,
     deltaPx: Float,
@@ -482,11 +485,16 @@ private fun resolveDrag(
     originalEnd = block.endMinute,
     visibleStart = day.visibleStart,
     visibleEnd = day.visibleEnd,
+    minimumDuration = if (block.lane == Lane.Planned) {
+        MIN_PLANNED_BLOCK_MINUTES
+    } else {
+        MIN_ACTUAL_BLOCK_MINUTES
+    },
 )
 
 private fun snapBlockDeltaMinutes(deltaPx: Float, slotPx: Float): Int {
-    val stepPx = slotPx * BLOCK_GESTURE_STEP_MINUTES / SLOT_MINUTES
-    return (deltaPx / stepPx).roundToInt() * BLOCK_GESTURE_STEP_MINUTES
+    val rawDeltaMinutes = deltaPx / slotPx * SLOT_MINUTES
+    return snapToBlockInteractionStep(rawDeltaMinutes)
 }
 
 /** Clamp a move/resize to the visible window, mirroring the prototype's rules. */
@@ -497,6 +505,7 @@ private fun applyDrag(
     originalEnd: Int,
     visibleStart: Int,
     visibleEnd: Int,
+    minimumDuration: Int,
 ): Pair<Int, Int> {
     var start = originalStart
     var end = originalEnd
@@ -505,8 +514,14 @@ private fun applyDrag(
             start = originalStart + deltaMinutes
             end = originalEnd + deltaMinutes
         }
-        DragMode.ResizeStart -> start = minOf(originalStart + deltaMinutes, originalEnd - SLOT_MINUTES)
-        DragMode.ResizeEnd -> end = maxOf(originalEnd + deltaMinutes, originalStart + SLOT_MINUTES)
+        DragMode.ResizeStart -> start = minOf(
+            originalStart + deltaMinutes,
+            originalEnd - minimumDuration,
+        )
+        DragMode.ResizeEnd -> end = maxOf(
+            originalEnd + deltaMinutes,
+            originalStart + minimumDuration,
+        )
     }
     if (start < visibleStart) {
         val shift = visibleStart - start
@@ -580,12 +595,18 @@ private fun PlanningDraftCard(
             .semantics {
                 contentDescription = "Planning draft ${placement.taskTitle}"
                 customActions = if (gesturesEnabled) listOf(
-                    CustomAccessibilityAction("Move 30 minutes earlier") {
-                        onResize(placement.startMinute - SLOT_MINUTES, placement.endMinute - SLOT_MINUTES)
+                    CustomAccessibilityAction("Move 5 minutes earlier") {
+                        onResize(
+                            placement.startMinute - BLOCK_INTERACTION_STEP_MINUTES,
+                            placement.endMinute - BLOCK_INTERACTION_STEP_MINUTES,
+                        )
                         true
                     },
-                    CustomAccessibilityAction("Move 30 minutes later") {
-                        onResize(placement.startMinute + SLOT_MINUTES, placement.endMinute + SLOT_MINUTES)
+                    CustomAccessibilityAction("Move 5 minutes later") {
+                        onResize(
+                            placement.startMinute + BLOCK_INTERACTION_STEP_MINUTES,
+                            placement.endMinute + BLOCK_INTERACTION_STEP_MINUTES,
+                        )
                         true
                     },
                     CustomAccessibilityAction("Return to Tasks to Plan") {
@@ -623,17 +644,24 @@ private fun PlanningDraftCard(
                         if (mode == DragMode.Move) {
                             onDrag(pointerRoot)
                         } else {
-                            val slotDelta = (total.y / slotPx).roundToInt() * SLOT_MINUTES
+                            val rawDeltaMinutes = total.y / slotPx * SLOT_MINUTES
+                            val minuteDelta = snapToBlockInteractionStep(rawDeltaMinutes)
                             resizePreview = when (mode) {
                                 DragMode.ResizeStart -> Pair(
-                                    (placement.startMinute + slotDelta)
-                                        .coerceIn(visibleStart, placement.endMinute - SLOT_MINUTES),
+                                    (placement.startMinute + minuteDelta)
+                                        .coerceIn(
+                                            visibleStart,
+                                            placement.endMinute - MIN_PLANNED_BLOCK_MINUTES,
+                                        ),
                                     placement.endMinute,
                                 )
                                 DragMode.ResizeEnd -> Pair(
                                     placement.startMinute,
-                                    (placement.endMinute + slotDelta)
-                                        .coerceIn(placement.startMinute + SLOT_MINUTES, visibleEnd),
+                                    (placement.endMinute + minuteDelta)
+                                        .coerceIn(
+                                            placement.startMinute + MIN_PLANNED_BLOCK_MINUTES,
+                                            visibleEnd,
+                                        ),
                                 )
                                 DragMode.Move -> null
                             }

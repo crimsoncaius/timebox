@@ -89,12 +89,12 @@ def test_create_and_patch_block(client):
 
     r2 = client.patch(
         f"/days/2026-04-13/blocks/{bid}",
-        json={"end_minute": 630},
+        json={"start_minute": 547, "end_minute": 607},
     )
     assert r2.status_code == 200
     data2 = r2.json()
     b2 = next(x for x in data2["time_blocks"] if x["id"] == bid)
-    assert b2["end_minute"] == 630
+    assert (b2["start_minute"], b2["end_minute"]) == (547, 607)
 
 
 def test_list_days(client):
@@ -108,14 +108,39 @@ def test_list_days(client):
     assert "2026-04-11" in dates
 
 
-def test_reject_non_snap_minutes(client):
-    tid = _tid(client, "x")
-    client.get("/days/2026-04-14")
-    r = client.post(
+def test_create_planned_block_accepts_any_whole_minute(client):
+    tid = _tid(client, "minute-precise")
+
+    response = client.post(
         "/days/2026-04-14/blocks",
-        json={"lane": "actual", "task_type_id": tid, "start_minute": 541, "end_minute": 600},
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "start_minute": 547,
+            "end_minute": 577,
+        },
     )
-    assert r.status_code == 422
+
+    assert response.status_code == 200
+    block = response.json()["planned_blocks"][0]
+    assert (block["start_minute"], block["end_minute"]) == (547, 577)
+
+
+def test_create_planned_block_requires_thirty_minutes(client):
+    tid = _tid(client, "too-short")
+
+    response = client.post(
+        "/days/2026-04-14/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "start_minute": 547,
+            "end_minute": 576,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Planned Blocks must be at least 30 minutes"
 
 
 def test_reject_overlap_same_lane(client):
@@ -187,15 +212,15 @@ def test_commit_plan_is_atomic_across_days(client):
                     "date": "2026-08-24",
                     "task_id": first["id"],
                     "task_type_id": task_type_id,
-                    "start_minute": 540,
-                    "end_minute": 570,
+                    "start_minute": 547,
+                    "end_minute": 577,
                 },
                 {
                     "date": "2026-08-25",
                     "task_id": second["id"],
                     "task_type_id": task_type_id,
-                    "start_minute": 600,
-                    "end_minute": 660,
+                    "start_minute": 603,
+                    "end_minute": 663,
                 },
             ]
         },

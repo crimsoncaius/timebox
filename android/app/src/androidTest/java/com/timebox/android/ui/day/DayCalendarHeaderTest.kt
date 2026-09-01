@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -299,7 +300,7 @@ class DayCalendarHeaderTest {
             state = DayUiState(
                 date = LocalDate.of(2026, 8, 28),
                 today = LocalDate.of(2026, 8, 28),
-                isPlanningMode = true,
+                planning = PlanningSessionState(active = true),
             ),
             onCommitPlanningMode = { committed = true },
         )

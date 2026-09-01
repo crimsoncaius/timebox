@@ -23,8 +23,8 @@ class PlanningLogicTest {
         val viewport = Rect(0f, 80f, 300f, 500f)
 
         assertEquals(
-            9 * 60,
-            planningDropStart(Offset(100f, 196f), lane, viewport, 8 * 60, 20 * 60, 48f),
+            9 * 60 + 5,
+            planningDropStart(Offset(100f, 204f), lane, viewport, 8 * 60, 20 * 60, 48f),
         )
         assertEquals(
             8 * 60,
@@ -32,6 +32,25 @@ class PlanningLogicTest {
         )
         assertNull(planningDropStart(Offset(260f, 196f), lane, viewport, 8 * 60, 20 * 60, 48f))
         assertNull(planningDropStart(Offset(100f, 520f), lane, viewport, 8 * 60, 20 * 60, 48f))
+    }
+
+    @Test
+    fun `moving an off-grid planning draft preserves its minute offset`() {
+        val lane = Rect(40f, 100f, 240f, 820f)
+        val viewport = Rect(0f, 80f, 300f, 500f)
+
+        assertEquals(
+            9 * 60 + 12,
+            planningDropStart(
+                pointerRoot = Offset(100f, 215.2f),
+                laneBounds = lane,
+                viewportBounds = viewport,
+                visibleStart = 8 * 60,
+                visibleEnd = 20 * 60,
+                slotPx = 48f,
+                originalStartMinute = 9 * 60 + 7,
+            ),
+        )
     }
 
     @Test

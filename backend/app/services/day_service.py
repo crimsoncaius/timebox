@@ -28,7 +28,7 @@ from app.schemas.day import (
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
 
-SLOT_MINUTES = 30
+MIN_PLANNED_BLOCK_MINUTES = 30
 DAY_END = 24 * 60  # 1440
 UNSPECIFIED_TASK_TYPE = "unspecified"
 
@@ -58,10 +58,12 @@ def _touch_day(day: Day) -> None:
 
 
 def _validate_minutes(start: int, end: int) -> None:
-    if start % SLOT_MINUTES != 0 or end % SLOT_MINUTES != 0:
-        raise ValueError(f"Times must snap to {SLOT_MINUTES}-minute boundaries")
     if not (0 <= start < end <= DAY_END):
         raise ValueError("Invalid range: require 0 <= start < end <= 1440")
+    if end - start < MIN_PLANNED_BLOCK_MINUTES:
+        raise ValueError(
+            f"Planned Blocks must be at least {MIN_PLANNED_BLOCK_MINUTES} minutes"
+        )
 
 
 def _active_task(

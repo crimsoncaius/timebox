@@ -130,6 +130,23 @@ def test_live_actual_start_rejects_an_explicit_future_instant(client, captured_i
     assert client.get("/actual-blocks/active").json() is None
 
 
+def test_retrospective_actual_block_can_be_shorter_than_thirty_minutes(client):
+    task_type = _task_type(client, "Brief interruption")
+
+    created = client.post(
+        "/actual-blocks",
+        json={
+            "task_type_id": task_type["id"],
+            "start_at": "2026-08-30T10:07:00Z",
+            "end_at": "2026-08-30T10:12:00Z",
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    assert created.json()["start_at"] == "2026-08-30T10:07:00Z"
+    assert created.json()["end_at"] == "2026-08-30T10:12:00Z"
+
+
 def test_retrospective_actual_correction_preserves_planned_data_and_correspondence(client):
     task_type = _task_type(client, "Client work")
     task = client.post(

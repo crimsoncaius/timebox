@@ -6,7 +6,7 @@ import com.timebox.android.data.ActualBlock
 import com.timebox.android.data.Day
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
-import com.timebox.android.data.SLOT_MINUTES
+import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.Subtask
@@ -380,13 +380,16 @@ class DayViewModel(
     fun startDraft(lane: Lane, startMinute: Int) {
         planThenWork = false
         val day = _state.value.day ?: return
-        val start = startMinute.coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
+        val start = startMinute.coerceIn(
+            day.visibleStart,
+            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
+        )
         _state.update { state ->
             state.copy(
                 draft = Draft(
                     lane = lane,
                     startMinute = start,
-                    endMinute = start + SLOT_MINUTES,
+                    endMinute = start + MIN_PLANNED_BLOCK_MINUTES,
                 ),
                 selectedBlockId = null,
                 noteInput = "",
@@ -781,13 +784,20 @@ class DayViewModel(
     fun planSomethingBeforeWorkMode() {
         val day = _state.value.day ?: return
         val nowMinute = minuteOfDay(clock(), day.timezone)
-        val start = (nowMinute / SLOT_MINUTES * SLOT_MINUTES)
-            .coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
+        val start = snapToBlockInteractionStep(nowMinute.toFloat())
+        val boundedStart = start.coerceIn(
+            day.visibleStart,
+            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
+        )
         planThenWork = true
         _state.update {
             it.copy(
                 workModeEntryWarning = false,
-                draft = Draft(Lane.Planned, start, start + SLOT_MINUTES),
+                draft = Draft(
+                    Lane.Planned,
+                    boundedStart,
+                    boundedStart + MIN_PLANNED_BLOCK_MINUTES,
+                ),
                 selectedBlockId = null,
             )
         }
