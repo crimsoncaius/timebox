@@ -77,6 +77,8 @@ private data class DragState(
 
 private enum class DragMode { Move, ResizeStart, ResizeEnd }
 
+private const val BLOCK_GESTURE_STEP_MINUTES = 15
+
 private fun PointerInputScope.dragModeForPress(pressY: Float): DragMode {
     val grab = minOf(
         maxOf(TimeboxDimens.grooveHeight.toPx(), 14.dp.toPx()),
@@ -363,7 +365,8 @@ private fun LaneColumn(
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
-                gesturesEnabled = blockGesturesEnabled && lane == Lane.Planned,
+                moveEnabled = blockGesturesEnabled && lane == Lane.Planned,
+                resizeEnabled = blockGesturesEnabled,
                 onTap = { onSelectBlock(block.id) },
                 // Both callbacks recompute from the block's committed times and the raw
                 // gesture delta. Reading the drag state here instead would capture the
@@ -465,7 +468,7 @@ private fun PlanningPreviewCard(
     }
 }
 
-/** Snap a raw pixel delta to slot boundaries and apply it to the block's saved times. */
+/** Snap a raw pixel delta to 15-minute boundaries and apply it to the block's saved times. */
 private fun resolveDrag(
     mode: DragMode,
     deltaPx: Float,
@@ -474,12 +477,17 @@ private fun resolveDrag(
     day: Day,
 ): Pair<Int, Int> = applyDrag(
     mode = mode,
-    deltaMinutes = (deltaPx / slotPx).roundToInt() * SLOT_MINUTES,
+    deltaMinutes = snapBlockDeltaMinutes(deltaPx, slotPx),
     originalStart = block.startMinute,
     originalEnd = block.endMinute,
     visibleStart = day.visibleStart,
     visibleEnd = day.visibleEnd,
 )
+
+private fun snapBlockDeltaMinutes(deltaPx: Float, slotPx: Float): Int {
+    val stepPx = slotPx * BLOCK_GESTURE_STEP_MINUTES / SLOT_MINUTES
+    return (deltaPx / stepPx).roundToInt() * BLOCK_GESTURE_STEP_MINUTES
+}
 
 /** Clamp a move/resize to the visible window, mirroring the prototype's rules. */
 private fun applyDrag(
@@ -682,7 +690,8 @@ private fun BlockCard(
     slotHeight: Dp,
     selected: Boolean,
     dragging: Boolean,
-    gesturesEnabled: Boolean,
+    moveEnabled: Boolean,
+    resizeEnabled: Boolean,
     onTap: () -> Unit,
     onDrag: (DragMode, Float) -> Unit,
     onDragEnd: (DragMode, Float) -> Unit,
@@ -717,14 +726,10 @@ private fun BlockCard(
                 }
             )
             // Tap, move and both resizes start with a press on the same card, so one
-            // handler owns all of them. Where the armed press began decides what the
-            // manipulation means; movement before arming remains available to the
-            // surrounding timeline scroll and day pager.
-            .pointerInput(block.id, block.startMinute, block.endMinute, gesturesEnabled) {
-                if (!gesturesEnabled) {
-                    detectTapGestures { onTap() }
-                    return@pointerInput
-                }
+            // handler owns all of them. Edge presses resize immediately; a body press
+            // still arms movement with a long press. Movement before body arming remains
+            // available to the surrounding timeline scroll and day pager.
+            .pointerInput(block.id, block.startMinute, block.endMinute, moveEnabled, resizeEnabled) {
                 var mode = DragMode.Move
                 var total = 0f
                 detectLongPressArmedDragGestures(
@@ -732,6 +737,15 @@ private fun BlockCard(
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
                     onTap = { onTap() },
+                    gestureEnabled = { down ->
+                        when (dragModeForPress(down.y)) {
+                            DragMode.Move -> moveEnabled
+                            DragMode.ResizeStart, DragMode.ResizeEnd -> resizeEnabled
+                        }
+                    },
+                    armImmediately = { down ->
+                        resizeEnabled && dragModeForPress(down.y) != DragMode.Move
+                    },
                     onDragStart = { down ->
                         // The drawn groove is only 8dp, so the grab zone is given a
                         // little more reach than the paint — but never more than a third

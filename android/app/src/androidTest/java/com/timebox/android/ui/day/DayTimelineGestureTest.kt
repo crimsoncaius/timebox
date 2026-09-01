@@ -46,12 +46,11 @@ class DayTimelineGestureTest {
         compose.onNodeWithTag("day-block-7").performTouchInput {
             down(center)
             advanceEventTime(1_000)
-            moveTo(center + Offset(0f, 120f))
+            moveTo(center + Offset(0f, height / 4f))
             up()
         }
         compose.runOnIdle {
-            check(committedMove?.first == 7)
-            check(committedMove?.second != 9 * 60)
+            check(committedMove == Triple(7, 9 * 60 + 15, 10 * 60 + 15))
             check(haptics.events == listOf(HapticFeedbackType.LongPress))
         }
     }
@@ -92,7 +91,7 @@ class DayTimelineGestureTest {
     }
 
     @Test
-    fun plannedBlockResizeGroovesRequireLongPress() {
+    fun plannedBlockResizeGroovesAreImmediate() {
         val date = LocalDate.of(2026, 8, 20)
         var committedMove: Triple<Int, Int, Int>? = null
         val haptics = RecordingHaptics()
@@ -106,15 +105,12 @@ class DayTimelineGestureTest {
         block.performTouchInput {
             val topGroove = Offset(center.x, 2f)
             down(topGroove)
-            advanceEventTime(1_000)
-            moveTo(topGroove + Offset(0f, 150f))
+            moveTo(topGroove - Offset(0f, height / 4f))
             up()
         }
         compose.runOnIdle {
-            check(committedMove?.first == 7)
-            check(committedMove?.second != 9 * 60)
-            check(committedMove?.third == 10 * 60)
-            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+            check(committedMove == Triple(7, 9 * 60 - 15, 10 * 60))
+            check(haptics.events.isEmpty())
             committedMove = null
             haptics.events.clear()
         }
@@ -122,15 +118,12 @@ class DayTimelineGestureTest {
         block.performTouchInput {
             val bottomGroove = Offset(center.x, height - 2f)
             down(bottomGroove)
-            advanceEventTime(1_000)
-            moveTo(bottomGroove + Offset(0f, -150f))
+            moveTo(bottomGroove + Offset(0f, height / 4f))
             up()
         }
         compose.runOnIdle {
-            check(committedMove?.first == 7)
-            check(committedMove?.second == 9 * 60)
-            check(committedMove?.third != 10 * 60)
-            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+            check(committedMove == Triple(7, 9 * 60, 10 * 60 + 15))
+            check(haptics.events.isEmpty())
         }
     }
 
@@ -179,6 +172,30 @@ class DayTimelineGestureTest {
         }
         compose.runOnIdle {
             check(!moved)
+            check(haptics.events.isEmpty())
+        }
+    }
+
+    @Test
+    fun actualBlockResizeGroovesAreImmediate() {
+        val date = LocalDate.of(2026, 8, 20)
+        var committedMove: Triple<Int, Int, Int>? = null
+        val haptics = RecordingHaptics()
+        setDayContent(
+            state = stateWithBlock(date, Lane.Actual),
+            haptics = haptics,
+            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
+        )
+
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            val bottomGroove = Offset(center.x, height - 2f)
+            down(bottomGroove)
+            moveTo(bottomGroove + Offset(0f, height / 4f))
+            up()
+        }
+
+        compose.runOnIdle {
+            check(committedMove == Triple(7, 9 * 60, 10 * 60 + 15))
             check(haptics.events.isEmpty())
         }
     }

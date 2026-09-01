@@ -15,13 +15,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 private enum class PreArmResult { Released, Canceled }
 
 /**
- * Detects direct manipulation that touch and stylus input must arm with a long press.
- * Mouse input remains immediate. Movement before arming is left unconsumed so a parent
- * scroll or pager can claim it.
+ * Detects direct manipulation that touch and stylus input normally arm with a long press.
+ * Callers may make explicit press regions immediate, such as an existing Block's resize
+ * grooves. Mouse input remains immediate. Movement before arming is left unconsumed so a
+ * parent scroll or pager can claim it.
  */
 internal suspend fun PointerInputScope.detectLongPressArmedDragGestures(
     onLongPress: () -> Unit,
     onTap: ((Offset) -> Unit)? = null,
+    gestureEnabled: (Offset) -> Boolean = { true },
+    armImmediately: (Offset) -> Boolean = { false },
     onDragStart: (Offset) -> Unit = {},
     onDragEnd: () -> Unit = {},
     onDragCancel: () -> Unit = {},
@@ -31,7 +34,14 @@ internal suspend fun PointerInputScope.detectLongPressArmedDragGestures(
         val down = awaitFirstDown(requireUnconsumed = false)
         down.consume()
 
-        val immediate = down.type == PointerType.Mouse
+        if (!gestureEnabled(down.position)) {
+            if (awaitArmOrCancellation(down.id) == PreArmResult.Released) {
+                onTap?.invoke(down.position)
+            }
+            return@awaitEachGesture
+        }
+
+        val immediate = down.type == PointerType.Mouse || armImmediately(down.position)
         if (!immediate) {
             val preArmResult = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                 awaitArmOrCancellation(down.id)

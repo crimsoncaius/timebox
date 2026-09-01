@@ -4,6 +4,7 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.WorkModeSnapshot
 import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.ActualBlockCreateDto
+import com.timebox.android.data.remote.ActualBlockDayProjectionDto
 import com.timebox.android.data.remote.ActualBlockPatchDto
 import com.timebox.android.data.remote.ActualBlockStartDto
 import com.timebox.android.data.remote.BattleTaskDto
@@ -38,6 +39,32 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DayWorkModeViewModelTest {
+    @Test
+    fun `resizing Actual Block persists Actual timestamps`() = runTest {
+        val api = FakeWorkModeApi(
+            blocks = emptyList(),
+            actualBlocks = listOf(actualProjection()),
+        )
+        val viewModel = loadedViewModel(
+            api,
+            FakeClock("2026-08-30T01:17:00Z"),
+            FakeWorkModePersistence(),
+        )
+        assertEquals(listOf(-44), viewModel.state.value.day?.blocks?.map { it.id })
+
+        viewModel.moveBlock(-44, 8 * 60 + 30, 10 * 60 + 30)
+        advanceUntilIdle()
+
+        assertEquals(
+            "calls=${api.calls}, message=${viewModel.state.value.message}",
+            listOf(44),
+            api.patchedActualIds,
+        )
+        assertEquals("2026-08-30T00:30:00Z", api.patchedActualBodies.single().startAt)
+        assertEquals("2026-08-30T02:30:00Z", api.patchedActualBodies.single().endAt)
+        assertFalse("patchBlock" in api.calls)
+    }
+
     @Test
     fun `current planned work confirms for one minute then Exit preserves Task state`() = runTest {
         val clock = FakeClock("2026-08-30T01:17:00Z")
@@ -284,10 +311,13 @@ private class FakeWorkModePersistence(initial: WorkModeSnapshot? = null) : WorkM
 private class FakeWorkModeApi(
     private val blocks: List<TimeBlockDto>,
     private val active: ActualBlockDto? = null,
+    private val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
 ) {
     val calls = mutableListOf<String>()
     val startedBodies = mutableListOf<ActualBlockStartDto>()
     val createdBodies = mutableListOf<ActualBlockCreateDto>()
+    val patchedActualIds = mutableListOf<Int>()
+    val patchedActualBodies = mutableListOf<ActualBlockPatchDto>()
     private val taskType = TaskTypeDto(3, "coding")
     private val linkedTask = LinkedTaskDto(10, "Ship Android", "open", 3)
     private val task = BattleTaskDto(
@@ -319,7 +349,9 @@ private class FakeWorkModeApi(
                             .copy(endAt = body.endAt)
                     }
                     "patchActualBlock" -> {
+                        patchedActualIds += args?.get(0) as Int
                         val body = args?.get(1) as ActualBlockPatchDto
+                        patchedActualBodies += body
                         actual(startedBodies.lastOrNull() ?: ActualBlockStartDto(plannedBlockId = 31)).copy(endAt = body.endAt)
                     }
                     else -> Unit
@@ -344,7 +376,7 @@ private class FakeWorkModeApi(
     private fun meta(date: String) = DayMetaDto("Asia/Singapore", date, "${date}T09:17:00+08:00")
     private fun day(date: String) = DayDto(
         id = 1, date = date, startHour = 8, endHour = 20, showFullDay = false,
-        timeBlocks = blocks, meta = meta(date),
+        timeBlocks = blocks, actualBlocks = actualBlocks, meta = meta(date),
     )
     private fun preview(date: String) = DayPreviewDto(
         date = date, startHour = 8, endHour = 20, showFullDay = false,
@@ -369,4 +401,23 @@ private fun activeActual(plannedBlockId: Int?) = ActualBlockDto(
     endAt = null,
     createdAt = "2026-08-30T01:00:00Z",
     updatedAt = "2026-08-30T01:00:00Z",
+)
+
+private fun actualProjection() = ActualBlockDayProjectionDto(
+    actualBlock = ActualBlockDto(
+        id = 44,
+        taskTypeId = 3,
+        taskType = TaskTypeDto(3, "coding"),
+        taskId = 10,
+        task = LinkedTaskDto(10, "Existing work", "open", 3),
+        plannedBlockId = null,
+        startAt = "2026-08-30T01:00:00Z",
+        endAt = "2026-08-30T02:00:00Z",
+        createdAt = "2026-08-30T01:00:00Z",
+        updatedAt = "2026-08-30T02:00:00Z",
+    ),
+    date = "2026-08-30",
+    startMinute = 9 * 60,
+    endMinute = 10 * 60,
+    durationMinutes = 60,
 )

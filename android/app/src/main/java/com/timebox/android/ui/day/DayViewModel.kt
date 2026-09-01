@@ -600,12 +600,52 @@ class DayViewModel(
         val block = day.blocks.firstOrNull { it.id == blockId } ?: return
         if (block.startMinute == startMinute && block.endMinute == endMinute) return
 
+        val actualPatch = if (block.lane == Lane.Actual) {
+            val actualBlockId = block.actualBlockId ?: return
+            val zone = runCatching { ZoneId.of(day.timezone) }.getOrDefault(ZoneId.of("UTC"))
+            val startAt = resolveActualMinute(current.date, startMinute, zone)
+            val endAt = resolveActualMinute(current.date, endMinute, zone)
+            if (startAt == null || endAt == null) {
+                _state.update { it.copy(message = "That local time does not exist in ${day.timezone}.") }
+                return
+            }
+            Triple(actualBlockId, startAt, endAt)
+        } else {
+            null
+        }
+
         _state.update { state ->
             state.copy(saving = true).withPage(current.date) { page ->
                 page.copy(day = page.day?.withBlockTimes(blockId, startMinute, endMinute))
             }
         }
         launchScope.launch {
+            if (actualPatch != null) {
+                repository.patchActualBlock(
+                    actualPatch.first,
+                    startAt = actualPatch.second,
+                    endAt = actualPatch.third,
+                ).fold(
+                    onSuccess = {
+                        _state.update { state -> state.copy(saving = false) }
+                    },
+                    onFailure = { e ->
+                        _state.update { state ->
+                            state.copy(
+                                saving = false,
+                                message = e.apiError.message,
+                            ).withPage(current.date) { page ->
+                                page.copy(day = page.day?.withBlockTimes(
+                                    blockId,
+                                    block.startMinute,
+                                    block.endMinute,
+                                ))
+                            }
+                        }
+                    },
+                )
+                return@launch
+            }
             repository.patchBlock(
                 current.date,
                 blockId,
