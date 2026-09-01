@@ -62,6 +62,63 @@ class BattlePlanScreenTest {
     }
 
     @Test
+    fun compactCardsUseMetadataBlockerPrioritySignalsAndExplicitPlanningStates() {
+        val readyToggles = mutableListOf<Int>()
+        val blockedChanges = mutableListOf<Pair<Int, Boolean>>()
+        val plannedDate = LocalDate.parse("2099-01-01")
+        compose.setContent {
+            TimeboxTheme(darkTheme = true) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(
+                            battleTask(1).copy(
+                                title = "Blocked task",
+                                urgency = PriorityLevel.High,
+                                importance = PriorityLevel.High,
+                                isBlocked = true,
+                                blockingReason = "Waiting for approval",
+                            ),
+                            battleTask(2).copy(title = "Ready task", readyToPlan = true),
+                            battleTask(3, listOf(plannedDate)).copy(title = "Planned task"),
+                        ),
+                        timezone = "UTC",
+                        serverNow = Instant.parse("2026-08-22T12:00:00Z"),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {},
+                    onToggleReady = { readyToggles += it.id },
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onSetBlocked = { task, blocked, _ -> blockedChanges += task.id to blocked },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
+                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
+                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("URGENT").fetchSemanticsNode()
+        compose.onNodeWithText("IMPORTANT").fetchSemanticsNode()
+        compose.onNodeWithText("Blocker: Waiting for approval").fetchSemanticsNode()
+        compose.onNodeWithText("BLOCKED").performClick()
+        compose.onNodeWithText("Add to Ready to Plan").performClick()
+        compose.onNodeWithText("Ready to Plan").performScrollTo().performClick()
+
+        val plannedLabel = checkNotNull(
+            plannedDateSummary(listOf(plannedDate), Instant.parse("2026-08-22T12:00:00Z"), "UTC"),
+        ).label
+        compose.onNodeWithText(plannedLabel).performScrollTo().fetchSemanticsNode()
+        compose.runOnIdle {
+            check(readyToggles == listOf(1, 2))
+            check(blockedChanges == listOf(1 to false))
+        }
+    }
+
+    @Test
     fun taskDetailsShowFivePlannedDatesExpandAndOpenDay() {
         val dates = (21..27).map { LocalDate.of(2026, 8, it) }
         var openedDay: LocalDate? = null

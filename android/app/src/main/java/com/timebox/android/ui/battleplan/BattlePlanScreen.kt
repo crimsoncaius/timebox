@@ -1198,6 +1198,7 @@ private fun MobileKanbanCard(
     onBoundsChanged: (Int, Rect?) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
+    val plannedSummary = plannedDateSummary(task.plannedDates, serverNow, timezone)
     var menu by remember(task.id) { mutableStateOf(false) }
     var blockDialog by remember(task.id) { mutableStateOf(false) }
     var blockingReason by remember(task.id, blockDialog) { mutableStateOf(task.blockingReason.orEmpty()) }
@@ -1213,22 +1214,27 @@ private fun MobileKanbanCard(
                 .onGloballyPositioned { onBoundsChanged(task.id, it.boundsInRoot()) }
                 .clip(TimeboxShapes.card)
                 .background(mobileTaskCardSurface(colors))
+                .border(1.dp, colors.hairline, TimeboxShapes.card)
                 .clickable { onOpen(task.id) }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Text(task.title, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                IconButton(
-                    onClick = { onToggleReady(task) },
-                    modifier = Modifier.size(38.dp),
-                    enabled = task.status != TaskStatus.Completed,
-                ) {
-                    Icon(
-                        if (task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
-                        contentDescription = if (task.readyToPlan) "Remove ${task.title} from Ready to Plan" else "Add ${task.title} to Ready to Plan",
-                        tint = if (task.readyToPlan) colors.planned else colors.onVariant,
-                    )
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    when {
+                        task.parentId != null -> "SUBTASK"
+                        task.project != null -> "PROJECT TASK"
+                        else -> "ADMIN TASK"
+                    },
+                    style = TimeboxTheme.type.laneLabel,
+                    color = colors.onVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                MobileBlockedPill(
+                    task = task,
+                    onClick = {
+                        if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
+                    },
+                )
                 Box {
                     IconButton(
                         onClick = { menu = true },
@@ -1254,32 +1260,49 @@ private fun MobileKanbanCard(
                     )
                 }
             }
+            Text(
+                task.title,
+                style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, fontWeight = FontWeight.Medium),
+                color = colors.on,
+                modifier = Modifier.padding(top = 8.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(task.project?.name ?: "Admin", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                TextButton(
-                    onClick = {
-                        if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
-                    },
-                    enabled = task.status != TaskStatus.Completed,
-                ) {
-                    Text(if (task.isBlocked) "Blocked" else "Block", color = if (task.isBlocked) colors.error else colors.onVariant)
-                }
+                Text(
+                    task.project?.name ?: task.parentTitle?.let { "Subtask of $it" } ?: "Admin",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = colors.onVariant,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                MobilePrioritySignals(task)
             }
-            task.blockingReason?.takeIf { task.isBlocked }?.let {
-                Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            task.blockingReason?.trim()?.takeIf { task.isBlocked && it.isNotEmpty() }?.let { reason ->
+                Text(
+                    "Blocker: $reason",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = colors.onVariant,
+                    modifier = Modifier.padding(top = 9.dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            plannedDateSummary(task.plannedDates, serverNow, timezone)?.let { summary ->
-                Spacer(Modifier.height(3.dp))
-                PlannedDatePill(summary)
-            }
+            MobilePlanningControl(
+                task = task,
+                plannedSummary = plannedSummary,
+                onToggleReady = onToggleReady,
+                modifier = Modifier.padding(top = 14.dp),
+            )
             val metadata = buildList {
                 task.deadlineDate?.let { add("Due $it") }
-                task.urgency?.let { add("U ${it.wire}") }
-                task.importance?.let { add("I ${it.wire}") }
+                task.urgency?.takeIf { it != PriorityLevel.High }?.let { add("Urgency ${it.wire}") }
+                task.importance?.takeIf { it != PriorityLevel.High }?.let { add("Importance ${it.wire}") }
                 if (task.subtasks.isNotEmpty()) add("${task.subtasks.count { it.checked }}/${task.subtasks.size} subtasks")
             }
             if (metadata.isNotEmpty()) {
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(9.dp))
                 Text(metadata.joinToString("  ·  "), style = TimeboxTheme.type.bodySmall, color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -1548,6 +1571,7 @@ private fun MobileTaskDragPreview(
 ) {
     val colors = TimeboxTheme.colors
     val previewSurface = mobileTaskDragPreviewSurface(colors)
+    val plannedSummary = plannedDateSummary(drag.task.plannedDates, serverNow, timezone)
     val density = LocalDensity.current
     val delta = drag.pointerInRoot - drag.startPointerInRoot
     val width = with(density) { drag.cardBoundsInRoot.width.toDp() }
@@ -1583,23 +1607,32 @@ private fun MobileTaskDragPreview(
             }
             .clip(TimeboxShapes.card)
             .background(previewSurface)
+            .border(1.dp, colors.hairline, TimeboxShapes.card)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
-        Row(verticalAlignment = Alignment.Top) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                drag.task.title,
-                style = TimeboxTheme.type.label,
-                color = colors.on,
+                when {
+                    drag.task.parentId != null -> "SUBTASK"
+                    drag.task.project != null -> "PROJECT TASK"
+                    else -> "ADMIN TASK"
+                },
+                style = TimeboxTheme.type.laneLabel,
+                color = colors.onVariant,
                 modifier = Modifier.weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
-            Icon(
-                if (drag.task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
-                contentDescription = null,
-                tint = if (drag.task.readyToPlan) colors.planned else colors.onVariant,
-                modifier = Modifier.padding(7.dp).size(24.dp),
-            )
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (drag.task.isBlocked) colors.error.copy(alpha = 0.08f) else Color.Transparent)
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    if (drag.task.isBlocked) "BLOCKED" else "BLOCK",
+                    style = TimeboxTheme.type.laneLabel,
+                    color = if (drag.task.isBlocked) colors.error else colors.onVariant,
+                )
+            }
             Icon(
                 Icons.Outlined.MoreVert,
                 contentDescription = null,
@@ -1607,45 +1640,52 @@ private fun MobileTaskDragPreview(
                 modifier = Modifier.padding(7.dp).size(24.dp),
             )
         }
+        Text(
+            drag.task.title,
+            style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, fontWeight = FontWeight.Medium),
+            color = colors.on,
+            modifier = Modifier.padding(top = 8.dp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                drag.task.project?.name ?: "Admin",
+                drag.task.project?.name ?: drag.task.parentTitle?.let { "Subtask of $it" } ?: "Admin",
                 style = TimeboxTheme.type.bodySmall,
                 color = colors.onVariant,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                if (drag.task.isBlocked) "Blocked" else "Block",
-                style = TimeboxTheme.type.label,
-                color = if (drag.task.isBlocked) colors.error else colors.onVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-            )
+            MobilePrioritySignals(drag.task)
         }
-        drag.task.blockingReason?.takeIf { drag.task.isBlocked }?.let {
+        drag.task.blockingReason?.trim()?.takeIf { drag.task.isBlocked && it.isNotEmpty() }?.let { reason ->
             Text(
-                it,
+                "Blocker: $reason",
                 style = TimeboxTheme.type.bodySmall,
-                color = colors.error,
+                color = colors.onVariant,
+                modifier = Modifier.padding(top = 9.dp),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        plannedDateSummary(drag.task.plannedDates, serverNow, timezone)?.let { summary ->
-            Spacer(Modifier.height(3.dp))
-            PlannedDatePill(summary)
-        }
+        MobilePlanningControl(
+            task = drag.task,
+            plannedSummary = plannedSummary,
+            onToggleReady = {},
+            modifier = Modifier.padding(top = 14.dp),
+            allowInteraction = false,
+        )
         val metadata = buildList {
             drag.task.deadlineDate?.let { add("Due $it") }
-            drag.task.urgency?.let { add("U ${it.wire}") }
-            drag.task.importance?.let { add("I ${it.wire}") }
+            drag.task.urgency?.takeIf { it != PriorityLevel.High }?.let { add("Urgency ${it.wire}") }
+            drag.task.importance?.takeIf { it != PriorityLevel.High }?.let { add("Importance ${it.wire}") }
             if (drag.task.subtasks.isNotEmpty()) {
                 add("${drag.task.subtasks.count { it.checked }}/${drag.task.subtasks.size} subtasks")
             }
         }
         if (metadata.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(9.dp))
             Text(
                 metadata.joinToString("  ·  "),
                 style = TimeboxTheme.type.bodySmall,
@@ -2362,6 +2402,129 @@ private fun TaskEditForm(
             Spacer(Modifier.width(10.dp))
             Text("Move to Trash", style = TimeboxTheme.type.label, color = TimeboxTheme.colors.error)
         }
+    }
+}
+
+@Composable
+private fun MobileBlockedPill(
+    task: BattleTask,
+    onClick: () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    val enabled = task.status != TaskStatus.Completed
+    val interactiveModifier = if (enabled) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier
+    }
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (task.isBlocked) colors.error.copy(alpha = 0.08f) else Color.Transparent)
+            .then(interactiveModifier)
+            .semantics {
+                contentDescription = if (task.isBlocked) {
+                    "Clear blocked condition for ${task.title}"
+                } else {
+                    "Mark ${task.title} blocked"
+                }
+            }
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+    ) {
+        Text(
+            if (task.isBlocked) "BLOCKED" else "BLOCK",
+            style = TimeboxTheme.type.laneLabel,
+            color = if (task.isBlocked) colors.error else colors.onVariant,
+        )
+    }
+}
+
+@Composable
+private fun MobilePrioritySignals(task: BattleTask) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (task.urgency == PriorityLevel.High) {
+            MobilePrioritySignal("URGENT", urgent = true)
+        }
+        if (task.importance == PriorityLevel.High) {
+            MobilePrioritySignal("IMPORTANT", urgent = false)
+        }
+    }
+}
+
+@Composable
+private fun MobilePrioritySignal(label: String, urgent: Boolean) {
+    val colors = TimeboxTheme.colors
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (urgent) colors.error.copy(alpha = 0.12f) else colors.plannedSurface)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(
+            label,
+            style = TimeboxTheme.type.laneLabel.copy(fontSize = 9.sp),
+            color = if (urgent) colors.error else colors.planned,
+        )
+    }
+}
+
+@Composable
+private fun MobilePlanningControl(
+    task: BattleTask,
+    plannedSummary: PlannedDateSummary?,
+    onToggleReady: (BattleTask) -> Unit,
+    modifier: Modifier = Modifier,
+    allowInteraction: Boolean = true,
+) {
+    val colors = TimeboxTheme.colors
+    val completed = task.status == TaskStatus.Completed
+    val interactive = allowInteraction && !completed && plannedSummary == null
+    val label = when {
+        completed -> "Completed"
+        plannedSummary != null -> plannedSummary.label
+        task.readyToPlan -> "Ready to Plan"
+        else -> "Add to Ready to Plan"
+    }
+    val icon = when {
+        completed -> Icons.Outlined.CheckCircle
+        plannedSummary != null -> Icons.Outlined.CalendarMonth
+        task.readyToPlan -> Icons.Outlined.CheckCircle
+        else -> Icons.Outlined.EventAvailable
+    }
+    val accented = !completed && (plannedSummary != null || task.readyToPlan)
+    val interactiveModifier = if (interactive) Modifier.clickable { onToggleReady(task) } else Modifier
+
+    Row(
+        modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (accented) colors.plannedSurface else colors.lowest)
+            .border(1.dp, if (accented) colors.plannedBorder else colors.hairline, RoundedCornerShape(10.dp))
+            .then(interactiveModifier)
+            .semantics {
+                contentDescription = when {
+                    completed -> "Completed Task"
+                    plannedSummary != null -> plannedSummary.label
+                    task.readyToPlan -> "Remove ${task.title} from Ready to Plan"
+                    else -> "Add ${task.title} to Ready to Plan"
+                }
+            }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (accented) colors.planned else colors.onVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            label,
+            style = TimeboxTheme.type.label,
+            color = if (accented) colors.planned else colors.onVariant,
+            modifier = Modifier.padding(start = 8.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
