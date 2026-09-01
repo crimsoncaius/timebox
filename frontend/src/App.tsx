@@ -6,6 +6,7 @@ import { SettingsPage } from './features/settings/SettingsPage'
 import { TaskTypesPage } from './features/task-types/TaskTypesPage'
 import { TodayPage } from './features/today/TodayPage'
 import { BattlePlanPage } from './features/battle-plan/BattlePlanPage'
+import { CreateTaskComposerPrototype } from './features/battle-plan/CreateTaskComposerPrototype'
 import { ReminderWatcher } from './components/ReminderWatcher'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
@@ -26,6 +27,9 @@ export function AppRoutes() {
 
 function BattlePlanRoute() {
   const [params] = useSearchParams()
+  if (import.meta.env.DEV && params.get('prototype') === 'create-task') {
+    return <CreateTaskComposerPrototype />
+  }
   return params.get('view') === 'recurring'
     ? <Suspense fallback={<p className="p-8 text-on-surface-variant">Loading Recurring…</p>}><RecurringPage /></Suspense>
     : <BattlePlanPage />
@@ -34,8 +38,18 @@ function BattlePlanRoute() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
-      <ReminderWatcher />
+      <AppContent />
     </BrowserRouter>
+  )
+}
+
+function AppContent() {
+  const [params] = useSearchParams()
+  const prototypeOpen = import.meta.env.DEV && params.get('prototype') === 'create-task'
+  return (
+    <>
+      <AppRoutes />
+      {!prototypeOpen && <ReminderWatcher />}
+    </>
   )
 }
