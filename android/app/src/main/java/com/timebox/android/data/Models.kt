@@ -169,7 +169,6 @@ fun TaskTypeDto.toModel() = TaskType(
 data class PlanningCommitPlacement(
     val date: LocalDate,
     val taskId: Int,
-    val taskTypeId: Int,
     val startMinute: Int,
     val endMinute: Int,
 )

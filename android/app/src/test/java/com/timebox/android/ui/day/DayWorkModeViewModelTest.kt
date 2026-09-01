@@ -15,6 +15,10 @@ import com.timebox.android.data.remote.LinkedTaskDto
 import com.timebox.android.data.remote.TaskTypeDto
 import com.timebox.android.data.remote.TimeBlockDto
 import com.timebox.android.data.remote.TimeboxApi
+import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
+import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.planning.PlanningSession
+import com.timebox.android.ui.planning.RepositoryPlanningSessionTransport
 import java.lang.reflect.Proxy
 import java.time.Instant
 import kotlin.coroutines.Continuation
@@ -248,12 +252,15 @@ class DayWorkModeViewModelTest {
         clock: FakeClock,
         persistence: FakeWorkModePersistence,
     ): DayViewModel {
+        val repository = TimeboxRepository(api.proxy())
         val viewModel = DayViewModel(
-            repository = TimeboxRepository(api.proxy()),
+            repository = repository,
             injectedScope = this,
             clock = clock::now,
             workModeTickMillis = 1_000,
             workModePersistence = persistence,
+            taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
+            planningSession = PlanningSession(RepositoryPlanningSessionTransport(repository)),
         )
         viewModel.load(java.time.LocalDate.parse("2026-08-30"))
         viewModel.state.first { it.day != null || it.error != null }

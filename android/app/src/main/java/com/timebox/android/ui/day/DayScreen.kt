@@ -75,7 +75,7 @@ fun DayScreen(
     onOpenWorkMode: () -> Unit = {},
 ) {
     BackHandler(enabled = state.isPlanningMode) {
-        if (!state.saving) onCancelPlanningMode()
+        if (!state.saving && !state.planning.saving) onCancelPlanningMode()
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -83,7 +83,7 @@ fun DayScreen(
             selectedDate = state.date,
             today = state.today,
             isPlanningMode = state.isPlanningMode,
-            planningActionEnabled = !state.saving,
+            planningActionEnabled = !state.saving && !state.planning.saving,
             onOpenWorkMode = onOpenWorkMode,
             onSetPlanningMode = { enabled ->
                 if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()

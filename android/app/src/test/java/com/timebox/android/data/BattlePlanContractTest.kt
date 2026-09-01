@@ -131,14 +131,14 @@ class BattlePlanContractTest {
             PlanningCommitDto.serializer(),
             PlanningCommitDto(
                 listOf(
-                    PlanningPlacementDto("2026-08-24", 10, 3, 540, 570),
-                    PlanningPlacementDto("2026-08-25", 11, 4, 600, 660),
+                    PlanningPlacementDto("2026-08-24", 10, 540, 570),
+                    PlanningPlacementDto("2026-08-25", 11, 600, 660),
                 )
             ),
         )
 
         assertTrue("\"task_id\":10" in encoded)
-        assertTrue("\"task_type_id\":4" in encoded)
+        assertTrue("task_type_id" !in encoded)
         assertTrue("\"date\":\"2026-08-25\"" in encoded)
         assertTrue("\"end_minute\":660" in encoded)
     }

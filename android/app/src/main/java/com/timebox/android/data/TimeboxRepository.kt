@@ -196,7 +196,6 @@ class TimeboxRepository private constructor(
                     PlanningPlacementDto(
                         date = it.date.toString(),
                         taskId = it.taskId,
-                        taskTypeId = it.taskTypeId,
                         startMinute = it.startMinute,
                         endMinute = it.endMinute,
                     )

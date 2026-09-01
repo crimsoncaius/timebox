@@ -210,6 +210,90 @@ def test_commit_plan_is_atomic_across_days(client):
     assert tasks[second["id"]]["ready_to_plan"] is False
 
 
+def test_linked_planned_block_creation_resolves_task_type_in_backend(client):
+    typed_id = _tid(client, "focused")
+    typed_task = client.post(
+        "/tasks",
+        json={"title": "Typed", "task_type_id": typed_id, "ready_to_plan": True},
+    ).json()
+    untyped_task = client.post(
+        "/tasks", json={"title": "Untyped", "ready_to_plan": True}
+    ).json()
+
+    typed = client.post(
+        "/days/2026-08-29/blocks",
+        json={
+            "lane": "planned",
+            "task_id": typed_task["id"],
+            "start_minute": 540,
+            "end_minute": 570,
+        },
+    )
+    untyped = client.post(
+        "/days/2026-08-29/blocks",
+        json={
+            "lane": "planned",
+            "task_id": untyped_task["id"],
+            "start_minute": 600,
+            "end_minute": 630,
+        },
+    )
+
+    assert typed.status_code == 200
+    assert untyped.status_code == 200
+    blocks = untyped.json()["time_blocks"]
+    typed_block = next(block for block in blocks if block["task_id"] == typed_task["id"])
+    untyped_block = next(block for block in blocks if block["task_id"] == untyped_task["id"])
+    assert typed_block["task_type_id"] == typed_id
+    assert untyped_block["task_type"]["name"] == "unspecified"
+    assert [row["name"] for row in client.get("/task-types").json()].count("unspecified") == 1
+
+
+def test_taskless_planned_block_still_requires_task_type(client):
+    response = client.post(
+        "/days/2026-08-30/blocks",
+        json={"lane": "planned", "start_minute": 540, "end_minute": 570},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Task Type is required when no Battle Plan Task is linked"
+    )
+    assert client.get("/task-types").json() == []
+
+
+def test_commit_plan_resolves_one_fallback_for_untyped_tasks(client):
+    first = client.post("/tasks", json={"title": "First", "ready_to_plan": True}).json()
+    second = client.post("/tasks", json={"title": "Second", "ready_to_plan": True}).json()
+
+    response = client.post(
+        "/days/plan",
+        json={
+            "placements": [
+                {
+                    "date": "2026-08-31",
+                    "task_id": first["id"],
+                    "start_minute": 540,
+                    "end_minute": 570,
+                },
+                {
+                    "date": "2026-09-01",
+                    "task_id": second["id"],
+                    "start_minute": 600,
+                    "end_minute": 630,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    block_types = {
+        day["time_blocks"][0]["task_type_id"] for day in response.json()["days"]
+    }
+    assert len(block_types) == 1
+    assert [row["name"] for row in client.get("/task-types").json()].count("unspecified") == 1
+
+
 def test_commit_plan_rolls_back_every_placement_when_one_overlaps(client):
     task_type_id = _tid(client, "planning-rollback")
     existing = client.post(
@@ -252,6 +336,45 @@ def test_commit_plan_rolls_back_every_placement_when_one_overlaps(client):
     tasks = {task["id"]: task for task in client.get("/tasks").json()["items"]}
     assert tasks[first["id"]]["ready_to_plan"] is True
     assert tasks[second["id"]]["ready_to_plan"] is True
+
+
+def test_commit_plan_rolls_back_materialized_fallback_when_a_placement_fails(client):
+    occupied_type_id = _tid(client, "occupied")
+    client.post(
+        "/days/2026-09-03/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": occupied_type_id,
+            "start_minute": 600,
+            "end_minute": 630,
+        },
+    )
+    first = client.post("/tasks", json={"title": "First", "ready_to_plan": True}).json()
+    second = client.post("/tasks", json={"title": "Second", "ready_to_plan": True}).json()
+
+    response = client.post(
+        "/days/plan",
+        json={
+            "placements": [
+                {
+                    "date": "2026-09-02",
+                    "task_id": first["id"],
+                    "start_minute": 540,
+                    "end_minute": 570,
+                },
+                {
+                    "date": "2026-09-03",
+                    "task_id": second["id"],
+                    "start_minute": 600,
+                    "end_minute": 630,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert client.get("/days/2026-09-02/preview").json()["time_blocks"] == []
+    assert [row["name"] for row in client.get("/task-types").json()] == ["occupied"]
 
 
 def test_commit_plan_rejects_duplicate_tasks_without_writing(client):

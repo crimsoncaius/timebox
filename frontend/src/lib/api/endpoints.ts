@@ -68,7 +68,7 @@ export const api = {
     date: string,
     body: {
       lane: 'planned'
-      task_type_id: number
+      task_type_id?: number
       task_id?: number | null
       note?: string | null
       start_minute: number

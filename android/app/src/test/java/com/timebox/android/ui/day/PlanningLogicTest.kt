@@ -5,9 +5,9 @@ import androidx.compose.ui.geometry.Rect
 import com.timebox.android.data.Day
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
-import com.timebox.android.data.TaskType
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TimeBlock
+import com.timebox.android.ui.planning.PlanningDraftPlacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -54,35 +54,6 @@ class PlanningLogicTest {
                 listOf(draft),
             ),
         )
-    }
-
-    @Test
-    fun `unspecified fallback is case insensitive`() {
-        val types = listOf(
-            TaskType(1, "work", 0),
-            TaskType(2, "Unspecified", 0),
-        )
-
-        assertEquals(2, types.unspecifiedTypeId())
-        assertNull(types.filterNot { it.id == 2 }.unspecifiedTypeId())
-    }
-
-    @Test
-    fun `touching intervals do not overlap`() {
-        assertFalse(blocksOverlap(480, 510, 510, 540))
-        assertTrue(blocksOverlap(480, 510, 500, 530))
-    }
-
-    @Test
-    fun `a draft ignores itself but not other drafts and dates are independent`() {
-        val day = dayWithBlocks()
-        val current = PlanningDraftPlacement(day.date, task(7, "Current"), 540, 570)
-        val other = PlanningDraftPlacement(day.date, task(8, "Other"), 600, 630)
-        val anotherDate = PlanningDraftPlacement(day.date.plusDays(1), task(9, "Tomorrow"), 660, 690)
-
-        assertTrue(isPlanningDropAvailable(day, 540, 570, listOf(current, other), excludeTaskId = 7))
-        assertFalse(isPlanningDropAvailable(day, 600, 630, listOf(current, other), excludeTaskId = 7))
-        assertTrue(isPlanningDropAvailable(day, 660, 690, listOf(anotherDate)))
     }
 
     private fun dayWithBlocks(vararg blocks: TimeBlock) = Day(

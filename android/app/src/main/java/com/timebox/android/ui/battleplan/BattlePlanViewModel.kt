@@ -17,6 +17,7 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
+import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -71,8 +72,6 @@ data class BattlePlanUiState(
     val deleteSummaryLoading: Boolean = false,
     val projectDeleteSummary: ProjectDeleteSummary? = null,
     val undoTaskId: Int? = null,
-    val completionUndoTaskId: Int? = null,
-    val completionUndoToken: String? = null,
     val permanentDeleteTask: BattleTask? = null,
 ) {
     val scopes: List<BattlePlanScope>
@@ -127,7 +126,10 @@ internal fun trashRetentionDays(serverNow: Instant, deletedAt: Instant?): Int? {
     return (30 - elapsed).coerceAtLeast(0).toInt()
 }
 
-class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel() {
+class BattlePlanViewModel(
+    private val repository: TimeboxRepository,
+    private val taskCompletion: TaskCompletion,
+) : ViewModel() {
     private val _state = MutableStateFlow(BattlePlanUiState())
     val state: StateFlow<BattlePlanUiState> = _state.asStateFlow()
     private var preferencesLoaded = false
@@ -202,7 +204,6 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
     fun setComposerVisible(visible: Boolean) = _state.update { it.copy(showComposer = visible) }
     fun consumeMessage() = _state.update { it.copy(message = null) }
     fun dismissUndo() = _state.update { it.copy(undoTaskId = null) }
-    fun dismissCompletionUndo() = _state.update { it.copy(completionUndoTaskId = null, completionUndoToken = null) }
     fun offerUndo(taskId: Int) = _state.update { it.copy(undoTaskId = taskId) }
 
     fun createTask(title: String, description: String, projectId: Int?) {
@@ -286,56 +287,32 @@ class BattlePlanViewModel(private val repository: TimeboxRepository) : ViewModel
         _state.update { it.copy(saving = true, message = null) }
         viewModelScope.launch {
             if (completed) {
-                repository.completeBattleTask(task.id).fold(
-                    onSuccess = { result ->
-                        _state.update {
-                            it.copy(
-                                saving = false,
-                                message = completionMessage(result.removedPlannedBlockIds.size),
-                                completionUndoTaskId = task.id,
-                                completionUndoToken = result.undoToken,
-                            )
-                        }
+                taskCompletion.transition(task.id, task.status, TaskStatus.Completed).fold(
+                    onSuccess = {
+                        _state.update { it.copy(saving = false) }
                         load(showSpinner = false)
                     },
-                    onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                    onFailure = {
+                        _state.update { it.copy(saving = false) }
+                        refreshAfterTaskCompletion()
+                    },
                 )
             } else {
-                repository.reopenBattleTask(task.id).fold(
+                taskCompletion.transition(task.id, task.status, TaskStatus.Open).fold(
                     onSuccess = {
-                        dismissCompletionUndo()
-                        _state.update { state -> state.copy(saving = false, message = "Task reopened") }
+                        _state.update { state -> state.copy(saving = false) }
                         load(showSpinner = false)
                     },
-                    onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                    onFailure = {
+                        _state.update { it.copy(saving = false) }
+                        refreshAfterTaskCompletion()
+                    },
                 )
             }
         }
     }
 
-    fun undoLastTaskCompletion() {
-        val taskId = _state.value.completionUndoTaskId ?: return
-        val token = _state.value.completionUndoToken ?: return
-        _state.update { it.copy(saving = true, completionUndoTaskId = null, completionUndoToken = null) }
-        viewModelScope.launch {
-            repository.undoBattleTaskCompletion(taskId, token).fold(
-                onSuccess = {
-                    _state.update { it.copy(saving = false, message = "Task completion undone") }
-                    load(showSpinner = false)
-                },
-                onFailure = { error ->
-                    _state.update {
-                        it.copy(
-                            saving = false,
-                            message = error.apiError.message,
-                            completionUndoTaskId = taskId,
-                            completionUndoToken = token,
-                        )
-                    }
-                },
-            )
-        }
-    }
+    fun refreshAfterTaskCompletion() = load(showSpinner = false)
 
     fun setBlocked(task: BattleTask, blocked: Boolean, reason: String?) {
         if (task.status == TaskStatus.Completed) return
@@ -482,9 +459,6 @@ internal fun dropTaskPlacements(
 }
 
 private fun Set<String>.toggle(value: String): Set<String> = if (value in this) this - value else this + value
-
-private fun completionMessage(removed: Int): String =
-    if (removed == 0) "Task completed" else "Task completed · $removed future Planned ${if (removed == 1) "Block" else "Blocks"} removed"
 
 private fun BattlePlanPreferences.resolveScope(projects: List<Project>): BattlePlanScope = when {
     scope == "admin" -> BattlePlanScope.Admin

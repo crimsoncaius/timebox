@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import DateTime, Integer, Text, func
+from sqlalchemy import DateTime, Index, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -12,6 +12,7 @@ class TaskType(Base):
     """Reusable task category (e.g. work, coding, gym)."""
 
     __tablename__ = "task_types"
+    __table_args__ = (Index("uq_task_types_name", "name", unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)

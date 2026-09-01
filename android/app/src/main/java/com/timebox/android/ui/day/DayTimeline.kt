@@ -60,6 +60,7 @@ import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.ui.gutterLabel
 import com.timebox.android.ui.hhmm
+import com.timebox.android.ui.planning.PlanningDraftPlacement
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme

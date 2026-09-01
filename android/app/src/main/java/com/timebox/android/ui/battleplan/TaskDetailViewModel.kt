@@ -13,6 +13,7 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
+import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -60,8 +61,6 @@ data class TaskDetailUiState(
     val confirmTrash: Boolean = false,
     val pendingSubtaskTrash: Subtask? = null,
     val undoSubtaskId: Int? = null,
-    val completionUndoTaskId: Int? = null,
-    val completionUndoToken: String? = null,
     val error: String? = null,
     val message: String? = null,
 ) {
@@ -69,7 +68,10 @@ data class TaskDetailUiState(
     val subtasks: List<Subtask> get() = task?.subtasks.orEmpty()
 }
 
-class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel() {
+class TaskDetailViewModel(
+    private val repository: TimeboxRepository,
+    private val taskCompletion: TaskCompletion,
+) : ViewModel() {
     private val _state = MutableStateFlow(TaskDetailUiState())
     val state: StateFlow<TaskDetailUiState> = _state.asStateFlow()
     private var clockJob: Job? = null
@@ -150,7 +152,6 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
     fun setReminderTime(value: String) = edit { copy(reminderTime = value) }
     fun setReady(value: Boolean) = edit { copy(readyToPlan = value) }
     fun consumeMessage() = _state.update { it.copy(message = null) }
-    fun dismissCompletionUndo() = _state.update { it.copy(completionUndoTaskId = null, completionUndoToken = null) }
     fun requestTrash() = _state.update { it.copy(confirmTrash = true) }
     fun dismissTrash() = _state.update { it.copy(confirmTrash = false) }
 
@@ -159,13 +160,14 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
         if (task.status != TaskStatus.Completed || _state.value.saving) return
         _state.update { it.copy(saving = true, message = null) }
         viewModelScope.launch {
-            repository.reopenBattleTask(task.id).fold(
+            taskCompletion.transition(task.id, task.status, TaskStatus.Open).fold(
                 onSuccess = {
-                    dismissCompletionUndo()
                     load(task.id)
-                    _state.update { it.copy(message = "Task reopened") }
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onFailure = {
+                    _state.update { it.copy(saving = false) }
+                    refreshAfterTaskCompletion(task.id)
+                },
             )
         }
     }
@@ -264,29 +266,17 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
                 _state.update { it.copy(saving = false, message = error.apiError.message) }
                 return@launch
             }
-            var undoToken: String? = null
-            var removedPlannedBlocks = 0
-            if (original.status != current.status && current.status == TaskStatus.Completed) {
-                val completion = repository.completeBattleTask(original.id).getOrElse { error ->
-                    _state.update { it.copy(saving = false, message = error.apiError.message) }
+            var lifecycleChanged = false
+            if (
+                original.status != current.status &&
+                (original.status == TaskStatus.Completed || current.status == TaskStatus.Completed)
+            ) {
+                taskCompletion.transition(original.id, original.status, current.status).getOrElse {
+                    _state.update { it.copy(saving = false) }
+                    refreshAfterTaskCompletion(original.id)
                     return@launch
                 }
-                undoToken = completion.undoToken
-                removedPlannedBlocks = completion.removedPlannedBlockIds.size
-            } else if (original.status == TaskStatus.Completed && current.status != TaskStatus.Completed) {
-                val reopened = repository.reopenBattleTask(original.id).getOrElse { error ->
-                    _state.update { it.copy(saving = false, message = error.apiError.message) }
-                    return@launch
-                }
-                if (reopened.status != current.status) {
-                    repository.patchBattleTask(
-                        original.id,
-                        BattleTaskPatch(status = PatchField.of(current.status)),
-                    ).getOrElse { error ->
-                        _state.update { it.copy(saving = false, message = error.apiError.message) }
-                        return@launch
-                    }
-                }
+                lifecycleChanged = true
             }
             load(original.id)
             _state.update {
@@ -294,37 +284,14 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
                     saving = false,
                     dirty = false,
                     saved = true,
-                    message = if (undoToken != null) completionMessage(removedPlannedBlocks) else "Task saved",
-                    completionUndoTaskId = if (undoToken != null) original.id else null,
-                    completionUndoToken = undoToken,
+                    message = if (lifecycleChanged) null else "Task saved",
                 )
             }
         }
     }
 
-    fun undoLastTaskCompletion() {
-        val taskId = _state.value.completionUndoTaskId ?: return
-        val token = _state.value.completionUndoToken ?: return
-        _state.update { it.copy(saving = true, completionUndoTaskId = null, completionUndoToken = null) }
-        viewModelScope.launch {
-            repository.undoBattleTaskCompletion(taskId, token).fold(
-                onSuccess = {
-                    val detailTaskId = _state.value.taskId
-                    detailTaskId?.let(::load)
-                    _state.update { it.copy(saving = false, message = "Task completion undone") }
-                },
-                onFailure = { error ->
-                    _state.update {
-                        it.copy(
-                            saving = false,
-                            message = error.apiError.message,
-                            completionUndoTaskId = taskId,
-                            completionUndoToken = token,
-                        )
-                    }
-                },
-            )
-        }
+    fun refreshAfterTaskCompletion(taskId: Int) {
+        if (_state.value.taskId == taskId) load(taskId)
     }
 
     private fun mutate(message: String, operation: suspend () -> Result<*>) {
@@ -344,9 +311,6 @@ class TaskDetailViewModel(private val repository: TimeboxRepository) : ViewModel
 
     companion object { private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm") }
 }
-
-private fun completionMessage(removed: Int): String =
-    if (removed == 0) "Task completed" else "Task completed · $removed future Planned ${if (removed == 1) "Block" else "Blocks"} removed"
 
 sealed interface TaskDraftValidation {
     data class Valid(val deadlineDate: LocalDate?, val deadlineAt: Instant?, val reminderAt: Instant?) : TaskDraftValidation

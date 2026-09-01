@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -58,6 +59,7 @@ import com.timebox.android.ui.theme.ThemePreviewScreen
 import com.timebox.android.ui.types.TypesScreen
 import com.timebox.android.ui.types.TypesViewModel
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 @Composable
 fun TimeboxApp(
@@ -68,7 +70,8 @@ fun TimeboxApp(
     onOpenNotificationSettings: () -> Unit,
 ) {
     val repository = rememberRepository()
-    val factory = remember(repository) { timeboxViewModelFactory(repository) }
+    val taskCompletion = rememberTaskCompletion()
+    val factory = remember(repository, taskCompletion) { timeboxViewModelFactory(repository, taskCompletion) }
     val navController = rememberNavController()
 
     val dayViewModel: DayViewModel = viewModel(factory = factory)
@@ -86,6 +89,7 @@ fun TimeboxApp(
     val settingsState by settingsViewModel.state.collectAsState()
     val battlePlanState by battlePlanViewModel.state.collectAsState()
     val taskDetailState by taskDetailViewModel.state.collectAsState()
+    val taskCompletionNotice by taskCompletion.notice.collectAsState()
     val projectEditorState by projectEditorViewModel.state.collectAsState()
     val recurringState by recurringViewModel.state.collectAsState()
     val recurringEditorState by recurringEditorViewModel.state.collectAsState()
@@ -99,6 +103,7 @@ fun TimeboxApp(
     val routeProjectId = backStackEntry?.arguments?.getInt(AppRoutes.ProjectIdArg)
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
+    val taskCompletionScope = rememberCoroutineScope()
     val openedDayEntryIds = remember { mutableSetOf<String>() }
 
     LaunchedEffect(route, routeDate, routeTaskId, routeProjectId, routeTemplateId, backStackEntry?.id) {
@@ -129,19 +134,7 @@ fun TimeboxApp(
         }
     }
     LaunchedEffect(dayState.message) {
-        dayState.message?.let { message ->
-            val hasCompletionUndo = dayState.completionUndoToken != null
-            dayViewModel.consumeMessage()
-            val result = snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = if (hasCompletionUndo) "Undo" else null,
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                dayViewModel.undoLastTaskCompletion()
-            } else if (hasCompletionUndo) {
-                dayViewModel.dismissCompletionUndo()
-            }
-        }
+        dayState.message?.let { snackbarHostState.showSnackbar(it); dayViewModel.consumeMessage() }
     }
     LaunchedEffect(route, routeDate, routeBlockId, dayState.day) {
         if (
@@ -160,32 +153,27 @@ fun TimeboxApp(
         settingsState.message?.let { snackbarHostState.showSnackbar(it); settingsViewModel.consumeMessage() }
     }
     LaunchedEffect(battlePlanState.message) {
-        battlePlanState.message?.let { message ->
-            val hasCompletionUndo = battlePlanState.completionUndoToken != null
-            battlePlanViewModel.consumeMessage()
-            val result = snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = if (hasCompletionUndo) "Undo" else null,
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                battlePlanViewModel.undoLastTaskCompletion()
-            } else if (hasCompletionUndo) {
-                battlePlanViewModel.dismissCompletionUndo()
-            }
-        }
+        battlePlanState.message?.let { snackbarHostState.showSnackbar(it); battlePlanViewModel.consumeMessage() }
     }
     LaunchedEffect(taskDetailState.message) {
-        taskDetailState.message?.let { message ->
-            val hasCompletionUndo = taskDetailState.completionUndoToken != null
-            taskDetailViewModel.consumeMessage()
+        taskDetailState.message?.let { snackbarHostState.showSnackbar(it); taskDetailViewModel.consumeMessage() }
+    }
+    LaunchedEffect(taskCompletionNotice?.id) {
+        taskCompletionNotice?.let { notice ->
             val result = snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = if (hasCompletionUndo) "Undo" else null,
+                message = notice.message,
+                actionLabel = if (notice.canUndo) "Undo" else null,
             )
-            if (result == SnackbarResult.ActionPerformed) {
-                taskDetailViewModel.undoLastTaskCompletion()
-            } else if (hasCompletionUndo) {
-                taskDetailViewModel.dismissCompletionUndo()
+            if (result == SnackbarResult.ActionPerformed && notice.canUndo) {
+                taskCompletionScope.launch {
+                    taskCompletion.undo(notice.id).onSuccess { task ->
+                        dayViewModel.refreshAfterTaskCompletion()
+                        battlePlanViewModel.refreshAfterTaskCompletion()
+                        taskDetailViewModel.refreshAfterTaskCompletion(task.id)
+                    }
+                }
+            } else {
+                taskCompletion.dismiss(notice.id)
             }
         }
     }

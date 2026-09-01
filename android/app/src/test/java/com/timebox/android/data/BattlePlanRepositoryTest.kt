@@ -48,7 +48,7 @@ class BattlePlanRepositoryTest {
         repository.restoreBattleTask(10).getOrThrow()
         repository.permanentlyDeleteBattleTask(10).getOrThrow()
         repository.commitPlan(
-            listOf(PlanningCommitPlacement(LocalDate.parse("2026-08-20"), 10, 3, 540, 570))
+            listOf(PlanningCommitPlacement(LocalDate.parse("2026-08-20"), 10, 540, 570))
         ).getOrThrow()
         repository.startActualBlock(taskId = 10, plannedBlockId = 31).getOrThrow()
         repository.createActualBlock(

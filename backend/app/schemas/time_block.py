@@ -138,7 +138,7 @@ class ActualBlockDayRead(BaseModel):
 
 class PlannedBlockCreate(BaseModel):
     lane: Literal[BlockLane.planned] = BlockLane.planned
-    task_type_id: int
+    task_type_id: int | None = None
     task_id: int | None = None
     note: str | None = None
     start_minute: int = Field(..., ge=0, le=1440)

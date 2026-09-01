@@ -89,7 +89,7 @@ describe('TodayPage inspector rail', () => {
       if (url.includes('/days/2026-06-01/blocks') && method === 'POST') {
         const body = JSON.parse(String(init?.body)) as {
           task_id: number
-          task_type_id: number
+          task_type_id?: number
           start_minute: number
           end_minute: number
         }
@@ -101,8 +101,10 @@ describe('TodayPage inspector rail', () => {
               id: 12,
               lane: 'planned',
               task_id: body.task_id,
-              task_type_id: body.task_type_id,
-              task_type: { id: body.task_type_id, name: 'unspecified', created_at: '', updated_at: '' },
+              task_type_id: body.task_type_id ?? (body.task_id === 79 ? 1 : 3),
+              task_type: body.task_id === 79
+                ? taskTypes[0]
+                : { id: 3, name: 'unspecified', created_at: '', updated_at: '' },
               note: null,
               start_minute: body.start_minute,
               end_minute: body.end_minute,
@@ -218,8 +220,9 @@ describe('TodayPage inspector rail', () => {
       )
       expect(createBlock).toBeDefined()
       expect(JSON.parse(String(createBlock?.[1]?.body))).toMatchObject({
-        lane: 'planned', task_id: 79, task_type_id: 1,
+        lane: 'planned', task_id: 79,
       })
+      expect(JSON.parse(String(createBlock?.[1]?.body))).not.toHaveProperty('task_type_id')
     })
   })
 
@@ -245,7 +248,7 @@ describe('TodayPage inspector rail', () => {
     expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
 
-  it('plans an untyped Ready to Plan task with the unspecified fallback', async () => {
+  it('delegates untyped Ready to Plan fallback resolution to the backend', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/day/2026-06-01']}>
@@ -273,16 +276,15 @@ describe('TodayPage inspector rail', () => {
       const createBlock = calls.find(([input, init]) =>
         String(input).includes('/days/2026-06-01/blocks') && init?.method === 'POST',
       )
-      expect(createType).toBeDefined()
-      expect(JSON.parse(String(createType?.[1]?.body))).toEqual({ name: 'unspecified' })
+      expect(createType).toBeUndefined()
       expect(createBlock).toBeDefined()
       expect(JSON.parse(String(createBlock?.[1]?.body))).toMatchObject({
         lane: 'planned',
         task_id: 78,
-        task_type_id: 3,
         start_minute: 510,
         end_minute: 540,
       })
+      expect(JSON.parse(String(createBlock?.[1]?.body))).not.toHaveProperty('task_type_id')
     })
   })
 

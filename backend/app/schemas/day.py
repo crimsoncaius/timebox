@@ -10,7 +10,7 @@ from app.schemas.time_block import ActualBlockDayProjectionRead, PlannedBlockRea
 class PlanningPlacementCreate(BaseModel):
     date: date
     task_id: int
-    task_type_id: int
+    task_type_id: int | None = None
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
 

@@ -66,6 +66,8 @@ import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.SLOT_MINUTES
+import com.timebox.android.ui.planning.PlanningDraftPlacement
+import com.timebox.android.ui.planning.planningRangeAvailable
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -228,7 +230,7 @@ internal fun PlanningWorkspace(
                     onPlannedLaneBoundsChanged = { laneBounds = it },
                     blockGesturesEnabled = false,
                     planningDrafts = planningDrafts,
-                    planningDraftGesturesEnabled = !state.saving,
+                    planningDraftGesturesEnabled = !state.saving && !state.planning.saving,
                     draggingPlanningTaskId = drag?.draft?.taskId,
                     onPlanningDraftDragStart = { draft, pointer, grabOffset ->
                         drag = TaskDragState(draft.task, pointer, draft, grabOffset)
@@ -277,7 +279,7 @@ internal fun PlanningWorkspace(
 
             if (showTaskRail) PlanningTaskRail(
                 state = state,
-                enabled = !state.saving,
+                enabled = !state.saving && !state.planning.saving,
                 draggingTaskId = drag?.takeIf { it.draft == null }?.task?.id,
                 returnDropActive = returningDraft,
                 appearingTaskId = returningTaskId,
@@ -331,9 +333,7 @@ internal fun PlanningWorkspace(
 }
 
 internal fun DayUiState.hasPlanningRailContent(date: java.time.LocalDate): Boolean {
-    if (readyTasksLoading || readyTasksError != null || accessibilityPlanningTaskId != null) return true
-    val drafted = planningDrafts(date).mapTo(mutableSetOf()) { it.taskId }
-    return readyTasks.any { it.id !in drafted }
+    return planning.hasRailContent(date)
 }
 
 @Composable
@@ -639,13 +639,5 @@ internal fun isPlanningDropAvailable(
     drafts: List<PlanningDraftPlacement> = emptyList(),
     excludeTaskId: Int? = null,
 ): Boolean {
-    if (startMinute < day.visibleStart || endMinute > day.visibleEnd) return false
-    if (day.lane(Lane.Planned).any {
-            blocksOverlap(startMinute, endMinute, it.startMinute, it.endMinute)
-        }
-    ) return false
-    return drafts.none {
-        it.date == day.date && it.taskId != excludeTaskId &&
-            blocksOverlap(startMinute, endMinute, it.startMinute, it.endMinute)
-    }
+    return planningRangeAvailable(day, drafts, excludeTaskId, startMinute, endMinute)
 }
