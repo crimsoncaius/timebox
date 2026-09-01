@@ -155,6 +155,13 @@ fun TimeboxApp(
     LaunchedEffect(battlePlanState.message) {
         battlePlanState.message?.let { snackbarHostState.showSnackbar(it); battlePlanViewModel.consumeMessage() }
     }
+    LaunchedEffect(battlePlanState.createdTaskNotice?.taskId) {
+        battlePlanState.createdTaskNotice?.let { notice ->
+            val result = snackbarHostState.showSnackbar(message = notice.message, actionLabel = "Open")
+            battlePlanViewModel.consumeCreatedTaskNotice()
+            if (result == SnackbarResult.ActionPerformed) navController.navigate(AppRoutes.taskDetail(notice.taskId))
+        }
+    }
     LaunchedEffect(taskDetailState.message) {
         taskDetailState.message?.let { snackbarHostState.showSnackbar(it); taskDetailViewModel.consumeMessage() }
     }
@@ -304,8 +311,12 @@ fun TimeboxApp(
                             onSetBlocked = battlePlanViewModel::setBlocked,
                             onCreateSubtask = battlePlanViewModel::createSubtask,
                             onToggleSubtask = battlePlanViewModel::toggleSubtaskComplete,
-                            onCreateTask = battlePlanViewModel::createTask,
+                            onCreateTask = { _, _, _ -> battlePlanViewModel.createTask() },
                             onShowComposer = battlePlanViewModel::setComposerVisible,
+                            onComposerDraftChange = battlePlanViewModel::updateComposerDraft,
+                            onComposerReminderEnabledChange = battlePlanViewModel::setComposerReminderEnabled,
+                            notificationsAllowed = notificationsAllowed,
+                            onRequestNotificationPermission = onRequestNotificationPermission,
                             onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
                             onNewProject = { navController.navigate(AppRoutes.ProjectNew) },
                             onPrepareDeleteProject = battlePlanViewModel::prepareProjectDelete,

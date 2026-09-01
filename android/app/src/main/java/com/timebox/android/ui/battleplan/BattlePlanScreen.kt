@@ -170,6 +170,10 @@ fun BattlePlanScreen(
     onToggleSubtask: (Subtask) -> Unit,
     onCreateTask: (String, String, Int?) -> Unit,
     onShowComposer: (Boolean) -> Unit,
+    onComposerDraftChange: (TaskComposerDraft) -> Unit = {},
+    onComposerReminderEnabledChange: (Boolean) -> Unit = {},
+    notificationsAllowed: Boolean = true,
+    onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
     onPrepareDeleteProject: (Project) -> Unit,
@@ -199,24 +203,33 @@ fun BattlePlanScreen(
             if (state.collection == TaskCollection.Active) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     if (maxWidth >= 840.dp) {
-                        Column(Modifier.fillMaxSize()) {
-                            ScopeSelector(
-                                scopes = state.scopes,
-                                selected = state.selectedScope,
-                                onSelect = onSelectScope,
-                                onNewProject = onNewProject,
-                                onOpenRecurring = onOpenRecurring,
-                            )
-                            BattlePlanFilters(state, onToggleUrgency, onToggleImportance, onToggleTaskType, onClearFilters)
-                            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                battlePlanStatuses.forEach { status ->
-                                    TaskColumn(
-                                        status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
-                                        true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onMoveTask,
-                                        onReorderTask, onCreateSubtask, onToggleSubtask,
-                                    )
+                        Box(Modifier.fillMaxSize()) {
+                            Column(Modifier.fillMaxSize()) {
+                                ScopeSelector(
+                                    scopes = state.scopes,
+                                    selected = state.selectedScope,
+                                    onSelect = onSelectScope,
+                                    onNewProject = onNewProject,
+                                    onOpenRecurring = onOpenRecurring,
+                                )
+                                BattlePlanFilters(state, onToggleUrgency, onToggleImportance, onToggleTaskType, onClearFilters)
+                                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    battlePlanStatuses.forEach { status ->
+                                        TaskColumn(
+                                            status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
+                                            true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onMoveTask,
+                                            onReorderTask, onCreateSubtask, onToggleSubtask,
+                                        )
+                                    }
                                 }
                             }
+                            PrimaryButton(
+                                text = "New task",
+                                onClick = { onShowComposer(true) },
+                                enabled = !state.saving,
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
+                                leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
+                            )
                         }
                     } else {
                         MobileKanbanBoard(
@@ -253,12 +266,14 @@ fun BattlePlanScreen(
     }
 
     if (state.showComposer) {
-        TaskComposerDialog(
-            scope = state.selectedScope,
-            projects = state.projects,
-            saving = state.saving,
+        TaskComposerOverlay(
+            state = state,
+            notificationsAllowed = notificationsAllowed,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onDraftChange = onComposerDraftChange,
+            onReminderEnabledChange = onComposerReminderEnabledChange,
             onDismiss = { onShowComposer(false) },
-            onCreate = onCreateTask,
+            onCreate = { onCreateTask("", "", null) },
         )
     }
 
@@ -1958,51 +1973,6 @@ private fun UtilityTaskList(
             }
         }
     }
-}
-
-@Composable
-private fun TaskComposerDialog(
-    scope: BattlePlanScope,
-    projects: List<Project>,
-    saving: Boolean,
-    onDismiss: () -> Unit,
-    onCreate: (String, String, Int?) -> Unit,
-) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var projectId by remember(scope.preferenceKey) {
-        mutableStateOf(if (scope.kind == BattlePlanScopeKind.Project) scope.projectId else null)
-    }
-    var projectMenu by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New ${scope.label} task") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
-                OutlinedTextField(description, { description = it }, label = { Text("Description") }, minLines = 2)
-                if (scope.kind == BattlePlanScopeKind.All) {
-                    Box {
-                        TextButton(onClick = { projectMenu = true }) {
-                            Text(projects.firstOrNull { it.id == projectId }?.name ?: "Admin")
-                        }
-                        DropdownMenu(projectMenu, { projectMenu = false }) {
-                            DropdownMenuItem({ Text("Admin") }, { projectId = null; projectMenu = false })
-                            projects.forEach { project ->
-                                DropdownMenuItem({ Text(project.name) }, { projectId = project.id; projectMenu = false })
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = title.isNotBlank() && !saving, onClick = { onCreate(title, description, projectId) }) {
-                Text(if (saving) "Creating…" else "Create")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 @Composable

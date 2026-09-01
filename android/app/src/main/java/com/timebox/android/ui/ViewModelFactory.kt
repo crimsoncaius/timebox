@@ -3,6 +3,7 @@ package com.timebox.android.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.timebox.android.TimeboxApplication
@@ -48,7 +49,7 @@ fun timeboxViewModelFactory(
         initializer { ChronicleViewModel(repository) }
         initializer { TypesViewModel(repository) }
         initializer { SettingsViewModel(repository) }
-        initializer { BattlePlanViewModel(repository, taskCompletion) }
+        initializer { BattlePlanViewModel(repository, taskCompletion, createSavedStateHandle()) }
         initializer { TaskDetailViewModel(repository, taskCompletion) }
         initializer { ProjectEditorViewModel(repository) }
         initializer { RecurringViewModel(repository) }

@@ -1,6 +1,10 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -14,8 +18,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.PriorityLevel
+import com.timebox.android.data.Project
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.theme.DarkTimeboxColors
@@ -27,6 +33,58 @@ import java.time.LocalDate
 
 class BattlePlanScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun composerUsesEditorialSectionsAndPolishedDropdownMenus() {
+        var createdDraft: TaskComposerDraft? = null
+        compose.setContent {
+            var state by remember {
+                mutableStateOf(
+                    BattlePlanUiState(
+                        loading = false,
+                        showComposer = true,
+                        projects = listOf(
+                            Project(3, "Timebox", "", null, null, Instant.EPOCH, Instant.EPOCH),
+                        ),
+                        taskTypes = listOf(TaskType(id = 7, name = "Design", usageCount = 0)),
+                        composerDraft = TaskComposerDraft(),
+                    ),
+                )
+            }
+            TimeboxTheme(darkTheme = false) {
+                TaskComposerOverlay(
+                    state = state,
+                    notificationsAllowed = true,
+                    onRequestNotificationPermission = {},
+                    onDraftChange = { state = state.copy(composerDraft = it) },
+                    onReminderEnabledChange = {},
+                    onDismiss = {},
+                    onCreate = { createdDraft = state.composerDraft },
+                )
+            }
+        }
+
+        compose.onNodeWithText("ESSENTIALS").fetchSemanticsNode()
+        compose.onNodeWithText("ORGANIZATION").fetchSemanticsNode()
+        compose.onNodeWithText("PLANNING").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithText("MORE OPTIONS").performScrollTo().fetchSemanticsNode()
+
+        compose.onNodeWithText("Title").performScrollTo().performTextInput("Prepare launch notes")
+        compose.onNodeWithContentDescription("Location, Admin").performScrollTo().performClick()
+        compose.onNodeWithText("Timebox").performClick()
+        compose.onNodeWithContentDescription("Task Type, Unset").performScrollTo().performClick()
+        compose.onNodeWithText("Design").performClick()
+        compose.onNodeWithContentDescription("Status, Open").performScrollTo().performClick()
+        compose.onNodeWithText("In Progress").performClick()
+        compose.onNodeWithText("Create task").performClick()
+
+        compose.runOnIdle {
+            check(createdDraft?.title == "Prepare launch notes")
+            check(createdDraft?.projectId == 3)
+            check(createdDraft?.taskTypeId == 7)
+            check(createdDraft?.status == TaskStatus.InProgress)
+        }
+    }
 
     @Test
     fun compactCardsRenderTheTimezoneAwarePlannedSummary() {

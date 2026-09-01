@@ -1,6 +1,7 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.BattlePlanPreferences
 import com.timebox.android.data.BattlePlanSort
@@ -20,7 +21,11 @@ import com.timebox.android.data.remote.PatchField
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,6 +54,27 @@ data class BattlePlanScope(val kind: BattlePlanScopeKind, val projectId: Int? = 
 
 data class ProjectDeleteSummary(val project: Project, val taskCount: Int)
 
+data class TaskComposerDraft(
+    val title: String = "",
+    val description: String = "",
+    val status: TaskStatus = TaskStatus.Open,
+    val projectId: Int? = null,
+    val taskTypeId: Int? = null,
+    val urgency: PriorityLevel? = null,
+    val importance: PriorityLevel? = null,
+    val deadlineMode: TaskDeadlineMode = TaskDeadlineMode.None,
+    val deadlineDate: String = "",
+    val deadlineTime: String = "",
+    val reminderEnabled: Boolean = false,
+    val reminderDate: String = "",
+    val reminderTime: String = "",
+    val readyToPlan: Boolean = false,
+    val moreOpen: Boolean = false,
+    val dirty: Boolean = false,
+)
+
+data class CreatedTaskNotice(val taskId: Int, val message: String)
+
 data class BattlePlanUiState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
@@ -69,6 +95,10 @@ data class BattlePlanUiState(
     val error: String? = null,
     val message: String? = null,
     val showComposer: Boolean = false,
+    val composerDraft: TaskComposerDraft = TaskComposerDraft(),
+    val composerSubmitted: Boolean = false,
+    val composerError: String? = null,
+    val createdTaskNotice: CreatedTaskNotice? = null,
     val deleteSummaryLoading: Boolean = false,
     val projectDeleteSummary: ProjectDeleteSummary? = null,
     val undoTaskId: Int? = null,
@@ -129,8 +159,14 @@ internal fun trashRetentionDays(serverNow: Instant, deletedAt: Instant?): Int? {
 class BattlePlanViewModel(
     private val repository: TimeboxRepository,
     private val taskCompletion: TaskCompletion,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
-    private val _state = MutableStateFlow(BattlePlanUiState())
+    private val _state = MutableStateFlow(
+        BattlePlanUiState(
+            showComposer = savedStateHandle[COMPOSER_VISIBLE] ?: false,
+            composerDraft = restoreComposerDraft(savedStateHandle),
+        ),
+    )
     val state: StateFlow<BattlePlanUiState> = _state.asStateFlow()
     private var preferencesLoaded = false
     private var clockJob: Job? = null
@@ -201,20 +237,102 @@ class BattlePlanViewModel(
     fun toggleImportance(value: String) { _state.update { it.copy(importanceFilter = it.importanceFilter.toggle(value)) }; persistView() }
     fun toggleTaskType(value: String) { _state.update { it.copy(taskTypeFilter = it.taskTypeFilter.toggle(value)) }; persistView() }
     fun clearFilters() { _state.update { it.copy(urgencyFilter = emptySet(), importanceFilter = emptySet(), taskTypeFilter = emptySet()) }; persistView() }
-    fun setComposerVisible(visible: Boolean) = _state.update { it.copy(showComposer = visible) }
+    fun setComposerVisible(visible: Boolean) {
+        if (!visible) {
+            discardComposer()
+            return
+        }
+        _state.update { current ->
+            if (current.showComposer) current else {
+                current.copy(
+                    showComposer = true,
+                    composerDraft = initialComposerDraft(current.selectedScope, current.selectedStatus),
+                    composerSubmitted = false,
+                    composerError = null,
+                )
+            }
+        }
+        persistComposer()
+    }
+
+    fun updateComposerDraft(draft: TaskComposerDraft) {
+        _state.update { it.copy(composerDraft = draft.copy(dirty = true), composerError = null) }
+        persistComposer()
+    }
+
+    fun setComposerReminderEnabled(enabled: Boolean) {
+        val current = _state.value
+        val draft = current.composerDraft
+        if (!enabled) {
+            updateComposerDraft(draft.copy(reminderEnabled = false))
+            return
+        }
+        val zone = runCatching { ZoneId.of(current.timezone) }.getOrDefault(ZoneId.of("UTC"))
+        val date = runCatching { LocalDate.parse(draft.deadlineDate) }.getOrNull()
+            ?: current.serverNow.atZone(zone).toLocalDate()
+        val suggested = if (draft.deadlineMode == TaskDeadlineMode.DateTime) {
+            val time = runCatching { LocalTime.parse(draft.deadlineTime) }.getOrDefault(LocalTime.of(9, 0))
+            LocalDateTime.of(date, time).minusHours(1)
+        } else {
+            LocalDateTime.of(date, LocalTime.of(9, 0))
+        }
+        updateComposerDraft(
+            draft.copy(
+                reminderEnabled = true,
+                reminderDate = suggested.toLocalDate().toString(),
+                reminderTime = suggested.toLocalTime().format(TIME_FORMAT),
+            ),
+        )
+    }
+
+    fun discardComposer() {
+        _state.update {
+            it.copy(
+                showComposer = false,
+                composerDraft = TaskComposerDraft(),
+                composerSubmitted = false,
+                composerError = null,
+            )
+        }
+        clearSavedComposer()
+    }
+
     fun consumeMessage() = _state.update { it.copy(message = null) }
+    fun consumeCreatedTaskNotice() = _state.update { it.copy(createdTaskNotice = null) }
     fun dismissUndo() = _state.update { it.copy(undoTaskId = null) }
     fun offerUndo(taskId: Int) = _state.update { it.copy(undoTaskId = taskId) }
 
-    fun createTask(title: String, description: String, projectId: Int?) {
-        if (title.isBlank()) { _state.update { it.copy(message = "Task title is required.") }; return }
-        val initialStatus = _state.value.selectedStatus.takeUnless { it == TaskStatus.Completed } ?: TaskStatus.Open
-        if (_state.value.selectedStatus == TaskStatus.Completed) {
-            _state.update { it.copy(selectedStatus = TaskStatus.Open) }
-            persistView()
+    fun createTask() {
+        val current = _state.value
+        val validation = validateTaskComposer(current.composerDraft, current.timezone)
+        if (validation is TaskComposerValidation.Invalid) {
+            _state.update { it.copy(composerSubmitted = true, composerError = validation.message) }
+            return
         }
-        mutate("Task created") {
-            repository.createBattleTask(BattleTaskCreate(title.trim(), description.trim(), status = initialStatus, projectId = projectId))
+        validation as TaskComposerValidation.Valid
+        if (current.saving) return
+        _state.update { it.copy(saving = true, composerSubmitted = true, composerError = null) }
+        viewModelScope.launch {
+            repository.createBattleTask(validation.request).fold(
+                onSuccess = { task ->
+                    val message = if (current.selectedStatus == TaskStatus.Completed) "Task created in Open" else "Task created"
+                    _state.update {
+                        it.copy(
+                            saving = false,
+                            showComposer = false,
+                            composerDraft = TaskComposerDraft(),
+                            composerSubmitted = false,
+                            composerError = null,
+                            createdTaskNotice = CreatedTaskNotice(task.id, message),
+                        )
+                    }
+                    clearSavedComposer()
+                    load(false)
+                },
+                onFailure = { error ->
+                    _state.update { it.copy(saving = false, composerError = error.apiError.message) }
+                },
+            )
         }
     }
 
@@ -422,7 +540,127 @@ class BattlePlanViewModel(
             repository.setBattlePlanView(BattlePlanPreferences(current.selectedScope.preferenceKey, current.selectedStatus, current.sort, current.hideCompleted, current.urgencyFilter, current.importanceFilter, current.taskTypeFilter))
         }
     }
+
+    private fun persistComposer() {
+        val state = _state.value
+        val draft = state.composerDraft
+        savedStateHandle[COMPOSER_VISIBLE] = state.showComposer
+        savedStateHandle[COMPOSER_TITLE] = draft.title
+        savedStateHandle[COMPOSER_DESCRIPTION] = draft.description
+        savedStateHandle[COMPOSER_STATUS] = draft.status.name
+        savedStateHandle[COMPOSER_PROJECT_ID] = draft.projectId
+        savedStateHandle[COMPOSER_TASK_TYPE_ID] = draft.taskTypeId
+        savedStateHandle[COMPOSER_URGENCY] = draft.urgency?.name
+        savedStateHandle[COMPOSER_IMPORTANCE] = draft.importance?.name
+        savedStateHandle[COMPOSER_DEADLINE_MODE] = draft.deadlineMode.name
+        savedStateHandle[COMPOSER_DEADLINE_DATE] = draft.deadlineDate
+        savedStateHandle[COMPOSER_DEADLINE_TIME] = draft.deadlineTime
+        savedStateHandle[COMPOSER_REMINDER_ENABLED] = draft.reminderEnabled
+        savedStateHandle[COMPOSER_REMINDER_DATE] = draft.reminderDate
+        savedStateHandle[COMPOSER_REMINDER_TIME] = draft.reminderTime
+        savedStateHandle[COMPOSER_READY] = draft.readyToPlan
+        savedStateHandle[COMPOSER_MORE_OPEN] = draft.moreOpen
+        savedStateHandle[COMPOSER_DIRTY] = draft.dirty
+    }
+
+    private fun clearSavedComposer() {
+        COMPOSER_KEYS.forEach { key -> savedStateHandle.remove<Any?>(key) }
+    }
+
+    companion object {
+        private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
+        private const val COMPOSER_VISIBLE = "battlePlan.composer.visible"
+        private const val COMPOSER_TITLE = "battlePlan.composer.title"
+        private const val COMPOSER_DESCRIPTION = "battlePlan.composer.description"
+        private const val COMPOSER_STATUS = "battlePlan.composer.status"
+        private const val COMPOSER_PROJECT_ID = "battlePlan.composer.projectId"
+        private const val COMPOSER_TASK_TYPE_ID = "battlePlan.composer.taskTypeId"
+        private const val COMPOSER_URGENCY = "battlePlan.composer.urgency"
+        private const val COMPOSER_IMPORTANCE = "battlePlan.composer.importance"
+        private const val COMPOSER_DEADLINE_MODE = "battlePlan.composer.deadlineMode"
+        private const val COMPOSER_DEADLINE_DATE = "battlePlan.composer.deadlineDate"
+        private const val COMPOSER_DEADLINE_TIME = "battlePlan.composer.deadlineTime"
+        private const val COMPOSER_REMINDER_ENABLED = "battlePlan.composer.reminderEnabled"
+        private const val COMPOSER_REMINDER_DATE = "battlePlan.composer.reminderDate"
+        private const val COMPOSER_REMINDER_TIME = "battlePlan.composer.reminderTime"
+        private const val COMPOSER_READY = "battlePlan.composer.ready"
+        private const val COMPOSER_MORE_OPEN = "battlePlan.composer.moreOpen"
+        private const val COMPOSER_DIRTY = "battlePlan.composer.dirty"
+        private val COMPOSER_KEYS = listOf(
+            COMPOSER_VISIBLE, COMPOSER_TITLE, COMPOSER_DESCRIPTION, COMPOSER_STATUS,
+            COMPOSER_PROJECT_ID, COMPOSER_TASK_TYPE_ID, COMPOSER_URGENCY, COMPOSER_IMPORTANCE,
+            COMPOSER_DEADLINE_MODE, COMPOSER_DEADLINE_DATE, COMPOSER_DEADLINE_TIME,
+            COMPOSER_REMINDER_ENABLED, COMPOSER_REMINDER_DATE, COMPOSER_REMINDER_TIME,
+            COMPOSER_READY, COMPOSER_MORE_OPEN, COMPOSER_DIRTY,
+        )
+    }
 }
+
+sealed interface TaskComposerValidation {
+    data class Valid(val request: BattleTaskCreate) : TaskComposerValidation
+    data class Invalid(val message: String) : TaskComposerValidation
+}
+
+internal fun validateTaskComposer(draft: TaskComposerDraft, timezone: String): TaskComposerValidation {
+    if (draft.title.isBlank()) return TaskComposerValidation.Invalid("Task title is required.")
+    if (draft.title.length > 500) return TaskComposerValidation.Invalid("Task title must be 500 characters or fewer.")
+    val taskValidation = validateTaskDraft(
+        TaskDetailUiState(
+            title = draft.title,
+            timezone = timezone,
+            deadlineMode = draft.deadlineMode,
+            deadlineDate = draft.deadlineDate,
+            deadlineTime = draft.deadlineTime,
+            reminderEnabled = draft.reminderEnabled,
+            reminderDate = draft.reminderDate,
+            reminderTime = draft.reminderTime,
+        ),
+    )
+    if (taskValidation is TaskDraftValidation.Invalid) return TaskComposerValidation.Invalid(taskValidation.message)
+    taskValidation as TaskDraftValidation.Valid
+    return TaskComposerValidation.Valid(
+        BattleTaskCreate(
+            title = draft.title.trim(),
+            description = draft.description.trim(),
+            readyToPlan = draft.readyToPlan,
+            status = draft.status.takeIf { it == TaskStatus.Open || it == TaskStatus.InProgress } ?: TaskStatus.Open,
+            projectId = draft.projectId,
+            taskTypeId = draft.taskTypeId,
+            urgency = draft.urgency,
+            importance = draft.importance,
+            deadlineDate = taskValidation.deadlineDate,
+            deadlineAt = taskValidation.deadlineAt,
+            reminderAt = taskValidation.reminderAt,
+        ),
+    )
+}
+
+internal fun initialComposerDraft(scope: BattlePlanScope, selectedStatus: TaskStatus): TaskComposerDraft =
+    TaskComposerDraft(
+        status = selectedStatus.takeIf { it == TaskStatus.Open || it == TaskStatus.InProgress } ?: TaskStatus.Open,
+        projectId = scope.projectId.takeIf { scope.kind == BattlePlanScopeKind.Project },
+    )
+
+internal fun restoreComposerDraft(handle: SavedStateHandle): TaskComposerDraft = TaskComposerDraft(
+    title = handle["battlePlan.composer.title"] ?: "",
+    description = handle["battlePlan.composer.description"] ?: "",
+    status = handle.get<String>("battlePlan.composer.status")?.let { runCatching { TaskStatus.valueOf(it) }.getOrNull() }
+        ?.takeIf { it == TaskStatus.Open || it == TaskStatus.InProgress } ?: TaskStatus.Open,
+    projectId = handle["battlePlan.composer.projectId"],
+    taskTypeId = handle["battlePlan.composer.taskTypeId"],
+    urgency = handle.get<String>("battlePlan.composer.urgency")?.let { runCatching { PriorityLevel.valueOf(it) }.getOrNull() },
+    importance = handle.get<String>("battlePlan.composer.importance")?.let { runCatching { PriorityLevel.valueOf(it) }.getOrNull() },
+    deadlineMode = handle.get<String>("battlePlan.composer.deadlineMode")?.let { runCatching { TaskDeadlineMode.valueOf(it) }.getOrNull() }
+        ?: TaskDeadlineMode.None,
+    deadlineDate = handle["battlePlan.composer.deadlineDate"] ?: "",
+    deadlineTime = handle["battlePlan.composer.deadlineTime"] ?: "",
+    reminderEnabled = handle["battlePlan.composer.reminderEnabled"] ?: false,
+    reminderDate = handle["battlePlan.composer.reminderDate"] ?: "",
+    reminderTime = handle["battlePlan.composer.reminderTime"] ?: "",
+    readyToPlan = handle["battlePlan.composer.ready"] ?: false,
+    moreOpen = handle["battlePlan.composer.moreOpen"] ?: false,
+    dirty = handle["battlePlan.composer.dirty"] ?: false,
+)
 
 internal fun statusMovePlacements(tasks: List<BattleTask>, moving: BattleTask, target: TaskStatus): List<TaskPlacement> {
     val targetTasks = tasks.filter { it.id != moving.id && it.status == target }.sortedBy { it.position }
