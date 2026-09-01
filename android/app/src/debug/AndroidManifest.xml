@@ -3,6 +3,24 @@
 
     <application>
         <activity
+            android:name=".ui.battleplan.prototype.BattlePlanCardPrototypeActivity"
+            android:exported="true"
+            android:label="Battle Plan card prototype"
+            android:theme="@style/Theme.Timebox">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="prototype"
+                    android:pathPrefix="/battle-plan-card"
+                    android:scheme="timebox" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".ui.day.prototype.DayHeaderPrototypeActivity"
             android:exported="true"
             android:label="Day header prototype"
