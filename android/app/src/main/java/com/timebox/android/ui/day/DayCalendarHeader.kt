@@ -144,7 +144,11 @@ internal fun DayCalendarHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TodayAction(
-                enabled = today != null && selectedDate != today,
+                state = when {
+                    today == null -> TodayControlState.Resolving
+                    selectedDate == today -> TodayControlState.Current
+                    else -> TodayControlState.Navigate
+                },
                 onClick = { today?.let(onNavigateToday) },
             )
             Spacer(Modifier.weight(1f))
@@ -213,38 +217,74 @@ private fun WorkModeAction(onClick: () -> Unit) {
     }
 }
 
+private enum class TodayControlState { Navigate, Current, Resolving }
+
 @Composable
-private fun TodayAction(enabled: Boolean, onClick: () -> Unit) {
+private fun TodayAction(state: TodayControlState, onClick: () -> Unit) {
     val colors = TimeboxTheme.colors
-    val contentColor = if (enabled) {
-        colors.onVariant
-    } else {
-        colors.disabledContent
+    val shape = RoundedCornerShape(percent = 50)
+    val interaction = when (state) {
+        TodayControlState.Navigate -> Modifier
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Go to today" }
+        TodayControlState.Current -> Modifier
+            .semantics { contentDescription = "Viewing today" }
+        TodayControlState.Resolving -> Modifier
+            .clickable(enabled = false, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Today unavailable" }
     }
     Box(
         modifier = Modifier
             .height(48.dp)
-            .clip(RoundedCornerShape(percent = 50))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Navigate to today" },
+            .clip(shape)
+            .then(interaction),
         contentAlignment = Alignment.Center,
     ) {
         Row(
             modifier = Modifier
-                .height(34.dp)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(if (enabled) colors.low else colors.disabledContainer)
-                .padding(horizontal = 11.dp),
+                .height(42.dp)
+                .clip(shape)
+                .background(
+                    when (state) {
+                        TodayControlState.Navigate -> colors.planned
+                        TodayControlState.Current -> colors.plannedSurface
+                        TodayControlState.Resolving -> colors.disabledContainer
+                    },
+                )
+                .then(
+                    if (state == TodayControlState.Current) {
+                        Modifier.border(1.dp, colors.plannedBorder, shape)
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.CalendarToday,
+                imageVector = if (state == TodayControlState.Current) {
+                    Icons.Outlined.Check
+                } else {
+                    Icons.Outlined.CalendarToday
+                },
                 contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(15.dp),
+                tint = when (state) {
+                    TodayControlState.Navigate -> colors.lowest
+                    TodayControlState.Current -> colors.planned
+                    TodayControlState.Resolving -> colors.disabledContent
+                },
+                modifier = Modifier.size(17.dp),
             )
-            Text("Today", style = TimeboxTheme.type.bodySmall, color = contentColor)
+            Text(
+                text = if (state == TodayControlState.Navigate) "Go to today" else "Today",
+                style = TimeboxTheme.type.label,
+                color = when (state) {
+                    TodayControlState.Navigate -> colors.lowest
+                    TodayControlState.Current -> colors.on
+                    TodayControlState.Resolving -> colors.disabledContent
+                },
+            )
         }
     }
 }

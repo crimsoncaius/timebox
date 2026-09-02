@@ -1,6 +1,8 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
@@ -118,7 +120,10 @@ class DayCalendarHeaderTest {
 
         compose.onNodeWithContentDescription("Wednesday, August 26, 2026").performClick()
         compose.onNodeWithContentDescription("Week dates").performTouchInput { swipeLeft() }
-        compose.onNodeWithText("Today").performClick()
+        compose.onNodeWithContentDescription("Go to today")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
 
         compose.runOnIdle {
             assertEquals(listOf(LocalDate.of(2026, 8, 26), LocalDate.of(2026, 9, 4)), navigated)
@@ -127,11 +132,14 @@ class DayCalendarHeaderTest {
     }
 
     @Test
-    fun todayIsDisabledWhenSelectedDateIsToday() {
+    fun todayBecomesStatusWhenSelectedDateIsToday() {
         val selected = LocalDate.of(2026, 8, 28)
 
         showDay(state = DayUiState(date = selected, today = selected))
-        compose.onNodeWithContentDescription("Navigate to today").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Viewing today")
+            .assertIsDisplayed()
+            .assertHasNoClickAction()
+        compose.onNodeWithText("Today").assertIsDisplayed()
     }
 
     @Test
@@ -139,7 +147,9 @@ class DayCalendarHeaderTest {
         val selected = LocalDate.of(2026, 8, 28)
 
         showDay(state = DayUiState(date = selected, today = null))
-        compose.onNodeWithContentDescription("Navigate to today").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Today unavailable")
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
     }
 
     @Test
@@ -247,7 +257,7 @@ class DayCalendarHeaderTest {
         }
 
         compose.onNodeWithText("Month").performClick()
-        compose.onNodeWithText("Today").performClick()
+        compose.onNodeWithContentDescription("Go to today").performClick()
 
         compose.runOnIdle { assertEquals(today, navigated) }
         compose.onNodeWithText("Month").assertIsSelected()
@@ -274,7 +284,7 @@ class DayCalendarHeaderTest {
 
         compose.onNodeWithText("DAY").assertIsDisplayed()
         compose.onNodeWithText("Friday, August 28").assertIsDisplayed()
-        compose.onNodeWithText("Today").assertIsDisplayed()
+        compose.onNodeWithText("Go to today").assertIsDisplayed()
         compose.onNodeWithText("Week").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithText("Month").assertIsDisplayed()
         compose.onNodeWithContentDescription("Work Mode").assertIsDisplayed().performClick()
