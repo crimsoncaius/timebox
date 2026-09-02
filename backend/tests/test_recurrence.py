@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import datetime as dt
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
-from app.models.battle_plan import RecurringTemplate
+from app.core.config import get_settings
+from app.models.battle_plan import RecurrenceOccurrence, RecurringTemplate, Task, TaskStatus
 from app.models.battle_plan import RecurrenceFrequency, RecurrenceMode
 from app.schemas.battle_plan import RecurrencePreviewRequest
 from app.services.recurrence_service import iter_windows
+from app.services.recurrence_service import synchronize
 
 
 def rule(**changes):
@@ -91,14 +94,34 @@ def _planned_block(client, date: dt.date, task: dict, task_type_id: int) -> dict
     return response.json()["planned_blocks"][-1]
 
 
+def _generated_root_count(template_id: int) -> int:
+    with Session(get_engine()) as db:
+        return db.execute(
+            select(func.count(Task.id)).where(
+                Task.recurring_template_id == template_id,
+                Task.parent_id.is_(None),
+            )
+        ).scalar_one()
+
+
+def _task_for_planning_date(client, date: dt.date, template_id: int) -> dict:
+    return next(
+        task for task in client.get(
+            "/tasks", params={"planning_date": date.isoformat()}
+        ).json()["items"]
+        if task["recurring_template_id"] == template_id
+    )
+
+
 def test_generation_is_idempotent_and_copies_checklist(client):
     today = client.get("/health").json()["today"]
     created = client.post("/recurring-templates", json=_daily_body(today))
     assert created.status_code == 201, created.text
     first = client.get("/tasks").json()["items"]
     second = client.get("/tasks").json()["items"]
-    assert len(first) == len(second) == 8
-    assert all(task["ready_to_plan"] for task in first)
+    assert len(first) == len(second) == 1
+    assert _generated_root_count(created.json()["id"]) == 8
+    assert first[0]["ready_to_plan"] is True
     assert [child["title"] for child in first[0]["subtasks"]] == ["Inbox", "Calendar"]
     assert all("ready_to_plan" not in child for child in first[0]["subtasks"])
     assert first[0]["recurring_template_title"] == "Daily review"
@@ -112,7 +135,15 @@ def test_past_start_requires_confirmation_then_backfills(client):
     assert response.json()["detail"]["past_cycles"] == 3
     body["confirm_backfill"] = True
     assert client.post("/recurring-templates", json=body).status_code == 201
-    assert len(client.get("/tasks").json()["items"]) == 11
+    template_id = client.get("/recurring-templates").json()[0]["id"]
+    assert len(client.get("/tasks").json()["items"]) == 1
+    assert _generated_root_count(template_id) == 11
+    with Session(get_engine()) as db:
+        skipped = db.execute(select(func.count(RecurrenceOccurrence.id)).where(
+            RecurrenceOccurrence.template_id == template_id,
+            RecurrenceOccurrence.skipped.is_(True),
+        )).scalar_one()
+    assert skipped == 3
 
 
 def test_quota_sessions_drive_parent_and_cannot_be_scheduled_early(client):
@@ -144,7 +175,9 @@ def test_quota_sessions_drive_parent_and_cannot_be_scheduled_early(client):
     assert refreshed["quota_completed"] == 1
     for child in refreshed["session_tasks"][1:]:
         client.post(f"/tasks/{child['id']}/complete")
-    assert client.get("/tasks").json()["items"][0]["status"] == "completed"
+    assert client.get("/tasks").json()["items"] == []
+    with Session(get_engine()) as db:
+        assert db.get(Task, parent["id"]).status == TaskStatus.completed
 
 
 def test_quota_series_edit_still_propagates_fields_to_unoverridden_sessions(client):
@@ -201,7 +234,8 @@ def test_schedule_edit_starts_after_preserved_history_without_new_backfill(clien
         "confirm_backfill": True,
     }).json()
     before = [task for task in client.get("/tasks").json()["items"] if task["recurring_template_id"] == template["id"]]
-    assert len(before) == 6
+    assert len(before) == 1
+    assert _generated_root_count(template["id"]) == 6
 
     changed = client.patch(f"/recurring-templates/{template['id']}", json={
         "frequency": "daily", "weekdays": [], "interval": 1,
@@ -209,7 +243,8 @@ def test_schedule_edit_starts_after_preserved_history_without_new_backfill(clien
     assert changed.status_code == 200, changed.text
     after = [task for task in client.get("/tasks").json()["items"] if task["recurring_template_id"] == template["id"]]
     # Four historical weekly occurrences plus today and the seven-day daily horizon.
-    assert len(after) == 12
+    assert len(after) == 1
+    assert _generated_root_count(template["id"]) == 12
 
 
 def test_cadence_edit_starts_today_while_protected_future_occurrence_survives(client):
@@ -219,11 +254,7 @@ def test_cadence_edit_starts_today_while_protected_future_occurrence_survives(cl
         "interval": 1, "weekdays": [today.weekday()], "start_date": today.isoformat(),
         "checklist_titles": [],
     }).json()
-    before = [
-        task for task in client.get("/tasks").json()["items"]
-        if task["recurring_template_id"] == template["id"]
-    ]
-    protected = next(task for task in before if task["deadline_date"] == (today + dt.timedelta(days=7)).isoformat())
+    protected = _task_for_planning_date(client, today + dt.timedelta(days=7), template["id"])
     assert client.patch(
         f"/tasks/{protected['id']}", json={"description": "future exception"}
     ).status_code == 200
@@ -233,15 +264,15 @@ def test_cadence_edit_starts_today_while_protected_future_occurrence_survives(cl
     })
 
     assert changed.status_code == 200, changed.text
-    after = [
-        task for task in client.get("/tasks").json()["items"]
-        if task["recurring_template_id"] == template["id"]
-    ]
-    assert {task["deadline_date"] for task in after} == {
-        (today + dt.timedelta(days=offset)).isoformat() for offset in range(8)
+    with Session(get_engine()) as db:
+        after = list(db.execute(select(Task).where(
+            Task.recurring_template_id == template["id"], Task.parent_id.is_(None)
+        )).scalars())
+    assert {task.deadline_date for task in after} == {
+        today + dt.timedelta(days=offset) for offset in range(8)
     }
-    preserved = next(task for task in after if task["id"] == protected["id"])
-    assert preserved["description"] == "future exception"
+    preserved = next(task for task in after if task.id == protected["id"])
+    assert preserved.description == "future exception"
 
 
 def test_new_cadence_is_anchored_to_application_local_today(client):
@@ -259,13 +290,14 @@ def test_new_cadence_is_anchored_to_application_local_today(client):
     })
 
     assert changed.status_code == 200, changed.text
-    current_and_future = sorted(
-        task["deadline_date"] for task in client.get("/tasks").json()["items"]
-        if task["recurring_template_id"] == template["id"]
-        and task["deadline_date"] >= today.isoformat()
-    )
+    with Session(get_engine()) as db:
+        current_and_future = sorted(db.execute(select(Task.deadline_date).where(
+            Task.recurring_template_id == template["id"],
+            Task.parent_id.is_(None),
+            Task.deadline_date >= today,
+        )).scalars())
     assert current_and_future == [
-        (today + dt.timedelta(days=offset)).isoformat() for offset in (0, 2, 4, 6)
+        today + dt.timedelta(days=offset) for offset in (0, 2, 4, 6)
     ]
 
 
@@ -277,18 +309,18 @@ def test_checklist_edit_rebuilds_only_pristine_future_occurrences(client):
     })
     assert response.status_code == 200, response.text
     tasks = client.get("/tasks").json()["items"]
-    assert len(tasks) == 8
-    assert all([child["title"] for child in task["subtasks"]] == ["New first", "New second"] for task in tasks)
+    assert len(tasks) == 1
+    assert [child["title"] for child in tasks[0]["subtasks"]] == ["New first", "New second"]
+    for offset in range(1, 8):
+        task = _task_for_planning_date(client, dt.date.fromisoformat(today) + dt.timedelta(days=offset), template["id"])
+        assert [child["title"] for child in task["subtasks"]] == ["New first", "New second"]
 
 
 def test_checklist_edit_keeps_protected_snapshot_and_rebuilds_unprotected_occurrence(client):
     today = client.get("/health").json()["today"]
     template = client.post("/recurring-templates", json=_daily_body(today)).json()
-    before = [
-        task for task in client.get("/tasks").json()["items"]
-        if task["recurring_template_id"] == template["id"]
-    ]
-    protected, rebuildable = before[:2]
+    protected = _task_for_planning_date(client, dt.date.fromisoformat(today), template["id"])
+    rebuildable = _task_for_planning_date(client, dt.date.fromisoformat(today) + dt.timedelta(days=1), template["id"])
     assert client.post(f"/subtasks/{protected['subtasks'][0]['id']}/check").status_code == 200
     assert client.post(f"/subtasks/{protected['subtasks'][0]['id']}/uncheck").status_code == 200
 
@@ -298,8 +330,10 @@ def test_checklist_edit_keeps_protected_snapshot_and_rebuilds_unprotected_occurr
 
     assert response.status_code == 200, response.text
     after = {
-        task["id"]: task for task in client.get("/tasks").json()["items"]
-        if task["recurring_template_id"] == template["id"]
+        task["id"]: task for task in (
+            _task_for_planning_date(client, dt.date.fromisoformat(today), template["id"]),
+            _task_for_planning_date(client, dt.date.fromisoformat(today) + dt.timedelta(days=1), template["id"]),
+        )
     }
     assert [child["title"] for child in after[protected["id"]]["subtasks"]] == ["Inbox", "Calendar"]
     assert after[protected["id"]]["subtasks"][0]["checked"] is False
@@ -317,10 +351,7 @@ def test_field_propagation_uses_stable_origin_not_moved_deadline(client):
     template = client.post(
         "/recurring-templates", json=_daily_body(today.isoformat(), checklist_titles=[])
     ).json()
-    occurrence = next(
-        task for task in client.get("/tasks").json()["items"]
-        if task["deadline_date"] == (today + dt.timedelta(days=2)).isoformat()
-    )
+    occurrence = _task_for_planning_date(client, today + dt.timedelta(days=2), template["id"])
     moved = client.patch(
         f"/tasks/{occurrence['id']}",
         json={"deadline_date": (today - dt.timedelta(days=20)).isoformat()},
@@ -332,10 +363,7 @@ def test_field_propagation_uses_stable_origin_not_moved_deadline(client):
     )
 
     assert updated.status_code == 200, updated.text
-    refreshed = next(
-        task for task in client.get("/tasks").json()["items"]
-        if task["id"] == occurrence["id"]
-    )
+    refreshed = _task_for_planning_date(client, today + dt.timedelta(days=2), template["id"])
     assert refreshed["deadline_date"] == (today - dt.timedelta(days=20)).isoformat()
     assert refreshed["description"] == "series description"
 
@@ -346,12 +374,8 @@ def test_planned_and_actual_state_survive_cadence_replacement(client):
     template = client.post("/recurring-templates", json=_daily_body(
         today.isoformat(), checklist_titles=[], task_type_id=task_type["id"]
     )).json()
-    before = [
-        task for task in client.get("/tasks").json()["items"]
-        if task["recurring_template_id"] == template["id"]
-    ]
-    planned_task = next(task for task in before if task["deadline_date"] == (today + dt.timedelta(days=1)).isoformat())
-    actual_task = next(task for task in before if task["deadline_date"] == (today + dt.timedelta(days=2)).isoformat())
+    planned_task = _task_for_planning_date(client, today + dt.timedelta(days=1), template["id"])
+    actual_task = _task_for_planning_date(client, today + dt.timedelta(days=2), template["id"])
     planned = _planned_block(client, today + dt.timedelta(days=1), planned_task, task_type["id"])
     actual = client.post("/actual-blocks", json={
         "task_type_id": task_type["id"],
@@ -367,9 +391,9 @@ def test_planned_and_actual_state_survive_cadence_replacement(client):
     })
 
     assert changed.status_code == 200, changed.text
-    after = {task["id"]: task for task in client.get("/tasks").json()["items"]}
-    assert planned_task["id"] in after
-    assert actual_task["id"] in after
+    with Session(get_engine()) as db:
+        assert db.get(Task, planned_task["id"]) is not None
+        assert db.get(Task, actual_task["id"]) is not None
     assert client.get(f"/days/{(today + dt.timedelta(days=1)).isoformat()}").json()["planned_blocks"][0]["id"] == planned["id"]
     assert client.get(f"/actual-blocks/{actual.json()['id']}").status_code == 404
 
@@ -379,7 +403,8 @@ def test_completion_reopen_and_undo_retain_each_occurrence_snapshot(client):
     template = client.post(
         "/recurring-templates", json=_daily_body(today.isoformat())
     ).json()
-    first, second = client.get("/tasks").json()["items"][:2]
+    first = _task_for_planning_date(client, today, template["id"])
+    second = _task_for_planning_date(client, today + dt.timedelta(days=1), template["id"])
     assert client.post(f"/subtasks/{second['subtasks'][0]['id']}/check").status_code == 200
 
     first_completion = client.post(f"/tasks/{first['id']}/complete")
@@ -408,30 +433,30 @@ def test_completion_reopen_and_undo_retain_each_occurrence_snapshot(client):
         "frequency": "weekly", "weekdays": [today.weekday()], "interval": 1,
     })
     assert changed.status_code == 200, changed.text
-    after = {task["id"]: task for task in client.get("/tasks").json()["items"]}
-    assert first["id"] in after
-    assert second["id"] in after
+    with Session(get_engine()) as db:
+        assert db.get(Task, first["id"]) is not None
+        assert db.get(Task, second["id"]) is not None
 
 
 def test_completing_one_occurrence_leaves_another_snapshot_and_plan_untouched(client):
     today = dt.date.fromisoformat(client.get("/health").json()["today"])
     task_type = client.post("/task-types", json={"name": "Focus"}).json()
-    client.post("/recurring-templates", json=_daily_body(
+    template = client.post("/recurring-templates", json=_daily_body(
         today.isoformat(), task_type_id=task_type["id"]
-    ))
-    first, second = client.get("/tasks").json()["items"][:2]
+    )).json()
+    first = _task_for_planning_date(client, today, template["id"])
+    second = _task_for_planning_date(client, today + dt.timedelta(days=1), template["id"])
     assert client.post(f"/subtasks/{second['subtasks'][1]['id']}/check").status_code == 200
     planned = _planned_block(client, today + dt.timedelta(days=2), second, task_type["id"])
 
     completed = client.post(f"/tasks/{first['id']}/complete")
 
     assert completed.status_code == 200, completed.text
-    after = {task["id"]: task for task in client.get("/tasks").json()["items"]}
-    assert after[first["id"]]["status"] == "completed"
-    assert after[first["id"]]["completed_at"] is not None
-    assert after[second["id"]]["status"] == "open"
-    assert after[second["id"]]["completed_at"] is None
-    assert [subtask["checked"] for subtask in after[second["id"]]["subtasks"]] == [False, True]
+    assert client.get("/tasks").json()["items"] == []
+    future = _task_for_planning_date(client, today + dt.timedelta(days=1), template["id"])
+    assert future["status"] == "open"
+    assert future["completed_at"] is None
+    assert [subtask["checked"] for subtask in future["subtasks"]] == [False, True]
     assert client.get(f"/days/{(today + dt.timedelta(days=2)).isoformat()}").json()["planned_blocks"][0]["id"] == planned["id"]
 
 
@@ -444,7 +469,8 @@ def test_occurrence_tombstone_prevents_regeneration(client):
     client.delete(f"/tasks/{task_id}")
     client.delete(f"/tasks/{task_id}/permanent")
     remaining = client.get("/tasks").json()["items"]
-    assert len(remaining) == 7
+    assert len(remaining) == 0
+    assert _generated_root_count(template["id"]) == 7
     assert task_id not in {task["id"] for task in remaining}
     series = client.get(f"/recurring-templates/{template['id']}").json()
     assert f"scheduled:{today}" not in {window["key"] for window in series["upcoming"]}
@@ -472,24 +498,25 @@ def test_pause_and_end_remove_only_untouched_future_occurrences(client):
     template = client.post("/recurring-templates", json=_daily_body(
         today.isoformat(), checklist_titles=[], task_type_id=task_type["id"]
     )).json()
-    protected = next(
-        task for task in client.get("/tasks").json()["items"]
-        if task["deadline_date"] == (today + dt.timedelta(days=3)).isoformat()
-    )
+    protected = _task_for_planning_date(client, today + dt.timedelta(days=3), template["id"])
     planned = _planned_block(client, today + dt.timedelta(days=3), protected, task_type["id"])
 
     paused = client.post(f"/recurring-templates/{template['id']}/pause")
 
     assert paused.status_code == 200, paused.text
     paused_tasks = [
-        task for task in client.get("/tasks").json()["items"]
+        task for task in client.get("/tasks", params={
+            "planning_date": (today + dt.timedelta(days=3)).isoformat(),
+        }).json()["items"]
         if task["recurring_template_id"] == template["id"]
     ]
     assert [task["id"] for task in paused_tasks] == [protected["id"]]
     assert client.post(f"/recurring-templates/{template['id']}/resume").status_code == 200
     assert client.post(f"/recurring-templates/{template['id']}/end").status_code == 200
     ended_tasks = [
-        task for task in client.get("/tasks").json()["items"]
+        task for task in client.get("/tasks", params={
+            "planning_date": (today + dt.timedelta(days=3)).isoformat(),
+        }).json()["items"]
         if task["recurring_template_id"] == template["id"]
     ]
     assert [task["id"] for task in ended_tasks] == [protected["id"]]
@@ -511,7 +538,7 @@ def test_same_day_pause_resume_rematerializes_today(client):
         task for task in client.get("/tasks").json()["items"]
         if task["recurring_template_id"] == template["id"]
     ]
-    assert len(tasks) == 8
+    assert len(tasks) == 1
     assert {task["deadline_date"] for task in tasks} >= {today}
     assert resumed.json()["next_occurrence"] == today
 
@@ -540,6 +567,147 @@ def test_resume_after_longer_pause_still_suppresses_through_resume_day(client):
         task["deadline_date"] for task in client.get("/tasks").json()["items"]
         if task["recurring_template_id"] == template["id"]
     }
-    assert yesterday.isoformat() in dates
+    assert yesterday.isoformat() not in dates
     assert today.isoformat() not in dates
     assert resumed.json()["next_occurrence"] == (today + dt.timedelta(days=1)).isoformat()
+
+
+def test_default_series_skips_past_occurrences_but_keeps_one_current_row(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(
+        (today - dt.timedelta(days=2)).isoformat(),
+        checklist_titles=[],
+        confirm_backfill=True,
+    )).json()
+
+    visible = client.get("/tasks").json()["items"]
+
+    assert len(visible) == 1
+    assert visible[0]["deadline_date"] == today.isoformat()
+    assert visible[0]["outstanding_occurrence_count"] == 1
+    with Session(get_engine()) as db:
+        outcomes = list(db.execute(
+            select(RecurrenceOccurrence)
+            .where(RecurrenceOccurrence.template_id == template["id"])
+            .order_by(RecurrenceOccurrence.cycle_start)
+        ).scalars())
+    assert [outcome.skipped for outcome in outcomes[:3]] == [True, True, False]
+
+
+def test_carry_over_series_groups_oldest_occurrence_with_outstanding_count(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(
+        (today - dt.timedelta(days=2)).isoformat(),
+        checklist_titles=[],
+        confirm_backfill=True,
+        keep_unfinished_overdue=True,
+    )).json()
+
+    visible = client.get("/tasks").json()["items"]
+
+    assert len(visible) == 1
+    assert visible[0]["deadline_date"] == (today - dt.timedelta(days=2)).isoformat()
+    assert visible[0]["outstanding_occurrence_count"] == 3
+    assert client.get(f"/recurring-templates/{template['id']}").json()["keep_unfinished_overdue"] is True
+
+
+def test_future_plan_protects_scheduled_occurrence_until_planned_day_passes(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "Protected"}).json()
+    template = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(), checklist_titles=[], task_type_id=task_type["id"]
+    )).json()
+    current = client.get("/tasks").json()["items"][0]
+    _planned_block(client, today + dt.timedelta(days=1), current, task_type["id"])
+
+    with Session(get_engine()) as db:
+        synchronize(db, get_settings(), today=today + dt.timedelta(days=1))
+        occurrence = db.execute(select(RecurrenceOccurrence).where(
+            RecurrenceOccurrence.template_id == template["id"],
+            RecurrenceOccurrence.task_id == current["id"],
+        )).scalar_one()
+        assert occurrence.skipped is False
+        synchronize(db, get_settings(), today=today + dt.timedelta(days=2))
+        assert occurrence.skipped is True
+
+
+def test_quota_shortfall_skips_remaining_sessions_and_does_not_carry(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "Quota"}).json()
+    template = client.post("/recurring-templates", json={
+        "title": "Practice", "mode": "quota", "frequency": "daily", "interval": 1,
+        "quota_count": 3, "start_date": today.isoformat(), "task_type_id": task_type["id"],
+    }).json()
+    tracker = client.get("/tasks").json()["items"][0]
+    assert client.post(f"/tasks/{tracker['session_tasks'][0]['id']}/complete").status_code == 200
+    too_late = client.post(f"/days/{(today + dt.timedelta(days=1)).isoformat()}/blocks", json={
+        "lane": "planned", "task_id": tracker["session_tasks"][1]["id"],
+        "start_minute": 600, "end_minute": 630,
+    })
+    assert too_late.status_code == 422
+
+    with Session(get_engine()) as db:
+        synchronize(db, get_settings(), today=today + dt.timedelta(days=1))
+        occurrence = db.execute(select(RecurrenceOccurrence).where(
+            RecurrenceOccurrence.template_id == template["id"],
+            RecurrenceOccurrence.cycle_start == today,
+        )).scalar_one()
+        sessions = list(db.execute(select(Task).where(Task.parent_id == tracker["id"])).scalars())
+    assert occurrence.skipped is True
+    assert sum(session.status == TaskStatus.completed for session in sessions) == 1
+    assert all(not session.ready_to_plan for session in sessions if session.status != TaskStatus.completed)
+
+
+def test_future_planning_materializes_on_demand_beyond_default_horizon(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post(
+        "/recurring-templates", json=_daily_body(today.isoformat(), checklist_titles=[])
+    ).json()
+    target = today + dt.timedelta(days=30)
+
+    planned_candidate = _task_for_planning_date(client, target, template["id"])
+
+    assert planned_candidate["deadline_date"] == target.isoformat()
+    assert planned_candidate["ready_to_plan"] is True
+    assert client.get("/tasks").json()["items"][0]["deadline_date"] == today.isoformat()
+    assert _generated_root_count(template["id"]) == 31
+
+
+def test_series_position_carries_to_future_occurrences(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post(
+        "/recurring-templates", json=_daily_body(today.isoformat(), checklist_titles=[])
+    ).json()
+    current = client.get("/tasks").json()["items"][0]
+    assert client.post("/tasks/reorder", json={"placements": [{
+        "task_id": current["id"], "status": current["status"], "position": 42,
+    }]}).status_code == 204
+
+    future = _task_for_planning_date(client, today + dt.timedelta(days=8), template["id"])
+
+    assert future["position"] == 42
+
+
+def test_quota_rejects_carry_over_setting(client):
+    today = client.get("/health").json()["today"]
+    response = client.post("/recurring-templates", json={
+        "title": "Practice", "mode": "quota", "frequency": "weekly", "interval": 1,
+        "quota_count": 3, "start_date": today, "keep_unfinished_overdue": True,
+    })
+
+    assert response.status_code == 422
+
+
+def test_quota_series_cannot_enable_carry_over(client):
+    today = client.get("/health").json()["today"]
+    template = client.post("/recurring-templates", json={
+        "title": "Practice", "mode": "quota", "frequency": "weekly", "interval": 1,
+        "quota_count": 3, "start_date": today,
+    }).json()
+
+    response = client.patch(f"/recurring-templates/{template['id']}", json={
+        "keep_unfinished_overdue": True,
+    })
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Quota shortfalls cannot carry into the next period"

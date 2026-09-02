@@ -44,6 +44,7 @@ internal fun RecurringTemplatePatch.toJson(): JsonObject = patchBody {
     int("cycle_limit", cycleLimit)
     strings("checklist_titles", checklistTitles)
     boolean("confirm_backfill", confirmBackfill)
+    boolean("keep_unfinished_overdue", keepUnfinishedOverdue)
 }
 
 internal fun timeBlockPatchBody(

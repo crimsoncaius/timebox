@@ -63,6 +63,7 @@ data class BattleTaskDto(
     @SerialName("planned_dates") val plannedDates: List<String> = emptyList(),
     val subtasks: List<SubtaskDto> = emptyList(),
     @SerialName("session_tasks") val sessionTasks: List<BattleTaskDto> = emptyList(),
+    @SerialName("outstanding_occurrence_count") val outstandingOccurrenceCount: Int = 1,
 )
 
 @Serializable
@@ -195,6 +196,7 @@ data class RecurringTemplateDto(
     @SerialName("start_date") val startDate: String,
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("cycle_limit") val cycleLimit: Int? = null,
+    @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
     val urgency: String? = null,
     val importance: String? = null,
     @SerialName("paused_at") val pausedAt: String? = null,
@@ -227,4 +229,5 @@ data class RecurringTemplateCreateDto(
     @SerialName("cycle_limit") val cycleLimit: Int? = null,
     @SerialName("checklist_titles") val checklistTitles: List<String> = emptyList(),
     @SerialName("confirm_backfill") val confirmBackfill: Boolean = false,
+    @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
 )

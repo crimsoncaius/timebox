@@ -838,20 +838,29 @@ def test_completion_is_scoped_to_one_recurring_task_occurrence(
         },
     )
     assert created.status_code == 201, created.text
-    occurrences = client.get("/tasks").json()["items"][:2]
-    first_plan = _planned_block(client, "2026-09-01", occurrences[0], task_type)
-    second_plan = _planned_block(client, "2026-09-02", occurrences[1], task_type)
+    tomorrow = (dt.date.fromisoformat(today) + dt.timedelta(days=1)).isoformat()
+    first_occurrence = client.get(
+        "/tasks", params={"planning_date": today}
+    ).json()["items"][0]
+    second_occurrence = client.get(
+        "/tasks", params={"planning_date": tomorrow}
+    ).json()["items"][0]
+    first_plan = _planned_block(client, today, first_occurrence, task_type)
+    second_plan = _planned_block(client, tomorrow, second_occurrence, task_type)
     captured_instants.append(dt.datetime(2026, 8, 30, 12, 0, tzinfo=UTC))
 
-    completed = client.post(f"/tasks/{occurrences[0]['id']}/complete")
+    completed = client.post(f"/tasks/{first_occurrence['id']}/complete")
 
     assert completed.status_code == 200, completed.text
     assert completed.json()["removed_planned_block_ids"] == [first_plan["id"]]
-    refreshed = {task["id"]: task for task in client.get("/tasks").json()["items"]}
-    assert refreshed[occurrences[0]["id"]]["status"] == "completed"
-    assert refreshed[occurrences[1]["id"]]["status"] == "open"
-    assert client.get("/days/2026-09-01").json()["planned_blocks"] == []
-    assert client.get("/days/2026-09-02").json()["planned_blocks"][0]["id"] == second_plan["id"]
+    assert completed.json()["task"]["status"] == "completed"
+    refreshed = client.get(
+        "/tasks", params={"planning_date": tomorrow}
+    ).json()["items"]
+    assert refreshed[0]["id"] == second_occurrence["id"]
+    assert refreshed[0]["status"] == "open"
+    assert client.get(f"/days/{today}").json()["planned_blocks"] == []
+    assert client.get(f"/days/{tomorrow}").json()["planned_blocks"][0]["id"] == second_plan["id"]
 
 
 def test_completion_eligibility_rejects_direct_completed_create_replay_and_inactive_tasks(

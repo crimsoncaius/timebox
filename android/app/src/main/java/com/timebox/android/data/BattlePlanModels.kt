@@ -113,6 +113,7 @@ data class BattleTask(
     val plannedDates: List<LocalDate> = emptyList(),
     val isBlocked: Boolean = false,
     val blockingReason: String? = null,
+    val outstandingOccurrenceCount: Int = 1,
 )
 
 data class Subtask(
@@ -178,6 +179,7 @@ data class RecurringTemplate(
     val currentTasks: List<RecurringTaskLink>,
     val cadence: String,
     val nextOccurrence: LocalDate?,
+    val keepUnfinishedOverdue: Boolean = false,
 )
 
 data class ProjectCreate(
@@ -257,6 +259,7 @@ data class RecurringTemplateCreate(
     val rule: RecurrenceRule,
     val checklistTitles: List<String> = emptyList(),
     val confirmBackfill: Boolean = false,
+    val keepUnfinishedOverdue: Boolean = false,
 )
 
 data class RecurringTemplatePatch(
@@ -276,6 +279,7 @@ data class RecurringTemplatePatch(
     val cycleLimit: PatchField<Int> = PatchField.Absent,
     val checklistTitles: PatchField<List<String>> = PatchField.Absent,
     val confirmBackfill: PatchField<Boolean> = PatchField.Absent,
+    val keepUnfinishedOverdue: PatchField<Boolean> = PatchField.Absent,
 )
 
 internal fun ProjectDto.toModel() = Project(
@@ -307,6 +311,7 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         sessionTasks = sessionTasks.map { it.toModel() },
         isBlocked = isBlocked || legacyStatus == TaskStatus.Blocked,
         blockingReason = blockingReason,
+        outstandingOccurrenceCount = outstandingOccurrenceCount,
     )
 }
 
@@ -328,11 +333,33 @@ internal fun RecurrencePreviewDto.toModel() = RecurrencePreview(upcoming.map { i
 internal fun RecurringChecklistItemDto.toModel() = RecurringChecklistItem(id, title, position)
 internal fun RecurringTaskLinkDto.toModel() = RecurringTaskLink(id, title, deadlineDate?.let(LocalDate::parse), overdue)
 internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
-    id, title, description, projectId, project?.toModel(), taskTypeId, taskType?.toModel(),
-    RecurrenceMode.fromWire(mode), RecurrenceStatus.fromWire(status), RecurrenceFrequency.fromWire(frequency),
-    interval, weekdays, monthDay, quotaCount, LocalDate.parse(startDate), endDate?.let(LocalDate::parse),
-    cycleLimit, urgency?.let(PriorityLevel::fromWire), importance?.let(PriorityLevel::fromWire),
-    pausedAt?.let(::parseInstant), endedAt?.let(::parseInstant), parseInstant(createdAt), parseInstant(updatedAt),
-    checklistItems.map { it.toModel() }, upcoming.map { it.toModel() }, currentTasks.map { it.toModel() },
-    cadence, nextOccurrence?.let(LocalDate::parse),
+    id = id,
+    title = title,
+    description = description,
+    projectId = projectId,
+    project = project?.toModel(),
+    taskTypeId = taskTypeId,
+    taskType = taskType?.toModel(),
+    mode = RecurrenceMode.fromWire(mode),
+    status = RecurrenceStatus.fromWire(status),
+    frequency = RecurrenceFrequency.fromWire(frequency),
+    interval = interval,
+    weekdays = weekdays,
+    monthDay = monthDay,
+    quotaCount = quotaCount,
+    startDate = LocalDate.parse(startDate),
+    endDate = endDate?.let(LocalDate::parse),
+    cycleLimit = cycleLimit,
+    urgency = urgency?.let(PriorityLevel::fromWire),
+    importance = importance?.let(PriorityLevel::fromWire),
+    pausedAt = pausedAt?.let(::parseInstant),
+    endedAt = endedAt?.let(::parseInstant),
+    createdAt = parseInstant(createdAt),
+    updatedAt = parseInstant(updatedAt),
+    checklistItems = checklistItems.map { it.toModel() },
+    upcoming = upcoming.map { it.toModel() },
+    currentTasks = currentTasks.map { it.toModel() },
+    cadence = cadence,
+    nextOccurrence = nextOccurrence?.let(LocalDate::parse),
+    keepUnfinishedOverdue = keepUnfinishedOverdue,
 )

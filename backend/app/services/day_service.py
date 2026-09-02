@@ -152,6 +152,8 @@ def _validate_recurrence_schedule(task: Task | None, day: Day) -> None:
     if task.recurrence_kind == "quota_session" and task.quota_period_start is not None:
         if day.date < task.quota_period_start:
             raise ValueError("Quota sessions cannot be scheduled before their period starts")
+        if task.quota_period_end is not None and day.date > task.quota_period_end:
+            raise ValueError("Quota sessions cannot be scheduled after their period ends")
 
 
 def _intervals_overlap(a0: int, a1: int, b0: int, b1: int) -> bool:

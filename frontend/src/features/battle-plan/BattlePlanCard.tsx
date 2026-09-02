@@ -120,6 +120,9 @@ export function BattlePlanCard({
               ↻ {task.recurring_template_title ?? 'Recurring'}
             </button>
           ) : null}
+          {(task.outstanding_occurrence_count ?? 1) > 1 ? (
+            <MetaChip>{task.outstanding_occurrence_count} outstanding</MetaChip>
+          ) : null}
           {task.recurrence_kind === 'quota_parent' && task.quota_period_start && task.quota_period_end ? (
             <MetaChip>
               {formatQuotaPeriod(task.quota_period_start, task.quota_period_end)} · {task.quota_completed ?? 0}/{task.expected_sessions ?? 0}

@@ -92,7 +92,7 @@ export function TodayPage() {
       const [d, tt, battle] = await Promise.all([
         api.getDay(date),
         api.listTaskTypes(),
-        api.listBattleTasks('active').catch(() => null),
+        api.listBattleTasks('active', date).catch(() => null),
       ])
       setDay(d)
       setTaskTypes(tt)
@@ -303,7 +303,7 @@ export function TodayPage() {
             })),
           })),
         )
-        const refreshed = await api.listBattleTasks('active').catch(() => null)
+        const refreshed = await api.listBattleTasks('active', date).catch(() => null)
         if (refreshed) setBattleTasks(refreshed.items)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to plan task')
@@ -425,7 +425,7 @@ export function TodayPage() {
             b.task_type_id === payload.task_type_id,
         )
         if (draft.task_id) {
-          const refreshed = await api.listBattleTasks('active')
+          const refreshed = await api.listBattleTasks('active', date)
           setBattleTasks(refreshed.items)
           setPlanningTaskId(null)
         }
@@ -865,7 +865,7 @@ export function TodayPage() {
             setWorkModeSubtaskError(null)
             try {
               if (checked) await api.checkSubtask(id); else await api.uncheckSubtask(id)
-              setBattleTasks((await api.listBattleTasks('active')).items)
+              setBattleTasks((await api.listBattleTasks('active', date)).items)
             } catch (cause) {
               setWorkModeSubtaskError(cause instanceof Error ? cause.message : 'Failed to update Subtask')
             } finally {

@@ -32,6 +32,10 @@ _Avoid_: Recurring template, recurring parent task
 A Battle Plan Task representing one instance of a Recurring Task Series, with its own completion, Subtask state, Planned Blocks, and Actual Blocks.
 _Avoid_: Recurring series, Quota Tracker
 
+**Skipped Task Occurrence**:
+A Task Occurrence whose recurrence period ended without a recorded Task Completion. It is historical rather than current work and is not created by a manual skip action.
+_Avoid_: Deleted occurrence, missed occurrence
+
 **Quota Tracker**:
 A generated progress aggregate for a recurring quota, expressed as completed Session Tasks out of required Session Tasks. It is derived rather than explicitly completed.
 _Avoid_: Recurring Task Series, Parent Task, completable task

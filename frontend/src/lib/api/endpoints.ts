@@ -128,8 +128,11 @@ export const api = {
 
   deleteProject: (id: number) => fetchVoid(`/projects/${id}`, { method: 'DELETE' }),
 
-  listBattleTasks: (state: TaskCollection = 'active') =>
-    fetchJson<BattleTaskList>(`/tasks?state=${state}`),
+  listBattleTasks: (state: TaskCollection = 'active', planningDate?: string) => {
+    const params = new URLSearchParams({ state })
+    if (planningDate) params.set('planning_date', planningDate)
+    return fetchJson<BattleTaskList>(`/tasks?${params.toString()}`)
+  },
 
   createBattleTask: (body: BattleTaskWrite) =>
     fetchJson<BattleTask>('/tasks', { method: 'POST', body: JSON.stringify(body) }),

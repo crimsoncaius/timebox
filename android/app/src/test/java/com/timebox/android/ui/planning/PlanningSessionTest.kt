@@ -159,7 +159,7 @@ private class InMemoryPlanningSessionTransport(
     var commitFailure: Throwable? = null
     var committedDays: List<Day> = emptyList()
 
-    override suspend fun loadReadyTasks(): Result<List<BattleTask>> {
+    override suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>> {
         calls += "load"
         return loadFailure?.let(Result.Companion::failure) ?: Result.success(readyTasks.readyToPlanTasks())
     }

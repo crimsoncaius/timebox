@@ -76,6 +76,7 @@ export interface BattleTask {
   occurrence?: { id: number; recurring_task_series_id: number; occurrence_key: string } | null
   subtasks: Subtask[]
   session_tasks?: BattleTask[]
+  outstanding_occurrence_count?: number
 }
 
 export interface Subtask {
@@ -250,6 +251,7 @@ export interface RecurringTemplate {
   start_date: string
   end_date: string | null
   cycle_limit: number | null
+  keep_unfinished_overdue?: boolean
   urgency: PriorityLevel | null
   importance: PriorityLevel | null
   paused_at: string | null
@@ -284,6 +286,7 @@ export type RecurringTemplateWrite = RecurrenceRuleWrite & {
   importance?: PriorityLevel | null
   checklist_titles?: string[]
   confirm_backfill?: boolean
+  keep_unfinished_overdue?: boolean
 }
 
 export type RecurrencePreview = {

@@ -31,7 +31,7 @@ from app.schemas.battle_plan import (
 
 from app.services.recurrence.cadence import _cadence
 from app.services.recurrence.common import SCHEDULE_FIELDS, _date_in_tz, _json_list, _utc_now
-from app.services.recurrence.helpers import _load_template, _replace_checklist, _validate_refs
+from app.services.recurrence.helpers import _load_template, _next_position, _replace_checklist, _validate_refs
 from app.services.recurrence.preview import _windows_for_preview
 from app.services.recurrence.synchronization import (
     _cleanup_future,
@@ -63,6 +63,8 @@ def create_template(db: Session, body: RecurringTemplateCreate, settings: Settin
         quota_count=body.quota_count, start_date=body.start_date,
         generation_start_date=body.start_date, end_date=body.end_date,
         cycle_limit=body.cycle_limit,
+        keep_unfinished_overdue=body.keep_unfinished_overdue,
+        position=_next_position(db),
     )
     db.add(row)
     db.flush()
@@ -81,6 +83,16 @@ def patch_template(db: Session, template_id: int, body: RecurringTemplatePatch, 
         body.task_type_id if "task_type_id" in fields else row.task_type_id,
     )
     today = today_in_tz(settings.app_timezone)
+    next_mode = body.mode if "mode" in fields and body.mode is not None else row.mode
+    next_keep_overdue = (
+        body.keep_unfinished_overdue
+        if "keep_unfinished_overdue" in fields
+        else row.keep_unfinished_overdue
+    )
+    if next_keep_overdue is None:
+        raise ValueError("Keep unfinished overdue must be true or false")
+    if next_mode == RecurrenceMode.quota and next_keep_overdue:
+        raise ValueError("Quota shortfalls cannot carry into the next period")
 
     def schedule_value_changed(field: str) -> bool:
         if field == "weekdays":
@@ -194,19 +206,28 @@ def to_read(db: Session, row: RecurringTemplate, settings: Settings) -> Recurrin
             and window.key not in suppressed_keys
         )
     ][:5]
-    tasks = list(db.execute(select(Task).where(
-        Task.recurring_template_id == row.id,
-        Task.parent_id.is_(None),
-        Task.status != TaskStatus.completed,
-        Task.deleted_at.is_(None),
-    ).order_by(Task.deadline_date, Task.id)).scalars())
+    tasks = list(db.execute(
+        select(Task)
+        .join(RecurrenceOccurrence, RecurrenceOccurrence.task_id == Task.id)
+        .where(
+            Task.recurring_template_id == row.id,
+            Task.parent_id.is_(None),
+            Task.status != TaskStatus.completed,
+            Task.deleted_at.is_(None),
+            Task.archived_at.is_(None),
+            RecurrenceOccurrence.skipped.is_(False),
+            RecurrenceOccurrence.cycle_start <= today,
+        )
+        .order_by(RecurrenceOccurrence.cycle_start, Task.id)
+    ).scalars())
     return RecurringTemplateRead(
         id=row.id, title=row.title, description=row.description,
         project_id=row.project_id, project=ProjectRead.model_validate(row.project) if row.project else None,
         task_type_id=row.task_type_id, task_type=row.task_type, mode=row.mode, status=row.status,
         frequency=row.frequency, interval=row.interval, weekdays=_json_list(row.weekdays_json),
         month_day=row.month_day, quota_count=row.quota_count, start_date=row.start_date,
-        end_date=row.end_date, cycle_limit=row.cycle_limit, urgency=row.urgency,
+        end_date=row.end_date, cycle_limit=row.cycle_limit,
+        keep_unfinished_overdue=row.keep_unfinished_overdue, urgency=row.urgency,
         importance=row.importance, paused_at=row.paused_at, ended_at=row.ended_at,
         created_at=row.created_at, updated_at=row.updated_at,
         checklist_items=[RecurringChecklistRead(id=item.id, title=item.title, position=item.position) for item in row.checklist_items],

@@ -1853,6 +1853,9 @@ private fun BattleTaskCard(
                 task.deadlineDate?.let { add("Due $it") }
                 task.deadlineAt?.let { add("Due $it") }
                 task.recurringTemplateTitle?.let { add("Recurring: $it") }
+                if (task.outstandingOccurrenceCount > 1) {
+                    add("${task.outstandingOccurrenceCount} outstanding")
+                }
                 if (task.subtasks.isNotEmpty()) {
                     add("${task.subtasks.count { it.checked }}/${task.subtasks.size} subtasks")
                 }

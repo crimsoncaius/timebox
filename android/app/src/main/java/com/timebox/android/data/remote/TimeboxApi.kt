@@ -102,7 +102,10 @@ interface TimeboxApi {
     suspend fun deleteProject(@Path("projectId") projectId: Int)
 
     @GET("tasks")
-    suspend fun listBattleTasks(@Query("state") state: String): BattleTaskListDto
+    suspend fun listBattleTasks(
+        @Query("state") state: String,
+        @Query("planning_date") planningDate: String? = null,
+    ): BattleTaskListDto
 
     @POST("tasks")
     suspend fun createBattleTask(@Body body: BattleTaskCreateDto): BattleTaskDto

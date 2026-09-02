@@ -49,6 +49,7 @@ data class RecurringEditorUiState(
     val endDate: String = "",
     val cycleLimit: String = "",
     val checklistText: String = "",
+    val keepUnfinishedOverdue: Boolean = false,
     val projects: List<Project> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
     val preview: RecurrencePreview? = null,
@@ -108,6 +109,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                 interval = if (value == RecurrenceMode.Quota) "1" else interval,
                 weekdays = if (value == RecurrenceMode.Quota) emptySet() else weekdays,
                 monthDay = if (value == RecurrenceMode.Quota) "1" else monthDay,
+                keepUnfinishedOverdue = if (value == RecurrenceMode.Quota) false else keepUnfinishedOverdue,
             )
         }
     }
@@ -128,6 +130,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     fun setEndDate(value: String) = edit { copy(endDate = value) }
     fun setCycleLimit(value: String) = edit { copy(cycleLimit = value.filter(Char::isDigit)) }
     fun setChecklistText(value: String) = edit { copy(checklistText = value) }
+    fun setKeepUnfinishedOverdue(value: Boolean) = edit { copy(keepUnfinishedOverdue = value) }
 
     fun refreshPreview() = schedulePreview(immediate = true)
 
@@ -153,6 +156,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                         rule = rule,
                         checklistTitles = current.checklistTitles(),
                         confirmBackfill = confirmBackfill,
+                        keepUnfinishedOverdue = current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue,
                     )
                 )
             } else {
@@ -175,6 +179,9 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                         cycleLimit = rule.cycleLimit.asPatch(),
                         checklistTitles = PatchField.of(current.checklistTitles()),
                         confirmBackfill = PatchField.of(confirmBackfill),
+                        keepUnfinishedOverdue = PatchField.of(
+                            current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue
+                        ),
                     ),
                 )
             }
@@ -300,6 +307,7 @@ private fun RecurringTemplate.toEditorState(projects: List<Project>, taskTypes: 
     endDate = endDate?.toString().orEmpty(),
     cycleLimit = cycleLimit?.toString().orEmpty(),
     checklistText = checklistItems.sortedBy { it.position }.joinToString("\n") { it.title },
+    keepUnfinishedOverdue = keepUnfinishedOverdue,
     projects = projects,
     taskTypes = taskTypes,
 )

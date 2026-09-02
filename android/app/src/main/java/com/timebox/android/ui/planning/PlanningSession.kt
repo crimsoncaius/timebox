@@ -61,7 +61,7 @@ sealed interface PlanningCommitOutcome {
 
 /** Internal seam between planning policy and the owned Timebox transport. */
 internal interface PlanningSessionTransport {
-    suspend fun loadReadyTasks(): Result<List<BattleTask>>
+    suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>>
     suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>>
 }
 
@@ -69,8 +69,8 @@ internal interface PlanningSessionTransport {
 internal class RepositoryPlanningSessionTransport(
     private val repository: TimeboxRepository,
 ) : PlanningSessionTransport {
-    override suspend fun loadReadyTasks(): Result<List<BattleTask>> =
-        repository.listBattleTasks().map { it.items.readyToPlanTasks() }
+    override suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>> =
+        repository.listBattleTasks(planningDate = planningDate).map { it.items.readyToPlanTasks() }
 
     override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> =
         repository.commitPlan(placements)
@@ -92,14 +92,16 @@ class PlanningSession internal constructor(
     val state: StateFlow<PlanningSessionState> = _state.asStateFlow()
 
     private var calendar = emptyMap<LocalDate, Day>()
+    private var planningDate: LocalDate? = null
 
-    suspend fun refreshQueue() {
+    suspend fun refreshQueue(date: LocalDate? = planningDate) {
+        planningDate = date
         val current = _state.value
         _state.value = current.copy(
             queueLoading = current.readyTasks.isEmpty(),
             queueError = null,
         )
-        transport.loadReadyTasks().fold(
+        transport.loadReadyTasks(date).fold(
             onSuccess = { ready ->
                 _state.value = _state.value.copy(
                     readyTasks = ready,

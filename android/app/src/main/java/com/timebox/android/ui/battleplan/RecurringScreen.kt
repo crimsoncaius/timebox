@@ -60,6 +60,7 @@ import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.SectionCard
 import com.timebox.android.ui.components.SectionHeader
 import com.timebox.android.ui.components.TimeboxChip
+import com.timebox.android.ui.components.TimeboxSwitch
 import com.timebox.android.ui.theme.TimeboxTheme
 
 @Composable
@@ -352,6 +353,7 @@ fun RecurringEditorScreen(
     onEndDate: (String) -> Unit,
     onCycleLimit: (String) -> Unit,
     onChecklist: (String) -> Unit,
+    onKeepUnfinishedOverdue: (Boolean) -> Unit = {},
     onRefreshPreview: () -> Unit,
     onSave: () -> Unit,
     onConfirmBackfill: () -> Unit,
@@ -396,6 +398,22 @@ fun RecurringEditorScreen(
                     OutlinedTextField(state.interval, onInterval, Modifier.fillMaxWidth(), label = { Text("Repeat every (periods)") }, singleLine = true)
                     if (state.frequency == RecurrenceFrequency.Weekly) WeekdayPicker(state.weekdays, onToggleWeekday)
                     if (state.frequency == RecurrenceFrequency.Monthly) OutlinedTextField(state.monthDay, onMonthDay, Modifier.fillMaxWidth(), label = { Text("Day of month (1–31)") }, singleLine = true)
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            onKeepUnfinishedOverdue(!state.keepUnfinishedOverdue)
+                        }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Keep unfinished occurrences overdue", color = TimeboxTheme.colors.on)
+                            Text(
+                                "Otherwise unfinished occurrences leave current work after their scheduled date.",
+                                style = TimeboxTheme.type.bodySmall,
+                                color = TimeboxTheme.colors.onVariant,
+                            )
+                        }
+                        TimeboxSwitch(state.keepUnfinishedOverdue, onKeepUnfinishedOverdue)
+                    }
                 } else {
                     OutlinedTextField(state.quotaCount, onQuotaCount, Modifier.fillMaxWidth(), label = { Text("Times per period") }, singleLine = true)
                     Text("Quota sessions are generated Ready to Plan. The server controls calendar period boundaries.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)

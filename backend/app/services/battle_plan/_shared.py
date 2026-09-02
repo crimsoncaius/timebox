@@ -127,6 +127,7 @@ def _to_read(
     now: dt.datetime,
     include_children: bool = True,
     include_deleted_children: bool = False,
+    outstanding_occurrence_count: int = 1,
 ) -> TaskRead:
     visible_children = [
         child
@@ -214,4 +215,5 @@ def _to_read(
         ),
         subtasks=subtasks,
         session_tasks=session_tasks,
+        outstanding_occurrence_count=outstanding_occurrence_count,
     )

@@ -93,6 +93,10 @@ class RecurringTemplate(Base):
     generation_start_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
     end_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     cycle_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    keep_unfinished_overdue: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     urgency: Mapped[PriorityLevel | None] = mapped_column(
         Enum(PriorityLevel, name="recurring_urgency", native_enum=False, length=16), nullable=True
     )
@@ -149,6 +153,7 @@ class RecurrenceOccurrence(Base):
         ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
     suppressed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    skipped: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     structurally_protected: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

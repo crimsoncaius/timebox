@@ -29,7 +29,6 @@ from app.services.recurrence.synchronization import (
     _materialize,
     _propagate_template_fields,
     _rebuild_unprotected_subtasks,
-    _reready_overdue,
     _suppress_pause_interval,
     recalculate_weekly_quotas,
     synchronize,

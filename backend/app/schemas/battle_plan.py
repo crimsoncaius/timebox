@@ -108,6 +108,7 @@ class TaskRead(BaseModel):
     subtasks: list[SubtaskRead] = Field(default_factory=list)
     # Quota Session Tasks are independently completable Tasks, not Subtasks.
     session_tasks: list["TaskRead"] = Field(default_factory=list)
+    outstanding_occurrence_count: int = 1
 
     @field_validator("completed_at")
     @classmethod
@@ -244,6 +245,13 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
     importance: PriorityLevel | None = None
     checklist_titles: list[str] = Field(default_factory=list)
     confirm_backfill: bool = False
+    keep_unfinished_overdue: bool = False
+
+    @model_validator(mode="after")
+    def validate_carry_over(self):
+        if self.mode == RecurrenceMode.quota and self.keep_unfinished_overdue:
+            raise ValueError("Quota shortfalls cannot carry into the next period")
+        return self
 
 
 class RecurringTemplatePatch(BaseModel):
@@ -263,6 +271,7 @@ class RecurringTemplatePatch(BaseModel):
     cycle_limit: int | None = Field(None, ge=1, le=10000)
     checklist_titles: list[str] | None = None
     confirm_backfill: bool = False
+    keep_unfinished_overdue: bool | None = None
 
 
 class RecurrencePreviewRequest(RecurrenceRuleFields):
@@ -314,6 +323,7 @@ class RecurringTemplateRead(BaseModel):
     start_date: date
     end_date: date | None
     cycle_limit: int | None
+    keep_unfinished_overdue: bool
     urgency: PriorityLevel | None
     importance: PriorityLevel | None
     paused_at: datetime | None

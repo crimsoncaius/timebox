@@ -379,6 +379,7 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
   const [endDate, setEndDate] = useState(template?.end_date ?? '')
   const [cycleLimit, setCycleLimit] = useState(template?.cycle_limit ?? 10)
   const [checklist, setChecklist] = useState(template?.checklist_items.map((item) => item.title).join('\n') ?? '')
+  const [keepUnfinishedOverdue, setKeepUnfinishedOverdue] = useState(template?.keep_unfinished_overdue ?? false)
   const [preview, setPreview] = useState<RecurrencePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -407,7 +408,8 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
     || endDate !== (template?.end_date ?? '')
     || cycleLimit !== (template?.cycle_limit ?? 10)
     || checklist !== (template?.checklist_items.map((item) => item.title).join('\n') ?? '')
-  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, mode, monthDay, projectId, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
+    || keepUnfinishedOverdue !== (template?.keep_unfinished_overdue ?? false)
+  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, projectId, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -493,6 +495,7 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
         urgency, importance,
         checklist_titles: mode === 'scheduled' ? checklist.split('\n').map((value) => value.trim()).filter(Boolean) : [],
         confirm_backfill: confirmBackfill,
+        keep_unfinished_overdue: mode === 'scheduled' && keepUnfinishedOverdue,
       }
       const saved = template
         ? await api.patchRecurringTemplate(template.id, body)
@@ -602,6 +605,21 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
                 <span className="mt-1.5 block text-[11px] text-[var(--task-detail-muted)]">Short months use their final day.</span>
               </Field>
             </div>
+          ) : null}
+
+          {mode === 'scheduled' ? (
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--task-detail-border)] p-3.5">
+              <input
+                type="checkbox"
+                checked={keepUnfinishedOverdue}
+                onChange={(event) => setKeepUnfinishedOverdue(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block text-sm text-[var(--task-detail-primary)]">Keep unfinished occurrences overdue</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-[var(--task-detail-muted)]">Otherwise an unfinished occurrence leaves current work when its scheduled date passes.</span>
+              </span>
+            </label>
           ) : null}
 
           <div className="mt-4 flex items-start gap-2 text-sm leading-[1.6] text-[var(--task-detail-primary)]">

@@ -74,12 +74,13 @@ def delete_project(project_id: int, db: Session = Depends(get_db)) -> Response:
 @router.get("/tasks", response_model=TaskListRead)
 def list_tasks(
     state: str = Query("active", pattern="^(active|archived|trash)$"),
+    planning_date: dt.date | None = Query(None),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> TaskListRead:
     now = now_in_tz(settings.app_timezone)
     try:
-        items = service.list_tasks(db, state, settings)
+        items = service.list_tasks(db, state, settings, planning_date=planning_date)
     except ValueError as exc:
         raise _not_found_or_unprocessable(exc) from exc
     return TaskListRead(items=items, timezone=settings.app_timezone, server_now_iso=now.isoformat())

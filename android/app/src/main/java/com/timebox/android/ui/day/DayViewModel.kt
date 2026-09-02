@@ -197,7 +197,7 @@ class DayViewModel(
     /** Battle Plan is independent of the timeline: failure leaves Day fully usable. */
     fun refreshReadyToPlan() {
         launchScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            planningSession.refreshQueue()
+            planningSession.refreshQueue(_state.value.date)
             syncPlanningState()
         }
         syncPlanningState()
@@ -348,6 +348,12 @@ class DayViewModel(
                 noteInput = "",
                 typeQuery = "",
             )
+        }
+        if (_state.value.isPlanningMode) {
+            launchScope.launch {
+                planningSession.refreshQueue(date)
+                syncPlanningState()
+            }
         }
         load(date)
     }

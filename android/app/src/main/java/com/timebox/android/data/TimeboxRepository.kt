@@ -224,8 +224,11 @@ class TimeboxRepository private constructor(
     suspend fun deleteProject(projectId: Int): Result<Unit> =
         call { api().deleteProject(projectId) }
 
-    suspend fun listBattleTasks(collection: TaskCollection = TaskCollection.Active): Result<BattleTaskList> =
-        call { api().listBattleTasks(collection.wire).toModel() }.also { result ->
+    suspend fun listBattleTasks(
+        collection: TaskCollection = TaskCollection.Active,
+        planningDate: LocalDate? = null,
+    ): Result<BattleTaskList> =
+        call { api().listBattleTasks(collection.wire, planningDate?.toString()).toModel() }.also { result ->
             if (collection == TaskCollection.Active) result.onSuccess(onActiveTasksLoaded)
         }
 
@@ -330,6 +333,7 @@ class TimeboxRepository private constructor(
                 cycleLimit = rule.cycleLimit,
                 checklistTitles = request.checklistTitles,
                 confirmBackfill = request.confirmBackfill,
+                keepUnfinishedOverdue = request.keepUnfinishedOverdue,
             )
         ).toModel()
     }

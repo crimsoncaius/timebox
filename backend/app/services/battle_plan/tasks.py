@@ -5,9 +5,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import now_in_tz
+from app.core.time import now_in_tz, today_in_tz
 from app.models.battle_plan import (
     RecurrenceOccurrence,
+    RecurringTemplate,
     Task,
     TaskStatus,
 )
@@ -204,12 +205,57 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     return _load_task(db, task_id)
 
 
-def list_tasks(db: Session, state: str, settings: Settings) -> list[TaskRead]:
+def _visible_active_rows(
+    rows: list[Task],
+    today: dt.date,
+    planning_date: dt.date | None,
+) -> list[tuple[Task, int]]:
+    visible: list[tuple[Task, int]] = []
+    recurring: dict[int, list[Task]] = {}
+    for row in rows:
+        if row.recurring_template_id is None or row.occurrence is None:
+            visible.append((row, 1))
+        else:
+            recurring.setdefault(row.recurring_template_id, []).append(row)
+
+    for tasks in recurring.values():
+        actionable = [
+            task for task in tasks
+            if not task.occurrence.skipped
+            and task.status != TaskStatus.completed
+            and task.occurrence.cycle_start <= today
+        ]
+        requested = [
+            task for task in tasks
+            if planning_date is not None
+            and not task.occurrence.skipped
+            and task.status != TaskStatus.completed
+            and task.occurrence.cycle_start <= planning_date <= task.occurrence.cycle_end
+        ]
+        candidates = requested or actionable
+        if not candidates:
+            continue
+        representative = min(
+            candidates,
+            key=lambda task: (task.occurrence.cycle_start, task.occurrence.id),
+        )
+        outstanding_ids = {task.id for task in actionable}
+        outstanding_ids.update(task.id for task in requested)
+        visible.append((representative, max(1, len(outstanding_ids))))
+    return sorted(visible, key=lambda item: (item[0].position, item[0].id))
+
+
+def list_tasks(
+    db: Session,
+    state: str,
+    settings: Settings,
+    planning_date: dt.date | None = None,
+) -> list[TaskRead]:
     from app.services import recurrence_service
 
     _purge_expired_trash(db)
     if state == "active":
-        recurrence_service.synchronize(db, settings)
+        recurrence_service.synchronize(db, settings, planning_date=planning_date)
     options = (
         selectinload(Task.project),
         selectinload(Task.task_type),
@@ -243,9 +289,14 @@ def list_tasks(db: Session, state: str, settings: Settings) -> list[TaskRead]:
     else:
         raise ValueError("state must be active, archived, or trash")
     rows = list(db.execute(stmt.order_by(Task.position, Task.id)).scalars().unique())
+    visible_rows = (
+        _visible_active_rows(rows, today_in_tz(settings.app_timezone), planning_date)
+        if state == "active"
+        else [(row, 1) for row in rows]
+    )
     if state == "trash":
         deleted_ids = {row.id for row in rows}
-        rows = [row for row in rows if row.parent_id not in deleted_ids]
+        visible_rows = [(row, count) for row, count in visible_rows if row.parent_id not in deleted_ids]
     now = now_in_tz(settings.app_timezone)
     return [
         _to_read(
@@ -254,8 +305,9 @@ def list_tasks(db: Session, state: str, settings: Settings) -> list[TaskRead]:
             now,
             include_children=True,
             include_deleted_children=state == "trash",
+            outstanding_occurrence_count=count,
         )
-        for row in rows
+        for row, count in visible_rows
     ]
 
 
@@ -295,6 +347,15 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
             row.is_blocked = False
             row.blocking_reason = None
         row.position = item.position
+        if row.recurring_template_id is not None:
+            template = db.get(RecurringTemplate, row.recurring_template_id)
+            if template is not None:
+                template.position = item.position
+            db.execute(
+                update(Task)
+                .where(Task.recurring_template_id == row.recurring_template_id)
+                .values(position=item.position)
+            )
         protect_task_occurrence(db, row)
     db.commit()
 

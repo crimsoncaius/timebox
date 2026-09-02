@@ -23,7 +23,7 @@ from app.models.day import Day
 from app.models.time_block import BlockLane, TimeBlock
 
 from app.services.recurrence.common import LEAD_DAYS, _json_list
-from app.services.recurrence.helpers import _next_position, _task_kwargs
+from app.services.recurrence.helpers import _task_kwargs
 from app.services.recurrence.protection import occurrence_is_protected
 from app.services.recurrence.windows import iter_windows
 
@@ -40,24 +40,81 @@ def _has_future_planned_block(db: Session, task_id: int, today: dt.date) -> bool
     ).scalar_one_or_none() is not None
 
 
-def _reready_overdue(db: Session, today: dt.date) -> None:
-    rows = list(db.execute(
-        select(Task).where(
-            Task.recurring_template_id.is_not(None),
-            Task.deadline_date < today,
-            Task.status != TaskStatus.completed,
-            Task.archived_at.is_(None),
+def _set_occurrence_ready(db: Session, task: Task, today: dt.date, ready: bool) -> None:
+    if task.recurrence_kind == "quota_parent":
+        sessions = list(db.execute(select(Task).where(Task.parent_id == task.id)).scalars())
+        for session in sessions:
+            session.ready_to_plan = (
+                ready
+                and session.status != TaskStatus.completed
+                and not _has_future_planned_block(db, session.id, today)
+            )
+        return
+    task.ready_to_plan = (
+        ready
+        and task.status != TaskStatus.completed
+        and not _has_future_planned_block(db, task.id, today)
+    )
+
+
+def _close_expired_occurrences(db: Session, today: dt.date) -> None:
+    rows = db.execute(
+        select(RecurrenceOccurrence, RecurringTemplate, Task)
+        .join(RecurringTemplate, RecurringTemplate.id == RecurrenceOccurrence.template_id)
+        .join(Task, Task.id == RecurrenceOccurrence.task_id)
+        .where(
+            RecurrenceOccurrence.cycle_end < today,
+            RecurrenceOccurrence.skipped.is_(False),
             Task.deleted_at.is_(None),
-            Task.ready_to_plan.is_(False),
-            Task.recurrence_kind.in_(["scheduled", "quota_session"]),
+            Task.archived_at.is_(None),
+            Task.status != TaskStatus.completed,
         )
-    ).scalars())
-    for task in rows:
-        if not _has_future_planned_block(db, task.id, today):
-            task.ready_to_plan = True
+        .order_by(RecurrenceOccurrence.cycle_end, RecurrenceOccurrence.id)
+    ).all()
+    for occurrence, template, task in rows:
+        keep_current = (
+            template.mode == RecurrenceMode.scheduled
+            and (
+                template.keep_unfinished_overdue
+                or _has_future_planned_block(db, task.id, today)
+            )
+        )
+        if keep_current:
+            _set_occurrence_ready(db, task, today, True)
+            continue
+        occurrence.skipped = True
+        _set_occurrence_ready(db, task, today, False)
 
 
-def _materialize(db: Session, template: RecurringTemplate, window) -> None:
+def _set_period_availability(
+    db: Session,
+    today: dt.date,
+    *,
+    planning_date: dt.date | None = None,
+) -> None:
+    rows = db.execute(
+        select(RecurrenceOccurrence, Task)
+        .join(Task, Task.id == RecurrenceOccurrence.task_id)
+        .where(
+            RecurrenceOccurrence.skipped.is_(False),
+            Task.deleted_at.is_(None),
+            Task.archived_at.is_(None),
+            Task.status != TaskStatus.completed,
+        )
+    ).all()
+    for occurrence, task in rows:
+        current = occurrence.cycle_start <= today <= occurrence.cycle_end
+        requested = (
+            planning_date is not None
+            and occurrence.cycle_start <= planning_date <= occurrence.cycle_end
+        )
+        if occurrence.cycle_start > today and not requested:
+            _set_occurrence_ready(db, task, today, False)
+        elif current or requested:
+            _set_occurrence_ready(db, task, today, True)
+
+
+def _materialize(db: Session, template: RecurringTemplate, window, today: dt.date) -> None:
     existing = db.execute(
         select(RecurrenceOccurrence).where(
             RecurrenceOccurrence.template_id == template.id,
@@ -77,10 +134,11 @@ def _materialize(db: Session, template: RecurringTemplate, window) -> None:
             db.add(ledger)
             db.flush()
             kwargs = _task_kwargs(template, window)
+            available = window.start <= today <= window.end
             if template.mode == RecurrenceMode.quota:
                 parent = Task(
                     **kwargs, ready_to_plan=False, recurrence_kind="quota_parent",
-                    expected_sessions=template.quota_count, position=_next_position(db),
+                    expected_sessions=template.quota_count, position=template.position,
                 )
                 db.add(parent)
                 db.flush()
@@ -88,13 +146,13 @@ def _materialize(db: Session, template: RecurringTemplate, window) -> None:
                     child_kwargs = {**kwargs, "title": f"Session {index}"}
                     db.add(Task(
                         **child_kwargs, parent_id=parent.id,
-                        ready_to_plan=True, recurrence_kind="quota_session",
+                        ready_to_plan=available, recurrence_kind="quota_session",
                         expected_sessions=None, session_index=index, position=index - 1,
                     ))
             else:
                 parent = Task(
-                    **kwargs, ready_to_plan=True, recurrence_kind="scheduled",
-                    position=_next_position(db),
+                    **kwargs, ready_to_plan=available, recurrence_kind="scheduled",
+                    position=template.position,
                 )
                 db.add(parent)
                 db.flush()
@@ -255,7 +313,13 @@ def _suppress_pause_interval(db: Session, template: RecurringTemplate, start: dt
             ))
 
 
-def synchronize(db: Session, settings: Settings, *, today: dt.date | None = None) -> None:
+def synchronize(
+    db: Session,
+    settings: Settings,
+    *,
+    today: dt.date | None = None,
+    planning_date: dt.date | None = None,
+) -> None:
     today = today or today_in_tz(settings.app_timezone)
     app_settings = db.execute(select(AppSettings).where(AppSettings.id == 1)).scalar_one_or_none()
     week_start = app_settings.week_start if app_settings is not None else "monday"
@@ -264,13 +328,14 @@ def synchronize(db: Session, settings: Settings, *, today: dt.date | None = None
         .where(RecurringTemplate.status == RecurrenceStatus.active)
         .options(selectinload(RecurringTemplate.checklist_items))
     ).scalars().unique())
-    horizon = today + dt.timedelta(days=LEAD_DAYS)
+    horizon = max(today + dt.timedelta(days=LEAD_DAYS), planning_date or today)
     for template in templates:
         for window in iter_windows(template, horizon, week_start):
             if window.start < template.generation_start_date:
                 continue
-            _materialize(db, template, window)
-    _reready_overdue(db, today)
+            _materialize(db, template, window, today)
+    _close_expired_occurrences(db, today)
+    _set_period_availability(db, today, planning_date=planning_date)
     _derive_quota_parents(db)
     db.commit()
 
