@@ -7,6 +7,7 @@ import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TaskStatus
+import com.timebox.android.data.TaskPlacement
 import com.timebox.android.ui.theme.DarkTimeboxColors
 import com.timebox.android.ui.theme.LightTimeboxColors
 import org.junit.Assert.assertEquals
@@ -166,6 +167,34 @@ class BattlePlanUiLogicTest {
             listOf(Triple(1, TaskStatus.Open, 0), Triple(2, TaskStatus.Completed, 0)),
             placements.map { Triple(it.taskId, it.status, it.position) },
         )
+    }
+
+    @Test
+    fun boundaryMoveUsesTheAbsoluteLaneOrderIncludingFilteredOutTasks() {
+        val moving = task(3, status = TaskStatus.Open, position = 2)
+        val tasks = listOf(
+            task(1, status = TaskStatus.Open, position = 0),
+            task(2, status = TaskStatus.Open, position = 1),
+            moving,
+            task(4, status = TaskStatus.InProgress, position = 0),
+        )
+
+        assertEquals(
+            listOf(3, 1, 2),
+            boundaryMovePlacements(tasks, moving, toTop = true).sortedBy { it.position }.map { it.taskId },
+        )
+        assertEquals(
+            listOf(2, 3, 1),
+            boundaryMovePlacements(tasks, tasks.first(), toTop = false).sortedBy { it.position }.map { it.taskId },
+        )
+    }
+
+    @Test
+    fun boundaryMoveIsEmptyWhenTheTaskIsAlreadyAtThatBoundary() {
+        val tasks = listOf(task(1, position = 0), task(2, position = 1))
+
+        assertEquals(emptyList<TaskPlacement>(), boundaryMovePlacements(tasks, tasks.first(), toTop = true))
+        assertEquals(emptyList<TaskPlacement>(), boundaryMovePlacements(tasks, tasks.last(), toTop = false))
     }
 
     @Test

@@ -164,6 +164,7 @@ fun BattlePlanScreen(
     onToggleReady: (BattleTask) -> Unit,
     onMoveTask: (BattleTask, TaskStatus) -> Unit,
     onReorderTask: (BattleTask, Int) -> Unit,
+    onMoveTaskToBoundary: (BattleTask, Boolean) -> Unit = { _, _ -> },
     onDropTask: (BattleTask, TaskStatus, Int) -> Unit = { _, _, _ -> },
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit = { _, _, _ -> },
     onCreateSubtask: (BattleTask, String) -> Unit,
@@ -183,6 +184,9 @@ fun BattlePlanScreen(
     onRestoreTrashed: (BattleTask) -> Unit,
     onUndoTrash: () -> Unit,
     onDismissUndo: () -> Unit,
+    onRequestTrash: (BattleTask) -> Unit = {},
+    onDismissTrash: () -> Unit = {},
+    onConfirmTrash: () -> Unit = {},
     onRequestPermanentDelete: (BattleTask) -> Unit,
     onDismissPermanentDelete: () -> Unit,
     onConfirmPermanentDelete: () -> Unit,
@@ -246,7 +250,9 @@ fun BattlePlanScreen(
                             onOpenTask = onOpenTask,
                             onToggleReady = onToggleReady,
                             onDropTask = onDropTask,
+                            onMoveTaskToBoundary = onMoveTaskToBoundary,
                             onSetBlocked = onSetBlocked,
+                            onRequestTrash = onRequestTrash,
                             onShowComposer = onShowComposer,
                             onOpenRecurring = onOpenRecurring,
                             onNewProject = onNewProject,
@@ -279,6 +285,20 @@ fun BattlePlanScreen(
 
     state.projectDeleteSummary?.let { summary ->
         ProjectDeleteDialog(summary, onDismissDeleteProject, onConfirmDeleteProject)
+    }
+    state.pendingTrashTask?.let { task ->
+        AlertDialog(
+            onDismissRequest = onDismissTrash,
+            title = { Text("Move ${task.title} to Trash?") },
+            text = {
+                Text(
+                    if (task.subtasks.isEmpty()) "You can restore it for 30 days."
+                    else "This also moves every Subtask to Trash. You can restore it for 30 days.",
+                )
+            },
+            confirmButton = { TextButton(onClick = onConfirmTrash) { Text("Move to Trash") } },
+            dismissButton = { TextButton(onClick = onDismissTrash) { Text("Cancel") } },
+        )
     }
     state.permanentDeleteTask?.let { task ->
         AlertDialog(
@@ -374,7 +394,9 @@ private fun MobileKanbanBoard(
     onOpenTask: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onDropTask: (BattleTask, TaskStatus, Int) -> Unit,
+    onMoveTaskToBoundary: (BattleTask, Boolean) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
+    onRequestTrash: (BattleTask) -> Unit,
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
@@ -714,7 +736,11 @@ private fun MobileKanbanBoard(
                     onOpen = onOpenTask,
                     onToggleReady = onToggleReady,
                     onDrop = onDropTask,
+                    onMoveToBoundary = onMoveTaskToBoundary,
                     onSetBlocked = onSetBlocked,
+                    onRequestTrash = onRequestTrash,
+                    manualOrder = state.sort == BattlePlanSort.Manual,
+                    absoluteLaneTasks = state.tasks.filter { it.status == status }.sortedBy { it.position },
                     activeDrag = visualDrag,
                     sourceGapCloseProgress = sourceGapCloseProgress,
                     onLaneBoundsChanged = { bounds ->
@@ -1079,7 +1105,11 @@ private fun MobileTaskLane(
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
+    onMoveToBoundary: (BattleTask, Boolean) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
+    onRequestTrash: (BattleTask) -> Unit,
+    manualOrder: Boolean,
+    absoluteLaneTasks: List<BattleTask>,
     activeDrag: MobileTaskDragState?,
     sourceGapCloseProgress: Float,
     onLaneBoundsChanged: (Rect?) -> Unit,
@@ -1146,8 +1176,6 @@ private fun MobileTaskLane(
                     item(key = task.id) {
                         MobileKanbanCard(
                             task = task,
-                            index = index,
-                            laneSize = visibleTasks.size,
                             taskCount = taskCount,
                             serverNow = serverNow,
                             timezone = timezone,
@@ -1155,7 +1183,12 @@ private fun MobileTaskLane(
                             onOpen = onOpen,
                             onToggleReady = onToggleReady,
                             onDrop = onDrop,
+                            onMoveToBoundary = onMoveToBoundary,
                             onSetBlocked = onSetBlocked,
+                            onRequestTrash = onRequestTrash,
+                            manualOrder = manualOrder,
+                            canMoveToTop = absoluteLaneTasks.firstOrNull()?.id != task.id,
+                            canMoveToBottom = absoluteLaneTasks.lastOrNull()?.id != task.id,
                             onBoundsChanged = onCardBoundsChanged,
                         )
                     }
@@ -1200,8 +1233,6 @@ private fun MobileDropIndicator(
 @Composable
 private fun MobileKanbanCard(
     task: BattleTask,
-    index: Int,
-    laneSize: Int,
     taskCount: (TaskStatus) -> Int,
     serverNow: java.time.Instant,
     timezone: String,
@@ -1209,7 +1240,12 @@ private fun MobileKanbanCard(
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
+    onMoveToBoundary: (BattleTask, Boolean) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
+    onRequestTrash: (BattleTask) -> Unit,
+    manualOrder: Boolean,
+    canMoveToTop: Boolean,
+    canMoveToBottom: Boolean,
     onBoundsChanged: (Int, Rect?) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -1244,12 +1280,7 @@ private fun MobileKanbanCard(
                     color = colors.onVariant,
                     modifier = Modifier.weight(1f),
                 )
-                MobileBlockedPill(
-                    task = task,
-                    onClick = {
-                        if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
-                    },
-                )
+                if (task.isBlocked) MobileBlockedPill(task)
                 Box {
                     IconButton(
                         onClick = { menu = true },
@@ -1266,12 +1297,19 @@ private fun MobileKanbanCard(
                     MobileTaskActionMenu(
                         expanded = menu,
                         status = task.status,
-                        canMoveEarlier = index > 0,
-                        canMoveLater = index < laneSize - 1,
+                        blocked = task.isBlocked,
+                        manualOrder = manualOrder,
+                        canMoveToTop = canMoveToTop,
+                        canMoveToBottom = canMoveToBottom,
                         onDismiss = { menu = false },
-                        onMoveEarlier = { menu = false; onDrop(task, task.status, index - 1) },
-                        onMoveLater = { menu = false; onDrop(task, task.status, index + 1) },
+                        onToggleBlocked = {
+                            menu = false
+                            if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
+                        },
+                        onMoveToTop = { menu = false; onMoveToBoundary(task, true) },
+                        onMoveToBottom = { menu = false; onMoveToBoundary(task, false) },
                         onMoveTo = { target -> menu = false; onDrop(task, target, taskCount(target)) },
+                        onTrash = { menu = false; onRequestTrash(task) },
                     )
                 }
             }
@@ -1338,15 +1376,18 @@ private fun MobileKanbanCard(
 private fun MobileTaskActionMenu(
     expanded: Boolean,
     status: TaskStatus,
-    canMoveEarlier: Boolean,
-    canMoveLater: Boolean,
+    blocked: Boolean,
+    manualOrder: Boolean,
+    canMoveToTop: Boolean,
+    canMoveToBottom: Boolean,
     onDismiss: () -> Unit,
-    onMoveEarlier: () -> Unit,
-    onMoveLater: () -> Unit,
+    onToggleBlocked: () -> Unit,
+    onMoveToTop: () -> Unit,
+    onMoveToBottom: () -> Unit,
     onMoveTo: (TaskStatus) -> Unit,
+    onTrash: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    val hasReorderActions = canMoveEarlier || canMoveLater
 
     DropdownMenu(
         expanded = expanded,
@@ -1367,42 +1408,40 @@ private fun MobileTaskActionMenu(
                 onClick = { onMoveTo(TaskStatus.Open) },
             )
         } else {
-            if (hasReorderActions) {
-                MenuSectionLabel("Reorder")
-                if (canMoveEarlier) {
-                    MobileTaskActionMenuItem(
-                        label = "Move earlier",
-                        icon = Icons.Outlined.KeyboardArrowUp,
-                        onClick = onMoveEarlier,
-                    )
-                }
-                if (canMoveLater) {
-                    MobileTaskActionMenuItem(
-                        label = "Move later",
-                        icon = Icons.Outlined.KeyboardArrowDown,
-                        onClick = onMoveLater,
-                    )
-                }
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                    color = colors.hairline,
-                )
-            }
-
-            MenuSectionLabel("Move to")
-            battlePlanStatuses.filter { it != status }.forEach { target ->
-                MobileTaskActionMenuItem(
-                    label = "Move to ${target.label}",
-                    icon = when (target) {
-                        TaskStatus.Open -> Icons.Outlined.Inbox
-                        TaskStatus.InProgress -> Icons.Outlined.PlayArrow
-                        TaskStatus.Completed -> Icons.Outlined.CheckCircle
-                        TaskStatus.Blocked -> Icons.Outlined.Inbox
-                    },
-                    onClick = { onMoveTo(target) },
-                )
-            }
+            MenuSectionLabel("Task")
+            MobileTaskActionMenuItem(
+                label = if (blocked) "Unblock task" else "Block task",
+                icon = Icons.Outlined.Flag,
+                onClick = onToggleBlocked,
+            )
         }
+        if (manualOrder) {
+            MenuSectionLabel("Reorder")
+            MobileTaskActionMenuItem(
+                label = "Move to top",
+                icon = Icons.Outlined.KeyboardArrowUp,
+                enabled = canMoveToTop,
+                disabledReason = "Already at the top",
+                onClick = onMoveToTop,
+            )
+            MobileTaskActionMenuItem(
+                label = "Move to bottom",
+                icon = Icons.Outlined.KeyboardArrowDown,
+                enabled = canMoveToBottom,
+                disabledReason = "Already at the bottom",
+                onClick = onMoveToBottom,
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+            color = colors.hairline,
+        )
+        MobileTaskActionMenuItem(
+            label = "Move to Trash",
+            icon = Icons.Outlined.DeleteOutline,
+            destructive = true,
+            onClick = onTrash,
+        )
     }
 }
 
@@ -1410,6 +1449,9 @@ private fun MobileTaskActionMenu(
 private fun MobileTaskActionMenuItem(
     label: String,
     icon: ImageVector,
+    enabled: Boolean = true,
+    disabledReason: String? = null,
+    destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -1418,7 +1460,11 @@ private fun MobileTaskActionMenuItem(
             Text(
                 text = label,
                 style = TimeboxTheme.type.label,
-                color = colors.on,
+                color = when {
+                    !enabled -> colors.onVariant.copy(alpha = 0.55f)
+                    destructive -> colors.error
+                    else -> colors.on
+                },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1434,16 +1480,20 @@ private fun MobileTaskActionMenuItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = colors.onVariant,
+                    tint = if (destructive) colors.error else colors.onVariant,
                     modifier = Modifier.size(18.dp),
                 )
             }
         },
+        enabled = enabled,
         onClick = onClick,
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = TimeboxDimens.touchTarget),
+            .heightIn(min = TimeboxDimens.touchTarget)
+            .semantics {
+                if (!enabled && disabledReason != null) contentDescription = "$label. $disabledReason"
+            },
     )
 }
 
@@ -2379,33 +2429,19 @@ private fun TaskEditForm(
 }
 
 @Composable
-private fun MobileBlockedPill(
-    task: BattleTask,
-    onClick: () -> Unit,
-) {
+private fun MobileBlockedPill(task: BattleTask) {
     val colors = TimeboxTheme.colors
-    val enabled = task.status != TaskStatus.Completed
-    val interactiveModifier = if (enabled) {
-        Modifier.clickable(onClick = onClick)
-    } else {
-        Modifier
-    }
     Box(
         Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(if (task.isBlocked) colors.error.copy(alpha = 0.08f) else Color.Transparent)
-            .then(interactiveModifier)
+            .background(colors.error.copy(alpha = 0.08f))
             .semantics {
-                contentDescription = if (task.isBlocked) {
-                    "Clear blocked condition for ${task.title}"
-                } else {
-                    "Mark ${task.title} blocked"
-                }
+                contentDescription = "${task.title} is blocked"
             }
             .padding(horizontal = 9.dp, vertical = 5.dp),
     ) {
         Text(
-            if (task.isBlocked) "BLOCKED" else "BLOCK",
+            "BLOCKED",
             style = TimeboxTheme.type.laneLabel,
             color = if (task.isBlocked) colors.error else colors.onVariant,
         )

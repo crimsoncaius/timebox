@@ -102,6 +102,7 @@ data class BattlePlanUiState(
     val deleteSummaryLoading: Boolean = false,
     val projectDeleteSummary: ProjectDeleteSummary? = null,
     val undoTaskId: Int? = null,
+    val pendingTrashTask: BattleTask? = null,
     val permanentDeleteTask: BattleTask? = null,
 ) {
     val scopes: List<BattlePlanScope>
@@ -459,6 +460,14 @@ class BattlePlanViewModel(
         optimisticReorder(ordered.mapIndexed { position, item -> TaskPlacement(item.id, item.status, position) }, "Order saved")
     }
 
+    fun moveTaskToBoundary(task: BattleTask, toTop: Boolean) {
+        if (_state.value.sort != BattlePlanSort.Manual) return
+        optimisticReorder(
+            boundaryMovePlacements(_state.value.tasks, task, toTop),
+            if (toTop) "Moved to top" else "Moved to bottom",
+        )
+    }
+
     fun archiveCompleted() {
         val ids = _state.value.completedForArchive.map { it.id }
         if (ids.isNotEmpty()) mutate("Archived ${ids.size} completed task${if (ids.size == 1) "" else "s"}") { repository.archiveCompletedBattleTasks(ids) }
@@ -467,9 +476,13 @@ class BattlePlanViewModel(
     fun restoreArchived(task: BattleTask) = mutate("Task restored") { repository.unarchiveBattleTask(task.id) }
     fun restoreTrashed(task: BattleTask) = mutate("Task restored") { repository.restoreBattleTask(task.id) }
 
-    fun trashTask(task: BattleTask) {
+    fun requestTrash(task: BattleTask) = _state.update { it.copy(pendingTrashTask = task) }
+    fun dismissTrash() = _state.update { it.copy(pendingTrashTask = null) }
+
+    fun confirmTrash() {
+        val task = _state.value.pendingTrashTask ?: return
         if (_state.value.saving) return
-        _state.update { it.copy(saving = true, message = null) }
+        _state.update { it.copy(pendingTrashTask = null, saving = true, message = null) }
         viewModelScope.launch {
             repository.trashBattleTask(task.id).fold(
                 onSuccess = { _state.update { it.copy(saving = false, undoTaskId = task.id, message = "Moved to Trash") }; load(false) },
@@ -694,6 +707,19 @@ internal fun dropTaskPlacements(
     val targetPlacements = destination.mapIndexed { position, item -> TaskPlacement(item.id, target, position) }
     if (sourceStatus == target) return targetPlacements
     return source.mapIndexed { position, item -> TaskPlacement(item.id, sourceStatus, position) } + targetPlacements
+}
+
+internal fun boundaryMovePlacements(
+    tasks: List<BattleTask>,
+    moving: BattleTask,
+    toTop: Boolean,
+): List<TaskPlacement> {
+    val ordered = tasks.filter { it.status == moving.status }.sortedWith(compareBy<BattleTask> { it.position }.thenBy { it.id }).toMutableList()
+    val from = ordered.indexOfFirst { it.id == moving.id }
+    if (from < 0 || (toTop && from == 0) || (!toTop && from == ordered.lastIndex)) return emptyList()
+    val item = ordered.removeAt(from)
+    ordered.add(if (toTop) 0 else ordered.size, item)
+    return ordered.mapIndexed { position, task -> TaskPlacement(task.id, task.status, position) }
 }
 
 private fun Set<String>.toggle(value: String): Set<String> = if (value in this) this - value else this + value

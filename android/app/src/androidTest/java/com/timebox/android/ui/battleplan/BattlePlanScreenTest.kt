@@ -9,6 +9,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -162,7 +163,8 @@ class BattlePlanScreenTest {
         compose.onNodeWithText("URGENT").fetchSemanticsNode()
         compose.onNodeWithText("IMPORTANT").fetchSemanticsNode()
         compose.onNodeWithText("Blocker: Waiting for approval").fetchSemanticsNode()
-        compose.onNodeWithText("BLOCKED").performClick()
+        compose.onNodeWithContentDescription("Actions for Blocked task").performClick()
+        compose.onNodeWithText("Unblock task").performClick()
         compose.onNodeWithText("Add to Ready to Plan").performClick()
         compose.onNodeWithText("Ready to Plan").performScrollTo().performClick()
 
@@ -336,8 +338,10 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun compactTaskActionMenuKeepsActionAvailabilityAndForwardsChoices() {
-        val dropped = mutableListOf<Triple<Int, TaskStatus, Int>>()
+    fun compactTaskActionMenuOffersQuickActionsWithoutDuplicatingStatusMoves() {
+        val boundaryMoves = mutableListOf<Pair<Int, Boolean>>()
+        var blocked: Triple<Int, Boolean, String?>? = null
+        var trashRequested: Int? = null
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 BattlePlanScreen(
@@ -349,7 +353,9 @@ class BattlePlanScreenTest {
                     onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
                     onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
                     onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
-                    onDropTask = { task, status, index -> dropped += Triple(task.id, status, index) },
+                    onMoveTaskToBoundary = { task, toTop -> boundaryMoves += task.id to toTop },
+                    onSetBlocked = { task, value, reason -> blocked = Triple(task.id, value, reason) },
+                    onRequestTrash = { trashRequested = it.id },
                     onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
                     onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
                     onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
@@ -362,33 +368,60 @@ class BattlePlanScreenTest {
 
         compose.onNodeWithContentDescription("Actions for Task 1").performClick()
         compose.onNodeWithTag("battle-plan-task-actions-menu").fetchSemanticsNode()
+        compose.onNodeWithText("TASK").fetchSemanticsNode()
         compose.onNodeWithText("REORDER").fetchSemanticsNode()
-        compose.onNodeWithText("MOVE TO").fetchSemanticsNode()
-        check(compose.onAllNodesWithText("Move earlier").fetchSemanticsNodes().isEmpty())
-        compose.onNodeWithText("Move later").fetchSemanticsNode()
-        check(compose.onAllNodesWithText("Move to Open").fetchSemanticsNodes().isEmpty())
-        compose.onNodeWithText("Move to Completed").fetchSemanticsNode()
-        compose.onNodeWithText("Move to In Progress").performClick()
-        compose.runOnIdle { check(dropped.last() == Triple(1, TaskStatus.InProgress, 0)) }
-
-        compose.onNodeWithContentDescription("Actions for Task 1").performClick()
-        compose.onNodeWithText("Move to Completed").performClick()
-        compose.runOnIdle { check(dropped.last() == Triple(1, TaskStatus.Completed, 0)) }
-
-        compose.onNodeWithContentDescription("Actions for Task 1").performClick()
-        compose.onNodeWithText("Move later").performClick()
-        compose.runOnIdle { check(dropped.last() == Triple(1, TaskStatus.Open, 1)) }
+        compose.onNodeWithText("Block task").fetchSemanticsNode()
+        compose.onNodeWithText("Move to top").assertIsNotEnabled()
+        compose.onNodeWithText("Move to bottom").performClick()
+        compose.runOnIdle { check(boundaryMoves.last() == (1 to false)) }
 
         compose.onNodeWithContentDescription("Actions for Task 2").performClick()
-        compose.onNodeWithText("Move earlier").performClick()
-        compose.runOnIdle {
-            check(dropped == listOf(
-                Triple(1, TaskStatus.InProgress, 0),
-                Triple(1, TaskStatus.Completed, 0),
-                Triple(1, TaskStatus.Open, 1),
-                Triple(2, TaskStatus.Open, 0),
-            ))
+        compose.onNodeWithText("Move to bottom").assertIsNotEnabled()
+        compose.onNodeWithText("Move to top").performClick()
+        compose.runOnIdle { check(boundaryMoves.last() == (2 to true)) }
+
+        compose.onNodeWithContentDescription("Actions for Task 1").performClick()
+        check(compose.onAllNodesWithText("Move to In Progress").fetchSemanticsNodes().isEmpty())
+        check(compose.onAllNodesWithText("Move to Completed").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("Block task").performClick()
+        compose.onNodeWithText("Mark blocked").performClick()
+        compose.runOnIdle { check(blocked == Triple(1, true, "")) }
+
+        compose.onNodeWithContentDescription("Actions for Task 1").performClick()
+        compose.onNodeWithText("Move to Trash").performClick()
+        compose.runOnIdle { check(trashRequested == 1) }
+    }
+
+    @Test
+    fun compactTaskTrashRequiresConfirmationAndExplainsRecovery() {
+        var confirmed = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(battleTask(1)),
+                        pendingTrashTask = battleTask(1),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
+                    onUndoTrash = {}, onDismissUndo = {}, onConfirmTrash = { confirmed = true },
+                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
+                    onConfirmPermanentDelete = {},
+                )
+            }
         }
+
+        compose.onNodeWithText("Move Task 1 to Trash?").fetchSemanticsNode()
+        compose.onNodeWithText("You can restore it for 30 days.").fetchSemanticsNode()
+        compose.onNodeWithText("Move to Trash").performClick()
+        compose.runOnIdle { check(confirmed) }
     }
 
     @Test
