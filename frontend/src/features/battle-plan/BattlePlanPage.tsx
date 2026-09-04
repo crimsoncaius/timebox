@@ -1,6 +1,6 @@
 import { DragDropProvider, useDroppable, type DragEndEvent } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import {
@@ -29,6 +29,7 @@ import { BATTLE_PLAN_STORAGE_KEY, type BattlePlanScope } from './battlePlanState
 import { ProjectEditor } from './ProjectEditor'
 import { TaskComposer } from './TaskComposer'
 import { TaskDetailPanel } from './TaskDetailPanel'
+import { TrashUndoNotice, type TrashUndoTarget } from './TrashUndoNotice'
 
 type Scope = BattlePlanScope
 type SortMode = 'manual' | 'deadline' | 'urgency' | 'importance'
@@ -104,7 +105,8 @@ export function BattlePlanPage() {
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [mobileSidebar, setMobileSidebar] = useState(false)
-  const [undoTaskId, setUndoTaskId] = useState<number | null>(null)
+  const [trashUndo, setTrashUndo] = useState<TrashUndoTarget | null>(null)
+  const nextTrashUndoId = useRef(1)
   const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const screenNowIso = useAppClock(serverNowIso, timezone)
 
@@ -421,11 +423,13 @@ export function BattlePlanPage() {
               onRestore={async (task) => {
                 if (collection === 'archived') await api.unarchiveBattleTask(task.id)
                 else await api.restoreBattleTask(task.id)
+                if (collection === 'trash') setTrashUndo((current) => current?.id === task.id ? null : current)
                 await loadCollection(collection)
               }}
               onPermanentDelete={async (task) => {
                 if (!window.confirm(`Permanently delete “${task.title}”? This cannot be undone.`)) return
                 await api.permanentlyDeleteBattleTask(task.id)
+                setTrashUndo((current) => current?.id === task.id ? null : current)
                 await loadCollection('trash')
               }}
             />
@@ -447,8 +451,9 @@ export function BattlePlanPage() {
           onSetSubtaskChecked={setSubtaskChecked}
           onAddSubtask={addSubtask}
           onTrash={async (id) => {
+            const title = selectedTask.title
             await api.trashBattleTask(id)
-            setUndoTaskId(id)
+            setTrashUndo({ noticeId: nextTrashUndoId.current++, id, title })
             if (id === selectedTask.id) closeTask()
             await loadActive()
           }}
@@ -477,12 +482,18 @@ export function BattlePlanPage() {
         />
       ) : null}
 
-      {undoTaskId != null ? (
-        <div className="fixed bottom-5 left-1/2 z-100 flex -translate-x-1/2 items-center gap-4 rounded-full bg-on-surface px-5 py-3 text-sm text-surface shadow-xl dark:bg-dark-on-surface dark:text-dark-background">
-          Moved to Trash
-          <button type="button" className="font-medium underline" onClick={async () => { await api.restoreBattleTask(undoTaskId); setUndoTaskId(null); await loadActive() }}>Undo</button>
-          <button type="button" aria-label="Dismiss undo" onClick={() => setUndoTaskId(null)}>×</button>
-        </div>
+      {trashUndo != null ? (
+        <TrashUndoNotice
+          key={trashUndo.noticeId}
+          target={trashUndo}
+          onUndo={async () => {
+            await api.restoreBattleTask(trashUndo.id)
+            setTrashUndo((current) => current?.noticeId === trashUndo.noticeId ? null : current)
+            await loadActive()
+          }}
+          onDismiss={() => setTrashUndo((current) => current?.noticeId === trashUndo.noticeId ? null : current)}
+          onExpire={() => setTrashUndo((current) => current?.noticeId === trashUndo.noticeId ? null : current)}
+        />
       ) : null}
     </Layout>
   )

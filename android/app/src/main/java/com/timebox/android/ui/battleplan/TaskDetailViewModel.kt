@@ -60,13 +60,19 @@ data class TaskDetailUiState(
     val trashed: Boolean = false,
     val confirmTrash: Boolean = false,
     val pendingSubtaskTrash: Subtask? = null,
-    val undoSubtaskId: Int? = null,
+    val trashUndoTarget: TrashUndoTarget? = null,
     val error: String? = null,
     val message: String? = null,
 ) {
     val isSubtask: Boolean get() = task?.parentId != null
     val subtasks: List<Subtask> get() = task?.subtasks.orEmpty()
 }
+
+data class TrashUndoTarget(
+    val taskId: Int,
+    val title: String,
+    val leaveTaskDetail: Boolean,
+)
 
 class TaskDetailViewModel(
     private val repository: TimeboxRepository,
@@ -152,6 +158,7 @@ class TaskDetailViewModel(
     fun setReminderTime(value: String) = edit { copy(reminderTime = value) }
     fun setReady(value: Boolean) = edit { copy(readyToPlan = value) }
     fun consumeMessage() = _state.update { it.copy(message = null) }
+    fun consumeTrashUndoTarget() = _state.update { it.copy(trashUndoTarget = null) }
     fun requestTrash() = _state.update { it.copy(confirmTrash = true) }
     fun dismissTrash() = _state.update { it.copy(confirmTrash = false) }
 
@@ -205,20 +212,10 @@ class TaskDetailViewModel(
             repository.trashBattleTask(task.id).fold(
                 onSuccess = {
                     load(taskId)
-                    _state.update { it.copy(undoSubtaskId = task.id, message = "Subtask moved to Trash") }
+                    _state.update {
+                        it.copy(trashUndoTarget = TrashUndoTarget(task.id, task.title, leaveTaskDetail = false))
+                    }
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
-            )
-        }
-    }
-
-    fun undoSubtaskTrash() {
-        val id = _state.value.undoSubtaskId ?: return
-        val taskId = _state.value.taskId ?: return
-        _state.update { it.copy(undoSubtaskId = null, saving = true) }
-        viewModelScope.launch {
-            repository.restoreBattleTask(id).fold(
-                onSuccess = { load(taskId) },
                 onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
             )
         }
@@ -229,7 +226,15 @@ class TaskDetailViewModel(
         _state.update { it.copy(confirmTrash = false, saving = true) }
         viewModelScope.launch {
             repository.trashBattleTask(task.id).fold(
-                onSuccess = { _state.update { it.copy(saving = false, trashed = true, message = "Moved to Trash") } },
+                onSuccess = {
+                    _state.update {
+                        it.copy(
+                            saving = false,
+                            trashed = true,
+                            trashUndoTarget = TrashUndoTarget(task.id, task.title, leaveTaskDetail = true),
+                        )
+                    }
+                },
                 onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
             )
         }

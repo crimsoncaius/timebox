@@ -9,6 +9,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -760,6 +761,106 @@ class BattlePlanScreenTest {
             check(!dropped)
             check(haptics.events == listOf(HapticFeedbackType.LongPress, HapticFeedbackType.TextHandleMove))
         }
+    }
+
+    @Test
+    fun trashUndoNoticeNamesTheTaskAndExposesAccessibleActions() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanTrashUndoNotice(
+                    notice = TrashUndoNotice(1, 7, "Draft launch brief"),
+                    onUndo = {},
+                    onDismiss = {},
+                    onExpiryFinished = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Draft launch brief moved to Trash").fetchSemanticsNode()
+        compose.onNodeWithText("Undo").assertIsEnabled()
+        compose.onNodeWithText("Dismiss").assertIsEnabled()
+    }
+
+    @Test
+    fun trashUndoFailureOffersRetryAndDismiss() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanTrashUndoNotice(
+                    notice = TrashUndoNotice(
+                        noticeId = 1,
+                        taskId = 7,
+                        title = "Draft launch brief",
+                        phase = TrashUndoPhase.Failed,
+                        error = "Restore unavailable",
+                    ),
+                    onUndo = {},
+                    onDismiss = {},
+                    onExpiryFinished = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Could not restore Draft launch brief. Restore unavailable").fetchSemanticsNode()
+        compose.onNodeWithText("Retry").assertIsEnabled()
+        compose.onNodeWithText("Dismiss").assertIsEnabled()
+    }
+
+    @Test
+    fun trashUndoProgressDisablesItsActions() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanTrashUndoNotice(
+                    notice = TrashUndoNotice(1, 7, "Draft launch brief", TrashUndoPhase.Restoring),
+                    onUndo = {},
+                    onDismiss = {},
+                    onExpiryFinished = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Restoring Draft launch brief").fetchSemanticsNode()
+        compose.onNodeWithText("Restoring…").assertIsNotEnabled()
+        compose.onNodeWithText("Dismiss").assertIsNotEnabled()
+    }
+
+    @Test
+    fun expiryUsesTheFullDecorativeFadeWhenMotionIsAllowed() {
+        var finished = false
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanTrashUndoNotice(
+                    notice = TrashUndoNotice(1, 7, "Draft launch brief", TrashUndoPhase.Expiring),
+                    onUndo = {},
+                    onDismiss = {},
+                    onExpiryFinished = { finished = true },
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.runOnIdle { check(!finished) }
+
+        compose.mainClock.advanceTimeBy(100)
+        compose.runOnIdle { check(finished) }
+    }
+
+    @Test
+    fun reducedMotionFinishesExpiryWithoutDecorativeDelay() {
+        var finished = false
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanTrashUndoNotice(
+                    notice = TrashUndoNotice(1, 7, "Draft launch brief", TrashUndoPhase.Expiring),
+                    reducedMotion = true,
+                    onUndo = {},
+                    onDismiss = {},
+                    onExpiryFinished = { finished = true },
+                )
+            }
+        }
+
+        compose.runOnIdle { check(finished) }
     }
 }
 

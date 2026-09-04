@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useNavigate } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BattlePlanPage } from './BattlePlanPage'
 import type { BattleTask, Project, Subtask, TaskType } from '../../lib/api'
@@ -81,12 +81,18 @@ function HistoryControls() {
 describe('BattlePlanPage', () => {
   const originalFetch = globalThis.fetch
   let activeTasks: BattleTask[]
+  let trashTasks: BattleTask[]
   let failNextCreate: boolean
+  let failNextRestore: boolean
+  let restoreGate: Promise<void> | null
 
   beforeEach(() => {
     localStorage.clear()
     activeTasks = [task()]
+    trashTasks = []
     failNextCreate = false
+    failNextRestore = false
+    restoreGate = null
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -96,7 +102,10 @@ describe('BattlePlanPage', () => {
       if (url.includes('/tasks?state=active')) {
         return response({ items: activeTasks, timezone: 'UTC', server_now_iso: '2026-08-15T12:00:00Z' })
       }
-      if (url.includes('/tasks?state=archived') || url.includes('/tasks?state=trash')) {
+      if (url.includes('/tasks?state=trash')) {
+        return response({ items: trashTasks, timezone: 'UTC', server_now_iso: '2026-08-15T12:00:00Z' })
+      }
+      if (url.includes('/tasks?state=archived')) {
         return response({ items: [], timezone: 'UTC', server_now_iso: '2026-08-15T12:00:00Z' })
       }
       if (url.endsWith('/tasks') && method === 'POST') {
@@ -167,6 +176,34 @@ describe('BattlePlanPage', () => {
         })
         return response(patched)
       }
+      if (/\/tasks\/\d+\/permanent$/.test(url) && method === 'DELETE') {
+        const id = Number(url.split('/').at(-2))
+        trashTasks = trashTasks.filter((row) => row.id !== id)
+        return response(undefined, 204)
+      }
+      if (/\/tasks\/\d+$/.test(url) && method === 'DELETE') {
+        const id = Number(url.split('/').pop())
+        const trashed = activeTasks.find((row) => row.id === id)
+        if (trashed) {
+          activeTasks = activeTasks.filter((row) => row.id !== id)
+          trashTasks = [...trashTasks, { ...trashed, deleted_at: '2026-08-15T12:00:00Z' }]
+        } else {
+          trashTasks = trashTasks.filter((row) => row.id !== id)
+        }
+        return response(trashed)
+      }
+      if (/\/tasks\/\d+\/restore$/.test(url) && method === 'POST') {
+        if (restoreGate) await restoreGate
+        if (failNextRestore) {
+          failNextRestore = false
+          return response({ detail: 'Restore is temporarily unavailable' }, 503)
+        }
+        const id = Number(url.split('/').at(-2))
+        const restored = trashTasks.find((row) => row.id === id)
+        trashTasks = trashTasks.filter((row) => row.id !== id)
+        if (restored) activeTasks = [...activeTasks, { ...restored, deleted_at: null }]
+        return response(undefined, 204)
+      }
       const subtaskAction = /\/subtasks\/(\d+)\/(check|uncheck)$/.exec(url)
       if (subtaskAction && method === 'POST') {
         const id = Number(subtaskAction[1])
@@ -180,6 +217,8 @@ describe('BattlePlanPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
   })
@@ -372,6 +411,235 @@ describe('BattlePlanPage', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Title')).toHaveValue('Follow up from reminder')
     })
+  })
+
+  it('names the trashed Battle Plan Task in one actionable polite notice', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+
+    const notice = await screen.findByRole('status', { name: 'Trash undo' })
+    expect(notice).toHaveTextContent('Draft launch brief moved to Trash')
+    expect(within(notice).getByRole('button', { name: 'Undo' })).toBeEnabled()
+    expect(within(notice).getByRole('button', { name: 'Dismiss' })).toBeEnabled()
+    expect(screen.getAllByText(/moved to Trash/i)).toHaveLength(1)
+  })
+
+  it('consumes the web Undo opportunity after ten seconds and fades for 150 ms', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const trash = await screen.findByRole('button', { name: 'Move to Trash' })
+    vi.useFakeTimers()
+    await act(async () => {
+      fireEvent.click(trash)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const notice = screen.getByRole('status', { name: 'Trash undo' })
+
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+    expect(within(notice).getByRole('button', { name: 'Undo' })).toBeDisabled()
+    expect(notice).toHaveClass('opacity-0')
+
+    await act(async () => { vi.advanceTimersByTime(150) })
+    expect(screen.queryByRole('status', { name: 'Trash undo' })).not.toBeInTheDocument()
+  })
+
+  it('counts only visible, unhovered, unfocused web exposure', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const trash = await screen.findByRole('button', { name: 'Move to Trash' })
+    vi.useFakeTimers()
+    await act(async () => {
+      fireEvent.click(trash)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const notice = screen.getByRole('status', { name: 'Trash undo' })
+    const undo = within(notice).getByRole('button', { name: 'Undo' })
+
+    await act(async () => { vi.advanceTimersByTime(4_000) })
+    fireEvent.mouseEnter(notice)
+    await act(async () => { vi.advanceTimersByTime(20_000) })
+    expect(undo).toBeEnabled()
+    fireEvent.mouseLeave(notice)
+    await act(async () => { vi.advanceTimersByTime(2_000) })
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => { vi.advanceTimersByTime(20_000) })
+    expect(undo).toBeEnabled()
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => { vi.advanceTimersByTime(2_000) })
+
+    fireEvent.focus(undo)
+    await act(async () => { vi.advanceTimersByTime(20_000) })
+    expect(undo).toBeEnabled()
+    fireEvent.blur(undo, { relatedTarget: document.body })
+    await act(async () => { vi.advanceTimersByTime(2_000) })
+    expect(undo).toBeDisabled()
+  })
+
+  it('removes an expired web notice immediately when reduced motion is requested', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const trash = await screen.findByRole('button', { name: 'Move to Trash' })
+    vi.useFakeTimers()
+    await act(async () => {
+      fireEvent.click(trash)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+
+    expect(screen.queryByRole('status', { name: 'Trash undo' })).not.toBeInTheDocument()
+  })
+
+  it('starts exactly one restore and exposes progress until it succeeds', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let releaseRestore = () => {}
+    restoreGate = new Promise<void>((resolve) => { releaseRestore = resolve })
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    const notice = await screen.findByRole('status', { name: 'Trash undo' })
+    const undo = within(notice).getByRole('button', { name: 'Undo' })
+
+    fireEvent.click(undo)
+    fireEvent.click(undo)
+
+    expect(within(notice).getByRole('button', { name: 'Restoring Draft launch brief' })).toBeDisabled()
+    expect(within(notice).getByRole('button', { name: 'Dismiss' })).toBeDisabled()
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes('/tasks/11/restore'))).toHaveLength(1)
+
+    releaseRestore()
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Trash undo' })).not.toBeInTheDocument())
+  })
+
+  it('keeps a failed restore available for Retry or Dismiss', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    failNextRestore = true
+    await user.click(within(screen.getByRole('status', { name: 'Trash undo' })).getByRole('button', { name: 'Undo' }))
+
+    const failure = await screen.findByRole('alert', { name: 'Trash undo failed' })
+    expect(failure).toHaveTextContent('Could not restore Draft launch brief')
+    expect(failure).toHaveTextContent('Restore is temporarily unavailable')
+    await user.click(within(failure).getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => expect(screen.queryByLabelText('Trash undo')).not.toBeInTheDocument())
+  })
+
+  it('keeps a newer Trash notice when an older Undo finishes', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    activeTasks = [task(), task({ id: 12, title: 'Follow up from reminder', position: 1 })]
+    let releaseRestore = () => {}
+    restoreGate = new Promise<void>((resolve) => { releaseRestore = resolve })
+    render(
+      <MemoryRouter initialEntries={['/battle-plan?task=11']}>
+        <BattlePlanPage />
+        <HistoryControls />
+      </MemoryRouter>,
+    )
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    fireEvent.click(within(await screen.findByRole('status', { name: 'Trash undo' })).getByRole('button', { name: 'Undo' }))
+
+    await user.click(screen.getByRole('button', { name: 'Open reminder task' }))
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    expect(await screen.findByRole('status', { name: 'Trash undo' })).toHaveTextContent('Follow up from reminder moved to Trash')
+
+    releaseRestore()
+    await act(async () => { await restoreGate })
+
+    expect(screen.getByRole('status', { name: 'Trash undo' })).toHaveTextContent('Follow up from reminder moved to Trash')
+  })
+
+  it('invalidates a matching notice when the Task is restored from Trash', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    await user.click(screen.getByRole('button', { name: 'Trash' }))
+    const trashedTask = await screen.findByText('Draft launch brief')
+
+    await user.click(within(trashedTask.closest('article')!).getByRole('button', { name: 'Restore' }))
+
+    expect(screen.queryByLabelText('Trash undo')).not.toBeInTheDocument()
+  })
+
+  it('invalidates a matching notice when the Task is permanently deleted', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    await user.click(screen.getByRole('button', { name: 'Trash' }))
+    const trashedTask = await screen.findByText('Draft launch brief')
+
+    await user.click(within(trashedTask.closest('article')!).getByRole('button', { name: 'Delete permanently' }))
+
+    expect(screen.queryByLabelText('Trash undo')).not.toBeInTheDocument()
+  })
+
+  it('Dismiss removes the notice without restoring the Task', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+
+    await user.click(within(await screen.findByRole('status', { name: 'Trash undo' })).getByRole('button', { name: 'Dismiss' }))
+
+    expect(screen.queryByLabelText('Trash undo')).not.toBeInTheDocument()
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([input]) => String(input).includes('/tasks/11/restore'))).toBe(false)
+  })
+
+  it('preserves the notice within Battle Plan and discards it after leaving', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <MemoryRouter initialEntries={['/battle-plan?task=11']}>
+        <HistoryControls />
+        <Routes>
+          <Route path="/battle-plan" element={<BattlePlanPage />} />
+          <Route path="/day/:date" element={<p>Day page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    await user.click(screen.getByRole('button', { name: 'Archive' }))
+    expect(screen.getByRole('status', { name: 'Trash undo' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Day' }))
+    expect(await screen.findByText('Day page')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'History back' }))
+
+    await screen.findByRole('heading', { name: 'Archive' })
+    expect(screen.queryByLabelText('Trash undo')).not.toBeInTheDocument()
+  })
+
+  it('does not persist the notice across a page reload', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const page = render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    expect(await screen.findByLabelText('Trash undo')).toBeInTheDocument()
+
+    page.unmount()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+
+    await screen.findByRole('heading', { name: 'All Tasks' })
+    expect(screen.queryByLabelText('Trash undo')).not.toBeInTheDocument()
   })
 
   it('keeps task status dragging enabled when tasks are sorted by deadline', async () => {

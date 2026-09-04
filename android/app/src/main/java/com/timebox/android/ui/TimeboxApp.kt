@@ -1,5 +1,6 @@
 package com.timebox.android.ui
 
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,15 +13,23 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -34,6 +43,7 @@ import com.timebox.android.data.Lane
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.battleplan.BattlePlanScreen
+import com.timebox.android.ui.battleplan.BattlePlanTrashUndoNotice
 import com.timebox.android.ui.battleplan.BattlePlanViewModel
 import com.timebox.android.ui.battleplan.ProjectEditorScreen
 import com.timebox.android.ui.battleplan.ProjectEditorViewModel
@@ -95,6 +105,17 @@ fun TimeboxApp(
     val recurringEditorState by recurringEditorViewModel.state.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route ?: AppRoutes.DayPattern
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var appResumed by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, _ ->
+            appResumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val routeDate = backStackEntry?.arguments?.getString(AppRoutes.DateArg)?.let {
         runCatching { LocalDate.parse(it) }.getOrNull()
     }
@@ -165,6 +186,21 @@ fun TimeboxApp(
     LaunchedEffect(taskDetailState.message) {
         taskDetailState.message?.let { snackbarHostState.showSnackbar(it); taskDetailViewModel.consumeMessage() }
     }
+    LaunchedEffect(taskDetailState.trashUndoTarget) {
+        taskDetailState.trashUndoTarget?.let { target ->
+            taskDetailViewModel.consumeTrashUndoTarget()
+            battlePlanViewModel.offerUndo(target.taskId, target.title)
+            battlePlanViewModel.load(showSpinner = false)
+            if (target.leaveTaskDetail && route == AppRoutes.TaskDetailPattern) navController.popBackStack()
+        }
+    }
+    LaunchedEffect(battlePlanState.restoredTrashTaskId) {
+        battlePlanState.restoredTrashTaskId?.let {
+            battlePlanViewModel.consumeRestoredTrashTask()
+            battlePlanViewModel.load(showSpinner = false)
+            if (route == AppRoutes.TaskDetailPattern) routeTaskId?.let(taskDetailViewModel::load)
+        }
+    }
     LaunchedEffect(taskCompletionNotice?.id) {
         taskCompletionNotice?.let { notice ->
             val result = snackbarHostState.showSnackbar(
@@ -216,6 +252,27 @@ fun TimeboxApp(
         else -> null
     }
     val colors = TimeboxTheme.colors
+    val accessibilityManager = LocalAccessibilityManager.current
+    val recommendedUndoTimeoutMillis = accessibilityManager?.calculateRecommendedTimeoutMillis(
+        originalTimeoutMillis = 10_000L,
+        containsIcons = false,
+        containsText = true,
+        containsControls = true,
+    ) ?: 10_000L
+    val context = LocalContext.current
+    val reducedMotion = Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f,
+    ) == 0f
+    val withinBattlePlan = isBattlePlanRoute(route)
+    LaunchedEffect(withinBattlePlan, appResumed, recommendedUndoTimeoutMillis) {
+        if (!withinBattlePlan) battlePlanViewModel.dismissUndo()
+        battlePlanViewModel.setUndoExposureActive(
+            active = withinBattlePlan && appResumed,
+            recommendedTimeoutMillis = recommendedUndoTimeoutMillis,
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         Column(
@@ -325,8 +382,8 @@ fun TimeboxApp(
                             onConfirmDeleteProject = battlePlanViewModel::confirmProjectDelete,
                             onRestoreArchived = battlePlanViewModel::restoreArchived,
                             onRestoreTrashed = battlePlanViewModel::restoreTrashed,
-                            onUndoTrash = battlePlanViewModel::undoTrash,
-                            onDismissUndo = battlePlanViewModel::dismissUndo,
+                            onUndoTrash = { battlePlanViewModel.undoTrash() },
+                            onDismissUndo = { battlePlanViewModel.dismissUndo() },
                             onRequestTrash = battlePlanViewModel::requestTrash,
                             onDismissTrash = battlePlanViewModel::dismissTrash,
                             onConfirmTrash = battlePlanViewModel::confirmTrash,
@@ -370,15 +427,11 @@ fun TimeboxApp(
                             onTrashSubtask = taskDetailViewModel::requestSubtaskTrash,
                             onDismissSubtaskTrash = taskDetailViewModel::dismissSubtaskTrash,
                             onConfirmSubtaskTrash = taskDetailViewModel::confirmSubtaskTrash,
-                            onUndoSubtaskTrash = taskDetailViewModel::undoSubtaskTrash,
+                            onUndoSubtaskTrash = {},
                             onRequestTrash = taskDetailViewModel::requestTrash,
                             onDismissTrash = taskDetailViewModel::dismissTrash,
                             onConfirmTrash = taskDetailViewModel::confirmTrash,
-                            onTrashed = {
-                                battlePlanViewModel.offerUndo(taskId)
-                                battlePlanViewModel.load(showSpinner = false)
-                                navController.popBackStack()
-                            },
+                            onTrashed = {},
                             onReopen = taskDetailViewModel::reopenTask,
                             onSave = taskDetailViewModel::save,
                         )
@@ -593,6 +646,19 @@ fun TimeboxApp(
             }
         }
 
+        if (withinBattlePlan) {
+            battlePlanState.trashUndo?.let { notice ->
+                BattlePlanTrashUndoNotice(
+                    notice = notice,
+                    onUndo = { battlePlanViewModel.undoTrash(notice.noticeId) },
+                    onDismiss = { battlePlanViewModel.dismissUndo(notice.noticeId) },
+                    onExpiryFinished = { battlePlanViewModel.finishUndoExpiry(notice.noticeId) },
+                    reducedMotion = reducedMotion,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp),
+                )
+            }
+        }
+
         dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
             WorkModeScreen(
                 state = workMode,
@@ -615,6 +681,17 @@ fun TimeboxApp(
         }
     }
 }
+
+internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
+    AppRoutes.BattlePlan,
+    AppRoutes.TaskDetailPattern,
+    AppRoutes.ProjectNew,
+    AppRoutes.ProjectDetailPattern,
+    AppRoutes.Recurring,
+    AppRoutes.RecurringNew,
+    AppRoutes.RecurringDetailPattern,
+    AppRoutes.RecurringEditPattern,
+)
 
 private fun routeKicker(route: String): String = when (route) {
     AppRoutes.DayPattern -> "Day"

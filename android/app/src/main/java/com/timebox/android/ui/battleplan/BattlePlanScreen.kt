@@ -196,14 +196,6 @@ fun BattlePlanScreen(
         state.loading -> LoadingState()
         state.error != null && state.tasks.isEmpty() -> ErrorState(state.error, onRetry)
         else -> Column(Modifier.fillMaxSize()) {
-            state.undoTaskId?.let {
-                Row(Modifier.fillMaxWidth().background(colors.on).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Moved to Trash", color = colors.bg, modifier = Modifier.weight(1f))
-                    TextButton(onClick = onUndoTrash) { Text("Undo", color = colors.bg) }
-                    TextButton(onClick = onDismissUndo) { Text("Dismiss", color = colors.bg) }
-                }
-            }
-
             if (state.collection == TaskCollection.Active) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     if (maxWidth >= 840.dp) {
@@ -2133,14 +2125,6 @@ fun TaskDetailScreen(
             text = { Text("The subtask can be restored while its parent remains active.") },
             confirmButton = { TextButton(onClick = onConfirmSubtaskTrash) { Text("Move to Trash") } },
             dismissButton = { TextButton(onClick = onDismissSubtaskTrash) { Text("Cancel") } },
-        )
-    }
-    if (state.undoSubtaskId != null) {
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Subtask moved to Trash") },
-            confirmButton = { TextButton(onClick = onUndoSubtaskTrash) { Text("Undo") } },
-            dismissButton = { TextButton(onClick = onRetry) { Text("Dismiss") } },
         )
     }
 }
