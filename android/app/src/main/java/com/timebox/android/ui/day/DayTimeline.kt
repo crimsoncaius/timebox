@@ -1,6 +1,5 @@
 package com.timebox.android.ui.day
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -448,30 +447,15 @@ private fun PlanningPreviewCard(
         PlanningPreviewState.Invalid -> colors.error
         PlanningPreviewState.Valid, PlanningPreviewState.Pending -> colors.planned
     }
-    val fill = when (preview.state) {
-        PlanningPreviewState.Invalid -> colors.error.copy(alpha = 0.12f)
-        PlanningPreviewState.Valid -> colors.planned.copy(alpha = 0.16f)
-        PlanningPreviewState.Pending -> colors.planned.copy(alpha = 0.24f)
-    }
     Box(
         modifier = Modifier
             .offset(y = top)
             .padding(horizontal = 3.dp)
             .fillMaxWidth()
             .height(height)
-            .border(1.5.dp, border, TimeboxShapes.block)
-            .background(fill, TimeboxShapes.block)
-            .padding(horizontal = 7.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Text(
-            text = preview.title,
-            style = TimeboxTheme.type.blockTitle,
-            color = if (preview.state == PlanningPreviewState.Invalid) colors.error else colors.on,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+            .border(1.dp, border.copy(alpha = 0.65f), TimeboxShapes.block)
+            .testTag("planning-drop-outline"),
+    )
 }
 
 /** Snap a raw pixel delta to five-minute steps and apply it to the block's saved times. */
@@ -574,10 +558,6 @@ private fun PlanningDraftCard(
         animationSpec = spring(dampingRatio = 0.86f, stiffness = 520f),
         label = "planning draft height",
     )
-    val sourceAlpha by animateFloatAsState(
-        targetValue = if (dragging) 0.10f else 1f,
-        label = "planning draft source",
-    )
 
     Box(
         modifier = Modifier
@@ -587,14 +567,14 @@ private fun PlanningDraftCard(
             .height(if (resizePreview != null) height else animatedHeight)
             .onGloballyPositioned { cardRoot = it.positionInRoot() }
             .graphicsLayer {
-                alpha = sourceAlpha
+                alpha = if (dragging) 0f else 1f
                 scaleX = if (dragging) 0.98f else 1f
                 scaleY = if (dragging) 0.98f else 1f
             }
             .shadow(if (dragging) 12.dp else 3.dp, TimeboxShapes.block, clip = false)
             .clip(TimeboxShapes.block)
             .background(colors.planned.copy(alpha = if (colors.isDark) 0.30f else 0.13f))
-            .border(1.5.dp, colors.planned, TimeboxShapes.block)
+            .border(1.dp, colors.plannedBorder, TimeboxShapes.block)
             .semantics {
                 contentDescription = "Planning draft ${placement.taskTitle}"
                 customActions = if (gesturesEnabled) listOf(

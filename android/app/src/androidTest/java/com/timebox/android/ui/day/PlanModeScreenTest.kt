@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
@@ -32,6 +33,39 @@ import java.time.Instant
 
 class PlanModeScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun carriedDraftMatchesDestinationSizeAndCancellationClearsBoth() {
+        val date = LocalDate.of(2026, 8, 20)
+        val draftTask = task(42, "Carry this hour")
+        val state = DayUiState(
+            date = date,
+            pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(draftTask),
+                drafts = mapOf(42 to PlanningDraftPlacement(date, draftTask, 540, 600)),
+            ),
+        )
+        var updated = false
+        setPlanningContent(state, RecordingHaptics(), onUpdatePlanningDraft = { _, _, _ -> updated = true })
+        val source = compose.onNodeWithContentDescription("Planning draft Carry this hour").fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performTouchInput {
+            down(source.center)
+            advanceEventTime(1_000)
+            moveTo(source.center + Offset(10f, 20f))
+        }
+        val carried = compose.onNodeWithTag("planning-drag-block").fetchSemanticsNode().boundsInRoot
+        val outline = compose.onNodeWithTag("planning-drop-outline").fetchSemanticsNode()
+        check(kotlin.math.abs(carried.width - outline.boundsInRoot.width) <= 1f)
+        check(kotlin.math.abs(carried.height - source.height) <= 1f)
+        check(kotlin.math.abs(carried.height - outline.boundsInRoot.height) <= 1f)
+        check(outline.children.isEmpty())
+        compose.onRoot().performTouchInput { cancel() }
+        compose.onNodeWithTag("planning-drag-block").assertDoesNotExist()
+        compose.onNodeWithTag("planning-drop-outline").assertDoesNotExist()
+        compose.runOnIdle { check(!updated) }
+    }
 
     @Test
     fun planModeReplacesActualWithReadyTaskRail() {

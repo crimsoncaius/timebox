@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
@@ -121,8 +122,6 @@ internal fun PlanningWorkspace(
     val slotPx = with(density) { TimeboxDimens.slotHeight.toPx() }
     val edgeZonePx = with(density) { 48.dp.toPx() }
     val scrollStepPx = with(density) { 12.dp.toPx() }
-    val ghostHalfWidthPx = with(density) { 54.dp.toPx() }
-    val ghostHalfHeightPx = with(density) { 24.dp.toPx() }
     val timelineScroll = rememberScrollState()
     var rootPosition by remember { mutableStateOf(Offset.Zero) }
     var laneBounds by remember { mutableStateOf(Rect.Zero) }
@@ -292,7 +291,9 @@ internal fun PlanningWorkspace(
                 onBoundsChanged = { railBounds = it },
                 onRetry = onRetryReadyTasks,
                 onArmAccessibleTask = onArmAccessibleTask,
-                onDragStart = { task, pointer -> drag = TaskDragState(task, pointer) },
+                onDragStart = { task, pointer ->
+                    drag = TaskDragState(task, pointer, grabOffsetPx = slotPx * MIN_PLANNED_BLOCK_MINUTES / SLOT_MINUTES / 2f)
+                },
                 onDrag = { pointer -> drag = drag?.copy(pointerRoot = pointer) },
                 onDragEnd = { task, pointer ->
                     val start = planningDropStart(
@@ -303,6 +304,7 @@ internal fun PlanningWorkspace(
                         visibleEnd = day.visibleEnd,
                         slotPx = slotPx,
                         durationMinutes = MIN_PLANNED_BLOCK_MINUTES,
+                        grabOffsetPx = drag?.grabOffsetPx ?: 0f,
                     )
                     val valid = start?.let {
                         isPlanningDropAvailable(
@@ -323,14 +325,18 @@ internal fun PlanningWorkspace(
         }
 
         drag?.let { active ->
+            val blockWidth = with(density) { laneBounds.width.toDp() } - 6.dp
+            val blockHeight = TimeboxDimens.slotHeight * (dragDuration.toFloat() / SLOT_MINUTES)
             DragGhost(
                 task = active.task,
-                draft = active.draft != null,
+                width = blockWidth.coerceAtLeast(1.dp),
+                height = blockHeight,
+                invalid = candidateStart != null && !candidateValid,
                 modifier = Modifier.offset {
                     val local = active.pointerRoot - rootPosition
                     IntOffset(
-                        (local.x - ghostHalfWidthPx).roundToInt(),
-                        (local.y - ghostHalfHeightPx).roundToInt(),
+                        (local.x - with(density) { blockWidth.toPx() } / 2f).roundToInt(),
+                        (local.y - active.grabOffsetPx).roundToInt(),
                     )
                 },
             )
@@ -565,7 +571,7 @@ private fun PlanningTaskCard(
 }
 
 @Composable
-private fun DragGhost(task: BattleTask, draft: Boolean, modifier: Modifier = Modifier) {
+private fun DragGhost(task: BattleTask, width: Dp, height: Dp, invalid: Boolean, modifier: Modifier = Modifier) {
     val colors = TimeboxTheme.colors
     var lifted by remember(task.id) { mutableStateOf(false) }
     val liftProgress by animateFloatAsState(
@@ -577,29 +583,25 @@ private fun DragGhost(task: BattleTask, draft: Boolean, modifier: Modifier = Mod
 
     Box(
         modifier = modifier
-            .width(108.dp)
-            .height(48.dp)
+            .width(width)
+            .height(height)
             .graphicsLayer {
-                alpha = 0.86f + (0.14f * liftProgress)
-                scaleX = 0.96f + (0.04f * liftProgress)
-                scaleY = 0.96f + (0.04f * liftProgress)
                 shadowElevation = 14f * liftProgress
-                shape = TimeboxShapes.card
+                shape = TimeboxShapes.block
             }
-            .clip(TimeboxShapes.card)
-            .background(
-                if (draft) colors.planned.copy(alpha = if (colors.isDark) 0.42f else 0.18f)
-                else colors.paperRaised
-            )
-            .border(1.5.dp, colors.planned, TimeboxShapes.card)
+            .clip(TimeboxShapes.block)
+            .background(colors.paperRaised)
+            .background(colors.planned.copy(alpha = if (colors.isDark) 0.25f else 0.13f))
+            .border(2.dp, if (invalid) colors.error else colors.planned, TimeboxShapes.block)
+            .testTag("planning-drag-block")
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(
             task.title,
-            style = TimeboxTheme.type.label,
+            style = TimeboxTheme.type.blockTitle,
             color = colors.on,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
