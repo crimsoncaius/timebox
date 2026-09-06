@@ -34,3 +34,25 @@ def test_list_days_counts_blocks(client):
     rows = {row["date"]: row for row in client.get("/days?limit=50").json()}
     assert rows["2026-05-02"]["block_count"] == 0
     assert rows["2026-05-03"]["block_count"] == 1
+
+
+def test_list_days_exposes_named_standalone_actual_for_chronicle(client):
+    client.get("/days/2026-05-04")
+    created = client.post(
+        "/actual-blocks",
+        json={
+            "name": "  Evening walk  ",
+            "start_at": "2026-05-04T10:00:00Z",
+            "end_at": "2026-05-04T11:00:00Z",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    row = next(
+        row for row in client.get("/days?limit=50").json()
+        if row["date"] == "2026-05-04"
+    )
+    assert row["block_count"] == 1
+    assert len(row["actual_blocks"]) == 1
+    assert row["actual_blocks"][0]["actual_block"]["name"] == "Evening walk"
+    assert row["actual_blocks"][0]["actual_block"]["task_type"]["name"] == "unspecified"

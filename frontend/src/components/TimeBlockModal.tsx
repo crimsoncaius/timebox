@@ -26,8 +26,8 @@ export function TimeBlockModal({
   day: DayRead
   taskTypes: TaskType[]
   onClose: () => void
-  onSave: (patch: { task_type_id?: number; note?: string | null }) => Promise<void>
-  onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
+  onSave: (patch: { task_type_id?: number; name?: string | null; note?: string | null }) => Promise<void>
+  onCreateFromDraft?: (payload: { task_type_id?: number; name: string | null; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>

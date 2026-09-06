@@ -9,7 +9,7 @@ from app.services.battle_plan._shared import _clean_name, _validate_deadline
 
 
 def list_projects(db: Session) -> list[Project]:
-    return list(db.execute(select(Project).order_by(func.lower(Project.name), Project.id)).scalars())
+    return list(db.execute(select(Project).order_by(Project.position, Project.id)).scalars())
 
 
 def create_project(db: Session, body: ProjectCreate) -> Project:
@@ -20,6 +20,7 @@ def create_project(db: Session, body: ProjectCreate) -> Project:
         raise ValueError("A project with this name already exists")
     row = Project(
         name=name,
+        position=(db.scalar(select(func.max(Project.position))) or 0) + 1,
         description=body.description,
         deadline_date=body.deadline_date,
         deadline_at=body.deadline_at,
@@ -69,3 +70,14 @@ def delete_project(db: Session, project_id: int) -> None:
     recurrence_service.move_project_templates_to_admin(db, project_id)
     db.delete(row)
     db.commit()
+
+
+def reorder_projects(db: Session, project_ids: list[int]) -> list[Project]:
+    rows = list_projects(db)
+    by_id = {row.id: row for row in rows}
+    if len(project_ids) != len(set(project_ids)) or set(project_ids) != set(by_id):
+        raise ValueError("Project list changed. Refresh and try again with every project exactly once.")
+    for position, project_id in enumerate(project_ids):
+        by_id[project_id].position = position
+    db.commit()
+    return list_projects(db)

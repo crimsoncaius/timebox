@@ -56,4 +56,77 @@ describe('HistoryPage', () => {
     await user.click(screen.getByRole('button', { name: 'This month' }))
     expect(screen.getByTestId('chronicle-month-heading')).toHaveTextContent('February 1980')
   })
+
+  it('shows a standalone Actual Block Name in Chronicle without unspecified noise', async () => {
+    days = [{
+      id: 2,
+      date: '1980-02-12',
+      start_hour: 8,
+      end_hour: 18,
+      show_full_day: false,
+      block_count: 1,
+      updated_at: '1980-02-12T10:00:00Z',
+      actual_blocks: [{
+        date: '1980-02-12',
+        start_minute: 600,
+        end_minute: 660,
+        duration_minutes: 60,
+        actual_block: {
+          id: 4,
+          task_type_id: 3,
+          task_type: { id: 3, name: 'unspecified', created_at: '', updated_at: '' },
+          task_id: null,
+          task: null,
+          name: 'Evening walk',
+          note: null,
+          planned_block_id: null,
+          start_at: '1980-02-12T10:00:00Z',
+          end_at: '1980-02-12T11:00:00Z',
+          created_at: '',
+          updated_at: '',
+        },
+      }],
+    }]
+    render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
+
+    expect(await screen.findByText('Evening walk')).toBeInTheDocument()
+    expect(screen.queryByText('unspecified')).not.toBeInTheDocument()
+  })
+
+  it('shows a task-backed Actual Block Name ahead of its linked task in Chronicle', async () => {
+    days = [{
+      id: 3,
+      date: '1980-02-13',
+      start_hour: 8,
+      end_hour: 18,
+      show_full_day: false,
+      block_count: 1,
+      updated_at: '1980-02-13T10:00:00Z',
+      actual_blocks: [{
+        date: '1980-02-13',
+        start_minute: 600,
+        end_minute: 660,
+        duration_minutes: 60,
+        actual_block: {
+          id: 5,
+          task_type_id: 4,
+          task_type: { id: 4, name: 'Deep work', created_at: '', updated_at: '' },
+          task_id: 9,
+          task: { id: 9, title: 'Prepare launch', status: 'in_progress', task_type_id: 4 },
+          name: 'Outline session',
+          note: null,
+          planned_block_id: null,
+          start_at: '1980-02-13T10:00:00Z',
+          end_at: '1980-02-13T11:00:00Z',
+          created_at: '',
+          updated_at: '',
+        },
+      }],
+    }]
+    render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
+
+    expect(await screen.findByText('Outline session')).toBeInTheDocument()
+    expect(screen.queryByText('Prepare launch')).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/1980-02-13, archived day, Outline session/)).toBeInTheDocument()
+  })
 })

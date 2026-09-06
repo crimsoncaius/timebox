@@ -39,6 +39,14 @@ Without uv: `python -m pip install -e ".[dev]"` (from `backend/`).
 
 ## Run locally
 
+On Windows, the review launcher verifies the registered ports, Postgres identity, database URL, Alembic revision, API readiness, Vite proxy, and Android foreground activity before reporting success:
+
+```powershell
+.\scripts\launch-timebox.ps1
+```
+
+It writes logs and machine-readable `status.json` under `%LOCALAPPDATA%\Temp\timebox-launch`. Use `.\scripts\stop-timebox.ps1` to stop only processes and containers whose Timebox identity is verified. Pass `-KeepDatabase` or `-KeepAndroid` when those surfaces should remain running.
+
 **Terminal 1 — API**
 
 ```bash
@@ -54,7 +62,7 @@ Set `DATABASE_URL`, `APP_TIMEZONE`, and `CORS_ORIGINS=http://localhost:5176,http
 ```bash
 cd frontend
 npm install
-npm run dev -- --host 127.0.0.1 --port 5176
+npm run dev:review
 ```
 
 Set `VITE_API_PROXY_TARGET=http://127.0.0.1:8001` in `frontend/.env` or the shell, then open `http://127.0.0.1:5176`.
@@ -69,6 +77,12 @@ cd frontend && npm test
 cd frontend && npm run lint
 cd frontend && npm run build
 cd frontend && npm run e2e
+```
+
+The Windows launcher safety helpers have a focused Pester suite:
+
+```powershell
+Invoke-Pester .\scripts\tests\Timebox.Launch.Tests.ps1
 ```
 
 `npm test` runs Vitest unit/component tests. `npm run e2e` starts isolated API and web servers with a SQLite test database, then runs Playwright across Day, Chronicle, Settings, Battle Plan, recurring work, and responsive layouts. Install its browser once with `npx playwright install chromium`. `npm run screenshots` regenerates the visual screenshot set.
@@ -99,12 +113,12 @@ The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and b
 ## API assumptions
 
 - **Timezone:** The backend owns `APP_TIMEZONE`; the UI uses `meta` from day responses for “today” and server time.
-- **Auth:** The application is single-user. Setting `API_KEY` turns on a shared-secret `X-API-Key` check for every application route, including days, settings, task types, projects, tasks, reminders, and recurring templates. `/health` stays open. The Android client sends the key; the web frontend does not, so leave it unset while relying on the browser UI.
+- **Auth and readiness:** The application is single-user. Setting `API_KEY` turns on a shared-secret `X-API-Key` check for every application route, including days, settings, task types, projects, tasks, reminders, and recurring templates. `/health` and `/ready` stay open. `/ready` returns HTTP 200 only when the database responds and its Alembic revision matches the repository head. The Android client sends the key; the web frontend does not, so leave it unset while relying on the browser UI.
 - **Day summary:** `GET /days/{date}/summary` returns planned/actual totals plus per-task-type minutes without creating the day. The old Android Day Review UI was removed while reporting is reconsidered; this endpoint remains as a possible reporting primitive.
 - **Day preview:** `GET /days/{date}/preview` returns renderable day data without creating a missing day. The Android client uses it for adjacent pages during an interactive swipe.
 - **Day list:** `GET /days` rows carry `block_count`. Simply opening a date creates the day, so the archive is mostly empty rows; the count is how a calendar tells those from days with real entries.
 - **E2E / SQLite:** Setting `AUTO_CREATE_TABLES=1` lets the API create tables on startup (used by Playwright). Do **not** use this for production Postgres; use Alembic instead.
 - **Day window:** Configure the visible hours under **Settings** (`GET`/`PATCH /settings`); changes apply to all days.
-- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Every stored Block references a Task Type. Planned Block creation may omit `task_type_id` when it links a Battle Plan Task: the backend uses the Task's type or atomically materializes `unspecified`. Taskless Planned Blocks still require an explicit Task Type. Blocks may also include an optional `note`. See the [hierarchical task-type design](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md).
+- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Every stored Block references a Task Type. Planned Block creation may omit `task_type_id`: the backend uses a linked Task's type when available or atomically materializes `unspecified`. Planned Blocks may also include an optional 500-character Block Name and a separate optional `note`. See the [hierarchical task-type design](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md).
 - **Battle Plan:** `/projects`, `/tasks`, and `/reminders` provide project organization, nested tasks, lifecycle actions, Ready to Plan state, and reminder delivery.
 - **Recurring work:** `/recurring-templates` supports previews and the complete template lifecycle. Generated tasks retain their recurrence metadata and can enter Ready to Plan like ordinary tasks.

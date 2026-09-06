@@ -123,9 +123,11 @@ webfont; the glyph names map one-to-one.
 
 ## Known behaviours worth knowing
 
-- **Movement is armed by a long press.** Touch and stylus users hold a movable
-  Planned Block, Planning Draft, or Tasks-to-Plan card until the haptic, then drag
-  to move it. Existing Planned and Actual Block resize grooves drag immediately.
+- **Most timeline movement is armed by a long press.** Touch and stylus users hold a
+  movable Planned Block or Planning Draft until the haptic, then drag to move it.
+  Ready to Plan cards drag into the timeline immediately without a haptic; early
+  vertical movement still scrolls the task rail. Existing Planned and Actual Block
+  resize grooves drag immediately.
   Existing Block movement and resizing apply five-minute deltas without normalizing
   saved times. New Block placement uses the nearest five-minute mark, while the
   timeline grid and minimum Planned Block duration remain 30 minutes.

@@ -189,7 +189,7 @@ When a task-backed Planned Block is active, Work Mode exposes:
 - Its Subtasks
 - Controls to check and uncheck Subtasks
 
-A taskless Planned Block participates normally and shows its Task Type as the primary label with its optional note as detail. **Up next** uses a compact title, time, and countdown presentation.
+A Planned Block may have its own optional Block Name. Work Mode identifies a Block by its Block Name when present, otherwise by its linked Battle Plan Task title, otherwise by a meaningful Task Type, and finally as **Untitled**. A Note remains supporting detail. **Up next** uses the same identity precedence in a compact title, time, and countdown presentation.
 
 Work Mode assumes the active Planned Block is being performed. It does not provide **Skip this block**. If that assumption is wrong, the user can explicitly exit Work Mode. Work Mode also does not provide a combined Task Completion action in the current scope.
 
@@ -771,6 +771,9 @@ These can still have:
 
 - Planned start/end
 - Actual start/end
+- An optional Block Name
+- A required Task Type, using `unspecified` when the user does not care to classify the Block
+- An optional Note
 
 But they do **not** have a task completion state.
 
@@ -792,16 +795,35 @@ There is no separate "task completed" concept.
 
 For a task-backed Planned Block, Work Mode can surface:
 
-- The Battle Plan Task title and notes
+- Its Block Name when present, otherwise the Battle Plan Task title
+- The linked Battle Plan Task as secondary context when the Block Name is primary
+- The Battle Plan Task notes
 - Its Subtasks
 - Its Task Type
 
 For a taskless Planned Block, Work Mode can surface:
 
-- Its Task Type
-- Its note
+- Its Block Name when present, otherwise a meaningful Task Type, otherwise **Untitled**
+- Its meaningful Task Type as secondary context where space permits
+- Its Note
 
 Both use the same **Exit Work Mode** action. Taskless work has no Task Completion state.
+
+## Block Name
+
+A Block Name identifies one specific Planned Block or Actual Block. It is independent text rather than a reusable label, tag, or reporting category, and duplicate names have no relationship to one another.
+
+- Every Planned Block and Actual Block may store an optional Block Name, whether task-backed or taskless.
+- The Name remains editable and preserved when a Battle Plan Task is linked or unlinked.
+- Linking does not replace the Block Name, and unlinking does not copy the former Battle Plan Task title into it.
+- A Note remains a separate supporting-detail field. Existing Notes are not promoted into Names.
+- Empty or whitespace-only input is stored as no Name. Non-empty input is trimmed at its outer edges and may contain up to 500 characters.
+- Existing Blocks receive no derived or backfilled Name.
+- The creation experience presents Name before Task Type. A taskless Block defaults to `unspecified`, so classification requires no interaction unless the user wants it.
+- Wherever a Block needs a visible identity, the precedence is Block Name, linked Battle Plan Task title, meaningful Task Type, then **Untitled**. The neutral `unspecified` Task Type is not shown as secondary context.
+- Task Type remains the sole source of category reporting. Block Names are not grouped, managed, suggested, or interpreted as reusable values.
+
+When an Actual Block is derived from a Planned Block, it copies the Planned Block Name once. Later Name edits are independent, preserving the distinction between intended and recorded time.
 
 ---
 
@@ -1538,10 +1560,11 @@ Given a schedule gap:
 - Work Mode records no Actual time during the gap.
 - Work Mode remains open and shows today's next Planned Block or the no-work state.
 
-Given a taskless Planned Block with a Task Type and optional note:
+Given a taskless Planned Block with an optional Block Name, required Task Type, and optional Note:
 
-- Work Mode presents that Task Type and note.
+- Work Mode applies the standard Block identity precedence and presents the Note as supporting detail.
 - It derives Actual time using the same confirmation and boundary rules.
+- The derived Actual Block snapshots the Planned Block Name once; later Name edits do not synchronize.
 
 ---
 

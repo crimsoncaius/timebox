@@ -12,6 +12,7 @@ from app.schemas.battle_plan import (
     ProjectCreate,
     ProjectPatch,
     ProjectRead,
+    ProjectReorder,
     ReminderRead,
     TaskCreate,
     TaskCompletionRead,
@@ -50,6 +51,14 @@ def list_projects(db: Session = Depends(get_db)):
 def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
     try:
         return service.create_project(db, body)
+    except ValueError as exc:
+        raise _not_found_or_unprocessable(exc) from exc
+
+
+@router.post("/projects/reorder", response_model=list[ProjectRead])
+def reorder_projects(body: ProjectReorder, db: Session = Depends(get_db)):
+    try:
+        return service.reorder_projects(db, body.project_ids)
     except ValueError as exc:
         raise _not_found_or_unprocessable(exc) from exc
 

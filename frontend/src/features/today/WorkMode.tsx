@@ -1,4 +1,5 @@
 import type { BattleTask, TimeBlock } from '../../lib/api'
+import { blockPrimaryIdentity, blockSecondaryIdentity } from '../../lib/blockIdentity'
 
 function formatMinute(minute: number) {
   const hours = Math.floor(minute / 60)
@@ -8,10 +9,10 @@ function formatMinute(minute: number) {
 }
 
 function blockTitle(block: TimeBlock) {
-  return block.task?.title ?? block.note?.trim() ?? block.task_type.name
+  return blockPrimaryIdentity(block)
 }
 
-export function WorkMode({ current, next, task, nowMinute, confirming, recording, busy, error, onSetSubtask, onLeave, onExit }: {
+export function WorkMode({ current, next, task, nowMinute, confirming, recording, busy, error, onSetSubtask, onExit }: {
   current: TimeBlock | null
   next: TimeBlock | null
   task: BattleTask | null
@@ -21,7 +22,6 @@ export function WorkMode({ current, next, task, nowMinute, confirming, recording
   busy: boolean
   error: string | null
   onSetSubtask: (id: number, checked: boolean) => Promise<void>
-  onLeave: () => void
   onExit: () => Promise<void>
 }) {
   const countdown = next ? Math.max(0, next.start_minute - nowMinute) : null
@@ -35,10 +35,7 @@ export function WorkMode({ current, next, task, nowMinute, confirming, recording
               {recording ? 'Actual recording live' : confirming ? 'Confirming current work…' : 'Following today’s plan'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onLeave} disabled={busy} className="rounded-full border border-outline-variant/30 px-4 py-2.5 text-sm disabled:opacity-40">Back to app</button>
-            <button type="button" onClick={() => void onExit()} disabled={busy} className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-on-primary disabled:opacity-40">Exit Work Mode</button>
-          </div>
+          <button type="button" onClick={() => void onExit()} disabled={busy} className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-on-primary disabled:opacity-40">Exit Work Mode</button>
         </header>
 
         <div className="flex flex-1 items-center py-10">
@@ -46,7 +43,7 @@ export function WorkMode({ current, next, task, nowMinute, confirming, recording
             <div className="w-full max-w-3xl">
               <p className="font-label text-xs font-semibold uppercase tracking-[0.16em] text-actual">Current · {formatMinute(current.start_minute)}–{formatMinute(current.end_minute)}</p>
               <h1 className="mt-3 font-headline text-5xl font-extralight leading-tight tracking-tight">{blockTitle(current)}</h1>
-              <p className="mt-3 text-sm font-medium text-on-surface-variant">{current.task_type.name}</p>
+              {blockSecondaryIdentity(current) ? <p className="mt-3 text-sm font-medium text-on-surface-variant">{blockSecondaryIdentity(current)}</p> : null}
               {task?.description?.trim() ? <p className="mt-5 max-w-2xl text-lg leading-relaxed text-on-surface-variant">{task.description}</p> : null}
               {!task && current.note?.trim() ? <p className="mt-5 max-w-2xl text-lg leading-relaxed text-on-surface-variant">{current.note}</p> : null}
               {task ? (
@@ -64,6 +61,7 @@ export function WorkMode({ current, next, task, nowMinute, confirming, recording
             <section aria-label="Up next" className="w-full rounded-3xl bg-surface-container-low p-8 dark:bg-dark-surface-container-low">
               <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-primary">Up next</p>
               <h1 className="mt-3 font-headline text-4xl font-extralight">{blockTitle(next)}</h1>
+              {blockSecondaryIdentity(next) ? <p className="mt-2 text-sm font-medium text-on-surface-variant">{blockSecondaryIdentity(next)}</p> : null}
               <p className="mt-3 text-on-surface-variant">{formatMinute(next.start_minute)} · {countdown === 0 ? 'starting now' : `in ${countdown} ${countdown === 1 ? 'minute' : 'minutes'}`}</p>
             </section>
           ) : (

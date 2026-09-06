@@ -23,7 +23,6 @@ const task: BattleTask = {
 const baseProps = {
   next: null, nowMinute: 620, confirming: false, recording: true, busy: false, error: null,
   onSetSubtask: vi.fn().mockResolvedValue(undefined), onExit: vi.fn().mockResolvedValue(undefined),
-  onLeave: vi.fn(),
 }
 
 describe('WorkMode', () => {
@@ -40,12 +39,45 @@ describe('WorkMode', () => {
     expect(onSetSubtask).toHaveBeenCalledWith(8, true)
     await user.click(screen.getByRole('button', { name: 'Exit Work Mode' }))
     expect(onExit).toHaveBeenCalled()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Back to app' })).not.toBeInTheDocument()
     expect(screen.queryByText(/complete Task|skip this block|save actual/i)).not.toBeInTheDocument()
   })
 
-  it('presents a taskless current block through Task Type and note', () => {
+  it('presents a taskless current block through Task Type and keeps Note as detail', () => {
     render(<WorkMode {...baseProps} current={{ ...block, task_id: null, task: null, note: 'Read in the garden' }} task={null} />)
-    expect(screen.getByRole('heading', { name: 'Read in the garden' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Deep work' })).toBeVisible()
+    expect(screen.getByText('Read in the garden')).toBeVisible()
+  })
+
+  it('uses taskless Block Name first and suppresses unspecified', () => {
+    const { rerender } = render(
+      <WorkMode {...baseProps} current={{ ...block, task_id: null, task: null, name: 'Garden reading' }} task={null} />,
+    )
+    expect(screen.getByRole('heading', { name: 'Garden reading' })).toBeVisible()
+    expect(screen.getByText('Deep work')).toBeVisible()
+
+    rerender(
+      <WorkMode
+        {...baseProps}
+        current={{ ...block, task_id: null, task: null, name: null, task_type: { ...block.task_type, name: 'unspecified' } }}
+        task={null}
+      />,
+    )
+    expect(screen.getByRole('heading', { name: 'Untitled' })).toBeVisible()
+    expect(screen.queryByText('unspecified')).not.toBeInTheDocument()
+  })
+
+  it('uses a task-backed Block Name first and keeps the linked task as context', () => {
+    const { rerender } = render(
+      <WorkMode {...baseProps} current={{ ...block, name: 'Outline session' }} task={task} />,
+    )
+    expect(screen.getByRole('heading', { name: 'Outline session' })).toBeVisible()
+    expect(screen.getByText('Prepare launch')).toBeVisible()
+    expect(screen.queryByText('Deep work')).not.toBeInTheDocument()
+
+    rerender(<WorkMode {...baseProps} current={{ ...block, name: null }} task={task} />)
+    expect(screen.getByRole('heading', { name: 'Prepare launch' })).toBeVisible()
     expect(screen.getByText('Deep work')).toBeVisible()
   })
 

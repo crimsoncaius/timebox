@@ -90,3 +90,4 @@ class DayListItem(BaseModel):
     updated_at: datetime
     #: How many blocks the day holds — lets a client tell an opened-but-empty day apart.
     block_count: int
+    actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)

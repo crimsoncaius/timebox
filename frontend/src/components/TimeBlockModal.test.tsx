@@ -207,9 +207,143 @@ describe('TimeBlockModal', () => {
     await user.click(screen.getByLabelText('Task type'))
     await user.click(screen.getByRole('option', { name: /^break$/i }))
     await waitFor(() => {
-      expect(onCreateFromDraft).toHaveBeenCalledWith({ task_type_id: 2, note: null })
+      expect(onCreateFromDraft).toHaveBeenCalledWith({ task_type_id: 2, name: null, note: null })
     })
   })
+
+  it('creates a named taskless Planned Block without choosing a Task Type', async () => {
+    const user = userEvent.setup()
+    const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
+    render(
+      <TimeBlockModal
+        open
+        block={null}
+        draft={{ lane: 'planned', start_minute: 480, end_minute: 510 }}
+        day={emptyDay}
+        taskTypes={taskTypes}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onCreateFromDraft={onCreateFromDraft}
+        onDelete={vi.fn()}
+        onCreateTaskTypePath={noopCreate}
+      />,
+    )
+
+    const name = screen.getByLabelText('Name')
+    const taskType = screen.getByLabelText('Task type')
+    expect(name.compareDocumentPosition(taskType) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await user.type(name, '  Dinner with Alex  ')
+    await user.type(screen.getByLabelText('Note'), 'Bring invitation')
+    await user.click(screen.getByRole('button', { name: 'Create block' }))
+
+    expect(onCreateFromDraft).toHaveBeenCalledWith({
+      name: 'Dinner with Alex',
+      note: 'Bring invitation',
+    })
+  })
+
+  it('creates a named standalone Actual Block without choosing a Task Type', async () => {
+    const user = userEvent.setup()
+    const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
+    render(
+      <TimeBlockModal
+        open
+        block={null}
+        draft={{ lane: 'actual', start_minute: 480, end_minute: 510 }}
+        day={emptyDay}
+        taskTypes={taskTypes}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onCreateFromDraft={onCreateFromDraft}
+        onDelete={vi.fn()}
+        onCreateTaskTypePath={noopCreate}
+      />,
+    )
+
+    const name = screen.getByLabelText('Name')
+    expect(name.compareDocumentPosition(screen.getByLabelText('Task type')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await user.type(name, '  Walk   home  ')
+    await user.type(screen.getByLabelText('Note'), 'Took the river path')
+    await user.click(screen.getByRole('button', { name: 'Create block' }))
+
+    expect(onCreateFromDraft).toHaveBeenCalledWith({
+      name: 'Walk   home',
+      note: 'Took the river path',
+    })
+  })
+
+  it('adds, reloads, and clears a standalone Actual Block Name separately from Note', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const actual = makeBlock({ lane: 'actual', task_id: null, name: null, note: 'Keep me' })
+    const props = {
+      open: true,
+      draft: null,
+      day: emptyDay,
+      taskTypes,
+      onClose: vi.fn(),
+      onSave,
+      onDelete: vi.fn(),
+      onCreateTaskTypePath: noopCreate,
+    }
+    const view = render(<TimeBlockModal block={actual} {...props} />)
+
+    await user.type(screen.getByLabelText('Name'), '  Evening walk  ')
+    await user.tab()
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: 'Evening walk' }))
+    expect(onSave).not.toHaveBeenCalledWith(expect.objectContaining({ note: expect.anything() }))
+
+    view.rerender(<TimeBlockModal block={{ ...actual, name: 'Evening walk' }} {...props} />)
+    expect(screen.getByLabelText('Name')).toHaveValue('Evening walk')
+    expect(screen.getByLabelText('Note')).toHaveValue('Keep me')
+    onSave.mockClear()
+    await user.clear(screen.getByLabelText('Name'))
+    await user.tab()
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: null }))
+  })
+
+  it.each(['planned', 'actual'] as const)(
+    'edits and reloads a task-backed %s Block Name without changing its linked context',
+    async (lane) => {
+      const user = userEvent.setup()
+      const onSave = vi.fn().mockResolvedValue(undefined)
+      const linked = makeBlock({
+        lane,
+        task_id: 42,
+        task: { id: 42, title: 'Prepare launch', status: 'in_progress', task_type_id: 1 },
+        name: 'Outline session',
+        note: 'Keep me',
+        planned_block_id: lane === 'actual' ? 8 : null,
+      })
+      const props = {
+        open: true,
+        draft: null,
+        day: emptyDay,
+        taskTypes,
+        onClose: vi.fn(),
+        onSave,
+        onDelete: vi.fn(),
+        onCreateTaskTypePath: noopCreate,
+      }
+      const view = render(
+        <MemoryRouter><TimeBlockModal block={linked} {...props} /></MemoryRouter>,
+      )
+
+      expect(screen.getByText('Prepare launch')).toBeVisible()
+      await user.clear(screen.getByLabelText('Name'))
+      await user.type(screen.getByLabelText('Name'), '  Review session  ')
+      await user.tab()
+      await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: 'Review session' }))
+      expect(onSave).not.toHaveBeenCalledWith(expect.objectContaining({ task_type_id: expect.anything() }))
+
+      view.rerender(
+        <MemoryRouter><TimeBlockModal block={{ ...linked, name: 'Review session' }} {...props} /></MemoryRouter>,
+      )
+      expect(screen.getByLabelText('Name')).toHaveValue('Review session')
+      expect(screen.getByLabelText('Note')).toHaveValue('Keep me')
+      expect(screen.getByText('Prepare launch')).toBeVisible()
+    },
+  )
 
   it('draft mode hides Delete and Complete', () => {
     render(

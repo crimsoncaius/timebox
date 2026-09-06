@@ -48,6 +48,7 @@ def _prepare_database(tmp_path: Path, monkeypatch) -> tuple[sa.Engine, Config]:
     )
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
+        connection.execute(sa.text("ALTER TABLE projects DROP COLUMN position"))
         connection.execute(sa.text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
         connection.execute(
             sa.text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),

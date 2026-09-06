@@ -151,7 +151,7 @@ class PlanModeScreenTest {
     }
 
     @Test
-    fun draggingTaskCardOntoOpenPlannedTimeRequestsPlacement() {
+    fun taskCardDragStartsImmediatelyWithoutHapticAndRequestsPlacement() {
         val date = LocalDate.of(2026, 8, 20)
         var placement: Pair<Int, Int>? = null
         val haptics = RecordingHaptics()
@@ -199,20 +199,9 @@ class PlanModeScreenTest {
             swipe(center, center + Offset(-500f, 0f), durationMillis = 200)
         }
         compose.runOnIdle {
-            check(placement == null)
-            check(haptics.events.isEmpty())
-        }
-
-        compose.onNodeWithText("Write brief").performTouchInput {
-            down(center)
-            advanceEventTime(1_000)
-            moveTo(center + Offset(-500f, 0f))
-            up()
-        }
-        compose.runOnIdle {
             check(placement?.first == 42)
             check(placement?.second != null)
-            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+            check(haptics.events.isEmpty())
         }
         compose.onNodeWithContentDescription("Planning draft Write brief").fetchSemanticsNode()
     }
@@ -264,10 +253,7 @@ class PlanModeScreenTest {
         }
 
         compose.onNodeWithText("Write brief").performTouchInput {
-            down(center)
-            advanceEventTime(1_000)
-            moveTo(center + Offset(-500f, 0f))
-            up()
+            swipe(center, center + Offset(-500f, 0f), durationMillis = 200)
         }
         compose.runOnIdle { check(placement == null) }
     }

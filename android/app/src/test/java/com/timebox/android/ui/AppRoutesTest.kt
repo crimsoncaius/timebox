@@ -1,11 +1,24 @@
 package com.timebox.android.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
 class AppRoutesTest {
+    @Test
+    fun `task composer owns the bottom chrome while it is visible`() {
+        assertFalse(shouldShowBottomNavigation(taskComposerVisible = true, isImeVisible = false))
+        assertTrue(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = false))
+    }
+
+    @Test
+    fun `on-screen keyboard hides bottom navigation`() {
+        assertFalse(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = true))
+        assertFalse(shouldShowBottomNavigation(taskComposerVisible = true, isImeVisible = true))
+    }
+
     @Test
     fun `existing destinations retain stable route builders`() {
         assertEquals("day/2026-08-17", AppRoutes.day(LocalDate.parse("2026-08-17")))

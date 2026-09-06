@@ -92,7 +92,7 @@ fun TimeboxSwitch(
     ) {
         Box(
             modifier = Modifier
-                .offset(x = offset, y = 2.dp)
+                .offset(x = offset, y = 3.dp)
                 .size(22.dp)
                 .clip(CircleShape)
                 .background(if (checked) Color.White else colors.lowest),
@@ -107,6 +107,7 @@ fun TimeboxChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = TimeboxShapes.chip,
     height: Dp? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
@@ -114,17 +115,25 @@ fun TimeboxChip(
 ) {
     val colors = TimeboxTheme.colors
     val fill by animateColorAsState(
-        targetValue = if (selected) colors.selected else Color.Transparent,
+        targetValue = when {
+            !enabled -> colors.disabledContainer
+            selected -> colors.selected
+            else -> Color.Transparent
+        },
         animationSpec = tween(durationMillis = 150),
         label = "chipFill",
     )
     val outline by animateColorAsState(
-        targetValue = if (selected) colors.outlineVariant else colors.hairline,
+        targetValue = if (enabled && selected) colors.outlineVariant else colors.hairline,
         animationSpec = tween(durationMillis = 150),
         label = "chipOutline",
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) colors.onSelected else colors.on,
+        targetValue = when {
+            !enabled -> colors.disabledContent
+            selected -> colors.onSelected
+            else -> colors.on
+        },
         animationSpec = tween(durationMillis = 150),
         label = "chipContent",
     )
@@ -134,7 +143,7 @@ fun TimeboxChip(
             .clip(shape)
             .background(fill)
             .border(1.dp, outline, shape)
-            .selectable(selected = selected, role = Role.Button, onClick = onClick)
+            .selectable(selected = selected, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(contentPadding),
         contentAlignment = Alignment.Center,
     ) {

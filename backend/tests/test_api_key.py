@@ -48,8 +48,9 @@ def test_correct_key_is_accepted(client):
 
 
 @pytest.mark.usefixtures("with_api_key")
-def test_health_stays_open(client):
+def test_health_and_readiness_stay_open(client):
     assert client.get("/health").status_code == 200
+    assert client.get("/ready").status_code == 503
 
 
 @pytest.mark.usefixtures("with_api_key")

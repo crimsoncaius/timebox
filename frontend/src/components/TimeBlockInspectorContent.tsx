@@ -7,11 +7,12 @@ import { Link } from 'react-router-dom'
 export type TimeBlockInspectorVariant = 'rail' | 'sheet'
 
 const NOTE_DEBOUNCE_MS = 450
+const NAME_DEBOUNCE_MS = 450
 
 /**
  * Shared form for editing a time block in the desktop inspector rail or mobile sheet.
  * Start/end times are display-only; adjust duration on the timeline.
- * Task type and note persist automatically (debounced note, immediate task type).
+ * Task type, Block Name, and Note persist automatically.
  */
 export function TimeBlockInspectorContent({
   block,
@@ -32,19 +33,23 @@ export function TimeBlockInspectorContent({
   taskTypes: TaskType[]
   variant: TimeBlockInspectorVariant
   onClose: () => void
-  onSave: (patch: { task_type_id?: number; note?: string | null }) => Promise<void>
-  onCreateFromDraft?: (payload: { task_type_id: number; note: string | null }) => Promise<void>
+  onSave: (patch: { task_type_id?: number; name?: string | null; note?: string | null }) => Promise<void>
+  onCreateFromDraft?: (payload: { task_type_id?: number; name: string | null; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const [taskTypeId, setTaskTypeId] = useState(() => block?.task_type_id ?? draft?.task_type_id ?? 0)
+  const [name, setName] = useState(() => block?.name ?? '')
   const [note, setNote] = useState(() => block?.note ?? '')
   const [saving, setSaving] = useState(false)
 
   const isCreateMode = draft != null && block == null
+  const lane = block?.lane ?? draft?.lane
+  const isNameEditable = lane === 'planned' || lane === 'actual'
   const noteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftCreateAttemptedRef = useRef(false)
 
   const clearNoteDebounce = useCallback(() => {
@@ -54,32 +59,43 @@ export function TimeBlockInspectorContent({
     }
   }, [])
 
+  const clearNameDebounce = useCallback(() => {
+    if (nameDebounceRef.current) {
+      clearTimeout(nameDebounceRef.current)
+      nameDebounceRef.current = null
+    }
+  }, [])
+
   /** Keep both responsive inspector instances aligned with the authoritative block. */
   useLayoutEffect(() => {
     if (block) {
       setTaskTypeId(block.task_type_id)
+      setName(block.name ?? '')
       setNote(block.note ?? '')
       return
     }
     if (draft) {
       setTaskTypeId(draft.task_type_id ?? 0)
+      setName('')
       setNote('')
     }
-    // Note remains locally editable; only an authoritative task-type change for the same block is synchronized.
+    // Note remains locally editable; synchronize the authoritative Name after its save response.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid wiping a pending note on unrelated block refreshes.
-  }, [block?.id, block?.task_type_id, draft])
+  }, [block?.id, block?.task_type_id, block?.name, draft])
 
   const dirty = useMemo(() => {
     if (isCreateMode) {
-      return taskTypeId !== 0 || note.trim() !== ''
+      return taskTypeId !== 0 || name.trim() !== '' || note.trim() !== ''
     }
     if (block) {
       const newNote = note.trim() || null
       const oldNote = (block.note ?? '').trim() || null
-      return taskTypeId !== block.task_type_id || newNote !== oldNote
+      const newName = name.trim() || null
+      const oldName = (block.name ?? '').trim() || null
+      return taskTypeId !== block.task_type_id || newName !== oldName || newNote !== oldNote
     }
     return false
-  }, [block, isCreateMode, note, taskTypeId])
+  }, [block, isCreateMode, name, note, taskTypeId])
 
   useEffect(() => {
     onDirtyChange?.(dirty)
@@ -87,9 +103,23 @@ export function TimeBlockInspectorContent({
 
   const canSaveCreate =
     isCreateMode &&
-    taskTypeId > 0 &&
-    taskTypes.some((t) => t.id === taskTypeId) &&
+    (isNameEditable || (taskTypeId > 0 && taskTypes.some((t) => t.id === taskTypeId))) &&
     !!onCreateFromDraft
+
+  const saveNamePatchIfNeeded = useCallback(async () => {
+    if (!block || isCreateMode || !isNameEditable) return
+    const newName = name.trim() || null
+    const oldName = (block.name ?? '').trim() || null
+    if (newName === oldName) return
+    setSaving(true)
+    try {
+      await onSave({ name: newName })
+    } catch {
+      /* parent shows error */
+    } finally {
+      setSaving(false)
+    }
+  }, [block, isCreateMode, isNameEditable, name, onSave])
 
   const saveNotePatchIfNeeded = useCallback(async () => {
     if (!block || isCreateMode) return
@@ -138,17 +168,31 @@ export function TimeBlockInspectorContent({
   }, [note, block, isCreateMode, saveNotePatchIfNeeded, clearNoteDebounce])
 
   useEffect(() => {
+    if (!block || isCreateMode || !isNameEditable) return
+    const newName = name.trim() || null
+    const oldName = (block.name ?? '').trim() || null
+    if (newName === oldName) return
+    clearNameDebounce()
+    nameDebounceRef.current = setTimeout(() => {
+      nameDebounceRef.current = null
+      void saveNamePatchIfNeeded()
+    }, NAME_DEBOUNCE_MS)
+    return () => clearNameDebounce()
+  }, [name, block, isCreateMode, isNameEditable, saveNamePatchIfNeeded, clearNameDebounce])
+
+  useEffect(() => {
     if (!isCreateMode) {
       draftCreateAttemptedRef.current = false
       return
     }
-    if (!canSaveCreate || !onCreateFromDraft) {
+    const selectedValidType = taskTypeId > 0 && taskTypes.some((type) => type.id === taskTypeId)
+    if (!canSaveCreate || !onCreateFromDraft || !selectedValidType) {
       draftCreateAttemptedRef.current = false
       return
     }
     if (draftCreateAttemptedRef.current) return
     draftCreateAttemptedRef.current = true
-    const payload = { task_type_id: taskTypeId, note: note.trim() || null }
+    const payload = { task_type_id: taskTypeId, name: name.trim() || null, note: note.trim() || null }
     setSaving(true)
     void (async () => {
       try {
@@ -159,15 +203,24 @@ export function TimeBlockInspectorContent({
         setSaving(false)
       }
     })()
-  }, [isCreateMode, canSaveCreate, onCreateFromDraft, taskTypeId, note])
+  }, [isCreateMode, canSaveCreate, onCreateFromDraft, taskTypeId, taskTypes, name, note])
 
   const flushNoteNow = useCallback(async () => {
     clearNoteDebounce()
     await saveNotePatchIfNeeded()
   }, [clearNoteDebounce, saveNotePatchIfNeeded])
 
+  const flushNameNow = useCallback(async () => {
+    clearNameDebounce()
+    await saveNamePatchIfNeeded()
+  }, [clearNameDebounce, saveNamePatchIfNeeded])
+
+  const flushTextNow = useCallback(async () => {
+    await Promise.all([flushNameNow(), flushNoteNow()])
+  }, [flushNameNow, flushNoteNow])
+
   const handleActualAction = useCallback(async (action: () => Promise<void>) => {
-    await flushNoteNow()
+    await flushTextNow()
     setSaving(true)
     try {
       await action()
@@ -176,11 +229,11 @@ export function TimeBlockInspectorContent({
     } finally {
       setSaving(false)
     }
-  }, [flushNoteNow])
+  }, [flushTextNow])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Permanently delete this time block? This cannot be undone.')) return
-    await flushNoteNow()
+    await flushTextNow()
     setSaving(true)
     try {
       await onDelete()
@@ -190,11 +243,10 @@ export function TimeBlockInspectorContent({
     } finally {
       setSaving(false)
     }
-  }, [flushNoteNow, onDelete, onClose])
+  }, [flushTextNow, onDelete, onClose])
 
   if (!block && !draft) return null
 
-  const lane = block?.lane ?? draft!.lane
   const startMinute = block?.start_minute ?? draft!.start_minute
   const endMinute = block?.end_minute ?? draft!.end_minute
 
@@ -256,7 +308,9 @@ export function TimeBlockInspectorContent({
       {/* Helper text */}
       <p className="max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">
         {isCreateMode
-          ? 'Pick a task type to create this block. Edits save as you make them.'
+          ? isNameEditable
+            ? 'Add a Name, choose a Task Type if useful, then create the block.'
+            : 'Pick a Task Type to create this block. Edits save as you make them.'
           : 'Drag the block edges on the timeline to adjust. Edits save as you make them.'}
       </p>
 
@@ -271,6 +325,24 @@ export function TimeBlockInspectorContent({
           ) : (
             <p className="mt-1 text-sm text-on-surface">Selected from Ready to Plan</p>
           )}
+        </div>
+      ) : null}
+
+      {isNameEditable ? (
+        <div>
+          <label htmlFor="block-name" className="mb-1.5 block text-[11px] font-medium text-on-surface-variant">
+            Name
+          </label>
+          <input
+            id="block-name"
+            type="text"
+            maxLength={500}
+            className="w-full rounded-xl border border-outline-variant/35 bg-surface px-3 py-2.5 font-body text-[13.5px] text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
+            placeholder="Optional"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={() => void flushNameNow()}
+          />
         </div>
       ) : null}
 
@@ -321,6 +393,23 @@ export function TimeBlockInspectorContent({
           </button>
         )}
         <div className="flex-1" />
+        {isCreateMode && isNameEditable && taskTypeId === 0 ? (
+          <button
+            type="button"
+            disabled={!canSaveCreate || saving}
+            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-on-primary disabled:opacity-40"
+            onClick={() => {
+              if (!onCreateFromDraft) return
+              draftCreateAttemptedRef.current = true
+              setSaving(true)
+              void onCreateFromDraft({ name: name.trim() || null, note: note.trim() || null })
+                .catch(() => { draftCreateAttemptedRef.current = false })
+                .finally(() => setSaving(false))
+            }}
+          >
+            Create block
+          </button>
+        ) : null}
       </div>
     </div>
   )

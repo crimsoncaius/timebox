@@ -92,6 +92,9 @@ interface TimeboxApi {
     @GET("projects")
     suspend fun listProjects(): List<ProjectDto>
 
+    @POST("projects/reorder")
+    suspend fun reorderProjects(@Body body: JsonObject): List<ProjectDto>
+
     @POST("projects")
     suspend fun createProject(@Body body: ProjectCreateDto): ProjectDto
 

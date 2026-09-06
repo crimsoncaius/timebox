@@ -17,8 +17,12 @@ A non-exhaustive, first-level execution checkpoint within a Parent Task. It is n
 _Avoid_: Child task, nested task
 
 **Task Type**:
-The category of work represented by a Planned Block or Actual Block. It remains required when no Battle Plan Task is linked and serves as the primary label for that taskless Block.
-_Avoid_: Task, tag
+The reusable category of work represented by a Planned Block or Actual Block. Every Block has one; `unspecified` is the neutral category when the user does not care to classify it.
+_Avoid_: Task, tag, Block Name
+
+**Block Name**:
+An optional user-defined identity for one Planned Block or Actual Block, distinct from its reusable Task Type and supporting Note. It remains the Block's own identity regardless of Battle Plan Task linkage.
+_Avoid_: Label, title, tag, Task Type
 
 **Work Mode**:
 A present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
@@ -49,7 +53,7 @@ A condition indicating that an incomplete Battle Plan Task cannot currently prog
 _Avoid_: Blocked status
 
 **Ready to Plan**:
-A queue condition indicating that an incomplete Battle Plan Task is available to receive a Planned Block. Completed tasks are never Ready to Plan.
+A queue condition indicating that an incomplete Battle Plan Task is available to receive a Planned Block. It is explicitly chosen for every Battle Plan Task, including a Task Occurrence; recurrence generation alone never adds it, and completed Tasks are never Ready to Plan.
 _Avoid_: Open status, unscheduled task
 
 **Planned Block**:

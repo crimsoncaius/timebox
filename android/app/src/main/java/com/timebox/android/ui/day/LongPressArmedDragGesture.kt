@@ -11,6 +11,7 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 
 private enum class PreArmResult { Released, Canceled }
 
@@ -91,6 +92,70 @@ internal suspend fun PointerInputScope.detectLongPressArmedDragGestures(
             }
             change.consume()
             onDrag(change, amount)
+        }
+    }
+}
+
+/**
+ * Starts a horizontal drag as soon as touch slop is crossed while leaving an early
+ * vertical gesture available to a scrolling parent.
+ */
+internal suspend fun PointerInputScope.detectImmediateHorizontalDragGestures(
+    onDragStart: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {},
+    onDragCancel: () -> Unit = {},
+    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        var cumulativeMovement = Offset.Zero
+        var dragging = false
+
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Main)
+            if (event.changes.count { it.pressed } > 1) {
+                if (dragging) onDragCancel()
+                return@awaitEachGesture
+            }
+            val change = event.changes.firstOrNull { it.id == down.id }
+            if (change == null) {
+                if (dragging) onDragCancel()
+                return@awaitEachGesture
+            }
+            if (!change.pressed) {
+                when {
+                    dragging && event.type == PointerEventType.Release && !change.isConsumed -> onDragEnd()
+                    dragging -> onDragCancel()
+                }
+                return@awaitEachGesture
+            }
+            if (change.isConsumed) {
+                if (dragging) onDragCancel()
+                return@awaitEachGesture
+            }
+
+            val amount = change.positionChangeIgnoreConsumed()
+            if (amount == Offset.Zero) continue
+
+            if (!dragging) {
+                cumulativeMovement += amount
+                val horizontalDistance = abs(cumulativeMovement.x)
+                val verticalDistance = abs(cumulativeMovement.y)
+                if (verticalDistance > viewConfiguration.touchSlop && verticalDistance > horizontalDistance) {
+                    return@awaitEachGesture
+                }
+                if (horizontalDistance <= viewConfiguration.touchSlop || horizontalDistance <= verticalDistance) {
+                    continue
+                }
+
+                dragging = true
+                onDragStart(down.position)
+                change.consume()
+                onDrag(change, cumulativeMovement)
+            } else {
+                change.consume()
+                onDrag(change, amount)
+            }
         }
     }
 }

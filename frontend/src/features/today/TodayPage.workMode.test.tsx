@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -76,9 +76,10 @@ describe('TodayPage present-tense Work Mode', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderStart()
 
-    expect(await screen.findByRole('dialog', { name: 'Work Mode' })).toBeVisible()
+    const workMode = await screen.findByRole('dialog', { name: 'Work Mode' })
+    expect(workMode).toBeVisible()
     expect(screen.getByRole('heading', { name: task.title })).toBeVisible()
-    expect(screen.getByText('Deep work')).toBeVisible()
+    expect(within(workMode).getByText('Deep work')).toBeVisible()
     expect(screen.getByText(task.description)).toBeVisible()
     expect(screen.queryByText(/complete Task/i)).not.toBeInTheDocument()
     expect(vi.mocked(globalThis.fetch).mock.calls.some(([input]) => String(input).includes('/actual-blocks/start'))).toBe(false)

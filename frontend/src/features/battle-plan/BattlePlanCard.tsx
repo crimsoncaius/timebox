@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { OptimisticSortingPlugin } from '@dnd-kit/dom/sortable'
 import { KeyboardSensor, PointerSensor } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
-import { useNavigate } from 'react-router-dom'
 import {
   deadlineBadge,
   plannedDateSummary,
@@ -44,7 +43,6 @@ export function BattlePlanCard({
   onToggleReady: (id: number, ready: boolean) => Promise<void>
   onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
 }) {
-  const navigate = useNavigate()
   const { ref, isDragging } = useSortable({
     id: task.id,
     index,
@@ -64,6 +62,7 @@ export function BattlePlanCard({
   const due = deadlineBadge(task, serverNowIso, timezone)
   const planned = plannedDateSummary(task.planned_dates, serverNowIso, timezone)
   const completed = task.subtasks.filter((subtask) => subtask.checked).length
+  const recurrenceLabel = recurrenceAccessibleName(task)
   const progressLabel = task.subtasks.length === 0
     ? `Add a subtask to ${task.title}`
     : `${completed} of ${task.subtasks.length} subtasks completed for ${task.title}`
@@ -74,7 +73,10 @@ export function BattlePlanCard({
       data-task-id={task.id}
       data-dragging={isDragging ? 'true' : undefined}
       tabIndex={0}
-      aria-label={task.status === 'completed' ? task.title : `Move ${task.title}`}
+      aria-label={[
+        task.status === 'completed' ? task.title : `Move ${task.title}`,
+        recurrenceLabel,
+      ].filter(Boolean).join('. ')}
       title={task.status === 'completed' ? 'Completed Task' : 'Drag task to change its status'}
       onClick={() => onOpen()}
       onKeyDown={(event) => {
@@ -107,18 +109,14 @@ export function BattlePlanCard({
           {task.task_type ? <MetaChip>{task.task_type.name}</MetaChip> : null}
           {task.urgency ? <MetaChip>U · {task.urgency}</MetaChip> : null}
           {task.importance ? <MetaChip>I · {task.importance}</MetaChip> : null}
-          {task.recurring_template_id ? (
-            <button
-              type="button"
-              className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary transition hover:bg-primary/15"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation()
-                navigate(`/battle-plan?view=recurring&recurring=${task.recurring_template_id}`)
-              }}
+          {recurrenceLabel ? (
+            <span
+              aria-label={recurrenceLabel}
+              className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-container-low px-2 py-1 text-[10px] font-medium text-on-surface-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant"
             >
-              ↻ {task.recurring_template_title ?? 'Recurring'}
-            </button>
+              <span className="material-symbols-outlined text-[12px]" aria-hidden>repeat</span>
+              <span aria-hidden>Recurring</span>
+            </span>
           ) : null}
           {(task.outstanding_occurrence_count ?? 1) > 1 ? (
             <MetaChip>{task.outstanding_occurrence_count} outstanding</MetaChip>
@@ -255,6 +253,19 @@ export function BattlePlanCard({
       </button>
     </article>
   )
+}
+
+function recurrenceAccessibleName(task: BattleTask) {
+  if (!task.recurring_template_id || task.parent_id !== null) return null
+  const seriesTitle = task.recurring_template_title?.trim()
+  if (task.recurrence_kind === 'quota_parent') {
+    return seriesTitle
+      ? `Quota Tracker from Recurring Task Series ${seriesTitle}`
+      : 'Quota Tracker from a Recurring Task Series'
+  }
+  return seriesTitle
+    ? `Recurring Task Occurrence from ${seriesTitle}`
+    : 'Recurring Task Occurrence'
 }
 
 function PlannedDateRow({ summary }: { summary: PlannedDateSummaryValue }) {

@@ -29,6 +29,7 @@ class TimeBlockRead(BaseModel):
     task_type: TaskTypeRead
     task_id: int | None = None
     task: LinkedTaskRead | None = None
+    name: str | None = None
     note: str | None = None
     planned_block_id: int | None = None
     actual_block_id: int | None = None
@@ -47,6 +48,7 @@ class PlannedBlockRead(BaseModel):
     day_id: int
     task_type_id: int
     task_id: int | None = None
+    name: str | None = None
     note: str | None = None
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
@@ -63,6 +65,7 @@ class ActualBlockRead(BaseModel):
     task_type: TaskTypeRead
     task_id: int | None = None
     task: LinkedTaskRead | None = None
+    name: str | None = None
     note: str | None = None
     planned_block_id: int | None = None
     start_at: datetime
@@ -83,9 +86,17 @@ class ActualBlockRead(BaseModel):
 class ActualBlockStart(BaseModel):
     task_type_id: int | None = None
     task_id: int | None = None
+    name: str | None = Field(None, max_length=500)
     note: str | None = None
     planned_block_id: int | None = None
     start_at: AwareDatetime | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
 
 
 class ActualBlockCreate(ActualBlockStart):
@@ -102,9 +113,17 @@ class ActualBlockCreate(ActualBlockStart):
 class ActualBlockPatch(BaseModel):
     task_type_id: int | None = None
     task_id: int | None = None
+    name: str | None = Field(None, max_length=500)
     note: str | None = None
     start_at: AwareDatetime | None = None
     end_at: AwareDatetime | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
 
 
 class ActualBlockRelink(BaseModel):
@@ -140,14 +159,30 @@ class PlannedBlockCreate(BaseModel):
     lane: Literal[BlockLane.planned] = BlockLane.planned
     task_type_id: int | None = None
     task_id: int | None = None
+    name: str | None = Field(None, max_length=500)
     note: str | None = None
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
 
 
 class TimeBlockPatch(BaseModel):
     task_type_id: int | None = None
     task_id: int | None = None
+    name: str | None = Field(None, max_length=500)
     note: str | None = None
     start_minute: int | None = Field(None, ge=0, le=1440)
     end_minute: int | None = Field(None, ge=0, le=1440)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None

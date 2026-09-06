@@ -27,10 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,14 +44,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -192,6 +187,13 @@ internal fun PlanningWorkspace(
             delay(AUTO_SCROLL_FRAME_MILLIS)
         }
     }
+
+    AutoScrollTimelineToNowOnce(
+        day = day,
+        enabled = day.date == state.today,
+        scrollState = timelineScroll,
+        viewportHeightPx = viewportBounds.height.roundToInt(),
+    )
 
     BoxWithConstraints(
         modifier = modifier
@@ -503,7 +505,6 @@ private fun PlanningTaskCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
-    val haptics = LocalHapticFeedback.current
     var cardRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     var pointerRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     val currentOnArmAccessible by rememberUpdatedState(onArmAccessible)
@@ -526,10 +527,7 @@ private fun PlanningTaskCard(
             .onGloballyPositioned { cardRoot = it.positionInRoot() }
             .pointerInput(task.id, enabled) {
                 if (!enabled) return@pointerInput
-                detectLongPressArmedDragGestures(
-                    onLongPress = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
+                detectImmediateHorizontalDragGestures(
                     onDragStart = { offset ->
                         pointerRoot = cardRoot + offset
                         currentOnDragStart(pointerRoot)
@@ -562,18 +560,6 @@ private fun PlanningTaskCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Box(
-                modifier = Modifier
-                    .size(42.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.DragIndicator,
-                    contentDescription = null,
-                    tint = if (enabled) colors.planned else colors.outlineVariant,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
         }
     }
 }
@@ -640,6 +626,7 @@ internal fun planningDropStart(
     } else {
         originalStartMinute + snapToBlockInteractionStep(rawStart - originalStartMinute)
     }
+
     return start.coerceIn(visibleStart, visibleEnd - durationMinutes)
 }
 

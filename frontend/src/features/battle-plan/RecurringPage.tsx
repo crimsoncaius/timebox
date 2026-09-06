@@ -145,6 +145,7 @@ export function RecurringPage() {
           scope="all"
           recurring
           projects={projects}
+          onReorderProjects={async (ids) => { setProjects(await api.reorderProjects(ids)) }}
           onClose={() => setMobileSidebar(false)}
           onScope={openBattlePlanScope}
           onCollection={(collection) => navigate(`/battle-plan?collection=${collection}`)}

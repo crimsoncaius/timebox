@@ -34,8 +34,8 @@ class DayCalendarHeaderLogicTest {
     }
 
     @Test
-    fun selectedDateUsesTitleLedEnglishHeaderFormat() {
-        assertEquals("Friday, August 28", formatCalendarHeaderDate(LocalDate.of(2026, 8, 28)))
+    fun selectedDateUsesAbbreviatedWeekdayHeaderFormat() {
+        assertEquals("Fri, August 28", formatCalendarHeaderDate(LocalDate.of(2026, 8, 28)))
     }
 
     @Test

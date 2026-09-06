@@ -4,6 +4,7 @@ import datetime as dt
 import uuid
 
 from sqlalchemy import or_, select, update
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -21,6 +22,9 @@ from app.schemas.time_block import (
     ActualBlockPatch,
 )
 from app.services.recurrence.protection import protect_task_occurrence
+
+
+UNSPECIFIED_TASK_TYPE = "unspecified"
 
 
 def _as_utc(value: dt.datetime) -> dt.datetime:
@@ -139,6 +143,38 @@ def _planned_row(
     return planned
 
 
+def _get_or_create_unspecified_task_type(db: Session) -> TaskType:
+    """Resolve the neutral category without committing the surrounding Actual write."""
+
+    values = {"name": UNSPECIFIED_TASK_TYPE}
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        statement = postgresql.insert(TaskType).values(**values).on_conflict_do_nothing(
+            index_elements=[TaskType.name]
+        )
+    elif dialect == "sqlite":
+        statement = sqlite.insert(TaskType).values(**values).on_conflict_do_nothing(
+            index_elements=[TaskType.name]
+        )
+    else:
+        existing = db.execute(
+            select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
+        ).scalar_one_or_none()
+        if existing is not None:
+            return existing
+        row = TaskType(name=UNSPECIFIED_TASK_TYPE)
+        db.add(row)
+        db.flush()
+        return row
+
+    db.execute(statement)
+    row = db.execute(
+        select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
+    ).scalar_one_or_none()
+    assert row is not None
+    return row
+
+
 def _resolve_origin_item(
     db: Session,
     *,
@@ -146,10 +182,12 @@ def _resolve_origin_item(
     task_id: int | None,
     planned_block_id: int | None,
     retrospective_end: dt.datetime | None = None,
-) -> tuple[int, int | None]:
+) -> tuple[int, int | None, str | None]:
     if planned_block_id is None:
         if task_type_id is None:
-            raise ValueError("task_type_id is required for standalone Actual")
+            if task_id is not None:
+                raise ValueError("task_type_id is required for task-backed Actual")
+            task_type_id = _get_or_create_unspecified_task_type(db).id
         _validate_item(
             db,
             task_type_id,
@@ -157,7 +195,7 @@ def _resolve_origin_item(
             for_update=True,
             retrospective_end=retrospective_end,
         )
-        return task_type_id, task_id
+        return task_type_id, task_id, None
 
     planned_snapshot = _planned_row(db, planned_block_id)
     if task_type_id is not None and task_type_id != planned_snapshot.task_type_id:
@@ -181,7 +219,7 @@ def _resolve_origin_item(
         raise ValueError("Linked Actual must use the Planned Block primary item")
     if task_id is not None and task_id != planned.task_id:
         raise ValueError("Linked Actual must use the Planned Block primary item")
-    return planned.task_type_id, planned.task_id
+    return planned.task_type_id, planned.task_id, planned.name
 
 
 def _integrity_message(exc: IntegrityError) -> str:
@@ -213,7 +251,7 @@ def start_actual_block(
     if started_at > authoritative_now:
         raise ValueError("Actual Block start cannot be in the future")
 
-    task_type_id, task_id = _resolve_origin_item(
+    task_type_id, task_id, planned_name = _resolve_origin_item(
         db,
         task_type_id=body.task_type_id,
         task_id=body.task_id,
@@ -226,6 +264,7 @@ def start_actual_block(
         lane=BlockLane.actual,
         task_type_id=task_type_id,
         task_id=task_id,
+        name=planned_name if body.planned_block_id is not None else body.name,
         note=(body.note or "").strip() or None,
         day_id=None,
         start_minute=None,
@@ -278,7 +317,7 @@ def finish_actual_block(
 def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead:
     """Create a finished retrospective Actual Block in one transaction."""
 
-    task_type_id, task_id = _resolve_origin_item(
+    task_type_id, task_id, planned_name = _resolve_origin_item(
         db,
         task_type_id=body.task_type_id,
         task_id=body.task_id,
@@ -289,6 +328,7 @@ def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead
         lane=BlockLane.actual,
         task_type_id=task_type_id,
         task_id=task_id,
+        name=planned_name if body.planned_block_id is not None else body.name,
         note=(body.note or "").strip() or None,
         planned_block_id=body.planned_block_id,
         day_id=None,
@@ -368,6 +408,8 @@ def patch_actual_block(
 
     row.task_type_id = task_type_id
     row.task_id = task_id
+    if "name" in data:
+        row.name = data["name"]
     if "note" in data:
         row.note = str(data["note"] or "").strip() or None
     row.start_at = start_at
@@ -492,6 +534,7 @@ def record_actual_as_planned(
         lane=BlockLane.actual,
         task_type_id=planned.task_type_id,
         task_id=planned.task_id,
+        name=planned.name,
         note=planned.note,
         planned_block_id=planned.id,
         day_id=None,

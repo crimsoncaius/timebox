@@ -142,6 +142,7 @@ export interface TimeBlock {
     archived_at?: string | null
     deleted_at?: string | null
   }) | null
+  name?: string | null
   note: string | null
   /** Present when this Actual is linked to its source Planned Block. */
   planned_block_id?: number | null
@@ -157,6 +158,7 @@ export interface ActualBlock {
   task_type: TaskType
   task_id: number | null
   task: TimeBlock['task']
+  name?: string | null
   note: string | null
   planned_block_id: number | null
   start_at: string
@@ -193,6 +195,7 @@ export interface DayRead {
     day_id: number
     task_type_id: number
     task_id: number | null
+    name: string | null
     note: string | null
     start_minute: number
     end_minute: number
@@ -213,6 +216,8 @@ export interface DayListItem {
   end_hour: number
   show_full_day: boolean
   updated_at: string
+  block_count?: number
+  actual_blocks?: ActualBlockDayProjection[]
 }
 
 export interface HealthResponse {

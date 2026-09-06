@@ -74,7 +74,7 @@ class BattlePlanScreenTest {
         compose.onNodeWithText("Title").performScrollTo().performTextInput("Prepare launch notes")
         compose.onNodeWithContentDescription("Location, Admin").performScrollTo().performClick()
         compose.onNodeWithText("Timebox").performClick()
-        compose.onNodeWithContentDescription("Task Type, Unset").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Task Type, Add a task type").performScrollTo().performClick()
         compose.onNodeWithText("Design").performClick()
         compose.onNodeWithContentDescription("Status, Open").performScrollTo().performClick()
         compose.onNodeWithText("In Progress").performClick()
@@ -119,6 +119,55 @@ class BattlePlanScreenTest {
             "Asia/Singapore",
         )).label
         compose.onNodeWithText(expected).fetchSemanticsNode()
+    }
+
+    @Test
+    fun compactCardsLabelRecurringOccurrencesAndQuotaTrackersWithoutMarkingOneOffTasks() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(
+                            battleTask(1).copy(
+                                title = "Weekly planning occurrence",
+                                recurringTemplateId = 7,
+                                recurringTemplateTitle = "Weekly planning",
+                                recurrenceKind = "scheduled",
+                            ),
+                            battleTask(2).copy(
+                                title = "Exercise quota",
+                                recurringTemplateId = 8,
+                                recurringTemplateTitle = "Exercise three times",
+                                recurrenceKind = "quota_parent",
+                            ),
+                            battleTask(3).copy(title = "One-off task"),
+                            battleTask(4).copy(
+                                title = "Nested session task",
+                                parentId = 2,
+                                recurringTemplateId = 8,
+                                recurringTemplateTitle = "Exercise three times",
+                                recurrenceKind = "quota_session",
+                            ),
+                        ),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
+                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
+                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Recurring Task Occurrence from Weekly planning").fetchSemanticsNode()
+        compose.onNodeWithContentDescription("Quota Tracker from Recurring Task Series Exercise three times").fetchSemanticsNode()
+        check(compose.onAllNodesWithText("Recurring").fetchSemanticsNodes().size == 2)
     }
 
     @Test
@@ -203,7 +252,8 @@ class BattlePlanScreenTest {
                     onToggleSubtask = {},
                     onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
                     onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
-                    onConfirmTrash = {}, onTrashed = {}, onReopen = {}, onSave = {},
+                    onConfirmTrash = {}, onTrashed = {}, onStartEditing = {}, onDiscardChanges = {},
+                    onUseLatestTask = {}, onRestoreRecoveredDraft = {}, onComplete = {}, onReopen = {}, onSave = {},
                 )
             }
         }
@@ -230,6 +280,7 @@ class BattlePlanScreenTest {
                         task = task,
                         title = task.title,
                         description = "Draft the launch brief.",
+                        editing = true,
                     ),
                     onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
                     onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
@@ -240,12 +291,13 @@ class BattlePlanScreenTest {
                     onOpenDay = { _, _ -> }, onAddSubtask = {}, onToggleSubtask = {},
                     onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
                     onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
-                    onConfirmTrash = {}, onTrashed = {}, onReopen = {}, onSave = {},
+                    onConfirmTrash = {}, onTrashed = {}, onStartEditing = {}, onDiscardChanges = {},
+                    onUseLatestTask = {}, onRestoreRecoveredDraft = {}, onComplete = {}, onReopen = {}, onSave = {},
                 )
             }
         }
 
-        compose.onNodeWithText("Edit details").performClick()
+        compose.onNodeWithText("Save changes").assertIsNotEnabled()
         compose.onNodeWithText("Tap a block or chip below to change that detail.").fetchSemanticsNode()
         compose.onNodeWithText("Ready to Plan").performClick()
         compose.onNodeWithContentDescription("Change importance").performClick()
@@ -254,6 +306,144 @@ class BattlePlanScreenTest {
         compose.runOnIdle {
             check(readyToPlan == true)
             check(importance == PriorityLevel.High)
+        }
+    }
+
+    @Test
+    fun taskDetailsUseOneSaveActionAndKeepCompletionOutsideEditing() {
+        var startedEditing = 0
+        var completed = 0
+        val task = battleTask(1)
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskDetailScreen(
+                    state = TaskDetailUiState(
+                        taskId = task.id,
+                        loading = false,
+                        task = task,
+                        title = task.title,
+                        status = task.status,
+                    ),
+                    onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
+                    onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
+                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = {},
+                    onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
+                    onReminderEnabledChange = {}, notificationsAllowed = true,
+                    onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = {},
+                    onOpenDay = { _, _ -> }, onAddSubtask = {}, onToggleSubtask = {},
+                    onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
+                    onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
+                    onConfirmTrash = {}, onTrashed = {}, onStartEditing = { startedEditing++ },
+                    onDiscardChanges = {}, onUseLatestTask = {}, onRestoreRecoveredDraft = {},
+                    onComplete = { completed++ }, onReopen = {}, onSave = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Complete task").performClick()
+        compose.onNodeWithText("Edit details").performClick()
+        check(compose.onAllNodesWithText("Save task").fetchSemanticsNodes().isEmpty())
+        check(compose.onAllNodesWithText("Done").fetchSemanticsNodes().isEmpty())
+        compose.runOnIdle {
+            check(completed == 1)
+            check(startedEditing == 1)
+        }
+    }
+
+    @Test
+    fun dirtyTaskEditingOffersSaveAndConfirmsDiscardWithoutCompletionChoice() {
+        var saves = 0
+        var discards = 0
+        val task = battleTask(1)
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskDetailScreen(
+                    state = TaskDetailUiState(
+                        taskId = task.id,
+                        loading = false,
+                        task = task,
+                        title = "Changed title",
+                        status = TaskStatus.Open,
+                        editing = true,
+                        dirty = true,
+                    ),
+                    onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
+                    onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
+                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = {},
+                    onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
+                    onReminderEnabledChange = {}, notificationsAllowed = true,
+                    onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = {},
+                    onOpenDay = { _, _ -> }, onAddSubtask = {}, onToggleSubtask = {},
+                    onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
+                    onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
+                    onConfirmTrash = {}, onTrashed = {}, onStartEditing = {},
+                    onDiscardChanges = { discards++ }, onUseLatestTask = {}, onRestoreRecoveredDraft = {},
+                    onComplete = {}, onReopen = {}, onSave = { saves++ },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Save changes").assertIsEnabled().performClick()
+        check(compose.onAllNodesWithText("Complete task").fetchSemanticsNodes().isEmpty())
+        check(compose.onAllNodesWithText("Save task").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("Open").performClick()
+        check(compose.onAllNodesWithText("Completed").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithContentDescription("Cancel editing").performClick()
+        compose.onNodeWithText("Discard unsaved changes?").fetchSemanticsNode()
+        compose.onNodeWithText("Discard changes").performClick()
+        compose.runOnIdle {
+            check(saves == 1)
+            check(discards == 1)
+        }
+    }
+
+    @Test
+    fun staleRecoveredTaskDraftRequiresAnExplicitChoice() {
+        var usedLatest = 0
+        var restored = 0
+        val task = battleTask(1)
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskDetailScreen(
+                    state = TaskDetailUiState(
+                        taskId = task.id,
+                        loading = false,
+                        task = task.copy(version = 4),
+                        title = task.title,
+                        status = task.status,
+                        recoveryConflict = TaskDetailRecoveryConflict(
+                            draft = TaskDetailDraft(
+                                title = "Recovered title", description = "", status = TaskStatus.Open,
+                                projectId = null, taskTypeId = null, urgency = null, importance = null,
+                                deadlineMode = TaskDeadlineMode.None, deadlineDate = "", deadlineTime = "",
+                                reminderEnabled = false, reminderDate = "", reminderTime = "", readyToPlan = false,
+                            ),
+                            baselineVersion = 3,
+                            currentVersion = 4,
+                        ),
+                    ),
+                    onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
+                    onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
+                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = {},
+                    onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
+                    onReminderEnabledChange = {}, notificationsAllowed = true,
+                    onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = {},
+                    onOpenDay = { _, _ -> }, onAddSubtask = {}, onToggleSubtask = {},
+                    onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
+                    onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
+                    onConfirmTrash = {}, onTrashed = {}, onStartEditing = {}, onDiscardChanges = {},
+                    onUseLatestTask = { usedLatest++ }, onRestoreRecoveredDraft = { restored++ },
+                    onComplete = {}, onReopen = {}, onSave = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Recovered edits conflict with a newer Task").fetchSemanticsNode()
+        compose.onNodeWithText("Restore my draft").performClick()
+        compose.onNodeWithText("Use latest task").performClick()
+        compose.runOnIdle {
+            check(restored == 1)
+            check(usedLatest == 1)
         }
     }
 
@@ -480,6 +670,105 @@ class BattlePlanScreenTest {
             check(haptics.events == listOf(HapticFeedbackType.LongPress, HapticFeedbackType.TextHandleMove))
         }
         check(compose.onAllNodesWithTag("battle-plan-drag-preview").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun heldTaskTraversesFromOpenToCompletedWithoutRecentering() {
+        var dropped: Triple<Int, TaskStatus, Int>? = null
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(battleTask(1)),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onDropTask = { task, status, index -> dropped = Triple(task.id, status, index) },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
+                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
+                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        val root = compose.onRoot()
+        val rootBounds = root.fetchSemanticsNode().boundsInRoot
+        val taskCenter = compose.onNodeWithTag("battle-plan-task-1")
+            .fetchSemanticsNode().boundsInRoot.center
+        compose.mainClock.autoAdvance = false
+        root.performTouchInput {
+            down(taskCenter)
+            advanceEventTime(1_000)
+            moveBy(androidx.compose.ui.geometry.Offset(0f, 1f))
+            moveTo(androidx.compose.ui.geometry.Offset(rootBounds.right - 1f, taskCenter.y))
+            advanceEventTime(16)
+        }
+
+        compose.mainClock.advanceTimeBy(2_500)
+        compose.waitForIdle()
+        root.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+
+        check(dropped == Triple(1, TaskStatus.Completed, 0)) {
+            "expected one held gesture to reach Completed, but dropped=$dropped"
+        }
+    }
+
+    @Test
+    fun heldTaskTraversesFromCompletedToOpenWithoutRecentering() {
+        var dropped: Triple<Int, TaskStatus, Int>? = null
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(battleTask(1).copy(status = TaskStatus.Completed)),
+                        selectedStatus = TaskStatus.Completed,
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onDropTask = { task, status, index -> dropped = Triple(task.id, status, index) },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
+                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
+                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        val root = compose.onRoot()
+        val rootBounds = root.fetchSemanticsNode().boundsInRoot
+        val taskCenter = compose.onNodeWithTag("battle-plan-task-1")
+            .fetchSemanticsNode().boundsInRoot.center
+        compose.mainClock.autoAdvance = false
+        root.performTouchInput {
+            down(taskCenter)
+            advanceEventTime(1_000)
+            moveBy(androidx.compose.ui.geometry.Offset(0f, 1f))
+            moveTo(androidx.compose.ui.geometry.Offset(rootBounds.left + 1f, taskCenter.y))
+            advanceEventTime(16)
+        }
+
+        compose.mainClock.advanceTimeBy(2_500)
+        compose.waitForIdle()
+        root.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+
+        check(dropped == Triple(1, TaskStatus.Open, 0)) {
+            "expected one held gesture to reach Open, but dropped=$dropped"
+        }
     }
 
     @Test

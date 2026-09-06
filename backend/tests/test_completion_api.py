@@ -58,13 +58,14 @@ def _task(client, title="Finish the brief", **extra):
     return response.json()
 
 
-def _planned_block(client, date, task, task_type, start=540):
+def _planned_block(client, date, task, task_type, start=540, name=None):
     response = client.post(
         f"/days/{date}/blocks",
         json={
             "lane": "planned",
             "task_id": task["id"],
             "task_type_id": task_type["id"],
+            "name": name,
             "start_minute": start,
             "end_minute": start + 30,
         },
@@ -250,8 +251,12 @@ def test_completion_removes_only_selected_tasks_strictly_future_plans_and_undo_i
 
     past = _planned_block(client, "2026-08-29", parent, task_type)
     exact = _planned_block(client, "2026-08-30", parent, task_type, start=600)
-    parent_future = _planned_block(client, "2026-08-31", parent, task_type)
-    future_with_actual = _planned_block(client, "2026-09-01", parent, task_type)
+    parent_future = _planned_block(
+        client, "2026-08-31", parent, task_type, name="Restore exactly"
+    )
+    future_with_actual = _planned_block(
+        client, "2026-09-01", parent, task_type, name="Restore correspondence"
+    )
     other_future = _planned_block(client, "2026-09-02", other, task_type)
     recorded = client.post(
         f"/planned-blocks/{future_with_actual['id']}/record-actual-as-planned"
@@ -291,8 +296,12 @@ def test_completion_removes_only_selected_tasks_strictly_future_plans_and_undo_i
     assert restored["blocking_reason"] == "External dependency"
     assert [child["checked"] for child in restored["subtasks"]] == [False, True]
     assert [child["effectively_resolved"] for child in restored["subtasks"]] == [False, True]
-    assert client.get("/days/2026-08-31").json()["time_blocks"][0]["id"] == parent_future["id"]
-    assert client.get("/days/2026-09-01").json()["time_blocks"][0]["id"] == future_with_actual["id"]
+    restored_parent_future = client.get("/days/2026-08-31").json()["time_blocks"][0]
+    restored_future_with_actual = client.get("/days/2026-09-01").json()["time_blocks"][0]
+    assert restored_parent_future["id"] == parent_future["id"]
+    assert restored_parent_future["name"] == "Restore exactly"
+    assert restored_future_with_actual["id"] == future_with_actual["id"]
+    assert restored_future_with_actual["name"] == "Restore correspondence"
     assert client.get(f"/actual-blocks/{ended_actual['id']}").json()["planned_block_id"] == future_with_actual["id"]
 
     repeated = client.post(

@@ -48,6 +48,7 @@ class PatchEncodingTest {
         val body = timeBlockPatchBody(
             taskTypeId = null,
             taskId = PatchField.clear(),
+            name = null,
             note = null,
             startMinute = 600,
             endMinute = null,

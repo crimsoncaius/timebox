@@ -54,8 +54,47 @@ data class TimeBlock(
     val actualBlockId: Int? = null,
     val startMinute: Int,
     val endMinute: Int,
+    val name: String? = null,
 ) {
     val durationMinutes: Int get() = endMinute - startMinute
+}
+
+fun TimeBlock.meaningfulTaskTypeName(): String? =
+    taskTypeName.trim().takeIf { it.isNotEmpty() && !it.equals("unspecified", ignoreCase = true) }
+
+fun TimeBlock.primaryIdentity(taskTitle: String? = task?.title): String =
+    name?.trim()?.takeIf(String::isNotEmpty)
+        ?: taskTitle?.trim()?.takeIf(String::isNotEmpty)
+        ?: meaningfulTaskTypeName()
+        ?: "Untitled"
+
+fun TimeBlock.secondaryIdentity(taskTitleOverride: String? = task?.title): String? {
+    val hasName = !name.isNullOrBlank()
+    val taskTitle = taskTitleOverride?.trim()?.takeIf(String::isNotEmpty)
+    return when {
+        hasName && taskTitle != null -> taskTitle
+        hasName || taskTitle != null -> meaningfulTaskTypeName()
+        else -> null
+    }
+}
+
+fun ActualBlock.meaningfulTaskTypeName(): String? =
+    taskTypeName.trim().takeIf { it.isNotEmpty() && !it.equals("unspecified", ignoreCase = true) }
+
+fun ActualBlock.primaryIdentity(): String =
+    name?.trim()?.takeIf(String::isNotEmpty)
+        ?: task?.title?.trim()?.takeIf(String::isNotEmpty)
+        ?: meaningfulTaskTypeName()
+        ?: "Untitled"
+
+fun ActualBlock.secondaryIdentity(): String? {
+    val hasName = !name.isNullOrBlank()
+    val taskTitle = task?.title?.trim()?.takeIf(String::isNotEmpty)
+    return when {
+        hasName && taskTitle != null -> taskTitle
+        hasName || taskTitle != null -> meaningfulTaskTypeName()
+        else -> null
+    }
 }
 
 data class ActualBlock(
@@ -68,6 +107,7 @@ data class ActualBlock(
     val plannedBlockId: Int?,
     val startAt: Instant,
     val endAt: Instant?,
+    val name: String? = null,
 )
 
 data class ActualBlockDayProjection(
@@ -129,6 +169,7 @@ data class ArchivedDay(
     val endHour: Int,
     val showFullDay: Boolean,
     val blockCount: Int,
+    val actualBlocks: List<ActualBlock> = emptyList(),
 ) {
     /** The day's window, or null for a date that was opened but never filled in. */
     val windowLabel: String?
@@ -196,6 +237,7 @@ fun TimeBlockDto.toModel() = TimeBlock(
     actualBlockId = actualBlockId,
     startMinute = startMinute,
     endMinute = endMinute,
+    name = name,
 )
 
 fun ActualBlockDto.toModel() = ActualBlock(
@@ -213,6 +255,7 @@ fun ActualBlockDto.toModel() = ActualBlock(
             deletedAt = it.deletedAt?.let(::parseInstant),
         )
     },
+    name = name,
     note = note,
     plannedBlockId = plannedBlockId,
     startAt = parseInstant(startAt),
@@ -246,6 +289,7 @@ private fun ActualBlockDayProjectionDto.toTimelineBlock() = TimeBlock(
             deletedAt = it.deletedAt?.let(::parseInstant),
         )
     },
+    name = actualBlock.name,
     note = actualBlock.note,
     plannedBlockId = actualBlock.plannedBlockId,
     actualBlockId = actualBlock.id,
@@ -285,6 +329,7 @@ fun DayListItemDto.toModel() = ArchivedDay(
     endHour = endHour,
     showFullDay = showFullDay,
     blockCount = blockCount,
+    actualBlocks = actualBlocks.map { it.actualBlock.toModel() },
 )
 
 fun DaySummaryDto.toModel() = DaySummary(

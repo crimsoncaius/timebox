@@ -61,6 +61,27 @@ function dragBlock(body: HTMLElement) {
   fireEvent.pointerUp(window, { pointerId: 1, clientX: 10, clientY: 180 })
 }
 
+function renderIdentityCard(identityBlock: TimeBlock) {
+  return render(
+    <div style={{ position: 'relative', height: 400 }}>
+      <TimeBlockCard
+        block={identityBlock}
+        lane={identityBlock.lane}
+        visibleStartMin={480}
+        visibleEndMin={1200}
+        slotHeightPx={30}
+        readOnly
+        sameLaneBlocks={[identityBlock]}
+        resizeMinStartMinute={0}
+        resizeMaxEndMinute={1440}
+        getMinuteFromClientY={(clientY) => clientY}
+        onPatch={vi.fn(() => Promise.resolve())}
+        isSelected={false}
+      />
+    </div>,
+  )
+}
+
 describe('TimeBlockCard', () => {
   beforeEach(() => {
     HTMLElement.prototype.setPointerCapture = vi.fn()
@@ -70,6 +91,41 @@ describe('TimeBlockCard', () => {
   afterEach(() => {
     HTMLElement.prototype.setPointerCapture = originalSetPointerCapture
     HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
+  })
+
+  it('shows linked Block Name as Day identity and the Battle Plan Task as context', () => {
+    const linked = {
+      ...block,
+      name: 'Outline session',
+      task_id: 42,
+      task: { id: 42, title: 'Prepare launch', status: 'in_progress' as const, task_type_id: 1 },
+      end_minute: 600,
+    }
+    const view = renderIdentityCard(linked)
+    expect(screen.getByText('Outline session')).toBeInTheDocument()
+    expect(screen.getByText('Prepare launch')).toHaveAttribute('data-block-context')
+
+    const unnamed: TimeBlock = { ...linked, name: null }
+    view.rerender(
+      <div style={{ position: 'relative', height: 400 }}>
+        <TimeBlockCard
+          block={unnamed}
+          lane="planned"
+          visibleStartMin={480}
+          visibleEndMin={1200}
+          slotHeightPx={30}
+          readOnly
+          sameLaneBlocks={[unnamed]}
+          resizeMinStartMinute={0}
+          resizeMaxEndMinute={1440}
+          getMinuteFromClientY={(clientY) => clientY}
+          onPatch={vi.fn(() => Promise.resolve())}
+          isSelected={false}
+        />
+      </div>,
+    )
+    expect(screen.getByText('Prepare launch')).toHaveAttribute('data-block-title')
+    expect(screen.getByText('alpha')).toHaveAttribute('data-block-context')
   })
 
   it('keeps the moved position visible until the async patch settles', () => {
@@ -174,7 +230,7 @@ describe('TimeBlockCard', () => {
     expect(screen.getByText('8 – 10am')).toBeInTheDocument()
   })
 
-  it('shows title and time beside the lane bar when the inner body is too short', () => {
+  it('shows title and time inline for a 30-minute block', () => {
     render(
       <div style={{ position: 'relative', height: 400 }}>
         <TimeBlockCard
@@ -195,6 +251,64 @@ describe('TimeBlockCard', () => {
     )
     expect(screen.getByText(/8 – 8:30am/)).toBeInTheDocument()
     expect(screen.getByText(/alpha/)).toBeInTheDocument()
+  })
+
+  it('keeps one card identity while adapting content density to duration', () => {
+    const hourBlock: TimeBlock = { ...block, id: 11, start_minute: 540, end_minute: 600 }
+    const view = render(
+      <>
+        <div style={{ position: 'relative', height: 60 }}>
+          <TimeBlockCard
+            block={block}
+            lane="planned"
+            visibleStartMin={480}
+            visibleEndMin={600}
+            slotHeightPx={46}
+            readOnly={false}
+            sameLaneBlocks={[block]}
+            resizeMinStartMinute={0}
+            resizeMaxEndMinute={1440}
+            getMinuteFromClientY={(clientY) => clientY}
+            onPatch={vi.fn(() => Promise.resolve())}
+          />
+        </div>
+        <div style={{ position: 'relative', height: 100 }}>
+          <TimeBlockCard
+            block={hourBlock}
+            lane="planned"
+            visibleStartMin={540}
+            visibleEndMin={660}
+            slotHeightPx={46}
+            readOnly={false}
+            sameLaneBlocks={[hourBlock]}
+            resizeMinStartMinute={0}
+            resizeMaxEndMinute={1440}
+            getMinuteFromClientY={(clientY) => clientY}
+            onPatch={vi.fn(() => Promise.resolve())}
+          />
+        </div>
+      </>,
+    )
+
+    const compact = view.container.querySelector('[data-block-id="10"]') as HTMLElement
+    const expanded = view.container.querySelector('[data-block-id="11"]') as HTMLElement
+    const compactStripe = compact.querySelector('[data-lane-stripe]') as HTMLElement
+    const expandedStripe = expanded.querySelector('[data-lane-stripe]') as HTMLElement
+    const compactTitle = compact.querySelector('[data-block-title]') as HTMLElement
+    const expandedTitle = expanded.querySelector('[data-block-title]') as HTMLElement
+    const compactTime = compact.querySelector('[data-block-time]') as HTMLElement
+    const expandedTime = expanded.querySelector('[data-block-time]') as HTMLElement
+
+    expect(compact).toHaveAttribute('data-content-density', 'compact')
+    expect(expanded).toHaveAttribute('data-content-density', 'expanded')
+    expect(compactStripe).toBeInTheDocument()
+    expect(expandedStripe).toBeInTheDocument()
+    expect(compactStripe.className).toBe(expandedStripe.className)
+    expect(compactTitle.className).toBe(expandedTitle.className)
+    expect(compactTime.className).toBe(expandedTime.className)
+    expect(compact.querySelector('[data-block-content]')).toHaveClass('flex-row')
+    expect(expanded.querySelector('[data-block-content]')).toHaveClass('flex-col')
+    expect(compact.querySelector('[aria-label="Resize block start"]')).toHaveClass('absolute')
   })
 
   it('uses the resting paper surface for a compact block', () => {

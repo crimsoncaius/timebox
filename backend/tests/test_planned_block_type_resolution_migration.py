@@ -27,6 +27,7 @@ def test_migration_consolidates_raced_task_types_before_enforcing_uniqueness(
         Base.metadata.create_all(engine)
 
         with engine.begin() as connection:
+            connection.execute(sa.text("ALTER TABLE projects DROP COLUMN position"))
             connection.execute(sa.text("DROP INDEX uq_task_types_name"))
             connection.execute(
                 sa.text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)")

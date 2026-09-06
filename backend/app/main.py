@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.deps import require_api_key
 from app.api.routes import actual_blocks, battle_plan, days, recurring, settings, task_types
@@ -13,8 +14,9 @@ from app.core.time import today_in_tz
 from sqlalchemy import inspect
 
 from app.db.base import Base
-from app.db.session import get_engine
+from app.db.session import get_engine, repair_sqlite_actual_record_operation_references
 from app.models.app_settings import AppSettings
+from app.readiness import readiness_details
 from app.services.day_service import validate_timezone
 
 import app.models  # noqa: F401 — register models on Base before create_all
@@ -35,6 +37,7 @@ async def lifespan(app: FastAPI):
     if os.getenv("AUTO_CREATE_TABLES") == "1":
         Base.metadata.create_all(bind=get_engine())
         _ensure_app_settings_table()
+    repair_sqlite_actual_record_operation_references(get_engine())
     yield
 
 
@@ -79,3 +82,9 @@ def health() -> dict[str, str]:
         "today": today_in_tz(settings.app_timezone).isoformat(),
         "timezone": settings.app_timezone,
     }
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    body, status_code = readiness_details(get_engine())
+    return JSONResponse(content=body, status_code=status_code)

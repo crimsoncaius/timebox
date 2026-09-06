@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -58,7 +59,9 @@ fun BlockSheet(
     onChooseType: (TaskType) -> Unit,
     onTypeQueryChange: (String) -> Unit,
     onCreateType: (String) -> Unit,
+    onNameChange: (String) -> Unit,
     onNoteChange: (String) -> Unit,
+    onCreateDraft: () -> Unit,
     onDelete: () -> Unit,
     onConfirmTaskCompletion: () -> Unit,
     onReopenTask: () -> Unit,
@@ -69,6 +72,7 @@ fun BlockSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val isDraft = state.draft != null
     val lane = state.sheetLane
+    val isNameEditable = lane == Lane.Planned || lane == Lane.Actual
     val laneColor = if (lane == Lane.Planned) colors.planned else colors.actual
     val laneSurface = if (lane == Lane.Planned) colors.plannedSurface else colors.actualSurface
     val laneBorder = if (lane == Lane.Planned) colors.plannedBorder else colors.actualBorder
@@ -99,7 +103,7 @@ fun BlockSheet(
                 // Outside the scroll, so the keyboard shrinks the viewport instead of
                 // covering the picker. `union` keeps the nav bar from being paid for twice.
                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                .heightIn(max = 560.dp)
+                .heightIn(max = 640.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 22.dp),
@@ -154,7 +158,11 @@ fun BlockSheet(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = if (isDraft) {
-                    "Pick a task type to create this block. Edits save as you make them."
+                    if (isNameEditable) {
+                        "Add a Name, choose a Task Type if useful, then create the block."
+                    } else {
+                        "Pick a Task Type to create this block. Edits save as you make them."
+                    }
                 } else {
                     "Drag the block on the timeline to move it, or pull its grooves to resize."
                 },
@@ -175,12 +183,39 @@ fun BlockSheet(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(linkedTask.title, style = TimeboxTheme.type.label, color = colors.on)
-                        Text("Linked Planned block", style = TimeboxTheme.type.bodySmall, color = colors.planned)
+                        Text(
+                            if (lane == Lane.Planned) "Linked Planned Block" else "Linked Actual Block",
+                            style = TimeboxTheme.type.bodySmall,
+                            color = laneColor,
+                        )
                     }
                     androidx.compose.material3.TextButton(onClick = { onOpenLinkedTask(linkedTaskId) }) {
                         Text("Open task")
                     }
                 }
+                Spacer(Modifier.height(18.dp))
+            }
+            if (isNameEditable) {
+                SheetLabel("Name")
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = state.nameInput,
+                    onValueChange = onNameChange,
+                    placeholder = {
+                        Text("Optional", style = TimeboxTheme.type.body, color = colors.outlineVariant)
+                    },
+                    singleLine = true,
+                    textStyle = TimeboxTheme.type.body.copy(color = colors.on),
+                    shape = TimeboxShapes.field,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = colors.bg,
+                        unfocusedContainerColor = colors.bg,
+                        focusedIndicatorColor = colors.outline,
+                        unfocusedIndicatorColor = colors.hairline,
+                        cursorColor = colors.on,
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("block-name-input"),
+                )
                 Spacer(Modifier.height(18.dp))
             }
             SheetLabel("Task type")
@@ -194,7 +229,7 @@ fun BlockSheet(
                 onCreate = onCreateType,
                 // Raising the keyboard is right for a draft, where naming the type is the
                 // only thing left to do. On an existing block it would bury the actions.
-                autoFocus = isDraft,
+                autoFocus = isDraft && !isNameEditable,
             )
 
             Spacer(Modifier.height(18.dp))
@@ -263,7 +298,10 @@ fun BlockSheet(
                 }
                 Spacer(Modifier.weight(1f))
                 if (isDraft) {
-                    PrimaryButton(text = "Done", onClick = onDismiss)
+                    PrimaryButton(
+                        text = if (isNameEditable) "Create block" else "Done",
+                        onClick = if (isNameEditable) onCreateDraft else onDismiss,
+                    )
                 }
             }
         }

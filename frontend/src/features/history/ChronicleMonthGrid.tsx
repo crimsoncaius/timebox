@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { DayListItem } from "../../lib/api";
+import { blockPrimaryIdentity } from "../../lib/blockIdentity";
 import { buildMonthGridUTC, formatMonthYearUTC } from "./historyCalendar";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -93,6 +94,9 @@ export function ChronicleMonthGrid({
         {cells.map((cell) => {
           const item = byDate.get(cell.iso);
           const hasArchive = item != null;
+          const actualIdentity = item?.actual_blocks?.[0]
+            ? blockPrimaryIdentity(item.actual_blocks[0].actual_block)
+            : null;
           const muted = !cell.inMonth;
           const baseCell =
             "flex min-h-[5.5rem] flex-col rounded-xl p-3 transition-colors md:min-h-[6rem] " +
@@ -103,7 +107,7 @@ export function ChronicleMonthGrid({
                 : "bg-surface-container-low/50 text-on-surface-variant hover:bg-surface-container-low ");
 
           const label = hasArchive
-            ? `${cell.iso}, archived day, window ${windowLabel(item!)}`
+            ? `${cell.iso}, archived day${actualIdentity ? `, ${actualIdentity}` : ""}, window ${windowLabel(item!)}`
             : `${cell.iso}, open day`;
 
           return (
@@ -122,8 +126,15 @@ export function ChronicleMonthGrid({
                 {cell.dayOfMonth}
               </span>
               {hasArchive && (
-                <span className="mt-auto pt-2 font-label text-[10px] uppercase leading-snug tracking-wider text-on-surface-variant/90">
-                  {windowLabel(item!)}
+                <span className="mt-auto min-w-0 pt-2 text-on-surface-variant/90">
+                  {actualIdentity ? (
+                    <span className="block truncate font-body text-[10px] leading-snug normal-case tracking-normal text-on-surface">
+                      {actualIdentity}
+                    </span>
+                  ) : null}
+                  <span className="block font-label text-[10px] uppercase leading-snug tracking-wider">
+                    {windowLabel(item!)}
+                  </span>
                 </span>
               )}
             </Link>

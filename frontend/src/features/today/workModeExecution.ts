@@ -1,5 +1,4 @@
-import type { ActualBlock, DayRead, TimeBlock } from '../../lib/api'
-import { api } from '../../lib/api'
+import { ApiHttpError, api, type ActualBlock, type DayRead, type TimeBlock } from '../../lib/api'
 import { zonedLocalDateTimeToIso } from '../../lib/time'
 import { readStoredWorkMode, writeStoredWorkMode, type StoredWorkMode } from './workModeState'
 
@@ -22,7 +21,7 @@ export interface WorkModeTransport {
 
 export interface WorkModeStore {
   load(): StoredWorkMode | null
-  save(value: StoredWorkMode | null): void
+  save(value: StoredWorkMode | null, exitedEntryAt?: string): void
 }
 
 export interface WorkModeEnvironment {
@@ -62,6 +61,7 @@ export class WorkModeExecution {
   private day: DayRead | null = null
   private clock: () => string = () => new Date().toISOString()
   private stopTicker: (() => void) | null = null
+  private lifecycle = 0
 
   constructor(
     transport: WorkModeTransport,
@@ -105,6 +105,7 @@ export class WorkModeExecution {
   }
 
   dispose() {
+    this.lifecycle += 1
     this.stopTicking()
     this.listeners.clear()
   }
@@ -138,7 +139,6 @@ export class WorkModeExecution {
   }
 
   show() { this.patch({ visible: true }) }
-  hide() { this.patch({ visible: false }) }
   setEntryGuard(value: boolean) { this.patch({ entryGuard: value }) }
 
   restoreIfAbsent(now: string) {
@@ -186,13 +186,30 @@ export class WorkModeExecution {
   async hydrateActive() {
     const session = this.value.session
     if (!session?.activeActualId || this.value.actual?.id === session.activeActualId) return
-    const active = await this.transport.getActiveActual().catch(() => null)
-    if (active?.id === session.activeActualId) this.patch({ actual: active })
+    let active: ActualBlock | null
+    try {
+      active = await this.transport.getActiveActual()
+    } catch {
+      return
+    }
+    if (active) {
+      if (active.id === session.activeActualId) this.patch({ actual: active })
+      else if (this.day) this.attachActive(this.day, this.clock(), active)
+      return
+    }
+    this.patch({ actual: null, error: null })
+    this.persist({
+      ...session,
+      activeActualId: null,
+      activePlannedBlockId: null,
+      activePlannedEndAt: null,
+    })
   }
 
   private async reconcile(day: DayRead, now: string) {
     const original = this.value.session
-    if (!original || this.value.restorePrompt || this.transitioning) return
+    const lifecycle = this.lifecycle
+    if (!original || this.value.restorePrompt || this.transitioning || !this.isCurrentSession(original, lifecycle)) return
     if (Date.parse(now) - Date.parse(original.lastObservedAt) > 10 * 60_000) {
       this.patch({ restorePrompt: true })
       this.stopTicking()
@@ -203,7 +220,8 @@ export class WorkModeExecution {
       let next = original
       const nowMs = Date.parse(now)
       if (next.activeActualId != null && next.activePlannedEndAt && nowMs >= Date.parse(next.activePlannedEndAt)) {
-        await this.transport.endActual(next.activeActualId, next.activePlannedEndAt)
+        await this.endActualIfPresent(next.activeActualId, next.activePlannedEndAt)
+        if (!this.isCurrentSession(original, lifecycle)) return
         this.patch({ actual: null })
         next = { ...next, activeActualId: null, activePlannedBlockId: null, activePlannedEndAt: null,
           confirmingPlannedBlockId: null, confirmationStartedAt: null, lastConfirmedAt: next.activePlannedEndAt }
@@ -220,9 +238,11 @@ export class WorkModeExecution {
             next = { ...next, confirmingPlannedBlockId: null, confirmationStartedAt: null }
           } else if (duration >= 60_000 && nowMs >= Date.parse(blockEnd)) {
             await this.transport.createActual(confirmed.id, actualStart, blockEnd)
+            if (!this.isCurrentSession(original, lifecycle)) return
             next = { ...next, confirmingPlannedBlockId: null, confirmationStartedAt: null, lastConfirmedAt: blockEnd }
           } else if (duration >= 60_000) {
             const actual = await this.transport.startActual(confirmed.id, actualStart)
+            if (!this.isCurrentSession(original, lifecycle)) return
             this.patch({ actual })
             next = { ...next, activeActualId: actual.id, activePlannedBlockId: confirmed.id,
               activePlannedEndAt: blockEnd, confirmingPlannedBlockId: null, confirmationStartedAt: null, lastConfirmedAt: now }
@@ -243,6 +263,7 @@ export class WorkModeExecution {
         } else if (nowMs - Date.parse(next.confirmationStartedAt) >= 60_000) {
           const actualStart = Date.parse(start) > Date.parse(next.entryAt) ? start : next.entryAt
           const actual = await this.transport.startActual(current.id, actualStart)
+          if (!this.isCurrentSession(original, lifecycle)) return
           this.patch({ actual })
           next = { ...next, activeActualId: actual.id, activePlannedBlockId: current.id,
             activePlannedEndAt: blockInstant(day, current.end_minute), confirmingPlannedBlockId: null,
@@ -250,10 +271,12 @@ export class WorkModeExecution {
         }
       }
       if (nowMs - Date.parse(next.lastObservedAt) >= 30_000) next = { ...next, lastObservedAt: now }
-      if (next !== original) this.persist(next)
+      if (next !== original && this.isCurrentSession(original, lifecycle)) this.persist(next)
     } catch (cause) {
+      if (!this.isCurrentSession(original, lifecycle)) return
       this.patch({ error: message(cause, 'Work Mode could not update Actual time') })
       const active = await this.transport.getActiveActual().catch(() => null)
+      if (!this.isCurrentSession(original, lifecycle)) return
       if (active) {
         this.patch({ actual: active })
         this.persist({ ...original, activeActualId: active.id, activePlannedBlockId: active.planned_block_id, lastObservedAt: now })
@@ -264,7 +287,9 @@ export class WorkModeExecution {
       const currentDay = this.day
       if (
         currentDay &&
+        this.lifecycle === lifecycle &&
         this.value.session &&
+        sameWorkModeIdentity(this.store.load(), this.value.session) &&
         !this.value.restorePrompt &&
         Date.parse(latest) > Date.parse(now)
       ) {
@@ -280,9 +305,9 @@ export class WorkModeExecution {
     this.stopTicking()
     try {
       const activeId = this.value.actual?.id ?? session.activeActualId
-      if (activeId != null) await this.transport.endActual(activeId, now)
+      if (activeId != null) await this.endActualIfPresent(activeId, now)
       this.patch({ actual: null, visible: false })
-      this.persist(null)
+      this.persist(null, session.entryAt)
       return true
     } catch (cause) {
       this.patch({ error: message(cause, 'Failed to exit Work Mode') })
@@ -300,7 +325,7 @@ export class WorkModeExecution {
       let ended: number | null = null
       if (next.activeActualId != null && next.activePlannedEndAt && Date.parse(next.activePlannedEndAt) <= Date.parse(now)) {
         ended = next.activePlannedBlockId
-        await this.transport.endActual(next.activeActualId, next.activePlannedEndAt)
+        await this.endActualIfPresent(next.activeActualId, next.activePlannedEndAt)
         next = { ...next, activeActualId: null, activePlannedBlockId: null, activePlannedEndAt: null }
         this.patch({ actual: null })
       }
@@ -337,16 +362,27 @@ export class WorkModeExecution {
     this.stopTicking()
     try {
       const activeId = this.value.actual?.id ?? session.activeActualId
-      if (activeId != null) await this.transport.endActual(activeId, session.lastConfirmedAt)
+      if (activeId != null) await this.endActualIfPresent(activeId, session.lastConfirmedAt)
       this.patch({ actual: null, restorePrompt: false, visible: false })
-      this.persist(null)
+      this.persist(null, session.entryAt)
     } catch (cause) { this.patch({ error: message(cause, 'Failed to restore Work Mode') }) }
     finally { this.patch({ busy: false }) }
   }
 
-  private persist(session: StoredWorkMode | null) {
-    this.store.save(session)
+  private persist(session: StoredWorkMode | null, exitedEntryAt?: string) {
+    this.store.save(session, exitedEntryAt)
     this.patch({ session })
+  }
+  private async endActualIfPresent(actualId: number, endAt: string) {
+    try {
+      await this.transport.endActual(actualId, endAt)
+    } catch (cause) {
+      if (cause instanceof ApiHttpError && cause.status === 404) return
+      throw cause
+    }
+  }
+  private isCurrentSession(session: StoredWorkMode, lifecycle: number) {
+    return this.lifecycle === lifecycle && this.value.session === session && sameWorkModeIdentity(this.store.load(), session)
   }
   private ensureTicker() {
     if (this.stopTicker || !this.day || !this.value.session || this.value.restorePrompt) return
@@ -367,6 +403,11 @@ export class WorkModeExecution {
 
 function planned(day: DayRead) {
   return day.time_blocks.filter((block) => block.lane === 'planned').sort((a, b) => a.start_minute - b.start_minute)
+}
+
+function sameWorkModeIdentity(left: StoredWorkMode | null, right: StoredWorkMode | null) {
+  if (!left || !right) return left === right
+  return left.entryAt === right.entryAt
 }
 
 function workSelection(day: DayRead, now: string): { current: TimeBlock | null; next: TimeBlock | null; nowMinute: number } {

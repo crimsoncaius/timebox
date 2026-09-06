@@ -1,5 +1,6 @@
 package com.timebox.android.ui.battleplan
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.BattleTask
@@ -31,6 +32,33 @@ import kotlinx.coroutines.launch
 
 enum class TaskDeadlineMode { None, DateOnly, DateTime }
 
+enum class TaskDetailOperation { SavingChanges, Completing, Reopening }
+
+enum class TaskDraftField { Title, DeadlineDate, DeadlineTime, ReminderDate, ReminderTime }
+
+data class TaskDetailDraft(
+    val title: String,
+    val description: String,
+    val status: TaskStatus,
+    val projectId: Int?,
+    val taskTypeId: Int?,
+    val urgency: PriorityLevel?,
+    val importance: PriorityLevel?,
+    val deadlineMode: TaskDeadlineMode,
+    val deadlineDate: String,
+    val deadlineTime: String,
+    val reminderEnabled: Boolean,
+    val reminderDate: String,
+    val reminderTime: String,
+    val readyToPlan: Boolean,
+)
+
+data class TaskDetailRecoveryConflict(
+    val draft: TaskDetailDraft,
+    val baselineVersion: Int,
+    val currentVersion: Int,
+)
+
 data class TaskDetailUiState(
     val taskId: Int? = null,
     val loading: Boolean = true,
@@ -55,8 +83,13 @@ data class TaskDetailUiState(
     val reminderDate: String = "",
     val reminderTime: String = "",
     val readyToPlan: Boolean = false,
+    val baselineDraft: TaskDetailDraft? = null,
+    val editing: Boolean = false,
     val dirty: Boolean = false,
-    val saved: Boolean = false,
+    val operation: TaskDetailOperation? = null,
+    val validationError: TaskDraftValidation.Invalid? = null,
+    val saveError: String? = null,
+    val recoveryConflict: TaskDetailRecoveryConflict? = null,
     val trashed: Boolean = false,
     val confirmTrash: Boolean = false,
     val pendingSubtaskTrash: Subtask? = null,
@@ -77,6 +110,7 @@ data class TrashUndoTarget(
 class TaskDetailViewModel(
     private val repository: TimeboxRepository,
     private val taskCompletion: TaskCompletion,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
     private val _state = MutableStateFlow(TaskDetailUiState())
     val state: StateFlow<TaskDetailUiState> = _state.asStateFlow()
@@ -102,29 +136,26 @@ class TaskDetailViewModel(
             val resolvedList = tasksResult.getOrThrow()
             val resolvedTask = task
             val zone = runCatching { ZoneId.of(resolvedList.timezone) }.getOrDefault(ZoneId.of("UTC"))
-            val deadlineMode = when {
-                resolvedTask.deadlineAt != null -> TaskDeadlineMode.DateTime
-                resolvedTask.deadlineDate != null -> TaskDeadlineMode.DateOnly
-                else -> TaskDeadlineMode.None
-            }
-            val deadlineLocal = resolvedTask.deadlineAt?.atZone(zone)
-            val reminderLocal = resolvedTask.reminderAt?.atZone(zone)
-            _state.update {
-                it.copy(
-                    loading = false, task = resolvedTask, parentTask = parent?.takeIf { root -> root.id != resolvedTask.id },
-                    projects = projectsResult.getOrThrow(), taskTypes = typesResult.getOrThrow(), timezone = resolvedList.timezone,
-                    serverNow = resolvedList.serverNow,
-                    title = resolvedTask.title, description = resolvedTask.description, status = resolvedTask.status,
-                    projectId = resolvedTask.projectId, taskTypeId = resolvedTask.taskTypeId, urgency = resolvedTask.urgency,
-                    importance = resolvedTask.importance, deadlineMode = deadlineMode,
-                    deadlineDate = resolvedTask.deadlineDate?.toString() ?: deadlineLocal?.toLocalDate()?.toString().orEmpty(),
-                    deadlineTime = deadlineLocal?.toLocalTime()?.format(TIME_FORMAT).orEmpty(),
-                    reminderEnabled = resolvedTask.reminderAt != null,
-                    reminderDate = reminderLocal?.toLocalDate()?.toString().orEmpty(),
-                    reminderTime = reminderLocal?.toLocalTime()?.format(TIME_FORMAT).orEmpty(),
-                    readyToPlan = resolvedTask.readyToPlan, error = null,
-                )
-            }
+            val baseline = resolvedTask.toTaskDetailDraft(zone)
+            val recovered = restoreTaskDetailDraft(savedStateHandle, taskId)
+            val matchingRecovery = recovered?.takeIf { it.baselineVersion == resolvedTask.version }
+            val recoveryConflict = recovered
+                ?.takeIf { it.baselineVersion != resolvedTask.version }
+                ?.let { TaskDetailRecoveryConflict(it.draft, it.baselineVersion, resolvedTask.version) }
+            val visibleDraft = matchingRecovery?.draft ?: baseline
+            _state.value = TaskDetailUiState(
+                taskId = taskId,
+                loading = false,
+                task = resolvedTask,
+                parentTask = parent?.takeIf { root -> root.id != resolvedTask.id },
+                projects = projectsResult.getOrThrow(),
+                taskTypes = typesResult.getOrThrow(),
+                timezone = resolvedList.timezone,
+                serverNow = resolvedList.serverNow,
+                baselineDraft = baseline,
+                editing = matchingRecovery != null,
+                recoveryConflict = recoveryConflict,
+            ).withDraft(visibleDraft)
             anchorClock(resolvedList.serverNow, resolvedList.timezone)
         }
     }
@@ -143,7 +174,10 @@ class TaskDetailViewModel(
 
     fun setTitle(value: String) = edit { copy(title = value) }
     fun setDescription(value: String) = edit { copy(description = value) }
-    fun setStatus(value: TaskStatus) = edit { copy(status = value) }
+    fun setStatus(value: TaskStatus) {
+        if (value == TaskStatus.Completed) return
+        edit { copy(status = value) }
+    }
     fun setProject(value: Int?) = edit { copy(projectId = value) }
     fun setTaskType(value: Int?) = edit { copy(taskTypeId = value) }
     fun setUrgency(value: PriorityLevel?) = edit { copy(urgency = value) }
@@ -162,17 +196,83 @@ class TaskDetailViewModel(
     fun requestTrash() = _state.update { it.copy(confirmTrash = true) }
     fun dismissTrash() = _state.update { it.copy(confirmTrash = false) }
 
+    fun startEditing() {
+        val current = _state.value
+        if (current.task?.status == TaskStatus.Completed || current.saving) return
+        _state.update { it.copy(editing = true, validationError = null, saveError = null) }
+        persistCurrentDraft()
+    }
+
+    fun discardChanges() {
+        val current = _state.value
+        val baseline = current.baselineDraft ?: return
+        clearPersistedDraft()
+        _state.value = current.withDraft(baseline).copy(
+            editing = false,
+            dirty = false,
+            validationError = null,
+            saveError = null,
+            recoveryConflict = null,
+        )
+    }
+
+    fun useLatestTask() {
+        val current = _state.value
+        val baseline = current.baselineDraft ?: return
+        clearPersistedDraft()
+        _state.value = current.withDraft(baseline).copy(
+            editing = false,
+            dirty = false,
+            recoveryConflict = null,
+            validationError = null,
+            saveError = null,
+        )
+    }
+
+    fun restoreRecoveredDraft() {
+        val current = _state.value
+        val conflict = current.recoveryConflict ?: return
+        if (current.task?.status == TaskStatus.Completed) return
+        _state.value = current.withDraft(conflict.draft).copy(
+            editing = true,
+            dirty = conflict.draft.normalized() != current.baselineDraft?.normalized(),
+            recoveryConflict = null,
+            validationError = null,
+            saveError = null,
+        )
+        persistCurrentDraft()
+    }
+
     fun reopenTask() {
         val task = _state.value.task ?: return
-        if (task.status != TaskStatus.Completed || _state.value.saving) return
-        _state.update { it.copy(saving = true, message = null) }
+        if (task.status != TaskStatus.Completed || _state.value.saving || _state.value.editing) return
+        _state.update { it.copy(saving = true, operation = TaskDetailOperation.Reopening, message = null) }
         viewModelScope.launch {
             taskCompletion.transition(task.id, task.status, TaskStatus.Open).fold(
                 onSuccess = {
+                    clearPersistedDraft()
                     load(task.id)
                 },
                 onFailure = {
-                    _state.update { it.copy(saving = false) }
+                    _state.update { it.copy(saving = false, operation = null) }
+                    refreshAfterTaskCompletion(task.id)
+                },
+            )
+        }
+    }
+
+    fun completeTask() {
+        val task = _state.value.task ?: return
+        if (task.status == TaskStatus.Completed || _state.value.saving || _state.value.editing) return
+        _state.update { it.copy(saving = true, operation = TaskDetailOperation.Completing, message = null) }
+        viewModelScope.launch {
+            taskCompletion.transition(task.id, task.status, TaskStatus.Completed).fold(
+                onSuccess = {
+                    clearPersistedDraft()
+                    load(task.id)
+                },
+                onFailure = {
+                    _state.update { it.copy(saving = false, operation = null) }
                     refreshAfterTaskCompletion(task.id)
                 },
             )
@@ -243,55 +343,53 @@ class TaskDetailViewModel(
     fun save() {
         val current = _state.value
         val original = current.task ?: return
+        val baseline = current.baselineDraft ?: return
+        if (!current.editing || !current.dirty || current.saving) return
         val parsed = validateTaskDraft(current)
         if (parsed is TaskDraftValidation.Invalid) {
-            _state.update { it.copy(message = parsed.message) }
+            _state.update { it.copy(validationError = parsed, saveError = null) }
             return
         }
         parsed as TaskDraftValidation.Valid
-        _state.update { it.copy(saving = true, message = null) }
+        val draft = current.toTaskDetailDraft().normalized()
+        val normalizedBaseline = baseline.normalized()
+        _state.update {
+            it.copy(
+                saving = true,
+                operation = TaskDetailOperation.SavingChanges,
+                validationError = null,
+                saveError = null,
+                message = null,
+            )
+        }
         viewModelScope.launch {
-            val changes = repository.patchBattleTask(
+            repository.patchBattleTask(
                 original.id,
                 BattleTaskPatch(
-                    title = PatchField.of(current.title.trim()), description = PatchField.of(current.description.trim()),
-                    status = if (
-                        original.status != current.status &&
-                        original.status != TaskStatus.Completed &&
-                        current.status != TaskStatus.Completed
-                    ) PatchField.of(current.status) else PatchField.Absent,
-                    projectId = if (current.isSubtask) PatchField.Absent else current.projectId.toPatchField(),
-                    taskTypeId = current.taskTypeId.toPatchField(), urgency = current.urgency.toPatchField(),
-                    importance = current.importance.toPatchField(),
-                    deadlineDate = parsed.deadlineDate.toPatchField(), deadlineAt = parsed.deadlineAt.toPatchField(),
-                    reminderAt = parsed.reminderAt.toPatchField(), readyToPlan = PatchField.of(current.readyToPlan),
+                    title = draft.title.changedFrom(normalizedBaseline.title),
+                    description = draft.description.changedFrom(normalizedBaseline.description),
+                    status = draft.status.changedFrom(normalizedBaseline.status),
+                    projectId = if (current.isSubtask) PatchField.Absent else draft.projectId.changedNullableFrom(normalizedBaseline.projectId),
+                    taskTypeId = draft.taskTypeId.changedNullableFrom(normalizedBaseline.taskTypeId),
+                    urgency = draft.urgency.changedNullableFrom(normalizedBaseline.urgency),
+                    importance = draft.importance.changedNullableFrom(normalizedBaseline.importance),
+                    deadlineDate = parsed.deadlineDate.changedNullableFrom(original.deadlineDate),
+                    deadlineAt = parsed.deadlineAt.changedNullableFrom(original.deadlineAt),
+                    reminderAt = parsed.reminderAt.changedNullableFrom(original.reminderAt),
+                    readyToPlan = draft.readyToPlan.changedFrom(normalizedBaseline.readyToPlan),
                 ),
-            )
-            changes.getOrElse { error ->
-                _state.update { it.copy(saving = false, message = error.apiError.message) }
+            ).getOrElse { error ->
+                _state.update {
+                    it.copy(
+                        saving = false,
+                        operation = null,
+                        saveError = error.apiError.message,
+                    )
+                }
                 return@launch
             }
-            var lifecycleChanged = false
-            if (
-                original.status != current.status &&
-                (original.status == TaskStatus.Completed || current.status == TaskStatus.Completed)
-            ) {
-                taskCompletion.transition(original.id, original.status, current.status).getOrElse {
-                    _state.update { it.copy(saving = false) }
-                    refreshAfterTaskCompletion(original.id)
-                    return@launch
-                }
-                lifecycleChanged = true
-            }
+            clearPersistedDraft()
             load(original.id)
-            _state.update {
-                it.copy(
-                    saving = false,
-                    dirty = false,
-                    saved = true,
-                    message = if (lifecycleChanged) null else "Task saved",
-                )
-            }
         }
     }
 
@@ -311,39 +409,221 @@ class TaskDetailViewModel(
         }
     }
 
-    private fun edit(block: TaskDetailUiState.() -> TaskDetailUiState) =
-        _state.update { it.block().copy(dirty = true, saved = false) }
+    private fun edit(block: TaskDetailUiState.() -> TaskDetailUiState) {
+        if (!_state.value.editing || _state.value.saving) return
+        _state.update { current ->
+            val updated = current.block().copy(validationError = null, saveError = null)
+            updated.copy(dirty = updated.toTaskDetailDraft().normalized() != updated.baselineDraft?.normalized())
+        }
+        persistCurrentDraft()
+    }
+
+    private fun persistCurrentDraft() {
+        val current = _state.value
+        val task = current.task ?: return
+        if (!current.editing) return
+        persistTaskDetailDraft(savedStateHandle, task.id, task.version, current.toTaskDetailDraft())
+    }
+
+    private fun clearPersistedDraft() = clearTaskDetailDraft(savedStateHandle)
 
     companion object { private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm") }
 }
 
+internal data class PersistedTaskDetailDraft(val draft: TaskDetailDraft, val baselineVersion: Int)
+
+private fun BattleTask.toTaskDetailDraft(zone: ZoneId): TaskDetailDraft {
+    val deadlineMode = when {
+        deadlineAt != null -> TaskDeadlineMode.DateTime
+        deadlineDate != null -> TaskDeadlineMode.DateOnly
+        else -> TaskDeadlineMode.None
+    }
+    val deadlineLocal = deadlineAt?.atZone(zone)
+    val reminderLocal = reminderAt?.atZone(zone)
+    return TaskDetailDraft(
+        title = title,
+        description = description,
+        status = status,
+        projectId = projectId,
+        taskTypeId = taskTypeId,
+        urgency = urgency,
+        importance = importance,
+        deadlineMode = deadlineMode,
+        deadlineDate = deadlineDate?.toString() ?: deadlineLocal?.toLocalDate()?.toString().orEmpty(),
+        deadlineTime = deadlineLocal?.toLocalTime()?.format(DateTimeFormatter.ofPattern("HH:mm")).orEmpty(),
+        reminderEnabled = reminderAt != null,
+        reminderDate = reminderLocal?.toLocalDate()?.toString().orEmpty(),
+        reminderTime = reminderLocal?.toLocalTime()?.format(DateTimeFormatter.ofPattern("HH:mm")).orEmpty(),
+        readyToPlan = readyToPlan,
+    )
+}
+
+internal fun TaskDetailUiState.toTaskDetailDraft() = TaskDetailDraft(
+    title = title,
+    description = description,
+    status = status,
+    projectId = projectId,
+    taskTypeId = taskTypeId,
+    urgency = urgency,
+    importance = importance,
+    deadlineMode = deadlineMode,
+    deadlineDate = deadlineDate,
+    deadlineTime = deadlineTime,
+    reminderEnabled = reminderEnabled,
+    reminderDate = reminderDate,
+    reminderTime = reminderTime,
+    readyToPlan = readyToPlan,
+)
+
+internal fun TaskDetailUiState.withDraft(draft: TaskDetailDraft) = copy(
+    title = draft.title,
+    description = draft.description,
+    status = draft.status,
+    projectId = draft.projectId,
+    taskTypeId = draft.taskTypeId,
+    urgency = draft.urgency,
+    importance = draft.importance,
+    deadlineMode = draft.deadlineMode,
+    deadlineDate = draft.deadlineDate,
+    deadlineTime = draft.deadlineTime,
+    reminderEnabled = draft.reminderEnabled,
+    reminderDate = draft.reminderDate,
+    reminderTime = draft.reminderTime,
+    readyToPlan = draft.readyToPlan,
+)
+
+internal fun TaskDetailDraft.normalized() = copy(title = title.trim(), description = description.trim())
+
+private object TaskDetailDraftKeys {
+    const val TaskId = "taskDetail.draft.taskId"
+    const val BaselineVersion = "taskDetail.draft.baselineVersion"
+    const val Editing = "taskDetail.draft.editing"
+    const val Title = "taskDetail.draft.title"
+    const val Description = "taskDetail.draft.description"
+    const val Status = "taskDetail.draft.status"
+    const val ProjectId = "taskDetail.draft.projectId"
+    const val HasProject = "taskDetail.draft.hasProject"
+    const val TaskTypeId = "taskDetail.draft.taskTypeId"
+    const val HasTaskType = "taskDetail.draft.hasTaskType"
+    const val Urgency = "taskDetail.draft.urgency"
+    const val Importance = "taskDetail.draft.importance"
+    const val DeadlineMode = "taskDetail.draft.deadlineMode"
+    const val DeadlineDate = "taskDetail.draft.deadlineDate"
+    const val DeadlineTime = "taskDetail.draft.deadlineTime"
+    const val ReminderEnabled = "taskDetail.draft.reminderEnabled"
+    const val ReminderDate = "taskDetail.draft.reminderDate"
+    const val ReminderTime = "taskDetail.draft.reminderTime"
+    const val ReadyToPlan = "taskDetail.draft.readyToPlan"
+
+    val all = listOf(
+        TaskId, BaselineVersion, Editing, Title, Description, Status, ProjectId, HasProject,
+        TaskTypeId, HasTaskType, Urgency, Importance, DeadlineMode, DeadlineDate, DeadlineTime,
+        ReminderEnabled, ReminderDate, ReminderTime, ReadyToPlan,
+    )
+}
+
+internal fun persistTaskDetailDraft(
+    handle: SavedStateHandle,
+    taskId: Int,
+    baselineVersion: Int,
+    draft: TaskDetailDraft,
+) {
+    handle[TaskDetailDraftKeys.TaskId] = taskId
+    handle[TaskDetailDraftKeys.BaselineVersion] = baselineVersion
+    handle[TaskDetailDraftKeys.Editing] = true
+    handle[TaskDetailDraftKeys.Title] = draft.title
+    handle[TaskDetailDraftKeys.Description] = draft.description
+    handle[TaskDetailDraftKeys.Status] = draft.status.name
+    handle[TaskDetailDraftKeys.HasProject] = draft.projectId != null
+    handle[TaskDetailDraftKeys.ProjectId] = draft.projectId
+    handle[TaskDetailDraftKeys.HasTaskType] = draft.taskTypeId != null
+    handle[TaskDetailDraftKeys.TaskTypeId] = draft.taskTypeId
+    handle[TaskDetailDraftKeys.Urgency] = draft.urgency?.name
+    handle[TaskDetailDraftKeys.Importance] = draft.importance?.name
+    handle[TaskDetailDraftKeys.DeadlineMode] = draft.deadlineMode.name
+    handle[TaskDetailDraftKeys.DeadlineDate] = draft.deadlineDate
+    handle[TaskDetailDraftKeys.DeadlineTime] = draft.deadlineTime
+    handle[TaskDetailDraftKeys.ReminderEnabled] = draft.reminderEnabled
+    handle[TaskDetailDraftKeys.ReminderDate] = draft.reminderDate
+    handle[TaskDetailDraftKeys.ReminderTime] = draft.reminderTime
+    handle[TaskDetailDraftKeys.ReadyToPlan] = draft.readyToPlan
+}
+
+internal fun restoreTaskDetailDraft(handle: SavedStateHandle, taskId: Int): PersistedTaskDetailDraft? {
+    if (handle.get<Boolean>(TaskDetailDraftKeys.Editing) != true) return null
+    if (handle.get<Int>(TaskDetailDraftKeys.TaskId) != taskId) return null
+    val baselineVersion = handle.get<Int>(TaskDetailDraftKeys.BaselineVersion) ?: return null
+    val status = handle.get<String>(TaskDetailDraftKeys.Status)
+        ?.let { runCatching { TaskStatus.valueOf(it) }.getOrNull() }
+        ?.takeIf { it != TaskStatus.Completed }
+        ?: TaskStatus.Open
+    val draft = TaskDetailDraft(
+        title = handle[TaskDetailDraftKeys.Title] ?: "",
+        description = handle[TaskDetailDraftKeys.Description] ?: "",
+        status = status,
+        projectId = handle.get<Int>(TaskDetailDraftKeys.ProjectId)
+            .takeIf { handle.get<Boolean>(TaskDetailDraftKeys.HasProject) == true },
+        taskTypeId = handle.get<Int>(TaskDetailDraftKeys.TaskTypeId)
+            .takeIf { handle.get<Boolean>(TaskDetailDraftKeys.HasTaskType) == true },
+        urgency = handle.get<String>(TaskDetailDraftKeys.Urgency)?.let { runCatching { PriorityLevel.valueOf(it) }.getOrNull() },
+        importance = handle.get<String>(TaskDetailDraftKeys.Importance)?.let { runCatching { PriorityLevel.valueOf(it) }.getOrNull() },
+        deadlineMode = handle.get<String>(TaskDetailDraftKeys.DeadlineMode)
+            ?.let { runCatching { TaskDeadlineMode.valueOf(it) }.getOrNull() } ?: TaskDeadlineMode.None,
+        deadlineDate = handle[TaskDetailDraftKeys.DeadlineDate] ?: "",
+        deadlineTime = handle[TaskDetailDraftKeys.DeadlineTime] ?: "",
+        reminderEnabled = handle[TaskDetailDraftKeys.ReminderEnabled] ?: false,
+        reminderDate = handle[TaskDetailDraftKeys.ReminderDate] ?: "",
+        reminderTime = handle[TaskDetailDraftKeys.ReminderTime] ?: "",
+        readyToPlan = handle[TaskDetailDraftKeys.ReadyToPlan] ?: false,
+    )
+    return PersistedTaskDetailDraft(draft, baselineVersion)
+}
+
+internal fun clearTaskDetailDraft(handle: SavedStateHandle) {
+    TaskDetailDraftKeys.all.forEach { handle.remove<Any>(it) }
+}
+
+private fun <T> T.changedFrom(original: T): PatchField<T> =
+    if (this == original) PatchField.Absent else PatchField.of(this)
+
+private fun <T : Any> T?.changedNullableFrom(original: T?): PatchField<T> = when {
+    this == original -> PatchField.Absent
+    this == null -> PatchField.Null
+    else -> PatchField.of(this)
+}
+
 sealed interface TaskDraftValidation {
     data class Valid(val deadlineDate: LocalDate?, val deadlineAt: Instant?, val reminderAt: Instant?) : TaskDraftValidation
-    data class Invalid(val message: String) : TaskDraftValidation
+    data class Invalid(val field: TaskDraftField?, val message: String) : TaskDraftValidation
 }
 
 internal fun validateTaskDraft(state: TaskDetailUiState): TaskDraftValidation {
-    if (state.title.isBlank()) return TaskDraftValidation.Invalid("Task title is required.")
-    val zone = runCatching { ZoneId.of(state.timezone) }.getOrElse { return TaskDraftValidation.Invalid("Unknown app timezone.") }
+    if (state.title.isBlank()) return TaskDraftValidation.Invalid(TaskDraftField.Title, "Task title is required.")
+    val zone = runCatching { ZoneId.of(state.timezone) }
+        .getOrElse { return TaskDraftValidation.Invalid(null, "Unknown app timezone.") }
     val date = if (state.deadlineMode != TaskDeadlineMode.None) runCatching { LocalDate.parse(state.deadlineDate) }.getOrNull() else null
-    if (state.deadlineMode != TaskDeadlineMode.None && date == null) return TaskDraftValidation.Invalid("Enter a deadline date as YYYY-MM-DD.")
+    if (state.deadlineMode != TaskDeadlineMode.None && date == null) {
+        return TaskDraftValidation.Invalid(TaskDraftField.DeadlineDate, "Enter a deadline date as YYYY-MM-DD.")
+    }
     val deadlineAt = if (state.deadlineMode == TaskDeadlineMode.DateTime) {
         val time = runCatching { LocalTime.parse(state.deadlineTime) }.getOrNull()
-            ?: return TaskDraftValidation.Invalid("Enter a deadline time as HH:MM.")
+            ?: return TaskDraftValidation.Invalid(TaskDraftField.DeadlineTime, "Enter a deadline time as HH:MM.")
         LocalDateTime.of(date, time).atZone(zone).toInstant()
     } else null
     val deadlineDate = date.takeIf { state.deadlineMode == TaskDeadlineMode.DateOnly }
     val reminderAt = if (state.reminderEnabled) {
-        if (state.deadlineMode == TaskDeadlineMode.None) return TaskDraftValidation.Invalid("A reminder requires a deadline.")
+        if (state.deadlineMode == TaskDeadlineMode.None) {
+            return TaskDraftValidation.Invalid(TaskDraftField.ReminderDate, "A reminder requires a deadline.")
+        }
         val reminderDate = runCatching { LocalDate.parse(state.reminderDate) }.getOrNull()
-            ?: return TaskDraftValidation.Invalid("Enter a reminder date as YYYY-MM-DD.")
+            ?: return TaskDraftValidation.Invalid(TaskDraftField.ReminderDate, "Enter a reminder date as YYYY-MM-DD.")
         val reminderTime = runCatching { LocalTime.parse(state.reminderTime) }.getOrNull()
-            ?: return TaskDraftValidation.Invalid("Enter a reminder time as HH:MM.")
+            ?: return TaskDraftValidation.Invalid(TaskDraftField.ReminderTime, "Enter a reminder time as HH:MM.")
         LocalDateTime.of(reminderDate, reminderTime).atZone(zone).toInstant()
     } else null
     val boundary = deadlineAt ?: deadlineDate?.plusDays(1)?.atStartOfDay(zone)?.toInstant()
     if (reminderAt != null && boundary != null && !reminderAt.isBefore(boundary)) {
-        return TaskDraftValidation.Invalid("Reminder must be before the deadline.")
+        return TaskDraftValidation.Invalid(TaskDraftField.ReminderTime, "Reminder must be before the deadline.")
     }
     return TaskDraftValidation.Valid(deadlineDate, deadlineAt, reminderAt)
 }

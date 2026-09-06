@@ -1,6 +1,9 @@
 package com.timebox.android.data
 
 import com.timebox.android.data.remote.ApiFactory
+import com.timebox.android.data.remote.ActualBlockCreateDto
+import com.timebox.android.data.remote.ActualBlockDto
+import com.timebox.android.data.remote.ActualBlockPatchDto
 import com.timebox.android.data.remote.BattleTaskListDto
 import com.timebox.android.data.remote.BattleTaskCreateDto
 import com.timebox.android.data.remote.DueReminderDto
@@ -116,13 +119,59 @@ class BattlePlanContractTest {
 
     @Test
     fun `time block create serializes optional task link without global nulls`() {
-        val linked = json.encodeToString(TimeBlockCreateDto("planned", 3, 10, null, 540, 570))
+        val linked = json.encodeToString(TimeBlockCreateDto(
+            lane = "planned", taskTypeId = 3, taskId = 10,
+            startMinute = 540, endMinute = 570,
+        ))
         assertTrue("\"task_id\":10" in linked)
         assertTrue("note" !in linked)
 
-        val unlinked = json.encodeToString(TimeBlockCreateDto("planned", 3, null, null, 540, 570))
+        val unlinked = json.encodeToString(TimeBlockCreateDto(
+            lane = "planned", taskTypeId = 3,
+            startMinute = 540, endMinute = 570,
+        ))
         assertTrue("task_id" !in unlinked)
         assertNull(json.decodeFromString(TimeBlockCreateDto.serializer(), unlinked).taskId)
+    }
+
+    @Test
+    fun `taskless Planned Block contract carries optional Name without Task Type`() {
+        val created = TimeBlockCreateDto(
+            name = "Dinner with Alex",
+            startMinute = 1080,
+            endMinute = 1140,
+        )
+        val encoded = json.encodeToString(created)
+        assertTrue("\"name\":\"Dinner with Alex\"" in encoded)
+        assertTrue("task_type_id" !in encoded)
+
+        val read = json.decodeFromString(
+            TimeBlockDto.serializer(),
+            """{"id":1,"lane":"planned","task_type_id":3,"task_type":{"id":3,"name":"unspecified"},"name":"Dinner with Alex","start_minute":1080,"end_minute":1140}""",
+        ).toModel()
+        assertEquals("Dinner with Alex", read.name)
+    }
+
+    @Test
+    fun `standalone Actual Block contract serializes and reads Name without Task Type`() {
+        val created = ActualBlockCreateDto(
+            startAt = "2026-08-30T10:00:00Z",
+            endAt = "2026-08-30T11:00:00Z",
+            name = "Dinner with Alex",
+        )
+        val encodedCreate = json.encodeToString(created)
+        assertTrue("\"name\":\"Dinner with Alex\"" in encodedCreate)
+        assertTrue("task_type_id" !in encodedCreate)
+
+        val encodedPatch = json.encodeToString(ActualBlockPatchDto(name = ""))
+        assertTrue("\"name\":\"\"" in encodedPatch)
+
+        val read = json.decodeFromString(
+            ActualBlockDto.serializer(),
+            """{"id":4,"task_type_id":3,"task_type":{"id":3,"name":"unspecified"},"name":"Dinner with Alex","start_at":"2026-08-30T10:00:00Z","end_at":"2026-08-30T11:00:00Z","created_at":"2026-08-30T10:00:00Z","updated_at":"2026-08-30T11:00:00Z"}""",
+        ).toModel()
+        assertEquals("Dinner with Alex", read.name)
+        assertEquals("unspecified", read.taskTypeName)
     }
 
     @Test

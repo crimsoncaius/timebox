@@ -1,7 +1,5 @@
 package com.timebox.android.ui.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -24,7 +21,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -68,9 +64,6 @@ fun SettingsScreen(
             .padding(horizontal = TimeboxDimens.screenPadding)
             .padding(bottom = TimeboxDimens.bottomInset),
     ) {
-        ConnectionStatus(connected = state.window != null && state.error == null)
-        Spacer(Modifier.height(14.dp))
-
         val window = state.window
         when {
             state.loading && window == null -> {
@@ -226,33 +219,6 @@ fun SettingsScreen(
             color = colors.outlineVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
-
-@Composable
-private fun ConnectionStatus(connected: Boolean) {
-    val colors = TimeboxTheme.colors
-    Row(
-        modifier = Modifier
-            .clip(TimeboxShapes.chip)
-            .background(colors.low)
-            .border(1.dp, colors.hairline, TimeboxShapes.chip)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        Box(
-            Modifier
-                .width(6.dp)
-                .height(6.dp)
-                .clip(CircleShape)
-                .background(if (connected) colors.tertiary else colors.error),
-        )
-        Text(
-            text = if (connected) "Up to date" else "Not connected",
-            style = TimeboxTheme.type.label.copy(fontSize = 11.sp),
-            color = colors.onVariant,
         )
     }
 }

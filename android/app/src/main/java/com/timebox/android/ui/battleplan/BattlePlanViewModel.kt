@@ -101,6 +101,7 @@ data class BattlePlanUiState(
     val refreshing: Boolean = false,
     val saving: Boolean = false,
     val projects: List<Project> = emptyList(),
+    val projectOrderSaving: Boolean = false,
     val taskTypes: List<TaskType> = emptyList(),
     val tasks: List<BattleTask> = emptyList(),
     val collection: TaskCollection = TaskCollection.Active,
@@ -259,6 +260,17 @@ class BattlePlanViewModel internal constructor(
         if (_state.value.collection == collection) return
         _state.update { it.copy(collection = collection, tasks = emptyList(), loading = true) }
         load(true)
+    }
+
+    fun reorderProjects(ids: List<Int>) {
+        if (_state.value.projectOrderSaving) return
+        _state.update { it.copy(projectOrderSaving = true, error = null) }
+        viewModelScope.launch {
+            repository.reorderProjects(ids).fold(
+                onSuccess = { projects -> _state.update { it.copy(projects = projects, projectOrderSaving = false) } },
+                onFailure = { _state.update { it.copy(projectOrderSaving = false, error = "Could not save project order. Refresh and try again.") } },
+            )
+        }
     }
 
     fun selectScope(scope: BattlePlanScope) { _state.update { it.copy(selectedScope = scope) }; persistView() }

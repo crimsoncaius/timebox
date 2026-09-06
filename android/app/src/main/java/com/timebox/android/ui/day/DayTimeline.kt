@@ -60,6 +60,8 @@ import com.timebox.android.data.MIN_ACTUAL_BLOCK_MINUTES
 import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TimeBlock
+import com.timebox.android.data.primaryIdentity
+import com.timebox.android.data.secondaryIdentity
 import com.timebox.android.ui.gutterLabel
 import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.planning.PlanningDraftPlacement
@@ -197,7 +199,8 @@ fun DayTimeline(
                     .padding(start = TimeboxDimens.gutterWidth + TimeboxDimens.laneGap)
                     .offset(y = y)
                     .height(1.dp)
-                    .background(colors.now),
+                    .background(colors.now)
+                    .testTag("day-now-line"),
                 // The knob is seven times the rule's height, so it is centred on the rule
                 // rather than hung off its top corner.
                 contentAlignment = Alignment.CenterStart,
@@ -368,7 +371,7 @@ private fun LaneColumn(
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
-                moveEnabled = blockGesturesEnabled && lane == Lane.Planned,
+                moveEnabled = blockGesturesEnabled,
                 resizeEnabled = blockGesturesEnabled,
                 onTap = { onSelectBlock(block.id) },
                 // Both callbacks recompute from the block's committed times and the raw
@@ -801,7 +804,7 @@ private fun BlockCard(
             ) {
                 Text(
                     text = buildString {
-                        append(block.task?.title ?: block.taskTypeName)
+                        append(block.primaryIdentity())
                         block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
                     },
                     style = if (selected) {
@@ -813,9 +816,10 @@ private fun BlockCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (block.task != null && innerHeight >= 30.dp) {
+                val secondary = block.secondaryIdentity()
+                if (secondary != null && innerHeight >= 30.dp) {
                     Text(
-                        text = block.taskTypeName,
+                        text = secondary,
                         style = TimeboxTheme.type.monoSmall,
                         color = colors.onVariant,
                         maxLines = 1,

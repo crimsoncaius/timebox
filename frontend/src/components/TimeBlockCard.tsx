@@ -7,17 +7,10 @@ import {
   SLOT_MINUTES,
 } from '../lib/time'
 import type { TimeBlockLike } from '../lib/time'
+import { blockPrimaryIdentity, blockSecondaryIdentity } from '../lib/blockIdentity'
 
 /** Ignore tiny jitter before moving a block. */
 const SWIPE_AXIS_DEAD_ZONE_PX = 8
-
-/** Resize handle row height (`h-2`) in px; two handles when editable. */
-const RESIZE_HANDLE_ROWS_PX = 16
-/** Min height for the body (below handles) before showing the time row. */
-const MIN_INNER_PX_FOR_TIME = 34
-const MIN_INNER_PX_FOR_TIME_WITH_NOTE = 48
-/** Inner height needed to show title and time on two lines in side-text mode. */
-const MIN_INNER_PX_SIDE_TEXT_TWO_LINES = 30
 
 type DragState =
   | { kind: 'resize'; edge: 'start' | 'end'; start: number; end: number }
@@ -54,6 +47,7 @@ export function TimeBlockCard({
   getMinuteFromClientY: (clientY: number) => number
   onPatch: (patch: {
     task_type_id?: number
+    name?: string | null
     note?: string | null
     start_minute?: number
     end_minute?: number
@@ -106,8 +100,11 @@ export function TimeBlockCard({
     if (!d) return
     try {
       const { start, end } = d
-      if (end - start < SLOT_MINUTES) return
-      if (start % SLOT_MINUTES !== 0 || end % SLOT_MINUTES !== 0) return
+      if (end <= start) return
+      if (
+        lane === 'planned'
+        && (end - start < SLOT_MINUTES || start % SLOT_MINUTES !== 0 || end % SLOT_MINUTES !== 0)
+      ) return
       if (start === block.start_minute && end === block.end_minute) return
       setPendingLayout({
         start,
@@ -121,7 +118,7 @@ export function TimeBlockCard({
     } finally {
       onDragSessionChange?.(false)
     }
-  }, [block.end_minute, block.start_minute, onDragSessionChange, onPatch])
+  }, [block.end_minute, block.start_minute, lane, onDragSessionChange, onPatch])
 
   const cancelDrag = useCallback(() => {
     const wasDragging = dragRef.current != null
@@ -338,16 +335,11 @@ export function TimeBlockCard({
     ],
   )
 
-  const label = block.task?.title?.trim() || block.task_type?.name?.trim() || '(No title)'
-  const displayLabel = label
+  const displayLabel = blockPrimaryIdentity(block)
+  const secondaryLabel = blockSecondaryIdentity(block)
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
-  const innerContentPx = heightPx - (readOnly ? 0 : RESIZE_HANDLE_ROWS_PX)
-  const innerTextThreshold = block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME
-  const useSideTextLayout = drag == null && innerContentPx < innerTextThreshold
-  const sideTextTwoLines = innerContentPx >= MIN_INNER_PX_SIDE_TEXT_TWO_LINES
-  const showTime =
-    !useSideTextLayout &&
-    innerContentPx >= (block.note ? MIN_INNER_PX_FOR_TIME_WITH_NOTE : MIN_INNER_PX_FOR_TIME)
+  const durationMin = displayEnd - displayStart
+  const compactContent = durationMin <= SLOT_MINUTES
 
   const isDragging = drag != null
   const dragKind =
@@ -357,18 +349,9 @@ export function TimeBlockCard({
 
   const laneStripeColor =
     lane === 'planned' ? 'bg-planned' : 'bg-actual'
-  const laneBarClassName = `w-3 shrink-0 rounded-md border border-[rgba(80,70,50,0.25)] dark:border-[rgba(255,250,240,0.18)] bg-paper-soft ${
-    isSelected ? `border-l-4 ${lane === 'planned' ? 'border-l-planned' : 'border-l-actual'} pl-0` : ''
-  }`
-
-  const showLaneStripe = isSelected || dragKind === 'move'
-  const durationMin = displayEnd - displayStart
-  const showSelectedMeta = isSelected && durationMin >= 60 && !useSideTextLayout
 
   const shellClassName = (() => {
-    const clip =
-      useSideTextLayout && dragKind == null ? 'overflow-visible' : 'overflow-hidden'
-    const base = `absolute left-1 right-1 flex flex-col ${clip} rounded-md transition-[box-shadow,background-color,border-color] duration-150`
+    const base = 'absolute left-1 right-1 flex flex-col overflow-hidden rounded-md transition-[box-shadow,background-color,border-color] duration-150'
     if (dragKind === 'move') {
       return `${base} z-30 cursor-grabbing border-0 bg-paper-raised [box-shadow:var(--shadow-engrave-drag)] rotate-[-1.2deg]`
     }
@@ -388,6 +371,7 @@ export function TimeBlockCard({
       data-selected={isSelected ? 'true' : undefined}
       data-dragging={isDragging ? 'true' : undefined}
       data-drag-kind={dragKind}
+      data-content-density={compactContent ? 'compact' : 'expanded'}
       className={shellClassName}
       style={{
         top: displayTop,
@@ -399,74 +383,36 @@ export function TimeBlockCard({
           type="button"
           aria-label="Resize block start"
           className={[
-            useSideTextLayout ? 'h-[5px]' : 'h-2',
-            'w-full shrink-0 cursor-ns-resize border-0 relative',
+            'absolute inset-x-0 top-0 z-20 h-2 cursor-ns-resize border-0',
             'bg-paper-groove-bg hover:bg-paper-groove-bg-strong',
             '[box-shadow:var(--shadow-groove-inner)]',
-            ...(!useSideTextLayout ? [
-              "before:content-[''] before:absolute before:left-1/2 before:-translate-x-1/2",
-              'before:top-[2px] before:h-[1px] before:w-9',
-              isSelected ? 'before:bg-paper-rule-ink' : 'before:bg-paper-rule',
-              "after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2",
-              'after:top-[4.5px] after:h-[1px] after:w-9',
-              isSelected ? 'after:bg-paper-rule-ink' : 'after:bg-paper-rule',
-            ] : []),
+            "before:content-[''] before:absolute before:left-1/2 before:-translate-x-1/2",
+            'before:top-[2px] before:h-[1px] before:w-9',
+            isSelected ? 'before:bg-paper-rule-ink' : 'before:bg-paper-rule',
+            "after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2",
+            'after:top-[4.5px] after:h-[1px] after:w-9',
+            isSelected ? 'after:bg-paper-rule-ink' : 'after:bg-paper-rule',
           ].join(' ')}
           onPointerDown={(e) => startResize('start', e)}
         />
       )}
       {readOnly ? (
-        useSideTextLayout ? (
-          <div className="flex min-h-0 flex-1 flex-row items-stretch gap-2 overflow-hidden px-1.5 py-0.5">
-            <div aria-hidden className={`self-stretch ${laneBarClassName}`} />
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden">
-              {sideTextTwoLines ? (
-                <>
-                  <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                    {displayLabel}
-                  </p>
-                  <p className="shrink-0 truncate font-body text-[10.5px] font-mono leading-tight text-on-surface-variant">
-                    {timeRangeLabel}
-                  </p>
-                </>
-              ) : (
-                <p className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                  {displayLabel}
-                  <span className="font-normal text-on-surface-variant">
-                    {' '}
-                    · {timeRangeLabel}
-                  </span>
-                </p>
-              )}
-              {block.note && sideTextTwoLines ? (
-                <p className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col items-stretch justify-center gap-0.5 overflow-hidden px-3 py-0">
-            <p className="shrink-0 truncate font-body text-[12.5px] font-medium leading-tight text-on-surface">
-              {displayLabel}
-            </p>
-            {showTime ? (
-              <p className="shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant">
-                {timeRangeLabel}
-              </p>
-            ) : null}
-            {block.note ? (
-              <p className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">{block.note}</p>
-            ) : null}
-          </div>
-        )
+        <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden text-left">
+          <CardContent
+            compact={compactContent}
+            displayLabel={displayLabel}
+            timeRangeLabel={timeRangeLabel}
+            note={block.note}
+            secondaryLabel={secondaryLabel}
+            laneStripeColor={laneStripeColor}
+            isSelected={isSelected}
+          />
+        </div>
       ) : (
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
-          className={`touch-none flex min-h-0 min-w-0 flex-1 border-0 bg-transparent text-left select-none relative ${
-            useSideTextLayout
-              ? 'flex-row items-stretch gap-2 overflow-hidden px-1.5 py-0.5'
-              : 'flex-col items-stretch justify-center gap-0.5 overflow-hidden px-3 py-0'
-          } ${
+          className={`relative flex min-h-0 min-w-0 flex-1 touch-none overflow-hidden border-0 bg-transparent text-left select-none ${
             drag?.kind === 'move' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           onPointerDown={onBodyPointerDown}
@@ -486,63 +432,15 @@ export function TimeBlockCard({
             onBlockClick?.()
           }}
         >
-          {showLaneStripe && !useSideTextLayout && (
-            <span
-              aria-hidden
-              className={`absolute top-2 bottom-2 left-0 w-[2px] rounded-[2px] ${laneStripeColor}`}
-            />
-          )}
-          {showSelectedMeta && (
-            <span className="absolute top-1.5 right-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-on-surface-variant">
-              · selected
-            </span>
-          )}
-          {useSideTextLayout ? (
-            <>
-              <span aria-hidden className={`self-stretch ${laneBarClassName}`} />
-              <span className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden">
-                {sideTextTwoLines ? (
-                  <>
-                    <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                      {displayLabel}
-                    </span>
-                    <span className="shrink-0 truncate font-body text-[10.5px] font-mono leading-tight text-on-surface-variant">
-                      {timeRangeLabel}
-                    </span>
-                  </>
-                ) : (
-                  <span className="shrink-0 truncate font-body text-[12px] font-medium leading-tight text-on-surface">
-                    {displayLabel}
-                    <span className="font-normal text-on-surface-variant">
-                      {' '}
-                      · {timeRangeLabel}
-                    </span>
-                  </span>
-                )}
-                {block.note && sideTextTwoLines ? (
-                  <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
-                    {block.note}
-                  </span>
-                ) : null}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className={`shrink-0 truncate font-body leading-tight text-on-surface ${isSelected ? 'text-[13.5px] font-semibold' : 'text-[12.5px] font-medium'}`}>
-                {displayLabel}
-              </span>
-              {showTime ? (
-                <span className="shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant">
-                  {timeRangeLabel}
-                </span>
-              ) : null}
-              {block.note ? (
-                <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
-                  {block.note}
-                </span>
-              ) : null}
-            </>
-          )}
+          <CardContent
+            compact={compactContent}
+            displayLabel={displayLabel}
+            timeRangeLabel={timeRangeLabel}
+            note={block.note}
+            secondaryLabel={secondaryLabel}
+            laneStripeColor={laneStripeColor}
+            isSelected={isSelected}
+          />
         </button>
       )}
       {!readOnly && !timeEditingDisabled && dragKind !== 'move' && (
@@ -550,22 +448,74 @@ export function TimeBlockCard({
           type="button"
           aria-label="Resize block end"
           className={[
-            useSideTextLayout ? 'h-[5px]' : 'h-2',
-            'w-full shrink-0 cursor-ns-resize border-0 relative',
+            'absolute inset-x-0 bottom-0 z-20 h-2 cursor-ns-resize border-0',
             'bg-paper-groove-bg hover:bg-paper-groove-bg-strong',
             '[box-shadow:var(--shadow-groove-inner)]',
-            ...(!useSideTextLayout ? [
-              "before:content-[''] before:absolute before:left-1/2 before:-translate-x-1/2",
-              'before:top-[2px] before:h-[1px] before:w-9',
-              isSelected ? 'before:bg-paper-rule-ink' : 'before:bg-paper-rule',
-              "after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2",
-              'after:top-[4.5px] after:h-[1px] after:w-9',
-              isSelected ? 'after:bg-paper-rule-ink' : 'after:bg-paper-rule',
-            ] : []),
+            "before:content-[''] before:absolute before:left-1/2 before:-translate-x-1/2",
+            'before:top-[2px] before:h-[1px] before:w-9',
+            isSelected ? 'before:bg-paper-rule-ink' : 'before:bg-paper-rule',
+            "after:content-[''] after:absolute after:left-1/2 after:-translate-x-1/2",
+            'after:top-[4.5px] after:h-[1px] after:w-9',
+            isSelected ? 'after:bg-paper-rule-ink' : 'after:bg-paper-rule',
           ].join(' ')}
           onPointerDown={(e) => startResize('end', e)}
         />
       )}
     </div>
+  )
+}
+
+function CardContent({
+  compact,
+  displayLabel,
+  timeRangeLabel,
+  note,
+  secondaryLabel,
+  laneStripeColor,
+  isSelected,
+}: {
+  compact: boolean
+  displayLabel: string
+  timeRangeLabel: string
+  note: string | null
+  secondaryLabel: string | null
+  laneStripeColor: string
+  isSelected: boolean
+}) {
+  const titleClassName = `min-w-0 shrink truncate font-body leading-tight text-on-surface ${
+    isSelected ? 'text-[13.5px] font-semibold' : 'text-[12.5px] font-medium'
+  }`
+  const timeClassName = 'shrink-0 truncate text-[10.5px] font-mono leading-tight text-on-surface-variant'
+
+  return (
+    <>
+      <span
+        aria-hidden
+        data-lane-stripe
+        className={`absolute top-2 bottom-2 left-0 w-[3px] rounded-[2px] ${laneStripeColor}`}
+      />
+      <span
+        data-block-content
+        className={`flex min-h-0 min-w-0 flex-1 overflow-hidden px-3 py-0 ${
+          compact
+            ? 'flex-row items-center gap-1.5'
+            : 'flex-col items-stretch justify-center gap-0.5'
+        }`}
+      >
+        <span data-block-title className={titleClassName}>{displayLabel}</span>
+        {compact ? <span aria-hidden className="shrink-0 text-on-surface-variant">·</span> : null}
+        <span data-block-time className={timeClassName}>{timeRangeLabel}</span>
+        {!compact && secondaryLabel ? (
+          <span data-block-context className="min-h-0 truncate font-body text-[9px] leading-tight text-on-surface-variant">
+            {secondaryLabel}
+          </span>
+        ) : null}
+        {!compact && note ? (
+          <span className="min-h-0 truncate font-body text-[9px] leading-tight text-outline-variant">
+            {note}
+          </span>
+        ) : null}
+      </span>
+    </>
   )
 }

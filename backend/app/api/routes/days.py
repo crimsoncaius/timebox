@@ -38,9 +38,10 @@ def commit_plan(
 def list_days(
     limit: int = Query(60, ge=1, le=500),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> list[DayListItem]:
     rows = day_service.list_recent_days(db, limit=limit)
-    return [day_service.to_day_list_item(d, count) for d, count in rows]
+    return [day_service.to_day_list_item(db, d, count, settings) for d, count in rows]
 
 
 @router.get("/{date}", response_model=DayRead)

@@ -153,6 +153,7 @@ fun BattlePlanScreen(
     onRetry: () -> Unit,
     onSelectCollection: (TaskCollection) -> Unit = {},
     onSelectScope: (BattlePlanScope) -> Unit,
+    onReorderProjects: (List<Int>) -> Unit = {},
     onSelectStatus: (TaskStatus) -> Unit,
     onToggleUrgency: (String) -> Unit,
     onToggleImportance: (String) -> Unit,
@@ -191,6 +192,8 @@ fun BattlePlanScreen(
     onDismissPermanentDelete: () -> Unit,
     onConfirmPermanentDelete: () -> Unit,
 ) {
+    var projectOrderOpen by remember { mutableStateOf(false) }
+    if (projectOrderOpen) ProjectOrderDialog(state.projects, state.projectOrderSaving, state.error, onReorderProjects) { projectOrderOpen = false }
     val colors = TimeboxTheme.colors
     when {
         state.loading -> LoadingState()
@@ -206,6 +209,7 @@ fun BattlePlanScreen(
                                     selected = state.selectedScope,
                                     onSelect = onSelectScope,
                                     onNewProject = onNewProject,
+                                    onReorderProjects = { projectOrderOpen = true },
                                     onOpenRecurring = onOpenRecurring,
                                 )
                                 BattlePlanFilters(state, onToggleUrgency, onToggleImportance, onToggleTaskType, onClearFilters)
@@ -248,6 +252,7 @@ fun BattlePlanScreen(
                             onShowComposer = onShowComposer,
                             onOpenRecurring = onOpenRecurring,
                             onNewProject = onNewProject,
+                            onReorderProjects = onReorderProjects,
                         )
                     }
                 }
@@ -309,6 +314,7 @@ private fun ScopeSelector(
     selected: BattlePlanScope,
     onSelect: (BattlePlanScope) -> Unit,
     onNewProject: () -> Unit,
+    onReorderProjects: () -> Unit,
     onOpenRecurring: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -338,6 +344,7 @@ private fun ScopeSelector(
                 .clickable(onClick = onOpenRecurring)
                 .padding(horizontal = 14.dp, vertical = 9.dp),
         )
+        TextButton(onClick = onReorderProjects) { Text("Reorder projects") }
         RoundIconButton(
             icon = Icons.Outlined.Add,
             contentDescription = "Create project",
@@ -392,6 +399,7 @@ private fun MobileKanbanBoard(
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
+    onReorderProjects: (List<Int>) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     val density = LocalDensity.current
@@ -455,14 +463,26 @@ private fun MobileKanbanBoard(
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
         if (!pagerState.isScrollInProgress) onSelectStatus(battlePlanStatuses[pagerState.currentPage])
     }
-    LaunchedEffect(activeDrag?.edgeDirection, pagerState.settledPage) {
+    LaunchedEffect(activeDrag?.edgeDirection, activeDrag?.edgeLockedAtPage, pagerState.settledPage) {
+        val lockedDrag = activeDrag
+        if (lockedDrag?.edgeLockedAtPage != null && lockedDrag.edgeLockedAtPage != pagerState.settledPage) {
+            val direction = edgePageDirection(
+                pointerX = lockedDrag.pointerInRoot.x - dragLayerBounds.left,
+                viewportWidth = dragLayerBounds.width,
+                edgeWidth = edgeWidthPx,
+                currentPage = pagerState.settledPage,
+                pageCount = battlePlanStatuses.size,
+            )
+            activeDrag = lockedDrag.copy(edgeDirection = direction, edgeLockedAtPage = null)
+            return@LaunchedEffect
+        }
         val direction = activeDrag?.edgeDirection ?: return@LaunchedEffect
         if (direction == 0) return@LaunchedEffect
         val targetPage = pagerState.settledPage + direction
         if (targetPage !in battlePlanStatuses.indices) return@LaunchedEffect
         delay(MobileDragEdgeDwellMillis)
         if (activeDrag?.edgeDirection != direction) return@LaunchedEffect
-        activeDrag = activeDrag?.copy(edgeDirection = 0, edgeLocked = true)
+        activeDrag = activeDrag?.copy(edgeDirection = 0, edgeLockedAtPage = pagerState.settledPage)
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         dragScope.launch { pagerState.animateScrollToPage(targetPage) }
     }
@@ -573,17 +593,16 @@ private fun MobileKanbanBoard(
                             }
                         }
 
-                        val projectScopes = state.scopes.filter { it.kind == BattlePlanScopeKind.Project }
                         ScopeMenuInsetSection("Projects", "battle-plan-scope-menu-projects") {
-                            projectScopes.forEach { scope ->
-                                ScopeMenuItem(
-                                    label = scope.label,
-                                    icon = Icons.Outlined.Folder,
-                                    selected = scope.preferenceKey == state.selectedScope.preferenceKey,
-                                    onClick = { scopeMenu = false; onSelectScope(scope) },
-                                )
-                                ScopeMenuInsetDivider()
-                            }
+                            ProjectNavigationList(
+                                projects = state.projects,
+                                selectedId = state.selectedScope.projectId,
+                                saving = state.projectOrderSaving,
+                                onSelect = { project -> scopeMenu = false; onSelectScope(BattlePlanScope.project(project)) },
+                                onReorder = onReorderProjects,
+                            )
+                            if (state.projectOrderSaving) Text("Saving project order…", color = colors.onVariant)
+                            state.error?.let { Text(it, color = colors.error) }
                             ScopeMenuItem(
                                 label = "New project",
                                 icon = Icons.Outlined.Add,
@@ -702,8 +721,7 @@ private fun MobileKanbanBoard(
                             )
                             val moved = drag.copy(
                                 pointerInRoot = pointerInRoot,
-                                edgeDirection = if (drag.edgeLocked) 0 else edgeDirection,
-                                edgeLocked = drag.edgeLocked && edgeDirection != 0,
+                                edgeDirection = if (drag.edgeLockedAtPage == null) edgeDirection else 0,
                             )
                             activeDrag = resolveTarget(moved, battlePlanStatuses[pagerState.targetPage])
                         },
@@ -1324,6 +1342,10 @@ private fun MobileKanbanCard(
                 )
                 MobilePrioritySignals(task)
             }
+            if (task.recurringTemplateId != null) {
+                Spacer(Modifier.height(8.dp))
+                RecurrenceBadge(task)
+            }
             task.blockingReason?.trim()?.takeIf { task.isBlocked && it.isNotEmpty() }?.let { reason ->
                 Text(
                     "Blocker: $reason",
@@ -1530,7 +1552,7 @@ private data class MobileTaskDragState(
     val targetStatus: TaskStatus,
     val targetIndex: Int,
     val edgeDirection: Int = 0,
-    val edgeLocked: Boolean = false,
+    val edgeLockedAtPage: Int? = null,
 )
 
 private data class MobileTaskDropSettleState(
@@ -1770,7 +1792,7 @@ private fun BattlePlanFilters(
             Box {
                 TextButton(onClick = { typeMenu = true }) { Text("Task types${if (state.taskTypeFilter.isEmpty()) "" else " · ${state.taskTypeFilter.size}"}") }
                 DropdownMenu(typeMenu, { typeMenu = false }) {
-                    DropdownMenuItem({ Text(filterMark("Unset", "unset" in state.taskTypeFilter)) }, { onTaskType("unset") })
+                    DropdownMenuItem({ Text(filterMark("No task type", "unset" in state.taskTypeFilter)) }, { onTaskType("unset") })
                     state.taskTypes.forEach { type ->
                         DropdownMenuItem({ Text(filterMark(type.name, type.id.toString() in state.taskTypeFilter)) }, { onTaskType(type.id.toString()) })
                     }
@@ -1787,7 +1809,8 @@ private fun BattlePlanFilters(
 private fun FilterButtons(label: String, selected: Set<String>, onToggle: (String) -> Unit) {
     Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
     listOf("low", "medium", "high", "unset").forEach { value ->
-        TextButton(onClick = { onToggle(value) }) { Text(filterMark(value.replaceFirstChar(Char::uppercase), value in selected)) }
+        val displayValue = if (value == "unset") "No ${label.lowercase()}" else value.replaceFirstChar(Char::uppercase)
+        TextButton(onClick = { onToggle(value) }) { Text(filterMark(displayValue, value in selected)) }
     }
 }
 
@@ -1891,10 +1914,13 @@ private fun BattleTaskCard(
                 Spacer(Modifier.height(5.dp))
                 PlannedDatePill(summary)
             }
+            if (task.recurringTemplateId != null) {
+                Spacer(Modifier.height(5.dp))
+                RecurrenceBadge(task)
+            }
             val details = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.deadlineAt?.let { add("Due $it") }
-                task.recurringTemplateTitle?.let { add("Recurring: $it") }
                 if (task.outstandingOccurrenceCount > 1) {
                     add("${task.outstandingOccurrenceCount} outstanding")
                 }
@@ -1974,6 +2000,47 @@ private fun BattleTaskCard(
         }
     } else if (task.status != TaskStatus.Completed) {
         TextButton(onClick = { expanded = true }, modifier = Modifier.padding(start = 12.dp)) { Text("Add subtask") }
+    }
+}
+
+@Composable
+private fun RecurrenceBadge(task: BattleTask) {
+    val accessibilityLabel = recurrenceAccessibleName(task) ?: return
+    val colors = TimeboxTheme.colors
+    Row(
+        modifier = Modifier
+            .clip(TimeboxShapes.chip)
+            .background(colors.surf)
+            .border(1.dp, colors.hairline, TimeboxShapes.chip)
+            .semantics(mergeDescendants = true) { contentDescription = accessibilityLabel }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Outlined.Repeat,
+            contentDescription = null,
+            tint = colors.onVariant,
+            modifier = Modifier.size(13.dp),
+        )
+        Text(
+            "Recurring",
+            style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+            color = colors.onVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+internal fun recurrenceAccessibleName(task: BattleTask): String? {
+    if (task.recurringTemplateId == null || task.parentId != null) return null
+    val seriesTitle = task.recurringTemplateTitle?.trim()?.takeIf(String::isNotEmpty)
+    return if (task.recurrenceKind == "quota_parent") {
+        seriesTitle?.let { "Quota Tracker from Recurring Task Series $it" }
+            ?: "Quota Tracker from a Recurring Task Series"
+    } else {
+        seriesTitle?.let { "Recurring Task Occurrence from $it" }
+            ?: "Recurring Task Occurrence"
     }
 }
 
@@ -2073,13 +2140,25 @@ fun TaskDetailScreen(
     onDismissTrash: () -> Unit,
     onConfirmTrash: () -> Unit,
     onTrashed: () -> Unit,
+    onStartEditing: () -> Unit,
+    onDiscardChanges: () -> Unit,
+    onUseLatestTask: () -> Unit,
+    onRestoreRecoveredDraft: () -> Unit,
+    onComplete: () -> Unit,
     onReopen: () -> Unit,
     onSave: () -> Unit,
 ) {
     LaunchedEffect(state.trashed) { if (state.trashed) onTrashed() }
-    var confirmDiscard by remember { mutableStateOf(false) }
+    var confirmDiscard by remember(state.taskId) { mutableStateOf(false) }
     var newSubtask by remember { mutableStateOf("") }
-    fun requestBack() { if (state.dirty) confirmDiscard = true else onBack() }
+    fun requestBack() {
+        if (state.saving || state.recoveryConflict != null) return
+        when {
+            state.editing && state.dirty -> confirmDiscard = true
+            state.editing -> onDiscardChanges()
+            else -> onBack()
+        }
+    }
     fun requestSave() = onSave()
     BackHandler(onBack = ::requestBack)
     when {
@@ -2089,12 +2168,12 @@ fun TaskDetailScreen(
             val expanded = maxWidth >= 840.dp
             if (expanded && !state.isSubtask) {
                 Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onReopen, ::requestSave)
+                    TaskEditForm(state, Modifier.weight(1.5f), ::requestBack, onStartEditing, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onComplete, onReopen, ::requestSave)
                     SubtaskPanel(state, Modifier.weight(1f), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onToggleSubtask, onTrashSubtask)
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onReopen, ::requestSave)
+                    TaskEditForm(state, Modifier.fillMaxWidth(), ::requestBack, onStartEditing, onTitleChange, onDescriptionChange, onStatusChange, onProjectChange, onTaskTypeChange, onUrgencyChange, onImportanceChange, onDeadlineModeChange, onDeadlineDateChange, onDeadlineTimeChange, onReminderEnabledChange, notificationsAllowed, onReminderDateChange, onReminderTimeChange, onReadyChange, onOpenDay, onRequestTrash, onComplete, onReopen, ::requestSave)
                     if (!state.isSubtask) SubtaskPanel(state, Modifier.fillMaxWidth(), newSubtask, { newSubtask = it }, { onAddSubtask(newSubtask); newSubtask = "" }, onToggleSubtask, onTrashSubtask)
                 }
             }
@@ -2105,8 +2184,29 @@ fun TaskDetailScreen(
             onDismissRequest = { confirmDiscard = false },
             title = { Text("Discard unsaved changes?") },
             text = { Text("Your task edits have not been saved.") },
-            confirmButton = { TextButton(onClick = onBack) { Text("Discard") } },
+            confirmButton = {
+                TextButton(onClick = { confirmDiscard = false; onDiscardChanges() }) { Text("Discard changes") }
+            },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+        )
+    }
+    state.recoveryConflict?.let { conflict ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Recovered edits conflict with a newer Task") },
+            text = {
+                Text(
+                    "This Task changed from version ${conflict.baselineVersion} to ${conflict.currentVersion} while the editor was closed. " +
+                        "Use the latest Task, or restore your draft and review it before saving."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = onRestoreRecoveredDraft,
+                    enabled = state.task?.status != TaskStatus.Completed,
+                ) { Text("Restore my draft") }
+            },
+            dismissButton = { TextButton(onClick = onUseLatestTask) { Text("Use latest task") } },
         )
     }
     if (state.confirmTrash) {
@@ -2134,6 +2234,7 @@ private fun TaskEditForm(
     state: TaskDetailUiState,
     modifier: Modifier,
     onBack: () -> Unit,
+    onStartEditing: () -> Unit,
     onTitle: (String) -> Unit,
     onDescription: (String) -> Unit,
     onStatus: (TaskStatus) -> Unit,
@@ -2151,17 +2252,19 @@ private fun TaskEditForm(
     onReady: (Boolean) -> Unit,
     onOpenDay: (java.time.LocalDate, Int?) -> Unit,
     onTrash: () -> Unit,
+    onComplete: () -> Unit,
     onReopen: () -> Unit,
     onSave: () -> Unit,
 ) {
-    var editing by remember(state.taskId) { mutableStateOf(false) }
     var showAllPlannedDates by remember(state.taskId) { mutableStateOf(false) }
+    val editing = state.editing
     val zone = runCatching { java.time.ZoneId.of(state.timezone) }.getOrDefault(java.time.ZoneId.of("UTC"))
     val today = state.serverNow.atZone(zone).toLocalDate()
     val plannedDates = orderedPlannedDates(state.task?.plannedDates.orEmpty(), today)
     val visiblePlannedDates = if (showAllPlannedDates) plannedDates else plannedDates.take(5)
     val projectLabel = state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin"
-    val taskTypeLabel = state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset"
+    val taskTypeLabel = state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name
+        ?: if (editing) "No task type" else "Not specified"
     val deadlineLabel = when (state.deadlineMode) {
         TaskDeadlineMode.None -> "None"
         TaskDeadlineMode.DateOnly -> state.deadlineDate.ifBlank { "Set date" }
@@ -2175,21 +2278,17 @@ private fun TaskEditForm(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TaskDetailBackRow(
             onBack = onBack,
+            backLabel = if (editing) "Cancel editing" else "Back to Battle Plan",
             actionLabel = when {
                 state.task?.status == TaskStatus.Completed -> "Completed"
-                editing -> "Done"
+                editing && state.operation == TaskDetailOperation.SavingChanges -> "Saving…"
+                editing -> "Save changes"
                 else -> "Edit details"
             },
             actionSelected = editing,
-            actionEnabled = !state.saving && state.task?.status != TaskStatus.Completed,
-            onAction = {
-                if (editing && state.dirty) {
-                    onSave()
-                    if (validateTaskDraft(state) is TaskDraftValidation.Valid) editing = false
-                } else {
-                    editing = !editing
-                }
-            },
+            actionEnabled = !state.saving && state.task?.status != TaskStatus.Completed && (!editing || state.dirty),
+            backEnabled = !state.saving,
+            onAction = { if (editing) onSave() else onStartEditing() },
         )
         if (state.task?.status == TaskStatus.Completed) {
             Text(state.task.title, style = TimeboxTheme.type.display, color = TimeboxTheme.colors.on)
@@ -2201,8 +2300,19 @@ private fun TaskEditForm(
                 style = TimeboxTheme.type.bodySmall,
                 color = TimeboxTheme.colors.onVariant,
             )
-            PrimaryButton("Reopen Task", onReopen, Modifier.fillMaxWidth(), enabled = !state.saving)
+            PrimaryButton(
+                if (state.operation == TaskDetailOperation.Reopening) "Reopening…" else "Reopen task",
+                onReopen,
+                Modifier.fillMaxWidth(),
+                enabled = !state.saving,
+            )
             return@Column
+        }
+        state.validationError?.takeIf { it.field == null }?.let {
+            Text(it.message, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.error)
+        }
+        state.saveError?.let {
+            Text(it, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.error)
         }
         Text("TASK", style = TimeboxTheme.type.kicker, color = TimeboxTheme.colors.onVariant)
         state.parentTask?.let {
@@ -2215,6 +2325,9 @@ private fun TaskEditForm(
                 Modifier.fillMaxWidth(),
                 label = { Text("Title") },
                 textStyle = TimeboxTheme.type.screenTitle.copy(color = TimeboxTheme.colors.on),
+                isError = state.validationError?.field == TaskDraftField.Title,
+                supportingText = state.validationError?.takeIf { it.field == TaskDraftField.Title }
+                    ?.let { error -> ({ Text(error.message) }) },
             )
             OutlinedTextField(
                 state.description,
@@ -2236,14 +2349,20 @@ private fun TaskEditForm(
         }
         TaskDetailSelectionChip(
             label = state.status.label,
-            values = battlePlanStatuses.map { it.label to it },
+            values = listOf(TaskStatus.Open, TaskStatus.InProgress).map { it.label to it },
             enabled = editing,
             onSelect = onStatus,
         )
         if (!state.isSubtask && state.status != TaskStatus.Completed && state.subtasks.isNotEmpty() && state.subtasks.all { it.checked }) {
-            TextButton(onClick = { onStatus(TaskStatus.Completed) }, enabled = editing) {
-                Text("All subtasks complete · Complete Parent Task")
-            }
+            Text("All subtasks complete", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+        }
+        if (!editing) {
+            PrimaryButton(
+                if (state.operation == TaskDetailOperation.Completing) "Completing…" else "Complete task",
+                onComplete,
+                Modifier.fillMaxWidth(),
+                enabled = !state.saving,
+            )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TaskDetailDashboardTile(
@@ -2292,8 +2411,8 @@ private fun TaskEditForm(
                 )
             }
             TaskDetailPriorityTile(
-                importance = state.importance?.displayLabel() ?: "Unset",
-                urgency = state.urgency?.displayLabel() ?: "Unset",
+                importance = state.importance?.displayLabel() ?: if (editing) "No importance" else "Not specified",
+                urgency = state.urgency?.displayLabel() ?: if (editing) "No urgency" else "Not specified",
                 enabled = editing,
                 modifier = Modifier.weight(1f),
                 onImportance = onImportance,
@@ -2309,6 +2428,9 @@ private fun TaskEditForm(
                     label = { Text("Deadline date") },
                     placeholder = { Text("YYYY-MM-DD") },
                     singleLine = true,
+                    isError = state.validationError?.field == TaskDraftField.DeadlineDate,
+                    supportingText = state.validationError?.takeIf { it.field == TaskDraftField.DeadlineDate }
+                        ?.let { error -> ({ Text(error.message) }) },
                 )
                 if (state.deadlineMode == TaskDeadlineMode.DateTime) {
                     OutlinedTextField(
@@ -2318,6 +2440,9 @@ private fun TaskEditForm(
                         label = { Text("Deadline time (${state.timezone})") },
                         placeholder = { Text("HH:MM") },
                         singleLine = true,
+                        isError = state.validationError?.field == TaskDraftField.DeadlineTime,
+                        supportingText = state.validationError?.takeIf { it.field == TaskDraftField.DeadlineTime }
+                            ?.let { error -> ({ Text(error.message) }) },
                     )
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2342,6 +2467,9 @@ private fun TaskEditForm(
                         label = { Text("Reminder date") },
                         placeholder = { Text("YYYY-MM-DD") },
                         singleLine = true,
+                        isError = state.validationError?.field == TaskDraftField.ReminderDate,
+                        supportingText = state.validationError?.takeIf { it.field == TaskDraftField.ReminderDate }
+                            ?.let { error -> ({ Text(error.message) }) },
                     )
                     OutlinedTextField(
                         state.reminderTime,
@@ -2350,6 +2478,9 @@ private fun TaskEditForm(
                         label = { Text("Reminder time (${state.timezone})") },
                         placeholder = { Text("HH:MM") },
                         singleLine = true,
+                        isError = state.validationError?.field == TaskDraftField.ReminderTime,
+                        supportingText = state.validationError?.takeIf { it.field == TaskDraftField.ReminderTime }
+                            ?.let { error -> ({ Text(error.message) }) },
                     )
                 }
             }
@@ -2392,7 +2523,7 @@ private fun TaskEditForm(
                 TaskDetailInfoMenuChip(
                     icon = Icons.AutoMirrored.Outlined.Label,
                     label = taskTypeLabel,
-                    values = listOf("Unset" to null) + state.taskTypes.map { it.name to it.id },
+                    values = listOf((if (state.taskTypeId == null) "No task type" else "Clear task type") to null) + state.taskTypes.map { it.name to it.id },
                     enabled = editing,
                     onSelect = onTaskType,
                 )
@@ -2400,7 +2531,6 @@ private fun TaskEditForm(
             }
         }
 
-        PrimaryButton("Save task", onSave, Modifier.fillMaxWidth(), enabled = state.dirty && !state.saving)
         Row(
             Modifier.fillMaxWidth().clip(TimeboxShapes.cell).clickable(enabled = !state.saving, onClick = onTrash).padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -2524,21 +2654,23 @@ private fun MobilePlanningControl(
 @Composable
 private fun TaskDetailBackRow(
     onBack: () -> Unit,
+    backLabel: String,
     actionLabel: String,
     actionSelected: Boolean,
     actionEnabled: Boolean,
+    backEnabled: Boolean,
     onAction: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to Battle Plan")
+        IconButton(onClick = onBack, enabled = backEnabled) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, backLabel)
         }
         Text("Battle Plan", style = TimeboxTheme.type.label, color = TimeboxTheme.colors.onVariant, modifier = Modifier.weight(1f))
         TimeboxChip(
             label = actionLabel,
             selected = actionSelected,
-            onClick = { if (actionEnabled) onAction() },
-            modifier = Modifier.then(if (actionEnabled) Modifier else Modifier.semantics { stateDescription = "Disabled" }),
+            onClick = onAction,
+            enabled = actionEnabled,
         )
     }
 }
@@ -2640,7 +2772,8 @@ private fun TaskDetailPriorityTile(
 ) {
     var importanceExpanded by remember { mutableStateOf(false) }
     var urgencyExpanded by remember { mutableStateOf(false) }
-    val values = listOf("Unset" to null) + PriorityLevel.entries.map { it.displayLabel() to it }
+    val importanceValues = listOf("Clear importance" to null) + PriorityLevel.entries.map { it.displayLabel() to it }
+    val urgencyValues = listOf("Clear urgency" to null) + PriorityLevel.entries.map { it.displayLabel() to it }
     Column(
         modifier
             .height(120.dp)
@@ -2671,7 +2804,7 @@ private fun TaskDetailPriorityTile(
                     Text(importance, style = TimeboxTheme.type.label, maxLines = 1)
                 }
                 DropdownMenu(importanceExpanded, { importanceExpanded = false }) {
-                    values.forEach { (name, value) ->
+                    importanceValues.forEach { (name, value) ->
                         DropdownMenuItem({ Text(name) }, { importanceExpanded = false; onImportance(value) })
                     }
                 }
@@ -2687,7 +2820,7 @@ private fun TaskDetailPriorityTile(
                     Text(urgency, style = TimeboxTheme.type.label, maxLines = 1)
                 }
                 DropdownMenu(urgencyExpanded, { urgencyExpanded = false }) {
-                    values.forEach { (name, value) ->
+                    urgencyValues.forEach { (name, value) ->
                         DropdownMenuItem({ Text(name) }, { urgencyExpanded = false; onUrgency(value) })
                     }
                 }

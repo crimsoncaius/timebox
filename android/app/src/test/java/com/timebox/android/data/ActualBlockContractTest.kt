@@ -14,6 +14,37 @@ import org.junit.Test
 
 class ActualBlockContractTest {
     @Test
+    fun `day API keeps derived Actual name as an independent snapshot`() {
+        val day = ApiFactory.json.decodeFromString(
+            DayDto.serializer(),
+            """{
+              "id":1,"date":"2026-08-30","start_hour":8,"end_hour":20,"show_full_day":false,
+              "time_blocks":[{
+                "id":8,"lane":"planned","task_type_id":3,"task_type":{"id":3,"name":"coding"},
+                "name":"Revised plan","start_minute":540,"end_minute":600
+              }],
+              "actual_blocks":[{
+                "date":"2026-08-30","start_minute":540,"end_minute":600,"duration_minutes":60,
+                "actual_block":{
+                  "id":44,"task_type_id":3,"task_type":{"id":3,"name":"coding"},
+                  "name":"Original snapshot","planned_block_id":8,
+                  "start_at":"2026-08-30T01:00:00Z","end_at":"2026-08-30T02:00:00Z",
+                  "created_at":"2026-08-30T01:00:00Z","updated_at":"2026-08-30T02:00:00Z"
+                }
+              }],
+              "meta":{"timezone":"Asia/Singapore","today":"2026-08-30","server_now_iso":"2026-08-30T10:00:00+08:00"}
+            }""",
+        ).toModel()
+
+        val planned = day.blocks.single { it.lane == Lane.Planned }
+        val actual = day.actualBlocks.single().actualBlock
+        assertEquals("Revised plan", planned.name)
+        assertEquals("Original snapshot", actual.name)
+        assertEquals(planned.id, actual.plannedBlockId)
+        assertEquals("Original snapshot", day.blocks.single { it.lane == Lane.Actual }.primaryIdentity())
+    }
+
+    @Test
     fun `day renders a cross-midnight Actual projection without mutating its authoritative interval`() {
         val dto = ApiFactory.json.decodeFromString(
             DayDto.serializer(),

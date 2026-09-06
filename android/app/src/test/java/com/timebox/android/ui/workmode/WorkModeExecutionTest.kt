@@ -7,6 +7,7 @@ import com.timebox.android.data.Lane
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.data.WorkModeSnapshot
+import com.timebox.android.data.primaryIdentity
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +23,26 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkModeExecutionTest {
+    @Test
+    fun `resuming an active Actual without its Planned origin preserves snapshotted name`() = runTest {
+        val clock = FakeClock("2026-08-30T01:17:00Z")
+        val transport = MemoryTransport(day()).also {
+            it.active = actual(null, Instant.parse("2026-08-30T01:00:00Z")).copy(
+                name = "Snapshotted session",
+                taskId = null,
+                taskTypeName = "unspecified",
+            )
+        }
+        val execution = WorkModeExecution(transport, MemoryPersistence(), this, clock::now, 1_000)
+
+        execution.begin(transport.day)
+
+        assertEquals("Snapshotted session", execution.state.value.session?.currentBlock?.name)
+        assertEquals("Snapshotted session", execution.state.value.session?.currentBlock?.primaryIdentity())
+        execution.exit()
+        runCurrent()
+    }
+
     @Test
     fun `begin confirms for a minute records Actual and exit clears durable session`() = runTest {
         val clock = FakeClock("2026-08-30T01:17:00Z")
@@ -137,6 +158,6 @@ private fun block(id: Int, start: Int, end: Int) = TimeBlock(
     id, Lane.Planned, 3, "coding", 10, null, null, null, null, start, end,
 )
 
-private fun actual(plannedBlockId: Int, startAt: Instant) = ActualBlock(
+private fun actual(plannedBlockId: Int?, startAt: Instant) = ActualBlock(
     44, 3, "coding", 10, null, null, plannedBlockId, startAt, null,
 )

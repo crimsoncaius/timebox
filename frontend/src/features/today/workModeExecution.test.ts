@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ActualBlock, DayRead } from '../../lib/api'
+import { ApiHttpError, type ActualBlock, type DayRead } from '../../lib/api'
 import { WorkModeExecution, type WorkModeEnvironment, type WorkModeStore, type WorkModeTransport } from './workModeExecution'
 import type { StoredWorkMode } from './workModeState'
 
@@ -83,6 +83,94 @@ describe('WorkModeExecution', () => {
     execution.dispose()
     expect(environment.active).toBe(false)
   })
+
+  it('recovers when a persisted Actual Block was already removed', async () => {
+    const store = new MemoryStore({
+      entryAt: '2026-06-01T12:00:00Z', lastConfirmedAt: '2026-06-01T12:09:00Z',
+      lastObservedAt: '2026-06-01T12:09:00Z', confirmingPlannedBlockId: null,
+      confirmationStartedAt: null, activeActualId: 40, activePlannedBlockId: 10,
+      activePlannedEndAt: '2026-06-01T12:10:00Z',
+    })
+    const transport = new MemoryTransport()
+    transport.missingActualIds.add(40)
+    const environment = new ManualEnvironment()
+    let now = '2026-06-01T12:09:00Z'
+    const execution = new WorkModeExecution(transport, store, environment)
+    execution.setContext(day, () => now)
+    await Promise.resolve()
+
+    now = '2026-06-01T12:10:00Z'
+    await environment.tick()
+
+    expect(execution.state.error).toBeNull()
+    expect(execution.state.actual).toBeNull()
+    expect(execution.state.session).toMatchObject({
+      activeActualId: null,
+      activePlannedBlockId: null,
+      activePlannedEndAt: null,
+    })
+    expect(await execution.exit('2026-06-01T12:11:00Z')).toBe(true)
+    expect(store.value).toBeNull()
+  })
+
+  it('repairs a stale active marker while hydrating a restored session', async () => {
+    const store = new MemoryStore({
+      entryAt: '2026-06-01T12:00:00Z', lastConfirmedAt: '2026-06-01T12:09:00Z',
+      lastObservedAt: '2026-06-01T12:09:00Z', confirmingPlannedBlockId: null,
+      confirmationStartedAt: null, activeActualId: 40, activePlannedBlockId: 10,
+      activePlannedEndAt: '2026-06-01T12:10:00Z',
+    })
+    const execution = new WorkModeExecution(new MemoryTransport(), store, new ManualEnvironment())
+
+    await execution.hydrateActive()
+
+    expect(execution.state.visible).toBe(true)
+    expect(execution.state.error).toBeNull()
+    expect(store.value).toMatchObject({
+      activeActualId: null,
+      activePlannedBlockId: null,
+      activePlannedEndAt: null,
+    })
+  })
+
+  it('does not restore a session after exit while reconciliation is in flight', async () => {
+    const store = new MemoryStore({
+      entryAt: '2026-06-01T12:00:00Z', lastConfirmedAt: '2026-06-01T12:09:00Z',
+      lastObservedAt: '2026-06-01T12:09:00Z', confirmingPlannedBlockId: null,
+      confirmationStartedAt: null, activeActualId: 40, activePlannedBlockId: 10,
+      activePlannedEndAt: '2026-06-01T12:10:00Z',
+    })
+    const transport = new DeferredMissingTransport()
+    const execution = new WorkModeExecution(transport, store, new ManualEnvironment())
+    execution.setContext(day, () => '2026-06-01T12:10:00Z')
+
+    await execution.hydrateActive()
+    expect(await execution.exit('2026-06-01T12:11:00Z')).toBe(true)
+    transport.releaseAsMissing()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(execution.state.session).toBeNull()
+    expect(execution.state.visible).toBe(false)
+    expect(store.value).toBeNull()
+  })
+
+  it('does not let an older instance overwrite a cleared shared store', async () => {
+    const store = new MemoryStore({
+      entryAt: '2026-06-01T12:00:00Z', lastConfirmedAt: '2026-06-01T12:09:00Z',
+      lastObservedAt: '2026-06-01T12:09:00Z', confirmingPlannedBlockId: null,
+      confirmationStartedAt: null, activeActualId: 40, activePlannedBlockId: 10,
+      activePlannedEndAt: '2026-06-01T12:10:00Z',
+    })
+    const transport = new DeferredMissingTransport()
+    const execution = new WorkModeExecution(transport, store, new ManualEnvironment())
+    execution.setContext(day, () => '2026-06-01T12:10:00Z')
+
+    store.save(null, '2026-06-01T12:00:00Z')
+    transport.releaseAsMissing()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.value).toBeNull()
+  })
 })
 
 class ManualEnvironment implements WorkModeEnvironment {
@@ -97,9 +185,13 @@ class ManualEnvironment implements WorkModeEnvironment {
 
 class MemoryStore implements WorkModeStore {
   value: StoredWorkMode | null
+  retiredEntryAt: string | null = null
   constructor(value: StoredWorkMode | null = null) { this.value = value }
-  load() { return this.value }
-  save(value: StoredWorkMode | null) { this.value = value }
+  load() { return this.value?.entryAt === this.retiredEntryAt ? null : this.value }
+  save(value: StoredWorkMode | null, exitedEntryAt?: string) {
+    if (exitedEntryAt) this.retiredEntryAt = exitedEntryAt
+    if (!value || value.entryAt !== this.retiredEntryAt) this.value = value
+  }
 }
 
 class MemoryTransport implements WorkModeTransport {
@@ -107,6 +199,7 @@ class MemoryTransport implements WorkModeTransport {
   started: Array<{ plannedBlockId: number; startAt: string }> = []
   created: Array<{ plannedBlockId: number; startAt: string; endAt: string }> = []
   ended: Array<{ id: number; endAt: string }> = []
+  missingActualIds = new Set<number>()
   failStart = false
   async getActiveActual() { return this.active }
   async startActual(plannedBlockId: number, startAt: string) {
@@ -119,11 +212,27 @@ class MemoryTransport implements WorkModeTransport {
     this.created.push({ plannedBlockId, startAt, endAt })
     return { ...actual(plannedBlockId, startAt), end_at: endAt }
   }
-  async endActual(id: number, endAt: string) {
+  async endActual(id: number, endAt: string): Promise<ActualBlock> {
     this.ended.push({ id, endAt })
+    if (this.missingActualIds.has(id)) throw new ApiHttpError(404, 'Actual Block not found')
     const result = { ...(this.active ?? actual(10, endAt)), end_at: endAt }
     this.active = null
     return result
+  }
+}
+
+class DeferredMissingTransport extends MemoryTransport {
+  private rejectEnd: ((error: ApiHttpError) => void) | null = null
+
+  override async endActual(id: number, endAt: string): Promise<ActualBlock> {
+    this.ended.push({ id, endAt })
+    return new Promise<ActualBlock>((_resolve, reject) => {
+      this.rejectEnd = reject
+    })
+  }
+
+  releaseAsMissing() {
+    this.rejectEnd?.(new ApiHttpError(404, 'Actual Block not found'))
   }
 }
 

@@ -118,7 +118,12 @@ internal fun DayCalendarHeader(
                     text = formatCalendarHeaderDate(selectedDate),
                     style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
                     color = colors.on,
-                    maxLines = 2,
+                    modifier = Modifier.semantics {
+                        contentDescription =
+                            "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
+                    },
+                    maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

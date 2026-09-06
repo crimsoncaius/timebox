@@ -121,10 +121,20 @@ def test_generation_is_idempotent_and_copies_checklist(client):
     second = client.get("/tasks").json()["items"]
     assert len(first) == len(second) == 1
     assert _generated_root_count(created.json()["id"]) == 8
-    assert first[0]["ready_to_plan"] is True
+    assert first[0]["ready_to_plan"] is False
     assert [child["title"] for child in first[0]["subtasks"]] == ["Inbox", "Calendar"]
     assert all("ready_to_plan" not in child for child in first[0]["subtasks"])
     assert first[0]["recurring_template_title"] == "Daily review"
+
+    with Session(get_engine()) as db:
+        legacy_implicit = db.get(Task, first[0]["id"])
+        legacy_implicit.ready_to_plan = True
+        db.commit()
+    assert client.get("/tasks").json()["items"][0]["ready_to_plan"] is False
+
+    opted_in = client.patch(f"/tasks/{first[0]['id']}", json={"ready_to_plan": True})
+    assert opted_in.status_code == 200, opted_in.text
+    assert client.get("/tasks").json()["items"][0]["ready_to_plan"] is True
 
 
 def test_past_start_requires_confirmation_then_backfills(client):
@@ -159,7 +169,7 @@ def test_quota_sessions_drive_parent_and_cannot_be_scheduled_early(client):
     assert parent["recurrence_kind"] == "quota_parent"
     assert parent["quota_completed"] == 0
     assert [child["title"] for child in parent["session_tasks"]] == ["Session 1", "Session 2", "Session 3"]
-    assert all(child["ready_to_plan"] for child in parent["session_tasks"])
+    assert all(not child["ready_to_plan"] for child in parent["session_tasks"])
 
     session = parent["session_tasks"][0]
     too_early = dt.date.fromisoformat(session["quota_period_start"]) - dt.timedelta(days=1)
@@ -668,7 +678,7 @@ def test_future_planning_materializes_on_demand_beyond_default_horizon(client):
     planned_candidate = _task_for_planning_date(client, target, template["id"])
 
     assert planned_candidate["deadline_date"] == target.isoformat()
-    assert planned_candidate["ready_to_plan"] is True
+    assert planned_candidate["ready_to_plan"] is False
     assert client.get("/tasks").json()["items"][0]["deadline_date"] == today.isoformat()
     assert _generated_root_count(template["id"]) == 31
 

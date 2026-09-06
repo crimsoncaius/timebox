@@ -70,6 +70,7 @@ export const api = {
       lane: 'planned'
       task_type_id?: number
       task_id?: number | null
+      name?: string | null
       note?: string | null
       start_minute: number
       end_minute: number
@@ -83,7 +84,7 @@ export const api = {
   patchBlock: (
     date: string,
     blockId: number,
-    body: Partial<{ task_type_id: number; task_id: number | null; note: string | null; start_minute: number; end_minute: number }>,
+    body: Partial<{ task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_minute: number; end_minute: number }>,
   ) =>
     fetchJson<DayRead>(`/days/${date}/blocks/${blockId}`, {
       method: 'PATCH',
@@ -107,18 +108,21 @@ export const api = {
 
   getActiveActualBlock: () => fetchJson<ActualBlock | null>('/actual-blocks/active'),
   getActualBlock: (id: number) => fetchJson<ActualBlock>(`/actual-blocks/${id}`),
-  startActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null; start_at?: string }) =>
+  startActualBlock: (body: { task_type_id?: number; task_id?: number | null; name?: string | null; note?: string | null; planned_block_id?: number | null; start_at?: string }) =>
     fetchJson<ActualBlock>('/actual-blocks/start', { method: 'POST', body: JSON.stringify(body) }),
-  createActualBlock: (body: { task_type_id?: number; task_id?: number | null; note?: string | null; planned_block_id?: number | null; start_at: string; end_at: string }) =>
+  createActualBlock: (body: { task_type_id?: number; task_id?: number | null; name?: string | null; note?: string | null; planned_block_id?: number | null; start_at: string; end_at: string }) =>
     fetchJson<ActualBlock>('/actual-blocks', { method: 'POST', body: JSON.stringify(body) }),
   finishActualBlock: (id: number) => fetchJson<ActualBlock>(`/actual-blocks/${id}/finish`, { method: 'POST' }),
-  patchActualBlock: (id: number, body: Partial<{ task_type_id: number; task_id: number | null; note: string | null; start_at: string; end_at: string }>) =>
+  patchActualBlock: (id: number, body: Partial<{ task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string }>) =>
     fetchJson<ActualBlock>(`/actual-blocks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteActualBlock: (id: number) => fetchVoid(`/actual-blocks/${id}`, { method: 'DELETE' }),
 
   listDays: (limit = 60) => fetchJson<DayListItem[]>(`/days?limit=${limit}`),
 
   listProjects: () => fetchJson<Project[]>('/projects'),
+
+  reorderProjects: (projectIds: number[]) =>
+    fetchJson<Project[]>('/projects/reorder', { method: 'POST', body: JSON.stringify({ project_ids: projectIds }) }),
 
   createProject: (body: ProjectWrite) =>
     fetchJson<Project>('/projects', { method: 'POST', body: JSON.stringify(body) }),

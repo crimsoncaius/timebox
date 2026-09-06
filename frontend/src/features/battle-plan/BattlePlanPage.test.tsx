@@ -234,6 +234,49 @@ describe('BattlePlanPage', () => {
     expect(screen.getByText('U · high')).toBeInTheDocument()
   })
 
+  it('labels recurring Task Occurrences and Quota Trackers without marking one-off Tasks', async () => {
+    activeTasks = [
+      task({
+        id: 11,
+        title: 'Weekly planning occurrence',
+        recurring_template_id: 7,
+        recurring_template_title: 'Weekly planning',
+        recurrence_kind: 'scheduled',
+      }),
+      task({
+        id: 12,
+        title: 'Exercise quota',
+        recurring_template_id: 8,
+        recurring_template_title: 'Exercise three times',
+        recurrence_kind: 'quota_parent',
+      }),
+      task({ id: 13, title: 'One-off task' }),
+      task({
+        id: 14,
+        title: 'Nested session task',
+        parent_id: 12,
+        recurring_template_id: 8,
+        recurring_template_title: 'Exercise three times',
+        recurrence_kind: 'quota_session',
+      }),
+    ]
+
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+
+    const occurrenceCard = (await screen.findByText('Weekly planning occurrence')).closest('article')
+    const quotaCard = screen.getByText('Exercise quota').closest('article')
+    const oneOffCard = screen.getByText('One-off task').closest('article')
+    const sessionCard = screen.getByText('Nested session task').closest('article')
+    expect(occurrenceCard).not.toBeNull()
+    expect(quotaCard).not.toBeNull()
+    expect(oneOffCard).not.toBeNull()
+    expect(sessionCard).not.toBeNull()
+    expect(within(occurrenceCard!).getByLabelText('Recurring Task Occurrence from Weekly planning')).toHaveTextContent('Recurring')
+    expect(within(quotaCard!).getByLabelText('Quota Tracker from Recurring Task Series Exercise three times')).toHaveTextContent('Recurring')
+    expect(within(oneOffCard!).queryByText('Recurring')).not.toBeInTheDocument()
+    expect(within(sessionCard!).queryByText('Recurring')).not.toBeInTheDocument()
+  })
+
   it('renders planned metadata before Due and keeps the planned row passive', async () => {
     const user = userEvent.setup()
     activeTasks = [task({ planned_dates: ['2026-08-14', '2026-08-15', '2026-08-17'] })]

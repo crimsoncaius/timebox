@@ -135,7 +135,7 @@ def _resolve_planned_block_task_type(
             raise ValueError("Task type not found")
         return task_type
     if task is None:
-        raise ValueError("Task Type is required when no Battle Plan Task is linked")
+        return _get_or_create_unspecified_task_type(db)
     if task.task_type_id is not None:
         task_type = task_type_service.get_task_type(db, task.task_type_id)
         if task_type is None:
@@ -368,7 +368,10 @@ def build_day_summary(
     )
 
 
-def to_day_list_item(day: Day, block_count: int) -> DayListItem:
+def to_day_list_item(
+    db: Session, day: Day, block_count: int, settings: Settings
+) -> DayListItem:
+    actual = actual_block_service.project_actual_blocks_for_day(db, day.date, settings)
     return DayListItem(
         id=day.id,
         date=day.date,
@@ -376,7 +379,8 @@ def to_day_list_item(day: Day, block_count: int) -> DayListItem:
         end_hour=day.end_hour,
         show_full_day=day.show_full_day,
         updated_at=day.updated_at,
-        block_count=block_count,
+        block_count=block_count + len(actual.actual_blocks),
+        actual_blocks=actual.actual_blocks,
     )
 
 
@@ -452,6 +456,7 @@ def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBl
         lane=body.lane,
         task_type_id=task_type.id,
         task_id=body.task_id,
+        name=body.name,
         note=note_val,
         start_minute=body.start_minute,
         end_minute=body.end_minute,
@@ -595,6 +600,8 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         protect_task_occurrence(db, block.task_id)
     if "note" in data:
         block.note = str(data["note"] or "").strip() or None
+    if "name" in data:
+        block.name = data["name"]
     if "start_minute" in data:
         block.start_minute = data["start_minute"]
     if "end_minute" in data:

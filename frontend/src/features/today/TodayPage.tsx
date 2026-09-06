@@ -40,6 +40,15 @@ function confirmDiscardUnsaved(): boolean {
   return window.confirm('Discard unsaved changes?')
 }
 
+/** Convert a Day-lane minute, including 24:00, into a valid local date-time input. */
+function localDateTimeAtMinute(date: string, minute: number): string {
+  const dayOffset = Math.floor(minute / (24 * 60))
+  const minuteOfDay = minute - dayOffset * 24 * 60
+  const hour = String(Math.floor(minuteOfDay / 60)).padStart(2, '0')
+  const minutePart = String(minuteOfDay % 60).padStart(2, '0')
+  return `${addDaysIso(date, dayOffset)}T${hour}:${minutePart}`
+}
+
 export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
@@ -393,7 +402,7 @@ export function TodayPage() {
   }, [draft, selectedBlock, tryClosePanel])
 
   const commitDraft = useCallback(
-    async (payload: { task_type_id: number; note: string | null }) => {
+    async (payload: { task_type_id?: number; name: string | null; note: string | null }) => {
       if (!date || !draft || draftCommitInFlightRef.current) return
       draftCommitInFlightRef.current = true
       setError(null)
@@ -401,20 +410,23 @@ export function TodayPage() {
         if (draft.lane === 'actual') {
           if (!day) return
           const local = (minute: number) => `${date}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
-          await api.createActualBlock({
+          const created = await api.createActualBlock({
             task_type_id: payload.task_type_id,
             task_id: draft.task_id ?? null,
+            name: payload.name,
             note: payload.note,
             start_at: zonedLocalDateTimeToIso(local(draft.start_minute), day.meta.timezone),
             end_at: zonedLocalDateTimeToIso(local(draft.end_minute), day.meta.timezone),
           })
           setDay(await api.getDay(date))
           setDraft(null)
+          setSelectedBlockRef({ id: created.id, lane: 'actual' })
+          setInspectorDirty(false)
           return
         }
         const next = await api.createBlock(date, {
           lane: 'planned', task_type_id: payload.task_type_id, task_id: draft.task_id ?? null,
-          note: payload.note ?? undefined, start_minute: draft.start_minute, end_minute: draft.end_minute,
+          name: payload.name, note: payload.note ?? undefined, start_minute: draft.start_minute, end_minute: draft.end_minute,
         })
         setDay(next)
         const created = next.time_blocks.find(
@@ -422,7 +434,7 @@ export function TodayPage() {
             b.lane === draft.lane &&
             b.start_minute === draft.start_minute &&
             b.end_minute === draft.end_minute &&
-            b.task_type_id === payload.task_type_id,
+            (payload.task_type_id == null || b.task_type_id === payload.task_type_id),
         )
         if (draft.task_id) {
           const refreshed = await api.listBattleTasks('active', date)
@@ -458,14 +470,44 @@ export function TodayPage() {
       patch: {
         task_type_id?: number
         task_id?: number | null
+        name?: string | null
         note?: string | null
         start_minute?: number
         end_minute?: number
       },
+      lane: BlockLane = 'planned',
     ) => {
       if (!date) return
       setError(null)
       try {
+        if (lane === 'actual') {
+          if (!day) return
+          const actualPatch: Partial<{
+            task_type_id: number
+            name: string | null
+            note: string | null
+            start_at: string
+            end_at: string
+          }> = {}
+          if (patch.task_type_id !== undefined) actualPatch.task_type_id = patch.task_type_id
+          if (patch.name !== undefined) actualPatch.name = patch.name
+          if (patch.note !== undefined) actualPatch.note = patch.note
+          if (patch.start_minute !== undefined) {
+            actualPatch.start_at = zonedLocalDateTimeToIso(
+              localDateTimeAtMinute(date, patch.start_minute),
+              day.meta.timezone,
+            )
+          }
+          if (patch.end_minute !== undefined) {
+            actualPatch.end_at = zonedLocalDateTimeToIso(
+              localDateTimeAtMinute(date, patch.end_minute),
+              day.meta.timezone,
+            )
+          }
+          await api.patchActualBlock(blockId, actualPatch)
+          setDay(await api.getDay(date))
+          return
+        }
         const next = await api.patchBlock(date, blockId, patch)
         setDay(next)
       } catch (e) {
@@ -474,7 +516,7 @@ export function TodayPage() {
         throw e
       }
     },
-    [date],
+    [date, day],
   )
 
   const deleteBlock = useCallback(
@@ -494,7 +536,7 @@ export function TodayPage() {
   )
 
   const patchActual = useCallback(
-    async (blockId: number, patch: { task_type_id?: number; note?: string | null }) => {
+    async (blockId: number, patch: { task_type_id?: number; name?: string | null; note?: string | null }) => {
       if (!date) return
       setError(null)
       try {
@@ -622,7 +664,7 @@ export function TodayPage() {
     day,
     taskTypes,
     onClose: tryClosePanel,
-    onSave: (patch: { task_type_id?: number; note?: string | null }) => {
+    onSave: (patch: { task_type_id?: number; name?: string | null; note?: string | null }) => {
       if (!selectedBlock) return Promise.resolve()
       return selectedBlock.lane === 'actual'
         ? patchActual(selectedBlock.id, patch)
@@ -650,8 +692,8 @@ export function TodayPage() {
   return (
     <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
       <DragDropProvider onDragEnd={onReadyTaskDragEnd}>
-      <div className="flex flex-col gap-8 lg:flex-row lg:gap-0 lg:items-stretch">
-        <div className="min-w-0 min-h-0 flex-1 lg:pr-4">
+      <div className="flex flex-col gap-8 xl:flex-row xl:gap-0 xl:items-stretch">
+        <div className="min-w-0 min-h-0 flex-1 xl:pr-4">
           <span data-testid="day-date" className="sr-only">
             {day.date}
           </span>
@@ -744,7 +786,7 @@ export function TodayPage() {
             </div>
           ) : null}
 
-          <div className="mb-6 lg:hidden">
+          <div className="mb-6 xl:hidden">
             <ReadyToPlanDrawer
               tasks={readyTasks}
               selectedTaskId={planningTaskId}
@@ -776,13 +818,14 @@ export function TodayPage() {
               onPatchBlock={patchBlock}
               onBlockClick={onBlockClick}
               onBlockDragSessionChange={setBlockDragActive}
+              autoScrollToNow
             />
           </section>
         </div>
 
         {/* Desktop: persistent inspector rail */}
         <div
-          className="hidden w-full shrink-0 lg:block lg:w-[min(28rem,100%)] lg:max-w-md lg:pl-6"
+          className="hidden w-full shrink-0 xl:block xl:w-[min(28rem,100%)] xl:max-w-md xl:pl-6"
           data-testid="day-inspector-rail"
         >
           <aside
@@ -872,7 +915,6 @@ export function TodayPage() {
               setWorkModeSubtaskBusy(false)
             }
           }}
-          onLeave={() => workModeExecution.hide()}
           onExit={exitWorkMode}
         />
       ) : null}
@@ -943,7 +985,10 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTaskId, on
         />
       ) : null}
 
-      <div className="mt-4 space-y-2">
+      <div
+        data-testid="ready-to-plan-list"
+        className={`mt-4 space-y-2 ${dragInstance === 'mobile' ? 'max-h-80 overflow-y-auto overscroll-contain pr-1' : ''}`}
+      >
         {visible.map((task) => {
           return (
             <ReadyToPlanTaskCard

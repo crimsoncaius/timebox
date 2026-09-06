@@ -340,6 +340,7 @@ export function BattlePlanPage() {
           collection={collection}
           scope={preferences.scope}
           projects={projects}
+          onReorderProjects={async (ids) => { setProjects(await api.reorderProjects(ids)) }}
           onClose={() => setMobileSidebar(false)}
           onScope={(scope) => { setPrefs({ scope }); void switchCollection('active'); setMobileSidebar(false) }}
           onCollection={(state) => { void switchCollection(state); setMobileSidebar(false) }}
@@ -393,25 +394,27 @@ export function BattlePlanPage() {
             <>
               <TaskFilters preferences={preferences} taskTypes={taskTypes} onChange={setPrefs} />
               <DragDropProvider onDragEnd={(event) => void handleDragEnd(event)}>
-                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {TASK_STATUSES.map((status) => (
-                    <KanbanColumn
-                      key={status}
-                      status={status}
-                      tasks={columns[status]}
-                      projects={projects}
-                      taskTypes={taskTypes}
-                      scope={preferences.scope}
-                      timezone={timezone}
-                      serverNowIso={screenNowIso}
-                      onCreate={createTask}
-                      onOpen={openTask}
-                      onAddSubtask={addSubtask}
-                      onSetSubtaskChecked={setSubtaskChecked}
-                      onToggleReady={(id, ready) => patchTask(id, { ready_to_plan: ready })}
-                      onSetTaskCompletion={setTaskCompletion}
-                    />
-                  ))}
+                <div data-testid="battle-plan-board" className="mt-6 overflow-x-auto pb-2">
+                  <div className="grid min-w-[64rem] grid-cols-4 gap-4">
+                    {TASK_STATUSES.map((status) => (
+                      <KanbanColumn
+                        key={status}
+                        status={status}
+                        tasks={columns[status]}
+                        projects={projects}
+                        taskTypes={taskTypes}
+                        scope={preferences.scope}
+                        timezone={timezone}
+                        serverNowIso={screenNowIso}
+                        onCreate={createTask}
+                        onOpen={openTask}
+                        onAddSubtask={addSubtask}
+                        onSetSubtaskChecked={setSubtaskChecked}
+                        onToggleReady={(id, ready) => patchTask(id, { ready_to_plan: ready })}
+                        onSetTaskCompletion={setTaskCompletion}
+                      />
+                    ))}
+                  </div>
                 </div>
               </DragDropProvider>
             </>

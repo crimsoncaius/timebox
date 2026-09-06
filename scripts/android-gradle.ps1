@@ -30,25 +30,26 @@ function Get-JavaCandidate {
 
     $javaExecutable = Join-Path $JavaHome "bin\java.exe"
     $javacExecutable = Join-Path $JavaHome "bin\javac.exe"
+    $releaseFile = Join-Path $JavaHome "release"
     if (-not (Test-Path -LiteralPath $javaExecutable) -or
-        -not (Test-Path -LiteralPath $javacExecutable)) {
+        -not (Test-Path -LiteralPath $javacExecutable) -or
+        -not (Test-Path -LiteralPath $releaseFile)) {
         return $null
     }
 
-    $versionOutput = (& $javaExecutable -version 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0 -or
-        $versionOutput -notmatch 'version "(?<major>\d+)(?:\.(?<minor>\d+))?') {
+    $releaseContents = Get-Content -LiteralPath $releaseFile -Raw
+    if ($releaseContents -notmatch '(?m)^JAVA_VERSION="(?<version>[^"]+)"') {
         return $null
     }
 
-    $majorVersion = [int]$Matches.major
-    if ($majorVersion -eq 1 -and $Matches.minor) {
-        $majorVersion = [int]$Matches.minor
+    $javaVersion = $Matches.version
+    if ($javaVersion -notmatch '^(?<major>\d+)') {
+        return $null
     }
 
     return [pscustomobject]@{
         Home = $JavaHome
-        MajorVersion = $majorVersion
+        MajorVersion = [int]$Matches.major
     }
 }
 

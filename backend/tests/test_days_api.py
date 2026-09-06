@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import pytest
+from sqlalchemy import text
+
+from app.db.session import get_engine
+from app.readiness import expected_alembic_head
+
 
 def _tid(client, name: str) -> int:
     r = client.post("/task-types", json={"name": name})
@@ -14,6 +20,54 @@ def test_health(client):
     assert data["status"] == "ok"
     assert "today" in data
     assert data["timezone"] == "UTC"
+
+
+@pytest.fixture
+def stamp_database():
+    def stamp(revision: str) -> None:
+        with get_engine().begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            connection.execute(
+                text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)")
+            )
+            connection.execute(
+                text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+                {"revision": revision},
+            )
+
+    yield stamp
+    with get_engine().begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+
+
+def test_ready_reports_database_and_matching_schema(client, stamp_database):
+    head = expected_alembic_head()
+    stamp_database(head)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "database": "ok",
+        "alembic": {"current": head, "head": head},
+    }
+
+
+def test_ready_rejects_schema_mismatch(client, stamp_database):
+    stamp_database("outdated_revision")
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "database": "ok",
+        "alembic": {
+            "current": "outdated_revision",
+            "head": expected_alembic_head(),
+        },
+    }
 
 
 def test_get_day_creates_empty_blocks(client):
@@ -95,6 +149,113 @@ def test_create_and_patch_block(client):
     data2 = r2.json()
     b2 = next(x for x in data2["time_blocks"] if x["id"] == bid)
     assert (b2["start_minute"], b2["end_minute"]) == (547, 607)
+
+
+def test_taskless_planned_block_name_round_trips_and_defaults_to_unspecified(client):
+    created = client.post(
+        "/days/2026-04-19/blocks",
+        json={
+            "lane": "planned",
+            "name": "  Dinner   with Alex  ",
+            "note": "Bring the invitation",
+            "start_minute": 1080,
+            "end_minute": 1140,
+        },
+    )
+
+    assert created.status_code == 200
+    block = created.json()["time_blocks"][0]
+    assert block["name"] == "Dinner   with Alex"
+    assert block["note"] == "Bring the invitation"
+    assert block["task_type"]["name"] == "unspecified"
+
+    changed = client.patch(
+        f"/days/2026-04-19/blocks/{block['id']}",
+        json={"name": "  Dinner with Sam  "},
+    )
+    assert changed.status_code == 200
+    assert changed.json()["planned_blocks"][0]["name"] == "Dinner with Sam"
+
+    cleared = client.patch(
+        f"/days/2026-04-19/blocks/{block['id']}",
+        json={"name": " \t "},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["time_blocks"][0]["name"] is None
+    assert client.get("/days/2026-04-19").json()["time_blocks"][0]["name"] is None
+
+
+def test_planned_block_name_contract_allows_duplicates_and_rejects_more_than_500_characters(client):
+    task_type_id = _tid(client, "named sessions")
+    first = client.post(
+        "/days/2026-04-20/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": task_type_id,
+            "name": "Focus",
+            "start_minute": 480,
+            "end_minute": 510,
+        },
+    )
+    second = client.post(
+        "/days/2026-04-20/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": task_type_id,
+            "name": "Focus",
+            "start_minute": 510,
+            "end_minute": 540,
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert [block["name"] for block in second.json()["planned_blocks"]] == ["Focus", "Focus"]
+
+    too_long = client.post(
+        "/days/2026-04-21/blocks",
+        json={
+            "lane": "planned",
+            "name": "x" * 501,
+            "start_minute": 480,
+            "end_minute": 510,
+        },
+    )
+    assert too_long.status_code == 422
+
+
+def test_task_backed_planned_block_contract_accepts_name_without_deriving_one(client):
+    task_type_id = _tid(client, "task sessions")
+    task = client.post(
+        "/tasks",
+        json={"title": "Prepare launch", "task_type_id": task_type_id},
+    ).json()
+
+    unnamed = client.post(
+        "/days/2026-04-22/blocks",
+        json={
+            "lane": "planned",
+            "task_id": task["id"],
+            "start_minute": 480,
+            "end_minute": 510,
+        },
+    )
+    named = client.post(
+        "/days/2026-04-22/blocks",
+        json={
+            "lane": "planned",
+            "task_id": task["id"],
+            "name": "Outline session",
+            "start_minute": 510,
+            "end_minute": 540,
+        },
+    )
+
+    assert unnamed.status_code == 200
+    assert named.status_code == 200
+    blocks = named.json()["planned_blocks"]
+    assert blocks[0]["name"] is None
+    assert blocks[1]["name"] == "Outline session"
 
 
 def test_list_days(client):
@@ -274,17 +435,16 @@ def test_linked_planned_block_creation_resolves_task_type_in_backend(client):
     assert [row["name"] for row in client.get("/task-types").json()].count("unspecified") == 1
 
 
-def test_taskless_planned_block_still_requires_task_type(client):
+def test_taskless_planned_block_without_task_type_uses_unspecified(client):
     response = client.post(
         "/days/2026-08-30/blocks",
         json={"lane": "planned", "start_minute": 540, "end_minute": 570},
     )
 
-    assert response.status_code == 422
-    assert response.json()["detail"] == (
-        "Task Type is required when no Battle Plan Task is linked"
-    )
-    assert client.get("/task-types").json() == []
+    assert response.status_code == 200
+    assert response.json()["planned_blocks"][0]["task_type_id"] > 0
+    assert response.json()["time_blocks"][0]["task_type"]["name"] == "unspecified"
+    assert [row["name"] for row in client.get("/task-types").json()] == ["unspecified"]
 
 
 def test_commit_plan_resolves_one_fallback_for_untyped_tasks(client):
@@ -535,6 +695,97 @@ def test_patch_block_accepts_and_clears_task_link(client):
     )
     assert unlinked.status_code == 200
     assert unlinked.json()["time_blocks"][0]["task"] is None
+
+
+def test_planned_block_name_survives_task_link_name_edits_and_unlink(client):
+    tid = _tid(client, "named-link")
+    task = client.post(
+        "/tasks",
+        json={
+            "title": "Prepare launch",
+            "task_type_id": tid,
+            "ready_to_plan": True,
+            "status": "in_progress",
+        },
+    ).json()
+    created = client.post(
+        "/days/2026-05-08/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "name": "Outline session",
+            "start_minute": 600,
+            "end_minute": 630,
+        },
+    ).json()["time_blocks"][0]
+
+    linked = client.patch(
+        f"/days/2026-05-08/blocks/{created['id']}",
+        json={"task_id": task["id"]},
+    )
+    assert linked.status_code == 200, linked.text
+    linked_block = linked.json()["time_blocks"][0]
+    assert linked_block["name"] == "Outline session"
+    assert linked_block["task_id"] == task["id"]
+    assert linked_block["task_type_id"] == tid
+
+    renamed = client.patch(
+        f"/days/2026-05-08/blocks/{created['id']}",
+        json={"name": "  Review session  "},
+    )
+    assert renamed.status_code == 200, renamed.text
+    renamed_block = renamed.json()["time_blocks"][0]
+    assert renamed_block["name"] == "Review session"
+    assert renamed_block["task_id"] == task["id"]
+    assert renamed_block["task_type_id"] == tid
+    task_after_name_edit = client.get("/tasks").json()["items"][0]
+    assert task_after_name_edit["ready_to_plan"] is False
+    assert task_after_name_edit["status"] == "in_progress"
+
+    unlinked = client.patch(
+        f"/days/2026-05-08/blocks/{created['id']}",
+        json={"task_id": None},
+    )
+    assert unlinked.status_code == 200, unlinked.text
+    unlinked_block = unlinked.json()["time_blocks"][0]
+    assert unlinked_block["name"] == "Review session"
+    assert unlinked_block["task"] is None
+    assert unlinked_block["task_type_id"] == tid
+
+    cleared = client.patch(
+        f"/days/2026-05-08/blocks/{created['id']}",
+        json={"name": "   "},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["time_blocks"][0]["name"] is None
+    assert client.get("/days/2026-05-08").json()["time_blocks"][0]["name"] is None
+
+
+def test_unlinking_unnamed_planned_block_does_not_copy_task_title(client):
+    tid = _tid(client, "unnamed-unlink")
+    task = client.post("/tasks", json={"title": "Keep this as task context"}).json()
+    created = client.post(
+        "/days/2026-05-09/blocks",
+        json={
+            "lane": "planned",
+            "task_type_id": tid,
+            "task_id": task["id"],
+            "start_minute": 600,
+            "end_minute": 630,
+        },
+    ).json()["time_blocks"][0]
+
+    assert created["name"] is None
+    unlinked = client.patch(
+        f"/days/2026-05-09/blocks/{created['id']}",
+        json={"task_id": None},
+    )
+
+    assert unlinked.status_code == 200, unlinked.text
+    block = unlinked.json()["time_blocks"][0]
+    assert block["task"] is None
+    assert block["name"] is None
+    assert block["task_type_id"] == tid
 
 
 def test_day_block_create_rejects_actual_lane(client):

@@ -4,8 +4,11 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarHost
@@ -72,6 +75,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun TimeboxApp(
     isDark: Boolean,
     onToggleDark: () -> Unit,
@@ -252,6 +256,7 @@ fun TimeboxApp(
         else -> null
     }
     val colors = TimeboxTheme.colors
+    val isImeVisible = WindowInsets.isImeVisible
     val accessibilityManager = LocalAccessibilityManager.current
     val recommendedUndoTimeoutMillis = accessibilityManager?.calculateRecommendedTimeoutMillis(
         originalTimeoutMillis = 10_000L,
@@ -318,7 +323,9 @@ fun TimeboxApp(
                             onChooseType = dayViewModel::chooseTaskType,
                             onTypeQueryChange = dayViewModel::onTypeQueryChange,
                             onCreateType = dayViewModel::createTaskTypeAndChoose,
+                            onNameChange = dayViewModel::onNameChange,
                             onNoteChange = dayViewModel::onNoteChange,
+                            onCreateDraft = dayViewModel::createTasklessPlannedDraft,
                             onDeleteSelected = dayViewModel::deleteSelected,
                             onConfirmSelectedTaskCompletion = dayViewModel::completeSelectedTask,
                             onReopenSelectedTask = dayViewModel::reopenSelectedTask,
@@ -353,6 +360,7 @@ fun TimeboxApp(
                             onRetry = { battlePlanViewModel.load() },
                             onSelectCollection = battlePlanViewModel::selectCollection,
                             onSelectScope = battlePlanViewModel::selectScope,
+                            onReorderProjects = battlePlanViewModel::reorderProjects,
                             onSelectStatus = battlePlanViewModel::selectStatus,
                             onToggleUrgency = battlePlanViewModel::toggleUrgency,
                             onToggleImportance = battlePlanViewModel::toggleImportance,
@@ -432,6 +440,11 @@ fun TimeboxApp(
                             onDismissTrash = taskDetailViewModel::dismissTrash,
                             onConfirmTrash = taskDetailViewModel::confirmTrash,
                             onTrashed = {},
+                            onStartEditing = taskDetailViewModel::startEditing,
+                            onDiscardChanges = taskDetailViewModel::discardChanges,
+                            onUseLatestTask = taskDetailViewModel::useLatestTask,
+                            onRestoreRecoveredDraft = taskDetailViewModel::restoreRecoveredDraft,
+                            onComplete = taskDetailViewModel::completeTask,
                             onReopen = taskDetailViewModel::reopenTask,
                             onSave = taskDetailViewModel::save,
                         )
@@ -622,17 +635,19 @@ fun TimeboxApp(
                 }
             }
 
-            TimeboxBottomNav(selectedTab) { tab ->
-                val target = when (tab) {
-                    TimeboxTab.Day -> AppRoutes.day(dayState.date)
-                    TimeboxTab.Chronicle -> AppRoutes.Chronicle
-                    TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
-                    TimeboxTab.Types -> AppRoutes.Types
-                    TimeboxTab.Settings -> AppRoutes.Settings
-                }
-                navController.navigate(target) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
+            if (shouldShowBottomNavigation(battlePlanState.showComposer, isImeVisible)) {
+                TimeboxBottomNav(selectedTab) { tab ->
+                    val target = when (tab) {
+                        TimeboxTab.Day -> AppRoutes.day(dayState.date)
+                        TimeboxTab.Chronicle -> AppRoutes.Chronicle
+                        TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
+                        TimeboxTab.Types -> AppRoutes.Types
+                        TimeboxTab.Settings -> AppRoutes.Settings
+                    }
+                    navController.navigate(target) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                    }
                 }
             }
         }
@@ -663,7 +678,6 @@ fun TimeboxApp(
             WorkModeScreen(
                 state = workMode,
                 onToggleSubtask = dayViewModel::toggleWorkModeSubtask,
-                onLeave = dayViewModel::leaveWorkModeVisible,
                 onExit = dayViewModel::exitWorkMode,
             )
         }
@@ -681,6 +695,11 @@ fun TimeboxApp(
         }
     }
 }
+
+internal fun shouldShowBottomNavigation(
+    taskComposerVisible: Boolean,
+    isImeVisible: Boolean,
+): Boolean = !taskComposerVisible && !isImeVisible
 
 internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
     AppRoutes.BattlePlan,

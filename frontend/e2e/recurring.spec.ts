@@ -61,12 +61,17 @@ async function scheduleReadyTask(page: Page, taskLabel: RegExp, slot = 4) {
   const blocks = page.locator('[data-block-id]')
   const before = await blocks.count()
   const plannedLane = page.getByTestId('day-timeline').locator('[role="presentation"]').first()
-  await plannedLane.scrollIntoViewIfNeeded()
+  const slotOffset = TIMELINE_SLOT_HEIGHT_PX * slot + TIMELINE_SLOT_HEIGHT_PX / 2
+  const initialBox = await plannedLane.boundingBox()
+  expect(initialBox).toBeTruthy()
+  // Today's page positions the current-time line in view. Bring the requested
+  // slot below the sticky header before using viewport-relative mouse input.
+  await page.evaluate((delta) => window.scrollBy({ top: delta, behavior: 'auto' }), initialBox!.y + slotOffset - 180)
   const box = await plannedLane.boundingBox()
   expect(box).toBeTruthy()
   await page.mouse.click(
     box!.x + box!.width / 2,
-    box!.y + TIMELINE_SLOT_HEIGHT_PX * slot + TIMELINE_SLOT_HEIGHT_PX / 2,
+    box!.y + slotOffset,
   )
   await expect(blocks).toHaveCount(before + 1, { timeout: 15_000 })
   await page.reload()

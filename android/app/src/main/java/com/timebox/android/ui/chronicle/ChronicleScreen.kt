@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.RoundIconButton
+import com.timebox.android.data.primaryIdentity
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -284,6 +285,7 @@ private fun ChronicleMonthPage(
                         isToday = date == state.today,
                         archived = archived != null,
                         windowLabel = archived?.windowLabel,
+                        actualIdentity = archived?.actualBlocks?.firstOrNull()?.primaryIdentity(),
                         onClick = { onOpenDay(date) },
                         enabled = interactive,
                         modifier = Modifier.weight(1f),
@@ -309,6 +311,7 @@ private fun DayCell(
     archived: Boolean,
     /** Null for a day with nothing in it, so empty cells stay bare. */
     windowLabel: String?,
+    actualIdentity: String?,
     onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
@@ -344,6 +347,14 @@ private fun DayCell(
         )
         if (windowLabel != null && inMonth) {
             Spacer(Modifier.weight(1f))
+            if (actualIdentity != null) {
+                Text(
+                    text = actualIdentity,
+                    style = TimeboxTheme.type.bodySmall.copy(fontSize = 7.5.sp),
+                    color = colors.on,
+                    maxLines = 1,
+                )
+            }
             Text(
                 text = windowLabel,
                 style = TimeboxTheme.type.monoSmall.copy(fontSize = 7.5.sp),

@@ -32,6 +32,39 @@ class DayCalendarHeaderTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
+    fun abbreviatedDateTitleRemainsOneLineWithoutMovingHeader() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                var selectedDate by remember { mutableStateOf(LocalDate.of(2026, 8, 31)) }
+                DayCalendarHeader(
+                    selectedDate = selectedDate,
+                    today = LocalDate.of(2026, 9, 2),
+                    isPlanningMode = false,
+                    onOpenWorkMode = {},
+                    onSetPlanningMode = {},
+                    onSelectDate = { selectedDate = it },
+                    onNavigateToday = { selectedDate = it },
+                )
+            }
+        }
+
+        val shortDateTitleHeight = compose.onNodeWithText("Mon, August 31")
+            .fetchSemanticsNode().boundsInRoot.height
+        val shortDateDividerTop = compose.onNodeWithTag("day-header-divider")
+            .fetchSemanticsNode().boundsInRoot.top
+
+        compose.onNodeWithContentDescription("Wednesday, September 2, 2026").performClick()
+        compose.waitForIdle()
+
+        val longDateTitleHeight = compose.onNodeWithText("Wed, September 2")
+            .fetchSemanticsNode().boundsInRoot.height
+        val longDateDividerTop = compose.onNodeWithTag("day-header-divider")
+            .fetchSemanticsNode().boundsInRoot.top
+        assertEquals(shortDateTitleHeight, longDateTitleHeight, 0.5f)
+        assertEquals(shortDateDividerTop, longDateDividerTop, 0.5f)
+    }
+
+    @Test
     fun timelineHeadersKeepBreathingRoomBelowTheCalendar() {
         showDay(
             state = DayUiState(
@@ -283,7 +316,7 @@ class DayCalendarHeaderTest {
         )
 
         compose.onNodeWithText("DAY").assertIsDisplayed()
-        compose.onNodeWithText("Friday, August 28").assertIsDisplayed()
+        compose.onNodeWithText("Fri, August 28").assertIsDisplayed()
         compose.onNodeWithText("Go to today").assertIsDisplayed()
         compose.onNodeWithText("Week").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithText("Month").assertIsDisplayed()

@@ -15,3 +15,7 @@ This repo uses the single-context domain-doc layout. See `docs/agents/domain.md`
 ### Review launches
 
 After fixing an issue, launch or relaunch the affected application from the updated working tree and leave it running in a reviewable state. The fix is not complete until the launched instance reflects the change.
+
+### Worktree lifecycle
+
+After a worktree branch is merged into the repository's primary branch (`master` here), remove the clean merged worktree and prune stale worktree metadata. The merge is not complete until the removed worktree no longer appears in `git worktree list`; preserve any dirty or unmerged worktree.

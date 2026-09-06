@@ -51,6 +51,8 @@ export const DayTimeline = forwardRef<
     onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
     /** While a block move/resize drag is active, parent may disable inspector hit-testing. */
     onBlockDragSessionChange?: (active: boolean) => void
+    /** Position today's now line once, leaving more room below it for upcoming work. */
+    autoScrollToNow?: boolean
   }
 >(function DayTimeline(
   {
@@ -63,6 +65,7 @@ export const DayTimeline = forwardRef<
     onPatchBlock,
     onBlockClick,
     onBlockDragSessionChange,
+    autoScrollToNow = false,
   },
   ref,
 ) {
@@ -72,6 +75,9 @@ export const DayTimeline = forwardRef<
 
   const plannedRef = useRef<HTMLDivElement>(null)
   const actualRef = useRef<HTMLDivElement>(null)
+  const nowLineRef = useRef<HTMLDivElement>(null)
+  const autoScrollDateRef = useRef<string | null>(null)
+  const autoScrollCompletedRef = useRef(false)
 
   const [, setNowTick] = useState(0)
   const isTodayInTz = calendarIsoDateInTimeZone(new Date(), day.meta.timezone) === day.date
@@ -110,6 +116,7 @@ export const DayTimeline = forwardRef<
       task_type: actual.task_type,
       task_id: actual.task_id,
       task: actual.task,
+      name: actual.name,
       note: actual.note,
       planned_block_id: actual.planned_block_id,
       start_minute,
@@ -130,6 +137,18 @@ export const DayTimeline = forwardRef<
   const nowLineTopPx = showNowLine
     ? ((nowMinuteOfDay - visibleStartMin) / visibleRange) * totalHeight
     : 0
+
+  useEffect(() => {
+    if (autoScrollDateRef.current !== day.date) {
+      autoScrollDateRef.current = day.date
+      autoScrollCompletedRef.current = false
+    }
+    if (!autoScrollToNow || !showNowLine || autoScrollCompletedRef.current) return
+    const line = nowLineRef.current
+    if (!line) return
+    autoScrollCompletedRef.current = true
+    scrollCurrentTimeIntoView(line)
+  }, [autoScrollToNow, day.date, showNowLine])
 
   return (
     <div
@@ -208,6 +227,7 @@ export const DayTimeline = forwardRef<
           aria-hidden
         >
           <div
+            ref={nowLineRef}
             className="absolute left-0 right-0 border-t-2 border-now-line"
             style={{ top: nowLineTopPx, transform: 'translateY(-1px)' }}
           />
@@ -216,6 +236,12 @@ export const DayTimeline = forwardRef<
     </div>
   )
 })
+
+/** Place the line one-third down the viewport, favoring context for upcoming work. */
+function scrollCurrentTimeIntoView(line: HTMLElement, viewportHeight = window.innerHeight) {
+  const targetTop = viewportHeight / 3
+  window.scrollBy({ top: line.getBoundingClientRect().top - targetTop, behavior: 'auto' })
+}
 
 function DraftBlockOverlay({
   draft,
@@ -507,7 +533,6 @@ function Lane({
             visibleEndMin={visibleEndMin}
             slotHeightPx={slotHeightPx}
             readOnly={readOnly}
-            timeEditingDisabled={lane === 'actual'}
             sameLaneBlocks={blocks}
             resizeMinStartMinute={minStartMinute}
             resizeMaxEndMinute={maxEndMinute}

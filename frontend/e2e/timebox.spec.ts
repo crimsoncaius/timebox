@@ -155,7 +155,7 @@ test('plan blocks and history', async ({ page, request }) => {
   })
 })
 
-test('Work Mode starts globally, survives leaving its surface, and exits explicitly', async ({ page, request }) => {
+test('Work Mode starts globally and offers one explicit exit', async ({ page, request }) => {
   const health = (await (await request.get(`${apiBase}/health`)).json()) as { today: string }
   await clearDayBlocks(request, apiBase, health.today)
   const active = (await (await request.get(`${apiBase}/actual-blocks/active`)).json()) as { id: number } | null
@@ -170,11 +170,9 @@ test('Work Mode starts globally, survives leaving its surface, and exits explici
 
   const workMode = page.getByRole('dialog', { name: 'Work Mode' })
   await expect(workMode.getByRole('heading', { name: 'No more planned work today' })).toBeVisible()
-  await workMode.getByRole('button', { name: 'Back to app' }).click()
-  await expect(workMode).not.toBeVisible()
-  await page.getByRole('link', { name: 'Work Mode', exact: true }).click()
-  await expect(workMode).toBeVisible()
-  await workMode.getByRole('button', { name: 'Exit Work Mode' }).first().click()
+  await expect(workMode.getByRole('button')).toHaveCount(1)
+  await expect(workMode.getByRole('button', { name: 'Back to app' })).toHaveCount(0)
+  await workMode.getByRole('button', { name: 'Exit Work Mode' }).click()
   await expect(workMode).not.toBeVisible()
   expect(await (await request.get(`${apiBase}/actual-blocks/active`)).json()).toBeNull()
 })
@@ -321,6 +319,57 @@ test('move planned block preserves duration and jumps past blocker', async ({ pa
   const a = blocks.find((b) => b.id === idA)
   expect(a?.start_minute).toBe(600)
   expect(a?.end_minute).toBe(630)
+})
+
+test('move actual block persists its timestamp interval', async ({ page, request }) => {
+  const date = '2026-06-26'
+  const base = apiBase
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await clearDayBlocks(request, base, date)
+
+  const taskTypeId = await ensureTaskType(request, base, 'Move actual')
+  const created = await request.post(`${base}/actual-blocks`, {
+    data: {
+      task_type_id: taskTypeId,
+      start_at: '2026-06-26T09:16:38Z',
+      end_at: '2026-06-26T09:45:00Z',
+    },
+    headers: { 'Content-Type': 'application/json' },
+  })
+  expect(created.ok()).toBeTruthy()
+  const actualBlockId = ((await created.json()) as { id: number }).id
+
+  await page.reload()
+  const body = page
+    .locator(`[data-block-id="${actualBlockId}"]`)
+    .getByRole('button', { name: 'Edit actual block' })
+  await body.scrollIntoViewIfNeeded()
+  const box = await body.boundingBox()
+  expect(box).toBeTruthy()
+  const cx = box!.x + box!.width / 2
+  const cy = box!.y + box!.height / 2
+  await page.mouse.move(cx, cy)
+  await page.mouse.down()
+  await page.mouse.move(cx, cy + 10)
+  await expect(page.locator(`[data-block-id="${actualBlockId}"]`)).toHaveAttribute('data-dragging', 'true')
+  await page.mouse.move(cx, cy + TIMELINE_SLOT_HEIGHT_PX, { steps: 8 })
+  await page.mouse.up()
+
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const value = (await response.json()) as {
+      actual_blocks: Array<{ start_minute: number; end_minute: number; actual_block: { id: number } }>
+    }
+    return value.actual_blocks.find((projection) => projection.actual_block.id === actualBlockId)
+  }).toMatchObject({ start_minute: 570, end_minute: 599 })
+
+  const persisted = await request.get(`${base}/actual-blocks/${actualBlockId}`)
+  expect(persisted.ok()).toBeTruthy()
+  expect(await persisted.json()).toMatchObject({
+    start_at: '2026-06-26T09:30:00Z',
+    end_at: '2026-06-26T09:59:00Z',
+  })
 })
 
 test('move planned block: preview stays stable while pointer wiggles in the invalid gap', async ({
@@ -533,6 +582,200 @@ test('draft-first: lane click shows ghost; block is created when task type is ch
   expect(data.time_blocks.length).toBe(1)
   expect(data.time_blocks[0].start_minute).toBe(600)
   expect(data.time_blocks[0].end_minute).toBe(630)
+})
+
+test('names a taskless Planned Block without choosing a Task Type and reloads edits', async ({ page, request }) => {
+  const date = '2026-06-28'
+  const base = apiBase
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await clearDayBlocks(request, base, date)
+  await page.reload()
+
+  const plannedLane = page.getByTestId('day-timeline').locator('[role="presentation"]').first()
+  await plannedLane.scrollIntoViewIfNeeded()
+  const box = await plannedLane.boundingBox()
+  expect(box).toBeTruthy()
+  const laneRelY = TIMELINE_SLOT_HEIGHT_PX * 6 + TIMELINE_SLOT_HEIGHT_PX * 0.5
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + laneRelY)
+
+  const inspector = page.getByRole('complementary', { name: 'Block details' })
+  const nameInput = inspector.getByLabel('Name')
+  const typeInput = inspector.getByLabel('Task type', { exact: true })
+  const [nameBox, typeBox] = await Promise.all([nameInput.boundingBox(), typeInput.boundingBox()])
+  expect(nameBox).toBeTruthy()
+  expect(typeBox).toBeTruthy()
+  expect(nameBox!.y).toBeLessThan(typeBox!.y)
+  await nameInput.fill('  Dinner   with Alex  ')
+  await inspector.getByLabel('Note').fill('Bring invitation')
+  await inspector.getByRole('button', { name: 'Create block' }).click()
+
+  let blockId = 0
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const body = (await response.json()) as { time_blocks: Array<{ id: number; name: string | null; note: string | null; task_type: { name: string } }> }
+    const block = body.time_blocks[0]
+    blockId = block?.id ?? 0
+    return block ? { name: block.name, note: block.note, type: block.task_type.name } : null
+  }).toEqual({ name: 'Dinner   with Alex', note: 'Bring invitation', type: 'unspecified' })
+
+  await expect(page.locator(`[data-block-id="${blockId}"]`).getByText('Dinner   with Alex')).toBeVisible()
+  await page.locator(`[data-block-id="${blockId}"]`).click()
+  await expect(inspector.getByLabel('Name')).toHaveValue('Dinner   with Alex')
+  await inspector.getByLabel('Name').fill('Dinner with Sam')
+  await inspector.getByLabel('Name').blur()
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const body = (await response.json()) as { time_blocks: Array<{ id: number; name: string | null }> }
+    return body.time_blocks.find((block) => block.id === blockId)?.name
+  }).toBe('Dinner with Sam')
+
+  await page.reload()
+  await expect(page.locator(`[data-block-id="${blockId}"]`).getByText('Dinner with Sam')).toBeVisible()
+  await page.locator(`[data-block-id="${blockId}"]`).click()
+  await inspector.getByLabel('Name').fill('   ')
+  await inspector.getByLabel('Name').blur()
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const body = (await response.json()) as { time_blocks: Array<{ id: number; name: string | null }> }
+    return body.time_blocks.find((block) => block.id === blockId)?.name ?? 'missing'
+  }).toBe('missing')
+
+  await page.reload()
+  await expect(page.locator(`[data-block-id="${blockId}"]`).getByText('Untitled')).toBeVisible()
+  await expect(page.getByText('unspecified')).toHaveCount(0)
+})
+
+test('derived Actual snapshots the Planned name and stays independently editable through Chronicle and reload', async ({ page, request }) => {
+  const date = '2199-12-30'
+  const base = apiBase
+  await request.patch(`${base}/settings`, {
+    data: { start_hour: 8, end_hour: 20, show_full_day: false },
+  })
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await clearDayBlocks(request, base, date)
+  await page.reload()
+
+  const plannedLane = page.getByTestId('day-timeline').locator('[role="presentation"]').first()
+  await plannedLane.scrollIntoViewIfNeeded()
+  const laneBox = await plannedLane.boundingBox()
+  expect(laneBox).toBeTruthy()
+  const laneRelY = TIMELINE_SLOT_HEIGHT_PX * 6 + TIMELINE_SLOT_HEIGHT_PX * 0.5
+  await page.mouse.click(laneBox!.x + laneBox!.width / 2, laneBox!.y + laneRelY)
+
+  const inspector = page.getByRole('complementary', { name: 'Block details' })
+  await inspector.getByLabel('Name').fill('Planned dinner')
+  await inspector.getByLabel('Note').fill('Original plan detail')
+  await inspector.getByRole('button', { name: 'Create block' }).click()
+
+  let plannedId = 0
+  await expect.poll(async () => {
+    const body = (await (await request.get(`${base}/days/${date}`)).json()) as {
+      time_blocks: Array<{ id: number; name: string | null }>
+    }
+    plannedId = body.time_blocks[0]?.id ?? 0
+    return body.time_blocks[0]?.name
+  }).toBe('Planned dinner')
+
+  await page.locator(`[data-block-id="${plannedId}"]`).click()
+  await inspector.getByRole('button', { name: 'Record Actual as planned' }).click()
+
+  let actualId = 0
+  await expect.poll(async () => {
+    const body = (await (await request.get(`${base}/days/${date}`)).json()) as {
+      actual_blocks: Array<{ actual_block: { id: number; name: string | null; planned_block_id: number | null } }>
+    }
+    const actual = body.actual_blocks[0]?.actual_block
+    actualId = actual?.id ?? 0
+    return actual ? { name: actual.name, plannedBlockId: actual.planned_block_id } : null
+  }).toEqual({ name: 'Planned dinner', plannedBlockId: plannedId })
+
+  await page.locator(`[data-block-id="${plannedId}"]`).click()
+  await inspector.getByLabel('Name').fill('Revised plan')
+  await inspector.getByLabel('Name').blur()
+  await expect.poll(async () => {
+    const body = (await (await request.get(`${base}/days/${date}`)).json()) as {
+      time_blocks: Array<{ id: number; name: string | null }>
+    }
+    return body.time_blocks.find((block) => block.id === plannedId)?.name
+  }).toBe('Revised plan')
+  expect(((await (await request.get(`${base}/actual-blocks/${actualId}`)).json()) as { name: string | null }).name)
+    .toBe('Planned dinner')
+
+  await page.locator(`[data-block-id="${actualId}"]`).click()
+  await inspector.getByLabel('Name').fill('Dinner that happened')
+  await inspector.getByLabel('Name').blur()
+  await expect.poll(async () =>
+    ((await (await request.get(`${base}/actual-blocks/${actualId}`)).json()) as { name: string | null }).name,
+  ).toBe('Dinner that happened')
+  const persistedPlan = (await (await request.get(`${base}/days/${date}`)).json()) as {
+    time_blocks: Array<{ id: number; name: string | null }>
+  }
+  expect(persistedPlan.time_blocks.find((block) => block.id === plannedId)?.name).toBe('Revised plan')
+
+  await page.reload()
+  await expect(page.locator(`[data-block-id="${plannedId}"]`).getByText('Revised plan')).toBeVisible()
+  await expect(page.locator(`[data-block-id="${actualId}"]`).getByText('Dinner that happened')).toBeVisible()
+
+  await page.getByRole('link', { name: 'Chronicle' }).click()
+  await expect(page.getByTestId(`chronicle-day-${date}`).getByText('Dinner that happened')).toBeVisible()
+  await expect(page.getByTestId(`chronicle-day-${date}`).getByText('Planned dinner')).toHaveCount(0)
+})
+
+test('names a standalone Actual Block without choosing a Task Type and reloads edits', async ({ page, request }) => {
+  const date = '2026-06-29'
+  const base = apiBase
+  await page.goto(`/day/${date}`)
+  await expect(page.getByTestId('day-date')).toHaveText(date, { timeout: 30_000 })
+  await clearDayBlocks(request, base, date)
+  await page.reload()
+
+  const actualLane = page.getByTestId('day-timeline').locator('[role="presentation"]').nth(1)
+  await actualLane.scrollIntoViewIfNeeded()
+  const box = await actualLane.boundingBox()
+  expect(box).toBeTruthy()
+  const laneRelY = TIMELINE_SLOT_HEIGHT_PX * 6 + TIMELINE_SLOT_HEIGHT_PX * 0.5
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + laneRelY)
+
+  const inspector = page.getByRole('complementary', { name: 'Block details' })
+  await inspector.getByLabel('Name').fill('  Evening   walk  ')
+  await inspector.getByLabel('Note').fill('Took the river path')
+  await inspector.getByRole('button', { name: 'Create block' }).click()
+
+  let actualId = 0
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/days/${date}`)
+    const body = (await response.json()) as {
+      actual_blocks: Array<{ actual_block: { id: number; name: string | null; note: string | null; task_type: { name: string } } }>
+    }
+    const actual = body.actual_blocks[0]?.actual_block
+    actualId = actual?.id ?? 0
+    return actual ? { name: actual.name, note: actual.note, type: actual.task_type.name } : null
+  }).toEqual({ name: 'Evening   walk', note: 'Took the river path', type: 'unspecified' })
+
+  await expect(page.locator(`[data-block-id="${actualId}"]`).getByText('Evening   walk')).toBeVisible()
+  await page.locator(`[data-block-id="${actualId}"]`).click()
+  await inspector.getByLabel('Name').fill('Walk home')
+  await inspector.getByLabel('Name').blur()
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/actual-blocks/${actualId}`)
+    return ((await response.json()) as { name: string | null }).name
+  }).toBe('Walk home')
+
+  await page.reload()
+  await expect(page.locator(`[data-block-id="${actualId}"]`).getByText('Walk home')).toBeVisible()
+  await page.locator(`[data-block-id="${actualId}"]`).click()
+  await inspector.getByLabel('Name').fill('   ')
+  await inspector.getByLabel('Name').blur()
+  await expect.poll(async () => {
+    const response = await request.get(`${base}/actual-blocks/${actualId}`)
+    return ((await response.json()) as { name: string | null }).name ?? 'missing'
+  }).toBe('missing')
+
+  await page.reload()
+  await expect(page.locator(`[data-block-id="${actualId}"]`).getByText('Untitled')).toBeVisible()
+  await expect(page.getByText('unspecified')).toHaveCount(0)
 })
 
 test('draft cleared when clicking outside the timeline', async ({ page }) => {

@@ -156,7 +156,6 @@ class WorkModeExecution(
     }
 
     fun show() = _state.update { if (it.session == null) it else it.copy(visible = true) }
-    fun hide() = _state.update { it.copy(visible = false) }
     fun clearEntryWarning() = _state.update { it.copy(entryWarning = false) }
     fun consumeNotice() = _state.update { it.copy(notice = null) }
 
@@ -371,8 +370,20 @@ class WorkModeExecution(
     private fun activeBlock(day: Day, actual: ActualBlock, now: Instant): TimeBlock {
         day.lane(Lane.Planned).firstOrNull { it.id == actual.plannedBlockId }?.let { return it }
         val start = minuteOfDay(actual.startAt, day.timezone)
-        return TimeBlock(actual.id, Lane.Actual, actual.taskTypeId, actual.taskTypeName, actual.taskId,
-            actual.task, actual.note, actual.plannedBlockId, actual.id, start, maxOf(start + 1, minuteOfDay(now, day.timezone)))
+        return TimeBlock(
+            id = actual.id,
+            lane = Lane.Actual,
+            taskTypeId = actual.taskTypeId,
+            taskTypeName = actual.taskTypeName,
+            taskId = actual.taskId,
+            task = actual.task,
+            note = actual.note,
+            plannedBlockId = actual.plannedBlockId,
+            actualBlockId = actual.id,
+            startMinute = start,
+            endMinute = maxOf(start + 1, minuteOfDay(now, day.timezone)),
+            name = actual.name,
+        )
     }
 }
 

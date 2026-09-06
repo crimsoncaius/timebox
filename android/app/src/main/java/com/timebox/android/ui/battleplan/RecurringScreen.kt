@@ -255,10 +255,10 @@ private fun RecurringDetailContent(
             DetailLine("Mode", template.mode.label)
             DetailLine("Cadence", template.cadence)
             DetailLine("Location", template.project?.name ?: "Admin")
-            DetailLine("Task type", template.taskType?.name ?: "Unset")
+            DetailLine("Task type", template.taskType?.name ?: "Not specified")
             DetailLine("Starts", template.startDate.toString())
             DetailLine("Ends", template.endDate?.toString() ?: template.cycleLimit?.let { "$it cycles" } ?: "Never")
-            DetailLine("Priorities", listOfNotNull(template.urgency?.label, template.importance?.label).joinToString(" · ").ifBlank { "Unset" })
+            DetailLine("Priorities", listOfNotNull(template.urgency?.label, template.importance?.label).joinToString(" · ").ifBlank { "Not specified" })
         }
         SectionCard {
             SectionHeader("Next five windows")
@@ -378,10 +378,10 @@ fun RecurringEditorScreen(
                 OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
                 RecurrenceMenu("Location", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
-                RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "Unset", listOf("Unset" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
+                RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "No task type", listOf((if (state.taskTypeId == null) "No task type" else "Clear task type") to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.weight(1f)) { RecurrenceMenu("Urgency", state.urgency?.label ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.label to it }, onUrgency) }
-                    Box(Modifier.weight(1f)) { RecurrenceMenu("Importance", state.importance?.label ?: "Unset", listOf("Unset" to null) + PriorityLevel.entries.map { it.label to it }, onImportance) }
+                    Box(Modifier.weight(1f)) { RecurrenceMenu("Urgency", state.urgency?.label ?: "No urgency", listOf((if (state.urgency == null) "No urgency" else "Clear urgency") to null) + PriorityLevel.entries.map { it.label to it }, onUrgency) }
+                    Box(Modifier.weight(1f)) { RecurrenceMenu("Importance", state.importance?.label ?: "No importance", listOf((if (state.importance == null) "No importance" else "Clear importance") to null) + PriorityLevel.entries.map { it.label to it }, onImportance) }
                 }
             }
             RecurringEditorSection("Schedule", "Choose how often Tasks are generated.") {
@@ -416,7 +416,7 @@ fun RecurringEditorScreen(
                     }
                 } else {
                     OutlinedTextField(state.quotaCount, onQuotaCount, Modifier.fillMaxWidth(), label = { Text("Times per period") }, singleLine = true)
-                    Text("Quota sessions are generated Ready to Plan. The server controls calendar period boundaries.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                    Text("Quota sessions are generated without being added to Ready to Plan. The server controls calendar period boundaries.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
                 }
             }
             RecurringEditorSection("End", "Set the active range for this series.") {

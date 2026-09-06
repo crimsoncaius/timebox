@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,10 +31,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.ErrorState
@@ -58,7 +61,9 @@ fun DayScreen(
     onChooseType: (TaskType) -> Unit,
     onTypeQueryChange: (String) -> Unit,
     onCreateType: (String) -> Unit,
+    onNameChange: (String) -> Unit = {},
     onNoteChange: (String) -> Unit,
+    onCreateDraft: () -> Unit = {},
     onDeleteSelected: () -> Unit,
     onConfirmSelectedTaskCompletion: () -> Unit,
     onReopenSelectedTask: () -> Unit,
@@ -74,13 +79,15 @@ fun DayScreen(
     onNavigateToday: (LocalDate) -> Unit = {},
     onOpenWorkMode: () -> Unit = {},
 ) {
+    var displayedDate by remember(state.date) { mutableStateOf(state.date) }
+
     BackHandler(enabled = state.isPlanningMode) {
         if (!state.saving && !state.planning.saving) onCancelPlanningMode()
     }
 
     Column(Modifier.fillMaxSize()) {
         DayCalendarHeader(
-            selectedDate = state.date,
+            selectedDate = displayedDate,
             today = state.today,
             isPlanningMode = state.isPlanningMode,
             planningActionEnabled = !state.saving && !state.planning.saving,
@@ -109,6 +116,7 @@ fun DayScreen(
                 InteractiveDayPager(
                     state = state,
                     onDateSettled = onDateSettled,
+                    onDisplayedDateChange = { displayedDate = it },
                     onRetry = onRetry,
                     onTapSlot = onTapSlot,
                     onSelectBlock = onSelectBlock,
@@ -125,7 +133,9 @@ fun DayScreen(
             onChooseType = onChooseType,
             onTypeQueryChange = onTypeQueryChange,
             onCreateType = onCreateType,
+            onNameChange = onNameChange,
             onNoteChange = onNoteChange,
+            onCreateDraft = onCreateDraft,
             onDelete = onDeleteSelected,
             onConfirmTaskCompletion = onConfirmSelectedTaskCompletion,
             onReopenTask = onReopenSelectedTask,
@@ -187,12 +197,14 @@ private val DAY_SWIPE_THRESHOLD = 55.dp
 
 /**
  * A clipped three-page track. The track follows the finger directly, then settles to
- * the adjacent page or returns home. The selected date changes only after animation.
+ * the adjacent page or returns home. A committed target is exposed immediately for
+ * the header; durable navigation still waits for the animation to finish.
  */
 @Composable
 private fun InteractiveDayPager(
     state: DayUiState,
     onDateSettled: (LocalDate) -> Unit,
+    onDisplayedDateChange: (LocalDate) -> Unit,
     onRetry: (LocalDate) -> Unit,
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
@@ -208,14 +220,16 @@ private fun InteractiveDayPager(
     val timelineScroll = rememberScrollState()
     val density = LocalDensity.current
 
-    BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
+    BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().testTag("day-pager")) {
         val pageWidthPx = constraints.maxWidth.toFloat()
         val thresholdPx = with(density) { DAY_SWIPE_THRESHOLD.toPx() }
 
         fun settle(dayDelta: Long?) {
             if (settling || pageWidthPx <= 0f) return
             val baseDate = state.date
+            val targetDate = dayDelta?.let(baseDate::plusDays) ?: baseDate
             settling = true
+            onDisplayedDateChange(targetDate)
             scope.launch {
                 val target = dayDelta?.let { -it * pageWidthPx } ?: 0f
                 animate(
@@ -225,7 +239,7 @@ private fun InteractiveDayPager(
                 ) { value, _ ->
                     dragOffsetPx = value
                 }
-                if (dayDelta != null) settleDate.value(baseDate.plusDays(dayDelta))
+                if (dayDelta != null) settleDate.value(targetDate)
                 dragOffsetPx = 0f
                 settling = false
             }
@@ -273,6 +287,7 @@ private fun InteractiveDayPager(
                             date = date,
                             page = state.page(date),
                             scrollState = timelineScroll,
+                            autoScrollToNow = pagePosition == 0 && date == state.today,
                             selectedBlockId = if (interactive) state.selectedBlockId else null,
                             draft = if (interactive) state.draft else null,
                             onRetry = { onRetry(date) },
@@ -299,6 +314,7 @@ private fun DayPage(
     date: LocalDate,
     page: DayPageState,
     scrollState: ScrollState,
+    autoScrollToNow: Boolean,
     selectedBlockId: Int?,
     draft: Draft?,
     onRetry: () -> Unit,
@@ -307,6 +323,7 @@ private fun DayPage(
     onCommitMove: (Int, Int, Int) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
+    var viewportHeightPx by remember(date) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -332,6 +349,7 @@ private fun DayPage(
             day != null -> Box(
                 modifier = Modifier
                     .weight(1f)
+                    .onSizeChanged { viewportHeightPx = it.height }
                     .verticalScroll(scrollState)
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
@@ -344,7 +362,56 @@ private fun DayPage(
                     onSelectBlock = onSelectBlock,
                     onCommitMove = onCommitMove,
                 )
+                AutoScrollTimelineToNowOnce(
+                    day = day,
+                    enabled = autoScrollToNow,
+                    scrollState = scrollState,
+                    viewportHeightPx = viewportHeightPx,
+                )
             }
         }
     }
 }
+
+/** Scroll once per date so the now line sits one-third down the visible timeline. */
+@Composable
+internal fun AutoScrollTimelineToNowOnce(
+    day: Day,
+    enabled: Boolean,
+    scrollState: ScrollState,
+    viewportHeightPx: Int,
+) {
+    var completed by remember(day.date) { mutableStateOf(false) }
+    val slotHeightPx = with(LocalDensity.current) { TimeboxDimens.slotHeight.toPx() }
+    val maxScroll = scrollState.maxValue
+
+    androidx.compose.runtime.LaunchedEffect(
+        enabled,
+        day.date,
+        viewportHeightPx,
+        maxScroll,
+    ) {
+        if (!enabled || completed || viewportHeightPx <= 0) return@LaunchedEffect
+        val nowMinute = day.nowMinuteAt(System.currentTimeMillis())
+        if (nowMinute == null || nowMinute !in day.visibleStart until day.visibleEnd) {
+            completed = true
+            return@LaunchedEffect
+        }
+        val lineOffsetPx = slotHeightPx *
+            (nowMinute - day.visibleStart).toFloat() /
+            com.timebox.android.data.SLOT_MINUTES
+        // A zero maximum can be transient during first layout. Wait if the line is
+        // demonstrably below the viewport; maxValue changing will restart this effect.
+        if (maxScroll == 0 && lineOffsetPx > viewportHeightPx) return@LaunchedEffect
+        scrollState.scrollTo(initialNowScrollOffset(lineOffsetPx, viewportHeightPx, maxScroll))
+        completed = true
+    }
+}
+
+internal fun initialNowScrollOffset(
+    lineOffsetPx: Float,
+    viewportHeightPx: Int,
+    maxScroll: Int,
+): Int = (lineOffsetPx - viewportHeightPx / 3f)
+    .roundToInt()
+    .coerceIn(0, maxScroll)

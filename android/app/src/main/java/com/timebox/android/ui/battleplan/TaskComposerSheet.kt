@@ -137,7 +137,6 @@ internal fun TaskComposerOverlay(
         ModalBottomSheet(
             onDismissRequest = requestDismiss,
             sheetState = sheetState,
-            modifier = Modifier.padding(bottom = 96.dp),
             containerColor = TimeboxTheme.colors.sheet,
             contentColor = TimeboxTheme.colors.on,
             scrimColor = TimeboxTheme.colors.scrim,
@@ -332,7 +331,8 @@ private fun OrganizationSection(state: BattlePlanUiState, onDraftChange: (TaskCo
         BeautifulDropdown(
             label = "Task Type",
             selected = draft.taskTypeId,
-            values = listOf("Unset" to null) + state.taskTypes.map { it.name to it.id },
+            values = listOf((if (draft.taskTypeId == null) "No task type" else "Clear task type") to null) + state.taskTypes.map { it.name to it.id },
+            emptySelectionLabel = "Add a task type",
             searchable = true,
             onSelect = { onDraftChange(draft.copy(taskTypeId = it)) },
         )
@@ -474,6 +474,7 @@ private fun <T> BeautifulDropdown(
     locked: Boolean = false,
     supporting: String? = null,
     searchable: Boolean = false,
+    emptySelectionLabel: String? = null,
     onSelect: (T) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -481,7 +482,11 @@ private fun <T> BeautifulDropdown(
     var anchorWidth by remember { mutableStateOf(280.dp) }
     val density = LocalDensity.current
     val colors = TimeboxTheme.colors
-    val selectedLabel = values.firstOrNull { it.second == selected }?.first ?: "Unset"
+    val selectedLabel = if (selected == null && emptySelectionLabel != null) {
+        emptySelectionLabel
+    } else {
+        values.firstOrNull { it.second == selected }?.first ?: "Not specified"
+    }
     val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "dropdownArrow")
     Box(modifier) {
         Column {
@@ -555,7 +560,7 @@ private fun PrioritySelector(label: String, selected: PriorityLevel?, onSelect: 
         Text(label.uppercase(), style = TimeboxTheme.type.laneLabel, color = TimeboxTheme.colors.onVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(
-                "Unset" to null,
+                (if (selected == null) "Set ${label.lowercase()}" else "Clear ${label.lowercase()}") to null,
                 "Low" to PriorityLevel.Low,
                 "Medium" to PriorityLevel.Medium,
                 "High" to PriorityLevel.High,

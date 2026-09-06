@@ -50,7 +50,7 @@ fun timeboxViewModelFactory(
         initializer { TypesViewModel(repository) }
         initializer { SettingsViewModel(repository) }
         initializer { BattlePlanViewModel(repository, taskCompletion, createSavedStateHandle()) }
-        initializer { TaskDetailViewModel(repository, taskCompletion) }
+        initializer { TaskDetailViewModel(repository, taskCompletion, createSavedStateHandle()) }
         initializer { ProjectEditorViewModel(repository) }
         initializer { RecurringViewModel(repository) }
         initializer { RecurringEditorViewModel(repository) }

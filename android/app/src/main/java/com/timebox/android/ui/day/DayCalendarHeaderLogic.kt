@@ -6,7 +6,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
-private val calendarHeaderFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.ENGLISH)
+private val calendarHeaderFormatter = DateTimeFormatter.ofPattern("EEE, MMMM d", Locale.ENGLISH)
 
 internal fun weekDates(selectedDate: LocalDate): List<LocalDate> {
     val monday = selectedDate.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))

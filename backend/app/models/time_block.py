@@ -80,6 +80,7 @@ class TimeBlock(Base):
     task_id: Mapped[int | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    name: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # When set on an Actual block, points to the Planned block this row completes (as planned).
     planned_block_id: Mapped[int | None] = mapped_column(

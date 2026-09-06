@@ -57,9 +57,11 @@ const taskTypes = [
 describe('TodayPage inspector rail', () => {
   const originalFetch = globalThis.fetch
   let rejectNextTaskUndo = false
+  let standaloneActual: Record<string, unknown> | null = null
 
   beforeEach(() => {
     rejectNextTaskUndo = false
+    standaloneActual = null
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -83,8 +85,36 @@ describe('TodayPage inspector rail', () => {
         }
         return Promise.resolve(jsonResponse({}))
       }
+      if (url.endsWith('/actual-blocks') && method === 'POST') {
+        const body = JSON.parse(String(init?.body)) as {
+          name: string | null
+          note: string | null
+          start_at: string
+          end_at: string
+        }
+        standaloneActual = {
+          id: 41,
+          task_type_id: 3,
+          task_type: { id: 3, name: 'unspecified', created_at: '', updated_at: '' },
+          task_id: null,
+          task: null,
+          name: body.name,
+          note: body.note,
+          planned_block_id: null,
+          start_at: body.start_at,
+          end_at: body.end_at,
+          created_at: '',
+          updated_at: '',
+        }
+        return Promise.resolve(jsonResponse(standaloneActual, 201))
+      }
       if (url.includes('/days/2026-06-01') && !url.includes('/blocks')) {
-        return Promise.resolve(jsonResponse(dayPayload))
+        return Promise.resolve(jsonResponse({
+          ...dayPayload,
+          actual_blocks: standaloneActual == null
+            ? []
+            : [{ actual_block: standaloneActual, start_minute: 510, end_minute: 540 }],
+        }))
       }
       if (url.includes('/days/2026-06-01/blocks') && method === 'POST') {
         const body = JSON.parse(String(init?.body)) as {
@@ -294,6 +324,32 @@ describe('TodayPage inspector rail', () => {
     await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
     expect(screen.queryByRole('button', { name: 'Start Work Mode' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]).toBeVisible()
+  })
+
+  it('keeps a newly created standalone Actual selected without a stale discard prompt', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(
+      <MemoryRouter initialEntries={['/day/2026-06-01']}>
+        <Routes>
+          <Route path="/day/:date" element={<TodayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const rail = await screen.findByRole('complementary', { name: 'Block details' })
+    const actualLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="actual"]')
+    expect(actualLane).not.toBeNull()
+    fireEvent.click(actualLane!, { clientY: 47 })
+
+    await user.type(within(rail).getByLabelText('Name'), 'Evening walk')
+    await user.click(within(rail).getByRole('button', { name: 'Create block' }))
+
+    const actualButton = await screen.findByRole('button', { name: 'Edit actual block' })
+    await user.click(actualButton)
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(within(rail).getByLabelText('Name')).toHaveValue('Evening walk')
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {

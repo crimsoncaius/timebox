@@ -30,6 +30,7 @@ data class TimeBlockDto(
     @SerialName("task_type") val taskType: TaskTypeDto,
     @SerialName("task_id") val taskId: Int? = null,
     val task: LinkedTaskDto? = null,
+    val name: String? = null,
     val note: String? = null,
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
     @SerialName("actual_block_id") val actualBlockId: Int? = null,
@@ -50,6 +51,7 @@ data class ActualBlockDto(
     @SerialName("end_at") val endAt: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
+    val name: String? = null,
 )
 
 @Serializable
@@ -103,6 +105,7 @@ data class DayListItemDto(
     @SerialName("end_hour") val endHour: Int,
     @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("block_count") val blockCount: Int,
+    @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
 )
 
 @Serializable
@@ -139,8 +142,9 @@ data class SettingsPatchDto(
 @Serializable
 data class TimeBlockCreateDto(
     val lane: String = "planned",
-    @SerialName("task_type_id") val taskTypeId: Int,
+    @SerialName("task_type_id") val taskTypeId: Int? = null,
     @SerialName("task_id") val taskId: Int? = null,
+    val name: String? = null,
     val note: String? = null,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
@@ -153,6 +157,7 @@ data class ActualBlockStartDto(
     val note: String? = null,
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
     @SerialName("start_at") val startAt: String? = null,
+    val name: String? = null,
 )
 
 @Serializable
@@ -163,6 +168,7 @@ data class ActualBlockCreateDto(
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
     @SerialName("start_at") val startAt: String,
     @SerialName("end_at") val endAt: String,
+    val name: String? = null,
 )
 
 @Serializable
@@ -172,6 +178,7 @@ data class ActualBlockPatchDto(
     val note: String? = null,
     @SerialName("start_at") val startAt: String? = null,
     @SerialName("end_at") val endAt: String? = null,
+    val name: String? = null,
 )
 
 @Serializable

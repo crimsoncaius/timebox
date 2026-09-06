@@ -154,11 +154,12 @@ class TimeboxRepository private constructor(
     suspend fun createBlock(
         date: LocalDate,
         lane: Lane,
-        taskTypeId: Int,
+        taskTypeId: Int?,
         startMinute: Int,
         endMinute: Int,
         note: String?,
         taskId: Int? = null,
+        name: String? = null,
     ): Result<Day> = call {
         api().createBlock(
             date.toString(),
@@ -166,6 +167,7 @@ class TimeboxRepository private constructor(
                 lane = lane.wire,
                 taskTypeId = taskTypeId,
                 taskId = taskId,
+                name = name,
                 note = note,
                 startMinute = startMinute,
                 endMinute = endMinute,
@@ -177,6 +179,7 @@ class TimeboxRepository private constructor(
         date: LocalDate,
         blockId: Int,
         taskTypeId: Int? = null,
+        name: String? = null,
         note: String? = null,
         startMinute: Int? = null,
         endMinute: Int? = null,
@@ -185,7 +188,7 @@ class TimeboxRepository private constructor(
         api().patchBlock(
             date.toString(),
             blockId,
-            timeBlockPatchBody(taskTypeId, taskId, note, startMinute, endMinute),
+            timeBlockPatchBody(taskTypeId, taskId, name, note, startMinute, endMinute),
         ).toModel()
     }
 
@@ -206,6 +209,10 @@ class TimeboxRepository private constructor(
 
     suspend fun listProjects(): Result<List<Project>> =
         call { api().listProjects().map { it.toModel() } }
+
+    suspend fun reorderProjects(ids: List<Int>): Result<List<Project>> = call {
+        api().reorderProjects(JsonObject(mapOf("project_ids" to JsonArray(ids.map { JsonPrimitive(it) })))).map { it.toModel() }
+    }
 
     suspend fun createProject(request: ProjectCreate): Result<Project> = call {
         api().createProject(
@@ -365,11 +372,21 @@ class TimeboxRepository private constructor(
     suspend fun startActualBlock(
         taskTypeId: Int? = null,
         taskId: Int? = null,
+        name: String? = null,
         note: String? = null,
         plannedBlockId: Int? = null,
         startAt: Instant? = null,
     ): Result<ActualBlock> = call {
-        api().startActualBlock(ActualBlockStartDto(taskTypeId, taskId, note, plannedBlockId, startAt?.toString())).toModel()
+        api().startActualBlock(
+            ActualBlockStartDto(
+                taskTypeId = taskTypeId,
+                taskId = taskId,
+                note = note,
+                plannedBlockId = plannedBlockId,
+                startAt = startAt?.toString(),
+                name = name,
+            )
+        ).toModel()
     }
 
     suspend fun createActualBlock(
@@ -377,6 +394,7 @@ class TimeboxRepository private constructor(
         endAt: Instant,
         taskTypeId: Int? = null,
         taskId: Int? = null,
+        name: String? = null,
         note: String? = null,
         plannedBlockId: Int? = null,
     ): Result<ActualBlock> = call {
@@ -384,6 +402,7 @@ class TimeboxRepository private constructor(
             ActualBlockCreateDto(
                 taskTypeId = taskTypeId,
                 taskId = taskId,
+                name = name,
                 note = note,
                 plannedBlockId = plannedBlockId,
                 startAt = startAt.toString(),
@@ -404,6 +423,7 @@ class TimeboxRepository private constructor(
         endAt: Instant? = null,
         taskTypeId: Int? = null,
         taskId: Int? = null,
+        name: String? = null,
         note: String? = null,
     ): Result<ActualBlock> = call {
         api().patchActualBlock(
@@ -411,6 +431,7 @@ class TimeboxRepository private constructor(
             ActualBlockPatchDto(
                 taskTypeId = taskTypeId,
                 taskId = taskId,
+                name = name,
                 note = note,
                 startAt = startAt?.toString(),
                 endAt = endAt?.toString(),

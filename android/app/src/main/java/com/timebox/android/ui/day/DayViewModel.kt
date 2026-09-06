@@ -71,6 +71,7 @@ data class DayUiState(
     val message: String? = null,
     val selectedBlockId: Int? = null,
     val draft: Draft? = null,
+    val nameInput: String = "",
     val noteInput: String = "",
     /** Raw text in the task type picker; cleared whenever the sheet changes what it shows. */
     val typeQuery: String = "",
@@ -345,6 +346,7 @@ class DayViewModel(
                 date = date,
                 selectedBlockId = null,
                 draft = null,
+                nameInput = "",
                 noteInput = "",
                 typeQuery = "",
             )
@@ -368,7 +370,7 @@ class DayViewModel(
                 if (actual != null && actual.endAt == null) {
                     _state.value.day?.let { workMode.resume(it, actual) }
                 } else {
-                    _state.update { it.copy(selectedBlockId = blockId, draft = null, noteInput = block.note.orEmpty(), typeQuery = "") }
+                    _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
                 }
             }
             return
@@ -377,6 +379,7 @@ class DayViewModel(
             it.copy(
                 selectedBlockId = blockId,
                 draft = null,
+                nameInput = block?.name.orEmpty(),
                 noteInput = block?.note.orEmpty(),
                 typeQuery = "",
             )
@@ -398,6 +401,7 @@ class DayViewModel(
                     endMinute = start + MIN_PLANNED_BLOCK_MINUTES,
                 ),
                 selectedBlockId = null,
+                nameInput = "",
                 noteInput = "",
                 typeQuery = "",
             )
@@ -408,14 +412,17 @@ class DayViewModel(
         planThenWork = false
         val current = _state.value
         val selected = current.selectedBlock
-        // The note field saves on dismiss rather than on every keystroke.
-        if (selected != null && current.noteInput != selected.note.orEmpty()) {
-            saveNote(selected, current.noteInput)
+        // Text fields save together on dismiss so Name and Note cannot race stale responses.
+        if (selected != null &&
+            (current.nameInput != selected.name.orEmpty() || current.noteInput != selected.note.orEmpty())
+        ) {
+            saveBlockText(selected, current.nameInput, current.noteInput)
         }
         _state.update {
             it.copy(
                 selectedBlockId = null,
                 draft = null,
+                nameInput = "",
                 noteInput = "",
                 typeQuery = "",
             )
@@ -423,6 +430,8 @@ class DayViewModel(
     }
 
     fun onNoteChange(value: String) = _state.update { it.copy(noteInput = value) }
+
+    fun onNameChange(value: String) = _state.update { it.copy(nameInput = value.take(500)) }
 
     fun onTypeQueryChange(value: String) = _state.update { it.copy(typeQuery = value) }
 
@@ -437,6 +446,7 @@ class DayViewModel(
                 draft.startMinute,
                 draft.endMinute,
                 taskType.id,
+                current.nameInput,
                 current.noteInput,
                 draft.taskId,
             )
@@ -484,7 +494,8 @@ class DayViewModel(
         lane: Lane,
         start: Int,
         end: Int,
-        taskTypeId: Int,
+        taskTypeId: Int?,
+        name: String,
         note: String,
         taskId: Int?,
     ) {
@@ -507,12 +518,16 @@ class DayViewModel(
                     endAt = endAt,
                     taskTypeId = taskTypeId,
                     taskId = taskId,
+                    name = name.trim().ifBlank { null },
                     note = note.ifBlank { null },
                 ).map {
                     repository.getDay(date).getOrThrow()
                 }
             } else {
-                repository.createBlock(date, lane, taskTypeId, start, end, note.ifBlank { null }, taskId)
+                repository.createBlock(
+                    date, lane, taskTypeId, start, end, note.ifBlank { null }, taskId,
+                    name = name.trim().ifBlank { null },
+                )
             }
             operation.fold(
                 onSuccess = { day ->
@@ -523,6 +538,7 @@ class DayViewModel(
                             saving = false,
                             draft = if (state.date == date) null else state.draft,
                             selectedBlockId = if (state.date == date) null else state.selectedBlockId,
+                            nameInput = if (state.date == date) "" else state.nameInput,
                             noteInput = if (state.date == date) "" else state.noteInput,
                             typeQuery = if (state.date == date) "" else state.typeQuery,
                             message = if (lane == Lane.Actual) null else "Block created",
@@ -552,6 +568,21 @@ class DayViewModel(
             is PlanningEditResult.Rejected -> _state.update { it.copy(message = result.reason) }
         }
         syncPlanningState()
+    }
+
+    fun createTasklessPlannedDraft() {
+        val current = _state.value
+        val draft = current.draft ?: return
+        if (draft.lane != Lane.Planned || draft.taskId != null) return
+        createBlock(
+            draft.lane,
+            draft.startMinute,
+            draft.endMinute,
+            draft.taskTypeId,
+            current.nameInput,
+            current.noteInput,
+            null,
+        )
     }
 
     fun updatePlanningDraft(taskId: Int, startMinute: Int, endMinute: Int) {
@@ -688,26 +719,6 @@ class DayViewModel(
         }
     }
 
-    private fun saveNote(block: TimeBlock, note: String) {
-        val date = _state.value.date
-        launchScope.launch {
-            if (block.lane == Lane.Actual) {
-                repository.patchActualBlock(block.actualBlockId ?: block.id, note = note).fold(
-                    onSuccess = { refreshCurrentDay() },
-                    onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
-                )
-                return@launch
-            }
-            repository.patchBlock(date, block.id, note = note).onSuccess { day ->
-                _state.update { state ->
-                    state.withPage(date) {
-                        DayPageState(day = day, loading = false, materialized = true)
-                    }
-                }
-            }
-        }
-    }
-
     fun deleteSelected() {
         val current = _state.value
         val selected = current.selectedBlock ?: return
@@ -782,6 +793,31 @@ class DayViewModel(
         }
     }
 
+    private fun saveBlockText(block: TimeBlock, name: String, note: String) {
+        val date = _state.value.date
+        launchScope.launch {
+            if (block.lane == Lane.Actual) {
+                repository.patchActualBlock(
+                    block.actualBlockId ?: block.id,
+                    name = name,
+                    note = note,
+                ).onSuccess { refreshCurrentDay() }.onFailure { error ->
+                    _state.update { it.copy(message = error.apiError.message) }
+                }
+                return@launch
+            }
+            repository.patchBlock(date, block.id, name = name, note = note).onSuccess { day ->
+                _state.update { state ->
+                    state.withPage(date) {
+                        DayPageState(day = day, loading = false, materialized = true)
+                    }
+                }
+            }.onFailure { error ->
+                _state.update { it.copy(message = error.apiError.message) }
+            }
+        }
+    }
+
     fun continueWorkModeEntry() {
         val day = _state.value.day ?: return
         launchScope.launch { workMode.continueEntry(day) }
@@ -831,8 +867,6 @@ class DayViewModel(
     fun declineWorkContinued() {
         workMode.declineAfterAbsence()
     }
-
-    fun leaveWorkModeVisible() = workMode.hide()
 
     fun reopenSelectedTask() {
         val current = _state.value

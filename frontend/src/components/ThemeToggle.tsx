@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { applyDocumentTheme, type ThemeMode } from '../lib/theme'
+import {
+  applyDocumentTheme,
+  preferredTheme,
+  readStoredTheme,
+  THEME_STORAGE_KEY,
+  type ThemeMode,
+} from '../lib/theme'
 
 export function ThemeToggle() {
   const [mode, setMode] = useState<ThemeMode>(() =>
@@ -8,13 +14,24 @@ export function ThemeToggle() {
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== 'timebox-theme') return
-      const next: ThemeMode = e.newValue === 'dark' ? 'dark' : 'light'
-      applyDocumentTheme(next)
+      if (e.key !== THEME_STORAGE_KEY) return
+      const next = e.newValue === 'dark' || e.newValue === 'light' ? e.newValue : preferredTheme()
+      applyDocumentTheme(next, false)
+      setMode(next)
+    }
+    const colorScheme = window.matchMedia?.('(prefers-color-scheme: dark)')
+    const onColorSchemeChange = (event: MediaQueryListEvent) => {
+      if (readStoredTheme()) return
+      const next: ThemeMode = event.matches ? 'dark' : 'light'
+      applyDocumentTheme(next, false)
       setMode(next)
     }
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    colorScheme?.addEventListener('change', onColorSchemeChange)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      colorScheme?.removeEventListener('change', onColorSchemeChange)
+    }
   }, [])
 
   const toggle = useCallback(() => {

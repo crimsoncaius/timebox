@@ -18,6 +18,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
+import com.timebox.android.data.DayWindowSettings
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TaskStatus
@@ -34,6 +35,8 @@ import com.timebox.android.ui.day.DayPageState
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayUiState
 import com.timebox.android.ui.planning.PlanningSessionState
+import com.timebox.android.ui.settings.SettingsScreen
+import com.timebox.android.ui.settings.SettingsUiState
 import com.timebox.android.ui.theme.TimeboxTheme
 import com.timebox.android.ui.theme.DarkTimeboxColors
 import com.timebox.android.ui.theme.ThemePreviewScreen
@@ -102,7 +105,8 @@ class DarkThemeScreenshotTest {
                     onOpenDay = { _, _ -> }, onAddSubtask = {}, onToggleSubtask = {},
                     onTrashSubtask = {}, onDismissSubtaskTrash = {}, onConfirmSubtaskTrash = {},
                     onUndoSubtaskTrash = {}, onRequestTrash = {}, onDismissTrash = {},
-                    onConfirmTrash = {}, onTrashed = {}, onReopen = {}, onSave = {},
+                    onConfirmTrash = {}, onTrashed = {}, onStartEditing = {}, onDiscardChanges = {},
+                    onUseLatestTask = {}, onRestoreRecoveredDraft = {}, onComplete = {}, onReopen = {}, onSave = {},
                 )
             }
         }
@@ -308,6 +312,26 @@ class DarkThemeScreenshotTest {
         saveScreenshot("light-theme-preview")
     }
 
+    @Test
+    fun lightSettingsSwitchesAreCaptured() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                Surface(Modifier.fillMaxSize(), color = TimeboxTheme.colors.bg) {
+                    SettingsScreenshot(isDark = false)
+                }
+            }
+        }
+        saveComposeScreenshot("light-settings-switches")
+    }
+
+    @Test
+    fun darkSettingsSwitchesAreCaptured() {
+        compose.setContent {
+            DarkFrame { SettingsScreenshot(isDark = true) }
+        }
+        saveComposeScreenshot("dark-settings-switches")
+    }
+
     private fun saveScreenshot(name: String) {
         compose.waitForIdle()
         writeScreenshot(
@@ -331,6 +355,32 @@ class DarkThemeScreenshotTest {
         }
         assertTrue("Expected a non-empty screenshot at $destination", destination.length() > 1_000)
     }
+}
+
+@Composable
+private fun SettingsScreenshot(isDark: Boolean) {
+    SettingsScreen(
+        state = SettingsUiState(
+            loading = false,
+            window = DayWindowSettings(
+                startHour = 8,
+                endHour = 20,
+                showFullDay = false,
+            ),
+        ),
+        isDark = isDark,
+        onToggleDark = {},
+        onStartHourDelta = {},
+        onEndHourDelta = {},
+        onToggleFullDay = {},
+        onBaseUrlChange = {},
+        onApiKeyChange = {},
+        onSaveConnection = {},
+        notificationsAllowed = true,
+        onRequestNotificationPermission = {},
+        onOpenNotificationSettings = {},
+        onRetry = {},
+    )
 }
 
 @Composable

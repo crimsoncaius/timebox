@@ -6,6 +6,7 @@ from app.services.battle_plan.projects import (
     delete_project,
     list_projects,
     patch_project,
+    reorder_projects,
 )
 from app.services.battle_plan.reminders import acknowledge_reminder, due_reminders
 from app.services.battle_plan.tasks import (

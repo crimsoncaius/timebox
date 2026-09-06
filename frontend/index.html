@@ -4,17 +4,20 @@
     <meta charset="UTF-8" />
     <script>
       ;(function () {
+        var storedTheme = null
         try {
-          var root = document.documentElement
-          if (localStorage.getItem('timebox-theme') === 'dark') {
-            root.classList.add('dark')
-            root.style.colorScheme = 'dark'
-          } else {
-            root.classList.remove('dark')
-            root.style.colorScheme = 'light'
-          }
+          storedTheme = localStorage.getItem('timebox-theme')
         } catch (e) {
           /* ignore */
+        }
+        var root = document.documentElement
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (storedTheme === 'dark' || (storedTheme !== 'light' && prefersDark)) {
+          root.classList.add('dark')
+          root.style.colorScheme = 'dark'
+        } else {
+          root.classList.remove('dark')
+          root.style.colorScheme = 'light'
         }
       })()
     </script>

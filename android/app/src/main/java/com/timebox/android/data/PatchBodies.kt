@@ -50,12 +50,14 @@ internal fun RecurringTemplatePatch.toJson(): JsonObject = patchBody {
 internal fun timeBlockPatchBody(
     taskTypeId: Int?,
     taskId: PatchField<Int>,
+    name: String?,
     note: String?,
     startMinute: Int?,
     endMinute: Int?,
 ): JsonObject = patchBody {
     if (taskTypeId != null) int("task_type_id", PatchField.of(taskTypeId))
     int("task_id", taskId)
+    if (name != null) string("name", PatchField.of(name))
     if (note != null) string("note", PatchField.of(note))
     if (startMinute != null) int("start_minute", PatchField.of(startMinute))
     if (endMinute != null) int("end_minute", PatchField.of(endMinute))

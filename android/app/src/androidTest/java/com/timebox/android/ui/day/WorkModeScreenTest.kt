@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.test.espresso.Espresso.pressBack
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
 import com.timebox.android.data.PriorityLevel
@@ -36,7 +37,6 @@ class WorkModeScreenTest {
                 WorkModeScreen(
                     workMode(current = block(), task = task()),
                     onToggleSubtask = {},
-                    onLeave = {},
                     onExit = {},
                     contentInsets = WindowInsets(top = 64.dp),
                 )
@@ -58,7 +58,7 @@ class WorkModeScreenTest {
         val task = task(subtasks = listOf(subtask(2, checked = true), subtask(3, checked = false)))
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                WorkModeScreen(workMode(current = block(), task = task), onToggleSubtask = {}, onLeave = {}, onExit = { exited = true })
+                WorkModeScreen(workMode(current = block(), task = task), onToggleSubtask = {}, onExit = { exited = true })
             }
         }
 
@@ -67,6 +67,7 @@ class WorkModeScreenTest {
         compose.onNodeWithText("Keep the release small.").fetchSemanticsNode()
         compose.onNodeWithText("Subtasks 1/2").fetchSemanticsNode()
         assertEquals(1, compose.onAllNodesWithText("Exit Work Mode").fetchSemanticsNodes().size)
+        assertEquals(0, compose.onAllNodesWithText("Back to app").fetchSemanticsNodes().size)
         compose.onNodeWithText("Exit Work Mode").performClick()
         compose.runOnIdle { assertTrue(exited) }
         check(compose.onAllNodesWithText("complete Task", substring = true, ignoreCase = true).fetchSemanticsNodes().isEmpty())
@@ -74,10 +75,28 @@ class WorkModeScreenTest {
     }
 
     @Test
+    fun androidBackUsesTheExitAction() {
+        var exited = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                WorkModeScreen(
+                    workMode(current = block(), task = task()),
+                    onToggleSubtask = {},
+                    onExit = { exited = true },
+                )
+            }
+        }
+
+        pressBack()
+
+        compose.runOnIdle { assertTrue(exited) }
+    }
+
+    @Test
     fun tasklessCurrentUsesTaskTypeAndNote() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                WorkModeScreen(workMode(current = block(taskless = true), task = null), onToggleSubtask = {}, onLeave = {}, onExit = {})
+                WorkModeScreen(workMode(current = block(taskless = true), task = null), onToggleSubtask = {}, onExit = {})
             }
         }
         compose.onNodeWithText("Read in the garden").fetchSemanticsNode()
@@ -85,21 +104,86 @@ class WorkModeScreenTest {
     }
 
     @Test
+    fun tasklessCurrentUsesNameBeforeMeaningfulTaskType() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                WorkModeScreen(
+                    workMode(current = block(taskless = true).copy(name = "Garden reading"), task = null),
+                    onToggleSubtask = {},
+                    onExit = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Garden reading").fetchSemanticsNode()
+        compose.onNodeWithText("coding").fetchSemanticsNode()
+    }
+
+    @Test
+    fun tasklessUnspecifiedCurrentIsUntitled() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                WorkModeScreen(
+                    workMode(
+                        current = block(taskless = true).copy(name = null, taskTypeName = "unspecified"),
+                        task = null,
+                    ),
+                    onToggleSubtask = {},
+                    onExit = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Untitled").fetchSemanticsNode()
+        assertEquals(0, compose.onAllNodesWithText("unspecified").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun taskBackedCurrentUsesBlockNameBeforeTaskAndKeepsTaskAsContext() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                WorkModeScreen(
+                    workMode(current = block().copy(name = "Outline session"), task = task()),
+                    onToggleSubtask = {},
+                    onExit = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Outline session").fetchSemanticsNode()
+        compose.onNodeWithText("Ship Android").fetchSemanticsNode()
+        assertEquals(0, compose.onAllNodesWithText("coding").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun currentSessionShowsElapsedAndRemainingTime() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                WorkModeScreen(workMode(current = block(), task = task()), onToggleSubtask = {}, onExit = {})
+            }
+        }
+
+        compose.onNodeWithText("CURRENT").fetchSemanticsNode()
+        compose.onNodeWithText("42:37").fetchSemanticsNode()
+        compose.onNodeWithText("MIN:SEC LEFT").fetchSemanticsNode()
+        compose.onNodeWithText("17:23 elapsed").fetchSemanticsNode()
+        compose.onNodeWithText("60:00 planned").fetchSemanticsNode()
+    }
+
+    @Test
     fun upNextAndEmptyStatesStayPresentTense() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                WorkModeScreen(workMode(current = null, next = block().copy(startMinute = 9 * 60 + 27), task = null), onToggleSubtask = {}, onLeave = {}, onExit = {})
+                WorkModeScreen(workMode(current = null, next = block().copy(startMinute = 9 * 60 + 27), task = null), onToggleSubtask = {}, onExit = {})
             }
         }
         compose.onNodeWithText("UP NEXT").fetchSemanticsNode()
-        compose.onNodeWithText("in 10 minutes", substring = true).fetchSemanticsNode()
+        compose.onNodeWithText("in 09:37", substring = true).fetchSemanticsNode()
     }
 
     @Test
     fun emptyStateStaysPresentTense() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                WorkModeScreen(workMode(current = null, next = null, task = null), onToggleSubtask = {}, onLeave = {}, onExit = {})
+                WorkModeScreen(workMode(current = null, next = null, task = null), onToggleSubtask = {}, onExit = {})
             }
         }
         compose.onNodeWithText("No more planned work today").fetchSemanticsNode()
@@ -110,7 +194,7 @@ class WorkModeScreenTest {
         val completed = task(subtasks = listOf(subtask(2, checked = false))).copy(status = TaskStatus.Completed)
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                WorkModeScreen(workMode(current = block(), task = completed), onToggleSubtask = {}, onLeave = {}, onExit = {})
+                WorkModeScreen(workMode(current = block(), task = completed), onToggleSubtask = {}, onExit = {})
             }
         }
         compose.onNodeWithTag("work-mode-subtask-2").assertIsNotEnabled()
@@ -119,7 +203,7 @@ class WorkModeScreenTest {
     private fun workMode(current: TimeBlock?, next: TimeBlock? = null, task: BattleTask?) = WorkModeUiState(
         entryAt = Instant.parse("2026-08-30T01:17:00Z"),
         lastConfirmedAt = Instant.parse("2026-08-30T01:17:00Z"),
-        lastObservedAt = Instant.parse("2026-08-30T01:17:00Z"),
+        lastObservedAt = Instant.parse("2026-08-30T01:17:23Z"),
         currentBlock = current,
         nextBlock = next,
         task = task,
