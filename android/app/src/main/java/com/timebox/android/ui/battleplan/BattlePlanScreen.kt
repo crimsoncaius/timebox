@@ -148,6 +148,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+// Throwaway #89 hooks: supplied only by the debug mobile prototype.
+internal val LocalPrototypeMove = androidx.compose.runtime.staticCompositionLocalOf<((BattleTask) -> Unit)?> { null }
+internal val LocalPrototypeCard = androidx.compose.runtime.staticCompositionLocalOf<(@Composable (BattleTask) -> Unit)?> { null }
+
 @Composable
 fun BattlePlanScreen(
     state: BattlePlanUiState,
@@ -195,7 +199,7 @@ fun BattlePlanScreen(
     onConfirmPermanentDelete: () -> Unit,
 ) {
     var movingTask by remember { mutableStateOf<BattleTask?>(null) }
-    val onRequestMoveProject: (BattleTask) -> Unit = { movingTask = it }
+    val onRequestMoveProject: (BattleTask) -> Unit = LocalPrototypeMove.current ?: { movingTask = it }
     movingTask?.let { task ->
         MoveTaskProjectDialog(task, state.projects, state.saving,
             onMove = { destination -> onMoveProject(task, destination); movingTask = null },
@@ -1378,6 +1382,7 @@ private fun MobileKanbanCard(
                 onToggleReady = onToggleReady,
                 modifier = Modifier.padding(top = 14.dp),
             )
+            LocalPrototypeCard.current?.invoke(task)
             val metadata = buildList {
                 task.deadlineDate?.let { add("Due $it") }
                 task.urgency?.takeIf { it != PriorityLevel.High }?.let { add("Urgency ${it.wire}") }
