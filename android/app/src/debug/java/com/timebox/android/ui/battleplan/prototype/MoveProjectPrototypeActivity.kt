@@ -15,6 +15,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,8 +103,8 @@ private fun MovePrototype(variant: String, changeVariant: (String) -> Unit) {
     LaunchedEffect(variant, task, selected, error, tasks) {
         Log.d("MovePrototype", "variant=$variant task=${task?.id} current=${task?.projectId} destination=$selected error=$error assignments=${tasks.map { it.id to it.projectId }}")
     }
-    BackHandler(task != null) { close() }
-    val cycle: (Int) -> Unit = { delta -> changeVariant(listOf("A", "B", "C")[(listOf("A", "B", "C").indexOf(variant) + delta + 3) % 3]) }
+    BackHandler(task != null && variant != "D") { close() }
+    val cycle: (Int) -> Unit = { delta -> changeVariant(listOf("A", "B", "C", "D")[(listOf("A", "B", "C", "D").indexOf(variant) + delta + 4) % 4]) }
     val switcher: @Composable () -> Unit = {
         PrototypeSwitcher(variant, cycle, fail, { fail = it })
     }
@@ -145,11 +149,44 @@ private fun MovePrototype(variant: String, changeVariant: (String) -> Unit) {
                     TextButton(onClick = { scope = movedTo?.let { id -> BattlePlanScope.project(projects.first { it.id == id }) } ?: BattlePlanScope.Admin; notice = "" }) { Text("View ${name(movedTo)}") }
                 }
             }
-            CompositionLocalProvider(LocalPrototypeMove provides open, LocalPrototypeCard provides { card ->
+            val menuContent: (@Composable (BattleTask, () -> Unit) -> Unit)? = if (variant == "D") { { card, dismiss ->
+                var expanded by remember { mutableStateOf(false) }
+                DropdownMenuItem(
+                    text = { Text("Move to project", style = TimeboxTheme.type.label) },
+                    leadingIcon = { Icon(Icons.Outlined.Inbox, null) },
+                    trailingIcon = { Icon(if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown, null) },
+                    modifier = Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
+                    onClick = { expanded = !expanded; if (expanded) open(card) else close() },
+                )
+                if (expanded) {
+                    Column(Modifier.padding(horizontal = 14.dp).widthIn(max = 280.dp).background(TimeboxTheme.colors.low, RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Current: ${name(card.projectId)}", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                        Column(Modifier.heightIn(max = 224.dp).verticalScroll(rememberScrollState())) {
+                            (listOf(null) + projects.map { it.id }).forEach { id ->
+                                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected == id, enabled = id != card.projectId, role = Role.RadioButton, onClick = { selected = id; error = false }), verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(selected == id, null, enabled = id != card.projectId)
+                                    Text(name(id), style = TimeboxTheme.type.bodySmall)
+                                }
+                            }
+                        }
+                        if (error) Text("Couldn't move. Try again.", color = TimeboxTheme.colors.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
+                        if (selected != card.projectId) Text("Move to ${name(selected)}?", style = TimeboxTheme.type.bodySmall)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { expanded = false; close() }) { Text("Cancel") }
+                            Button(enabled = selected != card.projectId, onClick = {
+                                val willFail = fail
+                                confirm()
+                                if (!willFail) { expanded = false; dismiss() }
+                            }) { Text(if (error) "Retry" else "Move") }
+                        }
+                    }
+                }
+            } } else null
+            CompositionLocalProvider(LocalPrototypeMove provides open, LocalPrototypeMenu provides menuContent, LocalPrototypeCard provides { card ->
                 if (variant == "B" && task?.id == card.id) {
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     picker(true)
-                } else {
+                } else if (variant != "D") {
                     TextButton(onClick = { open(card) }, contentPadding = PaddingValues(horizontal = 0.dp)) {
                         Text(when (variant) { "B" -> "${name(card.projectId)}  ▾  Change project"; "C" -> "Move task  →"; else -> "Move to project  ↗" })
                     }
@@ -220,7 +257,7 @@ private fun PrototypeSwitcher(variant: String, cycle: (Int) -> Unit, fail: Boole
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { cycle(-1) }) { Text("←", color = TimeboxTheme.colors.bg, modifier = Modifier.semantics { contentDescription = "Previous variant" }) }
-                Text("$variant · ${when (variant) { "B" -> "Inline card"; "C" -> "Full-screen picker"; else -> "Bottom sheet" }}", style = TimeboxTheme.type.body)
+                Text("$variant · ${when (variant) { "B" -> "Inline card"; "C" -> "Full-screen picker"; "D" -> "Menu dropdown"; else -> "Bottom sheet" }}", style = TimeboxTheme.type.body)
                 IconButton(onClick = { cycle(1) }) { Text("→", color = TimeboxTheme.colors.bg, modifier = Modifier.semantics { contentDescription = "Next variant" }) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -15,6 +15,7 @@ Deep link: `timebox://prototype/move-project?variant=A`; B and C select the othe
 - A: visible Move to project action, searchable bottom sheet, confirmation alongside destination selection.
 - B: Change project expands the existing card, retaining task details above the picker.
 - C: dedicated destination picker followed by a separate move review.
+- D: user-requested dropdown directly under Move to project inside the existing task menu. The project list scrolls; selection requires the inline Move button. No extra card action. The launcher defaults to D.
 
 The real Battle Plan screen hosts fixture tasks and projects, including Admin. Moves change only in-memory project assignment. Other Battle Plan actions are stubs. The Fail next move checkbox simulates a recoverable failure. State is logged under `MovePrototype`. These hooks and variants are prototype-only and must not be merged into master.
 

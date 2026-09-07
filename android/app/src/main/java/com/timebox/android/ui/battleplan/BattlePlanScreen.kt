@@ -151,6 +151,7 @@ import kotlin.math.roundToInt
 // Throwaway #89 hooks: supplied only by the debug mobile prototype.
 internal val LocalPrototypeMove = androidx.compose.runtime.staticCompositionLocalOf<((BattleTask) -> Unit)?> { null }
 internal val LocalPrototypeCard = androidx.compose.runtime.staticCompositionLocalOf<(@Composable (BattleTask) -> Unit)?> { null }
+internal val LocalPrototypeMenu = androidx.compose.runtime.staticCompositionLocalOf<(@Composable (BattleTask, () -> Unit) -> Unit)?> { null }
 
 @Composable
 fun BattlePlanScreen(
@@ -1324,6 +1325,7 @@ private fun MobileKanbanCard(
                         Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
                     }
                     MobileTaskActionMenu(
+                        task = task,
                         expanded = menu,
                         status = task.status,
                         blocked = task.isBlocked,
@@ -1409,6 +1411,7 @@ private fun MobileKanbanCard(
 
 @Composable
 private fun MobileTaskActionMenu(
+    task: BattleTask,
     expanded: Boolean,
     status: TaskStatus,
     blocked: Boolean,
@@ -1445,7 +1448,9 @@ private fun MobileTaskActionMenu(
             )
         } else {
             MenuSectionLabel("Task")
-            MobileTaskActionMenuItem(label = "Move to project", icon = Icons.Outlined.Inbox, onClick = onMoveProject)
+            val prototypeMenu = LocalPrototypeMenu.current
+            if (prototypeMenu != null) prototypeMenu(task, onDismiss)
+            else MobileTaskActionMenuItem(label = "Move to project", icon = Icons.Outlined.Inbox, onClick = onMoveProject)
             MobileTaskActionMenuItem(
                 label = if (blocked) "Unblock task" else "Block task",
                 icon = Icons.Outlined.Flag,

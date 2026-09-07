@@ -1,4 +1,4 @@
-param([ValidateSet("A", "B", "C")][string]$Variant = "A")
+param([ValidateSet("A", "B", "C", "D")][string]$Variant = "D")
 $ErrorActionPreference = "Stop"
 & (Join-Path $PSScriptRoot "android-gradle.ps1") :app:installDebug
 if ($LASTEXITCODE -ne 0) { throw "Debug build or install failed." }
