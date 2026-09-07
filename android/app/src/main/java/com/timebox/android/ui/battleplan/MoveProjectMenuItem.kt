@@ -1,6 +1,7 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -87,7 +88,12 @@ internal fun MoveProjectMenuItem(task: BattleTask, actions: ProjectMoveActions, 
                 onDismissRequest = { if (!actions.saving) { expanded = false; submitted = false; destination = task.projectId } },
                 properties = PopupProperties(focusable = true),
             ) {
-                Surface(shape = TimeboxShapes.field, color = colors.low, shadowElevation = 12.dp) {
+                Surface(
+                    shape = TimeboxShapes.field,
+                    color = colors.raised,
+                    border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.65f)),
+                    shadowElevation = 20.dp,
+                ) {
                     Column(
                         Modifier.widthIn(min = 264.dp, max = 280.dp)
                             .heightIn(max = availableHeight?.let { with(density) { it.toDp() } } ?: LocalConfiguration.current.screenHeightDp.dp)
