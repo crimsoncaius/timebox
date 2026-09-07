@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.DayWindowSettings
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
+import com.timebox.android.reminders.DailyReminderSettings
+import com.timebox.android.reminders.DailyReminder
+import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +25,7 @@ data class SettingsUiState(
     val saving: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    val dailyReminders: DailyReminderSettings = DailyReminderSettings(),
 )
 
 class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -38,9 +42,10 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
         viewModelScope.launch {
             if (!connectionPrimed) {
                 val stored = repository.settings.first()
+                val reminders = repository.dailyReminders.first()
                 connectionPrimed = true
                 _state.update {
-                    it.copy(baseUrlInput = stored.baseUrl, apiKeyInput = stored.apiKey)
+                    it.copy(baseUrlInput = stored.baseUrl, apiKeyInput = stored.apiKey, dailyReminders = reminders)
                 }
             }
             repository.getWindowSettings().fold(
@@ -96,6 +101,15 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
     fun toggleFullDay() {
         val window = _state.value.window ?: return
         patch(showFullDay = !window.showFullDay)
+    }
+
+    fun updateDailyReminder(planning: Boolean, enabled: Boolean? = null, time: LocalTime? = null) {
+        val current = _state.value.dailyReminders
+        val existing = if (planning) current.planning else current.review
+        val nextReminder = existing.copy(enabled = enabled ?: existing.enabled, time = time ?: existing.time)
+        val next = if (planning) current.copy(planning = nextReminder) else current.copy(review = nextReminder)
+        _state.update { it.copy(dailyReminders = next) }
+        viewModelScope.launch { repository.setDailyReminders(next) }
     }
 
     private fun patch(

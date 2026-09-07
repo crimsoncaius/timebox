@@ -273,7 +273,12 @@ class DueReminderWorker(
 
 class ReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        ReminderScheduler(context.applicationContext).start()
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED ->
+                ReminderScheduler(context.applicationContext).start()
+            Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_TIME_CHANGED ->
+                (context.applicationContext as? TimeboxApplication)?.dailyReminderScheduler?.rescheduleForCurrentTimezone()
+            else -> return
+        }
     }
 }

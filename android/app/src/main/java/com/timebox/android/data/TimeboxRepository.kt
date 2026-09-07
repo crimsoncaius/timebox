@@ -37,6 +37,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
+import com.timebox.android.reminders.DailyReminderSettings
 
 /** Message shown when a call fails, plus whether retrying makes sense. */
 data class ApiError(
@@ -91,9 +92,14 @@ class TimeboxRepository private constructor(
         ?: flowOf(BattlePlanPreferences())
 
     val workMode: Flow<WorkModeSnapshot?> = preferences?.workMode ?: flowOf(null)
+    val dailyReminders: Flow<DailyReminderSettings> = preferences?.dailyReminders ?: flowOf(DailyReminderSettings())
 
     suspend fun setWorkMode(snapshot: WorkModeSnapshot?) {
         preferences?.setWorkMode(snapshot)
+    }
+
+    suspend fun setDailyReminders(value: DailyReminderSettings) {
+        preferences?.setDailyReminders(value)
     }
 
     @Volatile

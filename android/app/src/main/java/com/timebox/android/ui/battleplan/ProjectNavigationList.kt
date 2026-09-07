@@ -2,6 +2,7 @@ package com.timebox.android.ui.battleplan
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -10,6 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.DropdownMenu
@@ -20,7 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,6 +36,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -48,6 +54,8 @@ internal fun ProjectNavigationList(
     saving: Boolean,
     onSelect: (Project) -> Unit,
     onReorder: (List<Int>) -> Unit,
+    onEdit: (Project) -> Unit = {},
+    onDelete: (Project) -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
@@ -84,9 +92,13 @@ internal fun ProjectNavigationList(
         }
     }
 
-    Column(Modifier.fillMaxWidth().heightIn(max = 336.dp)
-        .onGloballyPositioned { viewport = it.boundsInWindow() }
-        .verticalScroll(scroll, enabled = draggedId == null)) {
+    Column(
+        Modifier.fillMaxWidth().heightIn(max = 336.dp)
+            .clip(TimeboxShapes.card)
+            .background(colors.card)
+            .onGloballyPositioned { viewport = it.boundsInWindow() }
+            .verticalScroll(scroll, enabled = draggedId == null),
+    ) {
         projects.forEachIndexed { index, project ->
             key(project.id) {
                 val dragging = draggedId == project.id
@@ -98,6 +110,8 @@ internal fun ProjectNavigationList(
                 }
                 val animatedShift by animateFloatAsState(shift, label = "Project position")
                 var handleBounds by remember { mutableStateOf(Rect.Zero) }
+                val selected = project.id == selectedId
+                val accent = projectAccent(project, colors.isDark)
                 Row(
                     Modifier.fillMaxWidth().height(56.dp)
                         .zIndex(if (dragging) 1f else 0f)
@@ -106,7 +120,9 @@ internal fun ProjectNavigationList(
                             shadowElevation = if (dragging) 6.dp.toPx() else 0f
                             shape = TimeboxShapes.cell
                         }
-                        .background(if (dragging || project.id == selectedId) colors.selected else colors.lowest, TimeboxShapes.cell)
+                        .clip(TimeboxShapes.cell)
+                        .background(if (dragging || selected) colors.raised else Color.Transparent)
+                        .then(if (dragging || selected) Modifier.border(1.dp, accent, TimeboxShapes.cell) else Modifier)
                         .semantics {
                             customActions = buildList {
                                 if (!saving && index > 0) add(CustomAccessibilityAction("Move ${project.name} up") { move(index, index - 1); true })
@@ -148,24 +164,51 @@ internal fun ProjectNavigationList(
                         }, contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.DragHandle, "Drag ${project.name}", tint = colors.onVariant, modifier = Modifier.size(20.dp))
                     }
-                    Row(Modifier.weight(1f).fillMaxHeight().clickable(enabled = draggedId == null) { onSelect(project) },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.Folder, null, tint = colors.onVariant, modifier = Modifier.size(18.dp))
-                        Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        Modifier.weight(1f).fillMaxHeight().clickable(enabled = draggedId == null) { onSelect(project) },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (selected) {
+                            Box(Modifier.size(10.dp).clip(TimeboxShapes.chip).background(accent))
+                            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                Text("CURRENT PROJECT", style = TimeboxTheme.type.bodySmall, color = accent, fontWeight = FontWeight.Bold)
+                                Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        } else {
+                            Icon(Icons.Outlined.Folder, null, tint = colors.onVariant, modifier = Modifier.size(18.dp))
+                            Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                     Box {
                         IconButton(onClick = { actionsId = project.id }, enabled = !saving && draggedId == null) {
                             Icon(Icons.Outlined.MoreHoriz, "More actions for ${project.name}", tint = colors.onVariant)
                         }
                         DropdownMenu(expanded = actionsId == project.id, onDismissRequest = { actionsId = null }) {
-                            DropdownMenuItem(text = { Text("Move up") }, enabled = !saving && index > 0,
-                                onClick = { actionsId = null; move(index, index - 1) })
-                            DropdownMenuItem(text = { Text("Move down") }, enabled = !saving && index < projects.lastIndex,
-                                onClick = { actionsId = null; move(index, index + 1) })
+                            DropdownMenuItem(
+                                text = { Text("Edit") },
+                                leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                                onClick = { actionsId = null; onEdit(project) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = colors.error) },
+                                leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null, tint = colors.error) },
+                                onClick = { actionsId = null; onDelete(project) },
+                            )
                         }
                     }
                 }
             }
         }
     }
+}
+
+/** Stable per-Project accents are reserved for the active Project; all alternatives remain neutral. */
+private fun projectAccent(project: Project, dark: Boolean): Color {
+    val accents = if (dark) {
+        listOf(Color(0xFF8AB4F8), Color(0xFFD0BCFF), Color(0xFFF2C97D), Color(0xFF7DD3C8))
+    } else {
+        listOf(Color(0xFF2D6CC0), Color(0xFF7157A3), Color(0xFF9A6807), Color(0xFF0B7468))
+    }
+    return accents[Math.floorMod(project.id, accents.size)]
 }

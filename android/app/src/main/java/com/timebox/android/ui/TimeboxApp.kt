@@ -306,6 +306,7 @@ fun TimeboxApp(
                 NavHost(navController, startDestination = AppRoutes.DayPattern) {
                     composable(
                         AppRoutes.DayPattern,
+                        deepLinks = listOf(navDeepLink { uriPattern = AppRoutes.DayDeepLinkPattern }),
                         arguments = listOf(navArgument(AppRoutes.DateArg) {
                             type = NavType.StringType
                             defaultValue = LocalDate.now().toString()
@@ -393,6 +394,7 @@ fun TimeboxApp(
                             onRequestNotificationPermission = onRequestNotificationPermission,
                             onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
                             onNewProject = { navController.navigate(AppRoutes.ProjectNew) },
+                            onEditProject = { navController.navigate(AppRoutes.projectDetail(it.id)) },
                             onPrepareDeleteProject = battlePlanViewModel::prepareProjectDelete,
                             onDismissDeleteProject = battlePlanViewModel::dismissProjectDelete,
                             onConfirmDeleteProject = battlePlanViewModel::confirmProjectDelete,
@@ -614,6 +616,7 @@ fun TimeboxApp(
                             onStartHourDelta = settingsViewModel::adjustStartHour,
                             onEndHourDelta = settingsViewModel::adjustEndHour,
                             onToggleFullDay = settingsViewModel::toggleFullDay,
+                            onDailyReminderChange = settingsViewModel::updateDailyReminder,
                             onBaseUrlChange = settingsViewModel::onBaseUrlChange,
                             onApiKeyChange = settingsViewModel::onApiKeyChange,
                             onSaveConnection = {

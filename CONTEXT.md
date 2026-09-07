@@ -5,8 +5,12 @@ Timebox plans intended work, records actual work, and tracks the tasks that thos
 ## Language
 
 **Project**:
-A named group of related Battle Plan Tasks. Deadlines belong to individual Battle Plan Tasks.
+A named, finite group of related Battle Plan Tasks that advances a specific outcome. Deadlines belong to individual Battle Plan Tasks.
 _Avoid_: Parent Task, Task Type
+
+**Project Deletion**:
+The destructive removal of a Project and every Battle Plan Task assigned to it. It requires explicit confirmation.
+_Avoid_: Unassigning a Project, archiving a Project
 
 **Battle Plan Task**:
 An independently meaningful unit of work that can be scheduled and completed in its own right. It may contain Subtasks and have zero or more Planned Blocks and Actual Blocks.
@@ -32,12 +36,24 @@ _Avoid_: Label, title, tag, Task Type
 A full-screen, present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
 _Avoid_: Task detail, Task status, timer mode
 
+**Day Planning**:
+The daily activity of allocating Planned Blocks to intended work. It is performed on the Day surface and is distinct from Work Mode.
+_Avoid_: Plan Mode, scheduling reminder
+
+**Day Review**:
+The daily activity of reflecting on recorded and planned work from the Day surface. It is a prompt, not a separate application surface.
+_Avoid_: Day Review screen, report
+
+**Daily Reminder**:
+An optional, device-local notification scheduled for a chosen local time to prompt Day Planning or Day Review. It creates no task, recurrence, work record, or overdue state; a missed prompt is skipped.
+_Avoid_: Recurring Task Series, task reminder, notification task
+
 **Recurring Task Series**:
-A recurrence rule and template that produces Task Occurrences. It remains independent of the completion of any one occurrence.
+A recurrence rule and template that produces Task Occurrences. It represents an ongoing routine and does not belong to a Project.
 _Avoid_: Recurring template, recurring parent task
 
 **Task Occurrence**:
-A Battle Plan Task representing one instance of a Recurring Task Series, with its own completion, Subtask state, Planned Blocks, and Actual Blocks.
+A Battle Plan Task representing one instance of a Recurring Task Series, with its own completion, Subtask state, Planned Blocks, and Actual Blocks. It does not belong to a Project.
 _Avoid_: Recurring series, Quota Tracker
 
 **Skipped Task Occurrence**:
@@ -45,11 +61,11 @@ A Task Occurrence whose recurrence period ended without a recorded Task Completi
 _Avoid_: Deleted occurrence, missed occurrence
 
 **Quota Tracker**:
-A generated progress aggregate for a recurring quota, expressed as completed Session Tasks out of required Session Tasks. It is derived rather than explicitly completed.
+A generated progress aggregate for a recurring quota, expressed as completed Session Tasks out of required Session Tasks. It is derived rather than explicitly completed and does not belong to a Project.
 _Avoid_: Recurring Task Series, Parent Task, completable task
 
 **Session Task**:
-An individually completable unit of work that contributes to a Quota Tracker.
+An individually completable unit of work that contributes to a Quota Tracker. It does not belong to a Project.
 _Avoid_: Actual Block, Task Occurrence, work session
 
 **Blocked**:

@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.timebox.android.BuildConfig
+import com.timebox.android.reminders.DailyReminder
+import com.timebox.android.reminders.DailyReminderSettings
+import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -76,6 +79,10 @@ class AppPreferences(private val context: Context) {
         val workModeActiveActualId = stringPreferencesKey("work_mode_active_actual_id")
         val workModeActivePlannedId = stringPreferencesKey("work_mode_active_planned_id")
         val workModeActivePlannedEndAt = stringPreferencesKey("work_mode_active_planned_end_at")
+        val dayPlanningReminderEnabled = booleanPreferencesKey("day_planning_reminder_enabled")
+        val dayPlanningReminderTime = stringPreferencesKey("day_planning_reminder_time")
+        val dayReviewReminderEnabled = booleanPreferencesKey("day_review_reminder_enabled")
+        val dayReviewReminderTime = stringPreferencesKey("day_review_reminder_time")
     }
 
     val battlePlanPreferences: Flow<BattlePlanPreferences> = context.dataStore.data.map { prefs ->
@@ -116,6 +123,19 @@ class AppPreferences(private val context: Context) {
         )
     }
 
+    val dailyReminders: Flow<DailyReminderSettings> = context.dataStore.data.map { prefs ->
+        DailyReminderSettings(
+            planning = DailyReminder(
+                enabled = prefs[Keys.dayPlanningReminderEnabled] ?: false,
+                time = prefs[Keys.dayPlanningReminderTime].toLocalTimeOrDefault(LocalTime.of(9, 0)),
+            ),
+            review = DailyReminder(
+                enabled = prefs[Keys.dayReviewReminderEnabled] ?: false,
+                time = prefs[Keys.dayReviewReminderTime].toLocalTimeOrDefault(LocalTime.of(18, 0)),
+            ),
+        )
+    }
+
     suspend fun setConnection(baseUrl: String, apiKey: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.baseUrl] = baseUrl.trim()
@@ -127,6 +147,15 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.darkTheme] = dark
             prefs[Keys.darkThemeSet] = true
+        }
+    }
+
+    suspend fun setDailyReminders(value: DailyReminderSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.dayPlanningReminderEnabled] = value.planning.enabled
+            prefs[Keys.dayPlanningReminderTime] = value.planning.time.toString()
+            prefs[Keys.dayReviewReminderEnabled] = value.review.enabled
+            prefs[Keys.dayReviewReminderTime] = value.review.time.toString()
         }
     }
 
@@ -167,3 +196,6 @@ private fun String?.toPreferenceSet(): Set<String> =
     this?.split(',')?.filter(String::isNotBlank)?.toSet().orEmpty()
 
 private fun Set<String>.toPreferenceString(): String = sorted().joinToString(",")
+
+private fun String?.toLocalTimeOrDefault(default: LocalTime): LocalTime =
+    this?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: default

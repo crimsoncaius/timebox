@@ -111,7 +111,9 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun compactCardsRenderTheTimezoneAwarePlannedSummary() {
+    fun compactCardsCompleteExplicitlyWithoutOpeningTaskDetails() {
+        var completion: TaskStatus? = null
+        var opened = false
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 BattlePlanScreen(
@@ -123,8 +125,8 @@ class BattlePlanScreenTest {
                     ),
                     onRetry = {}, onSelectScope = {}, onSelectStatus = {},
                     onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onClearFilters = {}, onOpenTask = { opened = true }, onToggleReady = {},
+                    onMoveTask = { _, target -> completion = target }, onReorderTask = { _, _ -> },
                     onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
                     onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
                     onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
@@ -135,16 +137,14 @@ class BattlePlanScreenTest {
             }
         }
 
-        val expected = checkNotNull(plannedDateSummary(
-            listOf(LocalDate.parse("2026-08-21"), LocalDate.parse("2026-08-22"), LocalDate.parse("2026-08-24")),
-            Instant.parse("2026-08-21T16:00:00Z"),
-            "Asia/Singapore",
-        )).label
-        compose.onNodeWithText(expected).fetchSemanticsNode()
+        compose.onNodeWithTag("battle-plan-complete-1").performClick()
+        compose.runOnIdle { check(completion == TaskStatus.Completed); check(!opened) }
+        compose.onNodeWithContentDescription("Actions for Task 1").performClick()
+        compose.onNodeWithTag("battle-plan-task-actions-menu").fetchSemanticsNode()
     }
 
     @Test
-    fun compactCardsLabelRecurringOccurrencesAndQuotaTrackersWithoutMarkingOneOffTasks() {
+    fun compactCardsKeepRecurringTitlesWithoutExtraCardLabels() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 BattlePlanScreen(
@@ -187,13 +187,13 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithContentDescription("Recurring Task Occurrence from Weekly planning").fetchSemanticsNode()
-        compose.onNodeWithContentDescription("Quota Tracker from Recurring Task Series Exercise three times").fetchSemanticsNode()
-        check(compose.onAllNodesWithText("Recurring").fetchSemanticsNodes().size == 2)
+        compose.onNodeWithText("Weekly planning occurrence").fetchSemanticsNode()
+        compose.onNodeWithText("Exercise quota").fetchSemanticsNode()
+        check(compose.onAllNodesWithText("Recurring").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
-    fun compactCardsUseMetadataBlockerPrioritySignalsAndExplicitPlanningStates() {
+    fun compactCardsKeepBlockedSignalAndOverflowWhileMovingPlanningToDetails() {
         val readyToggles = mutableListOf<Int>()
         val blockedChanges = mutableListOf<Pair<Int, Boolean>>()
         val plannedDate = LocalDate.parse("2099-01-01")
@@ -232,20 +232,13 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("URGENT").fetchSemanticsNode()
-        compose.onNodeWithText("IMPORTANT").fetchSemanticsNode()
-        compose.onNodeWithText("Blocker: Waiting for approval").fetchSemanticsNode()
+        compose.onNodeWithText("BLOCKED").fetchSemanticsNode()
+        check(compose.onAllNodesWithText("URGENT").fetchSemanticsNodes().isEmpty())
+        check(compose.onAllNodesWithText("Blocker: Waiting for approval").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithContentDescription("Actions for Blocked task").performClick()
         compose.onNodeWithText("Unblock task").performClick()
-        compose.onNodeWithText("Add to Ready to Plan").performClick()
-        compose.onNodeWithText("Ready to Plan").performScrollTo().performClick()
-
-        val plannedLabel = checkNotNull(
-            plannedDateSummary(listOf(plannedDate), Instant.parse("2026-08-22T12:00:00Z"), "UTC"),
-        ).label
-        compose.onNodeWithText(plannedLabel).performScrollTo().fetchSemanticsNode()
         compose.runOnIdle {
-            check(readyToggles == listOf(1, 2))
+            check(readyToggles.isEmpty())
             check(blockedChanges == listOf(1 to false))
         }
     }

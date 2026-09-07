@@ -50,17 +50,32 @@ class ProjectNavigationListTest {
         compose.onNodeWithTag("battle-plan-scope-menu").assertDoesNotExist()
     }
 
-    @Test fun projectActionsMoveWithoutDraggingAndRespectBoundaries() {
+    @Test fun projectActionsEditOrRequestDeletionWithoutChangingTheOrder() {
         var requested = emptyList<Int>()
+        var edited: Project? = null
+        var deleted: Project? = null
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                ProjectNavigationList(projects, null, false, {}, { requested = it })
+                ProjectNavigationList(
+                    projects = projects,
+                    selectedId = null,
+                    saving = false,
+                    onSelect = {},
+                    onReorder = { requested = it },
+                    onEdit = { edited = it },
+                    onDelete = { deleted = it },
+                )
             }
         }
         compose.onNodeWithContentDescription("More actions for Alpha").performClick()
-        compose.onNodeWithText("Move up").assertIsNotEnabled()
-        compose.onNodeWithText("Move down").performClick()
-        compose.runOnIdle { assertEquals(listOf(2, 1, 3), requested) }
+        compose.onNodeWithText("Move up").assertDoesNotExist()
+        compose.onNodeWithText("Move down").assertDoesNotExist()
+        compose.onNodeWithText("Edit").performClick()
+        compose.runOnIdle { assertEquals(projects.first(), edited); assertNull(deleted); assertEquals(emptyList<Int>(), requested) }
+
+        compose.onNodeWithContentDescription("More actions for Alpha").performClick()
+        compose.onNodeWithText("Delete").performClick()
+        compose.runOnIdle { assertEquals(projects.first(), deleted); assertEquals(emptyList<Int>(), requested) }
     }
 
     @Test fun canceledDragPreservesTheSavedOrder() {

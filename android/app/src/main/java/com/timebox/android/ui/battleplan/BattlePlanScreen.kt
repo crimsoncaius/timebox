@@ -61,6 +61,9 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -107,6 +110,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -148,6 +152,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+private data class CardCompletionActions(val saving: Boolean = false, val move: (BattleTask, TaskStatus) -> Unit = { _, _ -> })
+private val LocalCardCompletion = androidx.compose.runtime.staticCompositionLocalOf { CardCompletionActions() }
+
 @Composable
 fun BattlePlanScreen(
     state: BattlePlanUiState,
@@ -180,6 +187,7 @@ fun BattlePlanScreen(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
+    onEditProject: (Project) -> Unit = {},
     onPrepareDeleteProject: (Project) -> Unit,
     onDismissDeleteProject: () -> Unit,
     onConfirmDeleteProject: () -> Unit,
@@ -196,6 +204,7 @@ fun BattlePlanScreen(
 ) {
     androidx.compose.runtime.CompositionLocalProvider(
         LocalProjectMove provides ProjectMoveActions(state.projects, state.saving, state.message, onMoveProject),
+        LocalCardCompletion provides CardCompletionActions(state.saving, onMoveTask),
     ) {
         var movingTask by remember { mutableStateOf<BattleTask?>(null) }
         val onRequestMoveProject: (BattleTask) -> Unit = { movingTask = it }
@@ -213,61 +222,31 @@ fun BattlePlanScreen(
             else -> Column(Modifier.fillMaxSize()) {
                 if (state.collection == TaskCollection.Active) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
-                        if (maxWidth >= 840.dp) {
-                            Box(Modifier.fillMaxSize()) {
-                                Column(Modifier.fillMaxSize()) {
-                                    ScopeSelector(
-                                        scopes = state.scopes,
-                                        selected = state.selectedScope,
-                                        onSelect = onSelectScope,
-                                        onNewProject = onNewProject,
-                                        onReorderProjects = { projectOrderOpen = true },
-                                        onOpenRecurring = onOpenRecurring,
-                                    )
-                                    BattlePlanFilters(state, onToggleUrgency, onToggleImportance, onToggleTaskType, onClearFilters)
-                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        battlePlanStatuses.forEach { status ->
-                                            TaskColumn(
-                                                status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
-                                                true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onRequestMoveProject, onMoveTask,
-                                                onReorderTask, onCreateSubtask, onToggleSubtask,
-                                            )
-                                        }
-                                    }
-                                }
-                                PrimaryButton(
-                                    text = "New task",
-                                    onClick = { onShowComposer(true) },
-                                    enabled = !state.saving,
-                                    modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
-                                    leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
-                                )
-                            }
-                        } else {
-                            MobileKanbanBoard(
-                                state = state,
-                                onSelectScope = onSelectScope,
-                                onSelectCollection = onSelectCollection,
-                                onSelectStatus = onSelectStatus,
-                                onToggleUrgency = onToggleUrgency,
-                                onToggleImportance = onToggleImportance,
-                                onToggleTaskType = onToggleTaskType,
-                                onClearFilters = onClearFilters,
-                                onSetHideCompleted = onSetHideCompleted,
-                                onArchiveCompleted = onArchiveCompleted,
-                                onOpenTask = onOpenTask,
-                                onToggleReady = onToggleReady,
-                                onRequestMoveProject = onRequestMoveProject,
-                                onDropTask = onDropTask,
-                                onMoveTaskToBoundary = onMoveTaskToBoundary,
-                                onSetBlocked = onSetBlocked,
-                                onRequestTrash = onRequestTrash,
-                                onShowComposer = onShowComposer,
-                                onOpenRecurring = onOpenRecurring,
-                                onNewProject = onNewProject,
-                                onReorderProjects = onReorderProjects,
-                            )
-                        }
+                        MobileKanbanBoard(
+                            state = state,
+                            onSelectScope = onSelectScope,
+                            onSelectCollection = onSelectCollection,
+                            onSelectStatus = onSelectStatus,
+                            onToggleUrgency = onToggleUrgency,
+                            onToggleImportance = onToggleImportance,
+                            onToggleTaskType = onToggleTaskType,
+                            onClearFilters = onClearFilters,
+                            onSetHideCompleted = onSetHideCompleted,
+                            onArchiveCompleted = onArchiveCompleted,
+                            onOpenTask = onOpenTask,
+                            onToggleReady = onToggleReady,
+                            onRequestMoveProject = onRequestMoveProject,
+                            onDropTask = onDropTask,
+                            onMoveTaskToBoundary = onMoveTaskToBoundary,
+                            onSetBlocked = onSetBlocked,
+                            onRequestTrash = onRequestTrash,
+                            onShowComposer = onShowComposer,
+                            onOpenRecurring = onOpenRecurring,
+                            onNewProject = onNewProject,
+                            onReorderProjects = onReorderProjects,
+                            onEditProject = onEditProject,
+                            onPrepareDeleteProject = onPrepareDeleteProject,
+                        )
                     }
                 } else {
                     UtilityTaskList(
@@ -415,6 +394,8 @@ private fun MobileKanbanBoard(
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
     onReorderProjects: (List<Int>) -> Unit,
+    onEditProject: (Project) -> Unit,
+    onPrepareDeleteProject: (Project) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     val density = LocalDensity.current
@@ -615,6 +596,8 @@ private fun MobileKanbanBoard(
                                 saving = state.projectOrderSaving,
                                 onSelect = { project -> scopeMenu = false; onSelectScope(BattlePlanScope.project(project)) },
                                 onReorder = onReorderProjects,
+                                onEdit = { project -> scopeMenu = false; onEditProject(project) },
+                                onDelete = { project -> scopeMenu = false; onPrepareDeleteProject(project) },
                             )
                             if (state.projectOrderSaving) Text("Saving project order…", color = colors.onVariant)
                             state.error?.let { Text(it, color = colors.error) }
@@ -1278,7 +1261,6 @@ private fun MobileKanbanCard(
     onBoundsChanged: (Int, Rect?) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    val plannedSummary = plannedDateSummary(task.plannedDates, serverNow, timezone)
     var menu by remember(task.id) { mutableStateOf(false) }
     var blockDialog by remember(task.id) { mutableStateOf(false) }
     var blockingReason by remember(task.id, blockDialog) { mutableStateOf(task.blockingReason.orEmpty()) }
@@ -1296,101 +1278,60 @@ private fun MobileKanbanCard(
                 .background(mobileTaskCardSurface(colors))
                 .border(1.dp, colors.hairline, TimeboxShapes.card)
                 .clickable { onOpen(task.id) }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 4.dp, vertical = 6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    when {
-                        task.parentId != null -> "SUBTASK"
-                        task.project != null -> "PROJECT TASK"
-                        else -> "ADMIN TASK"
-                    },
-                    style = TimeboxTheme.type.laneLabel,
-                    color = colors.onVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                if (task.isBlocked) MobileBlockedPill(task)
-                Box {
-                    IconButton(
-                        onClick = { menu = true },
-                        modifier = Modifier
-                            .size(TimeboxDimens.touchTarget)
-                            .clip(TimeboxShapes.chip)
-                            .background(if (menu) colors.surf else Color.Transparent)
-                            .semantics {
-                                stateDescription = if (menu) "Expanded" else "Collapsed"
-                            },
-                    ) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
-                    }
-                    MobileTaskActionMenu(
-                        task = task,
-                        expanded = menu,
-                        status = task.status,
-                        blocked = task.isBlocked,
-                        manualOrder = manualOrder,
-                        canMoveToTop = canMoveToTop,
-                        canMoveToBottom = canMoveToBottom,
-                        onDismiss = { menu = false },
-                        onToggleBlocked = {
-                            menu = false
-                            if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
+            Row(verticalAlignment = Alignment.Top) {
+                val completion = LocalCardCompletion.current
+                IconButton(
+                    onClick = { completion.move(task, if (task.status == TaskStatus.Completed) TaskStatus.Open else TaskStatus.Completed) },
+                    enabled = !completion.saving && task.recurrenceKind != "quota_parent",
+                    modifier = Modifier.size(48.dp).testTag("battle-plan-complete-${task.id}"),
+                ) {
+                    Icon(
+                        if (task.status == TaskStatus.Completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        when {
+                            task.recurrenceKind == "quota_parent" -> "Quota progress is derived from Session Tasks"
+                            task.status == TaskStatus.Completed -> "Reopen ${task.title}"
+                            else -> "Complete ${task.title}"
                         },
-                        onMoveToTop = { menu = false; onMoveToBoundary(task, true) },
-                        onMoveToBottom = { menu = false; onMoveToBoundary(task, false) },
-                        onMoveTo = { target -> menu = false; onDrop(task, target, taskCount(target)) },
-                        onTrash = { menu = false; onRequestTrash(task) },
+                        Modifier.size(21.dp), tint = colors.onVariant,
                     )
                 }
-            }
-            Text(
-                task.title,
-                style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, fontWeight = FontWeight.Medium),
-                color = colors.on,
-                modifier = Modifier.padding(top = 8.dp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    task.project?.name ?: task.parentTitle?.let { "Subtask of $it" } ?: "Admin",
-                    style = TimeboxTheme.type.bodySmall,
-                    color = colors.onVariant,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                MobilePrioritySignals(task)
-            }
-            if (task.recurringTemplateId != null) {
-                Spacer(Modifier.height(8.dp))
-                RecurrenceBadge(task)
-            }
-            task.blockingReason?.trim()?.takeIf { task.isBlocked && it.isNotEmpty() }?.let { reason ->
-                Text(
-                    "Blocker: $reason",
-                    style = TimeboxTheme.type.bodySmall,
-                    color = colors.onVariant,
-                    modifier = Modifier.padding(top = 9.dp),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            MobilePlanningControl(
-                task = task,
-                plannedSummary = plannedSummary,
-                onToggleReady = onToggleReady,
-                modifier = Modifier.padding(top = 14.dp),
-            )
-            val metadata = buildList {
-                task.deadlineDate?.let { add("Due $it") }
-                task.urgency?.takeIf { it != PriorityLevel.High }?.let { add("Urgency ${it.wire}") }
-                task.importance?.takeIf { it != PriorityLevel.High }?.let { add("Importance ${it.wire}") }
-                if (task.subtasks.isNotEmpty()) add("${task.subtasks.count { it.checked }}/${task.subtasks.size} subtasks")
-            }
-            if (metadata.isNotEmpty()) {
-                Spacer(Modifier.height(9.dp))
-                Text(metadata.joinToString("  ·  "), style = TimeboxTheme.type.bodySmall, color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                CompactTaskSummary(task, serverNow, timezone, Modifier.weight(1f).padding(top = 11.dp, bottom = 8.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box {
+                        IconButton(
+                            onClick = { menu = true },
+                            modifier = Modifier
+                                .size(TimeboxDimens.touchTarget)
+                                .clip(TimeboxShapes.chip)
+                                .background(if (menu) colors.surf else Color.Transparent)
+                                .semantics {
+                                    stateDescription = if (menu) "Expanded" else "Collapsed"
+                                },
+                        ) {
+                            Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
+                        }
+                        MobileTaskActionMenu(
+                            task = task,
+                            expanded = menu,
+                            status = task.status,
+                            blocked = task.isBlocked,
+                            manualOrder = manualOrder,
+                            canMoveToTop = canMoveToTop,
+                            canMoveToBottom = canMoveToBottom,
+                            onDismiss = { menu = false },
+                            onToggleBlocked = {
+                                menu = false
+                                if (task.isBlocked) onSetBlocked(task, false, null) else blockDialog = true
+                            },
+                            onMoveToTop = { menu = false; onMoveToBoundary(task, true) },
+                            onMoveToBottom = { menu = false; onMoveToBoundary(task, false) },
+                            onMoveTo = { target -> menu = false; onDrop(task, target, taskCount(target)) },
+                            onTrash = { menu = false; onRequestTrash(task) },
+                        )
+                    }
+                }
             }
         }
     }
@@ -1403,6 +1344,40 @@ private fun MobileKanbanCard(
             confirmButton = { TextButton(onClick = { blockDialog = false; onSetBlocked(task, true, blockingReason) }) { Text("Mark blocked") } },
             dismissButton = { TextButton(onClick = { blockDialog = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/** The resting card and lifted preview deliberately share the same information hierarchy. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CompactTaskSummary(task: BattleTask, serverNow: java.time.Instant, timezone: String, modifier: Modifier = Modifier) {
+    val colors = TimeboxTheme.colors
+    val completed = task.status == TaskStatus.Completed
+    val today = serverNow.atZone(java.time.ZoneId.of(timezone)).toLocalDate()
+    Column(modifier) {
+        Text(task.title, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            textDecoration = if (completed) TextDecoration.LineThrough else null,
+            color = if (completed) colors.onVariant else colors.on)
+        if ((!completed && task.isBlocked) || task.deadlineDate != null || task.subtasks.isNotEmpty()) {
+            FlowRow(Modifier.padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!completed && task.isBlocked) MobileBlockedPill(task)
+                if (task.subtasks.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Checklist, "Subtask progress", Modifier.size(14.dp), tint = colors.onVariant)
+                    Text(" ${task.subtasks.count { it.checked }}/${task.subtasks.size}", fontSize = 11.sp, color = colors.onVariant)
+                }
+                task.deadlineDate?.let { raw ->
+                    val date = raw
+                    val overdue = !completed && date < today
+                    val tint = if (overdue) colors.error else colors.onVariant
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.CalendarToday, "Deadline", Modifier.size(12.dp), tint = tint)
+                        Text(" " + date.format(java.time.format.DateTimeFormatter.ofPattern(if (date.year == today.year) "d MMM" else "d MMM yyyy")) + if (overdue) " · overdue" else "",
+                            fontSize = 11.sp, color = tint)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1673,7 +1648,6 @@ private fun MobileTaskDragPreview(
 ) {
     val colors = TimeboxTheme.colors
     val previewSurface = mobileTaskDragPreviewSurface(colors)
-    val plannedSummary = plannedDateSummary(drag.task.plannedDates, serverNow, timezone)
     val density = LocalDensity.current
     val delta = drag.pointerInRoot - drag.startPointerInRoot
     val width = with(density) { drag.cardBoundsInRoot.width.toDp() }
@@ -1710,91 +1684,19 @@ private fun MobileTaskDragPreview(
             .clip(TimeboxShapes.card)
             .background(previewSurface)
             .border(1.dp, colors.hairline, TimeboxShapes.card)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                when {
-                    drag.task.parentId != null -> "SUBTASK"
-                    drag.task.project != null -> "PROJECT TASK"
-                    else -> "ADMIN TASK"
-                },
-                style = TimeboxTheme.type.laneLabel,
-                color = colors.onVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (drag.task.isBlocked) colors.error.copy(alpha = 0.08f) else Color.Transparent)
-                    .padding(horizontal = 9.dp, vertical = 5.dp),
-            ) {
-                Text(
-                    if (drag.task.isBlocked) "BLOCKED" else "BLOCK",
-                    style = TimeboxTheme.type.laneLabel,
-                    color = if (drag.task.isBlocked) colors.error else colors.onVariant,
-                )
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Icon(if (drag.task.status == TaskStatus.Completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                    null, Modifier.size(21.dp), tint = colors.onVariant)
             }
-            Icon(
-                Icons.Outlined.MoreVert,
-                contentDescription = null,
-                tint = colors.onVariant,
-                modifier = Modifier.padding(7.dp).size(24.dp),
-            )
-        }
-        Text(
-            drag.task.title,
-            style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, fontWeight = FontWeight.Medium),
-            color = colors.on,
-            modifier = Modifier.padding(top = 8.dp),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                drag.task.project?.name ?: drag.task.parentTitle?.let { "Subtask of $it" } ?: "Admin",
-                style = TimeboxTheme.type.bodySmall,
-                color = colors.onVariant,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            MobilePrioritySignals(drag.task)
-        }
-        drag.task.blockingReason?.trim()?.takeIf { drag.task.isBlocked && it.isNotEmpty() }?.let { reason ->
-            Text(
-                "Blocker: $reason",
-                style = TimeboxTheme.type.bodySmall,
-                color = colors.onVariant,
-                modifier = Modifier.padding(top = 9.dp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        MobilePlanningControl(
-            task = drag.task,
-            plannedSummary = plannedSummary,
-            onToggleReady = {},
-            modifier = Modifier.padding(top = 14.dp),
-            allowInteraction = false,
-        )
-        val metadata = buildList {
-            drag.task.deadlineDate?.let { add("Due $it") }
-            drag.task.urgency?.takeIf { it != PriorityLevel.High }?.let { add("Urgency ${it.wire}") }
-            drag.task.importance?.takeIf { it != PriorityLevel.High }?.let { add("Importance ${it.wire}") }
-            if (drag.task.subtasks.isNotEmpty()) {
-                add("${drag.task.subtasks.count { it.checked }}/${drag.task.subtasks.size} subtasks")
+            CompactTaskSummary(drag.task, serverNow, timezone, Modifier.weight(1f).padding(top = 11.dp, bottom = 8.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(TimeboxDimens.touchTarget), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.MoreVert, null, tint = colors.onVariant)
+                }
             }
-        }
-        if (metadata.isNotEmpty()) {
-            Spacer(Modifier.height(9.dp))
-            Text(
-                metadata.joinToString("  ·  "),
-                style = TimeboxTheme.type.bodySmall,
-                color = colors.onVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }
@@ -2129,7 +2031,7 @@ private fun ProjectDeleteDialog(
         text = {
             Text(
                 "This permanently deletes ${summary.taskCount} project task(s), including archived and trashed tasks, " +
-                    "and their subtasks. Recurring templates are kept and moved to Admin. This cannot be undone."
+                    "and their subtasks. This cannot be undone."
             )
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete permanently") } },

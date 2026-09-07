@@ -1,5 +1,6 @@
 package com.timebox.android.ui.settings
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +27,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.timebox.android.reminders.DailyReminder
+import java.time.LocalTime
 import androidx.compose.foundation.text.KeyboardOptions
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
@@ -46,6 +51,7 @@ fun SettingsScreen(
     onStartHourDelta: (Int) -> Unit,
     onEndHourDelta: (Int) -> Unit,
     onToggleFullDay: () -> Unit,
+    onDailyReminderChange: (Boolean, Boolean?, LocalTime?) -> Unit = { _, _, _ -> },
     onBaseUrlChange: (String) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSaveConnection: () -> Unit,
@@ -151,12 +157,25 @@ fun SettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         SectionCard {
+            SectionHeader(title = "Daily reminders", description = "Optional prompts that stay on this device.")
+            Column(
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DailyReminderRow("Day planning reminder", state.dailyReminders.planning, true, onDailyReminderChange)
+                DailyReminderRow("Day review reminder", state.dailyReminders.review, false, onDailyReminderChange)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        SectionCard {
             SectionHeader(
                 title = "Notifications",
                 description = if (notificationsAllowed) {
-                    "This device can display Battle Plan reminders. Delivery may be delayed by battery restrictions."
+                    "This device can display Battle Plan and Daily Reminders. Delivery may be delayed by battery restrictions."
                 } else {
-                    "Reminders still save to the server, but this device cannot display them until notifications are enabled."
+                    "Daily Reminder preferences stay saved on this device, but notifications cannot display until enabled."
                 },
             )
             Column(
@@ -220,6 +239,29 @@ fun SettingsScreen(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+@Composable
+private fun DailyReminderRow(
+    title: String,
+    reminder: DailyReminder,
+    planning: Boolean,
+    onChange: (Boolean, Boolean?, LocalTime?) -> Unit,
+) {
+    val context = LocalContext.current
+    SettingRow(title = title, description = "${if (reminder.enabled) "Daily at" else "Off — saved time"} ${reminder.time}") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                enabled = reminder.enabled,
+                onClick = {
+                    TimePickerDialog(context, { _, hour, minute ->
+                        onChange(planning, null, LocalTime.of(hour, minute))
+                    }, reminder.time.hour, reminder.time.minute, false).show()
+                },
+            ) { Text(reminder.time.toString()) }
+            TimeboxSwitch(checked = reminder.enabled, onCheckedChange = { onChange(planning, it, null) })
+        }
     }
 }
 
