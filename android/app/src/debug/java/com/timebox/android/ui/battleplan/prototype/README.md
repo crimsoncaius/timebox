@@ -2,7 +2,7 @@
 
 Question: should moving a Battle Plan Task use a bottom sheet, an inline card expansion, or a dedicated picker with a review step?
 
-Throwaway branch: `codex/issue-89-mobile-prototype`. Verdict: awaiting user comparison; no production design selected.
+Throwaway branch: `codex/issue-89-mobile-prototype`. Verdict: user selected D, the dropdown directly beneath Move to project in the existing task menu. Integrate the selected flow with tighter spacing; keep the other variants only on this throwaway branch.
 
 Run from the repository root:
 
