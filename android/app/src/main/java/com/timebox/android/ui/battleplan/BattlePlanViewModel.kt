@@ -454,7 +454,8 @@ class BattlePlanViewModel internal constructor(
 
     fun moveProject(task: BattleTask, projectId: Int?) {
         if (task.status == TaskStatus.Completed || task.parentId != null || task.projectId == projectId) return
-        mutate("Task moved") {
+        val destination = _state.value.projects.firstOrNull { it.id == projectId }?.name ?: "Admin"
+        mutate("${task.title} moved to $destination") {
             repository.patchBattleTask(task.id, BattleTaskPatch(projectId = if (projectId == null) PatchField.Null else PatchField.of(projectId)))
                 .onSuccess { saved -> _state.update { current -> current.copy(tasks = current.tasks.map { if (it.id == saved.id) saved else it }) } }
         }

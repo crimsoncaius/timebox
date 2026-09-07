@@ -194,127 +194,131 @@ fun BattlePlanScreen(
     onDismissPermanentDelete: () -> Unit,
     onConfirmPermanentDelete: () -> Unit,
 ) {
-    var movingTask by remember { mutableStateOf<BattleTask?>(null) }
-    val onRequestMoveProject: (BattleTask) -> Unit = { movingTask = it }
-    movingTask?.let { task ->
-        MoveTaskProjectDialog(task, state.projects, state.saving,
-            onMove = { destination -> onMoveProject(task, destination); movingTask = null },
-            onDismiss = { movingTask = null })
-    }
-    var projectOrderOpen by remember { mutableStateOf(false) }
-    if (projectOrderOpen) ProjectOrderDialog(state.projects, state.projectOrderSaving, state.error, onReorderProjects) { projectOrderOpen = false }
-    val colors = TimeboxTheme.colors
-    when {
-        state.loading -> LoadingState()
-        state.error != null && state.tasks.isEmpty() -> ErrorState(state.error, onRetry)
-        else -> Column(Modifier.fillMaxSize()) {
-            if (state.collection == TaskCollection.Active) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    if (maxWidth >= 840.dp) {
-                        Box(Modifier.fillMaxSize()) {
-                            Column(Modifier.fillMaxSize()) {
-                                ScopeSelector(
-                                    scopes = state.scopes,
-                                    selected = state.selectedScope,
-                                    onSelect = onSelectScope,
-                                    onNewProject = onNewProject,
-                                    onReorderProjects = { projectOrderOpen = true },
-                                    onOpenRecurring = onOpenRecurring,
-                                )
-                                BattlePlanFilters(state, onToggleUrgency, onToggleImportance, onToggleTaskType, onClearFilters)
-                                Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    battlePlanStatuses.forEach { status ->
-                                        TaskColumn(
-                                            status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
-                                            true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onRequestMoveProject, onMoveTask,
-                                            onReorderTask, onCreateSubtask, onToggleSubtask,
-                                        )
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalProjectMove provides ProjectMoveActions(state.projects, state.saving, state.message, onMoveProject),
+    ) {
+        var movingTask by remember { mutableStateOf<BattleTask?>(null) }
+        val onRequestMoveProject: (BattleTask) -> Unit = { movingTask = it }
+        movingTask?.let { task ->
+            MoveTaskProjectDialog(task, state.projects, state.saving,
+                onMove = { destination -> onMoveProject(task, destination); movingTask = null },
+                onDismiss = { movingTask = null })
+        }
+        var projectOrderOpen by remember { mutableStateOf(false) }
+        if (projectOrderOpen) ProjectOrderDialog(state.projects, state.projectOrderSaving, state.error, onReorderProjects) { projectOrderOpen = false }
+        val colors = TimeboxTheme.colors
+        when {
+            state.loading -> LoadingState()
+            state.error != null && state.tasks.isEmpty() -> ErrorState(state.error, onRetry)
+            else -> Column(Modifier.fillMaxSize()) {
+                if (state.collection == TaskCollection.Active) {
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        if (maxWidth >= 840.dp) {
+                            Box(Modifier.fillMaxSize()) {
+                                Column(Modifier.fillMaxSize()) {
+                                    ScopeSelector(
+                                        scopes = state.scopes,
+                                        selected = state.selectedScope,
+                                        onSelect = onSelectScope,
+                                        onNewProject = onNewProject,
+                                        onReorderProjects = { projectOrderOpen = true },
+                                        onOpenRecurring = onOpenRecurring,
+                                    )
+                                    BattlePlanFilters(state, onToggleUrgency, onToggleImportance, onToggleTaskType, onClearFilters)
+                                    Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        battlePlanStatuses.forEach { status ->
+                                            TaskColumn(
+                                                status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
+                                                true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onRequestMoveProject, onMoveTask,
+                                                onReorderTask, onCreateSubtask, onToggleSubtask,
+                                            )
+                                        }
                                     }
                                 }
+                                PrimaryButton(
+                                    text = "New task",
+                                    onClick = { onShowComposer(true) },
+                                    enabled = !state.saving,
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
+                                    leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
+                                )
                             }
-                            PrimaryButton(
-                                text = "New task",
-                                onClick = { onShowComposer(true) },
-                                enabled = !state.saving,
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
-                                leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
+                        } else {
+                            MobileKanbanBoard(
+                                state = state,
+                                onSelectScope = onSelectScope,
+                                onSelectCollection = onSelectCollection,
+                                onSelectStatus = onSelectStatus,
+                                onToggleUrgency = onToggleUrgency,
+                                onToggleImportance = onToggleImportance,
+                                onToggleTaskType = onToggleTaskType,
+                                onClearFilters = onClearFilters,
+                                onSetHideCompleted = onSetHideCompleted,
+                                onArchiveCompleted = onArchiveCompleted,
+                                onOpenTask = onOpenTask,
+                                onToggleReady = onToggleReady,
+                                onRequestMoveProject = onRequestMoveProject,
+                                onDropTask = onDropTask,
+                                onMoveTaskToBoundary = onMoveTaskToBoundary,
+                                onSetBlocked = onSetBlocked,
+                                onRequestTrash = onRequestTrash,
+                                onShowComposer = onShowComposer,
+                                onOpenRecurring = onOpenRecurring,
+                                onNewProject = onNewProject,
+                                onReorderProjects = onReorderProjects,
                             )
                         }
-                    } else {
-                        MobileKanbanBoard(
-                            state = state,
-                            onSelectScope = onSelectScope,
-                            onSelectCollection = onSelectCollection,
-                            onSelectStatus = onSelectStatus,
-                            onToggleUrgency = onToggleUrgency,
-                            onToggleImportance = onToggleImportance,
-                            onToggleTaskType = onToggleTaskType,
-                            onClearFilters = onClearFilters,
-                            onSetHideCompleted = onSetHideCompleted,
-                            onArchiveCompleted = onArchiveCompleted,
-                            onOpenTask = onOpenTask,
-                            onToggleReady = onToggleReady,
-                            onRequestMoveProject = onRequestMoveProject,
-                            onDropTask = onDropTask,
-                            onMoveTaskToBoundary = onMoveTaskToBoundary,
-                            onSetBlocked = onSetBlocked,
-                            onRequestTrash = onRequestTrash,
-                            onShowComposer = onShowComposer,
-                            onOpenRecurring = onOpenRecurring,
-                            onNewProject = onNewProject,
-                            onReorderProjects = onReorderProjects,
-                        )
                     }
+                } else {
+                    UtilityTaskList(
+                        state,
+                        onBackToBoard = { onSelectCollection(TaskCollection.Active) },
+                        onRestoreArchived,
+                        onRestoreTrashed,
+                        onRequestPermanentDelete,
+                    )
                 }
-            } else {
-                UtilityTaskList(
-                    state,
-                    onBackToBoard = { onSelectCollection(TaskCollection.Active) },
-                    onRestoreArchived,
-                    onRestoreTrashed,
-                    onRequestPermanentDelete,
-                )
             }
         }
-    }
 
-    if (state.showComposer) {
-        TaskComposerOverlay(
-            state = state,
-            notificationsAllowed = notificationsAllowed,
-            onRequestNotificationPermission = onRequestNotificationPermission,
-            onDraftChange = onComposerDraftChange,
-            onReminderEnabledChange = onComposerReminderEnabledChange,
-            onDismiss = { onShowComposer(false) },
-            onCreate = { onCreateTask("", "", null) },
-        )
-    }
+        if (state.showComposer) {
+            TaskComposerOverlay(
+                state = state,
+                notificationsAllowed = notificationsAllowed,
+                onRequestNotificationPermission = onRequestNotificationPermission,
+                onDraftChange = onComposerDraftChange,
+                onReminderEnabledChange = onComposerReminderEnabledChange,
+                onDismiss = { onShowComposer(false) },
+                onCreate = { onCreateTask("", "", null) },
+            )
+        }
 
-    state.projectDeleteSummary?.let { summary ->
-        ProjectDeleteDialog(summary, onDismissDeleteProject, onConfirmDeleteProject)
-    }
-    state.pendingTrashTask?.let { task ->
-        AlertDialog(
-            onDismissRequest = onDismissTrash,
-            title = { Text("Move ${task.title} to Trash?") },
-            text = {
-                Text(
-                    if (task.subtasks.isEmpty()) "You can restore it for 30 days."
-                    else "This also moves every Subtask to Trash. You can restore it for 30 days.",
-                )
-            },
-            confirmButton = { TextButton(onClick = onConfirmTrash) { Text("Move to Trash") } },
-            dismissButton = { TextButton(onClick = onDismissTrash) { Text("Cancel") } },
-        )
-    }
-    state.permanentDeleteTask?.let { task ->
-        AlertDialog(
-            onDismissRequest = onDismissPermanentDelete,
-            title = { Text("Permanently delete ${task.title}?") },
-            text = { Text("This removes the task and its subtasks permanently. This cannot be undone.") },
-            confirmButton = { TextButton(onClick = onConfirmPermanentDelete) { Text("Delete permanently") } },
-            dismissButton = { TextButton(onClick = onDismissPermanentDelete) { Text("Cancel") } },
-        )
+        state.projectDeleteSummary?.let { summary ->
+            ProjectDeleteDialog(summary, onDismissDeleteProject, onConfirmDeleteProject)
+        }
+        state.pendingTrashTask?.let { task ->
+            AlertDialog(
+                onDismissRequest = onDismissTrash,
+                title = { Text("Move ${task.title} to Trash?") },
+                text = {
+                    Text(
+                        if (task.subtasks.isEmpty()) "You can restore it for 30 days."
+                        else "This also moves every Subtask to Trash. You can restore it for 30 days.",
+                    )
+                },
+                confirmButton = { TextButton(onClick = onConfirmTrash) { Text("Move to Trash") } },
+                dismissButton = { TextButton(onClick = onDismissTrash) { Text("Cancel") } },
+            )
+        }
+        state.permanentDeleteTask?.let { task ->
+            AlertDialog(
+                onDismissRequest = onDismissPermanentDelete,
+                title = { Text("Permanently delete ${task.title}?") },
+                text = { Text("This removes the task and its subtasks permanently. This cannot be undone.") },
+                confirmButton = { TextButton(onClick = onConfirmPermanentDelete) { Text("Delete permanently") } },
+                dismissButton = { TextButton(onClick = onDismissPermanentDelete) { Text("Cancel") } },
+            )
+        }
     }
 }
 
@@ -1320,6 +1324,7 @@ private fun MobileKanbanCard(
                         Icon(Icons.Outlined.MoreVert, contentDescription = "Actions for ${task.title}", tint = colors.onVariant)
                     }
                     MobileTaskActionMenu(
+                        task = task,
                         expanded = menu,
                         status = task.status,
                         blocked = task.isBlocked,
@@ -1334,7 +1339,6 @@ private fun MobileKanbanCard(
                         onMoveToTop = { menu = false; onMoveToBoundary(task, true) },
                         onMoveToBottom = { menu = false; onMoveToBoundary(task, false) },
                         onMoveTo = { target -> menu = false; onDrop(task, target, taskCount(target)) },
-                        onMoveProject = { menu = false; onRequestMoveProject(task) },
                         onTrash = { menu = false; onRequestTrash(task) },
                     )
                 }
@@ -1404,6 +1408,7 @@ private fun MobileKanbanCard(
 
 @Composable
 private fun MobileTaskActionMenu(
+    task: BattleTask,
     expanded: Boolean,
     status: TaskStatus,
     blocked: Boolean,
@@ -1416,13 +1421,13 @@ private fun MobileTaskActionMenu(
     onMoveToBottom: () -> Unit,
     onMoveTo: (TaskStatus) -> Unit,
     onTrash: () -> Unit,
-    onMoveProject: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
+    val projectMove = LocalProjectMove.current
 
     DropdownMenu(
         expanded = expanded,
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!projectMove.saving) onDismiss() },
         modifier = Modifier
             .widthIn(min = 264.dp, max = 320.dp)
             .testTag("battle-plan-task-actions-menu"),
@@ -1440,7 +1445,7 @@ private fun MobileTaskActionMenu(
             )
         } else {
             MenuSectionLabel("Task")
-            MobileTaskActionMenuItem(label = "Move to project", icon = Icons.Outlined.Inbox, onClick = onMoveProject)
+            if (task.parentId == null) MoveProjectMenuItem(task, projectMove, onDismiss)
             MobileTaskActionMenuItem(
                 label = if (blocked) "Unblock task" else "Block task",
                 icon = Icons.Outlined.Flag,
