@@ -6,7 +6,9 @@ import com.timebox.android.data.TimeBlock
 import com.timebox.android.ui.battleplan.task
 import com.timebox.android.ui.planning.PlanningDraftPlacement
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -58,6 +60,16 @@ class PlanningDragPlacementTest {
         assertEquals(540, nearestPlanningDragStart(day, drafts, 42, 540, 60))
         assertEquals(630, nearestPlanningDragStart(day, drafts, 42, 600, 60))
         assertEquals(630, nearestPlanningDragStart(day, drafts, null, 575, 30))
+    }
+
+    @Test
+    fun `saved Planned Block movement excludes itself and resolves around other Planned Blocks`() {
+        val day = day(block(7, 540, 600), block(8, 600, 660))
+
+        assertEquals(540, nearestSavedPlannedBlockDragStart(day, 7, 540, 60))
+        assertEquals(660, nearestSavedPlannedBlockDragStart(day, 7, 600, 60))
+        assertTrue(savedPlannedBlockRangeAvailable(day, 7, 540, 600))
+        assertFalse(savedPlannedBlockRangeAvailable(day, 7, 600, 660))
     }
 
     private fun day(vararg blocks: TimeBlock) = Day(

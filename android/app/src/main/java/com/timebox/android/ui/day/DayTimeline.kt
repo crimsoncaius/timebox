@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,6 +77,8 @@ private data class DragState(
     val id: Int,
     val startMinute: Int,
     val endMinute: Int,
+    val previewStartMinute: Int = startMinute,
+    val previewEndMinute: Int = endMinute,
 )
 
 private enum class DragMode { Move, ResizeStart, ResizeEnd }
@@ -109,6 +112,7 @@ fun DayTimeline(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    onSavedPlannedBlockDragPointer: (Float?) -> Unit = {},
     showActual: Boolean = true,
     planningPreview: PlanningDropPreview? = null,
     onPlannedLaneBoundsChanged: (Rect) -> Unit = {},
@@ -154,6 +158,7 @@ fun DayTimeline(
                 onTapSlot = onTapSlot,
                 onSelectBlock = onSelectBlock,
                 onCommitMove = onCommitMove,
+                onSavedPlannedBlockDragPointer = onSavedPlannedBlockDragPointer,
                 planningPreview = planningPreview,
                 onBoundsChanged = onPlannedLaneBoundsChanged,
                 blockGesturesEnabled = blockGesturesEnabled,
@@ -301,6 +306,7 @@ private fun LaneColumn(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    onSavedPlannedBlockDragPointer: (Float?) -> Unit = {},
     planningPreview: PlanningDropPreview? = null,
     onBoundsChanged: ((Rect) -> Unit)? = null,
     blockGesturesEnabled: Boolean = true,
@@ -366,10 +372,14 @@ private fun LaneColumn(
             val live = if (drag != null && drag.id == block.id) drag else null
             val start = live?.startMinute ?: block.startMinute
             val end = live?.endMinute ?: block.endMinute
+            val previewStart = live?.previewStartMinute ?: start
+            val previewEnd = live?.previewEndMinute ?: end
             BlockCard(
                 block = block,
                 startMinute = start,
                 endMinute = end,
+                previewStartMinute = previewStart,
+                previewEndMinute = previewEnd,
                 visibleStart = day.visibleStart,
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
@@ -381,15 +391,38 @@ private fun LaneColumn(
                 // gesture delta. Reading the drag state here instead would capture the
                 // value from when the gesture started — always null — and never commit.
                 onDrag = { mode, deltaPx ->
-                    val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
-                    onDragChange(DragState(block.id, start, end))
+                    resolveSavedBlockDrag(mode, deltaPx, slotPx, block, day).also(onDragChange)
                 },
-                onDragEnd = { mode, deltaPx ->
+                onDragEnd = { resolved ->
                     onDragChange(null)
-                    val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
-                    onCommitMove(block.id, start, end)
+                    resolved?.let {
+                        onCommitMove(block.id, resolved.previewStartMinute, resolved.previewEndMinute)
+                    }
                 },
                 onDragCancel = { onDragChange(null) },
+                onAccessibleMove = if (block.lane == Lane.Planned && blockGesturesEnabled) {
+                    { deltaMinutes ->
+                        val duration = block.endMinute - block.startMinute
+                        nearestSavedPlannedBlockDragStart(
+                            day = day,
+                            movingBlockId = block.id,
+                            intendedStart = block.startMinute + deltaMinutes,
+                            durationMinutes = duration,
+                        )?.let { start -> onCommitMove(block.id, start, start + duration) }
+                    }
+                } else {
+                    null
+                },
+                onDragPointer = if (block.lane == Lane.Planned) onSavedPlannedBlockDragPointer else null,
+            )
+        }
+
+        if (lane == Lane.Planned && drag != null && day.lane(Lane.Planned).any { it.id == drag.id }) {
+            SavedPlannedMovePreview(
+                startMinute = drag.previewStartMinute,
+                endMinute = drag.previewEndMinute,
+                visibleStart = day.visibleStart,
+                slotHeight = slotHeight,
             )
         }
 
@@ -483,9 +516,52 @@ private fun resolveDrag(
     },
 )
 
+/** Keeps the carried card under the finger while committing the same nearest valid preview. */
+private fun resolveSavedBlockDrag(
+    mode: DragMode,
+    deltaPx: Float,
+    slotPx: Float,
+    block: TimeBlock,
+    day: Day,
+): DragState? {
+    val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
+    val previewStart = if (mode == DragMode.Move && block.lane == Lane.Planned) {
+        nearestSavedPlannedBlockDragStart(day, block.id, start, end - start)
+    } else {
+        start
+    } ?: return null
+    return DragState(
+        id = block.id,
+        startMinute = start,
+        endMinute = end,
+        previewStartMinute = previewStart,
+        previewEndMinute = previewStart + (end - start),
+    )
+}
+
 private fun snapBlockDeltaMinutes(deltaPx: Float, slotPx: Float): Int {
     val rawDeltaMinutes = deltaPx / slotPx * SLOT_MINUTES
     return snapToBlockInteractionStep(rawDeltaMinutes)
+}
+
+@Composable
+private fun SavedPlannedMovePreview(
+    startMinute: Int,
+    endMinute: Int,
+    visibleStart: Int,
+    slotHeight: Dp,
+) {
+    val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
+    val height = slotHeight * ((endMinute - startMinute).toFloat() / SLOT_MINUTES)
+    Box(
+        modifier = Modifier
+            .offset(y = top)
+            .padding(horizontal = 3.dp)
+            .fillMaxWidth()
+            .height(height)
+            .border(1.dp, TimeboxTheme.colors.planned.copy(alpha = 0.65f), TimeboxShapes.block)
+            .testTag("saved-planned-move-preview"),
+    )
 }
 
 /** Clamp a move/resize to the visible window, mirroring the prototype's rules. */
@@ -704,6 +780,8 @@ private fun BlockCard(
     block: TimeBlock,
     startMinute: Int,
     endMinute: Int,
+    previewStartMinute: Int,
+    previewEndMinute: Int,
     visibleStart: Int,
     slotHeight: Dp,
     selected: Boolean,
@@ -711,9 +789,11 @@ private fun BlockCard(
     moveEnabled: Boolean,
     resizeEnabled: Boolean,
     onTap: () -> Unit,
-    onDrag: (DragMode, Float) -> Unit,
-    onDragEnd: (DragMode, Float) -> Unit,
+    onDrag: (DragMode, Float) -> DragState?,
+    onDragEnd: (DragState?) -> Unit,
     onDragCancel: () -> Unit,
+    onAccessibleMove: ((Int) -> Unit)?,
+    onDragPointer: ((Float?) -> Unit)?,
 ) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
@@ -726,6 +806,8 @@ private fun BlockCard(
         selected -> 8.dp
         else -> 0.dp
     }
+    var cardTopInRoot by remember(block.id) { mutableFloatStateOf(0f) }
+    var resolvedDrag by remember(block.id) { mutableStateOf<DragState?>(null) }
 
     Box(
         modifier = Modifier
@@ -733,6 +815,7 @@ private fun BlockCard(
             .padding(horizontal = 3.dp)
             .fillMaxWidth()
             .height(height)
+            .onGloballyPositioned { cardTopInRoot = it.positionInRoot().y }
             .testTag("day-block-${block.id}")
             .graphicsLayer { if (dragging) rotationZ = -1f }
             .shadow(elevation, TimeboxShapes.block, clip = false)
@@ -743,6 +826,20 @@ private fun BlockCard(
                     else -> colors.paper
                 }
             )
+            .semantics {
+                customActions = onAccessibleMove?.let { move ->
+                    listOf(
+                        CustomAccessibilityAction("Move 5 minutes earlier") {
+                            move(-BLOCK_INTERACTION_STEP_MINUTES)
+                            true
+                        },
+                        CustomAccessibilityAction("Move 5 minutes later") {
+                            move(BLOCK_INTERACTION_STEP_MINUTES)
+                            true
+                        },
+                    )
+                } ?: emptyList()
+            }
             // Tap, move and both resizes start with a press on the same card, so one
             // handler owns all of them. Edge presses resize immediately; a body press
             // still arms movement with a long press. Movement before body arming remains
@@ -770,13 +867,24 @@ private fun BlockCard(
                         // of the card, or a one-slot block would have no move surface.
                         mode = dragModeForPress(down.y)
                         total = 0f
+                        resolvedDrag = null
+                        if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot + down.y)
                     },
-                    onDrag = { _, moved ->
+                    onDrag = { change, moved ->
                         total += moved.y
-                        onDrag(mode, total)
+                        if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot + change.position.y)
+                        resolvedDrag = onDrag(mode, total)
                     },
-                    onDragEnd = { onDragEnd(mode, total) },
-                    onDragCancel = onDragCancel,
+                    onDragEnd = {
+                        onDragPointer?.invoke(null)
+                        onDragEnd(resolvedDrag)
+                        resolvedDrag = null
+                    },
+                    onDragCancel = {
+                        onDragPointer?.invoke(null)
+                        onDragCancel()
+                        resolvedDrag = null
+                    },
                 )
             },
     ) {
@@ -803,7 +911,11 @@ private fun BlockCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val secondary = block.secondaryIdentity()
+                val secondary = if (dragging) {
+                    "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}"
+                } else {
+                    block.secondaryIdentity()
+                }
                 if (secondary != null && innerHeight >= 30.dp) {
                     Text(
                         text = secondary,
@@ -814,7 +926,7 @@ private fun BlockCard(
                     )
                 } else if (innerHeight >= 30.dp) {
                     Text(
-                        text = "${hhmm(startMinute)} – ${hhmm(endMinute)}",
+                        text = "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}",
                         style = TimeboxTheme.type.monoSmall,
                         color = colors.onVariant,
                         maxLines = 1,

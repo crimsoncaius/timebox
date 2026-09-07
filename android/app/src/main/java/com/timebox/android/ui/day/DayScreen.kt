@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,7 +31,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -48,6 +52,7 @@ import com.timebox.android.ui.planning.PlanningEditResult
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
@@ -200,6 +205,9 @@ private fun PlanningDayPage(
 
 /** How far sideways a drag must travel before it counts as changing the day. */
 private val DAY_SWIPE_THRESHOLD = 55.dp
+private val SAVED_BLOCK_DRAG_EDGE_ZONE = 48.dp
+private const val SAVED_BLOCK_DRAG_SCROLL_STEP_PX = 18f
+private const val SAVED_BLOCK_DRAG_SCROLL_FRAME_MILLIS = 16L
 
 /**
  * A clipped three-page track. The track follows the finger directly, then settles to
@@ -330,6 +338,8 @@ private fun DayPage(
 ) {
     val colors = TimeboxTheme.colors
     var viewportHeightPx by remember(date) { mutableIntStateOf(0) }
+    var viewportBounds by remember(date) { mutableStateOf(Rect.Zero) }
+    var savedBlockDragPointerY by remember(date) { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -356,6 +366,7 @@ private fun DayPage(
                 modifier = Modifier
                     .weight(1f)
                     .onSizeChanged { viewportHeightPx = it.height }
+                    .onGloballyPositioned { viewportBounds = it.boundsInRoot() }
                     .verticalScroll(scrollState)
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
@@ -367,6 +378,12 @@ private fun DayPage(
                     onTapSlot = onTapSlot,
                     onSelectBlock = onSelectBlock,
                     onCommitMove = onCommitMove,
+                    onSavedPlannedBlockDragPointer = { savedBlockDragPointerY = it },
+                )
+                SavedPlannedBlockDragEdgeScroll(
+                    pointerY = savedBlockDragPointerY,
+                    viewportBounds = viewportBounds,
+                    scrollState = scrollState,
                 )
                 AutoScrollTimelineToNowOnce(
                     day = day,
@@ -375,6 +392,29 @@ private fun DayPage(
                     viewportHeightPx = viewportHeightPx,
                 )
             }
+        }
+    }
+}
+
+/** Keeps the ordinary Day timeline moving while a saved Planned Block is held at an edge. */
+@Composable
+private fun SavedPlannedBlockDragEdgeScroll(
+    pointerY: Float?,
+    viewportBounds: Rect,
+    scrollState: ScrollState,
+) {
+    val edgeZonePx = with(LocalDensity.current) { SAVED_BLOCK_DRAG_EDGE_ZONE.toPx() }
+    val latestPointerY by rememberUpdatedState(pointerY)
+    androidx.compose.runtime.LaunchedEffect(pointerY != null, viewportBounds, scrollState.maxValue) {
+        while (latestPointerY != null) {
+            val pointer = latestPointerY ?: break
+            val delta = when {
+                pointer < viewportBounds.top + edgeZonePx -> -SAVED_BLOCK_DRAG_SCROLL_STEP_PX
+                pointer > viewportBounds.bottom - edgeZonePx -> SAVED_BLOCK_DRAG_SCROLL_STEP_PX
+                else -> 0f
+            }
+            if (delta != 0f) scrollState.scrollBy(delta)
+            delay(SAVED_BLOCK_DRAG_SCROLL_FRAME_MILLIS)
         }
     }
 }

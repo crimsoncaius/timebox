@@ -661,6 +661,14 @@ class DayViewModel(
         val day = current.day ?: return
         val block = day.blocks.firstOrNull { it.id == blockId } ?: return
         if (block.startMinute == startMinute && block.endMinute == endMinute) return
+        if (block.lane == Lane.Planned && !savedPlannedBlockRangeAvailable(
+                day, block.id, startMinute, endMinute,
+            )
+        ) {
+            _state.update { it.copy(message = "That time is no longer available") }
+            launchScope.launch { refreshCurrentDay() }
+            return
+        }
 
         val actualPatch = if (block.lane == Lane.Actual) {
             val actualBlockId = block.actualBlockId ?: return
@@ -736,6 +744,7 @@ class DayViewModel(
                             ))
                         }
                     }
+                    refreshCurrentDay()
                 },
             )
         }

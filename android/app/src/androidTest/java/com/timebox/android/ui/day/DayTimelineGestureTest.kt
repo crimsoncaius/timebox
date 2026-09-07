@@ -9,10 +9,12 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.semantics.SemanticsActions
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.LinkedTask
@@ -125,6 +127,60 @@ class DayTimelineGestureTest {
 
         compose.runOnIdle {
             check(committedMove == Triple(7, 9 * 60 + 12, 10 * 60 + 12))
+        }
+    }
+
+    @Test
+    fun savedPlannedBlockDragCommitsNearestAvailableRange() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date)
+        val moving = base.day!!.blocks.single()
+        val blocker = moving.copy(id = 8, startMinute = 10 * 60, endMinute = 11 * 60)
+        var committedMove: Triple<Int, Int, Int>? = null
+        setDayContent(
+            state = base.copy(
+                pages = base.pages + (date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(moving, blocker)))),
+            ),
+            haptics = RecordingHaptics(),
+            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
+        )
+
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, height / 1f))
+        }
+        compose.onNodeWithTag("saved-planned-move-preview").assertIsDisplayed()
+        compose.onNodeWithText("11:00 – 12:00").assertIsDisplayed()
+        compose.onRoot().performTouchInput { up() }
+
+        compose.runOnIdle {
+            check(committedMove == Triple(7, 11 * 60, 12 * 60)) { "Committed $committedMove" }
+        }
+    }
+
+    @Test
+    fun savedPlannedBlockAccessibleMoveUsesNearestAvailableRange() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date)
+        val moving = base.day!!.blocks.single()
+        val blocker = moving.copy(id = 8, startMinute = 10 * 60, endMinute = 11 * 60)
+        var committedMove: Triple<Int, Int, Int>? = null
+        setDayContent(
+            state = base.copy(
+                pages = base.pages + (date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(moving, blocker)))),
+            ),
+            haptics = RecordingHaptics(),
+            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
+        )
+
+        val moveLater = compose.onNodeWithTag("day-block-7")
+            .fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            .first { it.label == "Move 5 minutes later" }
+        check(moveLater.action())
+
+        compose.runOnIdle {
+            check(committedMove == Triple(7, 9 * 60, 10 * 60)) { "Committed $committedMove" }
         }
     }
 
