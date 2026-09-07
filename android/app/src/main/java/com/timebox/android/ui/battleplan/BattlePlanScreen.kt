@@ -550,6 +550,7 @@ private fun MobileKanbanBoard(
                     Icon(
                         imageVector = if (state.selectedScope.kind == BattlePlanScopeKind.Project) Icons.Outlined.Folder else Icons.AutoMirrored.Outlined.ListAlt,
                         contentDescription = null,
+                        tint = if (state.selectedScope.kind == BattlePlanScopeKind.Project) colors.project else colors.on,
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(7.dp))

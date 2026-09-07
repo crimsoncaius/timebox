@@ -8,6 +8,10 @@ Timebox plans intended work, records actual work, and tracks the tasks that thos
 A named, finite group of related Battle Plan Tasks that advances a specific outcome. Deadlines belong to individual Battle Plan Tasks.
 _Avoid_: Parent Task, Task Type
 
+**Project Color**:
+The single dedicated visual color that identifies Projects throughout the Android application. It is distinct from the yellow accent used for other UI meanings.
+_Avoid_: Per-Project Color, Project Accent Palette
+
 **Project Deletion**:
 The destructive removal of a Project and every Battle Plan Task assigned to it. It requires explicit confirmation.
 _Avoid_: Unassigning a Project, archiving a Project

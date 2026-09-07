@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Folder
@@ -46,7 +45,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-/** The primary Project list: taps navigate, long-pressing a handle reorders. */
+/** The primary Project list: taps navigate, while holding a Project row reorders it. */
 @Composable
 internal fun ProjectNavigationList(
     projects: List<Project>,
@@ -66,15 +65,26 @@ internal fun ProjectNavigationList(
     var distance by remember { mutableFloatStateOf(0f) }
     var pointerY by remember { mutableFloatStateOf(0f) }
     var actionsId by remember { mutableStateOf<Int?>(null) }
-    val sourceIndex = projects.indexOfFirst { it.id == draggedId }
+    var orderedProjects by remember { mutableStateOf(projects) }
+    var pendingOrder by remember { mutableStateOf<List<Int>?>(null) }
+    LaunchedEffect(projects) {
+        val incomingOrder = projects.map { it.id }
+        if (pendingOrder == null || incomingOrder == pendingOrder) {
+            orderedProjects = projects
+            pendingOrder = null
+        }
+    }
+    val sourceIndex = orderedProjects.indexOfFirst { it.id == draggedId }
     val targetIndex = if (sourceIndex < 0) -1 else
-        (sourceIndex + (distance / rowHeight).roundToInt()).coerceIn(projects.indices)
+        (sourceIndex + (distance / rowHeight).roundToInt()).coerceIn(orderedProjects.indices)
     val latestOnReorder by rememberUpdatedState(onReorder)
 
     fun move(from: Int, to: Int) {
-        if (saving || from !in projects.indices || to !in projects.indices || from == to) return
-        val ids = projects.map { it.id }.toMutableList()
+        if (saving || from !in orderedProjects.indices || to !in orderedProjects.indices || from == to) return
+        val ids = orderedProjects.map { it.id }.toMutableList()
         ids.add(to, ids.removeAt(from))
+        orderedProjects = ids.map { id -> orderedProjects.first { it.id == id } }
+        pendingOrder = ids
         latestOnReorder(ids)
     }
 
@@ -99,7 +109,7 @@ internal fun ProjectNavigationList(
             .onGloballyPositioned { viewport = it.boundsInWindow() }
             .verticalScroll(scroll, enabled = draggedId == null),
     ) {
-        projects.forEachIndexed { index, project ->
+        orderedProjects.forEachIndexed { index, project ->
             key(project.id) {
                 val dragging = draggedId == project.id
                 val shift = when {
@@ -109,9 +119,9 @@ internal fun ProjectNavigationList(
                     else -> 0f
                 }
                 val animatedShift by animateFloatAsState(shift, label = "Project position")
-                var handleBounds by remember { mutableStateOf(Rect.Zero) }
+                var rowBounds by remember { mutableStateOf(Rect.Zero) }
                 val selected = project.id == selectedId
-                val accent = projectAccent(project, colors.isDark)
+                val projectColor = colors.project
                 Row(
                     Modifier.fillMaxWidth().height(56.dp)
                         .zIndex(if (dragging) 1f else 0f)
@@ -122,24 +132,25 @@ internal fun ProjectNavigationList(
                         }
                         .clip(TimeboxShapes.cell)
                         .background(if (dragging || selected) colors.raised else Color.Transparent)
-                        .then(if (dragging || selected) Modifier.border(1.dp, accent, TimeboxShapes.cell) else Modifier)
+                        .then(if (dragging || selected) Modifier.border(1.dp, projectColor, TimeboxShapes.cell) else Modifier)
+                        .onGloballyPositioned { rowBounds = it.boundsInWindow() }
                         .semantics {
                             customActions = buildList {
                                 if (!saving && index > 0) add(CustomAccessibilityAction("Move ${project.name} up") { move(index, index - 1); true })
-                                if (!saving && index < projects.lastIndex) add(CustomAccessibilityAction("Move ${project.name} down") { move(index, index + 1); true })
+                                if (!saving && index < orderedProjects.lastIndex) add(CustomAccessibilityAction("Move ${project.name} down") { move(index, index + 1); true })
                             }
                         },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(44.dp)
-                        .onGloballyPositioned { handleBounds = it.boundsInWindow() }
-                        .pointerInput(projects.map { it.id }, saving) {
+                    Row(
+                        Modifier.weight(1f).fillMaxHeight()
+                        .pointerInput(orderedProjects.map { it.id }, saving) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = { offset ->
                                     if (!saving) {
                                         actionsId = null
                                         distance = 0f
-                                        pointerY = handleBounds.top + offset.y
+                                        pointerY = rowBounds.top + offset.y
                                         draggedId = project.id
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
@@ -161,18 +172,15 @@ internal fun ProjectNavigationList(
                                     }
                                 },
                             )
-                        }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.DragHandle, "Drag ${project.name}", tint = colors.onVariant, modifier = Modifier.size(20.dp))
-                    }
-                    Row(
-                        Modifier.weight(1f).fillMaxHeight().clickable(enabled = draggedId == null) { onSelect(project) },
+                        }
+                        .clickable(enabled = draggedId == null) { onSelect(project) },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (selected) {
-                            Box(Modifier.size(10.dp).clip(TimeboxShapes.chip).background(accent))
+                            Box(Modifier.size(10.dp).clip(TimeboxShapes.chip).background(projectColor))
                             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                Text("CURRENT PROJECT", style = TimeboxTheme.type.bodySmall, color = accent, fontWeight = FontWeight.Bold)
+                                Text("CURRENT PROJECT", style = TimeboxTheme.type.bodySmall, color = projectColor, fontWeight = FontWeight.Bold)
                                 Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         } else {
@@ -201,14 +209,4 @@ internal fun ProjectNavigationList(
             }
         }
     }
-}
-
-/** Stable per-Project accents are reserved for the active Project; all alternatives remain neutral. */
-private fun projectAccent(project: Project, dark: Boolean): Color {
-    val accents = if (dark) {
-        listOf(Color(0xFF8AB4F8), Color(0xFFD0BCFF), Color(0xFFF2C97D), Color(0xFF7DD3C8))
-    } else {
-        listOf(Color(0xFF2D6CC0), Color(0xFF7157A3), Color(0xFF9A6807), Color(0xFF0B7468))
-    }
-    return accents[Math.floorMod(project.id, accents.size)]
 }

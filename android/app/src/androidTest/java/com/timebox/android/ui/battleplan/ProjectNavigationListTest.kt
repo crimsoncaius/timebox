@@ -9,6 +9,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -18,7 +19,7 @@ class ProjectNavigationListTest {
         Project(index + 1, name, Instant.EPOCH, Instant.EPOCH)
     }
 
-    @Test fun primaryProjectMenuSupportsDraggingWithoutOpeningAnotherDialog() {
+    @Test fun primaryProjectMenuSupportsHoldingAProjectRowToReorderWithoutOpeningAnotherDialog() {
         var requested = emptyList<Int>()
         var selected: BattlePlanScope? = null
         compose.setContent {
@@ -78,14 +79,14 @@ class ProjectNavigationListTest {
         compose.runOnIdle { assertEquals(projects.first(), deleted); assertEquals(emptyList<Int>(), requested) }
     }
 
-    @Test fun canceledDragPreservesTheSavedOrder() {
+    @Test fun canceledProjectRowDragPreservesTheSavedOrder() {
         var requested = emptyList<Int>()
         compose.setContent {
             TimeboxTheme(darkTheme = false) { ProjectNavigationList(projects, null, false, {}, { requested = it }) }
         }
-        val first = compose.onNodeWithContentDescription("Drag Alpha").fetchSemanticsNode().boundsInRoot
-        val second = compose.onNodeWithContentDescription("Drag Beta").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithContentDescription("Drag Alpha").performTouchInput {
+        val first = compose.onNodeWithText("Alpha").fetchSemanticsNode().boundsInRoot
+        val second = compose.onNodeWithText("Beta").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Alpha").performTouchInput {
             down(center)
             advanceEventTime(700)
             moveBy(Offset(0f, second.center.y - first.center.y), delayMillis = 100)
@@ -94,10 +95,22 @@ class ProjectNavigationListTest {
         compose.runOnIdle { assertEquals(emptyList<Int>(), requested) }
     }
 
+    @Test fun completedProjectRowDragKeepsTheOptimisticOrderWhileSaveIsPending() {
+        var requested = emptyList<Int>()
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) { ProjectNavigationList(projects, null, false, {}, { requested = it }) }
+        }
+        dragAlphaBelowBeta()
+        compose.runOnIdle { assertEquals(listOf(2, 1, 3), requested) }
+        val alpha = compose.onNodeWithText("Alpha").fetchSemanticsNode().boundsInRoot
+        val beta = compose.onNodeWithText("Beta").fetchSemanticsNode().boundsInRoot
+        assertTrue(alpha.top > beta.top)
+    }
+
     private fun dragAlphaBelowBeta() {
-        val first = compose.onNodeWithContentDescription("Drag Alpha").fetchSemanticsNode().boundsInRoot
-        val second = compose.onNodeWithContentDescription("Drag Beta").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithContentDescription("Drag Alpha").performTouchInput {
+        val first = compose.onNodeWithText("Alpha").fetchSemanticsNode().boundsInRoot
+        val second = compose.onNodeWithText("Beta").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Alpha").performTouchInput {
             down(center)
             advanceEventTime(700)
             moveBy(Offset(0f, second.center.y - first.center.y), delayMillis = 100)
