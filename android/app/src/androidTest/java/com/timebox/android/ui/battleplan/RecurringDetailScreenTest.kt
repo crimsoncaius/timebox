@@ -44,8 +44,6 @@ class RecurringDetailScreenTest {
         id = 7,
         title = "Daily review",
         description = "",
-        projectId = null,
-        project = null,
         taskTypeId = null,
         taskType = null,
         mode = RecurrenceMode.Scheduled,

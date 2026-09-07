@@ -363,6 +363,30 @@ fun RecurringEditorScreen(
     when {
         state.loading -> LoadingState()
         state.error != null -> ErrorState(state.error, onRetry)
+        state.templateId == null -> RecurringCreationContent(
+                state = state,
+                onBack = requestBack,
+                onTitle = onTitle,
+                onDescription = onDescription,
+                onTaskType = onTaskType,
+                onUrgency = onUrgency,
+                onImportance = onImportance,
+                onMode = onMode,
+                onFrequency = onFrequency,
+                onInterval = onInterval,
+                onToggleWeekday = onToggleWeekday,
+                onMonthDay = onMonthDay,
+                onQuotaCount = onQuotaCount,
+                onStartDate = onStartDate,
+                onEndMode = onEndMode,
+                onEndDate = onEndDate,
+                onCycleLimit = onCycleLimit,
+                onChecklist = onChecklist,
+                onKeepUnfinishedOverdue = onKeepUnfinishedOverdue,
+                onRefreshPreview = onRefreshPreview,
+                onSave = onSave,
+        )
+
         else -> Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(13.dp),
@@ -469,7 +493,7 @@ private fun RecurringEditorSection(
 }
 
 @Composable
-private fun PreviewCard(state: RecurringEditorUiState, onRefresh: () -> Unit) {
+internal fun PreviewCard(state: RecurringEditorUiState, onRefresh: () -> Unit) {
     val colors = TimeboxTheme.colors
     SectionCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -506,7 +530,7 @@ private fun PreviewCard(state: RecurringEditorUiState, onRefresh: () -> Unit) {
 }
 
 @Composable
-private fun WeekdayPicker(selected: Set<Int>, onToggle: (Int) -> Unit) {
+internal fun WeekdayPicker(selected: Set<Int>, onToggle: (Int) -> Unit) {
     val names = listOf("M", "T", "W", "T", "F", "S", "S")
     Column {
         Text("Weekdays", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
@@ -517,7 +541,7 @@ private fun WeekdayPicker(selected: Set<Int>, onToggle: (Int) -> Unit) {
 }
 
 @Composable
-private fun <T> RecurrenceMenu(label: String, selected: String, values: List<Pair<String, T>>, onSelect: (T) -> Unit) {
+internal fun <T> RecurrenceMenu(label: String, selected: String, values: List<Pair<String, T>>, onSelect: (T) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
@@ -530,9 +554,9 @@ private fun <T> RecurrenceMenu(label: String, selected: String, values: List<Pai
 
 private val RecurrenceStatus.label: String get() = wire.replaceFirstChar(Char::uppercase)
 private val RecurrenceMode.label: String get() = wire.replaceFirstChar(Char::uppercase)
-private val RecurrenceFrequency.label: String get() = wire.replaceFirstChar(Char::uppercase)
-private val PriorityLevel.label: String get() = wire.replaceFirstChar(Char::uppercase)
-private val RecurrenceEndMode.label: String get() = when (this) {
+internal val RecurrenceFrequency.label: String get() = wire.replaceFirstChar(Char::uppercase)
+internal val PriorityLevel.label: String get() = wire.replaceFirstChar(Char::uppercase)
+internal val RecurrenceEndMode.label: String get() = when (this) {
     RecurrenceEndMode.Never -> "Never"
     RecurrenceEndMode.EndDate -> "On a date"
     RecurrenceEndMode.CycleLimit -> "After cycles"

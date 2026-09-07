@@ -291,7 +291,7 @@ fun TimeboxApp(
                 if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
         ) {
-            if (route != AppRoutes.DayPattern) {
+            if (route != AppRoutes.DayPattern && route != AppRoutes.RecurringNew) {
                 TimeboxTopBar(
                     kicker = routeKicker(route),
                     title = routeTitle(
