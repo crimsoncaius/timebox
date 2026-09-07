@@ -43,6 +43,8 @@ import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.Kicker
 import com.timebox.android.ui.components.LoadingState
+import com.timebox.android.ui.planning.PlanningDraftPlacement
+import com.timebox.android.ui.planning.PlanningEditResult
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
@@ -72,6 +74,7 @@ fun DayScreen(
     onCommitPlanningMode: () -> Unit = {},
     onCancelPlanningMode: () -> Unit = {},
     onPlanTask: (Int, Int) -> Unit,
+    onDropPlanningTask: ((PlanningDraftPlacement) -> PlanningEditResult)? = null,
     onUpdatePlanningDraft: (Int, Int, Int) -> Unit = { _, _, _ -> },
     onReturnPlanningDraft: (Int) -> Unit = {},
     onArmAccessibleTask: (Int?) -> Unit,
@@ -107,6 +110,7 @@ fun DayScreen(
                     onSelectBlock = onSelectBlock,
                     onCommitMove = onCommitMove,
                     onPlanTask = onPlanTask,
+                    onDropPlanningTask = onDropPlanningTask,
                     onUpdatePlanningDraft = onUpdatePlanningDraft,
                     onReturnPlanningDraft = onReturnPlanningDraft,
                     onArmAccessibleTask = onArmAccessibleTask,
@@ -152,6 +156,7 @@ private fun PlanningDayPage(
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
     onPlanTask: (Int, Int) -> Unit,
+    onDropPlanningTask: ((PlanningDraftPlacement) -> PlanningEditResult)?,
     onUpdatePlanningDraft: (Int, Int, Int) -> Unit,
     onReturnPlanningDraft: (Int) -> Unit,
     onArmAccessibleTask: (Int?) -> Unit,
@@ -182,6 +187,7 @@ private fun PlanningDayPage(
                 onSelectBlock = onSelectBlock,
                 onCommitMove = onCommitMove,
                 onPlanTask = onPlanTask,
+                onDropPlanningTask = onDropPlanningTask,
                 onUpdatePlanningDraft = onUpdatePlanningDraft,
                 onReturnPlanningDraft = onReturnPlanningDraft,
                 onArmAccessibleTask = onArmAccessibleTask,

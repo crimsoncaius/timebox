@@ -337,6 +337,7 @@ fun TimeboxApp(
                             onCommitPlanningMode = dayViewModel::commitPlanningSession,
                             onCancelPlanningMode = dayViewModel::cancelPlanningSession,
                             onPlanTask = dayViewModel::planTaskAt,
+                            onDropPlanningTask = dayViewModel::dropPlanningTask,
                             onUpdatePlanningDraft = dayViewModel::updatePlanningDraft,
                             onReturnPlanningDraft = dayViewModel::returnPlanningDraft,
                             onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,

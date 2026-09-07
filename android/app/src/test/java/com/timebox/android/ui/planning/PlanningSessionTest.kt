@@ -72,6 +72,25 @@ class PlanningSessionTest {
     }
 
     @Test
+    fun `drag release rejects a previewed range that became occupied`() = runTest {
+        val session = PlanningSession(InMemoryPlanningSessionTransport(listOf(task(1, ready = true), task(2, ready = true))))
+        session.refreshQueue()
+        session.begin()
+        val originalDay = day()
+        session.place(1, originalDay, 540)
+
+        // A saved Planned Block arrives after the UI showed 10:00 as available.
+        val refreshedDay = day(blocks = arrayOf(block(99, 600, 630)))
+        val rejected = PlanningEditResult.Rejected("That time is no longer available")
+        assertEquals(rejected, session.drop(1, refreshedDay, 600, 630))
+        assertEquals(540, session.state.value.drafts.getValue(1).startMinute)
+        assertEquals(rejected, session.drop(2, refreshedDay, 600, 630))
+        assertFalse(2 in session.state.value.drafts)
+        assertEquals(PlanningEditResult.Accepted, session.drop(1, refreshedDay, 630, 660))
+        assertEquals(630, session.state.value.drafts.getValue(1).startMinute)
+    }
+
+    @Test
     fun `cancel discards the whole session but preserves the reusable queue`() = runTest {
         val transport = InMemoryPlanningSessionTransport(listOf(task(1, ready = true)))
         val session = PlanningSession(transport)

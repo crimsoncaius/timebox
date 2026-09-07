@@ -178,6 +178,24 @@ class PlanningSession internal constructor(
         return PlanningEditResult.Accepted
     }
 
+    /** Commit exactly the drag preview, validating against the caller's freshly loaded Day. */
+    fun drop(taskId: Int, day: Day, startMinute: Int, endMinute: Int): PlanningEditResult {
+        val current = _state.value
+        if (!current.active || current.saving) return reject("That Task cannot be planned right now")
+        val original = current.drafts[taskId]
+        val duration = original?.let { it.endMinute - it.startMinute } ?: MIN_PLANNED_BLOCK_MINUTES
+        if ((original != null && original.date != day.date) || endMinute - startMinute != duration ||
+            !planningRangeAvailable(day, current.drafts.values, taskId, startMinute, endMinute)
+        ) return reject("That time is no longer available")
+
+        return if (original == null) {
+            place(taskId, day, startMinute)
+        } else {
+            calendar = calendar + (day.date to day)
+            update(taskId, startMinute, endMinute)
+        }
+    }
+
     fun update(taskId: Int, startMinute: Int, endMinute: Int): PlanningEditResult {
         val current = _state.value
         val draft = current.drafts[taskId] ?: return reject("That planning draft no longer exists")

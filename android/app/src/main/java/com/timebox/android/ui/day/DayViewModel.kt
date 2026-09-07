@@ -570,6 +570,17 @@ class DayViewModel(
         syncPlanningState()
     }
 
+    fun dropPlanningTask(placement: PlanningDraftPlacement): PlanningEditResult {
+        val current = _state.value
+        val day = current.day
+        if (workMode.state.value.session != null || current.saving || day == null || day.date != placement.date) {
+            return PlanningEditResult.Rejected("That Task cannot be planned right now")
+        }
+        val result = planningSession.drop(placement.taskId, day, placement.startMinute, placement.endMinute)
+        syncPlanningState()
+        return result
+    }
+
     fun createTasklessPlannedDraft() {
         val current = _state.value
         val draft = current.draft ?: return
