@@ -527,10 +527,10 @@ class PlanModeScreenTest {
     }
 
     @Test
-    fun planningDraftResizeGroovesRequireLongPress() {
+    fun draftPlannedBlockResizeGroovesStartImmediatelyAndExpandDuration() {
         val date = LocalDate.of(2026, 8, 20)
         val draftTask = task(42, "Resize me")
-        var updated: Triple<Int, Int, Int>? = null
+        var updated: DraftPlannedBlockUpdate? = null
         val haptics = RecordingHaptics()
         val state = DayUiState(
             date = date,
@@ -539,54 +539,36 @@ class PlanModeScreenTest {
                 active = true,
                 readyTasks = listOf(draftTask, task(43, "Other task")),
                 drafts = mapOf(
-                    draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 10 * 60)
+                    draftTask.id to PlanningDraftPlacement(date, draftTask, 9 * 60, 9 * 60 + 30)
                 ),
             ),
         )
         setPlanningContent(
             state = state,
             haptics = haptics,
-            onUpdatePlanningDraft = { id, start, end -> updated = Triple(id, start, end) },
+            onUpdatePlanningDraft = { id, start, end ->
+                updated = DraftPlannedBlockUpdate(id, start, end)
+            },
         )
 
         val draft = compose.onNodeWithContentDescription("Planning draft Resize me")
         draft.performTouchInput {
-            val topGroove = Offset(center.x, 2f)
-            swipe(topGroove, topGroove + Offset(0f, 150f), durationMillis = 200)
-        }
-        compose.runOnIdle {
-            check(updated == null)
-            check(haptics.events.isEmpty())
-        }
-
-        draft.performTouchInput {
-            val topGroove = Offset(center.x, 2f)
-            down(topGroove)
-            advanceEventTime(1_000)
-            moveTo(topGroove + Offset(0f, height / 12f))
-            up()
-        }
-        compose.runOnIdle {
-            check(updated?.first == 42)
-            check(updated?.second == 9 * 60 + 5)
-            check(updated?.third == 10 * 60)
-            check(haptics.events == listOf(HapticFeedbackType.LongPress))
-            updated = null
-            haptics.events.clear()
-        }
-
-        draft.performTouchInput {
             val bottomGroove = Offset(center.x, height - 2f)
-            down(bottomGroove)
-            advanceEventTime(1_000)
-            moveTo(bottomGroove - Offset(0f, height / 12f))
-            up()
+            swipe(bottomGroove, bottomGroove + Offset(0f, height.toFloat()), durationMillis = 200)
         }
         compose.runOnIdle {
-            check(updated?.first == 42)
-            check(updated?.second == 9 * 60)
-            check(updated?.third == 10 * 60 - 5)
-            check(haptics.events == listOf(HapticFeedbackType.LongPress))
+            check(updated == DraftPlannedBlockUpdate(42, 9 * 60, 10 * 60)) { "$updated" }
+            check(haptics.events.isEmpty())
+            updated = null
+        }
+
+        draft.performTouchInput {
+            val topGroove = Offset(center.x, 2f)
+            swipe(topGroove, topGroove - Offset(0f, height.toFloat()), durationMillis = 200)
+        }
+        compose.runOnIdle {
+            check(updated == DraftPlannedBlockUpdate(42, 8 * 60 + 30, 9 * 60 + 30)) { "$updated" }
+            check(haptics.events.isEmpty())
         }
     }
 
@@ -746,6 +728,12 @@ class PlanModeScreenTest {
         }
         compose.onNodeWithContentDescription("Schedule Return me").fetchSemanticsNode()
     }
+
+    private data class DraftPlannedBlockUpdate(
+        val taskId: Int,
+        val startMinute: Int,
+        val endMinute: Int,
+    )
 
     private fun setPlanningContent(
         state: DayUiState,

@@ -615,6 +615,9 @@ private fun PlanningDraftCard(
                     onLongPress = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
+                    armImmediately = { down ->
+                        dragModeForPress(down.y) != DragMode.Move
+                    },
                     onDragStart = { down ->
                         mode = dragModeForPress(down.y)
                         total = Offset.Zero
