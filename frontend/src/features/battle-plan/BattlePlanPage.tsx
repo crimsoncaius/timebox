@@ -104,6 +104,8 @@ export function BattlePlanPage() {
   const [timezone, setTimezone] = useState('UTC')
   const [serverNowIso, setServerNowIso] = useState('1970-01-01T00:00:00Z')
   const [error, setError] = useState<string | null>(null)
+  const [readyRetry, setReadyRetry] = useState<{ id: number; ready: boolean } | null>(null)
+  const readyMutations = useRef(new Map<number, { confirmed: boolean; desired: boolean; running: boolean }>())
   const selectedTaskId = requestedTaskId
   const [movingTask, setMovingTask] = useState<BattleTask | null>(null)
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
@@ -229,6 +231,34 @@ export function BattlePlanPage() {
       setError(errorMessage(cause))
       throw cause
     }
+  }
+
+  const setReadyToPlan = async (id: number, ready: boolean) => {
+    const current = tasks.find((task) => task.id === id)
+    if (!current) return
+    const mutation = readyMutations.current.get(id) ?? { confirmed: Boolean(current.ready_to_plan), desired: Boolean(current.ready_to_plan), running: false }
+    mutation.desired = ready
+    readyMutations.current.set(id, mutation)
+    setError(null)
+    setReadyRetry(null)
+    setTasks((items) => items.map((item) => item.id === id ? { ...item, ready_to_plan: ready } : item))
+    if (mutation.running) return
+    mutation.running = true
+    while (mutation.desired !== mutation.confirmed) {
+      const target = mutation.desired
+      try {
+        await api.patchBattleTask(id, { ready_to_plan: target })
+        mutation.confirmed = target
+      } catch (cause) {
+        if (mutation.desired === target) {
+          setTasks((items) => items.map((item) => item.id === id ? { ...item, ready_to_plan: mutation.confirmed } : item))
+          setError(`Ready to Plan was not saved. ${errorMessage(cause)}`)
+          setReadyRetry({ id, ready: target })
+          break
+        }
+      }
+    }
+    mutation.running = false
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -386,7 +416,7 @@ export function BattlePlanPage() {
             ) : null}
           </header>
 
-          {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
+          {error && loadedCollection === collection ? <div role="alert" className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container"><span>{error}</span>{readyRetry ? <button type="button" className="font-medium underline" onClick={() => void setReadyToPlan(readyRetry.id, readyRetry.ready)}>Retry</button> : null}</div> : null}
           {completionUndo ? (
             <div className="mb-5 flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3 text-sm">
               <span>Task completed · {completionUndo.removed} future Planned {completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.</span>
@@ -421,7 +451,7 @@ export function BattlePlanPage() {
                         onAddSubtask={addSubtask}
                         onSetSubtaskChecked={setSubtaskChecked}
                         onMoveProject={setMovingTask}
-                        onToggleReady={(id, ready) => patchTask(id, { ready_to_plan: ready })}
+                        onToggleReady={setReadyToPlan}
                         onSetTaskCompletion={setTaskCompletion}
                       />
                     ))}

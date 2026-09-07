@@ -84,6 +84,7 @@ describe('BattlePlanPage', () => {
   let failNextRestore: boolean
   let failNextSubtaskCheck: boolean
   let restoreGate: Promise<void> | null
+  let readyGate: Promise<void> | null
 
   it.each([null, 7])('moves a task from project %s and persists the assignment after remount', async (source) => {
     activeTasks = [task({ project_id: source, project: source ? project : null })]
@@ -139,6 +140,7 @@ describe('BattlePlanPage', () => {
     failNextRestore = false
     failNextSubtaskCheck = false
     restoreGate = null
+    readyGate = null
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -212,6 +214,7 @@ describe('BattlePlanPage', () => {
       }
       if (/\/tasks\/\d+$/.test(url) && method === 'PATCH') {
         const body = JSON.parse(String(init?.body)) as Partial<BattleTask>
+        if ('ready_to_plan' in body && readyGate) await readyGate
         if ('project_id' in body && failNextMove) { failNextMove = false; return response({ detail: 'Move failed' }, 500) }
         const id = Number(url.split('/').pop())
         let patched: BattleTask | undefined
@@ -286,6 +289,20 @@ describe('BattlePlanPage', () => {
     expect(screen.getByRole('region', { name: 'Completed tasks' })).toBeInTheDocument()
     expect(screen.getAllByText('work/deep')).not.toHaveLength(0)
     expect(screen.getByText('U · high')).toBeInTheDocument()
+  })
+
+  it('shows a Ready to Plan card state before its save finishes', async () => {
+    let release!: () => void
+    readyGate = new Promise<void>((resolve) => { release = resolve })
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    const button = await screen.findByRole('button', { name: 'Add Draft launch brief to Ready to Plan' })
+
+    await user.click(button)
+
+    expect(screen.getByRole('button', { name: 'Remove Draft launch brief from Ready to Plan' })).toBeInTheDocument()
+    release()
+    await waitFor(() => expect(activeTasks[0].ready_to_plan).toBe(true))
   })
 
   it('keeps a saved blocked condition visible after reopening and reloading without changing underlying progress', async () => {

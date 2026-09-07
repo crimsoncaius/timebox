@@ -89,7 +89,6 @@ export function TaskDetailPanel({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isReadyToPlan, setIsReadyToPlan] = useState(task.ready_to_plan)
-  const [isTogglingPlan, setIsTogglingPlan] = useState(false)
   const [showAllPlannedDates, setShowAllPlannedDates] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -435,15 +434,14 @@ export function TaskDetailPanel({
                 <button
                   type="button"
                   aria-pressed={isReadyToPlan}
-                  disabled={isTogglingPlan}
                   onClick={async () => {
                     const next = !isReadyToPlan
-                    setIsTogglingPlan(true)
+                    const previous = isReadyToPlan
+                    setIsReadyToPlan(next)
                     try {
                       await onPatch(task.id, { ready_to_plan: next })
-                      setIsReadyToPlan(next)
-                    } finally {
-                      setIsTogglingPlan(false)
+                    } catch {
+                      setIsReadyToPlan(previous)
                     }
                   }}
                   className={`flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:opacity-50 ${isReadyToPlan ? 'bg-primary/12 text-primary' : 'border border-[var(--task-detail-input-border)] text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}

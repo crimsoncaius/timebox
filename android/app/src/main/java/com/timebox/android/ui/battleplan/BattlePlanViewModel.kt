@@ -463,8 +463,21 @@ class BattlePlanViewModel internal constructor(
 
     fun toggleReady(task: BattleTask) {
         if (task.status == TaskStatus.Completed) return
-        mutate(if (task.readyToPlan) "Removed from Ready to Plan" else "Ready to Plan") {
-            repository.patchBattleTask(task.id, BattleTaskPatch(readyToPlan = PatchField.of(!task.readyToPlan)))
+        val ready = !task.readyToPlan
+        _state.update { current ->
+            current.copy(tasks = current.tasks.map { row ->
+                if (row.id == task.id) row.copy(readyToPlan = ready) else row
+            }, message = null)
+        }
+        viewModelScope.launch {
+            repository.patchBattleTask(task.id, BattleTaskPatch(readyToPlan = PatchField.of(ready))).fold(
+                onSuccess = { saved ->
+                    _state.update { current -> current.copy(tasks = current.tasks.map { row -> if (row.id == saved.id) saved else row }, message = if (ready) "Ready to Plan" else "Removed from Ready to Plan") }
+                },
+                onFailure = { error ->
+                    _state.update { current -> current.copy(tasks = current.tasks.map { row -> if (row.id == task.id) task else row }, message = "Ready to Plan was not saved. ${error.apiError.message}") }
+                },
+            )
         }
     }
 
