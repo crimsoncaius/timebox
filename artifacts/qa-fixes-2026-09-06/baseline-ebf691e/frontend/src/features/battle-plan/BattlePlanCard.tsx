@@ -1,0 +1,319 @@
+import { useState } from 'react'
+import { OptimisticSortingPlugin } from '@dnd-kit/dom/sortable'
+import { KeyboardSensor, PointerSensor } from '@dnd-kit/react'
+import { useSortable } from '@dnd-kit/react/sortable'
+import {
+  deadlineBadge,
+  plannedDateSummary,
+  type DeadlineBadge as DeadlineBadgeValue,
+  type PlannedDateSummary as PlannedDateSummaryValue,
+} from '../../lib/battlePlan'
+import type { BattleTask, TaskStatus } from '../../lib/api'
+
+const cardSensors = [
+  PointerSensor,
+  KeyboardSensor.configure({
+    keyboardCodes: {
+      ...KeyboardSensor.defaults.keyboardCodes,
+      start: ['Space'],
+    },
+  }),
+]
+
+export function BattlePlanCard({
+  task,
+  index,
+  column,
+  timezone,
+  serverNowIso,
+  onOpen,
+  onAddSubtask,
+  onSetSubtaskChecked,
+  onToggleReady,
+  onSetTaskCompletion,
+}: {
+  task: BattleTask
+  index: number
+  column: TaskStatus
+  timezone: string
+  serverNowIso: string
+  onOpen: (id?: number) => void
+  onAddSubtask: (parentId: number, title: string) => Promise<void>
+  onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
+  onToggleReady: (id: number, ready: boolean) => Promise<void>
+  onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
+}) {
+  const { ref, isDragging } = useSortable({
+    id: task.id,
+    index,
+    group: column,
+    type: 'battle-task',
+    accept: 'battle-task',
+    sensors: cardSensors,
+    // React owns cross-column placement. Optimistic DOM reparenting can make
+    // React remove a card from the wrong column after a successful drop.
+    plugins: (defaults) => defaults.filter((plugin) => plugin !== OptimisticSortingPlugin),
+    disabled: task.status === 'completed',
+  })
+  const [subtasksOpen, setSubtasksOpen] = useState(false)
+  const [subtaskTitle, setSubtaskTitle] = useState('')
+  const [addingSubtask, setAddingSubtask] = useState(false)
+  const [busySubtaskId, setBusySubtaskId] = useState<number | null>(null)
+  const due = deadlineBadge(task, serverNowIso, timezone)
+  const planned = plannedDateSummary(task.planned_dates, serverNowIso, timezone)
+  const completed = task.subtasks.filter((subtask) => subtask.checked).length
+  const recurrenceLabel = recurrenceAccessibleName(task)
+  const progressLabel = task.subtasks.length === 0
+    ? `Add a subtask to ${task.title}`
+    : `${completed} of ${task.subtasks.length} subtasks completed for ${task.title}`
+
+  return (
+    <article
+      ref={ref}
+      data-task-id={task.id}
+      data-dragging={isDragging ? 'true' : undefined}
+      tabIndex={0}
+      aria-label={[
+        task.status === 'completed' ? task.title : `Move ${task.title}`,
+        recurrenceLabel,
+      ].filter(Boolean).join('. ')}
+      title={task.status === 'completed' ? 'Completed Task' : 'Drag task to change its status'}
+      onClick={() => onOpen()}
+      onKeyDown={(event) => {
+        if (event.currentTarget !== event.target || event.key !== 'Enter') return
+        event.preventDefault()
+        onOpen()
+      }}
+      className={[
+        `group rounded-2xl bg-surface-container-lowest p-4 shadow-[0_0_32px_rgba(45,52,53,0.045)] transition-opacity dark:bg-dark-surface-container-lowest ${task.status === 'completed' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`,
+        isDragging ? 'opacity-45' : 'opacity-100',
+      ].join(' ')}
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1 text-left">
+          <h3 className="font-headline text-base font-normal leading-snug tracking-tight text-on-surface dark:text-dark-on-surface">
+            {task.title}
+          </h3>
+        </div>
+        <span
+          aria-hidden
+          className="-mr-1 -mt-1 rounded-full p-1.5 text-on-surface-variant/55 opacity-60 transition hover:bg-surface-container-low group-hover:opacity-100 dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
+        >
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>drag_indicator</span>
+        </span>
+      </div>
+
+      <div className="mt-3 block w-full text-left">
+        <div className="flex flex-wrap gap-1.5">
+          {task.project ? <MetaChip>{task.project.name}</MetaChip> : <MetaChip>Admin</MetaChip>}
+          {task.task_type ? <MetaChip>{task.task_type.name}</MetaChip> : null}
+          {task.urgency ? <MetaChip>U · {task.urgency}</MetaChip> : null}
+          {task.importance ? <MetaChip>I · {task.importance}</MetaChip> : null}
+          {recurrenceLabel ? (
+            <span
+              aria-label={recurrenceLabel}
+              className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-container-low px-2 py-1 text-[10px] font-medium text-on-surface-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant"
+            >
+              <span className="material-symbols-outlined text-[12px]" aria-hidden>repeat</span>
+              <span aria-hidden>Recurring</span>
+            </span>
+          ) : null}
+          {(task.outstanding_occurrence_count ?? 1) > 1 ? (
+            <MetaChip>{task.outstanding_occurrence_count} outstanding</MetaChip>
+          ) : null}
+          {task.recurrence_kind === 'quota_parent' && task.quota_period_start && task.quota_period_end ? (
+            <MetaChip>
+              {formatQuotaPeriod(task.quota_period_start, task.quota_period_end)} · {task.quota_completed ?? 0}/{task.expected_sessions ?? 0}
+            </MetaChip>
+          ) : null}
+        </div>
+      </div>
+
+      {planned ? <div className="mt-3"><PlannedDateRow summary={planned} /></div> : null}
+      <div className={`${planned ? 'mt-1.5' : 'mt-3'} flex flex-wrap items-center justify-between gap-2`}>
+        {due ? <DeadlineBadge badge={due} /> : <span />}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={`${task.ready_to_plan ? 'Remove' : 'Add'} ${task.title} ${task.ready_to_plan ? 'from' : 'to'} Ready to Plan`}
+            aria-pressed={task.ready_to_plan}
+            disabled={task.status === 'completed'}
+            title={task.ready_to_plan ? 'Remove from Ready to Plan' : 'Add to Ready to Plan'}
+            className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium uppercase tracking-wide transition ${task.ready_to_plan ? 'bg-primary/12 text-primary' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              void onToggleReady(task.id, !task.ready_to_plan)
+            }}
+          >
+            <span className="material-symbols-outlined text-[14px]" aria-hidden>{task.ready_to_plan ? 'event_available' : 'event_upcoming'}</span>
+            {task.ready_to_plan ? 'Ready' : 'Plan'}
+          </button>
+          <button
+          type="button"
+          aria-label={progressLabel}
+          aria-expanded={subtasksOpen}
+          aria-controls={`task-${task.id}-subtasks`}
+          className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            setSubtasksOpen((current) => !current)
+          }}
+        >
+          <span className="material-symbols-outlined text-[15px]" aria-hidden>account_tree</span>
+          {completed}/{task.subtasks.length}
+          </button>
+        </div>
+      </div>
+
+      {subtasksOpen ? (
+        <section
+          id={`task-${task.id}-subtasks`}
+          aria-label={`Subtasks for ${task.title}`}
+          className="mt-3 border-t border-outline-variant/15 pt-3 dark:border-dark-outline-variant/30"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {task.subtasks.length > 0 ? (
+            <div className="space-y-1.5">
+              {task.subtasks.map((subtask) => {
+                const isCompleted = subtask.checked
+                return (
+                  <div key={subtask.id} className="rounded-xl bg-surface-container-low/70 p-2 dark:bg-dark-surface-container/70">
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 shrink-0"
+                        checked={isCompleted}
+                        disabled={task.status === 'completed' || busySubtaskId === subtask.id}
+                        aria-label={`${isCompleted ? 'Uncheck' : 'Check'} subtask ${subtask.title}`}
+                        onChange={async () => {
+                          setBusySubtaskId(subtask.id)
+                          try {
+                            await onSetSubtaskChecked(subtask.id, !isCompleted)
+                          } catch {
+                            // The page presents the request error and the server state remains authoritative.
+                          } finally {
+                            setBusySubtaskId(null)
+                          }
+                        }}
+                      />
+                      <span className={`min-w-0 flex-1 text-left text-sm leading-snug ${isCompleted ? 'text-on-surface-variant line-through' : ''}`}>
+                        {subtask.title}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-on-surface-variant">No subtasks yet.</p>
+          )}
+          {task.status !== 'completed' ? <form
+            className="mt-2 flex gap-1.5"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              const cleanTitle = subtaskTitle.trim()
+              if (!cleanTitle || addingSubtask) return
+              setAddingSubtask(true)
+              try {
+                await onAddSubtask(task.id, cleanTitle)
+                setSubtaskTitle('')
+              } catch {
+                // Keep the subtask title available for retry.
+              } finally {
+                setAddingSubtask(false)
+              }
+            }}
+          >
+            <input
+              aria-label={`New subtask for ${task.title}`}
+              placeholder="Add a subtask"
+              value={subtaskTitle}
+              onChange={(event) => setSubtaskTitle(event.target.value)}
+              className="min-w-0 flex-1 rounded-lg bg-surface-container-low px-2 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-primary/25 dark:bg-dark-surface-container"
+            />
+            <button type="submit" aria-label={`Add subtask to ${task.title}`} disabled={addingSubtask || !subtaskTitle.trim()} className="rounded-lg bg-primary px-2 py-1.5 text-xs text-on-primary disabled:opacity-40">
+              Add
+            </button>
+          </form> : null}
+        </section>
+      ) : null}
+      <button
+        type="button"
+        className="mt-3 w-full rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          void onSetTaskCompletion(task.id, task.status !== 'completed')
+        }}
+      >
+        {task.status === 'completed' ? 'Reopen Task' : 'Complete Task'}
+      </button>
+    </article>
+  )
+}
+
+function recurrenceAccessibleName(task: BattleTask) {
+  if (!task.recurring_template_id || task.parent_id !== null) return null
+  const seriesTitle = task.recurring_template_title?.trim()
+  if (task.recurrence_kind === 'quota_parent') {
+    return seriesTitle
+      ? `Quota Tracker from Recurring Task Series ${seriesTitle}`
+      : 'Quota Tracker from a Recurring Task Series'
+  }
+  return seriesTitle
+    ? `Recurring Task Occurrence from ${seriesTitle}`
+    : 'Recurring Task Occurrence'
+}
+
+function PlannedDateRow({ summary }: { summary: PlannedDateSummaryValue }) {
+  const fullLabel = `Planned ${summary.relativeLabel ? `${summary.relativeLabel} · ` : ''}${summary.dateLabel}${summary.additionalCount ? ` +${summary.additionalCount}` : ''}`
+  const toneClass = {
+    today: 'bg-planned/10 text-planned dark:bg-planned/12',
+    future: 'bg-surface-container-low text-on-surface-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant',
+    past: 'bg-surface-container-low/55 text-on-surface-variant/65 dark:bg-dark-surface-container/55 dark:text-dark-on-surface-variant/65',
+  }[summary.tone]
+  return (
+    <span aria-label={fullLabel} className={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium ${toneClass}`}>
+      <span className="material-symbols-outlined text-[12px]" aria-hidden>event</span>
+      <span aria-hidden className="truncate">
+        Planned{' '}
+        {summary.relativeLabel ? <>{summary.relativeLabel} · </> : null}
+        {summary.dateLabel}{summary.additionalCount ? ` +${summary.additionalCount}` : ''}
+      </span>
+    </span>
+  )
+}
+
+function formatQuotaPeriod(start: string, end: string) {
+  const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  const left = formatter.format(new Date(`${start}T12:00:00Z`))
+  const right = formatter.format(new Date(`${end}T12:00:00Z`))
+  return start === end ? left : `${left}–${right}`
+}
+
+function DeadlineBadge({ badge }: { badge: DeadlineBadgeValue }) {
+  const toneClass = {
+    overdue: 'bg-error-container/45 text-error dark:bg-error/15',
+    today: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/55 dark:text-emerald-300',
+    tomorrow: 'bg-amber-100 text-amber-800 dark:bg-amber-950/55 dark:text-amber-300',
+    upcoming: 'bg-violet-100 text-violet-800 dark:bg-violet-950/55 dark:text-violet-300',
+    later: 'bg-surface-container-low text-on-surface-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant',
+  }[badge.tone]
+  return (
+    <span className={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium ${toneClass}`}>
+      <span className="material-symbols-outlined text-[12px]" aria-hidden>calendar_today</span>
+      <span className="truncate">{badge.label}</span>
+    </span>
+  )
+}
+
+function MetaChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="max-w-full truncate rounded-full bg-surface-container-low px-2 py-1 font-label text-[10px] uppercase tracking-[0.09em] text-on-surface-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant">
+      {children}
+    </span>
+  )
+}

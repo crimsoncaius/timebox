@@ -1,0 +1,31 @@
+# Finding 2 — Block Name response overwrites a Note draft
+
+Implemented in the shared working tree; ready for coordinator review and independent reproduction.
+
+Cause: the shared `TimeBlockInspectorContent` layout effect reset Name and Note whenever the authoritative Name or Task Type changed. A delayed Name PATCH returns a complete Day snapshot containing the previously saved Note, which erased focused text. It also erased newer Name edits after an earlier Name save completed.
+
+Final change: preserve locally edited Name/Note drafts across stale responses and normalize a successful save only if its submitted text is still current. Day now renders **one persistent editor** whose presentation changes between desktop rail and mobile sheet, retaining the same draft across resize. This eliminates hidden editors competing to save stale state. New Block selection (including lane) initializes its own fields; untouched fields still synchronize from responses. Escape is handled by Day for both layouts; the desktop empty Ready to Plan rail remains.
+
+## Verification
+
+- `playwright-cli -s=fix2 run-code --filename=artifacts/qa-fixes-2026-09-06/finding-2-repro.js` failed twice before implementation with `Note overwritten: "Previously saved note"`; passes after final implementation. It drives actual Name PATCH/save code and holds its real response while editing focused Note.
+- Added a TodayPage integration regression through API client/fetch handling and full-Day response, asserting focused Note preservation and subsequent save.
+- Four shared rail/sheet regressions cover newer Name/Note drafts through late saves and unrelated Task Type/Name refreshes, plus selection reset across different IDs and equal Planned/Actual IDs. All five initial regressions failed before the draft protection fix.
+- Coordinator independently found a responsive peer race in the first implementation. New TodayPage resize regression reproduced the exact stale desktop PATCH after a newer mobile save. It now passes with one persistent editor and also asserts that an unsaved Note survives resizing before autosave. Both old responsive instances were unmounted before repair testing to stop conflicting saves.
+- Final focused suite: `npx vitest run src/components/TimeBlockModal.test.tsx src/components/DayTimeline.test.tsx src/features/today/TodayPage.test.tsx src/features/today/TodayPage.workMode.test.tsx src/features/today/WorkMode.test.tsx`: **53 passed**.
+- `npm run build`: passed after final implementation. Focused ESLint on all four changed files: passed. `git diff --check`: passed (Windows line-ending notices only).
+- `finding-2-web-check.js` via `playwright-cli -s=fix2 run-code --filename=artifacts/qa-fixes-2026-09-06/finding-2-web-check.js`: passed again after final implementation at **1440x1000 and 390x844**. Held Name response around 1.7 seconds; Note autosave finished first; releasing older Name snapshot kept new Note focused and intact. Name/Note both survived reload. No stale Note writes. Screenshots `fix2-1440-name-note-race.png`, `fix2-390-name-note-race.png`.
+- `finding-2-responsive-check.js`: desktop saved Note, resize390, mobile latest Note, resize1440, another unsaved Note, resize390 before autosave. Latest field and persisted values correct throughout; exactly three intended Note PATCHes, no competing desktop write. Screenshot `fix2-responsive-single-editor.png`.
+- `finding-2-layout-check.js`: mobile Escape closes editor; desktop Ready to Plan rail is visible; desktop Escape restores empty rail; reopening displays persisted Block.
+- Native Android emulator-5554: opened same Planned Block, confirmed web-saved values, appended ` Android` through native Name and Note fields, and reopened Block. Both persisted in native UI and live API. Visually inspected `android-fix2-persisted.png`; hierarchy `android-fix2-persisted.xml`. Native source/API unchanged; later web presentation correction does not change native flow. Controlled response latency tests apply to web only.
+
+## Review state and cleanup
+
+- Vite watcher served final updated source and browser was reloaded. Web, API and Android remain running; no service restart or port change was needed. Browser session `fix2` left at selected fixture in desktop rail. Emulator released to coordinator.
+- **Selector update:** only one editor now exists. Use `[data-inspector] textarea[id=block-note]` across resize. `[data-inspector=rail]` exists on desktop; `[data-inspector=sheet]` on mobile. A desktop-specific locator is intentionally absent while mobile layout is active. Accessible field names are now `Name` and `Note` (duplicate IDs/labels disappeared with the second editor). Revised repro and verification scripts use current selectors.
+- Fixture **Planned Block 766**, date **2026-09-06**, **21:00–21:30**, current name `QA fix2 renamed block`, current note `QA fix2 unsaved draft survives resize` before coordinator verification. Creation response in `finding-2-fixture.json`. No Actual Block or timer created.
+- Cleanup after independent verification: `DELETE /days/2026-09-06/blocks/766`. Creation also made backend default Task Type **6**, `unspecified`; remove only if unused and no later fixtures need it. Preserve pre-existing types1/5 and user data. An empty native Planning Draft opened during navigation was dismissed without creation.
+- A deliberately out-of-order full-Day response can cause one redundant Note PATCH containing the correct current value. It does not overwrite data. Current editor retains edited fields until selection changes.
+- No commits, push, merge, deployment or later-finding changes. Preserved finding1 changes and existing untracked artifacts. Physical devices and iOS not tested.
+
+Coordinator acceptance after one return: first implementation passed original race but independent resize test exposed hidden desktop editor overwriting mobile Note. Returned to same subagent before starting finding3. Final diff reviewed: single persistent responsive editor removes competing autosaves and preserves selection keys by lane/id. Independent coordinator-finding2.js passes held Name response + focused Note + reload at1440/390; coordinator-finding2-peer.js passes desktop→mobile→desktop edit persistence, pending draft across resize and Escape close. Agent native Name/Note persistence evidence reviewed. Finding2 accepted.

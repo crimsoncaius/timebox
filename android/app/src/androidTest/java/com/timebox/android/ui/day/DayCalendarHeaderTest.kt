@@ -352,6 +352,8 @@ class DayCalendarHeaderTest {
         compose.onNodeWithText("August 2026").assertIsDisplayed()
         compose.onNodeWithText("Month").assertIsSelected()
         compose.onNodeWithContentDescription("Work Mode").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Work Mode").assertIsNotEnabled()
+        compose.onNodeWithText("Finish planning to start Work Mode.").assertIsDisplayed()
         compose.onNodeWithText("Done").performClick()
         compose.runOnIdle { assertTrue(committed) }
     }
@@ -367,7 +369,7 @@ class DayCalendarHeaderTest {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 DayScreen(
-                    state = state,
+                    state = state.copy(workModeRestored = true),
                     onNavigateToday = onNavigateToday,
                     onDateSettled = onDateSettled,
                     onRetry = {}, onTapSlot = { _, _ -> }, onSelectBlock = {},

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BattlePlanSidebar } from './BattlePlanSidebar'
 import type { Project } from '../../lib/api'
 
-const projects: Project[] = ['Alpha', 'Beta'].map((name, index) => ({ id: index + 1, name, description: '', deadline_date: null, deadline_at: null, created_at: '', updated_at: '' }))
+const projects: Project[] = ['Alpha', 'Beta'].map((name, index) => ({ id: index + 1, name, created_at: '', updated_at: '' }))
 function setup(onReorderProjects = vi.fn().mockResolvedValue(undefined)) {
   const onEditProject = vi.fn()
   render(<MemoryRouter><BattlePlanSidebar open collection="active" scope="all" projects={projects} onClose={vi.fn()} onScope={vi.fn()} onCollection={vi.fn()} onNewProject={vi.fn()} onEditProject={onEditProject} onReorderProjects={onReorderProjects} /></MemoryRouter>)

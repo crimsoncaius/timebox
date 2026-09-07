@@ -1,0 +1,57 @@
+{
+  "id": 11,
+  "date": "2026-09-06",
+  "start_hour": 8,
+  "end_hour": 24,
+  "show_full_day": false,
+  "created_at": "2026-08-31T17:00:36.932077Z",
+  "updated_at": "2026-09-06T11:55:49.596973Z",
+  "time_blocks": [
+    {
+      "id": 766,
+      "lane": "planned",
+      "task_type_id": 6,
+      "task_type": {
+        "id": 6,
+        "name": "unspecified",
+        "created_at": "2026-09-06T11:55:49.589606Z",
+        "updated_at": "2026-09-06T11:55:49.589606Z"
+      },
+      "task_id": null,
+      "task": null,
+      "name": "QA fix2 note race",
+      "note": "Previously saved note",
+      "planned_block_id": null,
+      "actual_block_id": null,
+      "start_minute": 1260,
+      "end_minute": 1290,
+      "start_at": null,
+      "end_at": null,
+      "created_at": "2026-09-06T11:55:49.589606Z",
+      "updated_at": "2026-09-06T11:55:49.589606Z"
+    }
+  ],
+  "planned_blocks": [
+    {
+      "id": 766,
+      "day_id": 11,
+      "task_type_id": 6,
+      "task_id": null,
+      "name": "QA fix2 note race",
+      "note": "Previously saved note",
+      "start_minute": 1260,
+      "end_minute": 1290,
+      "actual_block_id": null,
+      "created_at": "2026-09-06T11:55:49.589606Z",
+      "updated_at": "2026-09-06T11:55:49.589606Z"
+    }
+  ],
+  "actual_blocks": [],
+  "planned_minutes": 30,
+  "actual_minutes": 0,
+  "meta": {
+    "timezone": "Asia/Singapore",
+    "today": "2026-09-06",
+    "server_now_iso": "2026-09-06T19:55:49.619759+08:00"
+  }
+}

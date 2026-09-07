@@ -1,0 +1,107 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Timebox" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Monastic productivity
+    - navigation [ref=e8]:
+      - link "Day" [ref=e9] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e10]: calendar_today
+        - generic [ref=e11]: Day
+      - link "Chronicle" [ref=e12] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e13]: history
+        - generic [ref=e14]: Chronicle
+      - link "Battle Plan" [ref=e15] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e16]: view_kanban
+        - generic [ref=e17]: Battle Plan
+      - link "Task types" [ref=e18] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e19]: category
+        - generic [ref=e20]: Task types
+    - generic [ref=e22]:
+      - generic [ref=e23]: TB
+      - generic [ref=e24]:
+        - generic [ref=e25]: You
+        - generic [ref=e26]: Cloud
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - heading "Timebox" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - link "Start Work Mode" [ref=e32] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e34]: settings
+          - generic [ref=e35]: Settings
+        - button "Switch to dark mode" [ref=e36]: dark_mode
+    - main [ref=e37]:
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: 2026-09-06
+          - generic [ref=e43]:
+            - generic [ref=e44]:
+              - heading "Sunday, September 6, 2026" [level=1] [ref=e45]
+              - paragraph [ref=e46]: Timezone Asia/Singapore.
+            - generic [ref=e47]:
+              - button "Previous day" [ref=e48]: ← Prev
+              - button "Jump to date" [ref=e50]:
+                - generic [ref=e51]: 06/09/2026
+                - generic [ref=e52]: calendar_month
+              - button "Next day" [ref=e53]: Next →
+          - generic [ref=e55]:
+            - heading "Planned" [level=3] [ref=e57]
+            - heading "Actual" [level=3] [ref=e58]
+            - generic [ref=e60]:
+              - generic [ref=e61]: 8 AM
+              - generic [ref=e63]: 9 AM
+              - generic [ref=e65]: 10 AM
+              - generic [ref=e67]: 11 AM
+              - generic [ref=e69]: 12 PM
+              - generic [ref=e71]: 1 PM
+              - generic [ref=e73]: 2 PM
+              - generic [ref=e75]: 3 PM
+              - generic [ref=e77]: 4 PM
+              - generic [ref=e79]: 5 PM
+              - generic [ref=e81]: 6 PM
+              - generic [ref=e83]: 7 PM
+              - generic [ref=e85]: 8 PM
+              - generic [ref=e87]: 9 PM
+              - generic [ref=e89]: 10 PM
+              - generic [ref=e91]: 11 PM
+            - generic [ref=e125]:
+              - button "Resize block start" [ref=e126]
+              - button "Edit planned block" [active] [ref=e127]:
+                - generic [ref=e129]:
+                  - generic [ref=e130]: QA fix2 renamed block Android
+                  - generic [ref=e131]: ·
+                  - generic [ref=e132]: 9 – 9:30pm
+              - button "Resize block end" [ref=e133]
+        - complementary "Block details" [ref=e167]:
+          - generic [ref=e169]:
+            - generic [ref=e170]:
+              - heading "Planned" [level=2] [ref=e171]: Planned
+              - generic [ref=e173]:
+                - generic [ref=e174]: 0h 30m
+                - button "Close" [ref=e175]:
+                  - generic [ref=e176]: close
+            - paragraph [ref=e177]: 21:00 – 21:30
+            - paragraph [ref=e178]: Drag the block edges on the timeline to adjust. Edits save as you make them.
+            - generic [ref=e179]:
+              - generic [ref=e180]: Name
+              - textbox "Name Name" [ref=e181]:
+                - /placeholder: Optional
+                - text: QA fix2 renamed block Android
+            - generic [ref=e182]:
+              - generic [ref=e183]: Task type
+              - combobox "Task type Task type" [ref=e184]: unspecified
+            - generic [ref=e185]:
+              - generic [ref=e186]: Note
+              - textbox "Note Note" [ref=e187]:
+                - /placeholder: Optional
+                - text: New note that should not disappear Android
+            - region "Actual time actions" [ref=e188]:
+              - button "Record Actual as planned" [ref=e189]
+            - button "Delete" [ref=e191]:
+              - generic [ref=e192]: delete

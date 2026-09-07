@@ -28,9 +28,6 @@ export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly'
 export interface Project {
   id: number
   name: string
-  description: string
-  deadline_date: string | null
-  deadline_at: string | null
   created_at: string
   updated_at: string
 }
@@ -112,8 +109,6 @@ export interface DueReminder {
 
 export type ProjectWrite = {
   name: string
-  description?: string
-  deadline_date?: string | null
   deadline_at?: string | null
 }
 
@@ -121,6 +116,7 @@ export type BattleTaskWrite = {
   title: string
   description?: string
   ready_to_plan?: boolean
+  is_blocked?: boolean
   status?: TaskStatus
   project_id?: number | null
   parent_id?: number | null

@@ -803,7 +803,7 @@ test('Battle Plan creates a dated project task, persists subtask progress, trash
   const taskTitle = `Launch brief ${uniq}`
 
   const projectResponse = await request.post(`${base}/projects`, {
-    data: { name: projectName, description: 'E2E project' },
+    data: { name: projectName },
   })
   expect(projectResponse.ok()).toBeTruthy()
 

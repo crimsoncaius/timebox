@@ -1,0 +1,70 @@
+- generic [ref=e429]:
+  - generic [ref=e430]:
+    - banner [ref=e431]:
+      - heading "Timebox" [level=2] [ref=e433]
+      - generic [ref=e434]:
+        - link "Start Work Mode" [ref=e435] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e436] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e437]: settings
+          - generic [ref=e438]: Settings
+        - button "Switch to dark mode" [ref=e439]: dark_mode
+    - main [ref=e440]:
+      - generic [ref=e442]:
+        - generic [ref=e443]: 2026-09-06
+        - generic [ref=e445]:
+          - generic [ref=e446]:
+            - heading "Sunday, September 6, 2026" [level=1] [ref=e447]
+            - paragraph [ref=e448]: Timezone Asia/Singapore.
+          - generic [ref=e449]:
+            - button "Previous day" [ref=e450]: ← Prev
+            - button "Jump to date" [ref=e452]:
+              - generic [ref=e453]: 06/09/2026
+              - generic [ref=e454]: calendar_month
+            - button "Next day" [ref=e455]: Next →
+        - region "Ready to Plan tasks" [ref=e457]:
+          - generic [ref=e458]:
+            - generic [ref=e459]:
+              - paragraph [ref=e460]: Battle Plan
+              - heading "Ready to Plan" [level=2] [ref=e461]
+              - paragraph [ref=e462]: Drag a task to Planned, or select it and choose a time slot.
+            - generic [ref=e463]: "0"
+          - paragraph [ref=e465]: No tasks are waiting to be planned.
+        - generic [ref=e467]:
+          - heading "Planned" [level=3] [ref=e469]
+          - heading "Actual" [level=3] [ref=e470]
+          - generic [ref=e472]:
+            - generic [ref=e473]: 8 AM
+            - generic [ref=e475]: 9 AM
+            - generic [ref=e477]: 10 AM
+            - generic [ref=e479]: 11 AM
+            - generic [ref=e481]: 12 PM
+            - generic [ref=e483]: 1 PM
+            - generic [ref=e485]: 2 PM
+            - generic [ref=e487]: 3 PM
+            - generic [ref=e489]: 4 PM
+            - generic [ref=e491]: 5 PM
+            - generic [ref=e493]: 6 PM
+            - generic [ref=e495]: 7 PM
+            - generic [ref=e497]: 8 PM
+            - generic [ref=e499]: 9 PM
+            - generic [ref=e501]: 10 PM
+            - generic [ref=e503]: 11 PM
+  - navigation [ref=e569]:
+    - link "Day mobile navigation" [ref=e570] [cursor=pointer]:
+      - /url: /day/2026-09-06
+      - generic [ref=e571]: calendar_today
+      - generic [ref=e572]: Day
+    - link "Chronicle mobile navigation" [ref=e573] [cursor=pointer]:
+      - /url: /history
+      - generic [ref=e574]: history
+      - generic [ref=e575]: Chronicle
+    - link "Battle Plan mobile navigation" [ref=e576] [cursor=pointer]:
+      - /url: /battle-plan
+      - generic [ref=e577]: view_kanban
+      - generic [ref=e578]: Battle Plan
+    - link "Task types mobile navigation" [ref=e579] [cursor=pointer]:
+      - /url: /task-types
+      - generic [ref=e580]: category
+      - generic [ref=e581]: Task types

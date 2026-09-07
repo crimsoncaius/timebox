@@ -1,0 +1,98 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Timebox" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Monastic productivity
+    - navigation [ref=e8]:
+      - link "Day" [ref=e9] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e10]: calendar_today
+        - generic [ref=e11]: Day
+      - link "Chronicle" [ref=e12] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e13]: history
+        - generic [ref=e14]: Chronicle
+      - link "Battle Plan" [ref=e15] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e16]: view_kanban
+        - generic [ref=e17]: Battle Plan
+      - link "Task types" [ref=e18] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e19]: category
+        - generic [ref=e20]: Task types
+    - generic [ref=e22]:
+      - generic [ref=e23]: TB
+      - generic [ref=e24]:
+        - generic [ref=e25]: You
+        - generic [ref=e26]: Cloud
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - heading "Timebox" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - link "Start Work Mode" [ref=e204] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e34]: settings
+          - generic [ref=e35]: Settings
+        - button "Switch to dark mode" [ref=e36]: dark_mode
+    - main [ref=e37]:
+      - generic [ref=e205]:
+        - generic [ref=e206]:
+          - generic [ref=e207]: 2026-09-06
+          - generic [ref=e209]:
+            - generic [ref=e210]:
+              - heading "Sunday, September 6, 2026" [level=1] [ref=e211]
+              - paragraph [ref=e212]: Timezone Asia/Singapore.
+            - generic [ref=e213]:
+              - button "Previous day" [ref=e214]: ← Prev
+              - button "Jump to date" [ref=e216]:
+                - generic [ref=e217]: 06/09/2026
+                - generic [ref=e218]: calendar_month
+              - button "Next day" [ref=e219]: Next →
+          - status [ref=e220]: Actual time preserved · Task remains open.
+          - generic [ref=e222]:
+            - heading "Planned" [level=3] [ref=e224]
+            - heading "Actual" [level=3] [ref=e225]
+            - generic [ref=e227]:
+              - generic [ref=e228]: 8 AM
+              - generic [ref=e230]: 9 AM
+              - generic [ref=e232]: 10 AM
+              - generic [ref=e234]: 11 AM
+              - generic [ref=e236]: 12 PM
+              - generic [ref=e238]: 1 PM
+              - generic [ref=e240]: 2 PM
+              - generic [ref=e242]: 3 PM
+              - generic [ref=e244]: 4 PM
+              - generic [ref=e246]: 5 PM
+              - generic [ref=e248]: 6 PM
+              - generic [ref=e250]: 7 PM
+              - generic [ref=e252]: 8 PM
+              - generic [ref=e254]: 9 PM
+              - generic [ref=e256]: 10 PM
+              - generic [ref=e258]: 11 PM
+            - generic [ref=e292]:
+              - button "Resize block start" [ref=e293]
+              - button "Edit planned block" [ref=e294]:
+                - generic [ref=e296]:
+                  - generic [ref=e297]: QA note-loss reproduction
+                  - generic [ref=e298]: ·
+                  - generic [ref=e299]: 6 – 6:30pm
+              - button "Resize block end" [ref=e300]
+            - generic [ref=e333]:
+              - button "Resize block start" [ref=e334]
+              - button "Edit actual block" [ref=e335]:
+                - generic [ref=e337]:
+                  - generic [ref=e338]: QA planning block
+                  - generic [ref=e339]: ·
+                  - generic [ref=e340]: 7 – 7:30pm
+              - button "Resize block end" [ref=e341]
+        - complementary "Block details" [ref=e343]:
+          - region "Ready to Plan tasks" [ref=e344]:
+            - generic [ref=e345]:
+              - generic [ref=e346]:
+                - paragraph [ref=e347]: Battle Plan
+                - heading "Ready to Plan" [level=2] [ref=e348]
+                - paragraph [ref=e349]: Drag a task to Planned, or select it and choose a time slot.
+              - generic [ref=e350]: "0"
+            - paragraph [ref=e352]: No tasks are waiting to be planned.

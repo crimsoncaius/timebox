@@ -1,0 +1,16 @@
+[     219ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5176/node_modules/.vite/deps/react-dom_client.js?v=b1f08709:14336
+[  149159ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5176/api/subtasks/3/check:0
+[  149181ms] ApiHttpError: Internal Server Error
+    at fetchJson (http://127.0.0.1:5176/src/lib/api/client.ts:87:9)
+    at async setSubtaskChecked (http://127.0.0.1:5176/src/features/battle-plan/BattlePlanPage.tsx:254:17)
+[  176225ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5176/api/subtasks/3/check:0
+[  176246ms] ApiHttpError: Internal Server Error
+    at fetchJson (http://127.0.0.1:5176/src/lib/api/client.ts:87:9)
+    at async setSubtaskChecked (http://127.0.0.1:5176/src/features/battle-plan/BattlePlanPage.tsx:254:17)
+[  254949ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5176/node_modules/.vite/deps/react-dom_client.js?v=b1f08709:14336
+[  295488ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5176/node_modules/.vite/deps/react-dom_client.js?v=b1f08709:14336
+[  418538ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:5176/api/subtasks/5/check:0
+[  418564ms] ApiHttpError: Internal Server Error
+    at fetchJson (http://127.0.0.1:5176/src/lib/api/client.ts:87:9)
+    at async setSubtaskChecked (http://127.0.0.1:5176/src/features/battle-plan/BattlePlanPage.tsx:254:17)
+[  609276ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5176/node_modules/.vite/deps/react-dom_client.js?v=b1f08709:14336

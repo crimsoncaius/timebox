@@ -37,6 +37,7 @@ from app.services.recurrence.task_overrides import quota_progress, record_task_o
 from app.services.recurrence.templates import (
     clear_template_type_references,
     create_template,
+    delete_template,
     end_template,
     get_template,
     list_templates,

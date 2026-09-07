@@ -1,0 +1,183 @@
+- generic [ref=e1]:
+  - generic [ref=e553]:
+    - complementary [ref=e554]:
+      - generic [ref=e555]:
+        - heading "Timebox" [level=1] [ref=e556]
+        - paragraph [ref=e557]: Monastic productivity
+      - navigation [ref=e558]:
+        - link "Day" [ref=e559] [cursor=pointer]:
+          - /url: /day/2026-09-06
+          - generic [ref=e560]: calendar_today
+          - generic [ref=e561]: Day
+        - link "Chronicle" [ref=e562] [cursor=pointer]:
+          - /url: /history
+          - generic [ref=e563]: history
+          - generic [ref=e564]: Chronicle
+        - link "Battle Plan" [ref=e565] [cursor=pointer]:
+          - /url: /battle-plan
+          - generic [ref=e566]: view_kanban
+          - generic [ref=e567]: Battle Plan
+        - link "Task types" [ref=e568] [cursor=pointer]:
+          - /url: /task-types
+          - generic [ref=e569]: category
+          - generic [ref=e570]: Task types
+      - generic [ref=e572]:
+        - generic [ref=e573]: TB
+        - generic [ref=e574]:
+          - generic [ref=e575]: You
+          - generic [ref=e576]: Cloud
+    - generic [ref=e577]:
+      - banner [ref=e578]:
+        - heading "Timebox" [level=2] [ref=e580]
+        - generic [ref=e581]:
+          - link "Start Work Mode" [ref=e582] [cursor=pointer]:
+            - /url: /day/2026-09-06?workMode=start
+          - link "Settings" [ref=e583] [cursor=pointer]:
+            - /url: /settings
+            - generic [ref=e584]: settings
+            - generic [ref=e585]: Settings
+          - button "Switch to dark mode" [ref=e586]: dark_mode
+      - main [ref=e587]:
+        - generic [ref=e588]:
+          - complementary "Battle Plan lists and projects" [ref=e589]:
+            - navigation [ref=e590]:
+              - button "All Tasks" [ref=e591]
+              - button "Admin" [ref=e592]
+              - link "Recurring" [ref=e593] [cursor=pointer]:
+                - /url: /battle-plan?view=recurring
+            - generic [ref=e594]:
+              - generic [ref=e595]: Projects
+              - button "New project" [ref=e596]: +
+            - list "Projects" [ref=e597]:
+              - listitem [ref=e598]:
+                - generic [ref=e599]:
+                  - button "Reorder Review - Development" [ref=e600]:
+                    - generic [ref=e601]: drag_indicator
+                  - button "Review - Development" [ref=e602]:
+                    - generic [ref=e603]: folder
+                    - generic [ref=e604]: Review - Development
+                  - button "More actions for Review - Development" [ref=e605]:
+                    - generic [ref=e606]: more_horiz
+              - listitem [ref=e607]:
+                - generic [ref=e608]:
+                  - button "Reorder Review - Design" [ref=e609]:
+                    - generic [ref=e610]: drag_indicator
+                  - button "Review - Design" [ref=e611]:
+                    - generic [ref=e612]: folder
+                    - generic [ref=e613]: Review - Design
+                  - button "More actions for Review - Design" [ref=e614]:
+                    - generic [ref=e615]: more_horiz
+              - listitem [ref=e616]:
+                - generic [ref=e617]:
+                  - button "Reorder Review - Launch" [ref=e618]:
+                    - generic [ref=e619]: drag_indicator
+                  - button "Review - Launch" [ref=e620]:
+                    - generic [ref=e621]: folder
+                    - generic [ref=e622]: Review - Launch
+                  - button "More actions for Review - Launch" [ref=e623]:
+                    - generic [ref=e624]: more_horiz
+            - status
+            - navigation [ref=e625]:
+              - button "Archive" [ref=e626]
+              - button "Trash" [ref=e627]
+          - generic [ref=e628]:
+            - generic [ref=e629]:
+              - generic [ref=e630]:
+                - paragraph [ref=e631]: Battle Plan
+                - heading "Recurring" [level=1] [ref=e632]
+                - paragraph [ref=e633]: Templates create independent Battle Plan tasks seven days ahead.
+              - button "New recurring task" [ref=e634]
+            - generic [ref=e635]:
+              - button "Active" [ref=e636]
+              - button "Paused" [ref=e637]
+              - button "Ended" [ref=e638]
+            - generic [ref=e639]:
+              - paragraph [ref=e640]: No active templates
+              - paragraph [ref=e641]: Create a schedule or period quota to populate this view.
+        - dialog "New recurring task" [ref=e645]:
+          - generic [ref=e646]:
+            - generic [ref=e647]:
+              - paragraph [ref=e648]: Recurring template
+              - heading "New recurring task" [level=2] [ref=e649]
+            - button "Close recurring form" [ref=e650]:
+              - generic [ref=e651]: close
+          - radiogroup "Recurrence mode" [ref=e652]:
+            - radio "On a schedule" [checked] [ref=e653]
+            - radio "Times per period" [ref=e654]
+          - generic [ref=e655]:
+            - heading "The task" [level=3] [ref=e656]
+            - textbox "Title" [ref=e657]:
+              - /placeholder: Untitled recurring task
+              - text: QA 0906 web series
+            - textbox "Description" [ref=e658]:
+              - /placeholder: Notes and context
+            - generic [ref=e659]:
+              - generic [ref=e660]:
+                - generic [ref=e661]: Location
+                - combobox "Location" [ref=e662]:
+                  - option "Admin" [selected]
+                  - option "Review - Development"
+                  - option "Review - Design"
+                  - option "Review - Launch"
+              - generic [ref=e663]:
+                - generic [ref=e664]: Task type
+                - combobox "Task type" [ref=e665]:
+                  - option "Unset" [selected]
+                  - option "unspecified"
+                  - option "work work"
+                  - option "x"
+          - generic [ref=e666]:
+            - heading "The schedule" [level=3] [ref=e667]
+            - generic [ref=e668]:
+              - button "Daily" [pressed] [ref=e669]
+              - button "Weekdays" [ref=e670]
+              - button "Weekly" [ref=e671]
+              - button "Monthly" [ref=e672]
+              - button "Custom…" [ref=e673]
+            - generic [ref=e674]:
+              - generic [ref=e675]:
+                - generic [ref=e676]: Every
+                - generic [ref=e677]:
+                  - spinbutton "Interval" [ref=e678]: "1"
+                  - generic [ref=e679]: days
+              - generic [ref=e680]:
+                - generic [ref=e681]: Starts
+                - textbox "Start date" [ref=e682]: 2026-09-06
+              - generic [ref=e683]:
+                - generic [ref=e684]: Ends
+                - combobox "Ending" [ref=e685]:
+                  - option "Never"
+                  - option "On date"
+                  - option "After cycles" [selected]
+              - generic [ref=e713]:
+                - generic [ref=e714]: Cycle limit
+                - spinbutton "Cycle limit" [ref=e715]: "10"
+            - generic [ref=e686] [cursor=pointer]:
+              - checkbox "Keep unfinished occurrences overdue Otherwise an unfinished occurrence leaves current work when its scheduled date passes." [ref=e687]
+              - generic [ref=e688]:
+                - generic [ref=e689]: Keep unfinished occurrences overdue
+                - generic [ref=e690]: Otherwise an unfinished occurrence leaves current work when its scheduled date passes.
+            - generic [ref=e691]:
+              - generic [ref=e692]: event_repeat
+              - paragraph [ref=e694]: Every day, starting Sep 6, 2026, for a set number of cycles.
+          - generic [ref=e695]:
+            - heading "Priority & checklist" [level=3] [ref=e696]
+            - generic [ref=e697]:
+              - generic [ref=e698]: Urgency
+              - radiogroup "Urgency" [ref=e699]:
+                - radio "Low" [ref=e700]
+                - radio "Medium" [ref=e701]: Med
+                - radio "High" [ref=e702]
+            - generic [ref=e703]:
+              - generic [ref=e704]: Importance
+              - radiogroup "Importance" [ref=e705]:
+                - radio "Low" [ref=e706]
+                - radio "Medium" [ref=e707]: Med
+                - radio "High" [ref=e708]
+            - textbox "Checklist (one title per line)" [active] [ref=e709]:
+              - /placeholder: One checklist item per line
+              - text: QA recurring checkpoint
+          - generic [ref=e710]:
+            - button "Cancel" [ref=e711]
+            - button "Create recurrence" [ref=e712]
+  - status [ref=e643]

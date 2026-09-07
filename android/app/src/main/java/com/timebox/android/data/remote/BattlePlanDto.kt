@@ -7,9 +7,6 @@ import kotlinx.serialization.Serializable
 data class ProjectDto(
     val id: Int,
     val name: String,
-    val description: String,
-    @SerialName("deadline_date") val deadlineDate: String? = null,
-    @SerialName("deadline_at") val deadlineAt: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
 )
@@ -17,9 +14,6 @@ data class ProjectDto(
 @Serializable
 data class ProjectCreateDto(
     val name: String,
-    val description: String = "",
-    @SerialName("deadline_date") val deadlineDate: String? = null,
-    @SerialName("deadline_at") val deadlineAt: String? = null,
 )
 
 @Serializable

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.timebox.android.ui.day.DayWorkModeViewModelTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-06T12:46:37" hostname="DESKTOP-B30L0U7" time="0.623">
+  <properties/>
+  <testcase name="midnight records the confirmed final block and follows the new day" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.483"/>
+  <testcase name="short restart restores original entry while a long absence asks first" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.019"/>
+  <testcase name="entry guard includes exactly ten minutes and warns above it" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.027"/>
+  <testcase name="restart catch-up requires a full uninterrupted minute before the boundary" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.015"/>
+  <testcase name="resizing Actual Block persists Actual timestamps" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.022"/>
+  <testcase name="long absence recovery does not duplicate the active block ended at its boundary" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.014"/>
+  <testcase name="current planned work confirms for one minute then Exit preserves Task state" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.021"/>
+  <testcase name="existing active Actual owns Work Mode without starting a conflicting Actual" classname="com.timebox.android.ui.day.DayWorkModeViewModelTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

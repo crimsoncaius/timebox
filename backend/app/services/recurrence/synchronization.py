@@ -98,6 +98,7 @@ def _set_period_availability(
         select(RecurrenceOccurrence, Task)
         .join(Task, Task.id == RecurrenceOccurrence.task_id)
         .where(
+            RecurrenceOccurrence.template_id.is_not(None),
             RecurrenceOccurrence.skipped.is_(False),
             Task.deleted_at.is_(None),
             Task.archived_at.is_(None),

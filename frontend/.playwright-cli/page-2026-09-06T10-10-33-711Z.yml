@@ -1,0 +1,177 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e384]:
+    - complementary [ref=e385]:
+      - generic [ref=e386]:
+        - heading "Timebox" [level=1] [ref=e387]
+        - paragraph [ref=e388]: Monastic productivity
+      - navigation [ref=e389]:
+        - link "Day" [ref=e390] [cursor=pointer]:
+          - /url: /day/2026-09-06
+          - generic [ref=e391]: calendar_today
+          - generic [ref=e392]: Day
+        - link "Chronicle" [ref=e393] [cursor=pointer]:
+          - /url: /history
+          - generic [ref=e394]: history
+          - generic [ref=e395]: Chronicle
+        - link "Battle Plan" [ref=e396] [cursor=pointer]:
+          - /url: /battle-plan
+          - generic [ref=e397]: view_kanban
+          - generic [ref=e398]: Battle Plan
+        - link "Task types" [ref=e399] [cursor=pointer]:
+          - /url: /task-types
+          - generic [ref=e400]: category
+          - generic [ref=e401]: Task types
+      - generic [ref=e403]:
+        - generic [ref=e404]: TB
+        - generic [ref=e405]:
+          - generic [ref=e406]: You
+          - generic [ref=e407]: Cloud
+    - generic [ref=e408]:
+      - banner [ref=e409]:
+        - heading "Timebox" [level=2] [ref=e411]
+        - generic [ref=e412]:
+          - link "Start Work Mode" [ref=e413] [cursor=pointer]:
+            - /url: /day/2026-09-06?workMode=start
+          - link "Settings" [ref=e414] [cursor=pointer]:
+            - /url: /settings
+            - generic [ref=e415]: settings
+            - generic [ref=e416]: Settings
+          - button "Switch to dark mode" [ref=e417]: dark_mode
+      - main [ref=e418]:
+        - generic [ref=e419]:
+          - complementary "Battle Plan lists and projects" [ref=e420]:
+            - navigation [ref=e421]:
+              - button "All Tasks" [ref=e422]
+              - button "Admin" [ref=e423]
+              - link "Recurring" [ref=e424] [cursor=pointer]:
+                - /url: /battle-plan?view=recurring
+            - generic [ref=e425]:
+              - generic [ref=e426]: Projects
+              - button "New project" [ref=e427]: +
+            - list "Projects" [ref=e428]:
+              - listitem [ref=e429]:
+                - generic [ref=e430]:
+                  - button "Reorder Review - Development" [ref=e431]:
+                    - generic [ref=e432]: drag_indicator
+                  - button "Review - Development" [ref=e433]:
+                    - generic [ref=e434]: folder
+                    - generic [ref=e435]: Review - Development
+                  - button "More actions for Review - Development" [ref=e436]:
+                    - generic [ref=e437]: more_horiz
+              - listitem [ref=e438]:
+                - generic [ref=e439]:
+                  - button "Reorder Review - Design" [ref=e440]:
+                    - generic [ref=e441]: drag_indicator
+                  - button "Review - Design" [ref=e442]:
+                    - generic [ref=e443]: folder
+                    - generic [ref=e444]: Review - Design
+                  - button "More actions for Review - Design" [ref=e445]:
+                    - generic [ref=e446]: more_horiz
+              - listitem [ref=e447]:
+                - generic [ref=e448]:
+                  - button "Reorder Review - Launch" [ref=e449]:
+                    - generic [ref=e450]: drag_indicator
+                  - button "Review - Launch" [ref=e451]:
+                    - generic [ref=e452]: folder
+                    - generic [ref=e453]: Review - Launch
+                  - button "More actions for Review - Launch" [ref=e454]:
+                    - generic [ref=e455]: more_horiz
+            - status
+            - navigation [ref=e456]:
+              - button "Archive" [ref=e457]
+              - button "Trash" [ref=e458]
+          - generic [ref=e459]:
+            - generic [ref=e460]:
+              - generic [ref=e461]:
+                - paragraph [ref=e462]: Battle Plan
+                - heading "All Tasks" [level=1] [ref=e463]
+              - generic [ref=e464]:
+                - combobox "Sort tasks" [ref=e465]:
+                  - option "Manual order" [selected]
+                  - option "Deadline"
+                  - option "Urgency"
+                  - option "Importance"
+                - generic [ref=e466]:
+                  - checkbox "Hide completed" [ref=e467]
+                  - text: Hide completed
+            - generic [ref=e468]:
+              - generic [ref=e469]:
+                - generic [ref=e470]: Urgency
+                - button "low" [ref=e471]
+                - button "medium" [ref=e472]
+                - button "high" [ref=e473]
+                - button "unset" [ref=e474]
+              - generic [ref=e475]:
+                - generic [ref=e476]: Importance
+                - button "low" [ref=e477]
+                - button "medium" [ref=e478]
+                - button "high" [ref=e479]
+                - button "unset" [ref=e480]
+              - group [ref=e481]:
+                - generic "Task types" [ref=e482] [cursor=pointer]
+            - generic [ref=e484]:
+              - region "Open tasks" [ref=e485]:
+                - generic [ref=e486]:
+                  - heading "Open" [level=2] [ref=e487]
+                  - generic [ref=e488]: "2"
+                - button "Add Open task" [ref=e489]:
+                  - generic [ref=e490]: add
+                  - text: Add task
+                - generic [ref=e491]:
+                  - button "Move x" [ref=e492]:
+                    - generic [ref=e493]:
+                      - heading "x" [level=3] [ref=e495]
+                      - generic [ref=e497]: drag_indicator
+                    - generic [ref=e499]:
+                      - generic [ref=e500]: Admin
+                      - generic [ref=e501]: x
+                    - generic "Planned Jan 1, 2099" [ref=e503]:
+                      - generic [ref=e504]: event
+                      - generic [ref=e505]: Planned Jan 1, 2099
+                    - generic [ref=e507]:
+                      - button "Add x to Ready to Plan" [ref=e508]:
+                        - generic [ref=e509]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to x" [ref=e510]:
+                        - generic [ref=e511]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e512]
+                  - button "Move QA 0906 task" [ref=e513]:
+                    - generic [ref=e514]:
+                      - heading "QA 0906 task" [level=3] [ref=e516]
+                      - generic [ref=e518]: drag_indicator
+                    - generic [ref=e521]: Admin
+                    - generic "Planned Today · Sep 6" [ref=e523]:
+                      - generic [ref=e524]: event
+                      - generic [ref=e525]: Planned Today · Sep 6
+                    - generic [ref=e527]:
+                      - button "Add QA 0906 task to Ready to Plan" [ref=e528]:
+                        - generic [ref=e529]: event_upcoming
+                        - text: Plan
+                      - button "0 of 1 subtasks completed for QA 0906 task" [ref=e530]:
+                        - generic [ref=e531]: account_tree
+                        - text: 0/1
+                    - button "Complete Task" [ref=e532]
+              - region "In progress tasks" [ref=e533]:
+                - generic [ref=e534]:
+                  - heading "In progress" [level=2] [ref=e535]
+                  - generic [ref=e536]: "0"
+                - button "Add In progress task" [ref=e537]:
+                  - generic [ref=e538]: add
+                  - text: Add task
+              - region "Blocked tasks" [ref=e539]:
+                - generic [ref=e540]:
+                  - heading "Blocked" [level=2] [ref=e541]
+                  - generic [ref=e542]: "0"
+                - button "Add Blocked task" [ref=e543]:
+                  - generic [ref=e544]: add
+                  - text: Add task
+              - region "Completed tasks" [ref=e545]:
+                - generic [ref=e546]:
+                  - heading "Completed" [level=2] [ref=e547]
+                  - generic [ref=e548]: "0"
+                - button "Add Completed task" [ref=e549]:
+                  - generic [ref=e550]: add
+                  - text: Add task
+  - status [ref=e551]
+  - status [ref=e552]

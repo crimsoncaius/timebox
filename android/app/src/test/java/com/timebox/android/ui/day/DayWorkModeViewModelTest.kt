@@ -25,6 +25,7 @@ import java.time.Instant
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -39,6 +40,65 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DayWorkModeViewModelTest {
+    @Test
+    fun `initial Work Mode restoration resolves before planning can begin`() = runTest {
+        val gate = CompletableDeferred<WorkModeSnapshot?>()
+        val persistence = FakeWorkModePersistence(loadGate = gate)
+        val viewModel = loadedViewModel(
+            FakeWorkModeApi(blocks = listOf(block(31, 9 * 60, 10 * 60))),
+            FakeClock("2026-08-30T01:17:00Z"), persistence,
+        )
+        assertFalse(viewModel.state.value.workModeRestored)
+        viewModel.setPlanningMode(true)
+        assertFalse(viewModel.state.value.isPlanningMode)
+        gate.complete(WorkModeSnapshot(entryAt = "2026-08-30T01:15:00Z", lastConfirmedAt = "2026-08-30T01:15:00Z", lastObservedAt = "2026-08-30T01:16:00Z"))
+        viewModel.state.first { it.workModeRestored && it.workMode != null }
+        assertTrue(viewModel.state.value.workModeRestored)
+        assertNotNull(viewModel.state.value.workMode)
+        viewModel.setPlanningMode(true)
+        assertFalse(viewModel.state.value.isPlanningMode)
+        viewModel.exitWorkMode()
+        viewModel.state.first { it.workMode == null }
+        viewModel.setPlanningMode(true)
+        assertTrue(viewModel.state.value.isPlanningMode)
+    }
+
+    @Test
+    fun `Plan Mode rejects Work Mode entry without changing planning state`() = runTest {
+        val api = FakeWorkModeApi(blocks = listOf(block(31, 9 * 60, 10 * 60)))
+        val persistence = FakeWorkModePersistence()
+        val viewModel = loadedViewModel(api, FakeClock("2026-08-30T01:17:00Z"), persistence)
+        viewModel.state.first { it.workModeRestored && it.taskTypes.isNotEmpty() }
+        viewModel.setPlanningMode(true)
+        runCurrent()
+        val before = viewModel.state.value
+        val workCalls = setOf("getActiveActualBlock", "startActualBlock", "patchActualBlock")
+        val callsBefore = api.calls.filter { it in workCalls }
+
+        viewModel.startWorkMode()
+        viewModel.continueWorkModeEntry()
+        runCurrent()
+
+        assertNull(viewModel.state.value.workMode)
+        assertFalse(viewModel.state.value.workModeEntryWarning)
+        assertEquals(before.planning, viewModel.state.value.planning)
+        assertEquals(before.date, viewModel.state.value.date)
+        assertEquals(before.draft, viewModel.state.value.draft)
+        assertEquals(before.selectedBlockId, viewModel.state.value.selectedBlockId)
+        assertFalse(viewModel.state.value.saving)
+        assertEquals(callsBefore, api.calls.filter { it in workCalls })
+        assertNull(persistence.snapshot)
+
+        viewModel.cancelPlanningSession()
+        viewModel.startWorkMode()
+        viewModel.state.first { it.workMode != null }
+        assertNotNull(viewModel.state.value.workMode)
+        viewModel.setPlanningMode(true)
+        assertFalse(viewModel.state.value.isPlanningMode)
+        viewModel.exitWorkMode()
+        viewModel.state.first { it.workMode == null }
+    }
+
     @Test
     fun `resizing Actual Block persists Actual timestamps`() = runTest {
         val api = FakeWorkModeApi(
@@ -302,9 +362,9 @@ private class FakeClock(initial: String) {
     fun advanceSeconds(seconds: Long) { instant = instant.plusSeconds(seconds) }
 }
 
-private class FakeWorkModePersistence(initial: WorkModeSnapshot? = null) : WorkModePersistence {
+private class FakeWorkModePersistence(initial: WorkModeSnapshot? = null, private val loadGate: CompletableDeferred<WorkModeSnapshot?>? = null) : WorkModePersistence {
     var snapshot: WorkModeSnapshot? = initial
-    override suspend fun load(): WorkModeSnapshot? = snapshot
+    override suspend fun load(): WorkModeSnapshot? = loadGate?.await() ?: snapshot
     override suspend fun save(snapshot: WorkModeSnapshot?) { this.snapshot = snapshot }
 }
 

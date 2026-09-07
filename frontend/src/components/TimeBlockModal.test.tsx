@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
@@ -87,6 +87,39 @@ describe('TimeBlockModal', () => {
     const noteField = screen.getByLabelText('Note')
     expect(noteField).toHaveAttribute('rows', '4')
     expect(noteField).toHaveClass('min-h-20')
+  })
+
+  describe.each(['rail', 'sheet'] as const)('%s field synchronization', (variant) => {
+    it.each(['name', 'note'] as const)('preserves a newer %s draft through late saves and unrelated refreshes', async (field) => {
+      const original = makeBlock({ name: 'Original name', note: 'Previously saved note' })
+      let finish!: () => void
+      const onSave = vi.fn(() => new Promise<void>((resolve) => { finish = resolve }))
+      const props = { variant, draft: null, day: emptyDay, taskTypes, onClose: vi.fn(), onSave,
+        onDelete: vi.fn(), onCreateTaskTypePath: noopCreate }
+      const view = render(<TimeBlockInspectorContent block={original} {...props} />)
+      const input = screen.getByLabelText(field === 'name' ? 'Name' : 'Note')
+      fireEvent.change(input, { target: { value: 'First edit' } })
+      fireEvent.blur(input)
+      expect(onSave).toHaveBeenCalledWith({ [field]: 'First edit' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: 'Newer draft still being typed' } })
+      view.rerender(<TimeBlockInspectorContent block={{ ...original, [field]: 'First edit' }} {...props} />)
+      await act(async () => { finish() })
+      expect(input).toHaveValue('Newer draft still being typed')
+      view.rerender(<TimeBlockInspectorContent block={{ ...original, task_type_id: 2, name: 'Other saved name' }} {...props} />)
+      expect(input).toHaveValue('Newer draft still being typed')
+      fireEvent.blur(input)
+      expect(onSave).toHaveBeenLastCalledWith({ [field]: 'Newer draft still being typed' })
+      await act(async () => { finish() })
+
+      // Planned and Actual IDs can collide; switching lanes is a new selection too.
+      view.rerender(<TimeBlockInspectorContent block={{ ...original, lane: 'actual', name: 'Actual name', note: 'Actual note' }} {...props} />)
+      expect(screen.getByLabelText('Name')).toHaveValue('Actual name')
+      expect(screen.getByLabelText('Note')).toHaveValue('Actual note')
+      view.rerender(<TimeBlockInspectorContent block={{ ...original, id: 11, name: 'Next name', note: 'Next note' }} {...props} />)
+      expect(screen.getByLabelText('Name')).toHaveValue('Next name')
+      expect(screen.getByLabelText('Note')).toHaveValue('Next note')
+    })
   })
 
   it('auto-saves only task_type_id on task type change, not time fields', async () => {

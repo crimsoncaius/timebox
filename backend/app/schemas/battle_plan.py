@@ -21,14 +21,13 @@ class DeadlineFields(BaseModel):
         return self
 
 
-class ProjectRead(DeadlineFields):
+class ProjectRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     position: int
 
     id: int
     name: str
-    description: str
     created_at: datetime
     updated_at: datetime
 
@@ -37,16 +36,12 @@ class ProjectReorder(BaseModel):
     project_ids: list[int]
 
 
-class ProjectCreate(DeadlineFields):
+class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    description: str = ""
 
 
 class ProjectPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
-    description: str | None = None
-    deadline_date: date | None = None
-    deadline_at: datetime | None = None
 
 
 class TaskOccurrenceIdentityRead(BaseModel):

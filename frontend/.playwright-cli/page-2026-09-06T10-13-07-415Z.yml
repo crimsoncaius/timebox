@@ -1,0 +1,96 @@
+- generic [ref=e1018]:
+  - generic [ref=e1042]:
+    - banner [ref=e1043]:
+      - heading "Timebox" [level=2] [ref=e1045]
+      - generic [ref=e1046]:
+        - link "Start Work Mode" [ref=e1047] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e1048] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e1049]: settings
+          - generic [ref=e1050]: Settings
+        - button "Switch to dark mode" [ref=e1051]: dark_mode
+    - main [ref=e1052]:
+      - generic [ref=e1178]:
+        - generic [ref=e1179]:
+          - generic [ref=e1180]:
+            - heading "Task types" [level=1] [ref=e1181]
+            - paragraph [ref=e1182]:
+              - text: Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a
+              - link "Day" [ref=e1183] [cursor=pointer]:
+                - /url: /
+              - text: block only after at least one type exists.
+          - generic [ref=e1186]: Saved
+        - generic [ref=e1187]:
+          - region "Task type" [ref=e1188]:
+            - heading "Task type" [level=2] [ref=e1189]
+            - generic [ref=e1190]:
+              - generic [ref=e1191]:
+                - generic [ref=e1192]: Filter saved types or enter a new task type name
+                - textbox "Filter saved types or enter a new task type name" [ref=e1193]:
+                  - /placeholder: Search or add (e.g. work)
+              - button "Add" [ref=e1194]
+          - region "Saved types" [ref=e1195]:
+            - heading "Saved types" [level=2] [ref=e1196]
+            - generic [ref=e1197]:
+              - generic [ref=e1198]:
+                - heading "qa0906renamed" [level=3] [ref=e1199]
+                - list [ref=e1200]:
+                  - listitem [ref=e1201]:
+                    - generic "Task type qa0906renamed" [ref=e1202]:
+                      - generic [ref=e1203]: qa0906renamed
+                    - button "Edit qa0906renamed" [ref=e1204]: Edit
+                    - button "Delete qa0906renamed" [ref=e1205]:
+                      - generic [ref=e1206]: delete
+                  - listitem [ref=e1207]:
+                    - generic "Task type qa0906renamed/deep" [ref=e1208]:
+                      - generic [ref=e1209]:
+                        - generic [ref=e1210]: qa0906renamed /
+                        - text: deep
+                    - button "Edit qa0906renamed/deep" [ref=e1211]: Edit
+                    - button "Delete qa0906renamed/deep" [ref=e1212]:
+                      - generic [ref=e1213]: delete
+              - generic [ref=e1214]:
+                - heading "unspecified" [level=3] [ref=e1215]
+                - list [ref=e1216]:
+                  - listitem [ref=e1217]:
+                    - generic "Task type unspecified" [ref=e1218]:
+                      - generic [ref=e1219]: unspecified
+                    - button "Edit unspecified" [ref=e1220]: Edit
+                    - button "Delete unspecified" [ref=e1221]:
+                      - generic [ref=e1222]: delete
+              - generic [ref=e1223]:
+                - heading "work work" [level=3] [ref=e1224]
+                - list [ref=e1225]:
+                  - listitem [ref=e1226]:
+                    - generic "Task type work work" [ref=e1227]:
+                      - generic [ref=e1228]: work work
+                    - button "Edit work work" [ref=e1229]: Edit
+                    - button "Delete work work" [ref=e1230]:
+                      - generic [ref=e1231]: delete
+              - generic [ref=e1232]:
+                - heading "x" [level=3] [ref=e1233]
+                - list [ref=e1234]:
+                  - listitem [ref=e1235]:
+                    - generic "Task type x" [ref=e1236]:
+                      - generic [ref=e1237]: x
+                    - button "Edit x" [ref=e1238]: Edit
+                    - button "Delete x" [ref=e1239]:
+                      - generic [ref=e1240]: delete
+  - navigation [ref=e1100]:
+    - link "Day mobile navigation" [ref=e1101] [cursor=pointer]:
+      - /url: /day/2026-09-06
+      - generic [ref=e1102]: calendar_today
+      - generic [ref=e1103]: Day
+    - link "Chronicle mobile navigation" [ref=e1104] [cursor=pointer]:
+      - /url: /history
+      - generic [ref=e1105]: history
+      - generic [ref=e1106]: Chronicle
+    - link "Battle Plan mobile navigation" [ref=e1107] [cursor=pointer]:
+      - /url: /battle-plan
+      - generic [ref=e1108]: view_kanban
+      - generic [ref=e1109]: Battle Plan
+    - link "Task types mobile navigation" [ref=e1110] [cursor=pointer]:
+      - /url: /task-types
+      - generic [ref=e1111]: category
+      - generic [ref=e1112]: Task types

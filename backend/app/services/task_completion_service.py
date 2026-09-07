@@ -171,7 +171,9 @@ def set_subtask_checked(
         select(Task)
         .options(joinedload(Task.parent))
         .where(Task.id == subtask_id)
-        .with_for_update()
+        # The parent is already locked above. PostgreSQL cannot lock the
+        # nullable side of joinedload's outer join.
+        .with_for_update(of=Task)
     ).scalar_one_or_none()
     if row is None:
         raise ValueError("Subtask not found")

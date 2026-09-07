@@ -46,9 +46,6 @@ class Project(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
-    deadline_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
-    deadline_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -121,7 +118,7 @@ class RecurringTemplate(Base):
         order_by="RecurringChecklistItem.position",
     )
     occurrences: Mapped[list["RecurrenceOccurrence"]] = relationship(
-        "RecurrenceOccurrence", back_populates="template", cascade="all, delete-orphan"
+        "RecurrenceOccurrence", back_populates="template", passive_deletes=True
     )
 
 
@@ -145,8 +142,8 @@ class RecurrenceOccurrence(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("recurring_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recurring_templates.id", ondelete="SET NULL"), nullable=True, index=True
     )
     occurrence_key: Mapped[str] = mapped_column(Text, nullable=False)
     cycle_start: Mapped[dt.date] = mapped_column(Date, nullable=False)
@@ -160,7 +157,7 @@ class RecurrenceOccurrence(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    template: Mapped[RecurringTemplate] = relationship("RecurringTemplate", back_populates="occurrences")
+    template: Mapped[RecurringTemplate | None] = relationship("RecurringTemplate", back_populates="occurrences")
     task: Mapped["Task | None"] = relationship("Task", foreign_keys=[task_id])
 
 

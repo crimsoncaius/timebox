@@ -1,5 +1,5 @@
 import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DayCalendarPopover } from '../../components/DayCalendarPopover'
 import {
@@ -9,7 +9,6 @@ import {
 } from '../../components/DayTimeline'
 import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
-import { TimeBlockModal } from '../../components/TimeBlockModal'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType, type TimeBlock } from '../../lib/api'
 import { WorkMode } from './WorkMode'
 import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteInTimeZone } from './workModeExecution'
@@ -85,6 +84,14 @@ export function TodayPage() {
   const selectedBlockId = selectedBlockRef?.id ?? null
   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
   const [inspectorDirty, setInspectorDirty] = useState(false)
+  const [inspectorIsRail, setInspectorIsRail] = useState(() => window.matchMedia?.('(min-width: 1280px)').matches ?? true)
+  useEffect(() => {
+    const media = window.matchMedia?.('(min-width: 1280px)')
+    if (!media) return
+    const onChange = (event: MediaQueryListEvent) => setInspectorIsRail(event.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
   const [blockDragActive, setBlockDragActive] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftCommitInFlightRef = useRef(false)
@@ -92,6 +99,17 @@ export function TodayPage() {
   const clockAnchorRef = useRef<{ server: number; client: number } | null>(null)
   const workModeRequestRef = useRef<string | null>(null)
   const [planningTaskBusyId, setPlanningTaskBusyId] = useState<number | null>(null)
+  const [readyTaskDragging, setReadyTaskDragging] = useState(false)
+  const [planningSaves, setPlanningSaves] = useState(0)
+  const [pendingWorkEntry, setPendingWorkEntry] = useState<string | null>(null)
+  const planningActive = allBattleTasks.some((task) => task.id === planningTaskId && task.ready_to_plan)
+    || draft?.lane === 'planned'
+    || (selectedBlockRef?.lane === 'planned' && inspectorDirty)
+    || readyTaskDragging || planningTaskBusyId != null || planningSaves > 0
+
+  useLayoutEffect(() => {
+    workModeExecution.setPlanningActive(planningActive)
+  }, [planningActive, workModeExecution])
 
   const load = useCallback(async () => {
     if (!date) return
@@ -143,10 +161,17 @@ export function TodayPage() {
 
   const enterWorkMode = useCallback((entryAt = presentInstant()) => {
     const next = workModeExecution.begin(entryAt)
+    if (!next) return null
     setSelectedBlockRef(null)
     setDraft(null)
     return next
   }, [presentInstant, workModeExecution])
+
+  useEffect(() => {
+    if (!pendingWorkEntry || planningActive) return
+    enterWorkMode(pendingWorkEntry)
+    setPendingWorkEntry(null)
+  }, [pendingWorkEntry, planningActive, enterWorkMode])
 
   useEffect(() => {
     setSelectedBlockRef(null)
@@ -237,11 +262,18 @@ export function TodayPage() {
     const requestKey = `${day.date}|${searchParams.toString()}`
     if (workModeRequestRef.current === requestKey) return
     workModeRequestRef.current = requestKey
+    if (planningActive) {
+      const remaining = new URLSearchParams(searchParams)
+      remaining.delete('workMode')
+      navigate({ pathname: `/day/${day.date}`, search: remaining.toString() }, { replace: true })
+      return
+    }
     void (async () => {
-      await workModeExecution.open(day, nowIso)
-      navigate(`/day/${day.meta.today}`, { replace: true })
+      if (await workModeExecution.open(day, nowIso)) {
+        navigate(`/day/${day.meta.today}`, { replace: true })
+      }
     })()
-  }, [day, navigate, nowIso, restoreWorkMode, searchParams, workMode, workModeExecution])
+  }, [day, navigate, nowIso, planningActive, restoreWorkMode, searchParams, workMode, workModeExecution])
 
   useEffect(() => {
     if (!day) return
@@ -259,19 +291,22 @@ export function TodayPage() {
   }, [day, searchParams])
 
   const tryDiscardIfNeeded = useCallback(() => {
+    if (workModeExecution.state.session) return false
     if (!inspectorDirty) return true
     return confirmDiscardUnsaved()
-  }, [inspectorDirty])
+  }, [inspectorDirty, workModeExecution])
 
   const tryClosePanel = useCallback(() => {
     if (!tryDiscardIfNeeded()) return
     setSelectedBlockRef(null)
     setDraft(null)
     setPlanThenWork(false)
+    setInspectorDirty(false)
   }, [tryDiscardIfNeeded])
 
   const planReadyTaskAt = useCallback(
     async (taskId: number, startMinute: number) => {
+      if (workModeExecution.state.session) return
       if (!date || !day || planningTaskInFlightRef.current) return
       const task = allBattleTasks.find((item) => item.id === taskId && item.ready_to_plan)
       if (!task) return
@@ -321,7 +356,7 @@ export function TodayPage() {
         setPlanningTaskBusyId(null)
       }
     },
-    [allBattleTasks, date, day],
+    [allBattleTasks, date, day, workModeExecution],
   )
 
   const onLaneSlotClick = useCallback(
@@ -346,6 +381,7 @@ export function TodayPage() {
 
   const onReadyTaskDragEnd = useCallback(
     (event: DragEndEvent) => {
+      setReadyTaskDragging(false)
       const { source, target, position } = event.operation
       if (
         event.canceled ||
@@ -383,17 +419,17 @@ export function TodayPage() {
       const el = node instanceof Element ? node : node.parentElement
       if (el?.closest('[role="dialog"]')) return
       if (el?.closest('[data-inspector]')) return
+      if (el?.closest('[data-work-mode-action]')) return
       tryClosePanel()
     }
     document.addEventListener('pointerdown', onPointerDown, true)
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
   }, [draft, selectedBlockId, tryClosePanel])
 
-  /** Desktop: Escape clears selection (mobile sheet uses TimeBlockModal's Escape handler). */
+  /** Escape clears the shared inspector selection in either responsive layout. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (window.matchMedia('(max-width: 1023px)').matches) return
       if (selectedBlock == null && draft == null) return
       tryClosePanel()
     }
@@ -404,7 +440,9 @@ export function TodayPage() {
   const commitDraft = useCallback(
     async (payload: { task_type_id?: number; name: string | null; note: string | null }) => {
       if (!date || !draft || draftCommitInFlightRef.current) return
+      if (workModeExecution.state.session) return
       draftCommitInFlightRef.current = true
+      if (draft.lane === 'planned') setPlanningSaves((count) => count + 1)
       setError(null)
       try {
         if (draft.lane === 'actual') {
@@ -442,6 +480,7 @@ export function TodayPage() {
           setPlanningTaskId(null)
         }
         setDraft(null)
+        setInspectorDirty(false)
         if (created) setSelectedBlockRef({ id: created.id, lane: created.lane })
         if (created && planThenWork) {
           const completedAt = presentInstant()
@@ -450,7 +489,8 @@ export function TodayPage() {
             (created.start_minute <= completedMinute && completedMinute < created.end_minute) ||
             (created.start_minute > completedMinute && created.start_minute - completedMinute <= 10)
           ) {
-            enterWorkMode(completedAt)
+            setPlanningTaskId(null)
+            setPendingWorkEntry(completedAt)
           }
           setPlanThenWork(false)
         }
@@ -459,9 +499,10 @@ export function TodayPage() {
         throw e
       } finally {
         draftCommitInFlightRef.current = false
+        if (draft.lane === 'planned') setPlanningSaves((count) => count - 1)
       }
     },
-    [date, day, draft, enterWorkMode, planThenWork, presentInstant],
+    [date, day, draft, workModeExecution, planThenWork, presentInstant],
   )
 
   const patchBlock = useCallback(
@@ -477,7 +518,9 @@ export function TodayPage() {
       },
       lane: BlockLane = 'planned',
     ) => {
+      if (workModeExecution.state.session) return
       if (!date) return
+      if (lane === 'planned') setPlanningSaves((count) => count + 1)
       setError(null)
       try {
         if (lane === 'actual') {
@@ -514,9 +557,11 @@ export function TodayPage() {
         const msg = e instanceof Error ? e.message : 'Failed to update block'
         setError(msg)
         throw e
+      } finally {
+        if (lane === 'planned') setPlanningSaves((count) => count - 1)
       }
     },
-    [date, day],
+    [date, day, workModeExecution],
   )
 
   const deleteBlock = useCallback(
@@ -618,6 +663,7 @@ export function TodayPage() {
 
   const onBlockClick = useCallback(
     (blockId: number, lane: BlockLane): boolean => {
+      if (lane === 'actual' && day?.actual_blocks.some(({ actual_block }) => actual_block.id === blockId && actual_block.end_at == null) && planningActive) return false
       if (!tryDiscardIfNeeded()) return false
       setDraft(null)
       if (lane === 'actual' && day) {
@@ -633,7 +679,7 @@ export function TodayPage() {
       setSelectedBlockRef({ id: blockId, lane })
       return true
     },
-    [day, presentInstant, tryDiscardIfNeeded, workModeExecution],
+    [day, planningActive, presentInstant, tryDiscardIfNeeded, workModeExecution],
   )
 
   if (!date) {
@@ -685,14 +731,14 @@ export function TodayPage() {
     onDirtyChange: setInspectorDirty,
   }
 
-  const mobileSheetOpen = selectedBlock != null || draft != null
+  const inspectorOpen = selectedBlock != null || draft != null
   const readyTasks = allBattleTasks.filter((task) => task.ready_to_plan)
   const planningTask = readyTasks.find((task) => task.id === planningTaskId) ?? null
 
   return (
-    <Layout mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
-      <DragDropProvider onDragEnd={onReadyTaskDragEnd}>
-      <div className="flex flex-col gap-8 xl:flex-row xl:gap-0 xl:items-stretch">
+    <Layout planningActive={planningActive} workModeActive={workMode != null || workModeGuard} mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
+      <DragDropProvider onDragStart={(event) => { if (event.operation.source?.type === READY_TASK_DRAG_TYPE) setReadyTaskDragging(true) }} onDragEnd={onReadyTaskDragEnd}>
+      <div inert={workMode != null || workModeGuard} className="flex flex-col gap-8 xl:flex-row xl:gap-0 xl:items-stretch">
         <div className="min-w-0 min-h-0 flex-1 xl:pr-4">
           <span data-testid="day-date" className="sr-only">
             {day.date}
@@ -823,16 +869,18 @@ export function TodayPage() {
           </section>
         </div>
 
-        {/* Desktop: persistent inspector rail */}
+        {/* One editor owns the draft across rail/sheet layout changes. */}
         <div
-          className="hidden w-full shrink-0 xl:block xl:w-[min(28rem,100%)] xl:max-w-md xl:pl-6"
+          className={`${inspectorOpen ? '' : 'hidden xl:block '}w-full shrink-0 xl:w-[min(28rem,100%)] xl:max-w-md xl:pl-6`}
           data-testid="day-inspector-rail"
         >
           <aside
-            role="complementary"
-            aria-label="Block details"
-            data-inspector="rail"
-            className={`sticky top-32 mt-0 max-h-[calc(100dvh-8.5rem)] w-full overflow-y-auto bg-surface-container-low dark:bg-dark-surface-container-low${blockDragActive ? ' pointer-events-none' : ''}`}
+            role={inspectorIsRail ? 'complementary' : 'dialog'}
+            aria-label={inspectorIsRail ? 'Block details' : undefined}
+            aria-modal={!inspectorIsRail && inspectorOpen ? true : undefined}
+            aria-labelledby={inspectorIsRail ? undefined : 'block-panel-title'}
+            data-inspector={inspectorIsRail ? 'rail' : 'sheet'}
+            className={`w-full overflow-y-auto bg-surface-container-low xl:sticky xl:top-32 xl:mt-0 xl:max-h-[calc(100dvh-8.5rem)] dark:bg-dark-surface-container-low${blockDragActive ? ' pointer-events-none' : ''}`}
           >
             {selectedBlock == null && draft == null ? (
               <ReadyToPlanDrawer
@@ -851,12 +899,12 @@ export function TodayPage() {
                 <TimeBlockInspectorContent
                   key={
                     selectedBlock != null
-                      ? `block-${selectedBlock.id}`
+                      ? `block-${selectedBlock.lane}-${selectedBlock.id}`
                       : draft != null
                         ? `draft-${draft.lane}-${draft.start_minute}-${draft.end_minute}`
                         : 'none'
                   }
-                  variant="rail"
+                  variant={inspectorIsRail ? 'rail' : 'sheet'}
                   block={selectedBlock}
                   draft={draft}
                   {...inspectorSharedProps}
@@ -866,31 +914,6 @@ export function TodayPage() {
           </aside>
         </div>
 
-        {/* Mobile: sheet below timeline */}
-        <div className="lg:hidden w-full">
-          <TimeBlockModal
-            key={
-              selectedBlock != null
-                ? `block-${selectedBlock.id}`
-                : draft != null
-                  ? `draft-${draft.lane}-${draft.start_minute}-${draft.end_minute}`
-                  : 'none'
-            }
-            open={mobileSheetOpen}
-            block={selectedBlock}
-            draft={draft}
-            day={day}
-            taskTypes={taskTypes}
-            onClose={tryClosePanel}
-            onSave={inspectorSharedProps.onSave}
-            onCreateFromDraft={commitDraft}
-            onDelete={inspectorSharedProps.onDelete}
-            onRecordActualAsPlanned={inspectorSharedProps.onRecordActualAsPlanned}
-            onCreateTaskTypePath={createTaskTypePath}
-            onDirtyChange={setInspectorDirty}
-            blockDragActive={blockDragActive}
-          />
-        </div>
       </div>
       </DragDropProvider>
       {workMode && workModeVisible && !restoreWorkMode ? (

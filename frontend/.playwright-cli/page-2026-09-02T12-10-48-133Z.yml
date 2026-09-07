@@ -1,0 +1,75 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Timebox" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Monastic productivity
+    - navigation [ref=e8]:
+      - link "Day" [ref=e9] [cursor=pointer]:
+        - /url: /day/2026-09-02
+        - generic [ref=e10]: calendar_today
+        - generic [ref=e11]: Day
+      - link "Chronicle" [ref=e12] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e13]: history
+        - generic [ref=e14]: Chronicle
+      - link "Battle Plan" [ref=e15] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e16]: view_kanban
+        - generic [ref=e17]: Battle Plan
+      - link "Task types" [ref=e18] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e19]: category
+        - generic [ref=e20]: Task types
+    - generic [ref=e22]:
+      - generic [ref=e23]: TB
+      - generic [ref=e24]:
+        - generic [ref=e25]: You
+        - generic [ref=e26]: Cloud
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - heading "Timebox" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - link "Start Work Mode" [ref=e32] [cursor=pointer]:
+          - /url: /day/2026-09-02?workMode=start
+        - link "Settings" [ref=e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e34]: settings
+          - generic [ref=e35]: Settings
+        - button "Switch to light mode" [active] [ref=e39]: light_mode
+    - main [ref=e37]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - heading "Settings" [level=1] [ref=e42]
+          - paragraph [ref=e43]: Global day window. Changes apply to all days.
+        - generic [ref=e46]: Up to date
+      - region "Day window" [ref=e47]:
+        - generic [ref=e48]:
+          - heading "Day window" [level=2] [ref=e49]
+          - paragraph [ref=e50]: Visible hours on the timeline. End hour is exclusive (e.g. 8–20 shows 8:00 through 19:59).
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - generic [ref=e53]:
+              - generic [ref=e54]: Start hour
+              - paragraph [ref=e55]: First hour shown (0–23).
+            - spinbutton "Start hour" [ref=e56]: "8"
+          - generic [ref=e57]:
+            - generic [ref=e58]:
+              - generic [ref=e59]: End hour
+              - paragraph [ref=e60]: Exclusive end of the window (1–24).
+            - spinbutton "End hour" [ref=e61]: "20"
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - paragraph [ref=e64]: Show full 24 hours
+              - paragraph [ref=e65]: Ignore start/end and display the full day on the timeline.
+            - checkbox "Show full 24 hours" [ref=e67]
+      - region "Week boundaries" [ref=e69]:
+        - generic [ref=e70]:
+          - heading "Week boundaries" [level=2] [ref=e71]
+          - paragraph [ref=e72]: Controls weekly recurrence quota periods across the app.
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - text: Week starts on
+            - paragraph [ref=e76]: Future pristine weekly quota periods are recalculated when this changes.
+          - combobox "Week starts on" [ref=e77]:
+            - option "Monday" [selected]
+            - option "Sunday"

@@ -157,6 +157,8 @@ The application should have a dedicated **Work Mode** for present-tense executio
 
 Web and Android should expose a persistent app-level **Start Work Mode** action. While Work Mode is active, that affordance becomes **Return to Work Mode**. The Planned Block inspector should remain a plan-editing surface and should not own a Work Mode start action.
 
+Day planning and Work Mode are mutually exclusive: finish or cancel planning before entering Work Mode, and explicitly exit Work Mode before planning. During Android Plan Mode and active web planning interactions, the Work Mode action stays visible but disabled with "Finish planning to start Work Mode." Web planning includes selecting or dragging a Ready to Plan task for placement, creating a Planned Block, unsaved Planned Block edits, and pending planning saves; viewing saved Blocks or the queue alone does not count. Blocked transitions preserve drafts and recording. See [issue 87](issue-87-plan-work-mode-separation.md) for the transition and restoration rules. This restriction also applies to returning to an existing Work Mode session; navigation persistence does not permit planning while that session remains active.
+
 Starting Work Mode always means:
 
 > **I am working now.**

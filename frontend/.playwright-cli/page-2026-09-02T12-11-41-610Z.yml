@@ -1,0 +1,155 @@
+- generic [ref=e60]:
+  - complementary [ref=e61]:
+    - generic [ref=e62]:
+      - heading "Timebox" [level=1] [ref=e63]
+      - paragraph [ref=e64]: Monastic productivity
+    - navigation [ref=e65]:
+      - link "Day" [ref=e66] [cursor=pointer]:
+        - /url: /day/2026-09-02
+        - generic [ref=e67]: calendar_today
+        - generic [ref=e68]: Day
+      - link "Chronicle" [ref=e69] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e70]: history
+        - generic [ref=e71]: Chronicle
+      - link "Battle Plan" [ref=e72] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e73]: view_kanban
+        - generic [ref=e74]: Battle Plan
+      - link "Task types" [ref=e75] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e76]: category
+        - generic [ref=e77]: Task types
+    - generic [ref=e79]:
+      - generic [ref=e80]: TB
+      - generic [ref=e81]:
+        - generic [ref=e82]: You
+        - generic [ref=e83]: Cloud
+  - generic [ref=e84]:
+    - banner [ref=e85]:
+      - heading "Timebox" [level=2] [ref=e87]
+      - generic [ref=e88]:
+        - link "Start Work Mode" [ref=e89] [cursor=pointer]:
+          - /url: /day/2026-09-02?workMode=start
+        - link "Settings" [ref=e90] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e91]: settings
+          - generic [ref=e92]: Settings
+        - button "Switch to dark mode" [active] [ref=e210]: dark_mode
+    - main [ref=e94]:
+      - generic [ref=e95]:
+        - complementary "Battle Plan lists and projects" [ref=e96]:
+          - navigation [ref=e97]:
+            - button "All Tasks" [ref=e98]
+            - button "Admin" [ref=e99]
+            - link "Recurring" [ref=e100] [cursor=pointer]:
+              - /url: /battle-plan?view=recurring
+          - generic [ref=e101]:
+            - generic [ref=e102]: Projects
+            - button "New project" [ref=e103]: +
+          - generic [ref=e104]:
+            - generic [ref=e105]:
+              - button "Atlas 1788094428502-788885258" [ref=e106]
+              - button "Edit Atlas 1788094428502-788885258" [ref=e107]:
+                - generic [ref=e108]: edit
+            - generic [ref=e109]:
+              - button "Atlas 1788340736777-487862100" [ref=e110]
+              - button "Edit Atlas 1788340736777-487862100" [ref=e111]:
+                - generic [ref=e112]: edit
+            - generic [ref=e113]:
+              - button "Atlas 1788341024326-57157327" [ref=e114]
+              - button "Edit Atlas 1788341024326-57157327" [ref=e115]:
+                - generic [ref=e116]: edit
+          - navigation [ref=e117]:
+            - button "Archive" [ref=e118]
+            - button "Trash" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - generic [ref=e122]:
+              - paragraph [ref=e123]: Battle Plan
+              - heading "Recurring" [level=1] [ref=e124]
+              - paragraph [ref=e125]: Templates create independent Battle Plan tasks seven days ahead.
+            - button "New recurring task" [ref=e126]
+          - generic [ref=e127]:
+            - button "Active" [ref=e128]
+            - button "Paused" [ref=e129]
+            - button "Ended" [ref=e130]
+          - generic [ref=e131]:
+            - article [ref=e132]:
+              - button "Gym 1788094412495-600522" [ref=e133]:
+                - generic [ref=e134]: Gym 1788094412495-600522
+                - generic [ref=e135]: Admin · recurring-quota-1788094412495-600522
+              - button "3 times per week" [ref=e136]
+              - button "Next Aug 31, 2026" [ref=e137]:
+                - generic [ref=e138]: Next
+                - generic [ref=e139]: Aug 31, 2026
+              - generic [ref=e140]:
+                - generic [ref=e141]: active
+                - button "Edit" [ref=e142]
+                - button "Pause" [ref=e143]
+                - button "End" [ref=e144]
+            - article [ref=e145]:
+              - button "Gym 1788340719617-2331143" [ref=e146]:
+                - generic [ref=e147]: Gym 1788340719617-2331143
+                - generic [ref=e148]: Admin · recurring-quota-1788340719617-2331143
+              - button "3 times per week" [ref=e149]
+              - button "Next Sep 2, 2026" [ref=e150]:
+                - generic [ref=e151]: Next
+                - generic [ref=e152]: Sep 2, 2026
+              - generic [ref=e153]:
+                - generic [ref=e154]: active
+                - button "Edit" [ref=e155]
+                - button "Pause" [ref=e156]
+                - button "End" [ref=e157]
+            - article [ref=e158]:
+              - button "Gym 1788341005790-8362072" [ref=e159]:
+                - generic [ref=e160]: Gym 1788341005790-8362072
+                - generic [ref=e161]: Admin · recurring-quota-1788341005790-8362072
+              - button "3 times per week" [ref=e162]
+              - button "Next Sep 2, 2026" [ref=e163]:
+                - generic [ref=e164]: Next
+                - generic [ref=e165]: Sep 2, 2026
+              - generic [ref=e166]:
+                - generic [ref=e167]: active
+                - button "Edit" [ref=e168]
+                - button "Pause" [ref=e169]
+                - button "End" [ref=e170]
+            - article [ref=e171]:
+              - button "Morning review 1788094410220-3954011" [ref=e172]:
+                - generic [ref=e173]: Morning review 1788094410220-3954011
+                - generic [ref=e174]: Admin · recurring-fixed-1788094410220-3954011
+              - button "Daily" [ref=e175]
+              - button "Next Sep 2, 2026" [ref=e176]:
+                - generic [ref=e177]: Next
+                - generic [ref=e178]: Sep 2, 2026
+              - generic [ref=e179]:
+                - generic [ref=e180]: active
+                - button "Edit" [ref=e181]
+                - button "Pause" [ref=e182]
+                - button "End" [ref=e183]
+            - article [ref=e184]:
+              - button "Morning review 1788340716934-9808620" [ref=e185]:
+                - generic [ref=e186]: Morning review 1788340716934-9808620
+                - generic [ref=e187]: Admin · recurring-fixed-1788340716934-9808620
+              - button "Daily" [ref=e188]
+              - button "Next Sep 2, 2026" [ref=e189]:
+                - generic [ref=e190]: Next
+                - generic [ref=e191]: Sep 2, 2026
+              - generic [ref=e192]:
+                - generic [ref=e193]: active
+                - button "Edit" [ref=e194]
+                - button "Pause" [ref=e195]
+                - button "End" [ref=e196]
+            - article [ref=e197]:
+              - button "Morning review 1788341003288-9792144" [ref=e198]:
+                - generic [ref=e199]: Morning review 1788341003288-9792144
+                - generic [ref=e200]: Admin · recurring-fixed-1788341003288-9792144
+              - button "Daily" [ref=e201]
+              - button "Next Sep 2, 2026" [ref=e202]:
+                - generic [ref=e203]: Next
+                - generic [ref=e204]: Sep 2, 2026
+              - generic [ref=e205]:
+                - generic [ref=e206]: active
+                - button "Edit" [ref=e207]
+                - button "Pause" [ref=e208]
+                - button "End" [ref=e209]

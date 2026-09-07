@@ -88,7 +88,7 @@ def test_task_responses_include_planned_dates_for_tasks_but_not_subtask_lifecycl
 def test_project_crud_and_permanent_cascade(client):
     created = client.post(
         "/projects",
-        json={"name": "Launch", "description": "Longer work", "deadline_date": "2099-08-15"},
+        json={"name": "Launch"},
     )
     assert created.status_code == 201
     project = created.json()
@@ -96,10 +96,10 @@ def test_project_crud_and_permanent_cascade(client):
 
     patched = client.patch(
         f"/projects/{project['id']}",
-        json={"name": "Launch v2", "deadline_at": "2099-08-15T12:00:00Z"},
+        json={"name": "Launch v2"},
     )
     assert patched.status_code == 200
-    assert patched.json()["deadline_date"] is None
+    assert patched.json()["name"] == "Launch v2"
 
     assert client.delete(f"/projects/{project['id']}").status_code == 204
     assert client.get("/projects").json() == []
@@ -272,3 +272,41 @@ def test_reminder_requires_deadline_and_precedes_it(client):
         },
     )
     assert too_late.status_code == 422
+
+
+def test_move_project_preserves_task_subtasks_and_blocks(client):
+    from app.models.time_block import TimeBlock
+    from app.models.time_block import BlockLane
+
+    first = client.post("/projects", json={"name": "First"}).json()["id"]
+    second = client.post("/projects", json={"name": "Second"}).json()["id"]
+    task_type = client.post("/task-types", json={"name": "focus"}).json()["id"]
+    parent = create_task(client, "Move me", description="Keep content", ready_to_plan=True, task_type_id=task_type)
+    child = create_task(client, "Checkpoint", parent_id=parent["id"])
+    client.post(f"/subtasks/{child['id']}/check")
+    create_block(client, "2026-08-24", parent["id"], task_type)
+    create_block(client, "2026-08-24", parent["id"], task_type, lane="actual")
+
+    def block_ids():
+        with Session(get_engine()) as db:
+            return (list(db.scalars(select(TimeBlock.id).where(TimeBlock.task_id == parent["id"], TimeBlock.lane == BlockLane.planned))),
+                    list(db.scalars(select(TimeBlock.id).where(TimeBlock.task_id == parent["id"], TimeBlock.lane == BlockLane.actual))))
+
+    original_blocks = block_ids()
+    assert all(original_blocks)
+    baseline = next(row for row in client.get("/tasks").json()["items"] if row["id"] == parent["id"])
+    for destination in (first, second, None):
+        moved = client.patch(f"/tasks/{parent['id']}", json={"project_id": destination})
+        assert moved.status_code == 200, moved.text
+        saved = next(row for row in client.get("/tasks").json()["items"] if row["id"] == parent["id"])
+        assert saved["project_id"] == destination
+        for field in ("title", "description", "status", "ready_to_plan", "planned_dates"):
+            assert saved[field] == baseline[field]
+        assert [{k: v for k, v in child.items() if k != "updated_at"} for child in saved["subtasks"]] == [{k: v for k, v in child.items() if k != "updated_at"} for child in baseline["subtasks"]]
+        assert block_ids() == original_blocks
+        with Session(get_engine()) as db:
+            assert db.get(Task, child["id"]).project_id == destination
+    failed = client.patch(f"/tasks/{parent['id']}", json={"project_id": 999999})
+    assert failed.status_code == 404
+    assert next(row for row in client.get("/tasks").json()["items"] if row["id"] == parent["id"])["project_id"] is None
+    assert block_ids() == original_blocks

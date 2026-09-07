@@ -175,7 +175,8 @@ export function TaskComposer({
           await onCreate({
             title: cleanTitle,
             description,
-            status,
+            status: status === 'blocked' ? 'open' : status,
+            is_blocked: status === 'blocked',
             project_id: fixedProjectId === undefined
               ? (projectId ? Number(projectId) : null)
               : fixedProjectId,

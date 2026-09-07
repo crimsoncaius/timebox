@@ -1,0 +1,183 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.timebox.android.ui.battleplan.BattlePlanScreenTest" tests="120" failures="1" errors="0" skipped="0" time="674.931" timestamp="2026-09-07T04:33:50" hostname="localhost">
+  <properties>
+    <property name="device" value="Pixel_9a(AVD) - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="expiryUsesTheFullDecorativeFadeWhenMotionIsAllowed" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="3.618" />
+  <testcase name="darkDragPreviewKeepsRaisedSurfaceWhileHeldMovingAndSettling" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.331" />
+  <testcase name="staleRecoveredTaskDraftRequiresAnExplicitChoice" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="2.739" />
+  <testcase name="compactActiveViewUsesOneLogicalNavigationGroup" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="3.934" />
+  <testcase name="trashUndoNoticeNamesTheTaskAndExposesAccessibleActions" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="1.691" />
+  <testcase name="dirtyTaskEditingOffersSaveAndConfirmsDiscardWithoutCompletionChoice" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.131" />
+  <testcase name="compactTaskActionMenuOffersQuickActionsWithoutDuplicatingStatusMoves" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="6.008" />
+  <testcase name="compactFiltersUseSectionsWithoutUnsetAndForwardChipTaps" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="3.041" />
+  <testcase name="reducedMotionFinishesExpiryWithoutDecorativeDelay" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="2.681" />
+  <testcase name="pickupLiftsPreviewAndClosesSourceGapOverTime" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="2.935" />
+  <testcase name="trashUndoFailureOffersRetryAndDismiss" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="2.605" />
+  <testcase name="compactCardsUseMetadataBlockerPrioritySignalsAndExplicitPlanningStates" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="3.085" />
+  <testcase name="cancelledDragRestoresTheSourceWithoutDropFeedback" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="15.297" />
+  <testcase name="heldTaskTraversesFromOpenToCompletedWithoutRecentering" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="5.477" />
+  <testcase name="composerUsesEditorialSectionsAndPolishedDropdownMenus" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="12.757" />
+  <testcase name="taskDetailsUseOneSaveActionAndKeepCompletionOutsideEditing" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.709" />
+  <testcase name="taskDetailsEditModeRevealsFieldsAndForwardsDashboardChanges" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="6.105" />
+  <testcase name="compactCardsRenderTheTimezoneAwarePlannedSummary" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="5.19" />
+  <testcase name="compactCardsLabelRecurringOccurrencesAndQuotaTrackersWithoutMarkingOneOffTasks" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.294" />
+  <testcase name="longPressCollapsesSourceShowsPreviewAndDropsAtMeasuredInsertion" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.362" />
+  <testcase name="trashUndoProgressDisablesItsActions" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.604" />
+  <testcase name="compactTaskTrashRequiresConfirmationAndExplainsRecovery" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.588" />
+  <testcase name="taskDetailsShowFivePlannedDatesExpandAndOpenDay" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="5.006" />
+  <testcase name="unchangedDropConfirmsPlacementWithoutPersistingAReorder" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="5.555" />
+  <testcase name="droppedPreviewSettlesIntoDestinationBeforeReorderIsCommitted" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="4.601" />
+  <testcase name="heldTaskTraversesFromCompletedToOpenWithoutRecentering" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="5.591" />
+  <testcase name="moveProjectPickerRequiresConfirmationAndSupportsAdmin" classname="com.timebox.android.ui.battleplan.BattlePlanScreenTest" time="6.489" />
+  <testcase name="projectActionsMoveWithoutDraggingAndRespectBoundaries" classname="com.timebox.android.ui.battleplan.ProjectNavigationListTest" time="4.942" />
+  <testcase name="primaryProjectMenuSupportsDraggingWithoutOpeningAnotherDialog" classname="com.timebox.android.ui.battleplan.ProjectNavigationListTest" time="5.751" />
+  <testcase name="canceledDragPreservesTheSavedOrder" classname="com.timebox.android.ui.battleplan.ProjectNavigationListTest" time="4.048" />
+  <testcase name="movesWithAccessibleButtonsAndDisablesBoundaries" classname="com.timebox.android.ui.battleplan.ProjectOrderDialogTest" time="4.858" />
+  <testcase name="longPressDragRequestsNewOrder" classname="com.timebox.android.ui.battleplan.ProjectOrderDialogTest" time="4.564" />
+  <testcase name="endRequiresExplicitConfirmation" classname="com.timebox.android.ui.battleplan.RecurringDetailScreenTest" time="4.553" />
+  <testcase name="belowThresholdDragSnapsBackWithoutChangingMonth" classname="com.timebox.android.ui.chronicle.ChronicleScreenTest" time="4.047" />
+  <testcase name="namedTaskBackedActualUsesBlockNameInChronicle" classname="com.timebox.android.ui.chronicle.ChronicleScreenTest" time="3.971" />
+  <testcase name="committedRightSwipePreviewsAndReturnsExactlyOneMonth" classname="com.timebox.android.ui.chronicle.ChronicleScreenTest" time="4.085" />
+  <testcase name="committedLeftSwipePreviewsAndAdvancesExactlyOneMonth" classname="com.timebox.android.ui.chronicle.ChronicleScreenTest" time="3.971" />
+  <testcase name="namedStandaloneActualIsIdentifiedInChronicleWithoutUnspecifiedNoise" classname="com.timebox.android.ui.chronicle.ChronicleScreenTest" time="3.955" />
+  <testcase name="bottomNavigationShowsFiveTabsAndSelectsSettings" classname="com.timebox.android.ui.components.ChromeTest" time="4.126" />
+  <testcase name="darkBlockSheetUsesOpaqueWarmSurfaceWithoutChangingLightTreatment" classname="com.timebox.android.ui.day.BlockSheetTest" time="3.107" />
+  <testcase name="taskBackedPlannedNameCanBeChangedAndReloadedSeparatelyFromLinkedContext" classname="com.timebox.android.ui.day.BlockSheetTest" time="4.984" />
+  <testcase name="deleteActionStaysAboveBottomNavigation" classname="com.timebox.android.ui.day.BlockSheetTest" time="4.956" />
+  <testcase name="taskBackedActualNameCanBeChangedEvenWhenItCorrespondsToAPlannedBlock" classname="com.timebox.android.ui.day.BlockSheetTest" time="4.775" />
+  <testcase name="standaloneActualNameCanBeChangedClearedAndReloadedSeparatelyFromNote" classname="com.timebox.android.ui.day.BlockSheetTest" time="6.964" />
+  <testcase name="tasklessPlannedDraftNamesBeforeTaskTypeAndCreatesWithoutChoosingOne" classname="com.timebox.android.ui.day.BlockSheetTest" time="5.682" />
+  <testcase name="standaloneActualDraftNamesBeforeTaskTypeAndCreatesWithoutChoosingOne" classname="com.timebox.android.ui.day.BlockSheetTest" time="6.248" />
+  <testcase name="weekSwipePreviewsTheIncomingWeekBeforeNavigationSettles" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="5.023" />
+  <testcase name="titleLedHeaderSeparatesDateNavigationPlanningAndCalendarMode" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="5.019" />
+  <testcase name="selectedCalendarModeFillsTheToggleTrack" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.04" />
+  <testcase name="todayIsDisabledUntilBackendDateIsResolved" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="3.514" />
+  <testcase name="weekShowsSevenDatesAndSupportsDateTodayAndWeekNavigation" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.483" />
+  <testcase name="inlineMonthStaysOpenAndNavigatesOnDateSelection" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.645" />
+  <testcase name="abbreviatedDateTitleRemainsOneLineWithoutMovingHeader" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.256" />
+  <testcase name="planningModeUsesDoneAction" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.615" />
+  <testcase name="timelineHeadersKeepBreathingRoomBelowTheCalendar" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="3.114" />
+  <testcase name="todayBecomesStatusWhenSelectedDateIsToday" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="3.49" />
+  <testcase name="todayKeepsMonthOpenAndSynchronizesTheDisplayedMonth" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.746" />
+  <testcase name="monthSwipeBrowsesWithoutNavigatingTheTimeline" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.713" />
+  <testcase name="weekControlRestoresTheExistingWeekStrip" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.727" />
+  <testcase name="adjacentMonthDateIsTappableAndAdvancesTheGrid" classname="com.timebox.android.ui.day.DayCalendarHeaderTest" time="4.828" />
+  <testcase name="cancelledDaySwipeKeepsCurrentHeaderAndDoesNotNavigate" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.137" />
+  <testcase name="actualBlockMovesLikePlannedBlock" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.162" />
+  <testcase name="plannedBlockMoveUsesFiveMinuteDeltaWithoutNormalizing" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="3.982" />
+  <testcase name="todayInitiallyScrollsTheCurrentTimeLineIntoView" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.549" />
+  <testcase name="actualBlockResizeCanRemainShorterThanThirtyMinutes" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="6.773" />
+  <testcase name="canceledArmedDragDoesNotCommitPartialMove" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="5.064" />
+  <testcase name="taskBackedDayBlockUsesNameThenLinkedTaskContext" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="3.472" />
+  <testcase name="plannedBlockQuickTapSelectsButStationaryLongPressDoesNot" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="2.962" />
+  <testcase name="plannedBlockResizeGroovesAreImmediate" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.109" />
+  <testcase name="plannedBlockRequiresLongPressBeforeMove" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.313" />
+  <testcase name="nextDaySwipeUpdatesHeaderWithinFirstFrame" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.39" />
+  <testcase name="tappingTimelineCreatesAtNearestFiveMinuteMark" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="3.955" />
+  <testcase name="previousDaySwipeUpdatesHeaderWithinFirstFrame" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="5.487" />
+  <testcase name="derivedActualAndRevisedPlanPresentTheirIndependentNames" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.716" />
+  <testcase name="earlyHorizontalMovementNavigatesDayWithoutSelectingOrMovingBlock" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="3.816" />
+  <testcase name="standaloneActualUsesNameThenMeaningfulTaskTypeThenUntitled" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.995" />
+  <testcase name="actualBlockResizeGroovesAreImmediate" classname="com.timebox.android.ui.day.DayTimelineGestureTest" time="4.085" />
+  <testcase name="draggingTaskCardOntoOccupiedPlannedTimeSnapsToPreview" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="5.02" />
+  <testcase name="planningDraftResizeGroovesRequireLongPress" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="3.974" />
+  <testcase name="bluePlanningDraftCanReturnToTaskRail" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="5.074" />
+  <testcase name="queueHoldPicksUpBeforeMovementAndSupportsEveryDirection" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.762" />
+  <testcase name="taskCardHoldThenVerticalStartRequestsPlacementWithHaptic" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.704" />
+  <testcase name="savingDisabledPlanningDraftDoesNotArm" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.889" />
+  <testcase name="carriedDraftMatchesDestinationSizeAndCancellationClearsBoth" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.413" />
+  <testcase name="androidBackCancelsInsteadOfCommittingPlanningSession" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="5.033" />
+  <testcase name="fullDayShowsNoSpaceAndLeavesQueueTaskUnplaced" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="3.78" />
+  <testcase name="draftMoveSnapsAroundAnotherDraftAndPreservesDuration" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.033" />
+  <testcase name="taskRailEarlyVerticalMovementScrollsWithoutArming" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="5.377" />
+  <testcase name="queueDropLaterInDayUsesVisibleTime" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.746" />
+  <testcase name="persistedPlannedCardIsLockedInPlanMode" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.381" />
+  <testcase name="planModeReplacesActualWithReadyTaskRail" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="4.104" />
+  <testcase name="accessibleTaskCardArmsTask" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="3.957" />
+  <testcase name="offscreenSnapShowsTimeWithoutJumpingAndEdgeHoldStillScrolls" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="2.937" />
+  <testcase name="queueDropAroundNoonUsesVisibleTime" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="3.135" />
+  <testcase name="queueDropAtTimelineTopUsesVisibleTime" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="5.176" />
+  <testcase name="availabilityChangeAfterPreviewRejectsReleaseWithoutChoosingAnotherTime" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="2.578" />
+  <testcase name="tasklessCurrentUsesNameBeforeMeaningfulTaskType" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="3.774" />
+  <testcase name="tasklessUnspecifiedCurrentIsUntitled" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="3.323" />
+  <testcase name="emptyStateStaysPresentTense" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="5.162" />
+  <testcase name="completedTaskFreezesSubtasks" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="4.075" />
+  <testcase name="headerStartsBelowTheStatusBar" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="3.315" />
+  <testcase name="tasklessCurrentUsesTaskTypeAndNote" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="3.154" />
+  <testcase name="androidBackUsesTheExitAction" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="4.686" />
+  <testcase name="taskContentShowsContextInteractiveSubtasksAndOnlyExit" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="4.337" />
+  <testcase name="currentSessionShowsElapsedAndRemainingTime" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="3.844" />
+  <testcase name="taskBackedCurrentUsesBlockNameBeforeTaskAndKeepsTaskAsContext" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="3.422" />
+  <testcase name="upNextAndEmptyStatesStayPresentTense" classname="com.timebox.android.ui.day.WorkModeScreenTest" time="4.08" />
+  <testcase name="deniedPermissionExplainsServerStateAndOffersBothRecoveryPaths" classname="com.timebox.android.ui.settings.SettingsNotificationTest" time="56.778">
+    <failure>java.lang.AssertionError: Activity never becomes requested state "[DESTROYED]" (last lifecycle transition = "PAUSED")
+at androidx.test.core.app.ActivityScenario.waitForActivityToBecomeAnyOf(ActivityScenario.java:454)
+at androidx.test.core.app.ActivityScenario.moveToState(ActivityScenario.java:689)
+at androidx.test.core.app.ActivityScenario.close(ActivityScenario.java:421)
+at androidx.test.ext.junit.rules.ActivityScenarioRule.after(ActivityScenarioRule.java:117)
+at org.junit.rules.ExternalResource$1.evaluate(ExternalResource.java:59)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule$apply$1$evaluate$1.invoke(AndroidComposeTestRule.android.kt:272)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule$apply$1$evaluate$1.invoke(AndroidComposeTestRule.android.kt:271)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.withDisposableContent(ComposeUiTest.android.kt:505)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$runTest$1$1$1$1$1$1.invoke(ComposeUiTest.android.kt:333)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.withComposeIdlingResource(ComposeUiTest.android.kt:385)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.access$withComposeIdlingResource(ComposeUiTest.android.kt:219)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$runTest$1$1$1$1$1.invoke(ComposeUiTest.android.kt:332)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.withWindowRecomposer(ComposeUiTest.android.kt:359)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.access$withWindowRecomposer(ComposeUiTest.android.kt:219)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$runTest$1$1$1$1.invoke(ComposeUiTest.android.kt:331)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.withTestCoroutines(ComposeUiTest.android.kt:372)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.access$withTestCoroutines(ComposeUiTest.android.kt:219)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$runTest$1$1$1.invoke(ComposeUiTest.android.kt:330)
+at androidx.compose.ui.test.EspressoLink.withStrategy(EspressoLink.android.kt:66)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$runTest$1$1.invoke(ComposeUiTest.android.kt:329)
+at androidx.compose.ui.test.IdlingResourceRegistry.withRegistry(IdlingResourceRegistry.jvm.kt:155)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$runTest$1.invoke(ComposeUiTest.android.kt:328)
+at androidx.compose.ui.test.ComposeRootRegistry.withRegistry(ComposeRootRegistry.android.kt:146)
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment.runTest(ComposeUiTest.android.kt:327)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule$apply$1.evaluate(AndroidComposeTestRule.android.kt:271)
+at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+at org.junit.runners.Suite.runChild(Suite.java:128)
+at org.junit.runners.Suite.runChild(Suite.java:27)
+at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+at org.junit.runner.JUnitCore.run(JUnitCore.java:115)
+at androidx.test.internal.runner.TestExecutor.execute(TestExecutor.java:68)
+at androidx.test.internal.runner.TestExecutor.execute(TestExecutor.java:59)
+at androidx.test.runner.AndroidJUnitRunner.onStart(AndroidJUnitRunner.java:463)
+at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+</failure>
+  </testcase>
+  <testcase name="darkSettingsSwitchesAreCaptured" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="8.065" />
+  <testcase name="battlePlanScopeMenuUsesMappedMaterialColors" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="16.513" />
+  <testcase name="taskDetailsCoverTopAndLowerContent" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="10.697" />
+  <testcase name="darkThemePreviewCoversProductTokens" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="9.283" />
+  <testcase name="recurringEditorUsesGroupedSectionsAndQuietSelections" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="9.567" />
+  <testcase name="destructiveDialogUsesDarkErrorContainerSystem" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="12.166" />
+  <testcase name="dayMonthCalendarCoversAdjacentDates" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="12.222" />
+  <testcase name="lightThemePreviewCoversProductTokens" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="9.872" />
+  <testcase name="chronicleCoversAdjacentDates" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="8.662" />
+  <testcase name="darkThemeProvidesReadableDefaultContentColor" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="6.386" />
+  <testcase name="emptyPlanningQueueCollapsesIntoGuidanceCard" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="10.267" />
+  <testcase name="lightSettingsSwitchesAreCaptured" classname="com.timebox.android.ui.visual.DarkThemeScreenshotTest" time="8.002" />
+</testsuite>

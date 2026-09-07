@@ -1,0 +1,113 @@
+- generic [ref=e1344]:
+  - complementary [ref=e1345]:
+    - generic [ref=e1346]:
+      - heading "Timebox" [level=1] [ref=e1347]
+      - paragraph [ref=e1348]: Monastic productivity
+    - navigation [ref=e1349]:
+      - link "Day" [ref=e1350] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e1351]: calendar_today
+        - generic [ref=e1352]: Day
+      - link "Chronicle" [ref=e1353] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e1354]: history
+        - generic [ref=e1355]: Chronicle
+      - link "Battle Plan" [ref=e1356] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e1357]: view_kanban
+        - generic [ref=e1358]: Battle Plan
+      - link "Task types" [ref=e1359] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e1360]: category
+        - generic [ref=e1361]: Task types
+    - generic [ref=e1363]:
+      - generic [ref=e1364]: TB
+      - generic [ref=e1365]:
+        - generic [ref=e1366]: You
+        - generic [ref=e1367]: Cloud
+  - generic [ref=e1368]:
+    - banner [ref=e1369]:
+      - heading "Timebox" [level=2] [ref=e1371]
+      - generic [ref=e1372]:
+        - link "Work Mode" [active] [ref=e1557] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e1374] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e1375]: settings
+          - generic [ref=e1376]: Settings
+        - button "Switch to dark mode" [ref=e1377]: dark_mode
+    - main [ref=e1378]:
+      - generic [ref=e1379]:
+        - generic [ref=e1380]:
+          - generic [ref=e1381]: 2026-09-06
+          - generic [ref=e1383]:
+            - generic [ref=e1384]:
+              - heading "Sunday, September 6, 2026" [level=1] [ref=e1385]
+              - paragraph [ref=e1386]: Timezone Asia/Singapore.
+            - generic [ref=e1387]:
+              - button "Previous day" [ref=e1388]: ← Prev
+              - button "Jump to date" [ref=e1390]:
+                - generic [ref=e1391]: 06/09/2026
+                - generic [ref=e1392]: calendar_month
+              - button "Next day" [ref=e1393]: Next →
+          - generic [ref=e1395]:
+            - heading "Planned" [level=3] [ref=e1397]
+            - heading "Actual" [level=3] [ref=e1398]
+            - generic [ref=e1400]:
+              - generic [ref=e1401]: 8 AM
+              - generic [ref=e1403]: 9 AM
+              - generic [ref=e1405]: 10 AM
+              - generic [ref=e1407]: 11 AM
+              - generic [ref=e1409]: 12 PM
+              - generic [ref=e1411]: 1 PM
+              - generic [ref=e1413]: 2 PM
+              - generic [ref=e1415]: 3 PM
+              - generic [ref=e1417]: 4 PM
+              - generic [ref=e1419]: 5 PM
+              - generic [ref=e1421]: 6 PM
+              - generic [ref=e1423]: 7 PM
+              - generic [ref=e1425]: 8 PM
+              - generic [ref=e1427]: 9 PM
+              - generic [ref=e1429]: 10 PM
+              - generic [ref=e1431]: 11 PM
+            - generic [ref=e1465]:
+              - button "Resize block start" [ref=e1555]
+              - button "Edit planned block" [ref=e1467]:
+                - generic [ref=e1469]:
+                  - generic [ref=e1470]: QA note-loss reproduction
+                  - generic [ref=e1471]: ·
+                  - generic [ref=e1472]: 6 – 6:30pm
+              - button "Resize block end" [ref=e1556]
+            - generic [ref=e1506]:
+              - button "Resize block start" [ref=e1507]
+              - button "Edit actual block" [ref=e1508]:
+                - generic [ref=e1510]:
+                  - generic [ref=e1511]: QA planning block
+                  - generic [ref=e1512]: ·
+                  - generic [ref=e1513]: 7 – 7:30pm
+              - button "Resize block end" [ref=e1514]
+        - complementary "Block details" [ref=e1516]:
+          - region "Ready to Plan tasks" [ref=e1558]:
+            - generic [ref=e1559]:
+              - generic [ref=e1560]:
+                - paragraph [ref=e1561]: Battle Plan
+                - heading "Ready to Plan" [level=2] [ref=e1562]
+                - paragraph [ref=e1563]: Drag a task to Planned, or select it and choose a time slot.
+              - generic [ref=e1564]: "0"
+            - paragraph [ref=e1566]: No tasks are waiting to be planned.
+      - dialog "Work Mode" [ref=e1567]:
+        - generic [ref=e1568]:
+          - generic [ref=e1569]:
+            - generic [ref=e1570]:
+              - paragraph [ref=e1571]: Work Mode
+              - paragraph [ref=e1572]: Confirming current work…
+            - button "Exit Work Mode" [ref=e1573]
+          - generic [ref=e1575]:
+            - paragraph [ref=e1576]: Current · 6:00 PM–6:30 PM
+            - heading "QA note-loss reproduction" [level=1] [ref=e1577]
+            - paragraph [ref=e1578]: QA 0906 task
+            - paragraph [ref=e1579]: Temporary exploratory QA item
+            - region "Subtasks" [ref=e1580]:
+              - generic [ref=e1581]:
+                - checkbox "QA checkpoint" [ref=e1582]
+                - generic [ref=e1583]: QA checkpoint

@@ -8,9 +8,6 @@ import type { BattleTask, Project, Subtask, TaskType } from '../../lib/api'
 const project: Project = {
   id: 7,
   name: 'Atlas',
-  description: 'Longer work',
-  deadline_date: null,
-  deadline_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }
@@ -82,16 +79,65 @@ describe('BattlePlanPage', () => {
   const originalFetch = globalThis.fetch
   let activeTasks: BattleTask[]
   let trashTasks: BattleTask[]
+  let failNextMove: boolean
   let failNextCreate: boolean
   let failNextRestore: boolean
+  let failNextSubtaskCheck: boolean
   let restoreGate: Promise<void> | null
 
+  it.each([null, 7])('moves a task from project %s and persists the assignment after remount', async (source) => {
+    activeTasks = [task({ project_id: source, project: source ? project : null })]
+    const user = userEvent.setup()
+    const view = render(<MemoryRouter><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByLabelText('Actions for Draft launch brief'))
+    await user.click(screen.getByRole('button', { name: 'Move to project' }))
+    await user.selectOptions(screen.getByLabelText('Destination'), source ? '' : '7')
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(activeTasks[0].project_id).toBe(source ? null : 7)
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringMatching(/\/tasks\/11$/), expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ project_id: source ? null : 7 }) }))
+    view.unmount()
+    render(<MemoryRouter><BattlePlanPage /></MemoryRouter>)
+    const card = await screen.findByRole('article', { name: 'Move Draft launch brief' })
+    expect(within(card).getByText(source ? 'Admin' : 'Atlas')).toBeInTheDocument()
+  })
+
+  it('cancels destination selection without saving', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByLabelText('Actions for Draft launch brief'))
+    await user.click(screen.getByRole('button', { name: 'Move to project' }))
+    await user.selectOptions(screen.getByLabelText('Destination'), '')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(activeTasks[0].project_id).toBe(7)
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false)
+  })
+
+  it('keeps the saved assignment on failure and allows retry', async () => {
+    failNextMove = true
+    const user = userEvent.setup()
+    render(<MemoryRouter><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByLabelText('Actions for Draft launch brief'))
+    await user.click(screen.getByRole('button', { name: 'Move to project' }))
+    await user.selectOptions(screen.getByLabelText('Destination'), '')
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Move failed')
+    expect(activeTasks[0].project_id).toBe(7)
+    expect(document.querySelector('[data-task-id="11"]')).toHaveTextContent('Atlas')
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(activeTasks[0].project_id).toBeNull()
+  })
+
   beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
     localStorage.clear()
     activeTasks = [task()]
     trashTasks = []
+    failNextMove = false
     failNextCreate = false
     failNextRestore = false
+    failNextSubtaskCheck = false
     restoreGate = null
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -118,7 +164,8 @@ describe('BattlePlanPage', () => {
           id: 12,
           title: body.title,
           description: body.description ?? '',
-          status: body.status ?? 'open',
+          status: body.status === 'blocked' ? 'open' : body.status ?? 'open',
+          is_blocked: body.is_blocked || body.status === 'blocked',
           parent_id: body.parent_id ?? null,
           project_id: body.project_id ?? null,
           project: body.project_id === project.id ? project : null,
@@ -144,7 +191,7 @@ describe('BattlePlanPage', () => {
         let completed: BattleTask | undefined
         activeTasks = activeTasks.map((row) => {
           if (row.id === id) {
-            completed = { ...row, status: 'completed' }
+            completed = { ...row, status: 'completed', is_blocked: false }
             return completed
           }
           return row
@@ -165,11 +212,14 @@ describe('BattlePlanPage', () => {
       }
       if (/\/tasks\/\d+$/.test(url) && method === 'PATCH') {
         const body = JSON.parse(String(init?.body)) as Partial<BattleTask>
+        if ('project_id' in body && failNextMove) { failNextMove = false; return response({ detail: 'Move failed' }, 500) }
         const id = Number(url.split('/').pop())
         let patched: BattleTask | undefined
         activeTasks = activeTasks.map((row) => {
           if (row.id === id) {
             patched = { ...row, ...body }
+            if ('project_id' in body) patched.project = body.project_id === project.id ? project : null
+            if (body.status === 'blocked') patched = { ...patched, status: 'open', is_blocked: true }
             return patched
           }
           return row
@@ -206,6 +256,10 @@ describe('BattlePlanPage', () => {
       }
       const subtaskAction = /\/subtasks\/(\d+)\/(check|uncheck)$/.exec(url)
       if (subtaskAction && method === 'POST') {
+        if (failNextSubtaskCheck) {
+          failNextSubtaskCheck = false
+          return response({ detail: 'Could not update subtask. Please retry.' }, 500)
+        }
         const id = Number(subtaskAction[1])
         const checked = subtaskAction[2] === 'check'
         let updated: Subtask | undefined
@@ -232,6 +286,67 @@ describe('BattlePlanPage', () => {
     expect(screen.getByRole('region', { name: 'Completed tasks' })).toBeInTheDocument()
     expect(screen.getAllByText('work/deep')).not.toHaveLength(0)
     expect(screen.getByText('U · high')).toBeInTheDocument()
+  })
+
+  it('keeps a saved blocked condition visible after reopening and reloading without changing underlying progress', async () => {
+    activeTasks = [task({ status: 'in_progress', is_blocked: false })]
+    const user = userEvent.setup()
+    const view = render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    await user.selectOptions(await screen.findByLabelText('Status'), 'blocked')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const column = screen.getByRole('region', { name: 'Blocked tasks' })
+    expect(within(column).getByRole('heading', { name: 'Draft launch brief' })).toBeInTheDocument()
+    expect(activeTasks[0]).toMatchObject({ status: 'in_progress', is_blocked: true })
+    expect(within(within(column).getByRole('heading', { name: 'Draft launch brief' }).closest('article')!).getByText('Blocked')).toBeInTheDocument()
+    await user.click(within(column).getByRole('heading', { name: 'Draft launch brief' }))
+    expect(screen.getByLabelText('Status')).toHaveValue('blocked')
+    await user.type(screen.getByLabelText('Description'), ' — updated while blocked')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(activeTasks[0]).toMatchObject({ status: 'in_progress', is_blocked: true, description: 'Gather the context — updated while blocked' })
+    view.unmount()
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    expect(await screen.findByLabelText('Status')).toHaveValue('blocked')
+  })
+
+  it.each(['open', 'in_progress'])('explicitly clears the blocked condition when the editor selects %s', async (status) => {
+    activeTasks = [task({ is_blocked: true })]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    expect(await screen.findByLabelText('Status')).toHaveValue('blocked')
+    await user.selectOptions(screen.getByLabelText('Status'), status)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(activeTasks[0]).toMatchObject({ status, is_blocked: false })
+    expect(within(screen.getByRole('region', { name: 'Blocked tasks' })).queryByRole('heading', { name: 'Draft launch brief' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('heading', { name: 'Draft launch brief' }))
+    expect(screen.getByLabelText('Status')).toHaveValue(status)
+  })
+
+  it('creates a blocked task using the independent condition returned by the API', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByLabelText('Add Blocked task'))
+    await user.type(screen.getByLabelText('Task title'), 'Waiting for review')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    const column = screen.getByRole('region', { name: 'Blocked tasks' })
+    expect(await within(column).findByRole('heading', { name: 'Waiting for review' })).toBeInTheDocument()
+    expect(activeTasks.find((row) => row.title === 'Waiting for review')).toMatchObject({ status: 'open', is_blocked: true })
+  })
+
+  it('shows a failed subtask check inside the dialog and permits retry', async () => {
+    activeTasks = [task({ subtasks: [subtask()] })]
+    failNextSubtaskCheck = true
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const dialog = await screen.findByRole('dialog', { name: 'Task details' })
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Could not update subtask. Please retry.')
+    expect(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' })).not.toBeChecked()
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' }))
+    expect(await within(dialog).findByRole('checkbox', { name: 'Uncheck subtask Check figures' })).toBeChecked()
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('labels recurring Task Occurrences and Quota Trackers without marking one-off Tasks', async () => {
@@ -358,7 +473,7 @@ describe('BattlePlanPage', () => {
       expect.stringMatching(/\/tasks\/11$/),
       expect.objectContaining({
         method: 'PATCH',
-        body: expect.stringMatching(/"status":"blocked".*"urgency":"low"/),
+        body: expect.stringMatching(/"is_blocked":true.*"urgency":"low"/),
       }),
     ))
     await waitFor(() => {

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.battle_plan import Project
 from app.schemas.battle_plan import ProjectCreate, ProjectPatch
-from app.services.battle_plan._shared import _clean_name, _validate_deadline
+from app.services.battle_plan._shared import _clean_name
 
 
 def list_projects(db: Session) -> list[Project]:
@@ -14,16 +14,12 @@ def list_projects(db: Session) -> list[Project]:
 
 def create_project(db: Session, body: ProjectCreate) -> Project:
     name = _clean_name(body.name)
-    _validate_deadline(body.deadline_date, body.deadline_at)
     exists = db.execute(select(Project.id).where(func.lower(Project.name) == name.lower())).scalar_one_or_none()
     if exists is not None:
         raise ValueError("A project with this name already exists")
     row = Project(
         name=name,
         position=(db.scalar(select(func.max(Project.position))) or 0) + 1,
-        description=body.description,
-        deadline_date=body.deadline_date,
-        deadline_at=body.deadline_at,
     )
     db.add(row)
     db.commit()
@@ -44,18 +40,6 @@ def patch_project(db: Session, project_id: int, body: ProjectPatch) -> Project:
         if exists is not None:
             raise ValueError("A project with this name already exists")
         row.name = name
-    if "description" in fields:
-        row.description = body.description or ""
-    if "deadline_date" in fields or "deadline_at" in fields:
-        date_value = body.deadline_date if "deadline_date" in fields else row.deadline_date
-        at_value = body.deadline_at if "deadline_at" in fields else row.deadline_at
-        if "deadline_date" in fields and body.deadline_date is not None:
-            at_value = None
-        if "deadline_at" in fields and body.deadline_at is not None:
-            date_value = None
-        _validate_deadline(date_value, at_value)
-        row.deadline_date = date_value
-        row.deadline_at = at_value
     db.commit()
     db.refresh(row)
     return row

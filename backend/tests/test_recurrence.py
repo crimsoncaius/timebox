@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -486,7 +487,7 @@ def test_occurrence_tombstone_prevents_regeneration(client):
     assert f"scheduled:{today}" not in {window["key"] for window in series["upcoming"]}
 
 
-def test_lifecycle_preserves_protected_occurrences_and_defers_permanent_series_delete(client):
+def test_lifecycle_preserves_and_detaches_occurrences_on_permanent_series_delete(client):
     today = client.get("/health").json()["today"]
     template = client.post("/recurring-templates", json=_daily_body(today, checklist_titles=[])).json()
     first_task = client.get("/tasks").json()["items"][0]
@@ -495,11 +496,112 @@ def test_lifecycle_preserves_protected_occurrences_and_defers_permanent_series_d
     assert client.get("/recurring-templates?status=paused").json()[0]["status"] == "paused"
     assert client.post(f"/recurring-templates/{template['id']}/resume").status_code == 200
     assert client.post(f"/recurring-templates/{template['id']}/end").status_code == 200
-    assert client.delete(f"/recurring-templates/{template['id']}").status_code == 405
+    deleted = client.delete(f"/recurring-templates/{template['id']}")
+    assert deleted.status_code == 204, deleted.text
+    assert client.get(f"/recurring-templates/{template['id']}").status_code == 404
+    assert client.get("/recurring-templates?status=ended").json() == []
     preserved = client.get("/tasks").json()["items"]
     assert len(preserved) == 1
-    assert preserved[0]["recurring_template_id"] == template["id"]
+    assert preserved[0]["id"] == first_task["id"]
+    assert preserved[0]["recurring_template_id"] is None
     assert preserved[0]["description"] == "keep me"
+
+
+@pytest.mark.parametrize("status", ["active", "paused"])
+def test_permanent_series_delete_requires_ending_first(client, status):
+    today = client.get("/health").json()["today"]
+    template = client.post("/recurring-templates", json=_daily_body(today)).json()
+    if status == "paused":
+        assert client.post(f"/recurring-templates/{template['id']}/pause").status_code == 200
+    response = client.delete(f"/recurring-templates/{template['id']}")
+    assert response.status_code == 422, response.text
+    assert client.get(f"/recurring-templates/{template['id']}").json()["status"] == status
+
+
+def test_permanent_series_delete_missing_is_not_found(client):
+    assert client.delete("/recurring-templates/99999").status_code == 404
+
+
+def test_permanent_series_delete_preserves_task_history_and_skipped_visibility(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "History"}).json()
+    template = client.post("/recurring-templates", json=_daily_body(
+        (today - dt.timedelta(days=1)).isoformat(), confirm_backfill=True,
+        task_type_id=task_type["id"],
+    )).json()
+    task = _task_for_planning_date(client, today, template["id"])
+    assert client.post(f"/subtasks/{task['subtasks'][0]['id']}/check").status_code == 200
+    future_date = today + dt.timedelta(days=2)
+    future_task = _task_for_planning_date(client, future_date, template["id"])
+    future_block = _planned_block(client, future_date, future_task, task_type["id"])
+    actual = client.post("/actual-blocks", json={
+        "task_type_id": task_type["id"], "task_id": task["id"],
+        "start_at": f"{today.isoformat()}T01:00:00Z",
+        "end_at": f"{today.isoformat()}T01:30:00Z", "note": "Durable actual history",
+    })
+    assert actual.status_code == 201, actual.text
+    completed = client.post(f"/tasks/{task['id']}/complete")
+    assert completed.status_code == 200, completed.text
+    assert client.post(f"/recurring-templates/{template['id']}/end").status_code == 200
+    actual_blocks = client.get(f"/days/{today.isoformat()}").json()["actual_blocks"]
+    with Session(get_engine()) as db:
+        task_ids = list(db.scalars(select(Task.id).where(Task.recurring_template_id == template["id"])))
+        skipped_id = db.scalar(select(RecurrenceOccurrence.task_id).where(
+            RecurrenceOccurrence.template_id == template["id"], RecurrenceOccurrence.skipped.is_(True),
+        ))
+        preserved_fields = (
+            "id", "parent_id", "title", "description", "status", "completed_at", "checked",
+            "archived_at", "deleted_at", "project_id", "task_type_id", "reminder_at",
+            "deadline_date", "recurrence_kind", "occurrence_key", "ready_to_plan",
+        )
+        before = {
+            task_id: {field: getattr(db.get(Task, task_id), field) for field in preserved_fields}
+            for task_id in task_ids
+        }
+    assert skipped_id is not None
+
+    response = client.delete(f"/recurring-templates/{template['id']}")
+
+    assert response.status_code == 204, response.text
+    with Session(get_engine()) as db:
+        for task_id in task_ids:
+            after = db.get(Task, task_id)
+            assert after is not None
+            assert after.recurring_template_id is None
+            assert {field: getattr(after, field) for field in preserved_fields} == before[task_id]
+    active_tasks = client.get("/tasks").json()["items"]
+    assert all(item["occurrence"] is None for item in active_tasks)
+    active_ids = {item["id"] for item in active_tasks}
+    assert skipped_id not in active_ids
+    assert future_task["id"] in active_ids
+    assert client.get(f"/days/{future_date.isoformat()}").json()["planned_blocks"] == [future_block]
+    assert client.get(f"/days/{today.isoformat()}").json()["actual_blocks"] == actual_blocks
+    with Session(get_engine()) as db:
+        assert db.get(RecurringTemplate, template["id"]) is None
+        assert db.get(Task, skipped_id).occurrence.skipped is True
+        assert db.get(Task, skipped_id).occurrence.template_id is None
+
+
+def test_permanent_quota_series_delete_keeps_tracker_and_session_completion(client):
+    today = client.get("/health").json()["today"]
+    template = client.post("/recurring-templates", json={
+        "title": "Practice", "mode": "quota", "frequency": "weekly", "interval": 1,
+        "quota_count": 2, "start_date": today,
+    }).json()
+    tracker = client.get("/tasks").json()["items"][0]
+    first, second = tracker["session_tasks"]
+    assert client.post(f"/tasks/{first['id']}/complete").status_code == 200
+    assert client.post(f"/recurring-templates/{template['id']}/end").status_code == 200
+    assert client.delete(f"/recurring-templates/{template['id']}").status_code == 204
+    detached = next(item for item in client.get("/tasks").json()["items"] if item["id"] == tracker["id"])
+    assert detached["recurring_template_id"] is None
+    assert detached["recurrence_kind"] == "quota_parent"
+    assert detached["quota_completed"] == 1
+    assert [session["id"] for session in detached["session_tasks"]] == [first["id"], second["id"]]
+    assert all(session["recurring_template_id"] is None for session in detached["session_tasks"])
+    assert client.post(f"/tasks/{second['id']}/complete").status_code == 200
+    updated = next(item for item in client.get("/tasks").json()["items"] if item["id"] == tracker["id"])
+    assert updated["quota_completed"] == 2
 
 
 def test_pause_and_end_remove_only_untouched_future_occurrences(client):

@@ -1,0 +1,53 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Prototype · native Android composer
+        - generic [ref=e162]:
+          - generic [ref=e164]:
+            - generic [ref=e165]:
+              - generic [ref=e166]:
+                - paragraph [ref=e167]: BATTLE PLAN / CAPTURE
+                - heading "New task" [level=1] [ref=e168]
+              - button "Close" [ref=e169]: ×
+            - generic [ref=e170]:
+              - button "01 Essentials" [ref=e171]:
+                - generic [ref=e172]: "01"
+                - text: Essentials
+              - button "02 Organize" [ref=e173]:
+                - generic [ref=e174]: "02"
+                - text: Organize
+              - button "03 Plan" [ref=e175]:
+                - generic [ref=e176]: "03"
+                - text: Plan
+          - generic [ref=e178]:
+            - generic [ref=e179]:
+              - generic [ref=e180]: "01"
+              - generic [ref=e181]:
+                - heading "Name the outcome" [level=2] [ref=e182]
+                - paragraph [ref=e183]: A title is all you need for quick capture.
+            - generic [ref=e184]:
+              - generic [ref=e185]: Title
+              - textbox "Title" [active] [ref=e186]:
+                - /placeholder: Prepare launch notes
+                - text: Prepare launch notes
+            - generic [ref=e187]:
+              - generic [ref=e188]: Description
+              - textbox "Description" [ref=e189]:
+                - /placeholder: Optional context or outcome
+            - button "Continue to organization →" [ref=e190]:
+              - text: Continue to organization
+              - generic [ref=e191]: →
+          - button "Quick create" [ref=e193]
+      - complementary [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - paragraph [ref=e85]: Visible prototype state
+            - heading "Variant C" [level=2] [ref=e194]
+          - button "Copy JSON" [ref=e87]
+        - generic [ref=e88]: "{ \"prototype\": \"Planning workbench\", \"canCreate\": true, \"payload\": { \"title\": \"Prepare launch notes\", \"description\": \"\", \"project\": \"Admin\", \"taskType\": \"Unset\", \"status\": \"Open\", \"deadlineMode\": \"None\", \"deadlineDate\": null, \"deadlineTime\": null, \"urgency\": \"Unset\", \"importance\": \"Unset\", \"readyToPlan\": false, \"reminder\": null } }"
+    - navigation "Prototype variants" [ref=e89]:
+      - button "Previous variant" [ref=e90]: ←
+      - generic [ref=e91]: C — Planning workbench
+      - button "Next variant" [ref=e92]: →
+      - button "Toggle prototype theme" [ref=e93]: ◐

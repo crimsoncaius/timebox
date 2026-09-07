@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TodayPage } from './TodayPage'
 
@@ -9,6 +9,11 @@ function jsonResponse(data: unknown, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function DirectWorkRequest() {
+  const navigate = useNavigate()
+  return <button onClick={() => navigate('?workMode=start')}>Request work directly</button>
 }
 
 const dayPayload = {
@@ -60,6 +65,7 @@ describe('TodayPage inspector rail', () => {
   let standaloneActual: Record<string, unknown> | null = null
 
   beforeEach(() => {
+    localStorage.clear()
     rejectNextTaskUndo = false
     standaloneActual = null
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -193,8 +199,10 @@ describe('TodayPage inspector rail', () => {
   })
 
   afterEach(() => {
+    localStorage.clear()
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('shows persistent empty rail then block details after selecting a block', async () => {
@@ -216,6 +224,95 @@ describe('TodayPage inspector rail', () => {
     expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
   })
 
+  it('keeps a focused Note draft when the earlier Block Name PATCH returns a full day', async () => {
+    const fallbackFetch = globalThis.fetch
+    let savedBlock = { ...dayPayload.time_blocks[0]!, name: 'Original name', note: 'Previously saved note' }
+    const snapshot = () => ({ ...dayPayload, time_blocks: [savedBlock, dayPayload.time_blocks[1]!] })
+    let releaseName!: () => void
+    const nameResponse = new Promise<void>((resolve) => { releaseName = resolve })
+    const patches: Record<string, unknown>[] = []
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/api/days/2026-06-01') return jsonResponse(snapshot())
+      if (url === '/api/days/2026-06-01/blocks/10' && init?.method === 'PATCH') {
+        const patch = JSON.parse(String(init.body))
+        patches.push(patch)
+        savedBlock = { ...savedBlock, ...patch }
+        const response = jsonResponse(snapshot())
+        if ('name' in patch) await nameResponse
+        return response
+      }
+      return fallbackFetch(input, init)
+    })
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    const rail = screen.getByRole('complementary', { name: 'Block details' })
+    const name = within(rail).getByLabelText('Name')
+    const note = within(rail).getByLabelText('Note')
+    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
+    fireEvent.change(name, { target: { value: 'Renamed block' } })
+    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
+    fireEvent.blur(name)
+    fireEvent.focus(note)
+    fireEvent.change(note, { target: { value: 'New note that should not disappear' } })
+    expect(patches).toEqual([{ name: 'Renamed block' }])
+    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
+    await act(async () => { releaseName() })
+    expect(note).toHaveValue('New note that should not disappear')
+    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
+    fireEvent.blur(note)
+    await waitFor(() => expect(savedBlock.note).toBe('New note that should not disappear'))
+    // The hidden responsive editor must not write its previously saved Note back.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)) })
+    expect(patches).toEqual([{ name: 'Renamed block' }, { note: 'New note that should not disappear' }])
+    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
+  })
+
+  it('preserves Note edits through responsive layout changes without a hidden editor saving over them', async () => {
+    const fallbackFetch = globalThis.fetch
+    let savedBlock = { ...dayPayload.time_blocks[0]!, note: 'Original note' }
+    const snapshot = () => ({ ...dayPayload, time_blocks: [savedBlock, dayPayload.time_blocks[1]!] })
+    const patches: { note?: string }[] = []
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/days/2026-06-01') return jsonResponse(snapshot())
+      if (String(input) === '/api/days/2026-06-01/blocks/10' && init?.method === 'PATCH') {
+        const patch = JSON.parse(String(init.body))
+        patches.push(patch)
+        savedBlock = { ...savedBlock, ...patch }
+        return jsonResponse(snapshot())
+      }
+      return fallbackFetch(input, init)
+    })
+    let resize: (event: { matches: boolean }) => void = () => {}
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: (_type: string, listener: typeof resize) => { resize = listener },
+      removeEventListener: vi.fn(),
+    }))
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    const desktop = screen.getByRole('complementary', { name: 'Block details' }).querySelector('textarea')!
+    fireEvent.change(desktop, { target: { value: 'Desktop note before resize' } })
+    fireEvent.blur(desktop)
+    await waitFor(() => expect(savedBlock.note).toBe('Desktop note before resize'))
+    act(() => { resize({ matches: false }) })
+    const mobile = screen.getByRole('dialog').querySelector('textarea')!
+    fireEvent.change(mobile, { target: { value: 'Latest mobile note' } })
+    fireEvent.blur(mobile)
+    await waitFor(() => expect(savedBlock.note).toBe('Latest mobile note'))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)) })
+    expect(patches).toEqual([{ note: 'Desktop note before resize' }, { note: 'Latest mobile note' }])
+    expect(savedBlock.note).toBe('Latest mobile note')
+
+    // A resize must carry an unsaved draft too, rather than remount from older server data.
+    fireEvent.change(mobile, { target: { value: 'Unsaved note across resize' } })
+    act(() => { resize({ matches: true }) })
+    const nextDesktop = screen.getByRole('complementary', { name: 'Block details' }).querySelector('textarea')!
+    expect(nextDesktop).toHaveValue('Unsaved note across resize')
+    fireEvent.blur(nextDesktop)
+    await waitFor(() => expect(savedBlock.note).toBe('Unsaved note across resize'))
+  })
+
   it('selects a Ready to Plan task before placing it on the timeline', async () => {
     const user = userEvent.setup()
     render(
@@ -231,6 +328,13 @@ describe('TodayPage inspector rail', () => {
 
     expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
+    expect(screen.getByText('Finish planning to start Work Mode.')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Start Work Mode' }))
+    expect(screen.queryByRole('dialog', { name: 'Start Work Mode' })).not.toBeInTheDocument()
+    expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
+    await user.click(taskButtons[0]!)
+    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
   })
 
   it('places a nested quota Session Task as an ordinary Planned Task', async () => {
@@ -324,6 +428,72 @@ describe('TodayPage inspector rail', () => {
     await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
     expect(screen.queryByRole('button', { name: 'Start Work Mode' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]).toBeVisible()
+  })
+
+  it('consumes a direct Work Mode request during planning without clearing the selection or replaying it', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<><TodayPage /><DirectWorkRequest /></>} /></Routes></MemoryRouter>)
+    const task = (await screen.findAllByRole('button', { name: /Write launch narrative/ }))[0]!
+    await user.click(task)
+    await user.click(screen.getByRole('button', { name: 'Request work directly' }))
+    expect(task).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('dialog', { name: 'Start Work Mode' })).not.toBeInTheDocument()
+    await user.click(task)
+    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Start Work Mode' })).not.toBeInTheDocument()
+  })
+
+  it('keeps a planned draft intact when the disabled Work Mode control is pressed', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByTestId('day-timeline')
+    const lane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')!
+    fireEvent.click(lane, { clientY: 190 })
+    const create = await screen.findByRole('button', { name: 'Create block' })
+    const work = screen.getByRole('button', { name: 'Start Work Mode' })
+    expect(work).toBeDisabled()
+    await user.click(work)
+    expect(create).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
+  })
+
+  it('finishes Plan something first before automatically entering Work Mode', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByTestId('day-timeline')
+    await user.click(screen.getByRole('link', { name: 'Start Work Mode' }))
+    await user.click(await screen.findByRole('button', { name: 'Plan something first' }))
+    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Create block' }))
+    expect(await screen.findByRole('dialog', { name: 'Work Mode' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create block' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Exit Work Mode' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Work Mode' })).not.toBeInTheDocument())
+  })
+
+  it.each(['cancel', 'failed save'])('does not start Work Mode after Plan something first: %s', async (outcome) => {
+    const user = userEvent.setup()
+    if (outcome === 'failed save') {
+      const fallbackFetch = globalThis.fetch
+      globalThis.fetch = vi.fn((input, init) => String(input).endsWith('/blocks') && init?.method === 'POST'
+        ? Promise.resolve(jsonResponse({ detail: 'Save rejected' }, 409))
+        : fallbackFetch(input, init))
+    }
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByTestId('day-timeline')
+    await user.click(screen.getByRole('link', { name: 'Start Work Mode' }))
+    await user.click(await screen.findByRole('button', { name: 'Plan something first' }))
+    if (outcome === 'cancel') {
+      await user.keyboard('{Escape}')
+      expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
+    } else {
+      await user.click(screen.getByRole('button', { name: 'Create block' }))
+      await screen.findAllByText('Save rejected')
+      expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Create block' })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole('dialog', { name: 'Work Mode' })).not.toBeInTheDocument()
   })
 
   it('keeps a newly created standalone Actual selected without a stale discard prompt', async () => {

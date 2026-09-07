@@ -4,7 +4,7 @@ import datetime as dt
 import json
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
@@ -174,6 +174,25 @@ def end_template(db: Session, template_id: int, settings: Settings) -> Recurring
     row.ended_at = _utc_now()
     db.commit()
     return _load_template(db, row.id)
+
+
+def delete_template(db: Session, template_id: int) -> None:
+    row = _load_template(db, template_id)
+    if row.status != RecurrenceStatus.ended:
+        raise ValueError("Only ended templates can be permanently deleted")
+    # Detach every generated Task, including archived/trash rows and Session
+    # Tasks. Keep their execution roles, completion and block history intact.
+    tasks = db.scalars(select(Task).where(Task.recurring_template_id == row.id)).all()
+    for task in tasks:
+        task.recurring_template = None
+    # Only generation tombstones are disposable. Occurrence ledgers attached to
+    # surviving Tasks retain their skipped history via the SET NULL foreign key.
+    db.execute(delete(RecurrenceOccurrence).where(
+        RecurrenceOccurrence.template_id == row.id,
+        RecurrenceOccurrence.task_id.is_(None),
+    ))
+    db.delete(row)
+    db.commit()
 
 
 def _to_read_current_tasks(tasks_window: list[Task], today: dt.date) -> list[RecurringTaskLink]:

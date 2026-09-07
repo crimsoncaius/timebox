@@ -66,9 +66,6 @@ enum class RecurrenceFrequency(val wire: String) {
 data class Project(
     val id: Int,
     val name: String,
-    val description: String,
-    val deadlineDate: LocalDate?,
-    val deadlineAt: Instant?,
     val createdAt: Instant,
     val updatedAt: Instant,
 )
@@ -184,16 +181,10 @@ data class RecurringTemplate(
 
 data class ProjectCreate(
     val name: String,
-    val description: String = "",
-    val deadlineDate: LocalDate? = null,
-    val deadlineAt: Instant? = null,
 )
 
 data class ProjectPatch(
     val name: PatchField<String> = PatchField.Absent,
-    val description: PatchField<String> = PatchField.Absent,
-    val deadlineDate: PatchField<LocalDate> = PatchField.Absent,
-    val deadlineAt: PatchField<Instant> = PatchField.Absent,
 )
 
 data class BattleTaskCreate(
@@ -283,7 +274,7 @@ data class RecurringTemplatePatch(
 )
 
 internal fun ProjectDto.toModel() = Project(
-    id, name, description, deadlineDate?.let(LocalDate::parse), deadlineAt?.let(::parseInstant),
+    id, name,
     parseInstant(createdAt), parseInstant(updatedAt),
 )
 

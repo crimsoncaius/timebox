@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/react/sortable'
 import {
   deadlineBadge,
   plannedDateSummary,
+  taskColumn,
   type DeadlineBadge as DeadlineBadgeValue,
   type PlannedDateSummary as PlannedDateSummaryValue,
 } from '../../lib/battlePlan'
@@ -31,7 +32,9 @@ export function BattlePlanCard({
   onSetSubtaskChecked,
   onToggleReady,
   onSetTaskCompletion,
+  onMoveProject,
 }: {
+  onMoveProject: (task: BattleTask) => void
   task: BattleTask
   index: number
   column: TaskStatus
@@ -95,6 +98,17 @@ export function BattlePlanCard({
             {task.title}
           </h3>
         </div>
+        <details className="relative" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+          <summary aria-label={`Actions for ${task.title}`} className="cursor-pointer list-none rounded-full p-1.5">
+            <span className="material-symbols-outlined" aria-hidden>more_vert</span>
+          </summary>
+          <div className="absolute right-0 z-40 w-48 rounded-xl bg-surface-container-lowest p-2 shadow-xl dark:bg-dark-surface-container-high">
+            <button type="button" className="w-full rounded-lg p-2 text-left text-sm disabled:opacity-50" disabled={task.status === 'completed'} onClick={(event) => {
+              event.currentTarget.closest('details')?.removeAttribute('open')
+              onMoveProject(task)
+            }}>Move to project</button>
+          </div>
+        </details>
         <span
           aria-hidden
           className="-mr-1 -mt-1 rounded-full p-1.5 text-on-surface-variant/55 opacity-60 transition hover:bg-surface-container-low group-hover:opacity-100 dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
@@ -106,6 +120,7 @@ export function BattlePlanCard({
       <div className="mt-3 block w-full text-left">
         <div className="flex flex-wrap gap-1.5">
           {task.project ? <MetaChip>{task.project.name}</MetaChip> : <MetaChip>Admin</MetaChip>}
+          {taskColumn(task) === 'blocked' ? <MetaChip>Blocked</MetaChip> : null}
           {task.task_type ? <MetaChip>{task.task_type.name}</MetaChip> : null}
           {task.urgency ? <MetaChip>U · {task.urgency}</MetaChip> : null}
           {task.importance ? <MetaChip>I · {task.importance}</MetaChip> : null}

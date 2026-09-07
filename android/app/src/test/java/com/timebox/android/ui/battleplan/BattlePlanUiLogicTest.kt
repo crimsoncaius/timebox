@@ -302,7 +302,7 @@ internal fun task(
     parentId = null,
     parentTitle = null,
     projectId = projectId,
-    project = projectId?.let { Project(it, "Project $it", "", null, null, Instant.EPOCH, Instant.EPOCH) },
+    project = projectId?.let { Project(it, "Project $it", Instant.EPOCH, Instant.EPOCH) },
     taskTypeId = null,
     taskType = null,
     recurringTemplateId = null,

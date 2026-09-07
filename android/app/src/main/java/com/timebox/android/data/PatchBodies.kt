@@ -6,9 +6,6 @@ import kotlinx.serialization.json.JsonObject
 
 internal fun ProjectPatch.toJson(): JsonObject = patchBody {
     string("name", name)
-    string("description", description)
-    string("deadline_date", deadlineDate.map(LocalDateEncoder))
-    string("deadline_at", deadlineAt.map(InstantEncoder))
 }
 
 internal fun BattleTaskPatch.toJson(): JsonObject = patchBody {

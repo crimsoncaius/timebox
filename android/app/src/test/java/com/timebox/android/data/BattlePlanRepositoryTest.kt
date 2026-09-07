@@ -168,7 +168,7 @@ class BattlePlanRepositoryTest {
     }
 
     private fun projectDto() = ProjectDto(
-        1, "Project", "", null, null, "2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z",
+        1, "Project", "2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z",
     )
 
     private fun taskDto(project: ProjectDto) = BattleTaskDto(

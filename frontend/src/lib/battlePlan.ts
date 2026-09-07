@@ -1,4 +1,4 @@
-import type { BattleTask, PriorityLevel, TaskStatus } from './api'
+import type { BattleTask, BattleTaskWrite, PriorityLevel, TaskStatus } from './api'
 
 export const TASK_STATUSES: TaskStatus[] = ['open', 'in_progress', 'blocked', 'completed']
 export const PRIORITY_LEVELS: PriorityLevel[] = ['low', 'medium', 'high']
@@ -15,6 +15,16 @@ export type DeadlineTone = 'overdue' | 'today' | 'tomorrow' | 'upcoming' | 'late
 export type DeadlineBadge = {
   label: string
   tone: DeadlineTone
+}
+
+// The board combines completion/progress with the independent Blocked condition.
+export function taskColumn(task: Pick<BattleTask, 'status' | 'is_blocked'>): TaskStatus {
+  if (task.status === 'completed') return 'completed'
+  return task.is_blocked ? 'blocked' : task.status
+}
+
+export function taskColumnChange(column: Exclude<TaskStatus, 'completed'>): Partial<BattleTaskWrite> {
+  return column === 'blocked' ? { is_blocked: true } : { status: column, is_blocked: false }
 }
 
 export type PlannedDateTone = 'today' | 'future' | 'past'

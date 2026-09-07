@@ -452,6 +452,14 @@ class BattlePlanViewModel internal constructor(
         mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id, projectId = parent.projectId)) }
     }
 
+    fun moveProject(task: BattleTask, projectId: Int?) {
+        if (task.status == TaskStatus.Completed || task.parentId != null || task.projectId == projectId) return
+        mutate("Task moved") {
+            repository.patchBattleTask(task.id, BattleTaskPatch(projectId = if (projectId == null) PatchField.Null else PatchField.of(projectId)))
+                .onSuccess { saved -> _state.update { current -> current.copy(tasks = current.tasks.map { if (it.id == saved.id) saved else it }) } }
+        }
+    }
+
     fun toggleReady(task: BattleTask) {
         if (task.status == TaskStatus.Completed) return
         mutate(if (task.readyToPlan) "Removed from Ready to Plan" else "Ready to Plan") {

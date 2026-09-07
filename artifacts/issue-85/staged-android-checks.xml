@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.timebox.android.ui.day.PlanModeScreenTest" tests="16" failures="0" errors="0" skipped="0" time="154.671" timestamp="2026-09-07T04:36:59" hostname="localhost">
+  <properties>
+    <property name="device" value="Pixel_9a(AVD) - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="draggingTaskCardOntoOccupiedPlannedTimeSnapsToPreview" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="10.684" />
+  <testcase name="planningDraftResizeGroovesRequireLongPress" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="7.29" />
+  <testcase name="bluePlanningDraftCanReturnToTaskRail" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="10.715" />
+  <testcase name="savingDisabledPlanningDraftDoesNotArm" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="10.186" />
+  <testcase name="carriedDraftMatchesDestinationSizeAndCancellationClearsBoth" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="9.088" />
+  <testcase name="androidBackCancelsInsteadOfCommittingPlanningSession" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="10.81" />
+  <testcase name="fullDayShowsNoSpaceAndLeavesQueueTaskUnplaced" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="7.406" />
+  <testcase name="draftMoveSnapsAroundAnotherDraftAndPreservesDuration" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="8.467" />
+  <testcase name="taskRailEarlyVerticalMovementScrollsWithoutArming" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="9.614" />
+  <testcase name="taskCardDragStartsImmediatelyWithoutHapticAndRequestsPlacement" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="9.192" />
+  <testcase name="persistedPlannedCardIsLockedInPlanMode" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="11.276" />
+  <testcase name="planModeReplacesActualWithReadyTaskRail" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="7.071" />
+  <testcase name="accessibleTaskCardArmsTask" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="8.782" />
+  <testcase name="offscreenSnapShowsTimeWithoutJumpingAndEdgeHoldStillScrolls" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="9.649" />
+  <testcase name="availabilityChangeAfterPreviewRejectsReleaseWithoutChoosingAnotherTime" classname="com.timebox.android.ui.day.PlanModeScreenTest" time="7.479" />
+  <testcase name="deniedPermissionExplainsServerStateAndOffersBothRecoveryPaths" classname="com.timebox.android.ui.settings.SettingsNotificationTest" time="11.432" />
+</testsuite>

@@ -1,0 +1,86 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Prototype · native Android composer
+        - generic [ref=e94]:
+          - generic [ref=e96]:
+            - generic [ref=e97]:
+              - generic [ref=e98]: NEW BATTLE PLAN TASK
+              - button "Close" [ref=e99]: ×
+            - textbox "What needs doing?" [active] [ref=e100]: Prepare launch notes
+            - textbox "Add context, notes, or a useful outcome…" [ref=e101]
+          - generic [ref=e102]:
+            - generic [ref=e103]:
+              - paragraph [ref=e104]: File it
+              - generic [ref=e105]:
+                - generic [ref=e106] [cursor=pointer]:
+                  - generic [ref=e107]: folder
+                  - generic [ref=e108]:
+                    - generic [ref=e109]: Admin
+                    - generic [ref=e110]: Location
+                  - combobox "folder Admin Location" [ref=e112]:
+                    - option "Admin" [selected]
+                    - option "Timebox"
+                    - option "Personal"
+                - generic [ref=e113] [cursor=pointer]:
+                  - generic [ref=e114]: label
+                  - generic [ref=e115]:
+                    - generic [ref=e116]: Unset
+                    - generic [ref=e117]: Task Type
+                  - combobox "label Unset Task Type" [ref=e119]:
+                    - option "Unset" [selected]
+                    - option "Development"
+                    - option "Design"
+                    - option "Admin / Finance"
+                - generic [ref=e120] [cursor=pointer]:
+                  - generic [ref=e121]: radio_button_checked
+                  - generic [ref=e122]:
+                    - generic [ref=e123]: Open
+                    - generic [ref=e124]: Status
+                  - combobox "radio_button_checked Open Status" [ref=e126]:
+                    - option "Open" [selected]
+                    - option "In Progress"
+            - generic [ref=e127]:
+              - generic [ref=e128]:
+                - paragraph [ref=e129]: Give it a horizon
+                - generic [ref=e130]: Optional
+              - combobox [ref=e134]:
+                - option "None" [selected]
+                - option "Date only"
+                - option "Date and time"
+            - generic [ref=e135]:
+              - paragraph [ref=e136]: Signal
+              - generic [ref=e137]:
+                - generic [ref=e138]:
+                  - generic [ref=e139]: Urgency
+                  - generic [ref=e140]:
+                    - button "Unset" [ref=e141]
+                    - button "Low" [ref=e142]
+                    - button "Medium" [ref=e143]
+                    - button "High" [ref=e144]
+                - generic [ref=e145]:
+                  - generic [ref=e146]: Importance
+                  - generic [ref=e147]:
+                    - button "Unset" [ref=e148]
+                    - button "Low" [ref=e149]
+                    - button "Medium" [ref=e150]
+                    - button "High" [ref=e151]
+            - button "More options Ready to Plan and reminder ⌄" [ref=e154]:
+              - generic [ref=e155]:
+                - generic [ref=e156]: More options
+                - generic [ref=e157]: Ready to Plan and reminder
+              - generic [ref=e158]: ⌄
+          - button "Create in Open" [ref=e160]
+      - complementary [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - paragraph [ref=e85]: Visible prototype state
+            - heading "Variant B" [level=2] [ref=e161]
+          - button "Copy JSON" [ref=e87]
+        - generic [ref=e88]: "{ \"prototype\": \"Command canvas\", \"canCreate\": true, \"payload\": { \"title\": \"Prepare launch notes\", \"description\": \"\", \"project\": \"Admin\", \"taskType\": \"Unset\", \"status\": \"Open\", \"deadlineMode\": \"None\", \"deadlineDate\": null, \"deadlineTime\": null, \"urgency\": \"Unset\", \"importance\": \"Unset\", \"readyToPlan\": false, \"reminder\": null } }"
+    - navigation "Prototype variants" [ref=e89]:
+      - button "Previous variant" [ref=e90]: ←
+      - generic [ref=e91]: B — Command canvas
+      - button "Next variant" [ref=e92]: →
+      - button "Toggle prototype theme" [ref=e93]: ◐

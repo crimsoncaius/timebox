@@ -131,7 +131,7 @@ internal fun DayCalendarHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                WorkModeAction(onClick = onOpenWorkMode)
+                WorkModeAction(enabled = !isPlanningMode, onClick = onOpenWorkMode)
                 PlanningModeAction(
                     isPlanningMode = isPlanningMode,
                     enabled = planningActionEnabled,
@@ -140,6 +140,14 @@ internal fun DayCalendarHeader(
             }
         }
 
+        if (isPlanningMode) {
+            Text(
+                "Finish planning to start Work Mode.",
+                modifier = Modifier.padding(horizontal = 20.dp),
+                color = colors.onVariant,
+                fontSize = 11.sp,
+            )
+        }
         Spacer(Modifier.height(8.dp))
 
         Row(
@@ -193,7 +201,7 @@ internal fun DayCalendarHeader(
 }
 
 @Composable
-private fun WorkModeAction(onClick: () -> Unit) {
+private fun WorkModeAction(enabled: Boolean, onClick: () -> Unit) {
     val colors = TimeboxTheme.colors
     val shape = RoundedCornerShape(percent = 50)
     Box(
@@ -201,7 +209,7 @@ private fun WorkModeAction(onClick: () -> Unit) {
             .size(48.dp)
             .testTag("work-mode-action")
             .clip(shape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Work Mode" },
         contentAlignment = Alignment.Center,
     ) {
@@ -215,7 +223,7 @@ private fun WorkModeAction(onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Outlined.PlayArrow,
                 contentDescription = null,
-                tint = colors.onVariant,
+                tint = colors.onVariant.copy(alpha = if (enabled) 1f else 0.38f),
                 modifier = Modifier.size(20.dp),
             )
         }

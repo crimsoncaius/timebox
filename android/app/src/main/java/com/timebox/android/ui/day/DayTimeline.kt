@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -329,7 +329,11 @@ private fun LaneColumn(
             .testTag("day-lane-${lane.name.lowercase()}")
             .then(
                 if (onBoundsChanged != null) {
-                    Modifier.onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) }
+                    Modifier.onGloballyPositioned {
+                        // Drop times need the full lane origin, including the portion above
+                        // the scroll viewport. Clipped bounds would reset it to the viewport top.
+                        onBoundsChanged(it.findRootCoordinates().localBoundingBoxOf(it, clipBounds = false))
+                    }
                 } else {
                     Modifier
                 }

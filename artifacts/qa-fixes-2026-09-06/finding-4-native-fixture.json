@@ -1,0 +1,110 @@
+{
+  "series": {
+    "id": 3,
+    "title": "QA fix4 native deletion",
+    "description": "",
+    "project_id": null,
+    "project": null,
+    "task_type_id": null,
+    "task_type": null,
+    "mode": "scheduled",
+    "status": "active",
+    "frequency": "daily",
+    "interval": 1,
+    "weekdays": [],
+    "month_day": null,
+    "quota_count": null,
+    "start_date": "2026-09-06",
+    "end_date": null,
+    "cycle_limit": 1,
+    "keep_unfinished_overdue": false,
+    "urgency": null,
+    "importance": null,
+    "paused_at": null,
+    "ended_at": null,
+    "created_at": "2026-09-06T12:26:21.96993Z",
+    "updated_at": "2026-09-06T12:26:21.96993Z",
+    "checklist_items": [
+      {
+        "id": 3,
+        "title": "Preserve checked checkpoint",
+        "position": 0
+      }
+    ],
+    "upcoming": [
+      {
+        "key": "scheduled:2026-09-06",
+        "start": "2026-09-06",
+        "end": "2026-09-06"
+      }
+    ],
+    "current_tasks": [
+      {
+        "id": 19,
+        "title": "QA fix4 native deletion",
+        "deadline_date": "2026-09-06",
+        "overdue": false
+      }
+    ],
+    "cadence": "Daily",
+    "next_occurrence": "2026-09-06"
+  },
+  "task": {
+    "id": 19,
+    "parent_id": null,
+    "parent_title": null,
+    "project_id": null,
+    "project": null,
+    "task_type_id": null,
+    "task_type": null,
+    "recurring_template_id": 3,
+    "recurring_template_title": "QA fix4 native deletion",
+    "occurrence_key": "scheduled:2026-09-06",
+    "recurrence_kind": "scheduled",
+    "quota_period_start": null,
+    "quota_period_end": null,
+    "expected_sessions": null,
+    "session_index": null,
+    "quota_completed": null,
+    "title": "QA fix4 native deletion",
+    "description": "",
+    "ready_to_plan": false,
+    "is_blocked": false,
+    "blocking_reason": null,
+    "status": "open",
+    "completed_at": null,
+    "version": 1,
+    "urgency": null,
+    "importance": null,
+    "deadline_date": "2026-09-06",
+    "deadline_at": null,
+    "reminder_at": null,
+    "reminder_delivered_at": null,
+    "position": 5,
+    "archived_at": null,
+    "deleted_at": null,
+    "created_at": "2026-09-06T12:26:21.98694Z",
+    "updated_at": "2026-09-06T12:26:21.98694Z",
+    "overdue": false,
+    "planned_dates": [],
+    "occurrence": {
+      "id": 4,
+      "recurring_task_series_id": 3,
+      "occurrence_key": "scheduled:2026-09-06"
+    },
+    "subtasks": [
+      {
+        "id": 20,
+        "parent_task_id": 19,
+        "title": "Preserve checked checkpoint",
+        "checked": false,
+        "effectively_resolved": false,
+        "position": 0,
+        "created_at": "2026-09-06T12:26:21.98694Z",
+        "updated_at": "2026-09-06T12:26:21.98694Z"
+      }
+    ],
+    "session_tasks": [],
+    "outstanding_occurrence_count": 1
+  }
+}

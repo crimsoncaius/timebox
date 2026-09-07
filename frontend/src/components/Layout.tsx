@@ -13,10 +13,14 @@ function isTodayPath(pathname: string, today: string | null) {
 export function Layout({
   children,
   mainClassName,
+  planningActive = false,
+  workModeActive = false,
 }: {
   children: ReactNode;
   /** Optional extra classes for the main content area. */
   mainClassName?: string;
+  planningActive?: boolean;
+  workModeActive?: boolean;
 }) {
   const location = useLocation();
   const [today, setToday] = useState<string | null>(null);
@@ -63,7 +67,7 @@ export function Layout({
 
   return (
     <div className="min-h-screen bg-surface font-body text-on-surface selection:bg-primary-container selection:text-on-primary-container dark:bg-dark-background dark:text-dark-on-surface">
-      <aside className="fixed left-0 top-0 z-60 hidden h-screen w-64 flex-col border-r-0 bg-surface px-8 py-8 dark:bg-dark-background lg:flex">
+      <aside inert={workModeActive} className="fixed left-0 top-0 z-60 hidden h-screen w-64 flex-col border-r-0 bg-surface px-8 py-8 dark:bg-dark-background lg:flex">
         <div className="mb-12">
           <h1 className="font-headline text-lg font-medium uppercase tracking-widest text-on-surface dark:text-dark-on-surface">
             Timebox
@@ -138,19 +142,26 @@ export function Layout({
       </aside>
 
       <div className="min-h-screen pb-20 lg:ml-64 lg:pb-0">
-        <header className="sticky top-0 z-50 flex w-full items-center justify-between bg-surface/85 px-4 py-4 backdrop-blur-[24px] dark:bg-dark-background/85 sm:px-8 lg:px-12 lg:py-6">
+        <header inert={workModeActive} className="sticky top-0 z-50 flex w-full items-center justify-between bg-surface/85 px-4 py-4 backdrop-blur-[24px] dark:bg-dark-background/85 sm:px-8 lg:px-12 lg:py-6">
           <div>
             <h2 className="font-headline text-xl font-light tracking-tighter text-on-surface dark:text-dark-on-surface">
               Timebox
             </h2>
           </div>
           <div className="flex items-center gap-3 text-on-surface dark:text-dark-on-surface">
-            <NavLink
+            {planningActive ? (
+              <div data-work-mode-action className="text-right">
+                <button type="button" disabled aria-describedby="work-mode-disabled-reason" className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary opacity-40">
+                  {workModeAvailable ? "Work Mode" : "Start Work Mode"}
+                </button>
+                <p id="work-mode-disabled-reason" className="mt-1 text-xs text-on-surface-variant">Finish planning to start Work Mode.</p>
+              </div>
+            ) : <NavLink
               to={`${todayHref}?workMode=start`}
               className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-opacity hover:opacity-90"
             >
               {workModeAvailable ? "Work Mode" : "Start Work Mode"}
-            </NavLink>
+            </NavLink>}
             <NavLink
               to="/settings"
               aria-label="Settings"
@@ -180,7 +191,7 @@ export function Layout({
           {children}
         </main>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-70 grid grid-cols-4 border-t border-outline-variant/20 bg-surface/95 px-2 py-2 backdrop-blur-xl dark:border-dark-outline-variant dark:bg-dark-background/95 lg:hidden">
+      <nav inert={workModeActive} className="fixed inset-x-0 bottom-0 z-70 grid grid-cols-4 border-t border-outline-variant/20 bg-surface/95 px-2 py-2 backdrop-blur-xl dark:border-dark-outline-variant dark:bg-dark-background/95 lg:hidden">
         <MobileNavLink to={todayHref} label="Day" icon="calendar_today" active={isTodayPath(location.pathname, today)} />
         <MobileNavLink to="/history" label="Chronicle" icon="history" active={location.pathname === "/history"} />
         <MobileNavLink to="/battle-plan" label="Battle Plan" icon="view_kanban" active={location.pathname.startsWith("/battle-plan")} />

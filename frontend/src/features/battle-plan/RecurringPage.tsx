@@ -58,7 +58,6 @@ export function RecurringPage() {
   const [mobileSidebar, setMobileSidebar] = useState(false)
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
-  const [timezone, setTimezone] = useState('UTC')
   const [applicationToday, setApplicationToday] = useState<string | null>(null)
   const latestLoadRequest = useRef(0)
   const selectedId = Number(searchParams.get('recurring')) || null
@@ -94,7 +93,6 @@ export function RecurringPage() {
     let active = true
     void api.health().then((health) => {
       if (!active) return
-      setTimezone(health.timezone)
       setApplicationToday(health.today)
     }).catch(() => undefined)
     return () => { active = false }
@@ -218,7 +216,6 @@ export function RecurringPage() {
       {projectEditor !== undefined ? (
         <ProjectEditor
           project={projectEditor}
-          timezone={timezone}
           taskCount={projectEditorCount}
           onClose={() => setProjectEditor(undefined)}
           onSave={async (body: ProjectWrite) => {

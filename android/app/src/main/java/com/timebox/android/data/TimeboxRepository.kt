@@ -218,9 +218,7 @@ class TimeboxRepository private constructor(
         api().createProject(
             ProjectCreateDto(
                 name = request.name,
-                description = request.description,
-                deadlineDate = request.deadlineDate?.toString(),
-                deadlineAt = request.deadlineAt?.toString(),
+
             )
         ).toModel()
     }

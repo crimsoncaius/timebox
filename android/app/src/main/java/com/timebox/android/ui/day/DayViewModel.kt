@@ -81,6 +81,7 @@ data class DayUiState(
     val activeActualAvailable: Boolean = false,
     val workModeEntryWarning: Boolean = false,
     val workModeRestorePrompt: Boolean = false,
+    val workModeRestored: Boolean = false,
 ) {
     fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
 
@@ -205,6 +206,7 @@ class DayViewModel(
     }
 
     fun setPlanningMode(enabled: Boolean) {
+        if (!workMode.restorationComplete || workMode.state.value.session != null || _state.value.saving) return
         if (!enabled) {
             cancelPlanningSession()
             return
@@ -222,6 +224,7 @@ class DayViewModel(
     }
 
     fun armAccessiblePlanningTask(taskId: Int?) {
+        if (!workMode.restorationComplete || workMode.state.value.session != null || _state.value.saving) return
         planningSession.toggleSelection(taskId)
         syncPlanningState()
         _state.update { it.copy(draft = null, selectedBlockId = null) }
@@ -249,6 +252,7 @@ class DayViewModel(
                             }
                         }
                         workMode.restore(day)
+                        _state.update { it.copy(workModeRestored = workMode.restorationComplete) }
                         if (_state.value.date == date) prefetchAdjacent(date)
                     }
                 },
@@ -363,15 +367,20 @@ class DayViewModel(
     fun shiftDay(days: Long) = goToDate(_state.value.date.plusDays(days))
 
     fun selectBlock(blockId: Int) {
+        if (workMode.state.value.session != null) return
         val block = _state.value.day?.blocks?.firstOrNull { it.id == blockId }
         if (block?.lane == Lane.Actual) {
+            if (_state.value.isPlanningMode || _state.value.saving) return
+            _state.update { it.copy(saving = true) }
             launchScope.launch {
                 val actual = repository.getActualBlock(block.actualBlockId ?: block.id).getOrNull()
+                if (_state.value.isPlanningMode) return@launch
                 if (actual != null && actual.endAt == null) {
                     _state.value.day?.let { workMode.resume(it, actual) }
                 } else {
                     _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
                 }
+                _state.update { it.copy(saving = false) }
             }
             return
         }
@@ -387,6 +396,7 @@ class DayViewModel(
     }
 
     fun startDraft(lane: Lane, startMinute: Int) {
+        if (!workMode.restorationComplete || workMode.state.value.session != null || _state.value.saving) return
         planThenWork = false
         val day = _state.value.day ?: return
         val start = startMinute.coerceIn(
@@ -551,7 +561,7 @@ class DayViewModel(
                         syncPlanningState()
                         refreshReadyToPlan()
                     }
-                    if (lane == Lane.Planned && planThenWork) finishPlanningIntoWorkMode(day)
+                    if (lane == Lane.Planned && planThenWork) finishPlanningIntoWorkMode(day, start, end)
                 },
                 onFailure = { e ->
                     _state.update { it.copy(saving = false, message = e.apiError.message) }
@@ -561,6 +571,7 @@ class DayViewModel(
     }
 
     fun planTaskAt(taskId: Int, startMinute: Int) {
+        if (workMode.state.value.session != null || _state.value.saving) return
         val current = _state.value
         val day = current.day ?: return
         when (val result = planningSession.place(taskId, day, startMinute)) {
@@ -615,7 +626,7 @@ class DayViewModel(
             when (val outcome = planningSession.commit()) {
                 is PlanningCommitOutcome.Saved -> {
                     _state.update { state ->
-                        outcome.days.fold(state.copy(message = "Plan saved")) { next, day ->
+                        outcome.days.fold(state) { next, day ->
                             next.withPage(day.date) {
                                 DayPageState(day = day, loading = false, materialized = true)
                             }
@@ -782,6 +793,7 @@ class DayViewModel(
 
     /** App-level entry: present time and today's plan always win over navigation context. */
     fun startWorkMode() {
+        if (_state.value.isPlanningMode || _state.value.saving || !workMode.restorationComplete) return
         if (workMode.state.value.session != null) {
             workMode.show()
             return
@@ -830,11 +842,17 @@ class DayViewModel(
     }
 
     fun continueWorkModeEntry() {
+        if (_state.value.isPlanningMode || _state.value.saving || !workMode.restorationComplete) return
         val day = _state.value.day ?: return
-        launchScope.launch { workMode.continueEntry(day) }
+        _state.update { it.copy(saving = true) }
+        launchScope.launch {
+            workMode.continueEntry(day)
+            _state.update { it.copy(saving = false) }
+        }
     }
 
     fun planSomethingBeforeWorkMode() {
+        if (_state.value.isPlanningMode || workMode.state.value.session != null || _state.value.saving) return
         val day = _state.value.day ?: return
         val nowMinute = minuteOfDay(clock(), day.timezone)
         val start = snapToBlockInteractionStep(nowMinute.toFloat())
@@ -856,9 +874,16 @@ class DayViewModel(
         }
     }
 
-    private suspend fun finishPlanningIntoWorkMode(day: Day) {
+    private suspend fun finishPlanningIntoWorkMode(day: Day, start: Int, end: Int) {
         planThenWork = false
+        if (_state.value.isPlanningMode) return
+        val now = clock()
+        if (now.atZone(ZoneId.of(day.timezone)).toLocalDate() != day.date) return
+        val minute = minuteOfDay(now, day.timezone)
+        if (!(start <= minute && minute < end) && !(start > minute && start - minute <= 10)) return
+        _state.update { it.copy(saving = true) }
         workMode.begin(day)
+        _state.update { it.copy(saving = false) }
     }
 
     fun toggleWorkModeSubtask(subtask: Subtask) {

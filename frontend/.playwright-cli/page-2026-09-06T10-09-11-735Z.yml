@@ -1,0 +1,121 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Timebox" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Monastic productivity
+    - navigation [ref=e8]:
+      - link "Day" [ref=e9] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e10]: calendar_today
+        - generic [ref=e11]: Day
+      - link "Chronicle" [ref=e12] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e13]: history
+        - generic [ref=e14]: Chronicle
+      - link "Battle Plan" [ref=e15] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e16]: view_kanban
+        - generic [ref=e17]: Battle Plan
+      - link "Task types" [ref=e18] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e19]: category
+        - generic [ref=e20]: Task types
+    - generic [ref=e22]:
+      - generic [ref=e23]: TB
+      - generic [ref=e24]:
+        - generic [ref=e25]: You
+        - generic [ref=e26]: Cloud
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - heading "Timebox" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - link "Start Work Mode" [ref=e32] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e34]: settings
+          - generic [ref=e35]: Settings
+        - button "Switch to dark mode" [ref=e36]: dark_mode
+    - main [ref=e37]:
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: 2026-09-06
+          - generic [ref=e43]:
+            - generic [ref=e44]:
+              - heading "Sunday, September 6, 2026" [level=1] [ref=e45]
+              - paragraph [ref=e46]: Timezone Asia/Singapore.
+            - generic [ref=e47]:
+              - button "Previous day" [ref=e48]: ← Prev
+              - button "Jump to date" [ref=e50]:
+                - generic [ref=e51]: 06/09/2026
+                - generic [ref=e52]: calendar_month
+              - button "Next day" [ref=e53]: Next →
+          - generic [ref=e55]:
+            - heading "Planned" [level=3] [ref=e57]
+            - heading "Actual" [level=3] [ref=e58]
+            - generic [ref=e60]:
+              - generic [ref=e61]: 8 AM
+              - generic [ref=e63]: 9 AM
+              - generic [ref=e65]: 10 AM
+              - generic [ref=e67]: 11 AM
+              - generic [ref=e69]: 12 PM
+              - generic [ref=e71]: 1 PM
+              - generic [ref=e73]: 2 PM
+              - generic [ref=e75]: 3 PM
+              - generic [ref=e77]: 4 PM
+              - generic [ref=e79]: 5 PM
+              - generic [ref=e81]: 6 PM
+              - generic [ref=e83]: 7 PM
+              - generic [ref=e85]: 8 PM
+              - generic [ref=e87]: 9 PM
+              - generic [ref=e89]: 10 PM
+              - generic [ref=e91]: 11 PM
+            - generic [ref=e125]:
+              - button "Resize block start" [ref=e126]
+              - button "Edit planned block" [active] [ref=e127]:
+                - generic [ref=e129]:
+                  - generic [ref=e130]: QA planning block
+                  - generic [ref=e131]: ·
+                  - generic [ref=e132]: 7 – 7:30pm
+              - button "Resize block end" [ref=e133]
+            - generic [ref=e166]:
+              - button "Resize block start" [ref=e167]
+              - button "Edit actual block" [ref=e168]:
+                - generic [ref=e170]:
+                  - generic [ref=e171]: QA planning block
+                  - generic [ref=e172]: ·
+                  - generic [ref=e173]: 7 – 7:30pm
+              - button "Resize block end" [ref=e174]
+        - complementary "Block details" [ref=e176]:
+          - generic [ref=e178]:
+            - generic [ref=e179]:
+              - heading "Planned" [level=2] [ref=e180]: Planned
+              - generic [ref=e182]:
+                - generic [ref=e183]: 0h 30m
+                - button "Close" [ref=e184]:
+                  - generic [ref=e185]: close
+            - paragraph [ref=e186]: 19:00 – 19:30
+            - paragraph [ref=e187]: Drag the block edges on the timeline to adjust. Edits save as you make them.
+            - generic [ref=e188]:
+              - paragraph [ref=e189]: Battle Plan task
+              - link "QA 0906 task" [ref=e190] [cursor=pointer]:
+                - /url: /battle-plan?task=2
+                - text: QA 0906 task
+                - generic [ref=e191]: open_in_new
+            - generic [ref=e192]:
+              - generic [ref=e193]: Name
+              - textbox "Name Name" [ref=e194]:
+                - /placeholder: Optional
+                - text: QA planning block
+            - generic [ref=e195]:
+              - generic [ref=e196]: Task type
+              - combobox "Task type Task type" [ref=e197]: unspecified
+            - generic [ref=e198]:
+              - generic [ref=e199]: Note
+              - textbox "Note Note" [ref=e200]:
+                - /placeholder: Optional
+                - text: QA note persists after blur
+            - region "Actual time actions" [ref=e201]:
+              - button "Record Actual as planned" [ref=e202]
+            - button "Delete" [ref=e204]:
+              - generic [ref=e205]: delete

@@ -213,6 +213,8 @@ def _visible_active_rows(
     visible: list[tuple[Task, int]] = []
     recurring: dict[int, list[Task]] = {}
     for row in rows:
+        if row.occurrence is not None and row.occurrence.skipped:
+            continue
         if row.recurring_template_id is None or row.occurrence is None:
             visible.append((row, 1))
         else:

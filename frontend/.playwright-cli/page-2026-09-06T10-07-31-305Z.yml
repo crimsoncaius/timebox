@@ -1,0 +1,169 @@
+- generic [ref=e1]:
+  - generic [ref=e203]:
+    - generic [ref=e227]:
+      - banner [ref=e228]:
+        - heading "Timebox" [level=2] [ref=e230]
+        - generic [ref=e231]:
+          - link "Start Work Mode" [ref=e232] [cursor=pointer]:
+            - /url: /day/2026-09-06?workMode=start
+          - link "Settings" [ref=e233] [cursor=pointer]:
+            - /url: /settings
+            - generic [ref=e234]: settings
+            - generic [ref=e235]: Settings
+          - button "Switch to dark mode" [ref=e236]: dark_mode
+      - main [ref=e237]:
+        - button "Lists & projects" [ref=e519]
+        - generic [ref=e238]:
+          - complementary "Battle Plan lists and projects" [ref=e239]:
+            - generic [ref=e520]:
+              - generic [ref=e521]: Battle Plan
+              - button "Close project sidebar" [ref=e522]: ×
+            - navigation [ref=e240]:
+              - button "All Tasks" [ref=e241]
+              - button "Admin" [ref=e242]
+              - link "Recurring" [ref=e243] [cursor=pointer]:
+                - /url: /battle-plan?view=recurring
+            - generic [ref=e244]:
+              - generic [ref=e245]: Projects
+              - button "New project" [ref=e246]: +
+            - list "Projects" [ref=e247]:
+              - listitem [ref=e248]:
+                - generic [ref=e249]:
+                  - button "Reorder Review - Development" [ref=e250]:
+                    - generic [ref=e251]: drag_indicator
+                  - button "Review - Development" [ref=e252]:
+                    - generic [ref=e253]: folder
+                    - generic [ref=e254]: Review - Development
+                  - button "More actions for Review - Development" [ref=e255]:
+                    - generic [ref=e256]: more_horiz
+              - listitem [ref=e257]:
+                - generic [ref=e258]:
+                  - button "Reorder Review - Design" [ref=e259]:
+                    - generic [ref=e260]: drag_indicator
+                  - button "Review - Design" [ref=e261]:
+                    - generic [ref=e262]: folder
+                    - generic [ref=e263]: Review - Design
+                  - button "More actions for Review - Design" [ref=e264]:
+                    - generic [ref=e265]: more_horiz
+              - listitem [ref=e266]:
+                - generic [ref=e267]:
+                  - button "Reorder Review - Launch" [ref=e268]:
+                    - generic [ref=e269]: drag_indicator
+                  - button "Review - Launch" [ref=e270]:
+                    - generic [ref=e271]: folder
+                    - generic [ref=e272]: Review - Launch
+                  - button "More actions for Review - Launch" [ref=e273]:
+                    - generic [ref=e274]: more_horiz
+            - status
+            - navigation [ref=e275]:
+              - button "Archive" [ref=e276]
+              - button "Trash" [ref=e277]
+          - generic [ref=e278]:
+            - generic [ref=e279]:
+              - generic [ref=e280]:
+                - paragraph [ref=e281]: Battle Plan
+                - heading "All Tasks" [level=1] [ref=e282]
+              - generic [ref=e283]:
+                - combobox "Sort tasks" [ref=e284]:
+                  - option "Manual order" [selected]
+                  - option "Deadline"
+                  - option "Urgency"
+                  - option "Importance"
+                - generic [ref=e285]:
+                  - checkbox "Hide completed" [ref=e286]
+                  - text: Hide completed
+            - generic [ref=e287]:
+              - generic [ref=e288]:
+                - generic [ref=e289]: Urgency
+                - button "low" [ref=e290]
+                - button "medium" [ref=e291]
+                - button "high" [ref=e292]
+                - button "unset" [ref=e293]
+              - generic [ref=e294]:
+                - generic [ref=e295]: Importance
+                - button "low" [ref=e296]
+                - button "medium" [ref=e297]
+                - button "high" [ref=e298]
+                - button "unset" [ref=e299]
+              - group [ref=e300]:
+                - generic "Task types" [ref=e301] [cursor=pointer]
+            - generic [ref=e303]:
+              - region "Open tasks" [ref=e304]:
+                - generic [ref=e305]:
+                  - heading "Open" [level=2] [ref=e306]
+                  - generic [ref=e307]: "2"
+                - button "Add Open task" [ref=e385]:
+                  - generic [ref=e386]: add
+                  - text: Add task
+                - generic [ref=e310]:
+                  - button "Move x" [ref=e311]:
+                    - generic [ref=e312]:
+                      - heading "x" [level=3] [ref=e314]
+                      - generic [ref=e316]: drag_indicator
+                    - generic [ref=e318]:
+                      - generic [ref=e319]: Admin
+                      - generic [ref=e320]: x
+                    - generic "Planned Jan 1, 2099" [ref=e322]:
+                      - generic [ref=e323]: event
+                      - generic [ref=e324]: Planned Jan 1, 2099
+                    - generic [ref=e326]:
+                      - button "Add x to Ready to Plan" [ref=e327]:
+                        - generic [ref=e328]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to x" [ref=e329]:
+                        - generic [ref=e330]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e331]
+                  - button "Move QA 0906 task" [active] [ref=e387]:
+                    - generic [ref=e388]:
+                      - heading "QA 0906 task" [level=3] [ref=e390]
+                      - generic [ref=e392]: drag_indicator
+                    - generic [ref=e395]: Admin
+                    - generic [ref=e397]:
+                      - button "Remove QA 0906 task from Ready to Plan" [pressed] [ref=e538]:
+                        - generic [ref=e399]: event_available
+                        - text: Ready
+                      - button "0 of 1 subtasks completed for QA 0906 task" [ref=e456]:
+                        - generic [ref=e401]: account_tree
+                        - text: 0/1
+                    - button "Complete Task" [ref=e402]
+              - region "In progress tasks" [ref=e332]:
+                - generic [ref=e333]:
+                  - heading "In progress" [level=2] [ref=e334]
+                  - generic [ref=e335]: "0"
+                - button "Add In progress task" [ref=e336]:
+                  - generic [ref=e337]: add
+                  - text: Add task
+              - region "Blocked tasks" [ref=e338]:
+                - generic [ref=e339]:
+                  - heading "Blocked" [level=2] [ref=e340]
+                  - generic [ref=e341]: "0"
+                - button "Add Blocked task" [ref=e342]:
+                  - generic [ref=e343]: add
+                  - text: Add task
+              - region "Completed tasks" [ref=e344]:
+                - generic [ref=e345]:
+                  - heading "Completed" [level=2] [ref=e346]
+                  - generic [ref=e347]: "0"
+                - button "Add Completed task" [ref=e348]:
+                  - generic [ref=e349]: add
+                  - text: Add task
+    - navigation [ref=e524]:
+      - link "Day mobile navigation" [ref=e525] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e526]: calendar_today
+        - generic [ref=e527]: Day
+      - link "Chronicle mobile navigation" [ref=e528] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e529]: history
+        - generic [ref=e530]: Chronicle
+      - link "Battle Plan mobile navigation" [ref=e531] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e532]: view_kanban
+        - generic [ref=e533]: Battle Plan
+      - link "Task types mobile navigation" [ref=e534] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e535]: category
+        - generic [ref=e536]: Task types
+  - status [ref=e350]
+  - status [ref=e351]

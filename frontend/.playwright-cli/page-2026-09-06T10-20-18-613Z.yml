@@ -1,0 +1,88 @@
+- generic [ref=e153]:
+  - complementary [ref=e154]:
+    - generic [ref=e155]:
+      - heading "Timebox" [level=1] [ref=e156]
+      - paragraph [ref=e157]: Monastic productivity
+    - navigation [ref=e158]:
+      - link "Day" [ref=e159] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e160]: calendar_today
+        - generic [ref=e161]: Day
+      - link "Chronicle" [ref=e162] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e163]: history
+        - generic [ref=e164]: Chronicle
+      - link "Battle Plan" [ref=e165] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e166]: view_kanban
+        - generic [ref=e167]: Battle Plan
+      - link "Task types" [ref=e168] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e169]: category
+        - generic [ref=e170]: Task types
+    - generic [ref=e172]:
+      - generic [ref=e173]: TB
+      - generic [ref=e174]:
+        - generic [ref=e175]: You
+        - generic [ref=e176]: Cloud
+  - generic [ref=e177]:
+    - banner [ref=e178]:
+      - heading "Timebox" [level=2] [ref=e180]
+      - generic [ref=e181]:
+        - link "Start Work Mode" [ref=e182] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e183] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e184]: settings
+          - generic [ref=e185]: Settings
+        - button "Switch to dark mode" [ref=e186]: dark_mode
+    - main [ref=e187]:
+      - generic [ref=e188]:
+        - generic [ref=e189]:
+          - generic [ref=e190]:
+            - heading "Task types" [level=1] [ref=e191]
+            - paragraph [ref=e192]:
+              - text: Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a
+              - link "Day" [ref=e193] [cursor=pointer]:
+                - /url: /
+              - text: block only after at least one type exists.
+          - generic [ref=e196]: Up to date
+        - generic [ref=e197]:
+          - region "Task type" [ref=e198]:
+            - heading "Task type" [level=2] [ref=e199]
+            - generic [ref=e200]:
+              - generic [ref=e201]:
+                - generic [ref=e202]: Filter saved types or enter a new task type name
+                - textbox "Filter saved types or enter a new task type name" [ref=e203]:
+                  - /placeholder: Search or add (e.g. work)
+              - button "Add" [ref=e204]
+          - region "Saved types" [ref=e205]:
+            - heading "Saved types" [level=2] [ref=e206]
+            - generic [ref=e207]:
+              - generic [ref=e208]:
+                - heading "unspecified" [level=3] [ref=e209]
+                - list [ref=e210]:
+                  - listitem [ref=e211]:
+                    - generic "Task type unspecified" [ref=e212]:
+                      - generic [ref=e213]: unspecified
+                    - button "Edit unspecified" [ref=e214]: Edit
+                    - button "Delete unspecified" [ref=e215]:
+                      - generic [ref=e216]: delete
+              - generic [ref=e217]:
+                - heading "work work" [level=3] [ref=e218]
+                - list [ref=e219]:
+                  - listitem [ref=e220]:
+                    - generic "Task type work work" [ref=e221]:
+                      - generic [ref=e222]: work work
+                    - button "Edit work work" [ref=e223]: Edit
+                    - button "Delete work work" [ref=e224]:
+                      - generic [ref=e225]: delete
+              - generic [ref=e226]:
+                - heading "x" [level=3] [ref=e227]
+                - list [ref=e228]:
+                  - listitem [ref=e229]:
+                    - generic "Task type x" [ref=e230]:
+                      - generic [ref=e231]: x
+                    - button "Edit x" [ref=e232]: Edit
+                    - button "Delete x" [ref=e233]:
+                      - generic [ref=e234]: delete

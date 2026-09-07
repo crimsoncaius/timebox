@@ -1,0 +1,96 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Prototype · native Android composer
+        - generic [ref=e8]:
+          - generic [ref=e10]:
+            - generic [ref=e11]:
+              - generic [ref=e12]:
+                - paragraph [ref=e13]: BATTLE PLAN
+                - heading "New task" [level=1] [ref=e14]
+              - button "Close" [ref=e15]: ×
+            - generic [ref=e16]:
+              - generic [ref=e17]: All Tasks
+              - generic [ref=e18]: Open
+          - generic [ref=e19]:
+            - generic [ref=e20]:
+              - generic [ref=e21]:
+                - generic [ref=e22]: "01"
+                - heading "Essentials" [level=2] [ref=e23]
+              - generic [ref=e25]:
+                - generic [ref=e26]:
+                  - generic [ref=e27]: Title
+                  - textbox "Title" [active] [ref=e28]:
+                    - /placeholder: Prepare launch notes
+                - generic [ref=e29]:
+                  - generic [ref=e30]: Description
+                  - textbox "Description" [ref=e31]:
+                    - /placeholder: Optional context or outcome
+            - generic [ref=e32]:
+              - generic [ref=e33]:
+                - generic [ref=e34]: "02"
+                - heading "Organization" [level=2] [ref=e35]
+              - generic [ref=e37]:
+                - generic [ref=e38]:
+                  - generic [ref=e39]:
+                    - generic [ref=e40]: Location
+                    - combobox "Location" [ref=e41]:
+                      - option "Admin" [selected]
+                      - option "Timebox"
+                      - option "Personal"
+                  - generic [ref=e42]:
+                    - generic [ref=e43]: Task Type
+                    - combobox "Task Type" [ref=e44]:
+                      - option "Unset" [selected]
+                      - option "Development"
+                      - option "Design"
+                      - option "Admin / Finance"
+                - generic [ref=e45]:
+                  - generic [ref=e46]: Status
+                  - generic [ref=e47]:
+                    - button "Open" [ref=e48]
+                    - button "In Progress" [ref=e49]
+            - generic [ref=e50]:
+              - generic [ref=e51]:
+                - generic [ref=e52]: "03"
+                - heading "Planning" [level=2] [ref=e53]
+              - generic [ref=e55]:
+                - generic [ref=e57]:
+                  - generic [ref=e58]: Deadline
+                  - combobox "Deadline" [ref=e59]:
+                    - option "None" [selected]
+                    - option "Date only"
+                    - option "Date and time"
+                - generic [ref=e60]:
+                  - generic [ref=e61]: Urgency
+                  - generic [ref=e62]:
+                    - button "Unset" [ref=e63]
+                    - button "Low" [ref=e64]
+                    - button "Medium" [ref=e65]
+                    - button "High" [ref=e66]
+                - generic [ref=e67]:
+                  - generic [ref=e68]: Importance
+                  - generic [ref=e69]:
+                    - button "Unset" [ref=e70]
+                    - button "Low" [ref=e71]
+                    - button "Medium" [ref=e72]
+                    - button "High" [ref=e73]
+            - button "More options Ready to Plan and reminder ⌄" [ref=e75]:
+              - generic [ref=e76]:
+                - generic [ref=e77]: More options
+                - generic [ref=e78]: Ready to Plan and reminder
+              - generic [ref=e79]: ⌄
+          - button "Create task" [disabled] [ref=e81]
+      - complementary [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - paragraph [ref=e85]: Visible prototype state
+            - heading "Variant A" [level=2] [ref=e86]
+          - button "Copy JSON" [ref=e87]
+        - generic [ref=e88]: "{ \"prototype\": \"Editorial sections\", \"canCreate\": false, \"payload\": { \"title\": \"\", \"description\": \"\", \"project\": \"Admin\", \"taskType\": \"Unset\", \"status\": \"Open\", \"deadlineMode\": \"None\", \"deadlineDate\": null, \"deadlineTime\": null, \"urgency\": \"Unset\", \"importance\": \"Unset\", \"readyToPlan\": false, \"reminder\": null } }"
+    - navigation "Prototype variants" [ref=e89]:
+      - button "Previous variant" [ref=e90]: ←
+      - generic [ref=e91]: A — Editorial sections
+      - button "Next variant" [ref=e92]: →
+      - button "Toggle prototype theme" [ref=e93]: ◐

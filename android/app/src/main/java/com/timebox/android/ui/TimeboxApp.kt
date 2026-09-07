@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -182,7 +184,11 @@ fun TimeboxApp(
     }
     LaunchedEffect(battlePlanState.createdTaskNotice?.taskId) {
         battlePlanState.createdTaskNotice?.let { notice ->
-            val result = snackbarHostState.showSnackbar(message = notice.message, actionLabel = "Open")
+            val result = snackbarHostState.showSnackbar(
+                message = notice.message,
+                actionLabel = "Open",
+                duration = SnackbarDuration.Short,
+            )
             battlePlanViewModel.consumeCreatedTaskNotice()
             if (result == SnackbarResult.ActionPerformed) navController.navigate(AppRoutes.taskDetail(notice.taskId))
         }
@@ -371,6 +377,7 @@ fun TimeboxApp(
                             onArchiveCompleted = battlePlanViewModel::archiveCompleted,
                             onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
                             onToggleReady = battlePlanViewModel::toggleReady,
+                            onMoveProject = battlePlanViewModel::moveProject,
                             onMoveTask = battlePlanViewModel::moveTask,
                             onReorderTask = battlePlanViewModel::reorderTask,
                             onMoveTaskToBoundary = battlePlanViewModel::moveTaskToBoundary,
@@ -458,10 +465,6 @@ fun TimeboxApp(
                             onBack = { navController.popBackStack() },
                             onRetry = { projectEditorViewModel.open(null) },
                             onNameChange = projectEditorViewModel::setName,
-                            onDescriptionChange = projectEditorViewModel::setDescription,
-                            onDeadlineChange = projectEditorViewModel::setDeadlineDate,
-                            onDeadlineTimeChange = projectEditorViewModel::setDeadlineTime,
-                            onDeadlineModeChange = projectEditorViewModel::setDeadlineMode,
                             onSave = projectEditorViewModel::save,
                             onPrepareDelete = {},
                             onDismissDelete = battlePlanViewModel::dismissProjectDelete,
@@ -484,10 +487,6 @@ fun TimeboxApp(
                             onBack = { navController.popBackStack() },
                             onRetry = { projectEditorViewModel.open(projectId) },
                             onNameChange = projectEditorViewModel::setName,
-                            onDescriptionChange = projectEditorViewModel::setDescription,
-                            onDeadlineChange = projectEditorViewModel::setDeadlineDate,
-                            onDeadlineTimeChange = projectEditorViewModel::setDeadlineTime,
-                            onDeadlineModeChange = projectEditorViewModel::setDeadlineMode,
                             onSave = projectEditorViewModel::save,
                             onPrepareDelete = {
                                 battlePlanState.projects.firstOrNull { it.id == projectId }
@@ -654,11 +653,21 @@ fun TimeboxApp(
         }
 
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp)) { data ->
-            Box(
-                Modifier.padding(horizontal = 16.dp).background(colors.on, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
-            ) {
-                Text(data.visuals.message, style = TimeboxTheme.type.bodySmall, color = colors.bg)
+            if (data.visuals.actionLabel != null) {
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(12.dp),
+                    containerColor = colors.on,
+                    contentColor = colors.bg,
+                    actionColor = colors.bg,
+                )
+            } else {
+                Box(
+                    Modifier.padding(horizontal = 16.dp).background(colors.on, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
+                ) {
+                    Text(data.visuals.message, style = TimeboxTheme.type.bodySmall, color = colors.bg)
+                }
             }
         }
 

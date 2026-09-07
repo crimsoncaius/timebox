@@ -51,6 +51,7 @@ export function TimeBlockInspectorContent({
   const noteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftCreateAttemptedRef = useRef(false)
+  const editedFieldsRef = useRef({ name: false, note: false })
 
   const clearNoteDebounce = useCallback(() => {
     if (noteDebounceRef.current) {
@@ -66,22 +67,21 @@ export function TimeBlockInspectorContent({
     }
   }, [])
 
-  /** Keep both responsive inspector instances aligned with the authoritative block. */
+  // A different selection starts a new editing session, including equal IDs in different lanes.
   useLayoutEffect(() => {
-    if (block) {
-      setTaskTypeId(block.task_type_id)
-      setName(block.name ?? '')
-      setNote(block.note ?? '')
-      return
-    }
-    if (draft) {
-      setTaskTypeId(draft.task_type_id ?? 0)
-      setName('')
-      setNote('')
-    }
-    // Note remains locally editable; synchronize the authoritative Name after its save response.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid wiping a pending note on unrelated block refreshes.
-  }, [block?.id, block?.task_type_id, block?.name, draft])
+    editedFieldsRef.current = { name: false, note: false }
+    setName(block?.name ?? '')
+    setNote(block?.note ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the selected Block or draft changes.
+  }, [block?.id, block?.lane, draft])
+
+  // Untouched responsive peers follow server snapshots. Once edited, a field owns its
+  // draft for this selection: a response for another field (or an older save) may be stale.
+  useLayoutEffect(() => {
+    setTaskTypeId(block?.task_type_id ?? draft?.task_type_id ?? 0)
+    if (!editedFieldsRef.current.name) setName(block?.name ?? '')
+    if (!editedFieldsRef.current.note) setNote(block?.note ?? '')
+  }, [block?.id, block?.lane, block?.task_type_id, block?.name, block?.note, draft])
 
   const dirty = useMemo(() => {
     if (isCreateMode) {
@@ -114,6 +114,7 @@ export function TimeBlockInspectorContent({
     setSaving(true)
     try {
       await onSave({ name: newName })
+      setName((current) => current === name ? newName ?? '' : current)
     } catch {
       /* parent shows error */
     } finally {
@@ -129,6 +130,7 @@ export function TimeBlockInspectorContent({
     setSaving(true)
     try {
       await onSave({ note: newNote })
+      setNote((current) => current === note ? newNote ?? '' : current)
     } catch {
       /* parent shows error */
     } finally {
@@ -340,7 +342,10 @@ export function TimeBlockInspectorContent({
             className="w-full rounded-xl border border-outline-variant/35 bg-surface px-3 py-2.5 font-body text-[13.5px] text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
             placeholder="Optional"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              editedFieldsRef.current.name = true
+              setName(event.target.value)
+            }}
             onBlur={() => void flushNameNow()}
           />
         </div>
@@ -366,7 +371,10 @@ export function TimeBlockInspectorContent({
           className="min-h-20 w-full rounded-xl border border-outline-variant/35 bg-surface px-3 py-2.5 font-body text-[13.5px] leading-relaxed text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
           placeholder="Optional"
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => {
+            editedFieldsRef.current.note = true
+            setNote(e.target.value)
+          }}
           onBlur={() => void flushNoteNow()}
         />
       </div>

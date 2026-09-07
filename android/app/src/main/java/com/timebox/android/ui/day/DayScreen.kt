@@ -93,7 +93,7 @@ fun DayScreen(
             selectedDate = displayedDate,
             today = state.today,
             isPlanningMode = state.isPlanningMode,
-            planningActionEnabled = !state.saving && !state.planning.saving,
+            planningActionEnabled = !state.saving && !state.planning.saving && state.workModeRestored && state.workMode == null,
             onOpenWorkMode = onOpenWorkMode,
             onSetPlanningMode = { enabled ->
                 if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()

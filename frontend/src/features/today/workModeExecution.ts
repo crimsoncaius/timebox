@@ -62,6 +62,13 @@ export class WorkModeExecution {
   private clock: () => string = () => new Date().toISOString()
   private stopTicker: (() => void) | null = null
   private lifecycle = 0
+  private planningActive = false
+  private entryVersion = 0
+
+  setPlanningActive(active: boolean) {
+    if (active !== this.planningActive) this.entryVersion += 1
+    this.planningActive = active
+  }
 
   constructor(
     transport: WorkModeTransport,
@@ -111,6 +118,7 @@ export class WorkModeExecution {
   }
 
   begin(entryAt: string) {
+    if (this.planningActive) return null
     let session: StoredWorkMode = {
       entryAt,
       lastConfirmedAt: entryAt,
@@ -138,10 +146,11 @@ export class WorkModeExecution {
     return session
   }
 
-  show() { this.patch({ visible: true }) }
+  show() { if (!this.planningActive) this.patch({ visible: true }) }
   setEntryGuard(value: boolean) { this.patch({ entryGuard: value }) }
 
   restoreIfAbsent(now: string) {
+    if (this.planningActive) return
     const session = this.store.load()
     if (!session) return
     this.persist(session)
@@ -154,22 +163,28 @@ export class WorkModeExecution {
   }
 
   async open(day: DayRead, now: string) {
+    if (this.planningActive) return false
+    const version = this.entryVersion
     const active = await this.transport.getActiveActual().catch(() => null)
+    if (this.planningActive || version !== this.entryVersion) return false
     if (active) {
       this.attachActive(day, now, active)
-      return
+      return true
     }
     if (this.value.session) {
       this.show()
-      return
+      return true
     }
     const { current, next, nowMinute } = workSelection(day, now)
     if (current || (next && next.start_minute - nowMinute <= 10)) this.begin(now)
     else this.patch({ entryGuard: true })
+    return true
   }
 
   attachActive(day: DayRead, now: string, actual: ActualBlock) {
+    if (this.planningActive) return
     const session = this.value.session ?? this.begin(actual.start_at)
+    if (!session) return
     const linked = actual.planned_block_id == null ? null : planned(day).find((block) => block.id === actual.planned_block_id)
     this.patch({ actual, visible: true, entryGuard: false, restorePrompt: false })
     this.persist({

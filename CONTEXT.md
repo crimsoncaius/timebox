@@ -4,6 +4,10 @@ Timebox plans intended work, records actual work, and tracks the tasks that thos
 
 ## Language
 
+**Project**:
+A named group of related Battle Plan Tasks. Deadlines belong to individual Battle Plan Tasks.
+_Avoid_: Parent Task, Task Type
+
 **Battle Plan Task**:
 An independently meaningful unit of work that can be scheduled and completed in its own right. It may contain Subtasks and have zero or more Planned Blocks and Actual Blocks.
 _Avoid_: Time block, scheduled block
@@ -25,7 +29,7 @@ An optional user-defined identity for one Planned Block or Actual Block, distinc
 _Avoid_: Label, title, tag, Task Type
 
 **Work Mode**:
-A present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
+A full-screen, present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
 _Avoid_: Task detail, Task status, timer mode
 
 **Recurring Task Series**:

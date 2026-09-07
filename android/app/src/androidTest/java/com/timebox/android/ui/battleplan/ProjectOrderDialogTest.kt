@@ -20,7 +20,7 @@ import org.junit.Test
 class ProjectOrderDialogTest {
     @get:Rule val compose = createComposeRule()
     private val projects = listOf("Alpha", "Beta", "Gamma").mapIndexed { index, name ->
-        Project(index + 1, name, "", null, null, Instant.EPOCH, Instant.EPOCH)
+        Project(index + 1, name, Instant.EPOCH, Instant.EPOCH)
     }
 
     @Test fun movesWithAccessibleButtonsAndDisablesBoundaries() {

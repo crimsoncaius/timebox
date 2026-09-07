@@ -1,14 +1,6 @@
 package com.timebox.android.ui.day
 
 import android.graphics.Bitmap
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasAnyDescendant
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.semantics.SemanticsProperties
-import com.timebox.android.ui.theme.TimeboxDimens
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.captureToImage
@@ -22,6 +14,14 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import com.timebox.android.ui.theme.TimeboxDimens
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.pressBack
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -50,6 +50,59 @@ import java.time.Instant
 
 class PlanModeScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun queueDropAtTimelineTopUsesVisibleTime() = queueDropUsesVisibleTime(0)
+    @Test fun queueDropAroundNoonUsesVisibleTime() = queueDropUsesVisibleTime(4)
+    @Test fun queueDropLaterInDayUsesVisibleTime() = queueDropUsesVisibleTime(7)
+
+    private fun queueDropUsesVisibleTime(scrollHours: Int) {
+        val date = LocalDate.of(2026, 8, 20)
+        var placement: Pair<Int, Int>? = null
+        val day = emptyDay(date).copy(endHour = 24)
+        val state = DayUiState(
+            date = date,
+            pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
+            planning = PlanningSessionState(active = true, readyTasks = listOf(task(42, "Drop at visible time"))),
+        )
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                PlanningWorkspace(
+                    state = state, day = day,
+                    onSelectBlock = {}, onCommitMove = { _, _, _ -> },
+                    onPlanTask = { id, minute -> placement = id to minute },
+                    onUpdatePlanningDraft = { _, _, _ -> }, onReturnPlanningDraft = {},
+                    onArmAccessibleTask = {}, onRetryReadyTasks = {},
+                    modifier = Modifier.height(400.dp),
+                )
+            }
+        }
+        val slotPx = with(compose.density) { TimeboxDimens.slotHeight.toPx() }
+        val timeline = compose.onNode(hasScrollAction() and hasAnyDescendant(hasTestTag("day-lane-planned")))
+        val initialTop = compose.onNodeWithTag("day-lane-planned").fetchSemanticsNode().boundsInRoot.top
+        timeline.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, scrollHours * 2 * slotPx) }
+        compose.waitForIdle()
+        val scrollPx = timeline.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        check(kotlin.math.abs(scrollPx - scrollHours * 2 * slotPx) < 1f) { "Scroll was $scrollPx, wanted ${scrollHours * 2 * slotPx}" }
+        val lane = compose.onNodeWithTag("day-lane-planned").fetchSemanticsNode().boundsInRoot
+        // The carried 30-minute block is grabbed at its center; its top should land one hour below the viewport top.
+        val target = Offset(lane.center.x, initialTop + 2.5f * slotPx)
+        val source = compose.onNodeWithContentDescription("Schedule Drop at visible time").fetchSemanticsNode().boundsInRoot.center
+        compose.onRoot().performTouchInput {
+            down(source)
+            advanceEventTime(1_000)
+            moveTo(source)
+        }
+        val heldScrollPx = timeline.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        check(heldScrollPx == scrollPx) { "Picking up a queue task moved the timeline from $scrollPx to $heldScrollPx" }
+        compose.onRoot().performTouchInput { moveTo(target) }
+        val preview = compose.onNodeWithTag("planning-drop-outline").fetchSemanticsNode().boundsInRoot
+        check(kotlin.math.abs(preview.top - (target.y - slotPx / 2f)) < 2f)
+        compose.onRoot().performTouchInput { up() }
+        compose.runOnIdle {
+            val expected = 42 to ((8 + scrollHours + 1) * 60)
+            check(placement == expected) { "Expected $expected after scrolling $scrollHours hours, got $placement" }
+        }
+    }
 
     @Test
     fun carriedDraftMatchesDestinationSizeAndCancellationClearsBoth() {
@@ -202,7 +255,7 @@ class PlanModeScreenTest {
     }
 
     @Test
-    fun taskCardDragStartsImmediatelyWithoutHapticAndRequestsPlacement() {
+    fun taskCardHoldThenVerticalStartRequestsPlacementWithHaptic() {
         val date = LocalDate.of(2026, 8, 20)
         var placement: Pair<Int, Int>? = null
         val haptics = RecordingHaptics()
@@ -248,16 +301,71 @@ class PlanModeScreenTest {
 
         compose.onNodeWithText("Write brief").performTouchInput {
             down(center)
-            moveTo(center + Offset(-500f, 0f), delayMillis = 200)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, 40f))
+            moveTo(center + Offset(-500f, 40f))
         }
         compose.onNodeWithTag("planning-drop-outline").fetchSemanticsNode()
         compose.onRoot().performTouchInput { up() }
         compose.runOnIdle {
             check(placement?.first == 42)
             check(placement?.second != null)
-            check(haptics.events.isEmpty())
+            check(haptics.events == listOf(HapticFeedbackType.LongPress))
         }
         compose.onNodeWithContentDescription("Planning draft Write brief").fetchSemanticsNode()
+    }
+
+    @Test
+    fun queueHoldPicksUpBeforeMovementAndSupportsEveryDirection() {
+        val date = LocalDate.of(2026, 8, 20)
+        var placements = 0
+        val haptics = RecordingHaptics()
+        setPlanningContent(
+            DayUiState(
+                date = date,
+                pages = mapOf(date to DayPageState(day = emptyDay(date), loading = false, materialized = true)),
+                planning = PlanningSessionState(active = true, readyTasks = listOf(task(42, "Pick me up"))),
+            ),
+            haptics,
+            onPlanTask = { _, _ -> placements++ },
+        )
+        val source = compose.onNodeWithContentDescription("Schedule Pick me up")
+            .fetchSemanticsNode().boundsInRoot.center
+        val directions = listOf(
+            Offset(-40f, 0f), Offset(40f, 0f), Offset(0f, -40f), Offset(0f, 40f),
+            Offset(-40f, -40f), Offset(40f, 40f),
+        )
+        directions.forEachIndexed { index, direction ->
+            compose.onRoot().performTouchInput {
+                down(source)
+                advanceEventTime(1_000)
+                moveTo(source)
+            }
+            val before = compose.onNodeWithTag("planning-drag-block").fetchSemanticsNode().boundsInRoot.center
+            compose.runOnIdle { check(haptics.events.size == index + 1) }
+            compose.onRoot().performTouchInput { moveTo(source + direction) }
+            val after = compose.onNodeWithTag("planning-drag-block").fetchSemanticsNode().boundsInRoot.center
+            check((after - before - direction).getDistance() < 2f)
+            compose.onRoot().performTouchInput { cancel() }
+            compose.onNodeWithTag("planning-drag-block").assertDoesNotExist()
+            compose.onNodeWithTag("planning-drop-outline").assertDoesNotExist()
+        }
+        compose.onRoot().performTouchInput {
+            down(source)
+            advanceEventTime(1_000)
+            moveTo(source)
+            up()
+        }
+        compose.onNodeWithTag("planning-drag-block").assertDoesNotExist()
+        compose.onRoot().performTouchInput {
+            down(source)
+            up()
+        }
+        compose.runOnIdle {
+            check(placements == 0)
+            check(haptics.events.size == directions.size + 1)
+        }
+        compose.onNodeWithContentDescription("Schedule Pick me up").fetchSemanticsNode()
     }
 
     @Test

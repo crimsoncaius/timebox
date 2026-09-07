@@ -7,6 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,12 +46,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -176,10 +179,11 @@ internal fun PlanningWorkspace(
 
     LaunchedEffect(drag != null, viewportBounds) {
         while (drag != null) {
-            val pointerY = drag?.pointerRoot?.y ?: break
+            val pointer = drag?.pointerRoot ?: break
             val delta = when {
-                pointerY < viewportBounds.top + edgeZonePx -> -scrollStepPx
-                pointerY > viewportBounds.bottom - edgeZonePx -> scrollStepPx
+                pointer.x !in viewportBounds.left..viewportBounds.right -> 0f
+                pointer.y < viewportBounds.top + edgeZonePx -> -scrollStepPx
+                pointer.y > viewportBounds.bottom - edgeZonePx -> scrollStepPx
                 else -> 0f
             }
             if (delta != 0f) timelineScroll.scrollBy(delta)
@@ -499,6 +503,7 @@ private fun PlanningTaskCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
+    val haptics = LocalHapticFeedback.current
     var cardRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     var pointerRoot by remember(task.id) { mutableStateOf(Offset.Zero) }
     val currentOnArmAccessible by rememberUpdatedState(onArmAccessible)
@@ -521,9 +526,10 @@ private fun PlanningTaskCard(
             .onGloballyPositioned { cardRoot = it.positionInRoot() }
             .pointerInput(task.id, enabled) {
                 if (!enabled) return@pointerInput
-                detectImmediateHorizontalDragGestures(
+                detectDragGesturesAfterLongPress(
                     onDragStart = { offset ->
                         pointerRoot = cardRoot + offset
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         currentOnDragStart(pointerRoot)
                     },
                     onDrag = { _, amount ->

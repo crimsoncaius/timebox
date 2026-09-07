@@ -4,6 +4,57 @@ import { WorkModeExecution, type WorkModeEnvironment, type WorkModeStore, type W
 import type { StoredWorkMode } from './workModeState'
 
 describe('WorkModeExecution', () => {
+  it('preserves the session and Actual Block when exiting fails', async () => {
+    class FailedExitTransport extends MemoryTransport {
+      override async endActual(): Promise<ActualBlock> { throw new Error('Exit failed') }
+    }
+    const transport = new FailedExitTransport()
+    const store = new MemoryStore()
+    const execution = new WorkModeExecution(transport, store, new ManualEnvironment())
+    const now = '2026-06-01T12:00:00Z'
+    execution.setContext(day, () => now)
+    execution.attachActive(day, now, actual(10, now))
+    expect(await execution.exit(now)).toBe(false)
+    expect(execution.state.session).not.toBeNull()
+    expect(execution.state.actual?.id).toBe(40)
+    expect(store.value?.activeActualId).toBe(40)
+    execution.dispose()
+  })
+
+  it('rejects every entry path during planning without starting work or a warning', async () => {
+    const transport = new MemoryTransport()
+    const store = new MemoryStore()
+    const environment = new ManualEnvironment()
+    const execution = new WorkModeExecution(transport, store, environment)
+    const now = '2026-06-01T12:00:00Z'
+    execution.setContext(day, () => now)
+    execution.setPlanningActive(true)
+    expect(await execution.open(day, now)).toBe(false)
+    expect(execution.begin(now)).toBeNull()
+    execution.attachActive(day, now, actual(10, now))
+    execution.show()
+    expect(execution.state.session).toBeNull()
+    expect(execution.state.visible).toBe(false)
+    expect(execution.state.entryGuard).toBe(false)
+    expect(store.value).toBeNull()
+    expect(environment.active).toBe(false)
+    execution.setPlanningActive(false)
+    expect(await execution.open(day, now)).toBe(true)
+    expect(execution.state.session).not.toBeNull()
+    execution.dispose()
+  })
+
+  it('does not replay an in-flight activation after planning starts and finishes', async () => {
+    const execution = new WorkModeExecution(new MemoryTransport(), new MemoryStore(), new ManualEnvironment())
+    const now = '2026-06-01T12:00:00Z'
+    execution.setContext(day, () => now)
+    const opening = execution.open(day, now)
+    execution.setPlanningActive(true)
+    execution.setPlanningActive(false)
+    expect(await opening).toBe(false)
+    expect(execution.state.session).toBeNull()
+  })
+
   it('begins, confirms for a minute, coordinates Actual time, and exits durably', async () => {
     const transport = new MemoryTransport()
     const store = new MemoryStore()

@@ -1,0 +1,88 @@
+- generic [ref=e1018]:
+  - complementary [ref=e1019]:
+    - generic [ref=e1020]:
+      - heading "Timebox" [level=1] [ref=e1021]
+      - paragraph [ref=e1022]: Monastic productivity
+    - navigation [ref=e1023]:
+      - link "Day" [ref=e1024] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e1025]: calendar_today
+        - generic [ref=e1026]: Day
+      - link "Chronicle" [ref=e1027] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e1028]: history
+        - generic [ref=e1029]: Chronicle
+      - link "Battle Plan" [ref=e1030] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e1031]: view_kanban
+        - generic [ref=e1032]: Battle Plan
+      - link "Task types" [ref=e1033] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e1034]: category
+        - generic [ref=e1035]: Task types
+    - generic [ref=e1037]:
+      - generic [ref=e1038]: TB
+      - generic [ref=e1039]:
+        - generic [ref=e1040]: You
+        - generic [ref=e1041]: Cloud
+  - generic [ref=e1042]:
+    - banner [ref=e1043]:
+      - heading "Timebox" [level=2] [ref=e1045]
+      - generic [ref=e1046]:
+        - link "Start Work Mode" [ref=e1047] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e1048] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e1049]: settings
+          - generic [ref=e1050]: Settings
+        - button "Switch to dark mode" [ref=e1051]: dark_mode
+    - main [ref=e1052]:
+      - generic [ref=e1053]:
+        - generic [ref=e1054]:
+          - generic [ref=e1055]:
+            - heading "Task types" [level=1] [ref=e1056]
+            - paragraph [ref=e1057]:
+              - text: Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a
+              - link "Day" [ref=e1058] [cursor=pointer]:
+                - /url: /
+              - text: block only after at least one type exists.
+          - generic [ref=e1061]: Up to date
+        - generic [ref=e1062]:
+          - region "Task type" [ref=e1063]:
+            - heading "Task type" [level=2] [ref=e1064]
+            - generic [ref=e1065]:
+              - generic [ref=e1066]:
+                - generic [ref=e1067]: Filter saved types or enter a new task type name
+                - textbox "Filter saved types or enter a new task type name" [ref=e1068]:
+                  - /placeholder: Search or add (e.g. work)
+              - button "Add" [ref=e1069]
+          - region "Saved types" [ref=e1070]:
+            - heading "Saved types" [level=2] [ref=e1071]
+            - generic [ref=e1072]:
+              - generic [ref=e1073]:
+                - heading "unspecified" [level=3] [ref=e1074]
+                - list [ref=e1075]:
+                  - listitem [ref=e1076]:
+                    - generic "Task type unspecified" [ref=e1077]:
+                      - generic [ref=e1078]: unspecified
+                    - button "Edit unspecified" [ref=e1079]: Edit
+                    - button "Delete unspecified" [ref=e1080]:
+                      - generic [ref=e1081]: delete
+              - generic [ref=e1082]:
+                - heading "work work" [level=3] [ref=e1083]
+                - list [ref=e1084]:
+                  - listitem [ref=e1085]:
+                    - generic "Task type work work" [ref=e1086]:
+                      - generic [ref=e1087]: work work
+                    - button "Edit work work" [ref=e1088]: Edit
+                    - button "Delete work work" [ref=e1089]:
+                      - generic [ref=e1090]: delete
+              - generic [ref=e1091]:
+                - heading "x" [level=3] [ref=e1092]
+                - list [ref=e1093]:
+                  - listitem [ref=e1094]:
+                    - generic "Task type x" [ref=e1095]:
+                      - generic [ref=e1096]: x
+                    - button "Edit x" [ref=e1097]: Edit
+                    - button "Delete x" [ref=e1098]:
+                      - generic [ref=e1099]: delete

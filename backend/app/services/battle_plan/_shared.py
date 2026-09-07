@@ -210,7 +210,7 @@ def _to_read(
                 recurring_task_series_id=task.occurrence.template_id,
                 occurrence_key=task.occurrence.occurrence_key,
             )
-            if task.occurrence is not None
+            if task.occurrence is not None and task.occurrence.template_id is not None
             else None
         ),
         subtasks=subtasks,

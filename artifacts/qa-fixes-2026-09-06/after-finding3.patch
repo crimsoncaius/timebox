@@ -1,0 +1,779 @@
+diff --git a/backend/app/services/task_completion_service.py b/backend/app/services/task_completion_service.py
+index 1dc456b..401fdfe 100644
+--- a/backend/app/services/task_completion_service.py
++++ b/backend/app/services/task_completion_service.py
+@@ -171,7 +171,9 @@ def set_subtask_checked(
+         select(Task)
+         .options(joinedload(Task.parent))
+         .where(Task.id == subtask_id)
+-        .with_for_update()
++        # The parent is already locked above. PostgreSQL cannot lock the
++        # nullable side of joinedload's outer join.
++        .with_for_update(of=Task)
+     ).scalar_one_or_none()
+     if row is None:
+         raise ValueError("Subtask not found")
+diff --git a/backend/tests/test_actual_block_locking.py b/backend/tests/test_actual_block_locking.py
+index 68b53b0..7fad533 100644
+--- a/backend/tests/test_actual_block_locking.py
++++ b/backend/tests/test_actual_block_locking.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
++from sqlalchemy import event
+ from sqlalchemy.dialects import postgresql
++from sqlalchemy.orm import Session
+ 
+ from app.services import actual_block_service, day_service, task_completion_service
+ from app.services.battle_plan import _shared
+@@ -41,3 +43,30 @@ def test_actual_block_select_locks_only_the_time_block_row_on_postgresql():
+     )
+ 
+     assert "FOR UPDATE OF time_blocks" in sql
++
++
++def test_subtask_check_and_uncheck_do_not_lock_nullable_parent_join(client):
++    parent = client.post("/tasks", json={"title": "Parent"}).json()
++    child = client.post(
++        "/tasks", json={"title": "Checkpoint", "parent_id": parent["id"]}
++    ).json()
++    statements = []
++
++    def capture_statement(state):
++        if state.is_select:
++            statements.append(str(state.statement.compile(dialect=postgresql.dialect())))
++
++    event.listen(Session, "do_orm_execute", capture_statement)
++    try:
++        for action, checked in [("check", True), ("uncheck", False)]:
++            statements.clear()
++            response = client.post(f"/subtasks/{child['id']}/{action}")
++            assert response.status_code == 200, response.text
++            assert response.json()["checked"] is checked
++            locking_reads = [sql for sql in statements if "FOR UPDATE" in sql]
++            assert len(locking_reads) >= 2  # Parent, then Subtask.
++            for sql in locking_reads:
++                if "LEFT OUTER JOIN" in sql:
++                    assert "FOR UPDATE OF tasks" in sql
++    finally:
++        event.remove(Session, "do_orm_execute", capture_statement)
+diff --git a/frontend/src/components/TimeBlockInspectorContent.tsx b/frontend/src/components/TimeBlockInspectorContent.tsx
+index ffda477..6f7daa2 100644
+--- a/frontend/src/components/TimeBlockInspectorContent.tsx
++++ b/frontend/src/components/TimeBlockInspectorContent.tsx
+@@ -51,6 +51,7 @@ export function TimeBlockInspectorContent({
+   const noteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+   const draftCreateAttemptedRef = useRef(false)
++  const editedFieldsRef = useRef({ name: false, note: false })
+ 
+   const clearNoteDebounce = useCallback(() => {
+     if (noteDebounceRef.current) {
+@@ -66,22 +67,21 @@ export function TimeBlockInspectorContent({
+     }
+   }, [])
+ 
+-  /** Keep both responsive inspector instances aligned with the authoritative block. */
++  // A different selection starts a new editing session, including equal IDs in different lanes.
+   useLayoutEffect(() => {
+-    if (block) {
+-      setTaskTypeId(block.task_type_id)
+-      setName(block.name ?? '')
+-      setNote(block.note ?? '')
+-      return
+-    }
+-    if (draft) {
+-      setTaskTypeId(draft.task_type_id ?? 0)
+-      setName('')
+-      setNote('')
+-    }
+-    // Note remains locally editable; synchronize the authoritative Name after its save response.
+-    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid wiping a pending note on unrelated block refreshes.
+-  }, [block?.id, block?.task_type_id, block?.name, draft])
++    editedFieldsRef.current = { name: false, note: false }
++    setName(block?.name ?? '')
++    setNote(block?.note ?? '')
++    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the selected Block or draft changes.
++  }, [block?.id, block?.lane, draft])
++
++  // Untouched responsive peers follow server snapshots. Once edited, a field owns its
++  // draft for this selection: a response for another field (or an older save) may be stale.
++  useLayoutEffect(() => {
++    setTaskTypeId(block?.task_type_id ?? draft?.task_type_id ?? 0)
++    if (!editedFieldsRef.current.name) setName(block?.name ?? '')
++    if (!editedFieldsRef.current.note) setNote(block?.note ?? '')
++  }, [block?.id, block?.lane, block?.task_type_id, block?.name, block?.note, draft])
+ 
+   const dirty = useMemo(() => {
+     if (isCreateMode) {
+@@ -114,6 +114,7 @@ export function TimeBlockInspectorContent({
+     setSaving(true)
+     try {
+       await onSave({ name: newName })
++      setName((current) => current === name ? newName ?? '' : current)
+     } catch {
+       /* parent shows error */
+     } finally {
+@@ -129,6 +130,7 @@ export function TimeBlockInspectorContent({
+     setSaving(true)
+     try {
+       await onSave({ note: newNote })
++      setNote((current) => current === note ? newNote ?? '' : current)
+     } catch {
+       /* parent shows error */
+     } finally {
+@@ -340,7 +342,10 @@ export function TimeBlockInspectorContent({
+             className="w-full rounded-xl border border-outline-variant/35 bg-surface px-3 py-2.5 font-body text-[13.5px] text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
+             placeholder="Optional"
+             value={name}
+-            onChange={(event) => setName(event.target.value)}
++            onChange={(event) => {
++              editedFieldsRef.current.name = true
++              setName(event.target.value)
++            }}
+             onBlur={() => void flushNameNow()}
+           />
+         </div>
+@@ -366,7 +371,10 @@ export function TimeBlockInspectorContent({
+           className="min-h-20 w-full rounded-xl border border-outline-variant/35 bg-surface px-3 py-2.5 font-body text-[13.5px] leading-relaxed text-on-surface placeholder:text-outline-variant/80 outline-none transition-colors focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
+           placeholder="Optional"
+           value={note}
+-          onChange={(e) => setNote(e.target.value)}
++          onChange={(e) => {
++            editedFieldsRef.current.note = true
++            setNote(e.target.value)
++          }}
+           onBlur={() => void flushNoteNow()}
+         />
+       </div>
+diff --git a/frontend/src/components/TimeBlockModal.test.tsx b/frontend/src/components/TimeBlockModal.test.tsx
+index 54189be..f1fa447 100644
+--- a/frontend/src/components/TimeBlockModal.test.tsx
++++ b/frontend/src/components/TimeBlockModal.test.tsx
+@@ -1,4 +1,4 @@
+-import { render, screen, waitFor } from '@testing-library/react'
++import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+ import userEvent from '@testing-library/user-event'
+ import { afterEach, describe, expect, it, vi } from 'vitest'
+ import { MemoryRouter } from 'react-router-dom'
+@@ -89,6 +89,39 @@ describe('TimeBlockModal', () => {
+     expect(noteField).toHaveClass('min-h-20')
+   })
+ 
++  describe.each(['rail', 'sheet'] as const)('%s field synchronization', (variant) => {
++    it.each(['name', 'note'] as const)('preserves a newer %s draft through late saves and unrelated refreshes', async (field) => {
++      const original = makeBlock({ name: 'Original name', note: 'Previously saved note' })
++      let finish!: () => void
++      const onSave = vi.fn(() => new Promise<void>((resolve) => { finish = resolve }))
++      const props = { variant, draft: null, day: emptyDay, taskTypes, onClose: vi.fn(), onSave,
++        onDelete: vi.fn(), onCreateTaskTypePath: noopCreate }
++      const view = render(<TimeBlockInspectorContent block={original} {...props} />)
++      const input = screen.getByLabelText(field === 'name' ? 'Name' : 'Note')
++      fireEvent.change(input, { target: { value: 'First edit' } })
++      fireEvent.blur(input)
++      expect(onSave).toHaveBeenCalledWith({ [field]: 'First edit' })
++      fireEvent.focus(input)
++      fireEvent.change(input, { target: { value: 'Newer draft still being typed' } })
++      view.rerender(<TimeBlockInspectorContent block={{ ...original, [field]: 'First edit' }} {...props} />)
++      await act(async () => { finish() })
++      expect(input).toHaveValue('Newer draft still being typed')
++      view.rerender(<TimeBlockInspectorContent block={{ ...original, task_type_id: 2, name: 'Other saved name' }} {...props} />)
++      expect(input).toHaveValue('Newer draft still being typed')
++      fireEvent.blur(input)
++      expect(onSave).toHaveBeenLastCalledWith({ [field]: 'Newer draft still being typed' })
++      await act(async () => { finish() })
++
++      // Planned and Actual IDs can collide; switching lanes is a new selection too.
++      view.rerender(<TimeBlockInspectorContent block={{ ...original, lane: 'actual', name: 'Actual name', note: 'Actual note' }} {...props} />)
++      expect(screen.getByLabelText('Name')).toHaveValue('Actual name')
++      expect(screen.getByLabelText('Note')).toHaveValue('Actual note')
++      view.rerender(<TimeBlockInspectorContent block={{ ...original, id: 11, name: 'Next name', note: 'Next note' }} {...props} />)
++      expect(screen.getByLabelText('Name')).toHaveValue('Next name')
++      expect(screen.getByLabelText('Note')).toHaveValue('Next note')
++    })
++  })
++
+   it('auto-saves only task_type_id on task type change, not time fields', async () => {
+     const user = userEvent.setup()
+     const onSave = vi.fn().mockResolvedValue(undefined)
+diff --git a/frontend/src/features/battle-plan/BattlePlanCard.tsx b/frontend/src/features/battle-plan/BattlePlanCard.tsx
+index 090fa36..a2383bf 100644
+--- a/frontend/src/features/battle-plan/BattlePlanCard.tsx
++++ b/frontend/src/features/battle-plan/BattlePlanCard.tsx
+@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/react/sortable'
+ import {
+   deadlineBadge,
+   plannedDateSummary,
++  taskColumn,
+   type DeadlineBadge as DeadlineBadgeValue,
+   type PlannedDateSummary as PlannedDateSummaryValue,
+ } from '../../lib/battlePlan'
+@@ -106,6 +107,7 @@ export function BattlePlanCard({
+       <div className="mt-3 block w-full text-left">
+         <div className="flex flex-wrap gap-1.5">
+           {task.project ? <MetaChip>{task.project.name}</MetaChip> : <MetaChip>Admin</MetaChip>}
++          {taskColumn(task) === 'blocked' ? <MetaChip>Blocked</MetaChip> : null}
+           {task.task_type ? <MetaChip>{task.task_type.name}</MetaChip> : null}
+           {task.urgency ? <MetaChip>U · {task.urgency}</MetaChip> : null}
+           {task.importance ? <MetaChip>I · {task.importance}</MetaChip> : null}
+diff --git a/frontend/src/features/battle-plan/BattlePlanPage.test.tsx b/frontend/src/features/battle-plan/BattlePlanPage.test.tsx
+index d33fd32..1c49cfd 100644
+--- a/frontend/src/features/battle-plan/BattlePlanPage.test.tsx
++++ b/frontend/src/features/battle-plan/BattlePlanPage.test.tsx
+@@ -84,6 +84,7 @@ describe('BattlePlanPage', () => {
+   let trashTasks: BattleTask[]
+   let failNextCreate: boolean
+   let failNextRestore: boolean
++  let failNextSubtaskCheck: boolean
+   let restoreGate: Promise<void> | null
+ 
+   beforeEach(() => {
+@@ -92,6 +93,7 @@ describe('BattlePlanPage', () => {
+     trashTasks = []
+     failNextCreate = false
+     failNextRestore = false
++    failNextSubtaskCheck = false
+     restoreGate = null
+     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+@@ -118,7 +120,8 @@ describe('BattlePlanPage', () => {
+           id: 12,
+           title: body.title,
+           description: body.description ?? '',
+-          status: body.status ?? 'open',
++          status: body.status === 'blocked' ? 'open' : body.status ?? 'open',
++          is_blocked: body.is_blocked || body.status === 'blocked',
+           parent_id: body.parent_id ?? null,
+           project_id: body.project_id ?? null,
+           project: body.project_id === project.id ? project : null,
+@@ -144,7 +147,7 @@ describe('BattlePlanPage', () => {
+         let completed: BattleTask | undefined
+         activeTasks = activeTasks.map((row) => {
+           if (row.id === id) {
+-            completed = { ...row, status: 'completed' }
++            completed = { ...row, status: 'completed', is_blocked: false }
+             return completed
+           }
+           return row
+@@ -170,6 +173,7 @@ describe('BattlePlanPage', () => {
+         activeTasks = activeTasks.map((row) => {
+           if (row.id === id) {
+             patched = { ...row, ...body }
++            if (body.status === 'blocked') patched = { ...patched, status: 'open', is_blocked: true }
+             return patched
+           }
+           return row
+@@ -206,6 +210,10 @@ describe('BattlePlanPage', () => {
+       }
+       const subtaskAction = /\/subtasks\/(\d+)\/(check|uncheck)$/.exec(url)
+       if (subtaskAction && method === 'POST') {
++        if (failNextSubtaskCheck) {
++          failNextSubtaskCheck = false
++          return response({ detail: 'Could not update subtask. Please retry.' }, 500)
++        }
+         const id = Number(subtaskAction[1])
+         const checked = subtaskAction[2] === 'check'
+         let updated: Subtask | undefined
+@@ -234,6 +242,67 @@ describe('BattlePlanPage', () => {
+     expect(screen.getByText('U · high')).toBeInTheDocument()
+   })
+ 
++  it('keeps a saved blocked condition visible after reopening and reloading without changing underlying progress', async () => {
++    activeTasks = [task({ status: 'in_progress', is_blocked: false })]
++    const user = userEvent.setup()
++    const view = render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
++    await user.selectOptions(await screen.findByLabelText('Status'), 'blocked')
++    await user.click(screen.getByRole('button', { name: 'Save' }))
++    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
++    const column = screen.getByRole('region', { name: 'Blocked tasks' })
++    expect(within(column).getByRole('heading', { name: 'Draft launch brief' })).toBeInTheDocument()
++    expect(activeTasks[0]).toMatchObject({ status: 'in_progress', is_blocked: true })
++    expect(within(within(column).getByRole('heading', { name: 'Draft launch brief' }).closest('article')!).getByText('Blocked')).toBeInTheDocument()
++    await user.click(within(column).getByRole('heading', { name: 'Draft launch brief' }))
++    expect(screen.getByLabelText('Status')).toHaveValue('blocked')
++    await user.type(screen.getByLabelText('Description'), ' — updated while blocked')
++    await user.click(screen.getByRole('button', { name: 'Save' }))
++    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
++    expect(activeTasks[0]).toMatchObject({ status: 'in_progress', is_blocked: true, description: 'Gather the context — updated while blocked' })
++    view.unmount()
++    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
++    expect(await screen.findByLabelText('Status')).toHaveValue('blocked')
++  })
++
++  it.each(['open', 'in_progress'])('explicitly clears the blocked condition when the editor selects %s', async (status) => {
++    activeTasks = [task({ is_blocked: true })]
++    const user = userEvent.setup()
++    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
++    expect(await screen.findByLabelText('Status')).toHaveValue('blocked')
++    await user.selectOptions(screen.getByLabelText('Status'), status)
++    await user.click(screen.getByRole('button', { name: 'Save' }))
++    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
++    expect(activeTasks[0]).toMatchObject({ status, is_blocked: false })
++    expect(within(screen.getByRole('region', { name: 'Blocked tasks' })).queryByRole('heading', { name: 'Draft launch brief' })).not.toBeInTheDocument()
++    await user.click(screen.getByRole('heading', { name: 'Draft launch brief' }))
++    expect(screen.getByLabelText('Status')).toHaveValue(status)
++  })
++
++  it('creates a blocked task using the independent condition returned by the API', async () => {
++    const user = userEvent.setup()
++    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
++    await user.click(await screen.findByLabelText('Add Blocked task'))
++    await user.type(screen.getByLabelText('Task title'), 'Waiting for review')
++    await user.click(screen.getByRole('button', { name: 'Add task' }))
++    const column = screen.getByRole('region', { name: 'Blocked tasks' })
++    expect(await within(column).findByRole('heading', { name: 'Waiting for review' })).toBeInTheDocument()
++    expect(activeTasks.find((row) => row.title === 'Waiting for review')).toMatchObject({ status: 'open', is_blocked: true })
++  })
++
++  it('shows a failed subtask check inside the dialog and permits retry', async () => {
++    activeTasks = [task({ subtasks: [subtask()] })]
++    failNextSubtaskCheck = true
++    const user = userEvent.setup()
++    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
++    const dialog = await screen.findByRole('dialog', { name: 'Task details' })
++    await user.click(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' }))
++    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Could not update subtask. Please retry.')
++    expect(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' })).not.toBeChecked()
++    await user.click(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' }))
++    expect(await within(dialog).findByRole('checkbox', { name: 'Uncheck subtask Check figures' })).toBeChecked()
++    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
++  })
++
+   it('labels recurring Task Occurrences and Quota Trackers without marking one-off Tasks', async () => {
+     activeTasks = [
+       task({
+@@ -358,7 +427,7 @@ describe('BattlePlanPage', () => {
+       expect.stringMatching(/\/tasks\/11$/),
+       expect.objectContaining({
+         method: 'PATCH',
+-        body: expect.stringMatching(/"status":"blocked".*"urgency":"low"/),
++        body: expect.stringMatching(/"is_blocked":true.*"urgency":"low"/),
+       }),
+     ))
+     await waitFor(() => {
+diff --git a/frontend/src/features/battle-plan/BattlePlanPage.tsx b/frontend/src/features/battle-plan/BattlePlanPage.tsx
+index b72fc45..399c918 100644
+--- a/frontend/src/features/battle-plan/BattlePlanPage.tsx
++++ b/frontend/src/features/battle-plan/BattlePlanPage.tsx
+@@ -9,6 +9,8 @@ import {
+   priorityRank,
+   STATUS_LABELS,
+   TASK_STATUSES,
++  taskColumn,
++  taskColumnChange,
+ } from '../../lib/battlePlan'
+ import {
+   ApiHttpError,
+@@ -191,7 +193,7 @@ export function BattlePlanPage() {
+   }, [preferences, scopeFiltered])
+ 
+   const columns = useMemo(() => Object.fromEntries(
+-    TASK_STATUSES.map((status) => [status, visibleTasks.filter((task) => task.status === status)]),
++    TASK_STATUSES.map((status) => [status, visibleTasks.filter((task) => taskColumn(task) === status)]),
+   ) as Record<TaskStatus, BattleTask[]>, [visibleTasks])
+ 
+   const createTask = async (body: BattleTaskWrite) => {
+@@ -243,21 +245,21 @@ export function BattlePlanPage() {
+       targetIndex = columns[targetStatus].filter((task) => task.id !== movingId).length
+     } else return
+     if (!TASK_STATUSES.includes(targetStatus)) return
+-    if (preferences.sort !== 'manual' && targetStatus === moving.status) return
++    if (preferences.sort !== 'manual' && targetStatus === taskColumn(moving)) return
+     if (targetStatus === 'completed' && moving.status !== 'completed') {
+       await setTaskCompletion(moving.id, true)
+       return
+     }
+     if (moving.status === 'completed' && targetStatus !== 'completed') {
+       await setTaskCompletion(moving.id, false)
+-      await patchTask(moving.id, { status: targetStatus })
++      await patchTask(moving.id, taskColumnChange(targetStatus))
+       return
+     }
+ 
+     const previous = tasks
+     const groups = Object.fromEntries(TASK_STATUSES.map((status) => [
+       status,
+-      tasks.filter((task) => task.status === status && task.id !== movingId).sort((a, b) => a.position - b.position),
++      tasks.filter((task) => taskColumn(task) === status && task.id !== movingId).sort((a, b) => a.position - b.position),
+     ])) as Record<TaskStatus, BattleTask[]>
+     const visibleTargetIds = columns[targetStatus].filter((task) => task.id !== movingId).map((task) => task.id)
+     const beforeId = visibleTargetIds[targetIndex]
+@@ -266,14 +268,21 @@ export function BattlePlanPage() {
+     if (beforeId != null) insertAt = groups[targetStatus].findIndex((task) => task.id === beforeId)
+     else if (afterId != null) insertAt = groups[targetStatus].findIndex((task) => task.id === afterId) + 1
+     if (insertAt < 0) insertAt = groups[targetStatus].length
+-    groups[targetStatus].splice(insertAt, 0, { ...moving, status: targetStatus })
+-    const next = TASK_STATUSES.flatMap((status) => groups[status].map((task, position) => ({ ...task, status, position })))
++    if (targetStatus === 'completed') return
++    const change = taskColumnChange(targetStatus)
++    groups[targetStatus].splice(insertAt, 0, { ...moving, ...change })
++    const next = TASK_STATUSES.flatMap((status) => groups[status].map((task, position) => ({ ...task, position })))
+     setTasks(next)
+     try {
+-      await api.reorderBattleTasks(next.map((task) => ({ task_id: task.id, status: task.status, position: task.position })))
++      if (targetStatus !== taskColumn(moving)) await api.patchBattleTask(moving.id, change)
++      await api.reorderBattleTasks(next.filter((task) => task.status !== 'completed')
++        .map((task) => ({ task_id: task.id, status: task.status, position: task.position })))
++      await loadActive()
+     } catch (cause) {
+       setTasks(previous)
+       setError(errorMessage(cause))
++      // The condition PATCH may have succeeded before the ordering request failed.
++      await loadActive().catch(() => {})
+     }
+   }
+ 
+@@ -288,7 +297,6 @@ export function BattlePlanPage() {
+       await loadActive()
+     } catch (cause) {
+       setError(errorMessage(cause))
+-      throw cause
+     }
+   }
+ 
+@@ -444,6 +452,7 @@ export function BattlePlanPage() {
+         <TaskDetailPanel
+           key={selectedTask.id}
+           task={selectedTask}
++          error={error}
+           projects={projects}
+           taskTypes={taskTypes}
+           timezone={timezone}
+diff --git a/frontend/src/features/battle-plan/TaskComposer.tsx b/frontend/src/features/battle-plan/TaskComposer.tsx
+index 08d7ff7..68dbbdd 100644
+--- a/frontend/src/features/battle-plan/TaskComposer.tsx
++++ b/frontend/src/features/battle-plan/TaskComposer.tsx
+@@ -175,7 +175,8 @@ export function TaskComposer({
+           await onCreate({
+             title: cleanTitle,
+             description,
+-            status,
++            status: status === 'blocked' ? 'open' : status,
++            is_blocked: status === 'blocked',
+             project_id: fixedProjectId === undefined
+               ? (projectId ? Number(projectId) : null)
+               : fixedProjectId,
+diff --git a/frontend/src/features/battle-plan/TaskDetailPanel.tsx b/frontend/src/features/battle-plan/TaskDetailPanel.tsx
+index 3d1e786..fda42be 100644
+--- a/frontend/src/features/battle-plan/TaskDetailPanel.tsx
++++ b/frontend/src/features/battle-plan/TaskDetailPanel.tsx
+@@ -10,6 +10,8 @@ import {
+   PRIORITY_LEVELS,
+   STATUS_LABELS,
+   TASK_STATUSES,
++  taskColumn,
++  taskColumnChange,
+   zonedLocalToIso,
+ } from '../../lib/battlePlan'
+ import type {
+@@ -41,7 +43,7 @@ function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
+   return {
+     title: task.title,
+     description: task.description,
+-    status: task.status,
++    status: taskColumn(task),
+     locationId: task.project_id?.toString() ?? '',
+     urgency: task.urgency,
+     importance: task.importance,
+@@ -55,6 +57,7 @@ function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
+ 
+ export function TaskDetailPanel({
+   task,
++  error,
+   projects,
+   taskTypes,
+   timezone,
+@@ -67,6 +70,7 @@ export function TaskDetailPanel({
+   onTrash,
+ }: {
+   task: BattleTask
++  error?: string | null
+   projects: Project[]
+   taskTypes: TaskType[]
+   timezone: string
+@@ -197,7 +201,7 @@ export function TaskDetailPanel({
+       await onPatch(task.id, {
+         title: draft.title.trim(),
+         description: draft.description,
+-        ...(draft.status !== task.status && draft.status !== 'completed' ? { status: draft.status } : {}),
++        ...(draft.status !== taskColumn(task) && draft.status !== 'completed' ? taskColumnChange(draft.status) : {}),
+         project_id: draft.locationId ? Number(draft.locationId) : null,
+         task_type_id: draft.taskTypeId ? Number(draft.taskTypeId) : null,
+         urgency: draft.urgency,
+@@ -275,6 +279,7 @@ export function TaskDetailPanel({
+ 
+         <div className="grid min-[720px]:grid-cols-[minmax(0,1fr)_22rem]">
+           <main className="flex min-w-0 flex-col gap-6 px-5 py-7 min-[480px]:px-9 min-[720px]:px-9 min-[720px]:py-8">
++            {error ? <div role="alert" className="rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
+             <div>
+               <p className="mb-2.5 font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Task details</p>
+               <input
+diff --git a/frontend/src/features/today/TodayPage.test.tsx b/frontend/src/features/today/TodayPage.test.tsx
+index aec82f6..f723a38 100644
+--- a/frontend/src/features/today/TodayPage.test.tsx
++++ b/frontend/src/features/today/TodayPage.test.tsx
+@@ -1,4 +1,4 @@
+-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
++import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+ import userEvent from '@testing-library/user-event'
+ import { MemoryRouter, Route, Routes } from 'react-router-dom'
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+@@ -195,6 +195,7 @@ describe('TodayPage inspector rail', () => {
+   afterEach(() => {
+     globalThis.fetch = originalFetch
+     vi.restoreAllMocks()
++    vi.unstubAllGlobals()
+   })
+ 
+   it('shows persistent empty rail then block details after selecting a block', async () => {
+@@ -216,6 +217,90 @@ describe('TodayPage inspector rail', () => {
+     expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
+   })
+ 
++  it('keeps a focused Note draft when the earlier Block Name PATCH returns a full day', async () => {
++    const fallbackFetch = globalThis.fetch
++    let savedBlock = { ...dayPayload.time_blocks[0]!, name: 'Original name', note: 'Previously saved note' }
++    const snapshot = () => ({ ...dayPayload, time_blocks: [savedBlock, dayPayload.time_blocks[1]!] })
++    let releaseName!: () => void
++    const nameResponse = new Promise<void>((resolve) => { releaseName = resolve })
++    const patches: Record<string, unknown>[] = []
++    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
++      const url = String(input)
++      if (url === '/api/days/2026-06-01') return jsonResponse(snapshot())
++      if (url === '/api/days/2026-06-01/blocks/10' && init?.method === 'PATCH') {
++        const patch = JSON.parse(String(init.body))
++        patches.push(patch)
++        savedBlock = { ...savedBlock, ...patch }
++        const response = jsonResponse(snapshot())
++        if ('name' in patch) await nameResponse
++        return response
++      }
++      return fallbackFetch(input, init)
++    })
++    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
++    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
++    const rail = screen.getByRole('complementary', { name: 'Block details' })
++    const name = within(rail).getByLabelText('Name')
++    const note = within(rail).getByLabelText('Note')
++    fireEvent.change(name, { target: { value: 'Renamed block' } })
++    fireEvent.blur(name)
++    fireEvent.focus(note)
++    fireEvent.change(note, { target: { value: 'New note that should not disappear' } })
++    expect(patches).toEqual([{ name: 'Renamed block' }])
++    await act(async () => { releaseName() })
++    expect(note).toHaveValue('New note that should not disappear')
++    fireEvent.blur(note)
++    await waitFor(() => expect(savedBlock.note).toBe('New note that should not disappear'))
++    // The hidden responsive editor must not write its previously saved Note back.
++    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)) })
++    expect(patches).toEqual([{ name: 'Renamed block' }, { note: 'New note that should not disappear' }])
++  })
++
++  it('preserves Note edits through responsive layout changes without a hidden editor saving over them', async () => {
++    const fallbackFetch = globalThis.fetch
++    let savedBlock = { ...dayPayload.time_blocks[0]!, note: 'Original note' }
++    const snapshot = () => ({ ...dayPayload, time_blocks: [savedBlock, dayPayload.time_blocks[1]!] })
++    const patches: { note?: string }[] = []
++    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
++      if (String(input) === '/api/days/2026-06-01') return jsonResponse(snapshot())
++      if (String(input) === '/api/days/2026-06-01/blocks/10' && init?.method === 'PATCH') {
++        const patch = JSON.parse(String(init.body))
++        patches.push(patch)
++        savedBlock = { ...savedBlock, ...patch }
++        return jsonResponse(snapshot())
++      }
++      return fallbackFetch(input, init)
++    })
++    let resize: (event: { matches: boolean }) => void = () => {}
++    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
++      matches: true,
++      addEventListener: (_type: string, listener: typeof resize) => { resize = listener },
++      removeEventListener: vi.fn(),
++    }))
++    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
++    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
++    const desktop = screen.getByRole('complementary', { name: 'Block details' }).querySelector('textarea')!
++    fireEvent.change(desktop, { target: { value: 'Desktop note before resize' } })
++    fireEvent.blur(desktop)
++    await waitFor(() => expect(savedBlock.note).toBe('Desktop note before resize'))
++    act(() => { resize({ matches: false }) })
++    const mobile = screen.getByRole('dialog').querySelector('textarea')!
++    fireEvent.change(mobile, { target: { value: 'Latest mobile note' } })
++    fireEvent.blur(mobile)
++    await waitFor(() => expect(savedBlock.note).toBe('Latest mobile note'))
++    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)) })
++    expect(patches).toEqual([{ note: 'Desktop note before resize' }, { note: 'Latest mobile note' }])
++    expect(savedBlock.note).toBe('Latest mobile note')
++
++    // A resize must carry an unsaved draft too, rather than remount from older server data.
++    fireEvent.change(mobile, { target: { value: 'Unsaved note across resize' } })
++    act(() => { resize({ matches: true }) })
++    const nextDesktop = screen.getByRole('complementary', { name: 'Block details' }).querySelector('textarea')!
++    expect(nextDesktop).toHaveValue('Unsaved note across resize')
++    fireEvent.blur(nextDesktop)
++    await waitFor(() => expect(savedBlock.note).toBe('Unsaved note across resize'))
++  })
++
+   it('selects a Ready to Plan task before placing it on the timeline', async () => {
+     const user = userEvent.setup()
+     render(
+diff --git a/frontend/src/features/today/TodayPage.tsx b/frontend/src/features/today/TodayPage.tsx
+index 9e79f52..e480069 100644
+--- a/frontend/src/features/today/TodayPage.tsx
++++ b/frontend/src/features/today/TodayPage.tsx
+@@ -9,7 +9,6 @@ import {
+ } from '../../components/DayTimeline'
+ import { Layout } from '../../components/Layout'
+ import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
+-import { TimeBlockModal } from '../../components/TimeBlockModal'
+ import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType, type TimeBlock } from '../../lib/api'
+ import { WorkMode } from './WorkMode'
+ import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteInTimeZone } from './workModeExecution'
+@@ -85,6 +84,14 @@ export function TodayPage() {
+   const selectedBlockId = selectedBlockRef?.id ?? null
+   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
+   const [inspectorDirty, setInspectorDirty] = useState(false)
++  const [inspectorIsRail, setInspectorIsRail] = useState(() => window.matchMedia?.('(min-width: 1280px)').matches ?? true)
++  useEffect(() => {
++    const media = window.matchMedia?.('(min-width: 1280px)')
++    if (!media) return
++    const onChange = (event: MediaQueryListEvent) => setInspectorIsRail(event.matches)
++    media.addEventListener('change', onChange)
++    return () => media.removeEventListener('change', onChange)
++  }, [])
+   const [blockDragActive, setBlockDragActive] = useState(false)
+   const timelineRef = useRef<HTMLDivElement>(null)
+   const draftCommitInFlightRef = useRef(false)
+@@ -389,11 +396,10 @@ export function TodayPage() {
+     return () => document.removeEventListener('pointerdown', onPointerDown, true)
+   }, [draft, selectedBlockId, tryClosePanel])
+ 
+-  /** Desktop: Escape clears selection (mobile sheet uses TimeBlockModal's Escape handler). */
++  /** Escape clears the shared inspector selection in either responsive layout. */
+   useEffect(() => {
+     const onKey = (e: KeyboardEvent) => {
+       if (e.key !== 'Escape') return
+-      if (window.matchMedia('(max-width: 1023px)').matches) return
+       if (selectedBlock == null && draft == null) return
+       tryClosePanel()
+     }
+@@ -685,7 +691,7 @@ export function TodayPage() {
+     onDirtyChange: setInspectorDirty,
+   }
+ 
+-  const mobileSheetOpen = selectedBlock != null || draft != null
++  const inspectorOpen = selectedBlock != null || draft != null
+   const readyTasks = allBattleTasks.filter((task) => task.ready_to_plan)
+   const planningTask = readyTasks.find((task) => task.id === planningTaskId) ?? null
+ 
+@@ -823,16 +829,18 @@ export function TodayPage() {
+           </section>
+         </div>
+ 
+-        {/* Desktop: persistent inspector rail */}
++        {/* One editor owns the draft across rail/sheet layout changes. */}
+         <div
+-          className="hidden w-full shrink-0 xl:block xl:w-[min(28rem,100%)] xl:max-w-md xl:pl-6"
++          className={`${inspectorOpen ? '' : 'hidden xl:block '}w-full shrink-0 xl:w-[min(28rem,100%)] xl:max-w-md xl:pl-6`}
+           data-testid="day-inspector-rail"
+         >
+           <aside
+-            role="complementary"
+-            aria-label="Block details"
+-            data-inspector="rail"
+-            className={`sticky top-32 mt-0 max-h-[calc(100dvh-8.5rem)] w-full overflow-y-auto bg-surface-container-low dark:bg-dark-surface-container-low${blockDragActive ? ' pointer-events-none' : ''}`}
++            role={inspectorIsRail ? 'complementary' : 'dialog'}
++            aria-label={inspectorIsRail ? 'Block details' : undefined}
++            aria-modal={!inspectorIsRail && inspectorOpen ? true : undefined}
++            aria-labelledby={inspectorIsRail ? undefined : 'block-panel-title'}
++            data-inspector={inspectorIsRail ? 'rail' : 'sheet'}
++            className={`w-full overflow-y-auto bg-surface-container-low xl:sticky xl:top-32 xl:mt-0 xl:max-h-[calc(100dvh-8.5rem)] dark:bg-dark-surface-container-low${blockDragActive ? ' pointer-events-none' : ''}`}
+           >
+             {selectedBlock == null && draft == null ? (
+               <ReadyToPlanDrawer
+@@ -851,12 +859,12 @@ export function TodayPage() {
+                 <TimeBlockInspectorContent
+                   key={
+                     selectedBlock != null
+-                      ? `block-${selectedBlock.id}`
++                      ? `block-${selectedBlock.lane}-${selectedBlock.id}`
+                       : draft != null
+                         ? `draft-${draft.lane}-${draft.start_minute}-${draft.end_minute}`
+                         : 'none'
+                   }
+-                  variant="rail"
++                  variant={inspectorIsRail ? 'rail' : 'sheet'}
+                   block={selectedBlock}
+                   draft={draft}
+                   {...inspectorSharedProps}
+@@ -866,31 +874,6 @@ export function TodayPage() {
+           </aside>
+         </div>
+ 
+-        {/* Mobile: sheet below timeline */}
+-        <div className="lg:hidden w-full">
+-          <TimeBlockModal
+-            key={
+-              selectedBlock != null
+-                ? `block-${selectedBlock.id}`
+-                : draft != null
+-                  ? `draft-${draft.lane}-${draft.start_minute}-${draft.end_minute}`
+-                  : 'none'
+-            }
+-            open={mobileSheetOpen}
+-            block={selectedBlock}
+-            draft={draft}
+-            day={day}
+-            taskTypes={taskTypes}
+-            onClose={tryClosePanel}
+-            onSave={inspectorSharedProps.onSave}
+-            onCreateFromDraft={commitDraft}
+-            onDelete={inspectorSharedProps.onDelete}
+-            onRecordActualAsPlanned={inspectorSharedProps.onRecordActualAsPlanned}
+-            onCreateTaskTypePath={createTaskTypePath}
+-            onDirtyChange={setInspectorDirty}
+-            blockDragActive={blockDragActive}
+-          />
+-        </div>
+       </div>
+       </DragDropProvider>
+       {workMode && workModeVisible && !restoreWorkMode ? (
+diff --git a/frontend/src/lib/api/types.ts b/frontend/src/lib/api/types.ts
+index 39136ef..2885a3a 100644
+--- a/frontend/src/lib/api/types.ts
++++ b/frontend/src/lib/api/types.ts
+@@ -121,6 +121,7 @@ export type BattleTaskWrite = {
+   title: string
+   description?: string
+   ready_to_plan?: boolean
++  is_blocked?: boolean
+   status?: TaskStatus
+   project_id?: number | null
+   parent_id?: number | null
+diff --git a/frontend/src/lib/battlePlan.ts b/frontend/src/lib/battlePlan.ts
+index 9c636e0..17ea4f3 100644
+--- a/frontend/src/lib/battlePlan.ts
++++ b/frontend/src/lib/battlePlan.ts
+@@ -1,4 +1,4 @@
+-import type { BattleTask, PriorityLevel, TaskStatus } from './api'
++import type { BattleTask, BattleTaskWrite, PriorityLevel, TaskStatus } from './api'
+ 
+ export const TASK_STATUSES: TaskStatus[] = ['open', 'in_progress', 'blocked', 'completed']
+ export const PRIORITY_LEVELS: PriorityLevel[] = ['low', 'medium', 'high']
+@@ -17,6 +17,16 @@ export type DeadlineBadge = {
+   tone: DeadlineTone
+ }
+ 
++// The board combines completion/progress with the independent Blocked condition.
++export function taskColumn(task: Pick<BattleTask, 'status' | 'is_blocked'>): TaskStatus {
++  if (task.status === 'completed') return 'completed'
++  return task.is_blocked ? 'blocked' : task.status
++}
++
++export function taskColumnChange(column: Exclude<TaskStatus, 'completed'>): Partial<BattleTaskWrite> {
++  return column === 'blocked' ? { is_blocked: true } : { status: column, is_blocked: false }
++}
++
+ export type PlannedDateTone = 'today' | 'future' | 'past'
+ 
+ export type PlannedDateSummary = {

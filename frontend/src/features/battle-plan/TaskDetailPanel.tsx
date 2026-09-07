@@ -10,6 +10,8 @@ import {
   PRIORITY_LEVELS,
   STATUS_LABELS,
   TASK_STATUSES,
+  taskColumn,
+  taskColumnChange,
   zonedLocalToIso,
 } from '../../lib/battlePlan'
 import type {
@@ -41,7 +43,7 @@ function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
   return {
     title: task.title,
     description: task.description,
-    status: task.status,
+    status: taskColumn(task),
     locationId: task.project_id?.toString() ?? '',
     urgency: task.urgency,
     importance: task.importance,
@@ -55,6 +57,7 @@ function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
 
 export function TaskDetailPanel({
   task,
+  error,
   projects,
   taskTypes,
   timezone,
@@ -67,6 +70,7 @@ export function TaskDetailPanel({
   onTrash,
 }: {
   task: BattleTask
+  error?: string | null
   projects: Project[]
   taskTypes: TaskType[]
   timezone: string
@@ -197,7 +201,7 @@ export function TaskDetailPanel({
       await onPatch(task.id, {
         title: draft.title.trim(),
         description: draft.description,
-        ...(draft.status !== task.status && draft.status !== 'completed' ? { status: draft.status } : {}),
+        ...(draft.status !== taskColumn(task) && draft.status !== 'completed' ? taskColumnChange(draft.status) : {}),
         project_id: draft.locationId ? Number(draft.locationId) : null,
         task_type_id: draft.taskTypeId ? Number(draft.taskTypeId) : null,
         urgency: draft.urgency,
@@ -275,6 +279,7 @@ export function TaskDetailPanel({
 
         <div className="grid min-[720px]:grid-cols-[minmax(0,1fr)_22rem]">
           <main className="flex min-w-0 flex-col gap-6 px-5 py-7 min-[480px]:px-9 min-[720px]:px-9 min-[720px]:py-8">
+            {error ? <div role="alert" className="rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
             <div>
               <p className="mb-2.5 font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Task details</p>
               <input

@@ -1,17 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
-import { isoToZonedLocal, zonedLocalToIso } from '../../lib/battlePlan'
 import type { Project, ProjectWrite } from '../../lib/api'
 
 export function ProjectEditor({
   project,
-  timezone,
   taskCount,
   onSave,
   onDelete,
   onClose,
 }: {
   project: Project | null
-  timezone: string
   taskCount: number
   onSave: (body: ProjectWrite) => Promise<void>
   onDelete: (() => Promise<void>) | null
@@ -19,19 +16,11 @@ export function ProjectEditor({
 }) {
   const initialDraftRef = useRef({
     name: project?.name ?? '',
-    description: project?.description ?? '',
-    deadlineMode: (project?.deadline_at ? 'datetime' : project?.deadline_date ? 'date' : 'none') as 'none' | 'date' | 'datetime',
-    deadlineDate: project?.deadline_date ?? '',
-    deadlineAt: isoToZonedLocal(project?.deadline_at ?? null, timezone),
   })
   const initialDraft = initialDraftRef.current
   const [name, setName] = useState(initialDraft.name)
-  const [description, setDescription] = useState(initialDraft.description)
-  const [deadlineMode, setDeadlineMode] = useState(initialDraft.deadlineMode)
-  const [deadlineDate, setDeadlineDate] = useState(initialDraft.deadlineDate)
-  const [deadlineAt, setDeadlineAt] = useState(initialDraft.deadlineAt)
   const [busy, setBusy] = useState(false)
-  const isDirty = JSON.stringify({ name, description, deadlineMode, deadlineDate, deadlineAt }) !== JSON.stringify(initialDraft)
+  const isDirty = name !== initialDraft.name
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -44,9 +33,6 @@ export function ProjectEditor({
     try {
       await onSave({
         name: name.trim(),
-        description,
-        deadline_date: deadlineMode === 'date' && deadlineDate ? deadlineDate : null,
-        deadline_at: deadlineMode === 'datetime' && deadlineAt ? zonedLocalToIso(deadlineAt, timezone) : null,
       })
     } finally {
       setBusy(false)
@@ -67,20 +53,7 @@ export function ProjectEditor({
             <span className="text-xs text-on-surface-variant">Name</span>
             <input autoFocus value={name} onChange={(event) => setName(event.target.value)} className="mt-1 w-full rounded-xl bg-surface-container-low px-3 py-2.5 outline-none dark:bg-dark-surface-container" />
           </label>
-          <label className="block">
-            <span className="text-xs text-on-surface-variant">Description</span>
-            <textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} className="mt-1 w-full resize-y rounded-xl bg-surface-container-low px-3 py-2.5 outline-none dark:bg-dark-surface-container" />
-          </label>
-          <label className="block">
-            <span className="text-xs text-on-surface-variant">Deadline</span>
-            <select value={deadlineMode} onChange={(event) => setDeadlineMode(event.target.value as typeof deadlineMode)} className="mt-1 w-full rounded-xl bg-surface-container-low px-3 py-2.5 dark:bg-dark-surface-container">
-              <option value="none">No deadline</option>
-              <option value="date">Date only</option>
-              <option value="datetime">Date and time</option>
-            </select>
-          </label>
-          {deadlineMode === 'date' ? <input aria-label="Project deadline date" type="date" value={deadlineDate} onChange={(event) => setDeadlineDate(event.target.value)} className="w-full rounded-xl bg-surface-container-low px-3 py-2.5 dark:bg-dark-surface-container" /> : null}
-          {deadlineMode === 'datetime' ? <input aria-label="Project deadline date and time" type="datetime-local" value={deadlineAt} onChange={(event) => setDeadlineAt(event.target.value)} className="w-full rounded-xl bg-surface-container-low px-3 py-2.5 dark:bg-dark-surface-container" /> : null}
+
         </div>
         <div className="mt-7 flex items-center justify-between gap-3">
           {onDelete ? (

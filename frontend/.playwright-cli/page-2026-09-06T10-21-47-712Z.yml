@@ -1,0 +1,81 @@
+- generic [ref=e273]:
+  - complementary [ref=e274]:
+    - generic [ref=e275]:
+      - heading "Timebox" [level=1] [ref=e276]
+      - paragraph [ref=e277]: Monastic productivity
+    - navigation [ref=e278]:
+      - link "Day" [ref=e279] [cursor=pointer]:
+        - /url: /day/2026-09-06
+        - generic [ref=e280]: calendar_today
+        - generic [ref=e281]: Day
+      - link "Chronicle" [ref=e282] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e283]: history
+        - generic [ref=e284]: Chronicle
+      - link "Battle Plan" [ref=e285] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e286]: view_kanban
+        - generic [ref=e287]: Battle Plan
+      - link "Task types" [ref=e288] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e289]: category
+        - generic [ref=e290]: Task types
+    - generic [ref=e292]:
+      - generic [ref=e293]: TB
+      - generic [ref=e294]:
+        - generic [ref=e295]: You
+        - generic [ref=e296]: Cloud
+  - generic [ref=e297]:
+    - banner [ref=e298]:
+      - heading "Timebox" [level=2] [ref=e300]
+      - generic [ref=e301]:
+        - link "Start Work Mode" [ref=e302] [cursor=pointer]:
+          - /url: /day/2026-09-06?workMode=start
+        - link "Settings" [ref=e303] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e304]: settings
+          - generic [ref=e305]: Settings
+        - button "Switch to dark mode" [ref=e306]: dark_mode
+    - main [ref=e307]:
+      - generic [ref=e308]:
+        - generic [ref=e309]:
+          - generic [ref=e310]: 2026-09-06
+          - generic [ref=e312]:
+            - generic [ref=e313]:
+              - heading "Sunday, September 6, 2026" [level=1] [ref=e314]
+              - paragraph [ref=e315]: Timezone Asia/Singapore.
+            - generic [ref=e316]:
+              - button "Previous day" [ref=e317]: ← Prev
+              - button "Jump to date" [ref=e319]:
+                - generic [ref=e320]: 06/09/2026
+                - generic [ref=e321]: calendar_month
+              - button "Next day" [ref=e322]: Next →
+          - generic [ref=e324]:
+            - heading "Planned" [level=3] [ref=e326]
+            - heading "Actual" [level=3] [ref=e327]
+            - generic [ref=e329]:
+              - generic [ref=e330]: 8 AM
+              - generic [ref=e332]: 9 AM
+              - generic [ref=e334]: 10 AM
+              - generic [ref=e336]: 11 AM
+              - generic [ref=e338]: 12 PM
+              - generic [ref=e340]: 1 PM
+              - generic [ref=e342]: 2 PM
+              - generic [ref=e344]: 3 PM
+              - generic [ref=e346]: 4 PM
+              - generic [ref=e348]: 5 PM
+              - generic [ref=e350]: 6 PM
+              - generic [ref=e352]: 7 PM
+              - generic [ref=e354]: 8 PM
+              - generic [ref=e356]: 9 PM
+              - generic [ref=e358]: 10 PM
+              - generic [ref=e360]: 11 PM
+        - complementary "Block details" [ref=e427]:
+          - region "Ready to Plan tasks" [ref=e428]:
+            - generic [ref=e429]:
+              - generic [ref=e430]:
+                - paragraph [ref=e431]: Battle Plan
+                - heading "Ready to Plan" [level=2] [ref=e432]
+                - paragraph [ref=e433]: Drag a task to Planned, or select it and choose a time slot.
+              - generic [ref=e434]: "0"
+            - paragraph [ref=e436]: No tasks are waiting to be planned.

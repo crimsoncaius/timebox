@@ -1,0 +1,40 @@
+async page => {
+  await page.setViewportSize({ width: 1920, height: 1300 });
+  await page.request.patch('http://127.0.0.1:5176/api/tasks/15', { data: { status: 'in_progress', is_blocked: false } });
+  await page.goto('http://127.0.0.1:5176/battle-plan');
+  await page.getByRole('heading', { name: 'QA fix3 drag task', exact: true }).waitFor();
+  const move = async (column) => {
+    const card = page.locator('article[data-task-id="15"]');
+    const destination = page.getByRole('region', { name: `${column} tasks`, exact: true });
+    await card.scrollIntoViewIfNeeded();
+    const source = await card.boundingBox();
+    const target = await destination.boundingBox();
+    if (!source || !target) throw new Error('Missing drag bounds');
+    const ordered = page.waitForResponse(response => response.url().endsWith('/api/tasks/reorder') && response.request().method() === 'POST');
+    await page.mouse.move(source.x + source.width / 2, source.y + 30);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 12, source.y + 30, { steps: 5 });
+    await page.mouse.move(target.x + target.width / 2, target.y + 80, { steps: 30 });
+    await page.mouse.up();
+    const response = await ordered;
+    if (!response.ok()) throw new Error(`Reorder failed: ${await response.text()}`);
+    await destination.getByRole('heading', { name: 'QA fix3 drag task', exact: true }).waitFor();
+  };
+  const read = async id => (await (await page.request.get('http://127.0.0.1:5176/api/tasks?state=active')).json()).items.find(task => task.id === id);
+  await move('Blocked');
+  let task = await read(15);
+  if (!task.is_blocked || task.status !== 'in_progress') throw new Error('Block drag changed underlying progress');
+  const peer = await read(16);
+  if (!peer.is_blocked || peer.status !== 'in_progress') throw new Error('Peer condition/progress changed');
+  await page.reload();
+  await page.getByRole('region', { name: 'Blocked tasks', exact: true }).getByRole('heading', { name: 'QA fix3 drag task', exact: true }).waitFor();
+  await move('Open');
+  task = await read(15);
+  if (task.is_blocked || task.status !== 'open') throw new Error('Open drag did not clear Blocked');
+  await page.reload();
+  await page.getByRole('region', { name: 'Open tasks', exact: true }).getByRole('heading', { name: 'QA fix3 drag task', exact: true }).waitFor();
+  const preserved = await read(16);
+  if (!preserved.is_blocked || preserved.status !== 'in_progress') throw new Error('Unrelated drag changed peer');
+  await page.screenshot({ path: 'artifacts/qa-fixes-2026-09-06/fix3-drag-board.png' });
+  return 'Native pointer drag In progress→Blocked→Open persists correctly; blocked in-progress peer and completed peer are preserved';
+}

@@ -36,6 +36,28 @@ import java.time.LocalDate
 class BattlePlanScreenTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun moveProjectPickerRequiresConfirmationAndSupportsAdmin() {
+        var moved: Int? = -1
+        var cancelled = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                MoveTaskProjectDialog(battleTask(1).copy(projectId = 3),
+                    listOf(Project(3, "Timebox", Instant.EPOCH, Instant.EPOCH), Project(4, "Other", Instant.EPOCH, Instant.EPOCH)),
+                    false, { moved = it }, { cancelled = true })
+            }
+        }
+        compose.onNodeWithText("Move", substring = false).assertIsNotEnabled()
+        compose.onNodeWithText("Other").performClick()
+        compose.runOnIdle { check(moved == -1) }
+        compose.onNodeWithText("Move", substring = false).performClick()
+        compose.runOnIdle { check(moved == 4) }
+        compose.onNodeWithText("Admin").performClick()
+        compose.onNodeWithText("Move", substring = false).performClick()
+        compose.runOnIdle { check(moved == null) }
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { check(cancelled) }
+    }
+
     @Test
     fun composerUsesEditorialSectionsAndPolishedDropdownMenus() {
         var createdDraft: TaskComposerDraft? = null
@@ -46,7 +68,7 @@ class BattlePlanScreenTest {
                         loading = false,
                         showComposer = true,
                         projects = listOf(
-                            Project(3, "Timebox", "", null, null, Instant.EPOCH, Instant.EPOCH),
+                            Project(3, "Timebox", Instant.EPOCH, Instant.EPOCH),
                         ),
                         taskTypes = listOf(TaskType(id = 7, name = "Design", usageCount = 0)),
                         composerDraft = TaskComposerDraft(),

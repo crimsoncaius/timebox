@@ -7,6 +7,17 @@ import { ProjectEditor } from './ProjectEditor'
 describe('ProjectEditor', () => {
   const originalConfirm = window.confirm
 
+  it('creates a project using only its name', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    render(<ProjectEditor project={null} taskCount={0} onSave={onSave} onDelete={null} onClose={vi.fn()} />)
+    expect(screen.queryByLabelText('Description')).not.toBeInTheDocument()
+    expect(screen.queryByText('Deadline')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Name'), '  Launch  ')
+    await user.click(screen.getByRole('button', { name: 'Save project' }))
+    expect(onSave).toHaveBeenCalledWith({ name: 'Launch' })
+  })
+
   afterEach(() => {
     window.confirm = originalConfirm
     vi.restoreAllMocks()
@@ -19,7 +30,6 @@ describe('ProjectEditor', () => {
     render(
       <ProjectEditor
         project={null}
-        timezone="UTC"
         taskCount={0}
         onSave={vi.fn()}
         onDelete={null}
@@ -45,7 +55,6 @@ describe('ProjectEditor', () => {
     render(
       <ProjectEditor
         project={null}
-        timezone="UTC"
         taskCount={0}
         onSave={vi.fn()}
         onDelete={null}
@@ -70,7 +79,6 @@ describe('ProjectEditor', () => {
       return open ? (
         <ProjectEditor
           project={null}
-          timezone="UTC"
           taskCount={0}
           onSave={async () => setOpen(false)}
           onDelete={null}

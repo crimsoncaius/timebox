@@ -1,0 +1,953 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - heading "Timebox" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Monastic productivity
+      - navigation [ref=e8]:
+        - link "Day" [ref=e9] [cursor=pointer]:
+          - /url: /day/2026-09-02
+          - generic [ref=e10]: calendar_today
+          - generic [ref=e11]: Day
+        - link "Chronicle" [ref=e12] [cursor=pointer]:
+          - /url: /history
+          - generic [ref=e13]: history
+          - generic [ref=e14]: Chronicle
+        - link "Battle Plan" [ref=e15] [cursor=pointer]:
+          - /url: /battle-plan
+          - generic [ref=e16]: view_kanban
+          - generic [ref=e17]: Battle Plan
+        - link "Task types" [ref=e18] [cursor=pointer]:
+          - /url: /task-types
+          - generic [ref=e19]: category
+          - generic [ref=e20]: Task types
+      - generic [ref=e22]:
+        - generic [ref=e23]: TB
+        - generic [ref=e24]:
+          - generic [ref=e25]: You
+          - generic [ref=e26]: Cloud
+    - generic [ref=e27]:
+      - banner [ref=e28]:
+        - heading "Timebox" [level=2] [ref=e30]
+        - generic [ref=e31]:
+          - link "Start Work Mode" [ref=e32] [cursor=pointer]:
+            - /url: /day/2026-09-02?workMode=start
+          - link "Settings" [ref=e33] [cursor=pointer]:
+            - /url: /settings
+            - generic [ref=e34]: settings
+            - generic [ref=e35]: Settings
+          - button "Switch to dark mode" [active] [ref=e60]: dark_mode
+      - main [ref=e37]:
+        - generic [ref=e38]:
+          - complementary "Battle Plan lists and projects" [ref=e39]:
+            - navigation [ref=e40]:
+              - button "All Tasks" [ref=e41]
+              - button "Admin" [ref=e42]
+              - link "Recurring" [ref=e43] [cursor=pointer]:
+                - /url: /battle-plan?view=recurring
+            - generic [ref=e44]:
+              - generic [ref=e45]: Projects
+              - button "New project" [ref=e46]: +
+            - generic [ref=e61]:
+              - generic [ref=e62]:
+                - button "Atlas 1788094428502-788885258" [ref=e63]
+                - button "Edit Atlas 1788094428502-788885258" [ref=e64]:
+                  - generic [ref=e65]: edit
+              - generic [ref=e66]:
+                - button "Atlas 1788340736777-487862100" [ref=e67]
+                - button "Edit Atlas 1788340736777-487862100" [ref=e68]:
+                  - generic [ref=e69]: edit
+              - generic [ref=e70]:
+                - button "Atlas 1788341024326-57157327" [ref=e71]
+                - button "Edit Atlas 1788341024326-57157327" [ref=e72]:
+                  - generic [ref=e73]: edit
+            - navigation [ref=e47]:
+              - button "Archive" [ref=e48]
+              - button "Trash" [ref=e49]
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - generic [ref=e52]:
+                - paragraph [ref=e53]: Battle Plan
+                - heading "All Tasks" [level=1] [ref=e54]
+              - generic [ref=e55]:
+                - combobox "Sort tasks" [ref=e56]:
+                  - option "Manual order" [selected]
+                  - option "Deadline"
+                  - option "Urgency"
+                  - option "Importance"
+                - generic [ref=e57]:
+                  - checkbox "Hide completed" [ref=e58]
+                  - text: Hide completed
+                - button "Archive completed (3)" [ref=e74]
+            - generic [ref=e75]:
+              - generic [ref=e76]:
+                - generic [ref=e77]: Urgency
+                - button "low" [ref=e78]
+                - button "medium" [ref=e79]
+                - button "high" [ref=e80]
+                - button "unset" [ref=e81]
+              - generic [ref=e82]:
+                - generic [ref=e83]: Importance
+                - button "low" [ref=e84]
+                - button "medium" [ref=e85]
+                - button "high" [ref=e86]
+                - button "unset" [ref=e87]
+              - group [ref=e88]:
+                - generic "Task types" [ref=e89] [cursor=pointer]
+            - generic [ref=e90]:
+              - region "Open tasks" [ref=e91]:
+                - generic [ref=e92]:
+                  - heading "Open" [level=2] [ref=e93]
+                  - generic [ref=e94]: "40"
+                - button "Add Open task" [ref=e95]:
+                  - generic [ref=e96]: add
+                  - text: Add task
+                - generic [ref=e97]:
+                  - button "Move Responsive task 1280 1788094406272-977807888" [ref=e98]:
+                    - generic [ref=e99]:
+                      - heading "Responsive task 1280 1788094406272-977807888" [level=3] [ref=e101]
+                      - generic [ref=e103]: drag_indicator
+                    - generic [ref=e106]: Admin
+                    - generic [ref=e108]:
+                      - button "Add Responsive task 1280 1788094406272-977807888 to Ready to Plan" [ref=e109]:
+                        - generic [ref=e110]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to Responsive task 1280 1788094406272-977807888" [ref=e111]:
+                        - generic [ref=e112]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e113]
+                  - button "Move Responsive task 1366 1788094409615-397519085" [ref=e114]:
+                    - generic [ref=e115]:
+                      - heading "Responsive task 1366 1788094409615-397519085" [level=3] [ref=e117]
+                      - generic [ref=e119]: drag_indicator
+                    - generic [ref=e122]: Admin
+                    - generic [ref=e124]:
+                      - button "Add Responsive task 1366 1788094409615-397519085 to Ready to Plan" [ref=e125]:
+                        - generic [ref=e126]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to Responsive task 1366 1788094409615-397519085" [ref=e127]:
+                        - generic [ref=e128]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e129]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e130]:
+                    - generic [ref=e131]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e133]
+                      - generic [ref=e135]: drag_indicator
+                    - generic [ref=e137]:
+                      - generic [ref=e138]: Admin
+                      - generic [ref=e139]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e140]
+                    - generic [ref=e141]:
+                      - generic [ref=e142]:
+                        - generic [ref=e143]: calendar_today
+                        - generic [ref=e144]: Overdue · Aug 30
+                      - generic [ref=e145]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e146]:
+                          - generic [ref=e147]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e148]:
+                          - generic [ref=e149]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e150]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e151]:
+                    - generic [ref=e152]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e154]
+                      - generic [ref=e156]: drag_indicator
+                    - generic [ref=e158]:
+                      - generic [ref=e159]: Admin
+                      - generic [ref=e160]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e161]
+                    - generic [ref=e162]:
+                      - generic [ref=e163]:
+                        - generic [ref=e164]: calendar_today
+                        - generic [ref=e165]: Overdue · Aug 31
+                      - generic [ref=e166]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e167]:
+                          - generic [ref=e168]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e169]:
+                          - generic [ref=e170]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e171]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e172]:
+                    - generic [ref=e173]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e175]
+                      - generic [ref=e177]: drag_indicator
+                    - generic [ref=e179]:
+                      - generic [ref=e180]: Admin
+                      - generic [ref=e181]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e182]
+                    - generic [ref=e183]:
+                      - generic [ref=e184]:
+                        - generic [ref=e185]: calendar_today
+                        - generic [ref=e186]: Overdue · Sep 1
+                      - generic [ref=e187]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e188]:
+                          - generic [ref=e189]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e190]:
+                          - generic [ref=e191]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e192]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e193]:
+                    - generic [ref=e194]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e196]
+                      - generic [ref=e198]: drag_indicator
+                    - generic [ref=e200]:
+                      - generic [ref=e201]: Admin
+                      - generic [ref=e202]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e203]
+                    - generic [ref=e204]:
+                      - generic [ref=e205]:
+                        - generic [ref=e206]: calendar_today
+                        - generic [ref=e207]: Today
+                      - generic [ref=e208]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e209]:
+                          - generic [ref=e210]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e211]:
+                          - generic [ref=e212]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e213]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e214]:
+                    - generic [ref=e215]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e217]
+                      - generic [ref=e219]: drag_indicator
+                    - generic [ref=e221]:
+                      - generic [ref=e222]: Admin
+                      - generic [ref=e223]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e224]
+                    - generic [ref=e225]:
+                      - generic [ref=e226]:
+                        - generic [ref=e227]: calendar_today
+                        - generic [ref=e228]: Tomorrow
+                      - generic [ref=e229]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e230]:
+                          - generic [ref=e231]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e232]:
+                          - generic [ref=e233]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e234]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e235]:
+                    - generic [ref=e236]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e238]
+                      - generic [ref=e240]: drag_indicator
+                    - generic [ref=e242]:
+                      - generic [ref=e243]: Admin
+                      - generic [ref=e244]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e245]
+                    - generic [ref=e246]:
+                      - generic [ref=e247]:
+                        - generic [ref=e248]: calendar_today
+                        - generic [ref=e249]: Friday
+                      - generic [ref=e250]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e251]:
+                          - generic [ref=e252]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e253]:
+                          - generic [ref=e254]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e255]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e256]:
+                    - generic [ref=e257]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e259]
+                      - generic [ref=e261]: drag_indicator
+                    - generic [ref=e263]:
+                      - generic [ref=e264]: Admin
+                      - generic [ref=e265]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e266]
+                    - generic [ref=e267]:
+                      - generic [ref=e268]:
+                        - generic [ref=e269]: calendar_today
+                        - generic [ref=e270]: Saturday
+                      - generic [ref=e271]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e272]:
+                          - generic [ref=e273]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e274]:
+                          - generic [ref=e275]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e276]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e277]:
+                    - generic [ref=e278]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e280]
+                      - generic [ref=e282]: drag_indicator
+                    - generic [ref=e284]:
+                      - generic [ref=e285]: Admin
+                      - generic [ref=e286]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e287]
+                    - generic [ref=e288]:
+                      - generic [ref=e289]:
+                        - generic [ref=e290]: calendar_today
+                        - generic [ref=e291]: Sunday
+                      - generic [ref=e292]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e293]:
+                          - generic [ref=e294]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e295]:
+                          - generic [ref=e296]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e297]
+                  - button "Move Gym 1788094412495-600522" [ref=e298]:
+                    - generic [ref=e299]:
+                      - heading "Gym 1788094412495-600522" [level=3] [ref=e301]
+                      - generic [ref=e303]: drag_indicator
+                    - generic [ref=e305]:
+                      - generic [ref=e306]: Admin
+                      - generic [ref=e307]: recurring-quota-1788094412495-600522
+                      - button "↻ Gym 1788094412495-600522" [ref=e308]
+                      - generic [ref=e309]: Aug 31–Sep 6 · 0/3
+                    - generic [ref=e310]:
+                      - generic [ref=e311]:
+                        - generic [ref=e312]: calendar_today
+                        - generic [ref=e313]: Sunday
+                      - generic [ref=e314]:
+                        - button "Add Gym 1788094412495-600522 to Ready to Plan" [ref=e315]:
+                          - generic [ref=e316]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788094412495-600522" [ref=e317]:
+                          - generic [ref=e318]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e319]
+                  - button "Move Launch brief 1788094428502-788885258" [ref=e320]:
+                    - generic [ref=e321]:
+                      - heading "Launch brief 1788094428502-788885258" [level=3] [ref=e323]
+                      - generic [ref=e325]: drag_indicator
+                    - generic [ref=e327]:
+                      - generic [ref=e328]: Atlas 1788094428502-788885258
+                      - generic [ref=e329]: U · high
+                      - generic [ref=e330]: I · medium
+                    - generic [ref=e331]:
+                      - generic [ref=e332]:
+                        - generic [ref=e333]: calendar_today
+                        - generic [ref=e334]: Overdue · Aug 30
+                      - generic [ref=e335]:
+                        - button "Add Launch brief 1788094428502-788885258 to Ready to Plan" [ref=e336]:
+                          - generic [ref=e337]: event_upcoming
+                          - text: Plan
+                        - button "1 of 1 subtasks completed for Launch brief 1788094428502-788885258" [ref=e338]:
+                          - generic [ref=e339]: account_tree
+                          - text: 1/1
+                    - button "Complete Task" [ref=e340]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e341]:
+                    - generic [ref=e342]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e344]
+                      - generic [ref=e346]: drag_indicator
+                    - generic [ref=e348]:
+                      - generic [ref=e349]: Admin
+                      - generic [ref=e350]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e351]
+                    - generic [ref=e352]:
+                      - generic [ref=e353]:
+                        - generic [ref=e354]: calendar_today
+                        - generic [ref=e355]: Monday
+                      - generic [ref=e356]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e357]:
+                          - generic [ref=e358]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e359]:
+                          - generic [ref=e360]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e361]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e362]:
+                    - generic [ref=e363]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e365]
+                      - generic [ref=e367]: drag_indicator
+                    - generic [ref=e369]:
+                      - generic [ref=e370]: Admin
+                      - generic [ref=e371]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e372]
+                    - generic [ref=e373]:
+                      - generic [ref=e374]:
+                        - generic [ref=e375]: calendar_today
+                        - generic [ref=e376]: Tuesday
+                      - generic [ref=e377]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e378]:
+                          - generic [ref=e379]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e380]:
+                          - generic [ref=e381]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e382]
+                  - button "Move Gym 1788094412495-600522" [ref=e383]:
+                    - generic [ref=e384]:
+                      - heading "Gym 1788094412495-600522" [level=3] [ref=e386]
+                      - generic [ref=e388]: drag_indicator
+                    - generic [ref=e390]:
+                      - generic [ref=e391]: Admin
+                      - generic [ref=e392]: recurring-quota-1788094412495-600522
+                      - button "↻ Gym 1788094412495-600522" [ref=e393]
+                      - generic [ref=e394]: Sep 7–Sep 13 · 0/3
+                    - generic [ref=e395]:
+                      - generic [ref=e396]:
+                        - generic [ref=e397]: calendar_today
+                        - generic [ref=e398]: Sep 13
+                      - generic [ref=e399]:
+                        - button "Add Gym 1788094412495-600522 to Ready to Plan" [ref=e400]:
+                          - generic [ref=e401]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788094412495-600522" [ref=e402]:
+                          - generic [ref=e403]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e404]
+                  - button "Move Morning review 1788094410220-3954011" [ref=e405]:
+                    - generic [ref=e406]:
+                      - heading "Morning review 1788094410220-3954011" [level=3] [ref=e408]
+                      - generic [ref=e410]: drag_indicator
+                    - generic [ref=e412]:
+                      - generic [ref=e413]: Admin
+                      - generic [ref=e414]: recurring-fixed-1788094410220-3954011
+                      - button "↻ Morning review 1788094410220-3954011" [ref=e415]
+                    - generic [ref=e416]:
+                      - generic [ref=e417]:
+                        - generic [ref=e418]: calendar_today
+                        - generic [ref=e419]: Wednesday
+                      - generic [ref=e420]:
+                        - button "Remove Morning review 1788094410220-3954011 from Ready to Plan" [pressed] [ref=e421]:
+                          - generic [ref=e422]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788094410220-3954011" [ref=e423]:
+                          - generic [ref=e424]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e425]
+                  - button "Move Responsive task 1280 1788340715458-449909482" [ref=e426]:
+                    - generic [ref=e427]:
+                      - heading "Responsive task 1280 1788340715458-449909482" [level=3] [ref=e429]
+                      - generic [ref=e431]: drag_indicator
+                    - generic [ref=e434]: Admin
+                    - generic [ref=e436]:
+                      - button "Add Responsive task 1280 1788340715458-449909482 to Ready to Plan" [ref=e437]:
+                        - generic [ref=e438]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to Responsive task 1280 1788340715458-449909482" [ref=e439]:
+                        - generic [ref=e440]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e441]
+                  - button "Move Responsive task 1366 1788340716345-458237452" [ref=e442]:
+                    - generic [ref=e443]:
+                      - heading "Responsive task 1366 1788340716345-458237452" [level=3] [ref=e445]
+                      - generic [ref=e447]: drag_indicator
+                    - generic [ref=e450]: Admin
+                    - generic [ref=e452]:
+                      - button "Add Responsive task 1366 1788340716345-458237452 to Ready to Plan" [ref=e453]:
+                        - generic [ref=e454]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to Responsive task 1366 1788340716345-458237452" [ref=e455]:
+                        - generic [ref=e456]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e457]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e458]:
+                    - generic [ref=e459]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e461]
+                      - generic [ref=e463]: drag_indicator
+                    - generic [ref=e465]:
+                      - generic [ref=e466]: Admin
+                      - generic [ref=e467]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e468]
+                    - generic [ref=e469]:
+                      - generic [ref=e470]:
+                        - generic [ref=e471]: calendar_today
+                        - generic [ref=e472]: Today
+                      - generic [ref=e473]:
+                        - button "Add Morning review 1788340716934-9808620 to Ready to Plan" [ref=e474]:
+                          - generic [ref=e475]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e476]:
+                          - generic [ref=e477]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e478]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e479]:
+                    - generic [ref=e480]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e482]
+                      - generic [ref=e484]: drag_indicator
+                    - generic [ref=e486]:
+                      - generic [ref=e487]: Admin
+                      - generic [ref=e488]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e489]
+                    - generic [ref=e490]:
+                      - generic [ref=e491]:
+                        - generic [ref=e492]: calendar_today
+                        - generic [ref=e493]: Tomorrow
+                      - generic [ref=e494]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e495]:
+                          - generic [ref=e496]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e497]:
+                          - generic [ref=e498]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e499]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e500]:
+                    - generic [ref=e501]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e503]
+                      - generic [ref=e505]: drag_indicator
+                    - generic [ref=e507]:
+                      - generic [ref=e508]: Admin
+                      - generic [ref=e509]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e510]
+                    - generic [ref=e511]:
+                      - generic [ref=e512]:
+                        - generic [ref=e513]: calendar_today
+                        - generic [ref=e514]: Friday
+                      - generic [ref=e515]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e516]:
+                          - generic [ref=e517]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e518]:
+                          - generic [ref=e519]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e520]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e521]:
+                    - generic [ref=e522]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e524]
+                      - generic [ref=e526]: drag_indicator
+                    - generic [ref=e528]:
+                      - generic [ref=e529]: Admin
+                      - generic [ref=e530]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e531]
+                    - generic [ref=e532]:
+                      - generic [ref=e533]:
+                        - generic [ref=e534]: calendar_today
+                        - generic [ref=e535]: Saturday
+                      - generic [ref=e536]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e537]:
+                          - generic [ref=e538]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e539]:
+                          - generic [ref=e540]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e541]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e542]:
+                    - generic [ref=e543]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e545]
+                      - generic [ref=e547]: drag_indicator
+                    - generic [ref=e549]:
+                      - generic [ref=e550]: Admin
+                      - generic [ref=e551]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e552]
+                    - generic [ref=e553]:
+                      - generic [ref=e554]:
+                        - generic [ref=e555]: calendar_today
+                        - generic [ref=e556]: Sunday
+                      - generic [ref=e557]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e558]:
+                          - generic [ref=e559]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e560]:
+                          - generic [ref=e561]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e562]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e563]:
+                    - generic [ref=e564]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e566]
+                      - generic [ref=e568]: drag_indicator
+                    - generic [ref=e570]:
+                      - generic [ref=e571]: Admin
+                      - generic [ref=e572]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e573]
+                    - generic [ref=e574]:
+                      - generic [ref=e575]:
+                        - generic [ref=e576]: calendar_today
+                        - generic [ref=e577]: Monday
+                      - generic [ref=e578]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e579]:
+                          - generic [ref=e580]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e581]:
+                          - generic [ref=e582]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e583]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e584]:
+                    - generic [ref=e585]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e587]
+                      - generic [ref=e589]: drag_indicator
+                    - generic [ref=e591]:
+                      - generic [ref=e592]: Admin
+                      - generic [ref=e593]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e594]
+                    - generic [ref=e595]:
+                      - generic [ref=e596]:
+                        - generic [ref=e597]: calendar_today
+                        - generic [ref=e598]: Tuesday
+                      - generic [ref=e599]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e600]:
+                          - generic [ref=e601]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e602]:
+                          - generic [ref=e603]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e604]
+                  - button "Move Morning review 1788340716934-9808620" [ref=e605]:
+                    - generic [ref=e606]:
+                      - heading "Morning review 1788340716934-9808620" [level=3] [ref=e608]
+                      - generic [ref=e610]: drag_indicator
+                    - generic [ref=e612]:
+                      - generic [ref=e613]: Admin
+                      - generic [ref=e614]: recurring-fixed-1788340716934-9808620
+                      - button "↻ Morning review 1788340716934-9808620" [ref=e615]
+                    - generic [ref=e616]:
+                      - generic [ref=e617]:
+                        - generic [ref=e618]: calendar_today
+                        - generic [ref=e619]: Wednesday
+                      - generic [ref=e620]:
+                        - button "Remove Morning review 1788340716934-9808620 from Ready to Plan" [pressed] [ref=e621]:
+                          - generic [ref=e622]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788340716934-9808620" [ref=e623]:
+                          - generic [ref=e624]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e625]
+                  - button "Move Gym 1788340719617-2331143" [ref=e626]:
+                    - generic [ref=e627]:
+                      - heading "Gym 1788340719617-2331143" [level=3] [ref=e629]
+                      - generic [ref=e631]: drag_indicator
+                    - generic [ref=e633]:
+                      - generic [ref=e634]: Admin
+                      - generic [ref=e635]: recurring-quota-1788340719617-2331143
+                      - button "↻ Gym 1788340719617-2331143" [ref=e636]
+                      - generic [ref=e637]: Sep 7–Sep 13 · 0/3
+                    - generic [ref=e638]:
+                      - generic [ref=e639]:
+                        - generic [ref=e640]: calendar_today
+                        - generic [ref=e641]: Sep 13
+                      - generic [ref=e642]:
+                        - button "Add Gym 1788340719617-2331143 to Ready to Plan" [ref=e643]:
+                          - generic [ref=e644]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788340719617-2331143" [ref=e645]:
+                          - generic [ref=e646]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e647]
+                  - button "Move Launch brief 1788340736777-487862100" [ref=e648]:
+                    - generic [ref=e649]:
+                      - heading "Launch brief 1788340736777-487862100" [level=3] [ref=e651]
+                      - generic [ref=e653]: drag_indicator
+                    - generic [ref=e655]:
+                      - generic [ref=e656]: Atlas 1788340736777-487862100
+                      - generic [ref=e657]: U · high
+                      - generic [ref=e658]: I · medium
+                    - generic [ref=e659]:
+                      - generic [ref=e660]:
+                        - generic [ref=e661]: calendar_today
+                        - generic [ref=e662]: Today
+                      - generic [ref=e663]:
+                        - button "Add Launch brief 1788340736777-487862100 to Ready to Plan" [ref=e664]:
+                          - generic [ref=e665]: event_upcoming
+                          - text: Plan
+                        - button "1 of 1 subtasks completed for Launch brief 1788340736777-487862100" [ref=e666]:
+                          - generic [ref=e667]: account_tree
+                          - text: 1/1
+                    - button "Complete Task" [ref=e668]
+                  - button "Move Responsive task 1280 1788341001916-286679524" [ref=e669]:
+                    - generic [ref=e670]:
+                      - heading "Responsive task 1280 1788341001916-286679524" [level=3] [ref=e672]
+                      - generic [ref=e674]: drag_indicator
+                    - generic [ref=e677]: Admin
+                    - generic [ref=e679]:
+                      - button "Add Responsive task 1280 1788341001916-286679524 to Ready to Plan" [ref=e680]:
+                        - generic [ref=e681]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to Responsive task 1280 1788341001916-286679524" [ref=e682]:
+                        - generic [ref=e683]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e684]
+                  - button "Move Responsive task 1366 1788341002632-101459989" [ref=e685]:
+                    - generic [ref=e686]:
+                      - heading "Responsive task 1366 1788341002632-101459989" [level=3] [ref=e688]
+                      - generic [ref=e690]: drag_indicator
+                    - generic [ref=e693]: Admin
+                    - generic [ref=e695]:
+                      - button "Add Responsive task 1366 1788341002632-101459989 to Ready to Plan" [ref=e696]:
+                        - generic [ref=e697]: event_upcoming
+                        - text: Plan
+                      - button "Add a subtask to Responsive task 1366 1788341002632-101459989" [ref=e698]:
+                        - generic [ref=e699]: account_tree
+                        - text: 0/0
+                    - button "Complete Task" [ref=e700]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e701]:
+                    - generic [ref=e702]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e704]
+                      - generic [ref=e706]: drag_indicator
+                    - generic [ref=e708]:
+                      - generic [ref=e709]: Admin
+                      - generic [ref=e710]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e711]
+                    - generic [ref=e712]:
+                      - generic [ref=e713]:
+                        - generic [ref=e714]: calendar_today
+                        - generic [ref=e715]: Today
+                      - generic [ref=e716]:
+                        - button "Add Morning review 1788341003288-9792144 to Ready to Plan" [ref=e717]:
+                          - generic [ref=e718]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e719]:
+                          - generic [ref=e720]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e721]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e722]:
+                    - generic [ref=e723]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e725]
+                      - generic [ref=e727]: drag_indicator
+                    - generic [ref=e729]:
+                      - generic [ref=e730]: Admin
+                      - generic [ref=e731]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e732]
+                    - generic [ref=e733]:
+                      - generic [ref=e734]:
+                        - generic [ref=e735]: calendar_today
+                        - generic [ref=e736]: Tomorrow
+                      - generic [ref=e737]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e738]:
+                          - generic [ref=e739]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e740]:
+                          - generic [ref=e741]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e742]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e743]:
+                    - generic [ref=e744]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e746]
+                      - generic [ref=e748]: drag_indicator
+                    - generic [ref=e750]:
+                      - generic [ref=e751]: Admin
+                      - generic [ref=e752]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e753]
+                    - generic [ref=e754]:
+                      - generic [ref=e755]:
+                        - generic [ref=e756]: calendar_today
+                        - generic [ref=e757]: Friday
+                      - generic [ref=e758]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e759]:
+                          - generic [ref=e760]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e761]:
+                          - generic [ref=e762]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e763]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e764]:
+                    - generic [ref=e765]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e767]
+                      - generic [ref=e769]: drag_indicator
+                    - generic [ref=e771]:
+                      - generic [ref=e772]: Admin
+                      - generic [ref=e773]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e774]
+                    - generic [ref=e775]:
+                      - generic [ref=e776]:
+                        - generic [ref=e777]: calendar_today
+                        - generic [ref=e778]: Saturday
+                      - generic [ref=e779]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e780]:
+                          - generic [ref=e781]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e782]:
+                          - generic [ref=e783]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e784]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e785]:
+                    - generic [ref=e786]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e788]
+                      - generic [ref=e790]: drag_indicator
+                    - generic [ref=e792]:
+                      - generic [ref=e793]: Admin
+                      - generic [ref=e794]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e795]
+                    - generic [ref=e796]:
+                      - generic [ref=e797]:
+                        - generic [ref=e798]: calendar_today
+                        - generic [ref=e799]: Sunday
+                      - generic [ref=e800]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e801]:
+                          - generic [ref=e802]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e803]:
+                          - generic [ref=e804]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e805]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e806]:
+                    - generic [ref=e807]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e809]
+                      - generic [ref=e811]: drag_indicator
+                    - generic [ref=e813]:
+                      - generic [ref=e814]: Admin
+                      - generic [ref=e815]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e816]
+                    - generic [ref=e817]:
+                      - generic [ref=e818]:
+                        - generic [ref=e819]: calendar_today
+                        - generic [ref=e820]: Monday
+                      - generic [ref=e821]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e822]:
+                          - generic [ref=e823]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e824]:
+                          - generic [ref=e825]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e826]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e827]:
+                    - generic [ref=e828]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e830]
+                      - generic [ref=e832]: drag_indicator
+                    - generic [ref=e834]:
+                      - generic [ref=e835]: Admin
+                      - generic [ref=e836]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e837]
+                    - generic [ref=e838]:
+                      - generic [ref=e839]:
+                        - generic [ref=e840]: calendar_today
+                        - generic [ref=e841]: Tuesday
+                      - generic [ref=e842]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e843]:
+                          - generic [ref=e844]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e845]:
+                          - generic [ref=e846]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e847]
+                  - button "Move Morning review 1788341003288-9792144" [ref=e848]:
+                    - generic [ref=e849]:
+                      - heading "Morning review 1788341003288-9792144" [level=3] [ref=e851]
+                      - generic [ref=e853]: drag_indicator
+                    - generic [ref=e855]:
+                      - generic [ref=e856]: Admin
+                      - generic [ref=e857]: recurring-fixed-1788341003288-9792144
+                      - button "↻ Morning review 1788341003288-9792144" [ref=e858]
+                    - generic [ref=e859]:
+                      - generic [ref=e860]:
+                        - generic [ref=e861]: calendar_today
+                        - generic [ref=e862]: Wednesday
+                      - generic [ref=e863]:
+                        - button "Remove Morning review 1788341003288-9792144 from Ready to Plan" [pressed] [ref=e864]:
+                          - generic [ref=e865]: event_available
+                          - text: Ready
+                        - button "Add a subtask to Morning review 1788341003288-9792144" [ref=e866]:
+                          - generic [ref=e867]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e868]
+                  - button "Move Gym 1788341005790-8362072" [ref=e869]:
+                    - generic [ref=e870]:
+                      - heading "Gym 1788341005790-8362072" [level=3] [ref=e872]
+                      - generic [ref=e874]: drag_indicator
+                    - generic [ref=e876]:
+                      - generic [ref=e877]: Admin
+                      - generic [ref=e878]: recurring-quota-1788341005790-8362072
+                      - button "↻ Gym 1788341005790-8362072" [ref=e879]
+                      - generic [ref=e880]: Sep 7–Sep 13 · 0/3
+                    - generic [ref=e881]:
+                      - generic [ref=e882]:
+                        - generic [ref=e883]: calendar_today
+                        - generic [ref=e884]: Sep 13
+                      - generic [ref=e885]:
+                        - button "Add Gym 1788341005790-8362072 to Ready to Plan" [ref=e886]:
+                          - generic [ref=e887]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788341005790-8362072" [ref=e888]:
+                          - generic [ref=e889]: account_tree
+                          - text: 0/0
+                    - button "Complete Task" [ref=e890]
+                  - button "Move Launch brief 1788341024326-57157327" [ref=e891]:
+                    - generic [ref=e892]:
+                      - heading "Launch brief 1788341024326-57157327" [level=3] [ref=e894]
+                      - generic [ref=e896]: drag_indicator
+                    - generic [ref=e898]:
+                      - generic [ref=e899]: Atlas 1788341024326-57157327
+                      - generic [ref=e900]: U · high
+                      - generic [ref=e901]: I · medium
+                    - generic [ref=e902]:
+                      - generic [ref=e903]:
+                        - generic [ref=e904]: calendar_today
+                        - generic [ref=e905]: Today
+                      - generic [ref=e906]:
+                        - button "Add Launch brief 1788341024326-57157327 to Ready to Plan" [ref=e907]:
+                          - generic [ref=e908]: event_upcoming
+                          - text: Plan
+                        - button "1 of 1 subtasks completed for Launch brief 1788341024326-57157327" [ref=e909]:
+                          - generic [ref=e910]: account_tree
+                          - text: 1/1
+                    - button "Complete Task" [ref=e911]
+              - region "In progress tasks" [ref=e912]:
+                - generic [ref=e913]:
+                  - heading "In progress" [level=2] [ref=e914]
+                  - generic [ref=e915]: "0"
+                - button "Add In progress task" [ref=e916]:
+                  - generic [ref=e917]: add
+                  - text: Add task
+              - region "Blocked tasks" [ref=e918]:
+                - generic [ref=e919]:
+                  - heading "Blocked" [level=2] [ref=e920]
+                  - generic [ref=e921]: "0"
+                - button "Add Blocked task" [ref=e922]:
+                  - generic [ref=e923]: add
+                  - text: Add task
+              - region "Completed tasks" [ref=e924]:
+                - generic [ref=e925]:
+                  - heading "Completed" [level=2] [ref=e926]
+                  - generic [ref=e927]: "3"
+                - button "Add Completed task" [ref=e928]:
+                  - generic [ref=e929]: add
+                  - text: Add task
+                - generic [ref=e930]:
+                  - button "Gym 1788094412495-600522" [disabled] [ref=e931]:
+                    - generic [ref=e932]:
+                      - heading "Gym 1788094412495-600522" [level=3] [ref=e934]
+                      - generic [ref=e936]: drag_indicator
+                    - generic [ref=e938]:
+                      - generic [ref=e939]: Admin
+                      - generic [ref=e940]: recurring-quota-1788094412495-600522
+                      - button "↻ Gym 1788094412495-600522" [disabled] [ref=e941]
+                      - generic [ref=e942]: Aug 30 · 3/3
+                    - generic [ref=e943]:
+                      - generic [ref=e944]:
+                        - generic [ref=e945]: calendar_today
+                        - generic [ref=e946]: Aug 30
+                      - generic [ref=e947]:
+                        - button "Add Gym 1788094412495-600522 to Ready to Plan" [disabled] [ref=e948]:
+                          - generic [ref=e949]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788094412495-600522" [disabled] [ref=e950]:
+                          - generic [ref=e951]: account_tree
+                          - text: 0/0
+                    - button "Reopen Task" [disabled] [ref=e952]
+                  - button "Gym 1788340719617-2331143" [disabled] [ref=e953]:
+                    - generic [ref=e954]:
+                      - heading "Gym 1788340719617-2331143" [level=3] [ref=e956]
+                      - generic [ref=e958]: drag_indicator
+                    - generic [ref=e960]:
+                      - generic [ref=e961]: Admin
+                      - generic [ref=e962]: recurring-quota-1788340719617-2331143
+                      - button "↻ Gym 1788340719617-2331143" [disabled] [ref=e963]
+                      - generic [ref=e964]: Sep 2–Sep 6 · 3/3
+                    - generic [ref=e965]:
+                      - generic [ref=e966]:
+                        - generic [ref=e967]: calendar_today
+                        - generic [ref=e968]: Sunday
+                      - generic [ref=e969]:
+                        - button "Add Gym 1788340719617-2331143 to Ready to Plan" [disabled] [ref=e970]:
+                          - generic [ref=e971]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788340719617-2331143" [disabled] [ref=e972]:
+                          - generic [ref=e973]: account_tree
+                          - text: 0/0
+                    - button "Reopen Task" [disabled] [ref=e974]
+                  - button "Gym 1788341005790-8362072" [disabled] [ref=e975]:
+                    - generic [ref=e976]:
+                      - heading "Gym 1788341005790-8362072" [level=3] [ref=e978]
+                      - generic [ref=e980]: drag_indicator
+                    - generic [ref=e982]:
+                      - generic [ref=e983]: Admin
+                      - generic [ref=e984]: recurring-quota-1788341005790-8362072
+                      - button "↻ Gym 1788341005790-8362072" [disabled] [ref=e985]
+                      - generic [ref=e986]: Sep 2–Sep 6 · 3/3
+                    - generic [ref=e987]:
+                      - generic [ref=e988]:
+                        - generic [ref=e989]: calendar_today
+                        - generic [ref=e990]: Sunday
+                      - generic [ref=e991]:
+                        - button "Add Gym 1788341005790-8362072 to Ready to Plan" [disabled] [ref=e992]:
+                          - generic [ref=e993]: event_upcoming
+                          - text: Plan
+                        - button "Add a subtask to Gym 1788341005790-8362072" [disabled] [ref=e994]:
+                          - generic [ref=e995]: account_tree
+                          - text: 0/0
+                    - button "Reopen Task" [disabled] [ref=e996]
+  - status [ref=e997]

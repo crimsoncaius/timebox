@@ -65,6 +65,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -163,6 +164,7 @@ fun BattlePlanScreen(
     onArchiveCompleted: () -> Unit = {},
     onOpenTask: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onMoveProject: (BattleTask, Int?) -> Unit = { _, _ -> },
     onMoveTask: (BattleTask, TaskStatus) -> Unit,
     onReorderTask: (BattleTask, Int) -> Unit,
     onMoveTaskToBoundary: (BattleTask, Boolean) -> Unit = { _, _ -> },
@@ -192,6 +194,13 @@ fun BattlePlanScreen(
     onDismissPermanentDelete: () -> Unit,
     onConfirmPermanentDelete: () -> Unit,
 ) {
+    var movingTask by remember { mutableStateOf<BattleTask?>(null) }
+    val onRequestMoveProject: (BattleTask) -> Unit = { movingTask = it }
+    movingTask?.let { task ->
+        MoveTaskProjectDialog(task, state.projects, state.saving,
+            onMove = { destination -> onMoveProject(task, destination); movingTask = null },
+            onDismiss = { movingTask = null })
+    }
     var projectOrderOpen by remember { mutableStateOf(false) }
     if (projectOrderOpen) ProjectOrderDialog(state.projects, state.projectOrderSaving, state.error, onReorderProjects) { projectOrderOpen = false }
     val colors = TimeboxTheme.colors
@@ -217,7 +226,7 @@ fun BattlePlanScreen(
                                     battlePlanStatuses.forEach { status ->
                                         TaskColumn(
                                             status.label, state.filteredTasks.filter { it.status == status }, Modifier.weight(1f),
-                                            true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onMoveTask,
+                                            true, state.serverNow, state.timezone, onOpenTask, onToggleReady, onRequestMoveProject, onMoveTask,
                                             onReorderTask, onCreateSubtask, onToggleSubtask,
                                         )
                                     }
@@ -245,6 +254,7 @@ fun BattlePlanScreen(
                             onArchiveCompleted = onArchiveCompleted,
                             onOpenTask = onOpenTask,
                             onToggleReady = onToggleReady,
+                            onRequestMoveProject = onRequestMoveProject,
                             onDropTask = onDropTask,
                             onMoveTaskToBoundary = onMoveTaskToBoundary,
                             onSetBlocked = onSetBlocked,
@@ -392,6 +402,7 @@ private fun MobileKanbanBoard(
     onArchiveCompleted: () -> Unit,
     onOpenTask: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onRequestMoveProject: (BattleTask) -> Unit,
     onDropTask: (BattleTask, TaskStatus, Int) -> Unit,
     onMoveTaskToBoundary: (BattleTask, Boolean) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
@@ -745,6 +756,7 @@ private fun MobileKanbanBoard(
                     timezone = state.timezone,
                     onOpen = onOpenTask,
                     onToggleReady = onToggleReady,
+                    onRequestMoveProject = onRequestMoveProject,
                     onDrop = onDropTask,
                     onMoveToBoundary = onMoveTaskToBoundary,
                     onSetBlocked = onSetBlocked,
@@ -1114,6 +1126,7 @@ private fun MobileTaskLane(
     timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onRequestMoveProject: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
     onMoveToBoundary: (BattleTask, Boolean) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
@@ -1192,6 +1205,7 @@ private fun MobileTaskLane(
                             bottomSpacing = if (index < visibleTasks.lastIndex && insertionIndex != index + 1) 10.dp else 0.dp,
                             onOpen = onOpen,
                             onToggleReady = onToggleReady,
+                            onRequestMoveProject = onRequestMoveProject,
                             onDrop = onDrop,
                             onMoveToBoundary = onMoveToBoundary,
                             onSetBlocked = onSetBlocked,
@@ -1249,6 +1263,7 @@ private fun MobileKanbanCard(
     bottomSpacing: Dp,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onRequestMoveProject: (BattleTask) -> Unit,
     onDrop: (BattleTask, TaskStatus, Int) -> Unit,
     onMoveToBoundary: (BattleTask, Boolean) -> Unit,
     onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
@@ -1319,6 +1334,7 @@ private fun MobileKanbanCard(
                         onMoveToTop = { menu = false; onMoveToBoundary(task, true) },
                         onMoveToBottom = { menu = false; onMoveToBoundary(task, false) },
                         onMoveTo = { target -> menu = false; onDrop(task, target, taskCount(target)) },
+                        onMoveProject = { menu = false; onRequestMoveProject(task) },
                         onTrash = { menu = false; onRequestTrash(task) },
                     )
                 }
@@ -1400,6 +1416,7 @@ private fun MobileTaskActionMenu(
     onMoveToBottom: () -> Unit,
     onMoveTo: (TaskStatus) -> Unit,
     onTrash: () -> Unit,
+    onMoveProject: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
 
@@ -1423,6 +1440,7 @@ private fun MobileTaskActionMenu(
             )
         } else {
             MenuSectionLabel("Task")
+            MobileTaskActionMenuItem(label = "Move to project", icon = Icons.Outlined.Inbox, onClick = onMoveProject)
             MobileTaskActionMenuItem(
                 label = if (blocked) "Unblock task" else "Block task",
                 icon = Icons.Outlined.Flag,
@@ -1826,6 +1844,7 @@ private fun TaskColumn(
     timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onRequestMoveProject: (BattleTask) -> Unit,
     onMove: (BattleTask, TaskStatus) -> Unit,
     onReorder: (BattleTask, Int) -> Unit,
     onCreateSubtask: (BattleTask, String) -> Unit,
@@ -1833,7 +1852,7 @@ private fun TaskColumn(
 ) {
     Column(modifier.fillMaxSize().clip(TimeboxShapes.card).background(TimeboxTheme.colors.low).padding(6.dp)) {
         Text("$title  ${tasks.size}", style = TimeboxTheme.type.label, modifier = Modifier.padding(8.dp))
-        TaskList(tasks, Modifier.fillMaxSize(), manualOrder, serverNow, timezone, onOpen, onToggleReady, onMove, onReorder, onCreateSubtask, onToggleSubtask)
+        TaskList(tasks, Modifier.fillMaxSize(), manualOrder, serverNow, timezone, onOpen, onToggleReady, onRequestMoveProject, onMove, onReorder, onCreateSubtask, onToggleSubtask)
     }
 }
 
@@ -1846,6 +1865,7 @@ private fun TaskList(
     timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onRequestMoveProject: (BattleTask) -> Unit,
     onMove: (BattleTask, TaskStatus) -> Unit,
     onReorder: (BattleTask, Int) -> Unit,
     onCreateSubtask: (BattleTask, String) -> Unit,
@@ -1856,7 +1876,7 @@ private fun TaskList(
     } else {
         LazyColumn(modifier, contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp, 2.dp, 4.dp, 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(tasks, key = { it.id }) { task ->
-                BattleTaskCard(task, manualOrder, serverNow, timezone, onOpen, onToggleReady, onMove, onReorder, onCreateSubtask, onToggleSubtask)
+                BattleTaskCard(task, manualOrder, serverNow, timezone, onOpen, onToggleReady, onRequestMoveProject, onMove, onReorder, onCreateSubtask, onToggleSubtask)
             }
         }
     }
@@ -1870,6 +1890,7 @@ private fun BattleTaskCard(
     timezone: String,
     onOpen: (Int) -> Unit,
     onToggleReady: (BattleTask) -> Unit,
+    onRequestMoveProject: (BattleTask) -> Unit,
     onMove: (BattleTask, TaskStatus) -> Unit,
     onReorder: (BattleTask, Int) -> Unit,
     onCreateSubtask: (BattleTask, String) -> Unit,
@@ -1949,6 +1970,9 @@ private fun BattleTaskCard(
                 Icon(Icons.Outlined.MoreVert, contentDescription = "Task actions", tint = colors.onVariant)
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (task.status != TaskStatus.Completed) {
+                    DropdownMenuItem(text = { Text("Move to project") }, onClick = { menu = false; onRequestMoveProject(task) })
+                }
                 if (task.status == TaskStatus.Completed) {
                     DropdownMenuItem(
                         text = { Text("Reopen Task") },
@@ -2776,7 +2800,7 @@ private fun TaskDetailPriorityTile(
     val urgencyValues = listOf("Clear urgency" to null) + PriorityLevel.entries.map { it.displayLabel() to it }
     Column(
         modifier
-            .height(120.dp)
+            .heightIn(min = 120.dp)
             .clip(TimeboxShapes.card)
             .background(TimeboxTheme.colors.card)
             .border(1.dp, TimeboxTheme.colors.hairline, TimeboxShapes.card)
@@ -2792,16 +2816,16 @@ private fun TaskDetailPriorityTile(
             }
         }
         Spacer(Modifier.weight(1f))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.fillMaxWidth().clip(TimeboxShapes.cell)
                         .clickable(enabled = enabled) { importanceExpanded = true }
                         .semantics { contentDescription = "Change importance" }
                         .padding(horizontal = 2.dp),
                 ) {
-                    Text("IMPORTANCE", style = TimeboxTheme.type.laneLabel.copy(fontSize = 8.sp), color = TimeboxTheme.colors.onVariant, maxLines = 1)
-                    Text(importance, style = TimeboxTheme.type.label, maxLines = 1)
+                    Text("IMPORTANCE", style = TimeboxTheme.type.laneLabel.copy(fontSize = 8.sp), color = TimeboxTheme.colors.onVariant)
+                    Text(importance, style = TimeboxTheme.type.label)
                 }
                 DropdownMenu(importanceExpanded, { importanceExpanded = false }) {
                     importanceValues.forEach { (name, value) ->
@@ -2809,15 +2833,15 @@ private fun TaskDetailPriorityTile(
                     }
                 }
             }
-            Box(Modifier.weight(1f)) {
+            Box(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.fillMaxWidth().clip(TimeboxShapes.cell)
                         .clickable(enabled = enabled) { urgencyExpanded = true }
                         .semantics { contentDescription = "Change urgency" }
                         .padding(horizontal = 2.dp),
                 ) {
-                    Text("URGENCY", style = TimeboxTheme.type.laneLabel.copy(fontSize = 8.sp), color = TimeboxTheme.colors.onVariant, maxLines = 1)
-                    Text(urgency, style = TimeboxTheme.type.label, maxLines = 1)
+                    Text("URGENCY", style = TimeboxTheme.type.laneLabel.copy(fontSize = 8.sp), color = TimeboxTheme.colors.onVariant)
+                    Text(urgency, style = TimeboxTheme.type.label)
                 }
                 DropdownMenu(urgencyExpanded, { urgencyExpanded = false }) {
                     urgencyValues.forEach { (name, value) ->
@@ -2977,10 +3001,6 @@ fun ProjectEditorScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onNameChange: (String) -> Unit,
-    onDescriptionChange: (String) -> Unit,
-    onDeadlineChange: (String) -> Unit,
-    onDeadlineTimeChange: (String) -> Unit,
-    onDeadlineModeChange: (ProjectDeadlineMode) -> Unit,
     onSave: () -> Unit,
     onPrepareDelete: () -> Unit,
     onDismissDelete: () -> Unit,
@@ -3008,47 +3028,6 @@ fun ProjectEditorScreen(
                 style = TimeboxTheme.type.screenTitle,
             )
             OutlinedTextField(state.name, onNameChange, Modifier.fillMaxWidth(), label = { Text("Name") }, singleLine = true)
-            OutlinedTextField(
-                state.description,
-                onDescriptionChange,
-                Modifier.fillMaxWidth(),
-                label = { Text("Description") },
-                minLines = 3,
-            )
-            SelectionMenu(
-                "Deadline",
-                when (state.deadlineMode) {
-                    ProjectDeadlineMode.None -> "No deadline"
-                    ProjectDeadlineMode.DateOnly -> "Date only"
-                    ProjectDeadlineMode.DateTime -> "Date and time"
-                },
-                listOf(
-                    "No deadline" to ProjectDeadlineMode.None,
-                    "Date only" to ProjectDeadlineMode.DateOnly,
-                    "Date and time" to ProjectDeadlineMode.DateTime,
-                ),
-                onDeadlineModeChange,
-            )
-            if (state.deadlineMode != ProjectDeadlineMode.None) {
-                OutlinedTextField(
-                    state.deadlineDate,
-                    onDeadlineChange,
-                    Modifier.fillMaxWidth(),
-                    label = { Text("Deadline date") },
-                    placeholder = { Text("YYYY-MM-DD") },
-                    singleLine = true,
-                )
-            }
-            if (state.deadlineMode == ProjectDeadlineMode.DateTime) {
-                OutlinedTextField(
-                    state.deadlineTime,
-                    onDeadlineTimeChange,
-                    Modifier.fillMaxWidth(),
-                    label = { Text("Deadline time (${state.timezone})") },
-                    placeholder = { Text("HH:MM") },
-                    singleLine = true,
-                )
-            }
             PrimaryButton("Save project", onSave, Modifier.fillMaxWidth(), enabled = state.name.isNotBlank() && !state.saving)
             if (state.projectId != null) {
                 TextButton(onClick = onPrepareDelete, enabled = !deleteSummaryLoading) {
@@ -3068,4 +3047,34 @@ fun ProjectEditorScreen(
         )
     }
     deleteSummary?.let { ProjectDeleteDialog(it, onDismissDelete, onConfirmDelete) }
+}
+
+@Composable
+internal fun MoveTaskProjectDialog(
+    task: BattleTask,
+    projects: List<Project>,
+    saving: Boolean,
+    onMove: (Int?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var destination by remember(task.id) { mutableStateOf(task.projectId) }
+    AlertDialog(
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text("Move to project") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(task.title, modifier = Modifier.padding(bottom = 12.dp))
+                (listOf("Admin" to null) + projects.map { it.name to it.id }).forEach { (name, id) ->
+                    Row(Modifier.fillMaxWidth().selectable(selected = destination == id, enabled = !saving,
+                        role = androidx.compose.ui.semantics.Role.RadioButton, onClick = { destination = id }).padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(selected = destination == id, onClick = null, enabled = !saving)
+                        Text(name, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(enabled = !saving && destination != task.projectId, onClick = { onMove(destination) }) { Text("Move") } },
+        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } },
+    )
 }

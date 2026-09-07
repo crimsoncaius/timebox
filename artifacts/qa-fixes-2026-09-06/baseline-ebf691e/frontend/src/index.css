@@ -1,0 +1,243 @@
+@import "tailwindcss";
+
+/* Class on <html> only — avoids OS `prefers-color-scheme` turning the shell dark while cards stay light. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary-dim: #515255;
+  --color-on-primary: #f7f7fa;
+  --color-tertiary-dim: #505452;
+  --color-on-error-container: #752121;
+  --color-secondary-container: #e4e2e2;
+  --color-on-secondary-fixed: #3f3f3f;
+  --color-surface-container: #ebeeef;
+  --color-inverse-primary: #f9f9fc;
+  --color-surface-bright: #f9f9f9;
+  --color-on-secondary-fixed-variant: #5b5b5b;
+  --color-primary: #5d5e61;
+  --color-on-surface-variant: #5a6061;
+  --color-primary-container: #e2e2e5;
+  --color-error-container: #fe8983;
+  --color-on-tertiary: #f7f9f7;
+  --color-outline: #757c7d;
+  --color-inverse-surface: #0c0f0f;
+  --color-secondary-fixed-dim: #d5d4d4;
+  --color-on-background: #2d3435;
+  --color-on-secondary: #faf8f8;
+  --color-tertiary-fixed-dim: #dbdddb;
+  --color-secondary-fixed: #e4e2e2;
+  --color-surface: #f9f9f9;
+  --color-primary-fixed: #e2e2e5;
+  --color-surface-container-low: #f2f4f4;
+  --color-secondary: #5f5f5f;
+  --color-on-primary-fixed-variant: #5a5c5e;
+  --color-error: #9f403d;
+  --color-tertiary-container: #e9ece9;
+  --color-background: #f9f9f9;
+  --color-primary-fixed-dim: #d4d4d7;
+  --color-outline-variant: #adb3b4;
+  --color-surface-dim: #d4dbdd;
+  --color-tertiary: #5c605e;
+  --color-surface-container-lowest: #ffffff;
+  --color-error-dim: #4e0309;
+  --color-surface-container-highest: #dde4e5;
+  --color-on-error: #fff7f6;
+  --color-secondary-dim: #535353;
+  --color-tertiary-fixed: #e9ece9;
+  --color-on-primary-fixed: #3e3f42;
+  --color-inverse-on-surface: #9c9d9d;
+  --color-surface-container-high: #e4e9ea;
+  --color-on-surface: #2d3435;
+  --color-on-tertiary-fixed-variant: #5e6260;
+  --color-surface-tint: #5d5e61;
+  --color-on-tertiary-container: #545756;
+  --color-on-tertiary-fixed: #424544;
+  --color-on-primary-container: #505254;
+  --color-on-secondary-container: #515252;
+  --color-surface-variant: #dde4e5;
+  --color-planned: #1967d2;
+  --color-planned-surface: #f5f9ff;
+  --color-planned-border: #c5d9f7;
+  --color-planned-dark: #8ab4f8;
+  --color-planned-dark-surface: #0f141c;
+  --color-planned-dark-border: #2a3f55;
+  --color-actual: #0d6b63;
+  --color-actual-surface: #f2faf9;
+  --color-actual-border: #b5ded6;
+  --color-actual-dark: #7dd3c8;
+  --color-actual-dark-surface: #0c1211;
+  --color-actual-dark-border: #1e3d38;
+  --color-timeline-grid-strong: #dadce0;
+  --color-timeline-grid-soft: #e8eaed;
+  --color-timeline-label: #5f6368;
+  --color-now-line: #9f403d;
+  --color-dark-background: #0c0a09;
+  --color-dark-surface: #121212;
+  --color-dark-surface-container-lowest: #0c0a09;
+  --color-dark-surface-container-low: #1c1917;
+  --color-dark-surface-container: #292524;
+  --color-dark-surface-container-high: #44403c;
+  --color-dark-surface-container-highest: #57534e;
+  --color-dark-on-surface: #f5f5f4;
+  --color-dark-on-surface-variant: #a8a29e;
+  --color-dark-outline: #78716c;
+  --color-dark-outline-variant: #44403c;
+
+  /* Engraved paper depth */
+  --color-paper-soft:    #ede8d8;
+  --color-paper-deep:    #e8e3d4;
+  --color-paper-raised:  #fefcf5;
+  --color-paper-rule:    rgba(50, 40, 20, 0.45);
+  --color-paper-rule-ink:#1f2426;
+  --color-paper-groove-bg:        rgba(50, 40, 20, 0.05);
+  --color-paper-groove-bg-strong: rgba(50, 40, 20, 0.10);
+
+  /* Shared shadows (light mode) */
+  --shadow-engrave-press:   inset 0 2px 5px rgba(50,40,20,0.12), inset 0 -1px 0 rgba(255,255,255,0.60);
+  --shadow-engrave-rest:    inset 0 1px 2px rgba(50,40,20,0.08), inset 0 -1px 0 rgba(255,255,255,0.70);
+  --shadow-engrave-raise:   0 1px 0 rgba(255,255,255,0.90) inset, 0 -1px 0 rgba(80,70,50,0.08) inset,
+                            0 10px 24px rgba(50,40,20,0.10), 0 2px 4px rgba(50,40,20,0.06);
+  --shadow-engrave-drag:    0 1px 0 rgba(255,255,255,0.90) inset,
+                            0 28px 48px rgba(50,40,20,0.18), 0 4px 10px rgba(50,40,20,0.10);
+
+  /* Groove inset shadow used inside the resize bands */
+  --shadow-groove-inner: inset 0 1px 2px rgba(50,40,20,0.12),
+                         inset 0 -1px 0 rgba(255,255,255,0.65);
+
+  --font-headline: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+  --color-background: var(--color-dark-background);
+  --color-on-background: var(--color-dark-on-surface);
+  --color-surface: var(--color-dark-surface);
+  --color-surface-bright: var(--color-dark-surface-container-high);
+  --color-surface-container-lowest: var(--color-dark-surface-container-lowest);
+  --color-surface-container-low: var(--color-dark-surface-container-low);
+  --color-surface-container: var(--color-dark-surface-container);
+  --color-surface-container-high: var(--color-dark-surface-container-high);
+  --color-surface-container-highest: var(--color-dark-surface-container-highest);
+  --color-surface-variant: var(--color-dark-surface-container-highest);
+  --color-on-surface: var(--color-dark-on-surface);
+  --color-on-surface-variant: var(--color-dark-on-surface-variant);
+  --color-outline: var(--color-dark-outline);
+  --color-outline-variant: var(--color-dark-outline-variant);
+  --color-planned: var(--color-planned-dark);
+  --color-planned-surface: var(--color-planned-dark-surface);
+  --color-planned-border: var(--color-planned-dark-border);
+  --color-actual: var(--color-actual-dark);
+  --color-actual-surface: var(--color-actual-dark-surface);
+  --color-actual-border: var(--color-actual-dark-border);
+  --color-paper-soft:    #1c1917;
+  --color-paper-deep:    #14110f;
+  --color-paper-raised:  #292524;
+  --color-paper-rule:    rgba(255, 250, 240, 0.30);
+  --color-paper-rule-ink:#f5f5f4;
+  --color-paper-groove-bg:        rgba(0, 0, 0, 0.30);
+  --color-paper-groove-bg-strong: rgba(0, 0, 0, 0.45);
+
+  --shadow-engrave-press:   inset 0 2px 5px rgba(0,0,0,0.45), inset 0 -1px 0 rgba(255,255,255,0.04);
+  --shadow-engrave-rest:    inset 0 1px 2px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.04);
+  --shadow-engrave-raise:   0 1px 0 rgba(255,255,255,0.05) inset, 0 -1px 0 rgba(0,0,0,0.30) inset,
+                            0 10px 24px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.25);
+  --shadow-engrave-drag:    0 1px 0 rgba(255,255,255,0.05) inset,
+                            0 28px 48px rgba(0,0,0,0.55), 0 4px 10px rgba(0,0,0,0.30);
+  --shadow-groove-inner: inset 0 1px 2px rgba(0,0,0,0.45),
+                         inset 0 -1px 0 rgba(255,255,255,0.04);
+
+  --color-timeline-grid-strong: var(--color-dark-outline-variant);
+  --color-timeline-grid-soft: var(--color-dark-surface-container);
+  --color-timeline-label: var(--color-dark-on-surface-variant);
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-body);
+}
+
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 300,
+    "GRAD" 0,
+    "opsz" 24;
+  vertical-align: middle;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.task-detail-dialog {
+  --task-detail-dialog: #ffffff;
+  --task-detail-rail: #f2f4f4;
+  --task-detail-track: #e4e9ea;
+  --task-detail-selected: #dde4e5;
+  --task-detail-primary: #2d3435;
+  --task-detail-secondary: #5a6061;
+  --task-detail-muted: #757c7d;
+  --task-detail-rule: #adb3b4;
+  --task-detail-border: rgba(117, 124, 125, 0.45);
+  --task-detail-divider: rgba(117, 124, 125, 0.24);
+  --task-detail-input-border: rgba(117, 124, 125, 0.55);
+  --task-detail-input-hover: #757c7d;
+  --task-detail-input-surface: #ffffff;
+  --task-detail-title-placeholder: #757c7d;
+  --task-detail-field-hover: rgba(228, 233, 234, 0.7);
+  --task-detail-shadow: 0 25px 50px -12px rgba(45, 52, 53, 0.26);
+}
+
+.dark .task-detail-dialog {
+  --task-detail-dialog: #0c0a09;
+  --task-detail-rail: #0f0d0c;
+  --task-detail-track: #1c1917;
+  --task-detail-selected: #44403c;
+  --task-detail-primary: #f5f5f4;
+  --task-detail-secondary: #a8a29e;
+  --task-detail-muted: #78716c;
+  --task-detail-rule: #44403c;
+  --task-detail-border: rgba(68, 64, 60, 0.5);
+  --task-detail-divider: rgba(68, 64, 60, 0.25);
+  --task-detail-input-border: rgba(68, 64, 60, 0.7);
+  --task-detail-input-hover: #57534e;
+  --task-detail-input-surface: #1c1917;
+  --task-detail-title-placeholder: #57534e;
+  --task-detail-field-hover: rgba(41, 37, 36, 0.6);
+  --task-detail-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+}
+
+.task-detail-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%235a6061' stroke-width='1.5'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-position: right 2px center;
+  background-repeat: no-repeat;
+}
+
+.dark .task-detail-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23a8a29e' stroke-width='1.5'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+}
+
+.task-detail-select option {
+  background: var(--task-detail-dialog);
+  color: var(--task-detail-primary);
+}

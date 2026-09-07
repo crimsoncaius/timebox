@@ -1,0 +1,187 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Timebox" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Monastic productivity
+    - navigation [ref=e8]:
+      - link "Day" [ref=e9] [cursor=pointer]:
+        - /url: /day/2026-09-02
+        - generic [ref=e10]: calendar_today
+        - generic [ref=e11]: Day
+      - link "Chronicle" [ref=e12] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e13]: history
+        - generic [ref=e14]: Chronicle
+      - link "Battle Plan" [ref=e15] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e16]: view_kanban
+        - generic [ref=e17]: Battle Plan
+      - link "Task types" [ref=e18] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e19]: category
+        - generic [ref=e20]: Task types
+    - generic [ref=e22]:
+      - generic [ref=e23]: TB
+      - generic [ref=e24]:
+        - generic [ref=e25]: You
+        - generic [ref=e26]: Cloud
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - heading "Timebox" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - link "Start Work Mode" [ref=e32] [cursor=pointer]:
+          - /url: /day/2026-09-02?workMode=start
+        - link "Settings" [ref=e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e34]: settings
+          - generic [ref=e35]: Settings
+        - button "Switch to light mode" [active] [ref=e43]: light_mode
+    - main [ref=e37]:
+      - generic [ref=e39]:
+        - heading "Chronicle of focus" [level=1] [ref=e40]
+        - paragraph [ref=e41]: Browse by month. Days you have opened appear in the archive; any day opens in Day.
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - heading "December 2099" [level=2] [ref=e46]
+          - generic [ref=e47]:
+            - button "Previous month" [ref=e48]:
+              - generic [ref=e49]: chevron_left
+            - button "This month" [ref=e50]
+            - button "Next month" [ref=e51]:
+              - generic [ref=e52]: chevron_right
+        - generic [ref=e53]:
+          - generic [ref=e54]: Mon
+          - generic [ref=e55]: Tue
+          - generic [ref=e56]: Wed
+          - generic [ref=e57]: Thu
+          - generic [ref=e58]: Fri
+          - generic [ref=e59]: Sat
+          - generic [ref=e60]: Sun
+        - generic [ref=e61]:
+          - link "2099-11-30, open day" [ref=e62] [cursor=pointer]:
+            - /url: /day/2099-11-30
+            - generic [ref=e63]: "30"
+          - link "2099-12-01, open day" [ref=e64] [cursor=pointer]:
+            - /url: /day/2099-12-01
+            - generic [ref=e65]: "1"
+          - link "2099-12-02, open day" [ref=e66] [cursor=pointer]:
+            - /url: /day/2099-12-02
+            - generic [ref=e67]: "2"
+          - link "2099-12-03, open day" [ref=e68] [cursor=pointer]:
+            - /url: /day/2099-12-03
+            - generic [ref=e69]: "3"
+          - link "2099-12-04, open day" [ref=e70] [cursor=pointer]:
+            - /url: /day/2099-12-04
+            - generic [ref=e71]: "4"
+          - link "2099-12-05, open day" [ref=e72] [cursor=pointer]:
+            - /url: /day/2099-12-05
+            - generic [ref=e73]: "5"
+          - link "2099-12-06, open day" [ref=e74] [cursor=pointer]:
+            - /url: /day/2099-12-06
+            - generic [ref=e75]: "6"
+          - link "2099-12-07, open day" [ref=e76] [cursor=pointer]:
+            - /url: /day/2099-12-07
+            - generic [ref=e77]: "7"
+          - link "2099-12-08, open day" [ref=e78] [cursor=pointer]:
+            - /url: /day/2099-12-08
+            - generic [ref=e79]: "8"
+          - link "2099-12-09, open day" [ref=e80] [cursor=pointer]:
+            - /url: /day/2099-12-09
+            - generic [ref=e81]: "9"
+          - link "2099-12-10, open day" [ref=e82] [cursor=pointer]:
+            - /url: /day/2099-12-10
+            - generic [ref=e83]: "10"
+          - link "2099-12-11, open day" [ref=e84] [cursor=pointer]:
+            - /url: /day/2099-12-11
+            - generic [ref=e85]: "11"
+          - link "2099-12-12, open day" [ref=e86] [cursor=pointer]:
+            - /url: /day/2099-12-12
+            - generic [ref=e87]: "12"
+          - link "2099-12-13, open day" [ref=e88] [cursor=pointer]:
+            - /url: /day/2099-12-13
+            - generic [ref=e89]: "13"
+          - link "2099-12-14, open day" [ref=e90] [cursor=pointer]:
+            - /url: /day/2099-12-14
+            - generic [ref=e91]: "14"
+          - link "2099-12-15, open day" [ref=e92] [cursor=pointer]:
+            - /url: /day/2099-12-15
+            - generic [ref=e93]: "15"
+          - link "2099-12-16, open day" [ref=e94] [cursor=pointer]:
+            - /url: /day/2099-12-16
+            - generic [ref=e95]: "16"
+          - link "2099-12-17, open day" [ref=e96] [cursor=pointer]:
+            - /url: /day/2099-12-17
+            - generic [ref=e97]: "17"
+          - link "2099-12-18, open day" [ref=e98] [cursor=pointer]:
+            - /url: /day/2099-12-18
+            - generic [ref=e99]: "18"
+          - link "2099-12-19, open day" [ref=e100] [cursor=pointer]:
+            - /url: /day/2099-12-19
+            - generic [ref=e101]: "19"
+          - link "2099-12-20, open day" [ref=e102] [cursor=pointer]:
+            - /url: /day/2099-12-20
+            - generic [ref=e103]: "20"
+          - link "2099-12-21, open day" [ref=e104] [cursor=pointer]:
+            - /url: /day/2099-12-21
+            - generic [ref=e105]: "21"
+          - link "2099-12-22, open day" [ref=e106] [cursor=pointer]:
+            - /url: /day/2099-12-22
+            - generic [ref=e107]: "22"
+          - link "2099-12-23, open day" [ref=e108] [cursor=pointer]:
+            - /url: /day/2099-12-23
+            - generic [ref=e109]: "23"
+          - link "2099-12-24, open day" [ref=e110] [cursor=pointer]:
+            - /url: /day/2099-12-24
+            - generic [ref=e111]: "24"
+          - link "2099-12-25, open day" [ref=e112] [cursor=pointer]:
+            - /url: /day/2099-12-25
+            - generic [ref=e113]: "25"
+          - link "2099-12-26, open day" [ref=e114] [cursor=pointer]:
+            - /url: /day/2099-12-26
+            - generic [ref=e115]: "26"
+          - link "2099-12-27, open day" [ref=e116] [cursor=pointer]:
+            - /url: /day/2099-12-27
+            - generic [ref=e117]: "27"
+          - link "2099-12-28, open day" [ref=e118] [cursor=pointer]:
+            - /url: /day/2099-12-28
+            - generic [ref=e119]: "28"
+          - link "2099-12-29, open day" [ref=e120] [cursor=pointer]:
+            - /url: /day/2099-12-29
+            - generic [ref=e121]: "29"
+          - link "2099-12-30, open day" [ref=e122] [cursor=pointer]:
+            - /url: /day/2099-12-30
+            - generic [ref=e123]: "30"
+          - link "2099-12-31, archived day, window 8:00–20:00" [ref=e124] [cursor=pointer]:
+            - /url: /day/2099-12-31
+            - generic [ref=e125]: "31"
+            - generic [ref=e126]: 8:00–20:00
+          - link "2100-01-01, open day" [ref=e127] [cursor=pointer]:
+            - /url: /day/2100-01-01
+            - generic [ref=e128]: "1"
+          - link "2100-01-02, open day" [ref=e129] [cursor=pointer]:
+            - /url: /day/2100-01-02
+            - generic [ref=e130]: "2"
+          - link "2100-01-03, open day" [ref=e131] [cursor=pointer]:
+            - /url: /day/2100-01-03
+            - generic [ref=e132]: "3"
+          - link "2100-01-04, open day" [ref=e133] [cursor=pointer]:
+            - /url: /day/2100-01-04
+            - generic [ref=e134]: "4"
+          - link "2100-01-05, open day" [ref=e135] [cursor=pointer]:
+            - /url: /day/2100-01-05
+            - generic [ref=e136]: "5"
+          - link "2100-01-06, open day" [ref=e137] [cursor=pointer]:
+            - /url: /day/2100-01-06
+            - generic [ref=e138]: "6"
+          - link "2100-01-07, open day" [ref=e139] [cursor=pointer]:
+            - /url: /day/2100-01-07
+            - generic [ref=e140]: "7"
+          - link "2100-01-08, open day" [ref=e141] [cursor=pointer]:
+            - /url: /day/2100-01-08
+            - generic [ref=e142]: "8"
+          - link "2100-01-09, open day" [ref=e143] [cursor=pointer]:
+            - /url: /day/2100-01-09
+            - generic [ref=e144]: "9"
+          - link "2100-01-10, open day" [ref=e145] [cursor=pointer]:
+            - /url: /day/2100-01-10
+            - generic [ref=e146]: "10"

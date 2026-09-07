@@ -38,7 +38,7 @@ class BattlePlanContractTest {
             """{
               "items":[{
                 "id":10,"parent_id":null,"parent_title":null,
-                "project_id":2,"project":{"id":2,"name":"Launch","description":"Ship it","deadline_date":"2026-09-01","deadline_at":null,"created_at":"2026-08-01T10:00:00+08:00","updated_at":"2026-08-02T10:00:00+08:00"},
+                "project_id":2,"project":{"id":2,"name":"Launch","created_at":"2026-08-01T10:00:00+08:00","updated_at":"2026-08-02T10:00:00+08:00"},
                 "task_type_id":4,"task_type":{"id":4,"name":"coding"},
                 "recurring_template_id":7,"recurring_template_title":"Weekly planning","occurrence_key":"2026-08-17","recurrence_kind":"scheduled",
                 "quota_period_start":"2026-08-17","quota_period_end":"2026-08-23","expected_sessions":3,"session_index":1,"quota_completed":0,
@@ -206,9 +206,9 @@ class BattlePlanContractTest {
     fun `project task reorder and recurrence requests serialize backend wire names`() {
         val project = json.encodeToString(
             ProjectCreateDto.serializer(),
-            ProjectCreateDto("Launch", "Ship", "2026-09-01"),
+            ProjectCreateDto("Launch"),
         )
-        assertTrue("\"deadline_date\":\"2026-09-01\"" in project)
+        assertEquals("""{"name":"Launch"}""", project)
 
         val task = json.encodeToString(
             BattleTaskCreateDto.serializer(),

@@ -103,6 +103,8 @@ class WorkModeExecution(
 
     private var ticker: Job? = null
     private var restoreChecked = false
+    var restorationComplete = false
+        private set
 
     suspend fun begin(day: Day, force: Boolean = false) {
         if (_state.value.session != null) {
@@ -134,7 +136,11 @@ class WorkModeExecution(
     suspend fun restore(day: Day) {
         if (restoreChecked) return
         restoreChecked = true
-        val snapshot = persistence.load() ?: return
+        val snapshot = persistence.load()
+        if (snapshot == null) {
+            restorationComplete = true
+            return
+        }
         val now = clock()
         val active = transport.getActiveActual().getOrNull()
         val (clockCurrent, next) = selection(day, now)
@@ -153,6 +159,7 @@ class WorkModeExecution(
         val absentTooLong = now.isAfter(session.lastObservedAt.plusSeconds(10 * 60))
         _state.value = WorkModeExecutionState(session, true, restorePrompt = absentTooLong, day = day)
         if (!absentTooLong) startTicker()
+        restorationComplete = true
     }
 
     fun show() = _state.update { if (it.session == null) it else it.copy(visible = true) }

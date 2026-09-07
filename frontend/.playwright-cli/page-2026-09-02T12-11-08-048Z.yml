@@ -1,0 +1,274 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Timebox" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Monastic productivity
+    - navigation [ref=e8]:
+      - link "Day" [ref=e9] [cursor=pointer]:
+        - /url: /day/2026-09-02
+        - generic [ref=e10]: calendar_today
+        - generic [ref=e11]: Day
+      - link "Chronicle" [ref=e12] [cursor=pointer]:
+        - /url: /history
+        - generic [ref=e13]: history
+        - generic [ref=e14]: Chronicle
+      - link "Battle Plan" [ref=e15] [cursor=pointer]:
+        - /url: /battle-plan
+        - generic [ref=e16]: view_kanban
+        - generic [ref=e17]: Battle Plan
+      - link "Task types" [ref=e18] [cursor=pointer]:
+        - /url: /task-types
+        - generic [ref=e19]: category
+        - generic [ref=e20]: Task types
+    - generic [ref=e22]:
+      - generic [ref=e23]: TB
+      - generic [ref=e24]:
+        - generic [ref=e25]: You
+        - generic [ref=e26]: Cloud
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - heading "Timebox" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - link "Start Work Mode" [ref=e32] [cursor=pointer]:
+          - /url: /day/2026-09-02?workMode=start
+        - link "Settings" [ref=e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=e34]: settings
+          - generic [ref=e35]: Settings
+        - button "Switch to dark mode" [active] [ref=e39]: dark_mode
+    - main [ref=e37]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - heading "Task types" [level=1] [ref=e43]
+            - paragraph [ref=e44]:
+              - text: Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a
+              - link "Day" [ref=e45] [cursor=pointer]:
+                - /url: /
+              - text: block only after at least one type exists.
+          - generic [ref=e48]: Up to date
+        - generic [ref=e49]:
+          - region "Task type" [ref=e50]:
+            - heading "Task type" [level=2] [ref=e51]
+            - generic [ref=e52]:
+              - generic [ref=e53]:
+                - generic [ref=e54]: Filter saved types or enter a new task type name
+                - textbox "Filter saved types or enter a new task type name" [ref=e55]:
+                  - /placeholder: Search or add (e.g. work)
+              - button "Add" [ref=e56]
+          - region "Saved types" [ref=e57]:
+            - heading "Saved types" [level=2] [ref=e58]
+            - generic [ref=e59]:
+              - generic [ref=e60]:
+                - heading "e2e actual" [level=3] [ref=e61]
+                - list [ref=e62]:
+                  - listitem [ref=e63]:
+                    - generic "Task type e2e actual" [ref=e64]:
+                      - generic [ref=e65]: e2e actual
+                    - button "Edit e2e actual" [ref=e66]: Edit
+                    - button "Delete e2e actual" [ref=e67]:
+                      - generic [ref=e68]: delete
+              - generic [ref=e69]:
+                - heading "e2e draft" [level=3] [ref=e70]
+                - list [ref=e71]:
+                  - listitem [ref=e72]:
+                    - generic "Task type e2e draft" [ref=e73]:
+                      - generic [ref=e74]: e2e draft
+                    - button "Edit e2e draft" [ref=e75]: Edit
+                    - button "Delete e2e draft" [ref=e76]:
+                      - generic [ref=e77]: delete
+              - generic [ref=e78]:
+                - heading "e2e planned" [level=3] [ref=e79]
+                - list [ref=e80]:
+                  - listitem [ref=e81]:
+                    - generic "Task type e2e planned" [ref=e82]:
+                      - generic [ref=e83]: e2e planned
+                    - button "Edit e2e planned" [ref=e84]: Edit
+                    - button "Delete e2e planned" [ref=e85]:
+                      - generic [ref=e86]: delete
+              - generic [ref=e87]:
+                - heading "e2ehpr1788094425284-225041560" [level=3] [ref=e88]
+                - list [ref=e89]:
+                  - listitem [ref=e90]:
+                    - generic "Task type e2ehpr1788094425284-225041560" [ref=e91]:
+                      - generic [ref=e92]: e2ehpr1788094425284-225041560
+                    - button "Edit e2ehpr1788094425284-225041560" [ref=e93]: Edit
+                    - button "Delete e2ehpr1788094425284-225041560" [ref=e94]:
+                      - generic [ref=e95]: delete
+                  - listitem [ref=e96]:
+                    - generic "Task type e2ehpr1788094425284-225041560/x" [ref=e97]:
+                      - generic [ref=e98]:
+                        - generic [ref=e99]: e2ehpr1788094425284-225041560 /
+                        - text: x
+                    - button "Edit e2ehpr1788094425284-225041560/x" [ref=e100]: Edit
+                    - button "Delete e2ehpr1788094425284-225041560/x" [ref=e101]:
+                      - generic [ref=e102]: delete
+              - generic [ref=e103]:
+                - heading "e2ehpr1788340733431-53093663" [level=3] [ref=e104]
+                - list [ref=e105]:
+                  - listitem [ref=e106]:
+                    - generic "Task type e2ehpr1788340733431-53093663" [ref=e107]:
+                      - generic [ref=e108]: e2ehpr1788340733431-53093663
+                    - button "Edit e2ehpr1788340733431-53093663" [ref=e109]: Edit
+                    - button "Delete e2ehpr1788340733431-53093663" [ref=e110]:
+                      - generic [ref=e111]: delete
+                  - listitem [ref=e112]:
+                    - generic "Task type e2ehpr1788340733431-53093663/x" [ref=e113]:
+                      - generic [ref=e114]:
+                        - generic [ref=e115]: e2ehpr1788340733431-53093663 /
+                        - text: x
+                    - button "Edit e2ehpr1788340733431-53093663/x" [ref=e116]: Edit
+                    - button "Delete e2ehpr1788340733431-53093663/x" [ref=e117]:
+                      - generic [ref=e118]: delete
+              - generic [ref=e119]:
+                - heading "e2ehpr1788341020601-985764383" [level=3] [ref=e120]
+                - list [ref=e121]:
+                  - listitem [ref=e122]:
+                    - generic "Task type e2ehpr1788341020601-985764383" [ref=e123]:
+                      - generic [ref=e124]: e2ehpr1788341020601-985764383
+                    - button "Edit e2ehpr1788341020601-985764383" [ref=e125]: Edit
+                    - button "Delete e2ehpr1788341020601-985764383" [ref=e126]:
+                      - generic [ref=e127]: delete
+                  - listitem [ref=e128]:
+                    - generic "Task type e2ehpr1788341020601-985764383/x" [ref=e129]:
+                      - generic [ref=e130]:
+                        - generic [ref=e131]: e2ehpr1788341020601-985764383 /
+                        - text: x
+                    - button "Edit e2ehpr1788341020601-985764383/x" [ref=e132]: Edit
+                    - button "Delete e2ehpr1788341020601-985764383/x" [ref=e133]:
+                      - generic [ref=e134]: delete
+              - generic [ref=e135]:
+                - heading "hysteresis a" [level=3] [ref=e136]
+                - list [ref=e137]:
+                  - listitem [ref=e138]:
+                    - generic "Task type hysteresis a" [ref=e139]:
+                      - generic [ref=e140]: hysteresis a
+                    - button "Edit hysteresis a" [ref=e141]: Edit
+                    - button "Delete hysteresis a" [ref=e142]:
+                      - generic [ref=e143]: delete
+              - generic [ref=e144]:
+                - heading "hysteresis b" [level=3] [ref=e145]
+                - list [ref=e146]:
+                  - listitem [ref=e147]:
+                    - generic "Task type hysteresis b" [ref=e148]:
+                      - generic [ref=e149]: hysteresis b
+                    - button "Edit hysteresis b" [ref=e150]: Edit
+                    - button "Delete hysteresis b" [ref=e151]:
+                      - generic [ref=e152]: delete
+              - generic [ref=e153]:
+                - heading "issue 3 comparison" [level=3] [ref=e154]
+                - list [ref=e155]:
+                  - listitem [ref=e156]:
+                    - generic "Task type issue 3 comparison" [ref=e157]:
+                      - generic [ref=e158]: issue 3 comparison
+                    - button "Edit issue 3 comparison" [ref=e159]: Edit
+                    - button "Delete issue 3 comparison" [ref=e160]:
+                      - generic [ref=e161]: delete
+              - generic [ref=e162]:
+                - heading "mobile resize repro" [level=3] [ref=e163]
+                - list [ref=e164]:
+                  - listitem [ref=e165]:
+                    - generic "Task type mobile resize repro" [ref=e166]:
+                      - generic [ref=e167]: mobile resize repro
+                    - button "Edit mobile resize repro" [ref=e168]: Edit
+                    - button "Delete mobile resize repro" [ref=e169]:
+                      - generic [ref=e170]: delete
+              - generic [ref=e171]:
+                - heading "move a" [level=3] [ref=e172]
+                - list [ref=e173]:
+                  - listitem [ref=e174]:
+                    - generic "Task type move a" [ref=e175]:
+                      - generic [ref=e176]: move a
+                    - button "Edit move a" [ref=e177]: Edit
+                    - button "Delete move a" [ref=e178]:
+                      - generic [ref=e179]: delete
+              - generic [ref=e180]:
+                - heading "move actual" [level=3] [ref=e181]
+                - list [ref=e182]:
+                  - listitem [ref=e183]:
+                    - generic "Task type move actual" [ref=e184]:
+                      - generic [ref=e185]: move actual
+                    - button "Edit move actual" [ref=e186]: Edit
+                    - button "Delete move actual" [ref=e187]:
+                      - generic [ref=e188]: delete
+              - generic [ref=e189]:
+                - heading "move b" [level=3] [ref=e190]
+                - list [ref=e191]:
+                  - listitem [ref=e192]:
+                    - generic "Task type move b" [ref=e193]:
+                      - generic [ref=e194]: move b
+                    - button "Edit move b" [ref=e195]: Edit
+                    - button "Delete move b" [ref=e196]:
+                      - generic [ref=e197]: delete
+              - generic [ref=e198]:
+                - heading "recurring-fixed-1788094410220-3954011" [level=3] [ref=e199]
+                - list [ref=e200]:
+                  - listitem [ref=e201]:
+                    - generic "Task type recurring-fixed-1788094410220-3954011" [ref=e202]:
+                      - generic [ref=e203]: recurring-fixed-1788094410220-3954011
+                    - button "Edit recurring-fixed-1788094410220-3954011" [ref=e204]: Edit
+                    - button "Delete recurring-fixed-1788094410220-3954011" [ref=e205]:
+                      - generic [ref=e206]: delete
+              - generic [ref=e207]:
+                - heading "recurring-fixed-1788340716934-9808620" [level=3] [ref=e208]
+                - list [ref=e209]:
+                  - listitem [ref=e210]:
+                    - generic "Task type recurring-fixed-1788340716934-9808620" [ref=e211]:
+                      - generic [ref=e212]: recurring-fixed-1788340716934-9808620
+                    - button "Edit recurring-fixed-1788340716934-9808620" [ref=e213]: Edit
+                    - button "Delete recurring-fixed-1788340716934-9808620" [ref=e214]:
+                      - generic [ref=e215]: delete
+              - generic [ref=e216]:
+                - heading "recurring-fixed-1788341003288-9792144" [level=3] [ref=e217]
+                - list [ref=e218]:
+                  - listitem [ref=e219]:
+                    - generic "Task type recurring-fixed-1788341003288-9792144" [ref=e220]:
+                      - generic [ref=e221]: recurring-fixed-1788341003288-9792144
+                    - button "Edit recurring-fixed-1788341003288-9792144" [ref=e222]: Edit
+                    - button "Delete recurring-fixed-1788341003288-9792144" [ref=e223]:
+                      - generic [ref=e224]: delete
+              - generic [ref=e225]:
+                - heading "recurring-quota-1788094412495-600522" [level=3] [ref=e226]
+                - list [ref=e227]:
+                  - listitem [ref=e228]:
+                    - generic "Task type recurring-quota-1788094412495-600522" [ref=e229]:
+                      - generic [ref=e230]: recurring-quota-1788094412495-600522
+                    - button "Edit recurring-quota-1788094412495-600522" [ref=e231]: Edit
+                    - button "Delete recurring-quota-1788094412495-600522" [ref=e232]:
+                      - generic [ref=e233]: delete
+              - generic [ref=e234]:
+                - heading "recurring-quota-1788340719617-2331143" [level=3] [ref=e235]
+                - list [ref=e236]:
+                  - listitem [ref=e237]:
+                    - generic "Task type recurring-quota-1788340719617-2331143" [ref=e238]:
+                      - generic [ref=e239]: recurring-quota-1788340719617-2331143
+                    - button "Edit recurring-quota-1788340719617-2331143" [ref=e240]: Edit
+                    - button "Delete recurring-quota-1788340719617-2331143" [ref=e241]:
+                      - generic [ref=e242]: delete
+              - generic [ref=e243]:
+                - heading "recurring-quota-1788341005790-8362072" [level=3] [ref=e244]
+                - list [ref=e245]:
+                  - listitem [ref=e246]:
+                    - generic "Task type recurring-quota-1788341005790-8362072" [ref=e247]:
+                      - generic [ref=e248]: recurring-quota-1788341005790-8362072
+                    - button "Edit recurring-quota-1788341005790-8362072" [ref=e249]: Edit
+                    - button "Delete recurring-quota-1788341005790-8362072" [ref=e250]:
+                      - generic [ref=e251]: delete
+              - generic [ref=e252]:
+                - heading "resize a" [level=3] [ref=e253]
+                - list [ref=e254]:
+                  - listitem [ref=e255]:
+                    - generic "Task type resize a" [ref=e256]:
+                      - generic [ref=e257]: resize a
+                    - button "Edit resize a" [ref=e258]: Edit
+                    - button "Delete resize a" [ref=e259]:
+                      - generic [ref=e260]: delete
+              - generic [ref=e261]:
+                - heading "resize b" [level=3] [ref=e262]
+                - list [ref=e263]:
+                  - listitem [ref=e264]:
+                    - generic "Task type resize b" [ref=e265]:
+                      - generic [ref=e266]: resize b
+                    - button "Edit resize b" [ref=e267]: Edit
+                    - button "Delete resize b" [ref=e268]:
+                      - generic [ref=e269]: delete

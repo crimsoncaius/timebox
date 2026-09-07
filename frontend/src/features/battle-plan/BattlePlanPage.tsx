@@ -9,6 +9,8 @@ import {
   priorityRank,
   STATUS_LABELS,
   TASK_STATUSES,
+  taskColumn,
+  taskColumnChange,
 } from '../../lib/battlePlan'
 import {
   ApiHttpError,
@@ -22,6 +24,7 @@ import {
   type TaskStatus,
   type TaskType,
 } from '../../lib/api'
+import { MoveProjectDialog } from './MoveProjectDialog'
 import { BattlePlanCard } from './BattlePlanCard'
 import { useAppClock } from '../../lib/useAppClock'
 import { BattlePlanSidebar } from './BattlePlanSidebar'
@@ -102,6 +105,7 @@ export function BattlePlanPage() {
   const [serverNowIso, setServerNowIso] = useState('1970-01-01T00:00:00Z')
   const [error, setError] = useState<string | null>(null)
   const selectedTaskId = requestedTaskId
+  const [movingTask, setMovingTask] = useState<BattleTask | null>(null)
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [mobileSidebar, setMobileSidebar] = useState(false)
@@ -191,7 +195,7 @@ export function BattlePlanPage() {
   }, [preferences, scopeFiltered])
 
   const columns = useMemo(() => Object.fromEntries(
-    TASK_STATUSES.map((status) => [status, visibleTasks.filter((task) => task.status === status)]),
+    TASK_STATUSES.map((status) => [status, visibleTasks.filter((task) => taskColumn(task) === status)]),
   ) as Record<TaskStatus, BattleTask[]>, [visibleTasks])
 
   const createTask = async (body: BattleTaskWrite) => {
@@ -243,21 +247,21 @@ export function BattlePlanPage() {
       targetIndex = columns[targetStatus].filter((task) => task.id !== movingId).length
     } else return
     if (!TASK_STATUSES.includes(targetStatus)) return
-    if (preferences.sort !== 'manual' && targetStatus === moving.status) return
+    if (preferences.sort !== 'manual' && targetStatus === taskColumn(moving)) return
     if (targetStatus === 'completed' && moving.status !== 'completed') {
       await setTaskCompletion(moving.id, true)
       return
     }
     if (moving.status === 'completed' && targetStatus !== 'completed') {
       await setTaskCompletion(moving.id, false)
-      await patchTask(moving.id, { status: targetStatus })
+      await patchTask(moving.id, taskColumnChange(targetStatus))
       return
     }
 
     const previous = tasks
     const groups = Object.fromEntries(TASK_STATUSES.map((status) => [
       status,
-      tasks.filter((task) => task.status === status && task.id !== movingId).sort((a, b) => a.position - b.position),
+      tasks.filter((task) => taskColumn(task) === status && task.id !== movingId).sort((a, b) => a.position - b.position),
     ])) as Record<TaskStatus, BattleTask[]>
     const visibleTargetIds = columns[targetStatus].filter((task) => task.id !== movingId).map((task) => task.id)
     const beforeId = visibleTargetIds[targetIndex]
@@ -266,14 +270,21 @@ export function BattlePlanPage() {
     if (beforeId != null) insertAt = groups[targetStatus].findIndex((task) => task.id === beforeId)
     else if (afterId != null) insertAt = groups[targetStatus].findIndex((task) => task.id === afterId) + 1
     if (insertAt < 0) insertAt = groups[targetStatus].length
-    groups[targetStatus].splice(insertAt, 0, { ...moving, status: targetStatus })
-    const next = TASK_STATUSES.flatMap((status) => groups[status].map((task, position) => ({ ...task, status, position })))
+    if (targetStatus === 'completed') return
+    const change = taskColumnChange(targetStatus)
+    groups[targetStatus].splice(insertAt, 0, { ...moving, ...change })
+    const next = TASK_STATUSES.flatMap((status) => groups[status].map((task, position) => ({ ...task, position })))
     setTasks(next)
     try {
-      await api.reorderBattleTasks(next.map((task) => ({ task_id: task.id, status: task.status, position: task.position })))
+      if (targetStatus !== taskColumn(moving)) await api.patchBattleTask(moving.id, change)
+      await api.reorderBattleTasks(next.filter((task) => task.status !== 'completed')
+        .map((task) => ({ task_id: task.id, status: task.status, position: task.position })))
+      await loadActive()
     } catch (cause) {
       setTasks(previous)
       setError(errorMessage(cause))
+      // The condition PATCH may have succeeded before the ordering request failed.
+      await loadActive().catch(() => {})
     }
   }
 
@@ -288,7 +299,6 @@ export function BattlePlanPage() {
       await loadActive()
     } catch (cause) {
       setError(errorMessage(cause))
-      throw cause
     }
   }
 
@@ -410,6 +420,7 @@ export function BattlePlanPage() {
                         onOpen={openTask}
                         onAddSubtask={addSubtask}
                         onSetSubtaskChecked={setSubtaskChecked}
+                        onMoveProject={setMovingTask}
                         onToggleReady={(id, ready) => patchTask(id, { ready_to_plan: ready })}
                         onSetTaskCompletion={setTaskCompletion}
                       />
@@ -444,6 +455,7 @@ export function BattlePlanPage() {
         <TaskDetailPanel
           key={selectedTask.id}
           task={selectedTask}
+          error={error}
           projects={projects}
           taskTypes={taskTypes}
           timezone={timezone}
@@ -463,10 +475,13 @@ export function BattlePlanPage() {
         />
       ) : null}
 
+      {movingTask && <MoveProjectDialog task={movingTask} projects={projects} onClose={() => setMovingTask(null)} onMove={async (projectId) => {
+        const saved = await api.patchBattleTask(movingTask.id, { project_id: projectId })
+        setTasks((current) => current.map((task) => task.id === saved.id ? saved : task))
+      }} />}
       {projectEditor !== undefined ? (
         <ProjectEditor
           project={projectEditor}
-          timezone={timezone}
           taskCount={projectEditorCount}
           onClose={() => setProjectEditor(undefined)}
           onSave={async (body: ProjectWrite) => {
@@ -502,7 +517,7 @@ export function BattlePlanPage() {
   )
 }
 
-function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion }: {
+function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion, onMoveProject }: {
   status: TaskStatus
   tasks: BattleTask[]
   projects: Project[]
@@ -514,6 +529,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   onOpen: (id: number) => void
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
+  onMoveProject: (task: BattleTask) => void
   onToggleReady: (id: number, ready: boolean) => Promise<void>
   onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
 }) {
@@ -551,6 +567,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
             onOpen={(id = task.id) => onOpen(id)}
             onAddSubtask={onAddSubtask}
             onSetSubtaskChecked={onSetSubtaskChecked}
+            onMoveProject={onMoveProject}
             onToggleReady={onToggleReady}
             onSetTaskCompletion={onSetTaskCompletion}
           />
