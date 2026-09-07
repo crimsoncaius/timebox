@@ -163,6 +163,8 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
         if row.blocking_reason is not None and row.status != TaskStatus.completed:
             row.is_blocked = True
     if "project_id" in fields:
+        if row.recurrence_kind is not None and body.project_id is not None:
+            raise ValueError("Recurring work cannot belong to a Project")
         if row.parent_id is not None:
             raise ValueError("A subtask inherits its parent's project")
         _validate_refs(db, body.project_id, None)

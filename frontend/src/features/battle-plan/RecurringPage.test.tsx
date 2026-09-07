@@ -23,8 +23,6 @@ const template: RecurringTemplate = {
   id: 9,
   title: 'Gym',
   description: 'Strength sessions',
-  project_id: null,
-  project: null,
   task_type_id: null,
   task_type: null,
   mode: 'quota',
@@ -141,6 +139,11 @@ describe('RecurringPage', () => {
       expect.stringContaining('/recurring-templates'),
       expect.objectContaining({ method: 'POST' }),
     )
+    const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([input, init]) => String(input).endsWith('/recurring-templates') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(request?.[1]?.body))).not.toHaveProperty('project_id')
+    expect(within(form).queryByLabelText('Location')).not.toBeInTheDocument()
     expect(window.confirm).not.toHaveBeenCalled()
   })
 

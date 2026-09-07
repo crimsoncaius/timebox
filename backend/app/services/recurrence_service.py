@@ -41,7 +41,6 @@ from app.services.recurrence.templates import (
     end_template,
     get_template,
     list_templates,
-    move_project_templates_to_admin,
     pause_template,
     patch_template,
     resume_template,

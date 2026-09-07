@@ -151,8 +151,6 @@ data class RecurringTemplate(
     val id: Int,
     val title: String,
     val description: String,
-    val projectId: Int?,
-    val project: Project?,
     val taskTypeId: Int?,
     val taskType: TaskType?,
     val mode: RecurrenceMode,
@@ -243,7 +241,6 @@ data class RecurrenceRule(
 data class RecurringTemplateCreate(
     val title: String,
     val description: String = "",
-    val projectId: Int? = null,
     val taskTypeId: Int? = null,
     val urgency: PriorityLevel? = null,
     val importance: PriorityLevel? = null,
@@ -256,7 +253,6 @@ data class RecurringTemplateCreate(
 data class RecurringTemplatePatch(
     val title: PatchField<String> = PatchField.Absent,
     val description: PatchField<String> = PatchField.Absent,
-    val projectId: PatchField<Int> = PatchField.Absent,
     val taskTypeId: PatchField<Int> = PatchField.Absent,
     val urgency: PatchField<PriorityLevel> = PatchField.Absent,
     val importance: PatchField<PriorityLevel> = PatchField.Absent,
@@ -327,8 +323,6 @@ internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
     id = id,
     title = title,
     description = description,
-    projectId = projectId,
-    project = project?.toModel(),
     taskTypeId = taskTypeId,
     taskType = taskType?.toModel(),
     mode = RecurrenceMode.fromWire(mode),

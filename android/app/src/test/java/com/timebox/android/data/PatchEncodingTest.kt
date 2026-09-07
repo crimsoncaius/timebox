@@ -29,14 +29,13 @@ class PatchEncodingTest {
     }
 
     @Test
-    fun `recurrence patch can clear rule and relationship fields`() {
+    fun `recurrence patch can clear rule fields without a Project relationship`() {
         val body = RecurringTemplatePatch(
-            projectId = PatchField.clear(),
             endDate = PatchField.clear(),
             cycleLimit = PatchField.of(8),
             weekdays = PatchField.of(listOf(0, 2, 4)),
         ).toJson()
-        assertSame(JsonNull, body.getValue("project_id"))
+        assertFalse("project_id" in body)
         assertSame(JsonNull, body.getValue("end_date"))
         assertEquals("8", body.getValue("cycle_limit").jsonPrimitive.content)
         assertTrue("weekdays" in body)

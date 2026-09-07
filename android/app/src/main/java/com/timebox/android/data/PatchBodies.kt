@@ -27,7 +27,6 @@ internal fun BattleTaskPatch.toJson(): JsonObject = patchBody {
 internal fun RecurringTemplatePatch.toJson(): JsonObject = patchBody {
     string("title", title)
     string("description", description)
-    int("project_id", projectId)
     int("task_type_id", taskTypeId)
     string("urgency", urgency.map { it.wire })
     string("importance", importance.map { it.wire })

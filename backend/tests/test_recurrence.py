@@ -114,6 +114,22 @@ def _task_for_planning_date(client, date: dt.date, template_id: int) -> dict:
     )
 
 
+def test_recurring_work_rejects_project_associations(client):
+    today = client.get("/health").json()["today"]
+    project = client.post("/projects", json={"name": "Launch"}).json()
+
+    created = client.post("/recurring-templates", json=_daily_body(today, project_id=project["id"]))
+
+    assert created.status_code == 422
+    assert "project_id" in created.text
+
+    template = client.post("/recurring-templates", json=_daily_body(today)).json()
+    occurrence = _task_for_planning_date(client, dt.date.fromisoformat(today), template["id"])
+    moved = client.patch(f"/tasks/{occurrence['id']}", json={"project_id": project["id"]})
+    assert moved.status_code == 422, moved.text
+    assert "Recurring work cannot belong to a Project" in moved.text
+
+
 def test_generation_is_idempotent_and_copies_checklist(client):
     today = client.get("/health").json()["today"]
     created = client.post("/recurring-templates", json=_daily_body(today))

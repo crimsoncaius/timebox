@@ -176,8 +176,6 @@ data class RecurringTemplateDto(
     val id: Int,
     val title: String,
     val description: String,
-    @SerialName("project_id") val projectId: Int? = null,
-    val project: ProjectDto? = null,
     @SerialName("task_type_id") val taskTypeId: Int? = null,
     @SerialName("task_type") val taskType: TaskTypeDto? = null,
     val mode: String,
@@ -208,7 +206,6 @@ data class RecurringTemplateDto(
 data class RecurringTemplateCreateDto(
     val title: String,
     val description: String = "",
-    @SerialName("project_id") val projectId: Int? = null,
     @SerialName("task_type_id") val taskTypeId: Int? = null,
     val urgency: String? = null,
     val importance: String? = null,

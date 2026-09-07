@@ -217,6 +217,14 @@ class BattlePlanContractTest {
         assertTrue("\"ready_to_plan\":true" in task)
         assertTrue("\"project_id\":2" in task)
 
+        val recurring = json.encodeToString(
+            RecurringTemplateCreateDto.serializer(),
+            RecurringTemplateCreateDto(
+                title = "Morning routine", mode = "scheduled", frequency = "daily", startDate = "2026-08-17",
+            ),
+        )
+        assertTrue("project_id" !in recurring)
+
         val reorder = json.encodeToString(
             TaskReorderDto.serializer(),
             TaskReorderDto(listOf(TaskPlacementDto(10, "in_progress", 3))),

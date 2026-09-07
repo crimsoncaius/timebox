@@ -241,7 +241,7 @@ class DarkThemeScreenshotTest {
                         checklistText = "Review outcomes\nChoose next focus",
                     ),
                     onBack = {}, onRetry = {}, onTitle = {}, onDescription = {},
-                    onProject = {}, onTaskType = {}, onUrgency = {}, onImportance = {},
+                    onTaskType = {}, onUrgency = {}, onImportance = {},
                     onMode = {}, onFrequency = {}, onInterval = {}, onToggleWeekday = {},
                     onMonthDay = {}, onQuotaCount = {}, onStartDate = {}, onEndMode = {},
                     onEndDate = {}, onCycleLimit = {}, onChecklist = {}, onRefreshPreview = {},

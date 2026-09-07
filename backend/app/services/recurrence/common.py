@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from app.core.time import get_zone
 
 LEAD_DAYS = 7
-INHERITED_FIELDS = {"title", "description", "project_id", "task_type_id", "urgency", "importance"}
+INHERITED_FIELDS = {"title", "description", "task_type_id", "urgency", "importance"}
 CUSTOMIZABLE_FIELDS = INHERITED_FIELDS | {
     "deadline_date", "deadline_at", "reminder_at", "ready_to_plan",
 }

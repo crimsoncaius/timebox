@@ -150,7 +150,7 @@ private fun RecurringTemplateRow(template: RecurringTemplate, onOpen: (Int) -> U
             Text(template.status.label, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
         }
         Text(
-            "${template.project?.name ?: "Admin"}${template.taskType?.let { " · ${it.name}" }.orEmpty()}",
+            template.taskType?.name ?: "",
             style = TimeboxTheme.type.bodySmall,
             color = colors.onVariant,
         )
@@ -254,7 +254,6 @@ private fun RecurringDetailContent(
         SectionCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
             DetailLine("Mode", template.mode.label)
             DetailLine("Cadence", template.cadence)
-            DetailLine("Location", template.project?.name ?: "Admin")
             DetailLine("Task type", template.taskType?.name ?: "Not specified")
             DetailLine("Starts", template.startDate.toString())
             DetailLine("Ends", template.endDate?.toString() ?: template.cycleLimit?.let { "$it cycles" } ?: "Never")
@@ -338,7 +337,6 @@ fun RecurringEditorScreen(
     onRetry: () -> Unit,
     onTitle: (String) -> Unit,
     onDescription: (String) -> Unit,
-    onProject: (Int?) -> Unit,
     onTaskType: (Int?) -> Unit,
     onUrgency: (PriorityLevel?) -> Unit,
     onImportance: (PriorityLevel?) -> Unit,
@@ -377,7 +375,6 @@ fun RecurringEditorScreen(
             RecurringEditorSection("Definition", "What this Recurring Task Series creates.") {
                 OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
-                RecurrenceMenu("Location", state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Admin", listOf("Admin" to null) + state.projects.map { it.name to it.id }, onProject)
                 RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "No task type", listOf((if (state.taskTypeId == null) "No task type" else "Clear task type") to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.weight(1f)) { RecurrenceMenu("Urgency", state.urgency?.label ?: "No urgency", listOf((if (state.urgency == null) "No urgency" else "Clear urgency") to null) + PriorityLevel.entries.map { it.label to it }, onUrgency) }

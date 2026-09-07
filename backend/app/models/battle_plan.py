@@ -56,18 +56,10 @@ class Project(Base):
     tasks: Mapped[list["Task"]] = relationship(
         "Task", back_populates="project", cascade="all, delete"
     )
-    recurring_templates: Mapped[list["RecurringTemplate"]] = relationship(
-        "RecurringTemplate", back_populates="project"
-    )
-
-
 class RecurringTemplate(Base):
     __tablename__ = "recurring_templates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
-    )
     task_type_id: Mapped[int | None] = mapped_column(
         ForeignKey("task_types.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -111,7 +103,6 @@ class RecurringTemplate(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    project: Mapped[Project | None] = relationship("Project", back_populates="recurring_templates")
     task_type: Mapped["TaskType | None"] = relationship("TaskType", back_populates="recurring_templates")
     checklist_items: Mapped[list["RecurringChecklistItem"]] = relationship(
         "RecurringChecklistItem", back_populates="template", cascade="all, delete-orphan",

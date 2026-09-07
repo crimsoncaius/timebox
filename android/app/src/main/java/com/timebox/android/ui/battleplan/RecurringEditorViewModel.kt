@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.ApiErrorCode
 import com.timebox.android.data.PriorityLevel
-import com.timebox.android.data.Project
 import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrencePreview
@@ -34,7 +33,6 @@ data class RecurringEditorUiState(
     val saving: Boolean = false,
     val title: String = "",
     val description: String = "",
-    val projectId: Int? = null,
     val taskTypeId: Int? = null,
     val urgency: PriorityLevel? = null,
     val importance: PriorityLevel? = null,
@@ -50,7 +48,6 @@ data class RecurringEditorUiState(
     val cycleLimit: String = "",
     val checklistText: String = "",
     val keepUnfinishedOverdue: Boolean = false,
-    val projects: List<Project> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
     val preview: RecurrencePreview? = null,
     val previewLoading: Boolean = false,
@@ -71,20 +68,16 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
         previewJob?.cancel()
         _state.value = RecurringEditorUiState(templateId = templateId, loading = true)
         viewModelScope.launch {
-            val projects = repository.listProjects().getOrElse {
-                _state.update { state -> state.copy(loading = false, error = it.apiError.message) }
-                return@launch
-            }
             val taskTypes = repository.listTaskTypes().getOrElse {
                 _state.update { state -> state.copy(loading = false, error = it.apiError.message) }
                 return@launch
             }
             if (templateId == null) {
-                _state.update { it.copy(loading = false, projects = projects, taskTypes = taskTypes) }
+                _state.update { it.copy(loading = false, taskTypes = taskTypes) }
             } else {
                 repository.getRecurringTemplate(templateId).fold(
                     onSuccess = { template ->
-                        _state.value = template.toEditorState(projects, taskTypes)
+                        _state.value = template.toEditorState(taskTypes)
                     },
                     onFailure = { cause ->
                         _state.update { it.copy(loading = false, error = cause.apiError.message) }
@@ -97,7 +90,6 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
 
     fun setTitle(value: String) = edit { copy(title = value) }
     fun setDescription(value: String) = edit { copy(description = value) }
-    fun setProject(value: Int?) = edit { copy(projectId = value) }
     fun setTaskType(value: Int?) = edit { copy(taskTypeId = value) }
     fun setUrgency(value: PriorityLevel?) = edit { copy(urgency = value) }
     fun setImportance(value: PriorityLevel?) = edit { copy(importance = value) }
@@ -149,7 +141,6 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                     RecurringTemplateCreate(
                         title = current.title.trim(),
                         description = current.description.trim(),
-                        projectId = current.projectId,
                         taskTypeId = current.taskTypeId,
                         urgency = current.urgency,
                         importance = current.importance,
@@ -165,7 +156,6 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                     RecurringTemplatePatch(
                         title = PatchField.of(current.title.trim()),
                         description = PatchField.of(current.description.trim()),
-                        projectId = current.projectId.asPatch(),
                         taskTypeId = current.taskTypeId.asPatch(),
                         urgency = current.urgency.asPatch(),
                         importance = current.importance.asPatch(),
@@ -284,11 +274,10 @@ internal fun RecurringEditorUiState.toRule(): RecurrenceRule? {
 private fun RecurringEditorUiState.checklistTitles(): List<String> = checklistText.lineSequence()
     .map(String::trim).filter(String::isNotEmpty).toList()
 
-private fun RecurringTemplate.toEditorState(projects: List<Project>, taskTypes: List<TaskType>) = RecurringEditorUiState(
+private fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = RecurringEditorUiState(
     templateId = id,
     title = title,
     description = description,
-    projectId = projectId,
     taskTypeId = taskTypeId,
     urgency = urgency,
     importance = importance,
@@ -308,7 +297,6 @@ private fun RecurringTemplate.toEditorState(projects: List<Project>, taskTypes: 
     cycleLimit = cycleLimit?.toString().orEmpty(),
     checklistText = checklistItems.sortedBy { it.position }.joinToString("\n") { it.title },
     keepUnfinishedOverdue = keepUnfinishedOverdue,
-    projects = projects,
     taskTypes = taskTypes,
 )
 

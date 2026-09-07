@@ -49,9 +49,6 @@ def delete_project(db: Session, project_id: int) -> None:
     row = db.get(Project, project_id)
     if row is None:
         raise ValueError("Project not found")
-    from app.services import recurrence_service
-
-    recurrence_service.move_project_templates_to_admin(db, project_id)
     db.delete(row)
     db.commit()
 

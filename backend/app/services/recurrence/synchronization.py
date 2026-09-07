@@ -224,7 +224,6 @@ def _propagate_template_fields(db: Session, template: RecurringTemplate, today: 
     values = {
         "title": template.title,
         "description": template.description,
-        "project_id": template.project_id,
         "task_type_id": template.task_type_id,
         "urgency": template.urgency,
         "importance": template.importance,
@@ -264,7 +263,6 @@ def _rebuild_unprotected_subtasks(
         for position, title in enumerate(cleaned):
             db.add(Task(
                 parent_id=task.id,
-                project_id=task.project_id,
                 task_type_id=task.task_type_id,
                 recurring_template_id=task.recurring_template_id,
                 occurrence_key=task.occurrence_key,

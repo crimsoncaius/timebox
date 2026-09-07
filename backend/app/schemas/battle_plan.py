@@ -238,9 +238,10 @@ class RecurrenceRuleFields(BaseModel):
 
 
 class RecurringTemplateCreate(RecurrenceRuleFields):
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(..., min_length=1, max_length=500)
     description: str = ""
-    project_id: int | None = None
     task_type_id: int | None = None
     urgency: PriorityLevel | None = None
     importance: PriorityLevel | None = None
@@ -256,9 +257,10 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
 
 
 class RecurringTemplatePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str | None = Field(None, min_length=1, max_length=500)
     description: str | None = None
-    project_id: int | None = None
     task_type_id: int | None = None
     urgency: PriorityLevel | None = None
     importance: PriorityLevel | None = None
@@ -310,8 +312,6 @@ class RecurringTemplateRead(BaseModel):
     id: int
     title: str
     description: str
-    project_id: int | None
-    project: ProjectRead | None = None
     task_type_id: int | None
     task_type: TaskTypeRead | None = None
     mode: RecurrenceMode

@@ -201,7 +201,6 @@ export function RecurringPage() {
           initialMode={editing?.mode ?? 'scheduled'}
           template={editing}
           applicationToday={formApplicationToday}
-          projects={projects}
           taskTypes={taskTypes}
           onClose={() => { setCreating(false); setEditing(null) }}
           onSaved={async (saved) => {
@@ -246,7 +245,7 @@ function TemplateRow({ template, selected, onSelect, onEdit, onLifecycle }: {
     <article className={`grid gap-3 border-b border-outline-variant/15 bg-surface-container-lowest px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(8rem,.7fr)_auto] sm:items-center dark:border-dark-outline-variant/30 dark:bg-dark-surface-container-lowest ${selected ? 'ring-1 ring-inset ring-primary/25' : ''}`}>
       <button type="button" aria-label={template.title} className="min-w-0 text-left" onClick={onSelect}>
         <span className="block truncate font-headline text-base">{template.title}</span>
-        <span className="mt-1 block truncate text-xs text-on-surface-variant">{template.project?.name ?? 'Admin'}{template.task_type ? ` · ${template.task_type.name}` : ''}</span>
+        {template.task_type ? <span className="mt-1 block truncate text-xs text-on-surface-variant">{template.task_type.name}</span> : null}
       </button>
       <button type="button" className="text-left text-sm text-on-surface-variant" onClick={onSelect}>{template.cadence}</button>
       <button type="button" className="text-left text-xs text-on-surface-variant" onClick={onSelect}>
@@ -275,7 +274,6 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
         {template.description ? <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">{template.description}</p> : null}
         <dl className="mt-7 grid grid-cols-2 gap-4 rounded-2xl bg-surface-container-low p-4 text-sm dark:bg-dark-surface-container-low">
           <div><dt className="text-xs text-on-surface-variant">Cadence</dt><dd className="mt-1">{template.cadence}</dd></div>
-          <div><dt className="text-xs text-on-surface-variant">Location</dt><dd className="mt-1">{template.project?.name ?? 'Admin'}</dd></div>
           <div><dt className="text-xs text-on-surface-variant">Starts</dt><dd className="mt-1">{displayDate(template.start_date)}</dd></div>
           <div><dt className="text-xs text-on-surface-variant">Ends</dt><dd className="mt-1">{template.end_date ? displayDate(template.end_date) : template.cycle_limit ? `${template.cycle_limit} cycles` : 'Never'}</dd></div>
         </dl>
@@ -351,11 +349,10 @@ function recurrenceSummary({
   return `${cadence}, starting ${start}, ${endingText}.`
 }
 
-function TemplateForm({ initialMode, template, applicationToday, projects, taskTypes, onClose, onSaved }: {
+function TemplateForm({ initialMode, template, applicationToday, taskTypes, onClose, onSaved }: {
   initialMode: RecurrenceMode
   template: RecurringTemplate | null
   applicationToday: string
-  projects: Project[]
   taskTypes: TaskType[]
   onClose: () => void
   onSaved: (template: RecurringTemplate) => Promise<void>
@@ -363,7 +360,6 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
   const [mode, setMode] = useState<RecurrenceMode>(initialMode)
   const [title, setTitle] = useState(template?.title ?? '')
   const [description, setDescription] = useState(template?.description ?? '')
-  const [projectId, setProjectId] = useState(template?.project_id ? String(template.project_id) : '')
   const [taskTypeId, setTaskTypeId] = useState(template?.task_type_id ? String(template.task_type_id) : '')
   const [urgency, setUrgency] = useState<PriorityLevel | null>(template?.urgency ?? null)
   const [importance, setImportance] = useState<PriorityLevel | null>(template?.importance ?? null)
@@ -392,7 +388,6 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
     mode !== initialMode
     || title !== (template?.title ?? '')
     || description !== (template?.description ?? '')
-    || projectId !== (template?.project_id ? String(template.project_id) : '')
     || taskTypeId !== (template?.task_type_id ? String(template.task_type_id) : '')
     || urgency !== (template?.urgency ?? null)
     || importance !== (template?.importance ?? null)
@@ -407,7 +402,7 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
     || cycleLimit !== (template?.cycle_limit ?? 10)
     || checklist !== (template?.checklist_items.map((item) => item.title).join('\n') ?? '')
     || keepUnfinishedOverdue !== (template?.keep_unfinished_overdue ?? false)
-  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, projectId, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
+  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -488,7 +483,7 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
         if (!confirmBackfill) return
       }
       const body: RecurringTemplateWrite = {
-        ...rule, title: title.trim(), description, project_id: projectId ? Number(projectId) : null,
+        ...rule, title: title.trim(), description,
         task_type_id: taskTypeId ? Number(taskTypeId) : null,
         urgency, importance,
         checklist_titles: mode === 'scheduled' ? checklist.split('\n').map((value) => value.trim()).filter(Boolean) : [],
@@ -540,7 +535,6 @@ function TemplateForm({ initialMode, template, applicationToday, projects, taskT
           <input autoFocus required aria-label="Title" placeholder="Untitled recurring task" value={title} onChange={(event) => setTitle(event.target.value)} className="w-full border-0 bg-transparent p-0 font-headline text-2xl font-light tracking-[-0.02em] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-title-placeholder)]" />
           <textarea rows={2} aria-label="Description" placeholder="Notes and context" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-3.5 w-full resize-y border-0 border-l-2 border-l-[var(--color-paper-rule)] bg-transparent py-0.5 pr-0 pl-3.5 text-sm leading-[1.7] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-muted)]" />
           <div className="mt-[18px] grid gap-3.5 sm:grid-cols-2">
-            <Select label="Location" value={projectId} unset={!projectId} onChange={setProjectId}><option value="">Admin</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
             <Select label="Task type" value={taskTypeId} unset={!taskTypeId} onChange={setTaskTypeId}><option value="">Unset</option>{taskTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
           </div>
         </section>

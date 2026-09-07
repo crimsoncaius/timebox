@@ -323,7 +323,6 @@ class TimeboxRepository private constructor(
             RecurringTemplateCreateDto(
                 title = request.title,
                 description = request.description,
-                projectId = request.projectId,
                 taskTypeId = request.taskTypeId,
                 urgency = request.urgency?.wire,
                 importance = request.importance?.wire,

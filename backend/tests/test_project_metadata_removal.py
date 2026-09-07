@@ -47,3 +47,25 @@ def test_migration_discards_only_project_metadata():
             migration.downgrade()
         assert connection.exec_driver_sql('SELECT description, deadline_date, deadline_at FROM projects').one() == ('', None, None)
         assert connection.exec_driver_sql('SELECT * FROM tasks').all() == before
+
+
+def test_migration_detaches_recurring_work_before_removing_project_association():
+    path = Path(__file__).parents[1] / 'alembic/versions/022_separate_recurring_work_from_projects.py'
+    spec = importlib.util.spec_from_file_location('separate_recurring_work_migration', path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    engine = sa.create_engine('sqlite:///:memory:')
+    with engine.begin() as connection:
+        connection.exec_driver_sql('CREATE TABLE projects (id INTEGER PRIMARY KEY)')
+        connection.exec_driver_sql('CREATE TABLE recurring_templates (id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id))')
+        connection.exec_driver_sql('CREATE INDEX ix_recurring_templates_project_id ON recurring_templates (project_id)')
+        connection.exec_driver_sql('CREATE TABLE tasks (id INTEGER PRIMARY KEY, parent_id INTEGER, project_id INTEGER REFERENCES projects(id), recurring_template_id INTEGER, recurrence_kind TEXT)')
+        connection.exec_driver_sql('INSERT INTO projects VALUES (1)')
+        connection.exec_driver_sql('INSERT INTO recurring_templates VALUES (2, 1)')
+        connection.exec_driver_sql("INSERT INTO tasks VALUES (3, NULL, 1, NULL, 'scheduled')")
+        connection.exec_driver_sql("INSERT INTO tasks VALUES (4, 3, 1, NULL, 'checklist')")
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+        assert 'project_id' not in {column['name'] for column in sa.inspect(connection).get_columns('recurring_templates')}
+        assert connection.exec_driver_sql('SELECT project_id FROM tasks WHERE id = 3').scalar_one() is None
+        assert connection.exec_driver_sql('SELECT project_id FROM tasks WHERE id = 4').scalar_one() is None
