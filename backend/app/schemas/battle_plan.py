@@ -237,6 +237,38 @@ class RecurrenceRuleFields(BaseModel):
         return self
 
 
+class RecurringPreplanningSlotWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_minute: int = Field(..., ge=0, le=1440)
+    end_minute: int = Field(..., ge=0, le=1440)
+    weekday: int | None = Field(None, ge=0, le=6)
+
+    @model_validator(mode="after")
+    def validate_planned_block_interval(self):
+        if self.start_minute >= self.end_minute:
+            raise ValueError("Invalid range: require 0 <= start < end <= 1440")
+        if self.end_minute - self.start_minute < 30:
+            raise ValueError("Planned Blocks must be at least 30 minutes")
+        return self
+
+
+class RecurringPreplanningScheduleWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slots: list[RecurringPreplanningSlotWrite] = Field(..., min_length=1, max_length=1)
+
+
+class RecurringPreplanningSlotRead(RecurringPreplanningSlotWrite):
+    id: int
+    key: str
+    position: int
+
+
+class RecurringPreplanningScheduleRead(BaseModel):
+    slots: list[RecurringPreplanningSlotRead]
+
+
 class RecurringTemplateCreate(RecurrenceRuleFields):
     model_config = ConfigDict(extra="forbid")
 
@@ -248,11 +280,21 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
     checklist_titles: list[str] = Field(default_factory=list)
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool = False
+    preplanning_schedule: "RecurringPreplanningScheduleWrite | None" = None
 
     @model_validator(mode="after")
     def validate_carry_over(self):
         if self.mode == RecurrenceMode.quota and self.keep_unfinished_overdue:
             raise ValueError("Quota shortfalls cannot carry into the next period")
+        if self.preplanning_schedule is not None:
+            if self.mode != RecurrenceMode.scheduled:
+                raise ValueError("Recurring Pre-planning Schedules require a scheduled Recurring Task Series")
+            for slot in self.preplanning_schedule.slots:
+                if self.frequency == RecurrenceFrequency.weekly:
+                    if slot.weekday is None or slot.weekday not in self.weekdays:
+                        raise ValueError("A weekly pre-planning slot must use a selected recurrence weekday")
+                elif slot.weekday is not None:
+                    raise ValueError("Daily and monthly pre-planning slots follow the Task Occurrence date")
         return self
 
 
@@ -325,6 +367,7 @@ class RecurringTemplateRead(BaseModel):
     end_date: date | None
     cycle_limit: int | None
     keep_unfinished_overdue: bool
+    preplanning_schedule: RecurringPreplanningScheduleRead | None = None
     urgency: PriorityLevel | None
     importance: PriorityLevel | None
     paused_at: datetime | None

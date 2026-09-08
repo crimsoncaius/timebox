@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
 from app.core.config import get_settings
-from app.models.battle_plan import RecurrenceOccurrence, RecurringTemplate, Task, TaskStatus
+from app.models.battle_plan import (
+    RecurrenceOccurrence,
+    RecurringPlannedBlockRealization,
+    RecurringPreplanningSlot,
+    RecurringTemplate,
+    Task,
+    TaskStatus,
+)
 from app.models.battle_plan import RecurrenceFrequency, RecurrenceMode
 from app.schemas.battle_plan import RecurrencePreviewRequest
 from app.services.recurrence_service import iter_windows
@@ -114,6 +121,209 @@ def _task_for_planning_date(client, date: dt.date, template_id: int) -> dict:
     )
 
 
+def test_scheduled_series_preplanning_schedule_materializes_attached_planned_blocks(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "Writing"}).json()
+    body = _daily_body(
+        today.isoformat(),
+        checklist_titles=[],
+        task_type_id=task_type["id"],
+        preplanning_schedule={
+            "slots": [{"start_minute": 540, "end_minute": 600}],
+        },
+    )
+
+    created = client.post("/recurring-templates", json=body)
+
+    assert created.status_code == 201, created.text
+    schedule = created.json()["preplanning_schedule"]
+    assert len(schedule["slots"]) == 1
+    assert schedule["slots"][0]["start_minute"] == 540
+    assert schedule["slots"][0]["end_minute"] == 600
+    assert schedule["slots"][0]["weekday"] is None
+    assert client.get(f"/recurring-templates/{created.json()['id']}").json()[
+        "preplanning_schedule"
+    ] == schedule
+
+    planned_block_ids = []
+    task_ids = []
+    for offset in range(8):
+        day_date = today + dt.timedelta(days=offset)
+        occurrence = _task_for_planning_date(client, day_date, created.json()["id"])
+        day = client.get(f"/days/{day_date.isoformat()}").json()
+        planned = day["planned_blocks"]
+        assert len(planned) == 1
+        assert planned[0]["task_id"] == occurrence["id"]
+        assert planned[0]["task_type_id"] == task_type["id"]
+        assert (planned[0]["start_minute"], planned[0]["end_minute"]) == (540, 600)
+        assert day["actual_blocks"] == []
+        assert occurrence["status"] == "open"
+        assert occurrence["completed_at"] is None
+        assert occurrence["ready_to_plan"] is False
+        planned_block_ids.append(planned[0]["id"])
+        task_ids.append(occurrence["id"])
+
+    with Session(get_engine()) as db:
+        realizations = list(
+            db.execute(select(RecurringPlannedBlockRealization)).scalars()
+        )
+        realization_task_ids = set(db.execute(
+            select(RecurrenceOccurrence.task_id)
+            .join(
+                RecurringPlannedBlockRealization,
+                RecurringPlannedBlockRealization.occurrence_id == RecurrenceOccurrence.id,
+            )
+        ).scalars())
+        assert len(realizations) == 8
+        assert {item.planned_block_id for item in realizations} == set(planned_block_ids)
+        assert {item.state.value for item in realizations} == {"untouched"}
+        assert realization_task_ids == set(task_ids)
+
+
+def test_confirmed_historical_backfill_does_not_preplan_past_task_occurrences(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "Reflection"}).json()
+    created = client.post("/recurring-templates", json=_daily_body(
+        (today - dt.timedelta(days=2)).isoformat(),
+        task_type_id=task_type["id"],
+        checklist_titles=[],
+        confirm_backfill=True,
+        preplanning_schedule={"slots": [{"start_minute": 1260, "end_minute": 1320}]},
+    ))
+
+    assert created.status_code == 201, created.text
+    for offset in (-2, -1):
+        historical = today + dt.timedelta(days=offset)
+        assert client.get(f"/days/{historical.isoformat()}").json()["planned_blocks"] == []
+    assert len(client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]) == 1
+
+
+def test_replacing_a_tombstoned_slot_retains_its_logical_realization_identity(client):
+    today = client.get("/health").json()["today"]
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{"start_minute": 540, "end_minute": 600}]},
+    ))
+    assert created.status_code == 201, created.text
+
+    with Session(get_engine()) as db:
+        slot = db.execute(select(RecurringPreplanningSlot)).scalar_one()
+        realization = db.execute(
+            select(RecurringPlannedBlockRealization).where(
+                RecurringPlannedBlockRealization.slot_id == slot.id
+            )
+        ).scalars().first()
+        assert realization is not None
+        logical_slot_key = slot.slot_key
+        realization_id = realization.id
+        slot.removed_at = dt.datetime.now(dt.timezone.utc)
+        db.commit()
+        db.add(RecurringPreplanningSlot(
+            template_id=slot.template_id,
+            slot_key="replacement-slot-key",
+            position=slot.position,
+            weekday=slot.weekday,
+            start_minute=slot.start_minute,
+            end_minute=slot.end_minute,
+        ))
+        db.commit()
+        db.delete(slot)
+        db.commit()
+
+    with Session(get_engine()) as db:
+        retained = db.get(RecurringPlannedBlockRealization, realization_id)
+        assert retained is not None
+        assert retained.slot_id is None
+        assert retained.slot_key == logical_slot_key
+
+
+@pytest.mark.parametrize("frequency", ["daily", "weekly", "monthly"])
+def test_one_preplanning_slot_uses_each_scheduled_recurrence_date(client, frequency):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "Routine"}).json()
+    rule_fields = {
+        "weekdays": [today.weekday()] if frequency == "weekly" else [],
+        "month_day": today.day if frequency == "monthly" else None,
+    }
+    slot = {
+        "start_minute": 720,
+        "end_minute": 750,
+        "weekday": today.weekday() if frequency == "weekly" else None,
+    }
+
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        frequency=frequency,
+        task_type_id=task_type["id"],
+        checklist_titles=[],
+        preplanning_schedule={"slots": [slot]},
+        **rule_fields,
+    ))
+
+    assert created.status_code == 201, created.text
+    occurrence = _task_for_planning_date(client, today, created.json()["id"])
+    planned = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    assert [(item["task_id"], item["start_minute"], item["end_minute"]) for item in planned] == [
+        (occurrence["id"], 720, 750)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("body_changes", "message"),
+    [
+        (
+            {"preplanning_schedule": {"slots": [{"start_minute": 540, "end_minute": 560}]}},
+            "Planned Blocks must be at least 30 minutes",
+        ),
+        (
+            {"preplanning_schedule": {"slots": [{"start_minute": 600, "end_minute": 570}]}},
+            "Invalid range",
+        ),
+        (
+            {"preplanning_schedule": {"slots": [
+                {"start_minute": 540, "end_minute": 600},
+                {"start_minute": 660, "end_minute": 720},
+            ]}},
+            "at most 1 item",
+        ),
+        (
+            {
+                "frequency": "weekly",
+                "weekdays": [0],
+                "preplanning_schedule": {"slots": [
+                    {"weekday": 1, "start_minute": 540, "end_minute": 600}
+                ]},
+            },
+            "selected recurrence weekday",
+        ),
+        (
+            {
+                "mode": "quota",
+                "frequency": "daily",
+                "quota_count": 1,
+                "preplanning_schedule": {"slots": [
+                    {"start_minute": 540, "end_minute": 600}
+                ]},
+            },
+            "scheduled Recurring Task Series",
+        ),
+    ],
+)
+def test_preplanning_schedule_rejects_invalid_planned_block_or_recurrence_position(
+    client, body_changes, message
+):
+    today = client.get("/health").json()["today"]
+
+    response = client.post(
+        "/recurring-templates",
+        json=_daily_body(today, checklist_titles=[], **body_changes),
+    )
+
+    assert response.status_code == 422
+    assert message in response.text
+
+
 def test_recurring_work_rejects_project_associations(client):
     today = client.get("/health").json()["today"]
     project = client.post("/projects", json={"name": "Launch"}).json()
@@ -134,9 +344,14 @@ def test_generation_is_idempotent_and_copies_checklist(client):
     today = client.get("/health").json()["today"]
     created = client.post("/recurring-templates", json=_daily_body(today))
     assert created.status_code == 201, created.text
+    assert created.json()["preplanning_schedule"] is None
     first = client.get("/tasks").json()["items"]
     second = client.get("/tasks").json()["items"]
     assert len(first) == len(second) == 1
+    assert all(
+        client.get(f"/days/{task['deadline_date']}").json()["planned_blocks"] == []
+        for task in first
+    )
     assert _generated_root_count(created.json()["id"]) == 8
     assert first[0]["ready_to_plan"] is False
     assert [child["title"] for child in first[0]["subtasks"]] == ["Inbox", "Calendar"]

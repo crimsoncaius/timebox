@@ -3,7 +3,10 @@ from __future__ import annotations
 import datetime as dt
 import enum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Text,
+    UniqueConstraint, func, text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -37,6 +40,12 @@ class RecurrenceFrequency(str, enum.Enum):
     daily = "daily"
     weekly = "weekly"
     monthly = "monthly"
+
+
+class RecurringPlannedBlockState(str, enum.Enum):
+    untouched = "untouched"
+    customized = "customized"
+    deleted = "deleted"
 
 
 class Project(Base):
@@ -108,6 +117,10 @@ class RecurringTemplate(Base):
         "RecurringChecklistItem", back_populates="template", cascade="all, delete-orphan",
         order_by="RecurringChecklistItem.position",
     )
+    preplanning_slots: Mapped[list["RecurringPreplanningSlot"]] = relationship(
+        "RecurringPreplanningSlot", back_populates="template", cascade="all",
+        order_by="RecurringPreplanningSlot.position",
+    )
     occurrences: Mapped[list["RecurrenceOccurrence"]] = relationship(
         "RecurrenceOccurrence", back_populates="template", passive_deletes=True
     )
@@ -123,6 +136,44 @@ class RecurringChecklistItem(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     template: Mapped[RecurringTemplate] = relationship("RecurringTemplate", back_populates="checklist_items")
+
+
+class RecurringPreplanningSlot(Base):
+    __tablename__ = "recurring_preplanning_slots"
+    __table_args__ = (
+        Index(
+            "uq_recurring_preplanning_slot_position",
+            "template_id",
+            "position",
+            unique=True,
+            postgresql_where=text("removed_at IS NULL"),
+            sqlite_where=text("removed_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slot_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("recurring_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    weekday: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_minute: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_minute: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    removed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    template: Mapped[RecurringTemplate] = relationship(
+        "RecurringTemplate", back_populates="preplanning_slots"
+    )
+    realizations: Mapped[list["RecurringPlannedBlockRealization"]] = relationship(
+        "RecurringPlannedBlockRealization", back_populates="slot", passive_deletes=True
+    )
 
 
 class RecurrenceOccurrence(Base):
@@ -150,6 +201,54 @@ class RecurrenceOccurrence(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     template: Mapped[RecurringTemplate | None] = relationship("RecurringTemplate", back_populates="occurrences")
     task: Mapped["Task | None"] = relationship("Task", foreign_keys=[task_id])
+    preplanning_realizations: Mapped[list["RecurringPlannedBlockRealization"]] = relationship(
+        "RecurringPlannedBlockRealization", back_populates="occurrence", cascade="all, delete-orphan"
+    )
+
+
+class RecurringPlannedBlockRealization(Base):
+    __tablename__ = "recurring_planned_block_realizations"
+    __table_args__ = (
+        UniqueConstraint("occurrence_id", "slot_key", name="uq_recurring_planned_block_realization"),
+        UniqueConstraint("planned_block_id", name="uq_recurring_planned_block_realization_block"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    occurrence_id: Mapped[int] = mapped_column(
+        ForeignKey("recurrence_occurrences.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    slot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recurring_preplanning_slots.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    slot_key: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    planned_block_id: Mapped[int | None] = mapped_column(
+        ForeignKey("time_blocks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    state: Mapped[RecurringPlannedBlockState] = mapped_column(
+        Enum(
+            RecurringPlannedBlockState,
+            name="recurring_planned_block_state",
+            native_enum=False,
+            length=16,
+        ),
+        nullable=False,
+        default=RecurringPlannedBlockState.untouched,
+        server_default="untouched",
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    occurrence: Mapped[RecurrenceOccurrence] = relationship(
+        "RecurrenceOccurrence", back_populates="preplanning_realizations"
+    )
+    slot: Mapped[RecurringPreplanningSlot | None] = relationship(
+        "RecurringPreplanningSlot", back_populates="realizations"
+    )
+    planned_block: Mapped["TimeBlock | None"] = relationship("TimeBlock")
 
 
 class Task(Base):

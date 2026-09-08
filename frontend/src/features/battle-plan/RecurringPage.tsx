@@ -374,6 +374,10 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
   const [cycleLimit, setCycleLimit] = useState(template?.cycle_limit ?? 10)
   const [checklist, setChecklist] = useState(template?.checklist_items.map((item) => item.title).join('\n') ?? '')
   const [keepUnfinishedOverdue, setKeepUnfinishedOverdue] = useState(template?.keep_unfinished_overdue ?? false)
+  const [preplanningEnabled, setPreplanningEnabled] = useState(false)
+  const [preplanningStart, setPreplanningStart] = useState('09:00')
+  const [preplanningEnd, setPreplanningEnd] = useState('10:00')
+  const [preplanningWeekday, setPreplanningWeekday] = useState<number | null>(null)
   const [preview, setPreview] = useState<RecurrencePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -402,7 +406,8 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     || cycleLimit !== (template?.cycle_limit ?? 10)
     || checklist !== (template?.checklist_items.map((item) => item.title).join('\n') ?? '')
     || keepUnfinishedOverdue !== (template?.keep_unfinished_overdue ?? false)
-  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
+    || preplanningEnabled
+  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, preplanningEnabled, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -469,10 +474,25 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
   const summary = recurrenceSummary({
     mode, frequency, interval, weekdays, monthDay, quotaCount, startDate, ending,
   })
+  const minuteForTime = (value: string, endOfDay = false) => {
+    const [hour, minute] = value.split(':').map(Number)
+    if (endOfDay && hour === 0 && minute === 0) return 24 * 60
+    return hour * 60 + minute
+  }
+  const preplanningStartMinute = minuteForTime(preplanningStart)
+  const preplanningEndMinute = minuteForTime(preplanningEnd, true)
+  const effectivePreplanningWeekday = frequency === 'weekly'
+    ? (preplanningWeekday != null && weekdays.includes(preplanningWeekday) ? preplanningWeekday : weekdays[0] ?? null)
+    : null
+  const preplanningError = preplanningEnabled && (
+    !Number.isFinite(preplanningStartMinute)
+    || !Number.isFinite(preplanningEndMinute)
+    || preplanningEndMinute - preplanningStartMinute < 30
+  ) ? 'A Planned Block must end at least 30 minutes after it starts.' : null
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!title.trim()) return
+    if (!title.trim() || preplanningError) return
     setSaving(true)
     setError(null)
     try {
@@ -489,6 +509,15 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
         checklist_titles: mode === 'scheduled' ? checklist.split('\n').map((value) => value.trim()).filter(Boolean) : [],
         confirm_backfill: confirmBackfill,
         keep_unfinished_overdue: mode === 'scheduled' && keepUnfinishedOverdue,
+        ...(!template && mode === 'scheduled' && preplanningEnabled ? {
+          preplanning_schedule: {
+            slots: [{
+              start_minute: preplanningStartMinute,
+              end_minute: preplanningEndMinute,
+              weekday: effectivePreplanningWeekday,
+            }],
+          },
+        } : {}),
       }
       const saved = template
         ? await api.patchRecurringTemplate(template.id, body)
@@ -614,6 +643,44 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
             </label>
           ) : null}
 
+          {mode === 'scheduled' && !template ? (
+            <div className="mt-4 rounded-xl border border-[var(--task-detail-border)] p-3.5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  aria-label="Pre-plan each Task Occurrence"
+                  checked={preplanningEnabled}
+                  onChange={(event) => setPreplanningEnabled(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm text-[var(--task-detail-primary)]">Pre-plan each Task Occurrence</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-[var(--task-detail-muted)]">Create one attached Planned Block in the existing seven-day horizon.</span>
+                </span>
+              </label>
+              {preplanningEnabled ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {frequency === 'weekly' ? (
+                    <Select
+                      label="Pre-planning weekday"
+                      value={String(effectivePreplanningWeekday ?? '')}
+                      onChange={(value) => setPreplanningWeekday(Number(value))}
+                    >
+                      {weekdays.map((weekday) => <option key={weekday} value={weekday}>{WEEKDAYS[weekday]}</option>)}
+                    </Select>
+                  ) : null}
+                  <Field label="Starts">
+                    <input aria-label="Pre-planning start" type="time" value={preplanningStart} onChange={(event) => setPreplanningStart(event.target.value)} className={recurringFieldClass} />
+                  </Field>
+                  <Field label="Ends">
+                    <input aria-label="Pre-planning end" type="time" value={preplanningEnd} onChange={(event) => setPreplanningEnd(event.target.value)} className={recurringFieldClass} />
+                  </Field>
+                  {preplanningError ? <p role="alert" className="text-xs text-error sm:col-span-2">{preplanningError}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-4 flex items-start gap-2 text-sm leading-[1.6] text-[var(--task-detail-primary)]">
             <span className="material-symbols-outlined mt-0.5 text-[18px] text-[var(--task-detail-muted)]" aria-hidden>event_repeat</span>
             <div>
@@ -640,7 +707,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
 
         <footer className="flex items-center justify-end gap-2.5 border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7">
           <button type="button" className="border-0 bg-transparent px-2 py-[9px] text-[13px] text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" onClick={requestClose}>Cancel</button>
-          <button type="submit" disabled={saving || !title.trim()} className="rounded-[10px] bg-primary px-5 py-[9px] text-[13px] font-medium text-on-primary transition-colors duration-120 ease-out hover:bg-primary-dim focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary">{saving ? 'Saving…' : template ? 'Save changes' : 'Create recurrence'}</button>
+          <button type="submit" disabled={saving || !title.trim() || Boolean(preplanningError)} className="rounded-[10px] bg-primary px-5 py-[9px] text-[13px] font-medium text-on-primary transition-colors duration-120 ease-out hover:bg-primary-dim focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary">{saving ? 'Saving…' : template ? 'Save changes' : 'Create recurrence'}</button>
         </footer>
       </form>
     </div>

@@ -91,6 +91,43 @@ class RecurringEditorLogicTest {
         )
     }
 
+    @Test
+    fun `scheduled creation maps one valid Recurring Pre-planning Schedule slot`() {
+        val state = base().copy(
+            preplanningEnabled = true,
+            preplanningStart = "08:30",
+            preplanningEnd = "09:15",
+        )
+
+        assertNull(validateRecurrenceDraft(state, requireTitle = true))
+        val slot = state.toPreplanningSchedule()!!.slots.single()
+        assertEquals(510, slot.startMinute)
+        assertEquals(555, slot.endMinute)
+        assertNull(slot.weekday)
+
+        assertEquals(
+            "A Planned Block must end at least 30 minutes after it starts.",
+            validateRecurrenceDraft(
+                state.copy(preplanningStart = "09:00", preplanningEnd = "09:20"),
+                requireTitle = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `scheduled creation represents a Planned Block ending at midnight as minute 1440`() {
+        val state = base().copy(
+            preplanningEnabled = true,
+            preplanningStart = "23:00",
+            preplanningEnd = "00:00",
+        )
+
+        assertNull(validateRecurrenceDraft(state, requireTitle = true))
+        val slot = state.toPreplanningSchedule()!!.slots.single()
+        assertEquals(1380, slot.startMinute)
+        assertEquals(1440, slot.endMinute)
+    }
+
     private fun base() = RecurringEditorUiState(
         title = "Template",
         startDate = "2026-08-17",

@@ -9,6 +9,8 @@ import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurrenceWindowDto
 import com.timebox.android.data.remote.RecurringChecklistItemDto
 import com.timebox.android.data.remote.RecurringTaskLinkDto
+import com.timebox.android.data.remote.RecurringPreplanningScheduleDto
+import com.timebox.android.data.remote.RecurringPreplanningSlotDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.SubtaskDto
 import java.time.Instant
@@ -153,6 +155,15 @@ data class RecurrencePreview(
     val pastCycles: Int,
     val pastTasks: Int,
 )
+data class RecurringPreplanningSlot(
+    val id: Int? = null,
+    val key: String? = null,
+    val position: Int = 0,
+    val weekday: Int? = null,
+    val startMinute: Int,
+    val endMinute: Int,
+)
+data class RecurringPreplanningSchedule(val slots: List<RecurringPreplanningSlot>)
 
 data class RecurringTemplate(
     val id: Int,
@@ -182,6 +193,7 @@ data class RecurringTemplate(
     val cadence: String,
     val nextOccurrence: LocalDate?,
     val keepUnfinishedOverdue: Boolean = false,
+    val preplanningSchedule: RecurringPreplanningSchedule? = null,
 )
 
 data class ProjectCreate(
@@ -255,6 +267,7 @@ data class RecurringTemplateCreate(
     val checklistTitles: List<String> = emptyList(),
     val confirmBackfill: Boolean = false,
     val keepUnfinishedOverdue: Boolean = false,
+    val preplanningSchedule: RecurringPreplanningSchedule? = null,
 )
 
 data class RecurringTemplatePatch(
@@ -326,6 +339,27 @@ internal fun RecurrenceWindowDto.toModel() = RecurrenceWindow(key, LocalDate.par
 internal fun RecurrencePreviewDto.toModel() = RecurrencePreview(upcoming.map { it.toModel() }, pastCycles, pastTasks)
 internal fun RecurringChecklistItemDto.toModel() = RecurringChecklistItem(id, title, position)
 internal fun RecurringTaskLinkDto.toModel() = RecurringTaskLink(id, title, deadlineDate?.let(LocalDate::parse), overdue)
+internal fun RecurringPreplanningSlotDto.toModel() = RecurringPreplanningSlot(
+    id = id,
+    key = key,
+    position = position,
+    weekday = weekday,
+    startMinute = startMinute,
+    endMinute = endMinute,
+)
+internal fun RecurringPreplanningScheduleDto.toModel() = RecurringPreplanningSchedule(slots.map { it.toModel() })
+internal fun RecurringPreplanningSchedule.toDto() = RecurringPreplanningScheduleDto(
+    slots.map {
+        RecurringPreplanningSlotDto(
+            id = it.id,
+            key = it.key,
+            position = it.position,
+            weekday = it.weekday,
+            startMinute = it.startMinute,
+            endMinute = it.endMinute,
+        )
+    }
+)
 internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
     id = id,
     title = title,
@@ -354,4 +388,5 @@ internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
     cadence = cadence,
     nextOccurrence = nextOccurrence?.let(LocalDate::parse),
     keepUnfinishedOverdue = keepUnfinishedOverdue,
+    preplanningSchedule = preplanningSchedule?.toModel(),
 )

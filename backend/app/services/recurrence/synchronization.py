@@ -15,6 +15,7 @@ from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
+    RecurringPlannedBlockRealization,
     RecurringTemplate,
     Task,
     TaskStatus,
@@ -115,7 +116,53 @@ def _set_period_availability(
             _clear_occurrence_ready(db, task)
 
 
-def _materialize(db: Session, template: RecurringTemplate, window) -> None:
+def _materialize_preplanning(
+    db: Session,
+    template: RecurringTemplate,
+    occurrence: RecurrenceOccurrence,
+    task: Task,
+    window,
+) -> None:
+    if template.mode != RecurrenceMode.scheduled:
+        return
+    from app.services import day_service
+
+    for slot in template.preplanning_slots:
+        if slot.removed_at is not None:
+            continue
+        if slot.weekday is not None and slot.weekday != window.start.weekday():
+            continue
+        existing = db.execute(select(RecurringPlannedBlockRealization.id).where(
+            RecurringPlannedBlockRealization.occurrence_id == occurrence.id,
+            RecurringPlannedBlockRealization.slot_key == slot.slot_key,
+        )).scalar_one_or_none()
+        if existing is not None:
+            continue
+        block = day_service.try_create_generated_planned_block(
+            db,
+            date=window.start,
+            task=task,
+            start_minute=slot.start_minute,
+            end_minute=slot.end_minute,
+        )
+        if block is None:
+            # Unavailable-slot reads and reconciliation belong to #106.
+            continue
+        db.add(RecurringPlannedBlockRealization(
+            occurrence_id=occurrence.id,
+            slot_id=slot.id,
+            slot_key=slot.slot_key,
+            planned_block_id=block.id,
+        ))
+
+
+def _materialize(
+    db: Session,
+    template: RecurringTemplate,
+    window,
+    *,
+    preplanning_eligible: bool,
+) -> None:
     existing = db.execute(
         select(RecurrenceOccurrence).where(
             RecurrenceOccurrence.template_id == template.id,
@@ -165,6 +212,8 @@ def _materialize(db: Session, template: RecurringTemplate, window) -> None:
                     ))
             db.flush()
             ledger.task_id = parent.id
+            if preplanning_eligible:
+                _materialize_preplanning(db, template, ledger, parent, window)
     except IntegrityError:
         # Another request won the uniqueness race. Its transaction owns the occurrence.
         return
@@ -324,14 +373,22 @@ def synchronize(
     templates = list(db.execute(
         select(RecurringTemplate)
         .where(RecurringTemplate.status == RecurrenceStatus.active)
-        .options(selectinload(RecurringTemplate.checklist_items))
+        .options(
+            selectinload(RecurringTemplate.checklist_items),
+            selectinload(RecurringTemplate.preplanning_slots),
+        )
     ).scalars().unique())
     horizon = max(today + dt.timedelta(days=LEAD_DAYS), planning_date or today)
     for template in templates:
         for window in iter_windows(template, horizon, week_start):
             if window.start < template.generation_start_date:
                 continue
-            _materialize(db, template, window)
+            _materialize(
+                db,
+                template,
+                window,
+                preplanning_eligible=window.end >= today,
+            )
     _close_expired_occurrences(db, today)
     _set_period_availability(db, today, planning_date=planning_date)
     _derive_quota_parents(db)

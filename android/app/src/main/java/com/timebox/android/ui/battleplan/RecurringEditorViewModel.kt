@@ -9,6 +9,8 @@ import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrencePreview
 import com.timebox.android.data.RecurrenceRule
 import com.timebox.android.data.RecurringTemplate
+import com.timebox.android.data.RecurringPreplanningSchedule
+import com.timebox.android.data.RecurringPreplanningSlot
 import com.timebox.android.data.RecurringTemplateCreate
 import com.timebox.android.data.RecurringTemplatePatch
 import com.timebox.android.data.ServerErrorDetail
@@ -48,6 +50,10 @@ data class RecurringEditorUiState(
     val cycleLimit: String = "",
     val checklistText: String = "",
     val keepUnfinishedOverdue: Boolean = false,
+    val preplanningEnabled: Boolean = false,
+    val preplanningStart: String = "09:00",
+    val preplanningEnd: String = "10:00",
+    val preplanningWeekday: Int? = null,
     val taskTypes: List<TaskType> = emptyList(),
     val preview: RecurrencePreview? = null,
     val previewLoading: Boolean = false,
@@ -123,6 +129,10 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     fun setCycleLimit(value: String) = edit { copy(cycleLimit = value.filter(Char::isDigit)) }
     fun setChecklistText(value: String) = edit { copy(checklistText = value) }
     fun setKeepUnfinishedOverdue(value: Boolean) = edit { copy(keepUnfinishedOverdue = value) }
+    fun setPreplanningEnabled(value: Boolean) = edit { copy(preplanningEnabled = value) }
+    fun setPreplanningStart(value: String) = edit { copy(preplanningStart = value) }
+    fun setPreplanningEnd(value: String) = edit { copy(preplanningEnd = value) }
+    fun setPreplanningWeekday(value: Int) = edit { copy(preplanningWeekday = value) }
 
     fun refreshPreview() = schedulePreview(immediate = true)
 
@@ -148,6 +158,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                         checklistTitles = current.checklistTitles(),
                         confirmBackfill = confirmBackfill,
                         keepUnfinishedOverdue = current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue,
+                        preplanningSchedule = current.toPreplanningSchedule(),
                     )
                 )
             } else {
@@ -239,6 +250,20 @@ internal fun validateRecurrenceDraft(state: RecurringEditorUiState, requireTitle
         if (state.frequency == RecurrenceFrequency.Monthly && state.monthDay.toIntOrNull() !in 1..31) {
             return "Month day must be between 1 and 31."
         }
+        if (state.preplanningEnabled) {
+            val startMinute = parseTimeMinute(state.preplanningStart)
+                ?: return "Use HH:MM for the Planned Block start."
+            val endMinute = parseTimeMinute(state.preplanningEnd, endOfDay = true)
+                ?: return "Use HH:MM for the Planned Block end."
+            if (endMinute - startMinute < 30) {
+                return "A Planned Block must end at least 30 minutes after it starts."
+            }
+            if (state.frequency == RecurrenceFrequency.Weekly &&
+                (state.preplanningWeekday ?: state.weekdays.minOrNull()) !in state.weekdays
+            ) {
+                return "Choose a selected recurrence weekday for the pre-planning slot."
+            }
+        }
     } else if (state.quotaCount.toIntOrNull() !in 1..100) {
         return "Quota count must be between 1 and 100."
     }
@@ -254,6 +279,29 @@ internal fun validateRecurrenceDraft(state: RecurringEditorUiState, requireTitle
         }
     }
     return null
+}
+
+private fun parseTimeMinute(value: String, endOfDay: Boolean = false): Int? {
+    val parts = value.trim().split(":")
+    if (parts.size != 2) return null
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    if (endOfDay && hour == 0 && minute == 0) return 24 * 60
+    return hour * 60 + minute
+}
+
+internal fun RecurringEditorUiState.toPreplanningSchedule(): RecurringPreplanningSchedule? {
+    if (!preplanningEnabled || mode != RecurrenceMode.Scheduled) return null
+    val startMinute = parseTimeMinute(preplanningStart) ?: return null
+    val endMinute = parseTimeMinute(preplanningEnd, endOfDay = true) ?: return null
+    return RecurringPreplanningSchedule(listOf(RecurringPreplanningSlot(
+        weekday = if (frequency == RecurrenceFrequency.Weekly) {
+            preplanningWeekday ?: weekdays.minOrNull()
+        } else null,
+        startMinute = startMinute,
+        endMinute = endMinute,
+    )))
 }
 
 internal fun RecurringEditorUiState.toRule(): RecurrenceRule? {

@@ -1,7 +1,8 @@
 from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
     PriorityLevel, Project, RecurrenceFrequency, RecurrenceMode, RecurrenceOccurrence,
-    RecurrenceStatus, RecurringChecklistItem, RecurringTemplate, Task,
+    RecurrenceStatus, RecurringChecklistItem, RecurringPlannedBlockRealization,
+    RecurringPlannedBlockState, RecurringPreplanningSlot, RecurringTemplate, Task,
     TaskCompletionOperation, TaskStatus,
 )
 from app.models.day import Day
@@ -12,5 +13,6 @@ __all__ = [
     "AppSettings", "Day", "TaskType", "TimeBlock", "ActualBlockRecordOperation", "BlockLane",
     "Project", "Task", "TaskCompletionOperation", "TaskStatus", "PriorityLevel",
     "RecurringTemplate", "RecurringChecklistItem", "RecurrenceOccurrence",
+    "RecurringPreplanningSlot", "RecurringPlannedBlockRealization", "RecurringPlannedBlockState",
     "RecurrenceMode", "RecurrenceStatus", "RecurrenceFrequency",
 ]

@@ -11,6 +11,7 @@ import com.timebox.android.data.remote.ProjectDto
 import com.timebox.android.data.remote.PlanningCommitResponseDto
 import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurringTemplateDto
+import com.timebox.android.data.remote.RecurringTemplateCreateDto
 import com.timebox.android.data.remote.TimeboxApi
 import com.timebox.android.data.remote.TaskCompletionResponseDto
 import com.timebox.android.data.remote.SubtaskDto
@@ -24,6 +25,7 @@ import java.time.Instant
 
 class BattlePlanRepositoryTest {
     private val calls = mutableListOf<String>()
+    private var recurringCreateBody: RecurringTemplateCreateDto? = null
     private val repository = TimeboxRepository(fakeApi())
 
     @Test
@@ -113,14 +115,36 @@ class BattlePlanRepositoryTest {
         assertEquals(RecurrenceFrequency.Daily, template.frequency)
     }
 
+    @Test
+    fun `repository sends one Recurring Pre-planning Schedule slot on creation`() = runBlocking {
+        repository.createRecurringTemplate(RecurringTemplateCreate(
+            title = "Morning review",
+            rule = RecurrenceRule(
+                RecurrenceMode.Scheduled,
+                RecurrenceFrequency.Daily,
+                startDate = LocalDate.parse("2026-08-17"),
+            ),
+            preplanningSchedule = RecurringPreplanningSchedule(listOf(
+                RecurringPreplanningSlot(startMinute = 510, endMinute = 555)
+            )),
+        )).getOrThrow()
+
+        val slot = recurringCreateBody?.preplanningSchedule?.slots?.single()
+        assertEquals(510, slot?.startMinute)
+        assertEquals(555, slot?.endMinute)
+    }
+
     private fun fakeApi(): TimeboxApi {
         val project = projectDto()
         val task = taskDto(project)
         val template = templateDto()
         val actual = actualDto()
         val subtask = SubtaskDto(11, 10, "Check contract", false, false, 0, "2026-08-17T00:00:00Z", "2026-08-17T00:00:00Z")
-        val handler = java.lang.reflect.InvocationHandler { _, method, _ ->
+        val handler = java.lang.reflect.InvocationHandler { _, method, arguments ->
             calls += method.name
+            if (method.name == "createRecurringTemplate") {
+                recurringCreateBody = arguments?.first() as RecurringTemplateCreateDto
+            }
             when (method.name) {
                 "listProjects" -> listOf(project)
                 "createProject", "patchProject" -> project

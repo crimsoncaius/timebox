@@ -14,6 +14,7 @@ def _load_template(db: Session, template_id: int) -> RecurringTemplate:
         .options(
             selectinload(RecurringTemplate.task_type),
             selectinload(RecurringTemplate.checklist_items),
+            selectinload(RecurringTemplate.preplanning_slots),
         )
     ).scalar_one_or_none()
     if row is None:

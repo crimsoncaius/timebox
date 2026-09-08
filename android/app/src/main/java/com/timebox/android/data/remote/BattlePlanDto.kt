@@ -172,6 +172,21 @@ data class RecurringTaskLinkDto(
 )
 
 @Serializable
+data class RecurringPreplanningSlotDto(
+    val id: Int? = null,
+    val key: String? = null,
+    val position: Int = 0,
+    val weekday: Int? = null,
+    @SerialName("start_minute") val startMinute: Int,
+    @SerialName("end_minute") val endMinute: Int,
+)
+
+@Serializable
+data class RecurringPreplanningScheduleDto(
+    val slots: List<RecurringPreplanningSlotDto>,
+)
+
+@Serializable
 data class RecurringTemplateDto(
     val id: Int,
     val title: String,
@@ -189,6 +204,7 @@ data class RecurringTemplateDto(
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("cycle_limit") val cycleLimit: Int? = null,
     @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
+    @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleDto? = null,
     val urgency: String? = null,
     val importance: String? = null,
     @SerialName("paused_at") val pausedAt: String? = null,
@@ -221,4 +237,5 @@ data class RecurringTemplateCreateDto(
     @SerialName("checklist_titles") val checklistTitles: List<String> = emptyList(),
     @SerialName("confirm_backfill") val confirmBackfill: Boolean = false,
     @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
+    @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleDto? = null,
 )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import uuid
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import delete, func, select, update
@@ -14,6 +15,7 @@ from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
+    RecurringPreplanningSlot,
     RecurringTemplate,
     Task,
     TaskStatus,
@@ -26,6 +28,8 @@ from app.schemas.battle_plan import (
     RecurringTemplateCreate,
     RecurringTemplatePatch,
     RecurringTemplateRead,
+    RecurringPreplanningScheduleRead,
+    RecurringPreplanningSlotRead,
 )
 
 from app.services.recurrence.cadence import _cadence
@@ -95,6 +99,16 @@ def create_template(
     _replace_checklist(
         db, row, body.checklist_titles if body.mode == RecurrenceMode.scheduled else []
     )
+    if body.preplanning_schedule is not None:
+        for position, slot in enumerate(body.preplanning_schedule.slots):
+            db.add(RecurringPreplanningSlot(
+                template_id=row.id,
+                slot_key=str(uuid.uuid4()),
+                position=position,
+                weekday=slot.weekday,
+                start_minute=slot.start_minute,
+                end_minute=slot.end_minute,
+            ))
     db.commit()
     synchronize(db, settings, today=today)
     return _load_template(db, row.id)
@@ -344,6 +358,21 @@ def to_read(
         end_date=row.end_date,
         cycle_limit=row.cycle_limit,
         keep_unfinished_overdue=row.keep_unfinished_overdue,
+        preplanning_schedule=(
+            RecurringPreplanningScheduleRead(slots=[
+                RecurringPreplanningSlotRead(
+                    id=slot.id,
+                    key=slot.slot_key,
+                    position=slot.position,
+                    weekday=slot.weekday,
+                    start_minute=slot.start_minute,
+                    end_minute=slot.end_minute,
+                )
+                for slot in row.preplanning_slots
+                if slot.removed_at is None
+            ])
+            if any(slot.removed_at is None for slot in row.preplanning_slots) else None
+        ),
         urgency=row.urgency,
         importance=row.importance,
         paused_at=row.paused_at,
@@ -373,6 +402,7 @@ def list_templates(
             .options(
                 selectinload(RecurringTemplate.task_type),
                 selectinload(RecurringTemplate.checklist_items),
+                selectinload(RecurringTemplate.preplanning_slots),
             )
             .order_by(func.lower(RecurringTemplate.title), RecurringTemplate.id)
         )

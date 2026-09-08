@@ -437,6 +437,55 @@ def get_block(
     ).scalar_one_or_none()
 
 
+def try_create_generated_planned_block(
+    db: Session,
+    *,
+    date: dt.date,
+    task: Task,
+    start_minute: int,
+    end_minute: int,
+) -> TimeBlock | None:
+    """Create one generated Planned Block inside the caller's transaction.
+
+    A conflicting slot is unavailable, so callers receive ``None`` and can retain
+    ownership of any higher-level reconciliation policy.
+    """
+
+    _validate_minutes(start_minute, end_minute)
+    day = get_day_by_date(db, date)
+    if day is None:
+        day = create_day(db, date)
+    else:
+        day = db.execute(
+            select(Day)
+            .where(Day.id == day.id)
+            .options(selectinload(Day.time_blocks))
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one()
+    try:
+        _assert_no_overlap(day, BlockLane.planned, start_minute, end_minute)
+    except ValueError:
+        return None
+    task_type = _resolve_planned_block_task_type(
+        db,
+        task=task,
+        requested_task_type_id=None,
+    )
+    block = TimeBlock(
+        day=day,
+        lane=BlockLane.planned,
+        task_type_id=task_type.id,
+        task_id=task.id,
+        start_minute=start_minute,
+        end_minute=end_minute,
+    )
+    db.add(block)
+    db.flush()
+    _touch_day(day)
+    return block
+
+
 def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBlock:
     _validate_minutes(body.start_minute, body.end_minute)
     task = _active_task(db, body.task_id, for_update=True)

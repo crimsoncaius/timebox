@@ -233,6 +233,15 @@ export interface SettingsRead {
 }
 
 export type RecurrenceWindow = { key: string; start: string; end: string }
+export type RecurringPreplanningSlot = {
+  id: number
+  key: string
+  position: number
+  weekday: number | null
+  start_minute: number
+  end_minute: number
+}
+export type RecurringPreplanningSchedule = { slots: RecurringPreplanningSlot[] }
 
 export interface RecurringTemplate {
   id: number
@@ -251,6 +260,7 @@ export interface RecurringTemplate {
   end_date: string | null
   cycle_limit: number | null
   keep_unfinished_overdue?: boolean
+  preplanning_schedule?: RecurringPreplanningSchedule | null
   urgency: PriorityLevel | null
   importance: PriorityLevel | null
   paused_at: string | null
@@ -285,6 +295,13 @@ export type RecurringTemplateWrite = RecurrenceRuleWrite & {
   checklist_titles?: string[]
   confirm_backfill?: boolean
   keep_unfinished_overdue?: boolean
+  preplanning_schedule?: {
+    slots: Array<{
+      weekday: number | null
+      start_minute: number
+      end_minute: number
+    }>
+  } | null
 }
 
 export type RecurrencePreview = {

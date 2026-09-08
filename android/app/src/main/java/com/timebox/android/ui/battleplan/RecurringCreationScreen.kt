@@ -41,6 +41,10 @@ internal fun RecurringCreationContent(
     onCycleLimit: (String) -> Unit,
     onChecklist: (String) -> Unit,
     onKeepUnfinishedOverdue: (Boolean) -> Unit = {},
+    onPreplanningEnabled: (Boolean) -> Unit = {},
+    onPreplanningStart: (String) -> Unit = {},
+    onPreplanningEnd: (String) -> Unit = {},
+    onPreplanningWeekday: (Int) -> Unit = {},
     onRefreshPreview: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -91,6 +95,48 @@ internal fun RecurringCreationContent(
             if (state.endMode == RecurrenceEndMode.EndDate) CreationDateRow("Ends", end?.format(formatter) ?: "Choose date", !state.saving) { dateTarget = "end" }
             if (state.endMode == RecurrenceEndMode.Never) Text("Keeps repeating until you end it.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             if (state.endMode == RecurrenceEndMode.CycleLimit) Text("Ends after ${state.cycleLimit} cycles.", style = TimeboxTheme.type.bodySmall)
+            if (!quota) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Pre-plan each Task Occurrence", style = TimeboxTheme.type.body)
+                        Text("Create one attached Planned Block in the existing seven-day horizon.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    }
+                    Switch(
+                        state.preplanningEnabled,
+                        onPreplanningEnabled,
+                        enabled = !state.saving,
+                        modifier = Modifier.semantics { contentDescription = "Pre-plan each Task Occurrence" },
+                    )
+                }
+                if (state.preplanningEnabled) {
+                    if (state.frequency == RecurrenceFrequency.Weekly) {
+                        RecurrenceMenu(
+                            "Pre-planning weekday",
+                            weekdayLabel(state.preplanningWeekday ?: state.weekdays.minOrNull()),
+                            state.weekdays.sorted().map { weekdayLabel(it) to it },
+                            onPreplanningWeekday,
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            state.preplanningStart,
+                            onPreplanningStart,
+                            Modifier.weight(1f),
+                            label = { Text("Planned Block start") },
+                            placeholder = { Text("HH:MM") },
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            state.preplanningEnd,
+                            onPreplanningEnd,
+                            Modifier.weight(1f),
+                            label = { Text("Planned Block end") },
+                            placeholder = { Text("HH:MM") },
+                            singleLine = true,
+                        )
+                    }
+                }
+            }
             TextButton({ details = !details }, contentPadding = PaddingValues(0.dp)) { Text(if (details) "−  Less detail" else "+  Notes, subtasks & more") }
             if (details) {
                 OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Notes · optional") }, minLines = 2)
@@ -147,6 +193,10 @@ internal fun RecurringCreationContent(
         )
     }
 }
+
+private fun weekdayLabel(weekday: Int?): String = listOf(
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+).getOrNull(weekday ?: -1) ?: "Choose weekday"
 
 @Composable
 private fun CreationMode(title: String, subtitle: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {

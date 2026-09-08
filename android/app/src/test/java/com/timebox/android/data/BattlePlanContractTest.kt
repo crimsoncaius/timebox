@@ -11,6 +11,8 @@ import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurrenceRuleDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
+import com.timebox.android.data.remote.RecurringPreplanningScheduleDto
+import com.timebox.android.data.remote.RecurringPreplanningSlotDto
 import com.timebox.android.data.remote.ProjectCreateDto
 import com.timebox.android.data.remote.PlanningCommitDto
 import com.timebox.android.data.remote.PlanningPlacementDto
@@ -96,6 +98,13 @@ class BattlePlanContractTest {
         assertEquals(3, template.quotaCount)
         assertEquals("Warm up", template.checklistItems.single().title)
         assertEquals(99, template.currentTasks.single().id)
+        assertNull(template.preplanningSchedule)
+
+        val scheduled = json.decodeFromString(
+            RecurringTemplateDto.serializer(),
+            """{"id":6,"title":"Morning review","description":"","task_type_id":null,"task_type":null,"mode":"scheduled","status":"active","frequency":"daily","interval":1,"weekdays":[],"month_day":null,"quota_count":null,"start_date":"2026-08-17","end_date":null,"cycle_limit":null,"preplanning_schedule":{"slots":[{"id":8,"position":0,"weekday":null,"start_minute":510,"end_minute":555}]},"urgency":null,"importance":null,"paused_at":null,"ended_at":null,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-16T00:00:00Z","checklist_items":[],"upcoming":[],"current_tasks":[],"cadence":"Daily","next_occurrence":"2026-08-17"}""",
+        ).toModel()
+        assertEquals(510, scheduled.preplanningSchedule?.slots?.single()?.startMinute)
     }
 
     @Test
@@ -244,5 +253,20 @@ class BattlePlanContractTest {
         val encodedTemplate = json.encodeToString(RecurringTemplateCreateDto.serializer(), template)
         assertTrue("\"checklist_titles\":[\"Review\"]" in encodedTemplate)
         assertTrue("\"weekdays\":[0,2]" in encodedTemplate)
+
+        val preplanned = json.encodeToString(
+            RecurringTemplateCreateDto.serializer(),
+            RecurringTemplateCreateDto(
+                title = "Morning review",
+                mode = "scheduled",
+                frequency = "daily",
+                startDate = "2026-08-17",
+                preplanningSchedule = RecurringPreplanningScheduleDto(
+                    listOf(RecurringPreplanningSlotDto(startMinute = 510, endMinute = 555))
+                ),
+            ),
+        )
+        assertTrue("\"preplanning_schedule\"" in preplanned)
+        assertTrue("\"start_minute\":510" in preplanned)
     }
 }

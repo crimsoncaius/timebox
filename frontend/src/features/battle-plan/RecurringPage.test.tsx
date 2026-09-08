@@ -132,6 +132,11 @@ describe('RecurringPage', () => {
     expect(within(form).getByText(/3 times per calendar week/)).toBeInTheDocument()
     await user.click(within(form).getByRole('radio', { name: 'On a schedule' }))
     await user.type(within(form).getByLabelText('Title'), 'Morning review')
+    await user.click(within(form).getByLabelText('Pre-plan each Task Occurrence'))
+    await user.clear(within(form).getByLabelText('Pre-planning start'))
+    await user.type(within(form).getByLabelText('Pre-planning start'), '08:30')
+    await user.clear(within(form).getByLabelText('Pre-planning end'))
+    await user.type(within(form).getByLabelText('Pre-planning end'), '09:15')
     await waitFor(() => expect(within(form).getByText(/Every day, starting/)).toBeInTheDocument())
     await user.click(within(form).getByRole('button', { name: 'Create recurrence' }))
     expect(await screen.findByText('Morning review')).toBeInTheDocument()
@@ -142,9 +147,36 @@ describe('RecurringPage', () => {
     const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
       ([input, init]) => String(input).endsWith('/recurring-templates') && init?.method === 'POST',
     )
-    expect(JSON.parse(String(request?.[1]?.body))).not.toHaveProperty('project_id')
+    const requestBody = JSON.parse(String(request?.[1]?.body))
+    expect(requestBody).not.toHaveProperty('project_id')
+    expect(requestBody.preplanning_schedule).toEqual({
+      slots: [{ start_minute: 510, end_minute: 555, weekday: null }],
+    })
     expect(within(form).queryByLabelText('Location')).not.toBeInTheDocument()
     expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('creates a Planned Block ending at midnight as minute 1440', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+    await screen.findByText('3 times per week')
+    await user.click(screen.getByRole('button', { name: 'New recurring task' }))
+    const form = screen.getByRole('dialog', { name: 'New recurring task' })
+    await user.type(within(form).getByLabelText('Title'), 'Evening review')
+    await user.click(within(form).getByLabelText('Pre-plan each Task Occurrence'))
+    await user.clear(within(form).getByLabelText('Pre-planning start'))
+    await user.type(within(form).getByLabelText('Pre-planning start'), '23:00')
+    await user.clear(within(form).getByLabelText('Pre-planning end'))
+    await user.type(within(form).getByLabelText('Pre-planning end'), '00:00')
+
+    await user.click(within(form).getByRole('button', { name: 'Create recurrence' }))
+
+    const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([input, init]) => String(input).endsWith('/recurring-templates') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(request?.[1]?.body)).preplanning_schedule).toEqual({
+      slots: [{ start_minute: 1380, end_minute: 1440, weekday: null }],
+    })
   })
 
   it('keeps the latest status results when an older request resolves last', async () => {
