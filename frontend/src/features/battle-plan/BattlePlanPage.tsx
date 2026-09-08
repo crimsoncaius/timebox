@@ -111,7 +111,6 @@ export function BattlePlanPage() {
   const [timezone, setTimezone] = useState('UTC')
   const [serverNowIso, setServerNowIso] = useState('1970-01-01T00:00:00Z')
   const [error, setError] = useState<string | null>(null)
-  const [readyRetry, setReadyRetry] = useState<{ id: number; ready: boolean } | null>(null)
   const selectedTaskId = requestedTaskId
   const [movingTask, setMovingTask] = useState<BattleTask | null>(null)
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
@@ -251,13 +250,7 @@ export function BattlePlanPage() {
     const current = tasks.find((task) => task.id === id)
     if (!current) return
     setError(null)
-    setReadyRetry(null)
-    try {
-      await readiness.setReadyToPlan(current, ready)
-    } catch (cause) {
-      setError(`Ready to Plan was not saved. ${errorMessage(cause)}`)
-      setReadyRetry({ id, ready })
-    }
+    await readiness.setReadyToPlan(current, ready)
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -415,7 +408,7 @@ export function BattlePlanPage() {
             ) : null}
           </header>
 
-          {error && loadedCollection === collection ? <div role="alert" className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container"><span>{error}</span>{readyRetry ? <button type="button" className="font-medium underline" onClick={() => void setReadyToPlan(readyRetry.id, readyRetry.ready)}>Retry</button> : null}</div> : null}
+          {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
           {completionUndo ? (
             <div className="mb-5 flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3 text-sm">
               <span>Task completed · {completionUndo.removed} future Planned {completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.</span>

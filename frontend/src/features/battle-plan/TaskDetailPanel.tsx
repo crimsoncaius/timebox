@@ -22,6 +22,7 @@ import type {
   TaskStatus,
   TaskType,
 } from '../../lib/api'
+import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
 
@@ -443,6 +444,7 @@ export function TaskDetailPanel({
                   {task.ready_to_plan ? 'Ready to Plan' : 'Add to Ready to Plan'}
                 </button>
                 {readinessPending ? <p role="status" aria-label={`${task.title} readiness`} className="mt-2 text-xs text-[var(--task-detail-muted)]">Saving Ready to Plan…</p> : null}
+                <ReadinessFailureNotice task={task} className="mt-2" />
                 <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">Planning readiness is separate from work status.</p>
               </div>
             </div>

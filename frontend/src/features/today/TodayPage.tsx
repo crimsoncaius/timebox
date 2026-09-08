@@ -14,6 +14,7 @@ import { WorkMode } from './WorkMode'
 import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteInTimeZone } from './workModeExecution'
 import { dateInTimeZone } from '../../lib/battlePlan'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
+import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 import {
   addDaysIso,
   minuteFromPointerYInVisibleLane,
@@ -1102,6 +1103,7 @@ function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, pending, 
           {pending ? 'Saving · unavailable to plan' : task.task_type?.name ?? 'Unspecified'}
         </span>
       </button>
+      <ReadinessFailureNotice task={task} className="self-center px-2" />
       <button
         ref={handleRef}
         type="button"

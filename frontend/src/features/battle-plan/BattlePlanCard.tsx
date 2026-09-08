@@ -10,6 +10,7 @@ import {
   type PlannedDateSummary as PlannedDateSummaryValue,
 } from '../../lib/battlePlan'
 import type { BattleTask, TaskStatus } from '../../lib/api'
+import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 
 const cardSensors = [
   PointerSensor,
@@ -187,6 +188,7 @@ export function BattlePlanCard({
           </button>
         </div>
       </div>
+      <ReadinessFailureNotice task={task} className="mt-2" />
 
       {subtasksOpen ? (
         <section
