@@ -18,7 +18,6 @@ import com.timebox.android.ui.day.DayViewModel
 import com.timebox.android.ui.planning.PlanningSession
 import com.timebox.android.ui.planning.RepositoryPlanningSessionTransport
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
-import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import com.timebox.android.ui.types.TypesViewModel
@@ -39,7 +38,7 @@ fun rememberTaskCompletion(): TaskCompletion {
 fun timeboxViewModelFactory(
     repository: TimeboxRepository,
     taskCompletion: TaskCompletion,
-    readinessCoordinator: ReadyToPlanCoordinator = ReadyToPlanCoordinators.forRepository(repository),
+    readinessCoordinator: ReadyToPlanCoordinator,
 ): ViewModelProvider.Factory =
     viewModelFactory {
         initializer {

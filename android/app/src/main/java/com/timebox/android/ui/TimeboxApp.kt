@@ -68,6 +68,7 @@ import com.timebox.android.ui.day.DayViewModel
 import com.timebox.android.ui.day.WorkModeScreen
 import com.timebox.android.ui.day.WorkModeEntryDialog
 import com.timebox.android.ui.day.WorkModeRestoreDialog
+import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import com.timebox.android.ui.settings.SettingsScreen
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -90,7 +91,13 @@ fun TimeboxApp(
     taskCompletion: TaskCompletion = rememberTaskCompletion(),
     imeVisibleOverride: Boolean? = null,
 ) {
-    val factory = remember(repository, taskCompletion) { timeboxViewModelFactory(repository, taskCompletion) }
+    val readinessScope = rememberCoroutineScope()
+    val readinessCoordinator = remember(repository, readinessScope) {
+        createReadyToPlanCoordinator(repository, readinessScope)
+    }
+    val factory = remember(repository, taskCompletion, readinessCoordinator) {
+        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator)
+    }
     val navController = rememberNavController()
 
     val dayViewModel: DayViewModel = viewModel(factory = factory)

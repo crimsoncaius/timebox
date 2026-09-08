@@ -6,10 +6,7 @@ import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.flattenBattleTasks
 import com.timebox.android.data.remote.PatchField
-import java.util.WeakHashMap
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -182,16 +179,10 @@ class ReadyToPlanCoordinator internal constructor(
     }
 }
 
-/** One coordinator per app-owned repository, shared by every screen ViewModel. */
-internal object ReadyToPlanCoordinators {
-    private val coordinators = WeakHashMap<TimeboxRepository, ReadyToPlanCoordinator>()
-
-    @Synchronized
-    fun forRepository(repository: TimeboxRepository): ReadyToPlanCoordinator =
-        coordinators.getOrPut(repository) {
-            ReadyToPlanCoordinator(
-                RepositoryReadyToPlanTransport(repository),
-                CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-            )
-        }
-}
+internal fun createReadyToPlanCoordinator(
+    repository: TimeboxRepository,
+    scope: CoroutineScope,
+): ReadyToPlanCoordinator = ReadyToPlanCoordinator(
+    RepositoryReadyToPlanTransport(repository),
+    scope,
+)

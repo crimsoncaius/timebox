@@ -21,7 +21,6 @@ import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
-import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -188,8 +187,7 @@ class BattlePlanViewModel internal constructor(
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     private val trashRestoreTransport: TrashRestoreTransport = RepositoryTrashRestoreTransport(repository),
     private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
-    private val readinessCoordinator: ReadyToPlanCoordinator =
-        ReadyToPlanCoordinators.forRepository(repository),
+    private val readinessCoordinator: ReadyToPlanCoordinator,
 ) : ViewModel() {
     private val _state = MutableStateFlow(
         BattlePlanUiState(

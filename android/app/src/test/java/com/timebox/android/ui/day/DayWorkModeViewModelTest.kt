@@ -20,6 +20,7 @@ import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import com.timebox.android.ui.planning.PlanningSession
 import com.timebox.android.ui.planning.RepositoryPlanningSessionTransport
+import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import java.lang.reflect.Proxy
 import java.time.Instant
 import kotlin.coroutines.Continuation
@@ -340,6 +341,7 @@ class DayWorkModeViewModelTest {
         persistence: FakeWorkModePersistence,
     ): DayViewModel {
         val repository = TimeboxRepository(api.proxy())
+        val readinessCoordinator = createReadyToPlanCoordinator(repository, this)
         val viewModel = DayViewModel(
             repository = repository,
             injectedScope = this,
@@ -347,7 +349,10 @@ class DayWorkModeViewModelTest {
             workModeTickMillis = 1_000,
             workModePersistence = persistence,
             taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
-            planningSession = PlanningSession(RepositoryPlanningSessionTransport(repository)),
+            planningSession = PlanningSession(
+                RepositoryPlanningSessionTransport(repository, readinessCoordinator),
+            ),
+            readinessCoordinator = readinessCoordinator,
         )
         viewModel.load(java.time.LocalDate.parse("2026-08-30"))
         viewModel.state.first { it.day != null || it.error != null }

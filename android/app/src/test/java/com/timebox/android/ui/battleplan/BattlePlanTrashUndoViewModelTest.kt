@@ -3,6 +3,7 @@ package com.timebox.android.ui.battleplan
 import androidx.lifecycle.SavedStateHandle
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.remote.TimeboxApi
+import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.lang.reflect.Proxy
@@ -161,7 +162,7 @@ class BattlePlanTrashUndoViewModelTest {
         assertNull(recreatedAfterProcessDeath.state.value.trashUndo)
     }
 
-    private fun viewModel(
+    private fun kotlinx.coroutines.test.TestScope.viewModel(
         elapsedRealtime: () -> Long,
         transport: TrashRestoreTransport = FakeTrashRestoreTransport(),
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
@@ -173,6 +174,7 @@ class BattlePlanTrashUndoViewModelTest {
             savedStateHandle = savedStateHandle,
             trashRestoreTransport = transport,
             elapsedRealtime = elapsedRealtime,
+            readinessCoordinator = createReadyToPlanCoordinator(repository, this),
         )
     }
 

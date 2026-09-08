@@ -550,7 +550,7 @@ class PlanModeScreenTest {
         val day = emptyDay(date)
         var latestDay = day
         val session = PlanningSession(object : PlanningSessionTransport {
-            override suspend fun loadReadyTasks(planningDate: LocalDate?) = Result.success(listOf(ready))
+            override suspend fun loadScopedTasks(planningDate: LocalDate?) = Result.success(listOf(ready))
             override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> =
                 error("Dropping a draft must not save the plan")
         })

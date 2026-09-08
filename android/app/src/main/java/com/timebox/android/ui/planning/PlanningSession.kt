@@ -9,7 +9,6 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.flattenBattleTasks
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
-import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,8 +70,7 @@ internal interface PlanningSessionTransport {
 /** Production adapter; module tests use an in-memory adapter at the same seam. */
 internal class RepositoryPlanningSessionTransport(
     private val repository: TimeboxRepository,
-    private val readinessCoordinator: ReadyToPlanCoordinator =
-        ReadyToPlanCoordinators.forRepository(repository),
+    private val readinessCoordinator: ReadyToPlanCoordinator,
 ) : PlanningSessionTransport {
     override suspend fun loadScopedTasks(planningDate: LocalDate?): Result<List<BattleTask>> =
         repository.listBattleTasks(planningDate = planningDate).map { result ->
