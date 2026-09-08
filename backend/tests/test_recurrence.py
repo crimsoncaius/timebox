@@ -121,6 +121,265 @@ def _task_for_planning_date(client, date: dt.date, template_id: int) -> dict:
     )
 
 
+def _generated_preplanning_case(client) -> tuple[dt.date, dict, dict]:
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    task_type = client.post("/task-types", json={"name": "Generated routine"}).json()
+    template = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        checklist_titles=["Keep this checkpoint"],
+        task_type_id=task_type["id"],
+        preplanning_schedule={
+            "slots": [{"start_minute": 540, "end_minute": 600}],
+        },
+    )).json()
+    block = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"][0]
+    return today, template, block
+
+
+def _edit_preplanning_slot(client, template: dict) -> dict:
+    slot = template["preplanning_schedule"]["slots"][0]
+    response = client.patch(f"/recurring-templates/{template['id']}", json={
+        "checklist_titles": ["Replacement checkpoint"],
+        "preplanning_schedule": {"slots": [{
+            "key": slot["key"],
+            "start_minute": 720,
+            "end_minute": 780,
+        }]},
+    })
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_time_edit_customizes_one_generated_planned_block_while_untouched_peer_reconciles(
+    client,
+):
+    today, template, block = _generated_preplanning_case(client)
+
+    edited_block = client.patch(
+        f"/days/{today.isoformat()}/blocks/{block['id']}",
+        json={"start_minute": 630, "end_minute": 690},
+    )
+    assert edited_block.status_code == 200, edited_block.text
+    _edit_preplanning_slot(client, template)
+
+    customized = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    untouched = client.get(
+        f"/days/{(today + dt.timedelta(days=1)).isoformat()}"
+    ).json()["planned_blocks"]
+    assert [(item["id"], item["start_minute"], item["end_minute"]) for item in customized] == [
+        (block["id"], 630, 690)
+    ]
+    assert [(item["start_minute"], item["end_minute"]) for item in untouched] == [(720, 780)]
+    customized_task = _task_for_planning_date(client, today, template["id"])
+    untouched_task = _task_for_planning_date(
+        client, today + dt.timedelta(days=1), template["id"]
+    )
+    assert [item["title"] for item in customized_task["subtasks"]] == [
+        "Keep this checkpoint"
+    ]
+    assert [item["title"] for item in untouched_task["subtasks"]] == [
+        "Replacement checkpoint"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("patch", "field", "expected"),
+    [
+        pytest.param({"name": "My exception"}, "name", "My exception", id="Block Name"),
+        pytest.param({"note": "Bring the draft"}, "note", "Bring the draft", id="note"),
+    ],
+)
+def test_text_edit_customizes_generated_planned_block(client, patch, field, expected):
+    today, template, block = _generated_preplanning_case(client)
+
+    changed = client.patch(
+        f"/days/{today.isoformat()}/blocks/{block['id']}", json=patch
+    )
+    assert changed.status_code == 200, changed.text
+    _edit_preplanning_slot(client, template)
+    for _ in range(2):
+        assert client.get(f"/recurring-templates/{template['id']}").status_code == 200
+
+    planned = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    assert len(planned) == 1
+    assert planned[0]["id"] == block["id"]
+    assert planned[0][field] == expected
+    assert (planned[0]["start_minute"], planned[0]["end_minute"]) == (540, 600)
+
+
+def test_task_type_reassignment_customizes_generated_planned_block(client):
+    today, template, block = _generated_preplanning_case(client)
+    reassigned = client.post("/task-types", json={"name": "Reassigned work"}).json()
+
+    changed = client.patch(
+        f"/days/{today.isoformat()}/blocks/{block['id']}",
+        json={"task_type_id": reassigned["id"]},
+    )
+    assert changed.status_code == 200, changed.text
+    _edit_preplanning_slot(client, template)
+
+    planned = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    assert len(planned) == 1
+    assert planned[0]["id"] == block["id"]
+    assert planned[0]["task_type_id"] == reassigned["id"]
+    assert (planned[0]["start_minute"], planned[0]["end_minute"]) == (540, 600)
+
+
+def test_battle_plan_task_reassignment_customizes_generated_planned_block(client):
+    today, template, block = _generated_preplanning_case(client)
+    reassigned = client.post("/tasks", json={"title": "One-off alternative"}).json()
+
+    changed = client.patch(
+        f"/days/{today.isoformat()}/blocks/{block['id']}",
+        json={"task_id": reassigned["id"]},
+    )
+    assert changed.status_code == 200, changed.text
+    _edit_preplanning_slot(client, template)
+
+    planned = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    assert len(planned) == 1
+    assert planned[0]["id"] == block["id"]
+    assert planned[0]["task_id"] == reassigned["id"]
+    assert (planned[0]["start_minute"], planned[0]["end_minute"]) == (540, 600)
+
+
+def test_deleting_generated_planned_block_leaves_durable_tombstone_on_synchronization(
+    client,
+):
+    today, template, block = _generated_preplanning_case(client)
+
+    deleted = client.delete(f"/days/{today.isoformat()}/blocks/{block['id']}")
+    assert deleted.status_code == 200, deleted.text
+    for _ in range(2):
+        assert client.get(f"/recurring-templates/{template['id']}").status_code == 200
+
+    assert client.get(f"/days/{today.isoformat()}").json()["planned_blocks"] == []
+    untouched = client.get(
+        f"/days/{(today + dt.timedelta(days=1)).isoformat()}"
+    ).json()["planned_blocks"]
+    assert [(item["start_minute"], item["end_minute"]) for item in untouched] == [(540, 600)]
+
+
+def test_removed_and_readded_slot_does_not_revive_deleted_generated_planned_block(client):
+    today, template, block = _generated_preplanning_case(client)
+    original_slot_key = template["preplanning_schedule"]["slots"][0]["key"]
+    assert client.delete(
+        f"/days/{today.isoformat()}/blocks/{block['id']}"
+    ).status_code == 200
+
+    removed = client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={"preplanning_schedule": None},
+    )
+    assert removed.status_code == 200, removed.text
+    readded = client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={
+            "preplanning_schedule": {
+                "slots": [{"start_minute": 540, "end_minute": 600}]
+            }
+        },
+    )
+    assert readded.status_code == 200, readded.text
+    assert readded.json()["preplanning_schedule"]["slots"][0]["key"] == original_slot_key
+    for _ in range(2):
+        assert client.get(f"/recurring-templates/{template['id']}").status_code == 200
+
+    assert client.get(f"/days/{today.isoformat()}").json()["planned_blocks"] == []
+    untouched = client.get(
+        f"/days/{(today + dt.timedelta(days=1)).isoformat()}"
+    ).json()["planned_blocks"]
+    assert [(item["start_minute"], item["end_minute"]) for item in untouched] == [(540, 600)]
+
+
+def test_keyless_readd_rejects_ambiguous_removed_slot_exception_histories(client):
+    today, template, first_block = _generated_preplanning_case(client)
+    first_slot = template["preplanning_schedule"]["slots"][0]
+    assert client.delete(
+        f"/days/{today.isoformat()}/blocks/{first_block['id']}"
+    ).status_code == 200
+    assert client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={"preplanning_schedule": None},
+    ).status_code == 200
+
+    second = client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={
+            "preplanning_schedule": {
+                "slots": [{"start_minute": 720, "end_minute": 780}]
+            }
+        },
+    )
+    assert second.status_code == 200, second.text
+    second_slot = second.json()["preplanning_schedule"]["slots"][0]
+    assert second_slot["key"] != first_slot["key"]
+    converged = client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={
+            "preplanning_schedule": {
+                "slots": [{
+                    "key": second_slot["key"],
+                    "start_minute": 540,
+                    "end_minute": 600,
+                }]
+            }
+        },
+    )
+    assert converged.status_code == 200, converged.text
+    assert client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={"preplanning_schedule": None},
+    ).status_code == 200
+
+    ambiguous = client.patch(
+        f"/recurring-templates/{template['id']}",
+        json={
+            "preplanning_schedule": {
+                "slots": [{"start_minute": 540, "end_minute": 600}]
+            }
+        },
+    )
+
+    assert ambiguous.status_code == 422, ambiguous.text
+    assert "ambiguous" in ambiguous.json()["detail"].lower()
+    assert client.get(f"/recurring-templates/{template['id']}").json()[
+        "preplanning_schedule"
+    ] is None
+    assert client.get(f"/days/{today.isoformat()}").json()["planned_blocks"] == []
+
+
+def test_moving_generated_planned_block_to_another_day_customizes_only_its_realization(
+    client,
+):
+    today, template, block = _generated_preplanning_case(client)
+    target_date = today + dt.timedelta(days=1)
+
+    moved = client.patch(
+        f"/days/{today.isoformat()}/blocks/{block['id']}",
+        json={
+            "date": target_date.isoformat(),
+            "start_minute": 630,
+            "end_minute": 690,
+        },
+    )
+    assert moved.status_code == 200, moved.text
+    _edit_preplanning_slot(client, template)
+    for _ in range(2):
+        assert client.get(f"/recurring-templates/{template['id']}").status_code == 200
+
+    assert client.get(f"/days/{today.isoformat()}").json()["planned_blocks"] == []
+    target_blocks = client.get(
+        f"/days/{target_date.isoformat()}"
+    ).json()["planned_blocks"]
+    assert len(target_blocks) == 2
+    assert (target_blocks[0]["id"], target_blocks[0]["start_minute"], target_blocks[0]["end_minute"]) == (
+        block["id"], 630, 690,
+    )
+    assert (target_blocks[1]["start_minute"], target_blocks[1]["end_minute"]) == (720, 780)
+    assert target_blocks[1]["id"] != block["id"]
+
+
 def test_scheduled_series_preplanning_schedule_materializes_attached_planned_blocks(client):
     today = dt.date.fromisoformat(client.get("/health").json()["today"])
     task_type = client.post("/task-types", json={"name": "Writing"}).json()

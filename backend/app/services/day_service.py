@@ -11,7 +11,11 @@ from app.core.config import Settings
 from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz
 from app.models.app_settings import AppSettings
 from app.models.day import Day
-from app.models.battle_plan import Task
+from app.models.battle_plan import (
+    RecurringPlannedBlockRealization,
+    RecurringPlannedBlockState,
+    Task,
+)
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 from app.services import actual_block_service, task_type_service
@@ -444,6 +448,23 @@ def get_block(
     ).scalar_one_or_none()
 
 
+def _mark_generated_planned_block(
+    db: Session,
+    block: TimeBlock,
+    state: RecurringPlannedBlockState,
+) -> None:
+    realization = db.execute(
+        select(RecurringPlannedBlockRealization)
+        .where(RecurringPlannedBlockRealization.planned_block_id == block.id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if realization is None:
+        return
+    realization.state = state
+    if state == RecurringPlannedBlockState.deleted:
+        realization.planned_block = None
+
+
 def try_create_generated_planned_block(
     db: Session,
     *,
@@ -662,6 +683,7 @@ def commit_planning_session(
 
 def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch) -> TimeBlock:
     data = patch.model_dump(exclude_unset=True)
+    target_date = data.pop("date", None) or day.date
     target_task = None
     if "task_id" in data:
         target_task = _active_task(
@@ -672,25 +694,46 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
     block = get_block(db, day, block_id, for_update=True)
     if block is None:
         raise ValueError("Block not found")
+    if target_date != day.date and block.lane != BlockLane.planned:
+        raise ValueError("Only Planned Blocks can move to another Day")
+    target_day = day
+    if target_date != day.date:
+        target_day = get_day_by_date(db, target_date) or create_day(db, target_date)
+        target_day = db.execute(
+            select(Day)
+            .where(Day.id == target_day.id)
+            .options(selectinload(Day.time_blocks))
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one()
     original_item = (block.task_type_id, block.task_id)
     if block.lane == BlockLane.planned and block.task_id is not None:
         protect_task_occurrence(db, block.task_id)
     start = data.get("start_minute", block.start_minute)
     end = data.get("end_minute", block.end_minute)
-    if "start_minute" in data or "end_minute" in data:
+    if target_date != day.date or "start_minute" in data or "end_minute" in data:
         _validate_minutes(start, end)
-        _assert_no_overlap(day, block.lane, start, end, exclude_id=block.id)
+        _assert_no_overlap(target_day, block.lane, start, end, exclude_id=block.id)
     if "task_type_id" in data:
         tid = data["task_type_id"]
         if task_type_service.get_task_type(db, tid) is None:
             raise ValueError("Task type not found")
         block.task_type_id = tid
+    if target_date != day.date or "task_id" in data:
+        _validate_recurrence_schedule(
+            target_task if "task_id" in data else block.task,
+            target_day,
+        )
     if "task_id" in data:
-        _validate_recurrence_schedule(target_task, day)
-        block.task_id = data["task_id"]
         if target_task is not None and block.lane == BlockLane.planned:
             target_task.ready_to_plan = False
             protect_task_occurrence(db, target_task)
+    if (data or target_date != day.date) and block.lane == BlockLane.planned:
+        _mark_generated_planned_block(
+            db, block, RecurringPlannedBlockState.customized
+        )
+    if "task_id" in data:
+        block.task_id = data["task_id"]
     if block.lane == BlockLane.planned and block.task_id is not None:
         protect_task_occurrence(db, block.task_id)
     if "note" in data:
@@ -701,6 +744,8 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         block.start_minute = data["start_minute"]
     if "end_minute" in data:
         block.end_minute = data["end_minute"]
+    if target_day.id != day.id:
+        block.day = target_day
     if block.lane == BlockLane.planned and original_item != (
         block.task_type_id,
         block.task_id,
@@ -714,6 +759,8 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
             actual_block_service.invalidate_record_actual_undo(db, linked_actual.id)
             linked_actual.planned_block_id = None
     _touch_day(day)
+    if target_day.id != day.id:
+        _touch_day(target_day)
     try:
         db.commit()
     except Exception:
@@ -732,6 +779,7 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
     if block.lane == BlockLane.planned:
         if block.task_id is not None:
             protect_task_occurrence(db, block.task_id)
+        _mark_generated_planned_block(db, block, RecurringPlannedBlockState.deleted)
         linked_actual = db.execute(
             select(TimeBlock)
             .where(TimeBlock.planned_block_id == block.id)

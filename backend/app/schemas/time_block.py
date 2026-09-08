@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from datetime import date, datetime, timezone
 from typing import Literal
 
@@ -173,6 +174,7 @@ class PlannedBlockCreate(BaseModel):
 
 
 class TimeBlockPatch(BaseModel):
+    date: dt.date | None = None
     task_type_id: int | None = None
     task_id: int | None = None
     name: str | None = Field(None, max_length=500)

@@ -125,11 +125,33 @@ def _replace_preplanning_schedule(
     active_by_key = {
         slot.slot_key: slot for slot in row.preplanning_slots if slot.removed_at is None
     }
+    removed_slots = sorted(
+        (slot for slot in row.preplanning_slots if slot.removed_at is not None),
+        key=lambda slot: (slot.removed_at, slot.id),
+        reverse=True,
+    )
     requested = schedule.slots if schedule is not None else []
     requested_keys = {slot.key for slot in requested if slot.key is not None}
     unknown = requested_keys - active_by_key.keys()
     if unknown:
         raise ValueError("Pre-planning slot not found on this Recurring Task Series")
+    restored_by_position: dict[int, RecurringPreplanningSlot] = {}
+    for position, value in enumerate(requested):
+        if value.key is not None:
+            continue
+        matches = [
+            slot
+            for slot in removed_slots
+            if slot.weekday == value.weekday
+            and slot.start_minute == value.start_minute
+            and slot.end_minute == value.end_minute
+        ]
+        if len(matches) > 1:
+            raise ValueError(
+                "Keyless pre-planning slot reactivation is ambiguous"
+            )
+        if matches:
+            restored_by_position[position] = matches[0]
 
     for temporary_position, slot in enumerate(active_by_key.values(), start=1):
         slot.position = -temporary_position
@@ -143,6 +165,11 @@ def _replace_preplanning_schedule(
 
     for position, value in enumerate(requested):
         if value.key is None:
+            restored = restored_by_position.get(position)
+            if restored is not None:
+                restored.position = position
+                restored.removed_at = None
+                continue
             db.add(RecurringPreplanningSlot(
                 template_id=row.id,
                 slot_key=str(uuid.uuid4()),
