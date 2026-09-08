@@ -4,6 +4,7 @@ import com.timebox.android.data.BattleTask
 import com.timebox.android.data.BattleTaskPatch
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TimeboxRepository
+import com.timebox.android.data.flattenBattleTasks
 import com.timebox.android.data.remote.PatchField
 import java.util.WeakHashMap
 import kotlinx.coroutines.CoroutineScope
@@ -56,7 +57,7 @@ class ReadyToPlanCoordinator internal constructor(
 
     @Synchronized
     fun mergeServerTasks(tasks: List<BattleTask>) {
-        tasks.flattenTasks().forEach { incoming ->
+        tasks.flattenBattleTasks().forEach { incoming ->
             val current = entries[incoming.id]
             if (current == null) {
                 entries[incoming.id] = ReadinessEntry(incoming, incoming.readyToPlan, incoming.readyToPlan)
@@ -80,14 +81,6 @@ class ReadyToPlanCoordinator internal constructor(
 
     @Synchronized
     fun projectedTask(taskId: Int): BattleTask? = entries[taskId]?.projection()
-
-    @Synchronized
-    fun readyTasks(): List<BattleTask> = entries.values
-        .map(ReadinessEntry::projection)
-        .filter { task ->
-            task.readyToPlan && task.status != TaskStatus.Completed &&
-                task.archivedAt == null && task.deletedAt == null
-        }
 
     fun setReady(task: BattleTask, ready: Boolean) {
         var startWorker = false
@@ -188,9 +181,6 @@ class ReadyToPlanCoordinator internal constructor(
         _projections.value = entries.values.map(ReadinessEntry::projection)
     }
 }
-
-private fun List<BattleTask>.flattenTasks(): List<BattleTask> =
-    flatMap { task -> listOf(task) + task.sessionTasks.flattenTasks() }
 
 /** One coordinator per app-owned repository, shared by every screen ViewModel. */
 internal object ReadyToPlanCoordinators {

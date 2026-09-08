@@ -7,6 +7,7 @@ import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.PlanningCommitPlacement
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
+import com.timebox.android.data.flattenBattleTasks
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -318,4 +319,4 @@ internal fun intervalsOverlap(start: Int, end: Int, otherStart: Int, otherEnd: I
     start < otherEnd && otherStart < end
 
 internal fun List<BattleTask>.readyToPlanTasks(): List<BattleTask> =
-    flatMap { task -> listOf(task) + task.sessionTasks.readyToPlanTasks() }.filter { it.readyToPlan }
+    flattenBattleTasks().filter(BattleTask::readyToPlan)

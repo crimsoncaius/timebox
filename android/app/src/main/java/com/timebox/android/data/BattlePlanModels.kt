@@ -115,6 +115,9 @@ data class BattleTask(
     val outstandingOccurrenceCount: Int = 1,
 )
 
+internal fun List<BattleTask>.flattenBattleTasks(): List<BattleTask> =
+    flatMap { task -> listOf(task) + task.sessionTasks.flattenBattleTasks() }
+
 data class Subtask(
     val id: Int,
     val parentTaskId: Int,
