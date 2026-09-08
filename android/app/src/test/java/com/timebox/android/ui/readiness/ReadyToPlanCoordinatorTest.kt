@@ -72,6 +72,48 @@ class ReadyToPlanCoordinatorTest {
         assertFalse(projected.readyToPlan)
         assertFalse(projected.readinessPending)
     }
+
+    @Test
+    fun `readiness projection preserves fresher unrelated caller fields`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val cached = task(12, ready = false).copy(
+            title = "Cached title",
+            description = "Cached description",
+            position = 1,
+            version = 1,
+        )
+        coordinator.mergeServerTasks(listOf(cached))
+        coordinator.setReady(cached, true)
+        runCurrent()
+
+        val fresherCallerTask = cached.copy(
+            title = "Fresh title",
+            description = "Fresh description",
+            position = 9,
+            version = 2,
+        )
+
+        val projected = coordinator.projectTasks(listOf(fresherCallerTask)).single()
+
+        assertEquals("Fresh title", projected.title)
+        assertEquals("Fresh description", projected.description)
+        assertEquals(9, projected.position)
+        assertEquals(2, projected.version)
+        assertTrue(projected.readyToPlan)
+        assertTrue(projected.readinessPending)
+
+        transport.completeNext(cached.copy(readyToPlan = true, version = 2))
+        runCurrent()
+
+        val settled = coordinator.projectTasks(listOf(fresherCallerTask)).single()
+        assertEquals("Fresh title", settled.title)
+        assertEquals("Fresh description", settled.description)
+        assertEquals(9, settled.position)
+        assertEquals(2, settled.version)
+        assertTrue(settled.readyToPlan)
+        assertFalse(settled.readinessPending)
+    }
 }
 
 private class DeferredReadyToPlanTransport : ReadyToPlanTransport {

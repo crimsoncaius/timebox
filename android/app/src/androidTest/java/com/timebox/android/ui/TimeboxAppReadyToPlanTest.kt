@@ -9,6 +9,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.semantics.SemanticsActions
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.remote.BattleTaskDto
 import com.timebox.android.data.remote.BattleTaskListDto
@@ -76,15 +80,98 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithText("Day").performClick()
         compose.onNodeWithContentDescription("Schedule App projection Task").assertIsEnabled()
     }
+
+    @Test
+    fun pendingRemovalClearsDaySelectionAndUnsubmittedDraftAcrossNavigation() {
+        val transport = ControllableTimeboxApi(initialReady = true)
+        setAppContent(transport)
+
+        enterPlanningMode()
+        compose.onNodeWithContentDescription("Schedule App projection Task")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("App projection Task selected", useUnmergedTree = true).assertExists()
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.onNodeWithContentDescription("Remove App projection Task from Ready to Plan").performClick()
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithText("App projection Task selected", useUnmergedTree = true).assertDoesNotExist()
+
+        compose.runOnIdle { transport.completeReadiness(ready = false, version = 2) }
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
+
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithContentDescription("Schedule App projection Task")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithTag("day-lane-planned").performTouchInput { click(center) }
+        compose.onNodeWithContentDescription("Planning draft App projection Task").assertExists()
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.onNodeWithContentDescription("Remove App projection Task from Ready to Plan").performClick()
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithContentDescription("Planning draft App projection Task").assertDoesNotExist()
+    }
+
+    @Test
+    fun serverLifecycleRejectionIsAuthoritativeAcrossAppNavigation() {
+        val transport = ControllableTimeboxApi()
+        setAppContent(transport)
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        compose.runOnIdle {
+            transport.completeReadiness(ready = false, version = 2, status = "completed")
+        }
+        compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").assertDoesNotExist()
+        compose.onNodeWithText("Completed").performClick()
+        compose.onNodeWithText("App projection Task").assertExists()
+
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithTag("planning-mode-action").performClick()
+        compose.onNodeWithContentDescription("Schedule App projection Task").assertDoesNotExist()
+    }
+
+    private fun setAppContent(transport: ControllableTimeboxApi) {
+        val repository = TimeboxRepository(transport.proxy())
+        compose.setContent {
+            TimeboxApp(
+                isDark = false,
+                onToggleDark = {},
+                notificationsAllowed = true,
+                onRequestNotificationPermission = {},
+                onOpenNotificationSettings = {},
+                repository = repository,
+                taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
+                imeVisibleOverride = false,
+            )
+        }
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithText("Battle Plan").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun enterPlanningMode() {
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithTag("planning-mode-action").performClick()
+    }
 }
 
-private class ControllableTimeboxApi {
+private class ControllableTimeboxApi(initialReady: Boolean = false) {
     private val meta = DayMetaDto(
         timezone = "Asia/Singapore",
         today = "2026-09-08",
         serverNowIso = "2026-09-08T12:00:00+08:00",
     )
-    private var task = taskDto(ready = false, version = 1)
+    private var task = taskDto(ready = initialReady, version = 1)
     private var readinessContinuation: Continuation<Any?>? = null
 
     fun proxy(): TimeboxApi = Proxy.newProxyInstance(
@@ -115,8 +202,8 @@ private class ControllableTimeboxApi {
         }
     } as TimeboxApi
 
-    fun completeReadiness(ready: Boolean, version: Int) {
-        task = taskDto(ready, version)
+    fun completeReadiness(ready: Boolean, version: Int, status: String = "open") {
+        task = taskDto(ready, version, status)
         checkNotNull(readinessContinuation).resumeWith(Result.success(task))
         readinessContinuation = null
     }
@@ -140,12 +227,12 @@ private class ControllableTimeboxApi {
         meta = meta,
     )
 
-    private fun taskDto(ready: Boolean, version: Int) = BattleTaskDto(
+    private fun taskDto(ready: Boolean, version: Int, status: String = "open") = BattleTaskDto(
         id = 10,
         title = "App projection Task",
         description = "",
         readyToPlan = ready,
-        status = "open",
+        status = status,
         version = version,
         position = 0,
         createdAt = "2026-09-08T00:00:00Z",

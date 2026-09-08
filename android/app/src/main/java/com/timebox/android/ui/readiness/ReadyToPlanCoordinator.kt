@@ -34,6 +34,7 @@ private data class ReadinessEntry(
     val confirmed: Boolean,
     val desired: Boolean,
     val writing: Boolean = false,
+    val authoritativeLifecycle: Boolean = false,
 ) {
     fun projection(): BattleTask = task.copy(
         readyToPlan = desired,
@@ -61,7 +62,11 @@ class ReadyToPlanCoordinator internal constructor(
                 entries[incoming.id] = ReadinessEntry(incoming, incoming.readyToPlan, incoming.readyToPlan)
             } else if (incoming.version >= current.task.version) {
                 entries[incoming.id] = if (current.writing || current.desired != current.confirmed) {
-                    current.copy(task = incoming, confirmed = incoming.readyToPlan)
+                    current.copy(
+                        task = incoming,
+                        confirmed = incoming.readyToPlan,
+                        authoritativeLifecycle = false,
+                    )
                 } else {
                     ReadinessEntry(incoming, incoming.readyToPlan, incoming.readyToPlan)
                 }
@@ -118,12 +123,17 @@ class ReadyToPlanCoordinator internal constructor(
                         } else {
                             current.task
                         }
-                        val lifecycleRejected = saved.status == TaskStatus.Completed || saved.readyToPlan != target
+                        val lifecycleChanged = saved.status != current.task.status ||
+                            saved.completedAt != current.task.completedAt ||
+                            saved.archivedAt != current.task.archivedAt ||
+                            saved.deletedAt != current.task.deletedAt
+                        val lifecycleRejected = lifecycleChanged || saved.readyToPlan != target
                         if (lifecycleRejected) {
                             entries[taskId] = ReadinessEntry(
                                 task = newestTask,
                                 confirmed = saved.readyToPlan,
                                 desired = saved.readyToPlan,
+                                authoritativeLifecycle = lifecycleChanged,
                             )
                             false
                         } else {
@@ -151,7 +161,26 @@ class ReadyToPlanCoordinator internal constructor(
     }
 
     private fun projectTree(task: BattleTask): BattleTask {
-        val projection = entries[task.id]?.projection() ?: task
+        val entry = entries[task.id]
+        val readiness = entry?.projection()
+        var projection = if (readiness == null) {
+            task
+        } else {
+            task.copy(
+                readyToPlan = readiness.readyToPlan,
+                readinessPending = readiness.readinessPending,
+            )
+        }
+        if (entry?.authoritativeLifecycle == true && entry.task.version >= task.version) {
+            projection = projection.copy(
+                status = entry.task.status,
+                completedAt = entry.task.completedAt,
+                archivedAt = entry.task.archivedAt,
+                deletedAt = entry.task.deletedAt,
+                version = entry.task.version,
+                updatedAt = entry.task.updatedAt,
+            )
+        }
         return projection.copy(sessionTasks = task.sessionTasks.map(::projectTree))
     }
 
