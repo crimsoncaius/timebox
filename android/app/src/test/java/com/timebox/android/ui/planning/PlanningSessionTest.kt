@@ -72,6 +72,43 @@ class PlanningSessionTest {
     }
 
     @Test
+    fun `pending Ready to Plan addition is visible but cannot be selected or planned`() = runTest {
+        val session = PlanningSession(InMemoryPlanningSessionTransport(emptyList()))
+        val pendingAddition = task(7, ready = true).copy(readinessPending = true)
+        session.begin()
+
+        session.applyReadinessProjection(listOf(pendingAddition))
+        session.toggleSelection(7)
+
+        assertEquals(listOf(7), session.state.value.readyTasks.map { it.id })
+        assertNull(session.state.value.selectedTaskId)
+        assertEquals(
+            PlanningEditResult.Rejected("That Task is still saving"),
+            session.place(7, day(), 9 * 60),
+        )
+    }
+
+    @Test
+    fun `pending removal clears matching selection and unsubmitted planning draft`() = runTest {
+        val session = PlanningSession(InMemoryPlanningSessionTransport(listOf(task(8, ready = true))))
+        session.refreshQueue()
+        session.begin()
+        session.toggleSelection(8)
+        assertEquals(8, session.state.value.selectedTaskId)
+
+        session.applyReadinessProjection(emptyList())
+
+        assertNull(session.state.value.selectedTaskId)
+        session.applyReadinessProjection(listOf(task(8, ready = true)))
+        assertEquals(PlanningEditResult.Accepted, session.place(8, day(), 9 * 60))
+
+        session.applyReadinessProjection(emptyList())
+
+        assertTrue(session.state.value.drafts.isEmpty())
+        assertTrue(session.state.value.readyTasks.isEmpty())
+    }
+
+    @Test
     fun `drag release rejects a previewed range that became occupied`() = runTest {
         val session = PlanningSession(InMemoryPlanningSessionTransport(listOf(task(1, ready = true), task(2, ready = true))))
         session.refreshQueue()

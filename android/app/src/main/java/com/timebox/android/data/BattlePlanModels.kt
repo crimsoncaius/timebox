@@ -90,6 +90,8 @@ data class BattleTask(
     val title: String,
     val description: String,
     val readyToPlan: Boolean,
+    /** True while the latest local Ready to Plan choice is not yet confirmed by the server. */
+    val readinessPending: Boolean = false,
     val status: TaskStatus,
     val completedAt: Instant? = null,
     val version: Int = 1,

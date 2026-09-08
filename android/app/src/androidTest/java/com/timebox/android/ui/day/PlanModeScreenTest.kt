@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
@@ -54,6 +55,38 @@ class PlanModeScreenTest {
     @Test fun queueDropAtTimelineTopUsesVisibleTime() = queueDropUsesVisibleTime(0)
     @Test fun queueDropAroundNoonUsesVisibleTime() = queueDropUsesVisibleTime(4)
     @Test fun queueDropLaterInDayUsesVisibleTime() = queueDropUsesVisibleTime(7)
+
+    @Test
+    fun pendingReadyToPlanAdditionIsShownAsSavingAndUnavailable() {
+        val date = LocalDate.of(2026, 8, 20)
+        val day = emptyDay(date)
+        val state = DayUiState(
+            date = date,
+            pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
+            planning = PlanningSessionState(
+                active = true,
+                readyTasks = listOf(
+                    task(42, "Pending Task").copy(readinessPending = true),
+                ),
+            ),
+        )
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                PlanningWorkspace(
+                    state = state, day = day,
+                    onSelectBlock = {}, onCommitMove = { _, _, _ -> },
+                    onPlanTask = { _, _ -> error("Pending Task cannot be planned") },
+                    onUpdatePlanningDraft = { _, _, _ -> }, onReturnPlanningDraft = {},
+                    onArmAccessibleTask = { error("Pending Task cannot be selected") },
+                    onRetryReadyTasks = {}, modifier = Modifier.height(400.dp),
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Pending Task is saving and unavailable")
+            .assertIsNotEnabled()
+        compose.onNodeWithText("Saving").fetchSemanticsNode()
+    }
 
     private fun queueDropUsesVisibleTime(scrollHours: Int) {
         val date = LocalDate.of(2026, 8, 20)

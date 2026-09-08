@@ -19,6 +19,8 @@ import com.timebox.android.ui.planning.PlanningEditResult
 import com.timebox.android.ui.planning.PlanningSession
 import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import com.timebox.android.ui.workmode.RepositoryWorkModePersistence
 import com.timebox.android.ui.workmode.RepositoryWorkModeTransport
 import com.timebox.android.ui.workmode.WorkModeExecution
@@ -122,6 +124,8 @@ class DayViewModel(
     private val workModeTickMillis: Long = 1_000L,
     private val workModePersistence: WorkModePersistence = RepositoryWorkModePersistence(repository),
     workModeExecution: WorkModeExecution? = null,
+    private val readinessCoordinator: ReadyToPlanCoordinator =
+        ReadyToPlanCoordinators.forRepository(repository),
 ) : ViewModel() {
 
     private val launchScope: CoroutineScope get() = injectedScope ?: viewModelScope
@@ -144,6 +148,12 @@ class DayViewModel(
     private var planThenWork = false
 
     init {
+        workModeBridgeScope.launch {
+            readinessCoordinator.projections.collect {
+                planningSession.applyReadinessProjection(readinessCoordinator.readyTasks())
+                syncPlanningState()
+            }
+        }
         workModeBridgeScope.launch {
             workMode.state.collect { work ->
                 _state.update { state ->

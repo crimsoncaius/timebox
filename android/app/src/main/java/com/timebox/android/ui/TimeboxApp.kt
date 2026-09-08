@@ -45,6 +45,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.timebox.android.data.Lane
+import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.battleplan.BattlePlanScreen
@@ -73,6 +74,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 import com.timebox.android.ui.theme.ThemePreviewScreen
 import com.timebox.android.ui.types.TypesScreen
 import com.timebox.android.ui.types.TypesViewModel
+import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.time.LocalDate
 import kotlinx.coroutines.launch
 
@@ -84,9 +86,10 @@ fun TimeboxApp(
     notificationsAllowed: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    repository: TimeboxRepository = rememberRepository(),
+    taskCompletion: TaskCompletion = rememberTaskCompletion(),
+    imeVisibleOverride: Boolean? = null,
 ) {
-    val repository = rememberRepository()
-    val taskCompletion = rememberTaskCompletion()
     val factory = remember(repository, taskCompletion) { timeboxViewModelFactory(repository, taskCompletion) }
     val navController = rememberNavController()
 
@@ -262,7 +265,7 @@ fun TimeboxApp(
         else -> null
     }
     val colors = TimeboxTheme.colors
-    val isImeVisible = WindowInsets.isImeVisible
+    val isImeVisible = imeVisibleOverride ?: WindowInsets.isImeVisible
     val accessibilityManager = LocalAccessibilityManager.current
     val recommendedUndoTimeoutMillis = accessibilityManager?.calculateRecommendedTimeoutMillis(
         originalTimeoutMillis = 10_000L,

@@ -244,6 +244,39 @@ class BattlePlanScreenTest {
     }
 
     @Test
+    fun pendingReadyToPlanControlAnnouncesSavingAndStillAllowsReversal() {
+        val toggled = mutableListOf<Int>()
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        tasks = listOf(
+                            battleTask(1).copy(readyToPlan = true, readinessPending = true),
+                        ),
+                    ),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
+                    onClearFilters = {}, onOpenTask = {},
+                    onToggleReady = { toggled += it.id },
+                    onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onSetBlocked = { _, _, _ -> }, onCreateSubtask = { _, _ -> },
+                    onToggleSubtask = {}, onCreateTask = { _, _, _ -> }, onShowComposer = {},
+                    onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
+                    onDismissDeleteProject = {}, onConfirmDeleteProject = {},
+                    onRestoreArchived = {}, onRestoreTrashed = {}, onUndoTrash = {},
+                    onDismissUndo = {}, onRequestPermanentDelete = {},
+                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Saving Ready to Plan for Task 1")
+            .performClick()
+        compose.runOnIdle { check(toggled == listOf(1)) }
+    }
+
+    @Test
     fun taskDetailsShowFivePlannedDatesExpandAndOpenDay() {
         val dates = (21..27).map { LocalDate.of(2026, 8, it) }
         var openedDay: LocalDate? = null

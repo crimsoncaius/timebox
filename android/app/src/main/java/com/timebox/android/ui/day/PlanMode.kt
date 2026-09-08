@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -404,7 +405,7 @@ private fun PlanningTaskRail(
                 items(visibleTasks, key = BattleTask::id) { task ->
                     CollapsiblePlanningTaskCard(
                         task = task,
-                        enabled = enabled,
+                        enabled = enabled && !task.readinessPending,
                         armed = task.id == state.accessibilityPlanningTaskId,
                         dragging = task.id == draggingTaskId,
                         appearing = task.id == appearingTaskId,
@@ -517,10 +518,18 @@ private fun PlanningTaskCard(
             .background(if (armed) colors.plannedSurface else colors.lowest)
             .border(1.dp, if (armed) colors.plannedBorder else colors.hairline, TimeboxShapes.card)
             .semantics {
-                contentDescription = "Schedule ${task.title}"
-                onClick {
-                    currentOnArmAccessible()
-                    true
+                contentDescription = if (task.readinessPending) {
+                    "${task.title} is saving and unavailable"
+                } else {
+                    "Schedule ${task.title}"
+                }
+                if (enabled) {
+                    onClick {
+                        currentOnArmAccessible()
+                        true
+                    }
+                } else {
+                    disabled()
                 }
             }
             .onGloballyPositioned { cardRoot = it.positionInRoot() }
@@ -551,6 +560,13 @@ private fun PlanningTaskCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(end = 7.dp),
         )
+        if (task.readinessPending) {
+            Text(
+                "Saving",
+                style = TimeboxTheme.type.bodySmall,
+                color = colors.onVariant,
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = task.taskType?.leaf ?: "Unspecified",

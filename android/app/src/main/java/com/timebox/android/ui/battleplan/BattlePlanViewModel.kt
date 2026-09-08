@@ -20,6 +20,8 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -186,6 +188,8 @@ class BattlePlanViewModel internal constructor(
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     private val trashRestoreTransport: TrashRestoreTransport = RepositoryTrashRestoreTransport(repository),
     private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
+    private val readinessCoordinator: ReadyToPlanCoordinator =
+        ReadyToPlanCoordinators.forRepository(repository),
 ) : ViewModel() {
     private val _state = MutableStateFlow(
         BattlePlanUiState(
@@ -202,6 +206,16 @@ class BattlePlanViewModel internal constructor(
     private var undoEligibleExposureMillis = 0L
     private var undoExposureStartedAt: Long? = null
     private var undoExpiryJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            readinessCoordinator.projections.collect {
+                _state.update { current ->
+                    current.copy(tasks = readinessCoordinator.projectTasks(current.tasks))
+                }
+            }
+        }
+    }
 
     fun load(showSpinner: Boolean = _state.value.tasks.isEmpty()) {
         val collection = _state.value.collection
@@ -221,6 +235,7 @@ class BattlePlanViewModel internal constructor(
             }
             val projects = projectsResult.getOrThrow()
             val taskList = tasksResult.getOrThrow()
+            readinessCoordinator.mergeServerTasks(taskList.items)
             preferencesLoaded = true
             _state.update { current ->
                 val scope = saved?.resolveScope(projects) ?: current.selectedScope.takeIf { candidate ->
@@ -228,7 +243,8 @@ class BattlePlanViewModel internal constructor(
                 } ?: BattlePlanScope.All
                 current.copy(
                     loading = false, refreshing = false, projects = projects,
-                    taskTypes = typesResult.getOrThrow(), tasks = taskList.items,
+                    taskTypes = typesResult.getOrThrow(),
+                    tasks = readinessCoordinator.projectTasks(taskList.items),
                     selectedScope = scope,
                     selectedStatus = (saved?.status ?: current.selectedStatus)
                         .takeIf { it in battlePlanStatuses } ?: TaskStatus.Open,
@@ -463,22 +479,8 @@ class BattlePlanViewModel internal constructor(
 
     fun toggleReady(task: BattleTask) {
         if (task.status == TaskStatus.Completed) return
-        val ready = !task.readyToPlan
-        _state.update { current ->
-            current.copy(tasks = current.tasks.map { row ->
-                if (row.id == task.id) row.copy(readyToPlan = ready) else row
-            }, message = null)
-        }
-        viewModelScope.launch {
-            repository.patchBattleTask(task.id, BattleTaskPatch(readyToPlan = PatchField.of(ready))).fold(
-                onSuccess = { saved ->
-                    _state.update { current -> current.copy(tasks = current.tasks.map { row -> if (row.id == saved.id) saved else row }, message = if (ready) "Ready to Plan" else "Removed from Ready to Plan") }
-                },
-                onFailure = { error ->
-                    _state.update { current -> current.copy(tasks = current.tasks.map { row -> if (row.id == task.id) task else row }, message = "Ready to Plan was not saved. ${error.apiError.message}") }
-                },
-            )
-        }
+        _state.update { it.copy(message = null) }
+        readinessCoordinator.setReady(task, !task.readyToPlan)
     }
 
     fun toggleSubtaskComplete(subtask: Subtask) {

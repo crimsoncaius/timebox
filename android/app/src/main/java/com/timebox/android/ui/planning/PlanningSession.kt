@@ -7,6 +7,8 @@ import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.PlanningCommitPlacement
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinators
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,9 +70,14 @@ internal interface PlanningSessionTransport {
 /** Production adapter; module tests use an in-memory adapter at the same seam. */
 internal class RepositoryPlanningSessionTransport(
     private val repository: TimeboxRepository,
+    private val readinessCoordinator: ReadyToPlanCoordinator =
+        ReadyToPlanCoordinators.forRepository(repository),
 ) : PlanningSessionTransport {
     override suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>> =
-        repository.listBattleTasks(planningDate = planningDate).map { it.items.readyToPlanTasks() }
+        repository.listBattleTasks(planningDate = planningDate).map { result ->
+            readinessCoordinator.mergeServerTasks(result.items)
+            readinessCoordinator.readyTasks()
+        }
 
     override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> =
         repository.commitPlan(placements)
@@ -146,7 +153,8 @@ class PlanningSession internal constructor(
     fun toggleSelection(taskId: Int?) {
         val current = _state.value
         val selectable = taskId?.takeIf { id ->
-            current.active && !current.saving && id !in current.drafts && current.readyTasks.any { it.id == id }
+            current.active && !current.saving && id !in current.drafts &&
+                current.readyTasks.any { it.id == id && !it.readinessPending }
         }
         _state.value = current.copy(
             selectedTaskId = selectable?.takeUnless { it == current.selectedTaskId },
@@ -158,6 +166,7 @@ class PlanningSession internal constructor(
         val current = _state.value
         val task = current.readyTasks.firstOrNull { it.id == taskId }
             ?: return reject("That Task is no longer Ready to Plan")
+        if (task.readinessPending) return reject("That Task is still saving")
         if (!current.active || current.saving || taskId in current.drafts) {
             return reject("That Task cannot be planned right now")
         }
@@ -219,6 +228,18 @@ class PlanningSession internal constructor(
         _state.value = _state.value.copy(
             drafts = _state.value.drafts - taskId,
             failure = null,
+        )
+    }
+
+    /** Apply the app-scoped readiness projection and enforce Day eligibility immediately. */
+    internal fun applyReadinessProjection(readyTasks: List<BattleTask>) {
+        val eligibleIds = readyTasks.asSequence()
+            .filterNot(BattleTask::readinessPending)
+            .mapTo(mutableSetOf(), BattleTask::id)
+        _state.value = _state.value.copy(
+            readyTasks = readyTasks,
+            selectedTaskId = _state.value.selectedTaskId?.takeIf(eligibleIds::contains),
+            drafts = _state.value.drafts.filterKeys(eligibleIds::contains),
         )
     }
 

@@ -1334,6 +1334,12 @@ private fun MobileKanbanCard(
                     }
                 }
             }
+            MobilePlanningControl(
+                task = task,
+                plannedSummary = null,
+                onToggleReady = onToggleReady,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 
@@ -1863,13 +1869,22 @@ private fun BattleTaskCard(
             }
             if (task.readyToPlan) {
                 Spacer(Modifier.height(6.dp))
-                Text("Ready to Plan", style = TimeboxTheme.type.bodySmall, color = colors.planned)
+                Text(
+                    if (task.readinessPending) "Saving · Ready to Plan" else "Ready to Plan",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = colors.planned,
+                )
             }
         }
         IconButton(onClick = { onToggleReady(task) }, enabled = task.status != TaskStatus.Completed) {
             Icon(
                 if (task.readyToPlan) Icons.Outlined.CheckCircle else Icons.Outlined.EventAvailable,
-                contentDescription = if (task.readyToPlan) "Remove from Ready to Plan" else "Mark Ready to Plan",
+                contentDescription = when {
+                    task.readinessPending && task.readyToPlan -> "Saving Ready to Plan for ${task.title}"
+                    task.readinessPending -> "Saving removal from Ready to Plan for ${task.title}"
+                    task.readyToPlan -> "Remove from Ready to Plan"
+                    else -> "Mark Ready to Plan"
+                },
                 tint = if (task.readyToPlan) colors.planned else colors.onVariant,
             )
         }
@@ -2537,6 +2552,8 @@ private fun MobilePlanningControl(
     val label = when {
         completed -> "Completed"
         plannedSummary != null -> plannedSummary.label
+        task.readinessPending && task.readyToPlan -> "Saving · Ready to Plan"
+        task.readinessPending -> "Saving · Not Ready to Plan"
         task.readyToPlan -> "Ready to Plan"
         else -> "Add to Ready to Plan"
     }
@@ -2559,6 +2576,8 @@ private fun MobilePlanningControl(
                 contentDescription = when {
                     completed -> "Completed Task"
                     plannedSummary != null -> plannedSummary.label
+                    task.readinessPending && task.readyToPlan -> "Saving Ready to Plan for ${task.title}"
+                    task.readinessPending -> "Saving removal from Ready to Plan for ${task.title}"
                     task.readyToPlan -> "Remove ${task.title} from Ready to Plan"
                     else -> "Add ${task.title} to Ready to Plan"
                 }
