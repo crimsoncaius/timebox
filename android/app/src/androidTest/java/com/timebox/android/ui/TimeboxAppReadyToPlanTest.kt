@@ -13,6 +13,8 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.test.core.app.ApplicationProvider
+import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.remote.BattleTaskDto
 import com.timebox.android.data.remote.BattleTaskListDto
@@ -22,21 +24,42 @@ import com.timebox.android.data.remote.DayPreviewDto
 import com.timebox.android.data.remote.DaySummaryDto
 import com.timebox.android.data.remote.TaskTypeDto
 import com.timebox.android.data.remote.TimeboxApi
+import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.lang.reflect.Proxy
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import org.junit.After
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 
 class TimeboxAppReadyToPlanTest {
     @get:Rule val compose = createComposeRule()
+    private val readinessScopes = mutableListOf<CoroutineScope>()
+
+    @After
+    fun cancelReadinessScopes() {
+        readinessScopes.forEach(CoroutineScope::cancel)
+    }
+
+    @Test
+    fun applicationOwnsOneStableReadyToPlanCoordinator() {
+        val application = ApplicationProvider.getApplicationContext<TimeboxApplication>()
+
+        assertSame(application.readinessCoordinator, application.readinessCoordinator)
+    }
 
     @Test
     fun pendingReadyToPlanChoiceSurvivesNavigationAndSettlesWithoutFlicker() {
         val transport = ControllableTimeboxApi()
         val repository = TimeboxRepository(transport.proxy())
+        val readinessCoordinator = testReadyToPlanCoordinator(repository)
         compose.setContent {
             TimeboxApp(
                 isDark = false,
@@ -46,6 +69,7 @@ class TimeboxAppReadyToPlanTest {
                 onOpenNotificationSettings = {},
                 repository = repository,
                 taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
+                readinessCoordinator = readinessCoordinator,
                 imeVisibleOverride = false,
             )
         }
@@ -142,6 +166,7 @@ class TimeboxAppReadyToPlanTest {
 
     private fun setAppContent(transport: ControllableTimeboxApi) {
         val repository = TimeboxRepository(transport.proxy())
+        val readinessCoordinator = testReadyToPlanCoordinator(repository)
         compose.setContent {
             TimeboxApp(
                 isDark = false,
@@ -151,6 +176,7 @@ class TimeboxAppReadyToPlanTest {
                 onOpenNotificationSettings = {},
                 repository = repository,
                 taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
+                readinessCoordinator = readinessCoordinator,
                 imeVisibleOverride = false,
             )
         }
@@ -158,6 +184,12 @@ class TimeboxAppReadyToPlanTest {
             compose.onAllNodesWithText("Battle Plan").fetchSemanticsNodes().isNotEmpty()
         }
     }
+
+    private fun testReadyToPlanCoordinator(repository: TimeboxRepository) =
+        createReadyToPlanCoordinator(
+            repository,
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also(readinessScopes::add),
+        )
 
     private fun enterPlanningMode() {
         compose.onNodeWithText("Day").performClick()

@@ -7,6 +7,8 @@ import com.timebox.android.reminders.AndroidReminderNotifier
 import com.timebox.android.reminders.DailyReminderNotifier
 import com.timebox.android.reminders.DailyReminderScheduler
 import com.timebox.android.reminders.ReminderScheduler
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +27,8 @@ class TimeboxApplication : Application() {
         private set
     lateinit var taskCompletion: TaskCompletion
         private set
+    lateinit var readinessCoordinator: ReadyToPlanCoordinator
+        private set
     lateinit var reminderNotifier: AndroidReminderNotifier
         private set
     lateinit var reminderScheduler: ReminderScheduler
@@ -36,6 +40,7 @@ class TimeboxApplication : Application() {
         super.onCreate()
         preferences = AppPreferences(this)
         repository = TimeboxRepository(preferences)
+        readinessCoordinator = createReadyToPlanCoordinator(repository, applicationScope)
         taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository))
         reminderNotifier = AndroidReminderNotifier(this).also { it.createChannel() }
         reminderScheduler = ReminderScheduler(this)

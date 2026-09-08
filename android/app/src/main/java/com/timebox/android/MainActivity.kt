@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
-            val repository = (context.applicationContext as TimeboxApplication).repository
+            val application = context.applicationContext as TimeboxApplication
+            val repository = application.repository
             val scope = rememberCoroutineScope()
 
             val systemDark = isSystemInDarkTheme()
@@ -84,6 +85,9 @@ class MainActivity : ComponentActivity() {
                     notificationsAllowed = notificationsAllowed,
                     onRequestNotificationPermission = ::requestNotificationPermission,
                     onOpenNotificationSettings = ::openNotificationSettings,
+                    repository = repository,
+                    taskCompletion = application.taskCompletion,
+                    readinessCoordinator = application.readinessCoordinator,
                 )
             }
         }
