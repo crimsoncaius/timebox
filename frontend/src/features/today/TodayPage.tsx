@@ -58,6 +58,10 @@ export function TodayPage() {
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [storedBattleTasks, setBattleTasks] = useState<BattleTask[]>([])
   const battleTasks = readiness.projectTasks(storedBattleTasks)
+  const ingestBattleTasks = useCallback((items: BattleTask[]) => {
+    readiness.observeTasks(items)
+    setBattleTasks(items)
+  }, [readiness])
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -109,13 +113,17 @@ export function TodayPage() {
     || draft?.lane === 'planned'
     || (selectedBlockRef?.lane === 'planned' && inspectorDirty)
     || readyTaskDragging || planningTaskBusyId != null || planningSaves > 0
+  const planningTaskSchedulable = planningTaskId == null || readiness.isSchedulable(planningTaskId)
+  const draftTaskId = draft?.task_id ?? null
+  const draftTaskSchedulable = draftTaskId == null || readiness.isSchedulable(draftTaskId)
 
   useEffect(() => {
-    if (planningTaskId == null || readiness.isSchedulable(planningTaskId)) return
-    setPlanningTaskId(null)
-    setDraft((current) => current?.task_id === planningTaskId ? null : current)
-    setInspectorDirty(false)
-  }, [planningTaskId, readiness])
+    if (!planningTaskSchedulable) setPlanningTaskId(null)
+    if (!draftTaskSchedulable) {
+      setDraft(null)
+      setInspectorDirty(false)
+    }
+  }, [draftTaskSchedulable, planningTaskSchedulable])
 
   useLayoutEffect(() => {
     workModeExecution.setPlanningActive(planningActive)
@@ -133,14 +141,13 @@ export function TodayPage() {
       ])
       setDay(d)
       setTaskTypes(tt)
-      readiness.observeTasks(battle?.items ?? [])
-      setBattleTasks(battle?.items ?? [])
+      ingestBattleTasks(battle?.items ?? [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load day')
     } finally {
       setLoading(false)
     }
-  }, [date, readiness])
+  }, [date, ingestBattleTasks])
 
   useEffect(() => {
     void load()
@@ -361,8 +368,7 @@ export function TodayPage() {
         )
         const refreshed = await api.listBattleTasks('active', date).catch(() => null)
         if (refreshed) {
-          readiness.observeTasks(refreshed.items)
-          setBattleTasks(refreshed.items)
+          ingestBattleTasks(refreshed.items)
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to plan task')
@@ -371,7 +377,7 @@ export function TodayPage() {
         setPlanningTaskBusyId(null)
       }
     },
-    [allBattleTasks, date, day, readiness, workModeExecution],
+    [allBattleTasks, date, day, ingestBattleTasks, readiness, workModeExecution],
   )
 
   const onLaneSlotClick = useCallback(
@@ -425,6 +431,17 @@ export function TodayPage() {
     setDraft((d) => (d ? { ...d, start_minute: startMin, end_minute: endMin } : null))
   }, [])
 
+  const selectReadyTask = useCallback((taskId: number | null) => {
+    setPlanningTaskId(taskId)
+    setDraft((current) => {
+      if (current?.lane !== 'planned') return null
+      if (taskId == null) return current
+      const task = allBattleTasks.find((item) => item.id === taskId)
+      return task ? { ...current, task_id: task.id, task_type_id: task.task_type_id } : current
+    })
+    setSelectedBlockRef(null)
+  }, [allBattleTasks])
+
   useEffect(() => {
     if (draft == null && selectedBlockId == null) return
     const onPointerDown = (e: PointerEvent) => {
@@ -434,6 +451,7 @@ export function TodayPage() {
       const el = node instanceof Element ? node : node.parentElement
       if (el?.closest('[role="dialog"]')) return
       if (el?.closest('[data-inspector]')) return
+      if (el?.closest('[data-ready-task-id]')) return
       if (el?.closest('[data-work-mode-action]')) return
       tryClosePanel()
     }
@@ -491,8 +509,7 @@ export function TodayPage() {
         )
         if (draft.task_id) {
           const refreshed = await api.listBattleTasks('active', date)
-          readiness.observeTasks(refreshed.items)
-          setBattleTasks(refreshed.items)
+          ingestBattleTasks(refreshed.items)
           setPlanningTaskId(null)
         }
         setDraft(null)
@@ -518,7 +535,7 @@ export function TodayPage() {
         if (draft.lane === 'planned') setPlanningSaves((count) => count - 1)
       }
     },
-    [date, day, draft, readiness, workModeExecution, planThenWork, presentInstant],
+    [date, day, draft, ingestBattleTasks, workModeExecution, planThenWork, presentInstant],
   )
 
   const patchBlock = useCallback(
@@ -854,11 +871,7 @@ export function TodayPage() {
               selectedTaskId={planningTaskId}
               dragInstance="mobile"
               busyTaskId={planningTaskBusyId}
-              onSelect={(taskId) => {
-                setPlanningTaskId(taskId)
-                setDraft(null)
-                setSelectedBlockRef(null)
-              }}
+              onSelect={selectReadyTask}
             />
           </div>
 
@@ -904,11 +917,7 @@ export function TodayPage() {
                 selectedTaskId={planningTaskId}
                 dragInstance="desktop"
                 busyTaskId={planningTaskBusyId}
-                onSelect={(taskId) => {
-                  setPlanningTaskId(taskId)
-                  setDraft(null)
-                  setSelectedBlockRef(null)
-                }}
+                onSelect={selectReadyTask}
               />
             ) : (
               <div className="transition-opacity duration-150">
@@ -948,8 +957,7 @@ export function TodayPage() {
             try {
               if (checked) await api.checkSubtask(id); else await api.uncheckSubtask(id)
               const refreshed = await api.listBattleTasks('active', date)
-              readiness.observeTasks(refreshed.items)
-              setBattleTasks(refreshed.items)
+              ingestBattleTasks(refreshed.items)
             } catch (cause) {
               setWorkModeSubtaskError(cause instanceof Error ? cause.message : 'Failed to update Subtask')
             } finally {

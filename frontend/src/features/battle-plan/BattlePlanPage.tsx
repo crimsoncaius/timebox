@@ -102,6 +102,10 @@ export function BattlePlanPage() {
   const [loadedCollection, setLoadedCollection] = useState<TaskCollection | null>(null)
   const [storedTasks, setTasks] = useState<BattleTask[]>([])
   const tasks = readiness.projectTasks(storedTasks)
+  const ingestTasks = useCallback((items: BattleTask[]) => {
+    readiness.observeTasks(items)
+    setTasks(items)
+  }, [readiness])
   const [projects, setProjects] = useState<Project[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [timezone, setTimezone] = useState('UTC')
@@ -128,27 +132,24 @@ export function BattlePlanPage() {
 
   const loadActive = useCallback(async () => {
     const result = await api.listBattleTasks('active')
-    readiness.observeTasks(result.items)
-    setTasks(result.items)
+    ingestTasks(result.items)
     setTimezone(result.timezone)
     setServerNowIso(result.server_now_iso)
-  }, [readiness])
+  }, [ingestTasks])
 
   const loadCollection = useCallback(async (state: TaskCollection) => {
     const result = await api.listBattleTasks(state)
-    readiness.observeTasks(result.items)
-    setTasks(result.items)
+    ingestTasks(result.items)
     setTimezone(result.timezone)
     setServerNowIso(result.server_now_iso)
-  }, [readiness])
+  }, [ingestTasks])
 
   useEffect(() => {
     let active = true
     Promise.all([api.listBattleTasks(collection), api.listProjects(), api.listTaskTypes()])
       .then(([taskResult, projectRows, typeRows]) => {
         if (!active) return
-        readiness.observeTasks(taskResult.items)
-        setTasks(taskResult.items)
+        ingestTasks(taskResult.items)
         setTimezone(taskResult.timezone)
         setServerNowIso(taskResult.server_now_iso)
         setProjects(projectRows)
@@ -167,7 +168,7 @@ export function BattlePlanPage() {
         setLoadedCollection(collection)
       })
     return () => { active = false }
-  }, [collection, preferences.scope, readiness, setPrefs])
+  }, [collection, ingestTasks, preferences.scope, setPrefs])
 
   const switchCollection = (next: TaskCollection) => {
     setSearchParams(next === 'active' ? {} : { collection: next })

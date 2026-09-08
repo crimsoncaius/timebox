@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TodayPage } from './TodayPage'
+import { ReadinessCoordinator } from '../readiness/readinessCoordinator'
+import { ReadinessProvider } from '../readiness/ReadinessProvider'
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -63,11 +65,13 @@ describe('TodayPage inspector rail', () => {
   const originalFetch = globalThis.fetch
   let rejectNextTaskUndo = false
   let standaloneActual: Record<string, unknown> | null = null
+  let readySaveGate: Promise<void> | null = null
 
   beforeEach(() => {
     localStorage.clear()
     rejectNextTaskUndo = false
     standaloneActual = null
+    readySaveGate = null
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -90,6 +94,11 @@ describe('TodayPage inspector rail', () => {
           return Promise.resolve(jsonResponse({ detail: 'Task completion changed on another surface' }, 409))
         }
         return Promise.resolve(jsonResponse({}))
+      }
+      if (url.includes('/tasks/77') && method === 'PATCH') {
+        const body = JSON.parse(String(init?.body)) as { ready_to_plan: boolean }
+        const respond = () => jsonResponse({ id: 77, title: 'Write launch narrative', ready_to_plan: body.ready_to_plan })
+        return readySaveGate ? readySaveGate.then(respond) : Promise.resolve(respond())
       }
       if (url.endsWith('/actual-blocks') && method === 'POST') {
         const body = JSON.parse(String(init?.body)) as {
@@ -428,6 +437,70 @@ describe('TodayPage inspector rail', () => {
     await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
     expect(screen.queryByRole('button', { name: 'Start Work Mode' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]).toBeVisible()
+  })
+
+  it.each([
+    { state: 'selected task and its unsubmitted draft', clearSelectionFirst: false },
+    { state: 'task-linked draft after its selection is cleared', clearSelectionFirst: true },
+  ])('discards a $state when readiness removal becomes pending', async ({ clearSelectionFirst }) => {
+    let releaseSave!: () => void
+    readySaveGate = new Promise<void>((resolve) => { releaseSave = resolve })
+    const coordinator = new ReadinessCoordinator()
+    render(
+      <MemoryRouter initialEntries={['/day/2026-06-01']}>
+        <ReadinessProvider coordinator={coordinator}>
+          <Routes>
+            <Route path="/day/:date" element={<TodayPage />} />
+          </Routes>
+        </ReadinessProvider>
+      </MemoryRouter>,
+    )
+
+    await screen.findAllByRole('button', { name: 'Write launch narrative' })
+    const plannedLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')
+    expect(plannedLane).not.toBeNull()
+    fireEvent.click(plannedLane!, { clientY: 47 })
+    expect(await screen.findByRole('heading', { name: 'New block' })).toBeInTheDocument()
+
+    const readyQueue = screen.getByRole('region', { name: 'Ready to Plan tasks' })
+    const readyChoice = within(readyQueue).getByRole('button', { name: 'Write launch narrative' })
+    fireEvent.click(readyChoice)
+    expect(screen.getByRole('button', { name: 'Write launch narrative' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { name: 'New block' })).toBeInTheDocument()
+    expect(screen.getByText('Selected from Ready to Plan')).toBeInTheDocument()
+    expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
+    if (clearSelectionFirst) {
+      fireEvent.click(screen.getByRole('button', { name: 'Write launch narrative' }))
+      expect(screen.getByRole('button', { name: 'Write launch narrative' })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.queryByText(/is selected\. Choose an open slot/)).not.toBeInTheDocument()
+      expect(screen.getByText('Selected from Ready to Plan')).toBeInTheDocument()
+    }
+
+    const task = {
+      id: 77,
+      title: 'Write launch narrative',
+      ready_to_plan: true,
+      task_type_id: 1,
+      task_type: taskTypes[0],
+      status: 'open',
+      subtasks: [],
+    }
+    let removal!: Promise<void>
+    await act(async () => {
+      removal = coordinator.setReadyToPlan(task, false)
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText(/is selected\. Choose an open slot/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'New block' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Selected from Ready to Plan')).not.toBeInTheDocument()
+    })
+
+    await act(async () => {
+      releaseSave()
+      await removal
+    })
   })
 
   it('consumes a direct Work Mode request during planning without clearing the selection or replaying it', async () => {

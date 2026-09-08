@@ -14,7 +14,7 @@ type MutableReadinessState = ReadinessState & {
 export class ReadinessCoordinator {
   private readonly entries = new Map<number, MutableReadinessState>()
   private readonly listeners = new Set<() => void>()
-  private readonly pumps = new Map<number, Promise<void>>()
+  private readonly persistenceLoopsByTask = new Map<number, Promise<void>>()
   private revision = 0
 
   subscribe = (listener: () => void) => {
@@ -73,19 +73,24 @@ export class ReadinessCoordinator {
     return state ? state.desired && !state.pending : false
   }
 
-  async setReadyToPlan(task: BattleTask, ready: boolean) {
-    if (!this.entries.has(task.id)) this.observeTasks([task])
+  async setReadyToPlan(task: Pick<BattleTask, 'id' | 'ready_to_plan'>, ready: boolean) {
+    if (!this.entries.has(task.id)) {
+      const current = Boolean(task.ready_to_plan)
+      this.entries.set(task.id, { confirmed: current, desired: current, pending: false, running: false })
+      this.emit()
+    }
     const state = this.entries.get(task.id)!
     state.desired = ready
     state.pending = state.running || state.desired !== state.confirmed
     this.emit()
 
-    const running = this.pumps.get(task.id)
+    const running = this.persistenceLoopsByTask.get(task.id)
     if (running) return running
 
-    const pump = this.persist(task.id).finally(() => this.pumps.delete(task.id))
-    this.pumps.set(task.id, pump)
-    return pump
+    const persistenceLoop = this.persist(task.id)
+      .finally(() => this.persistenceLoopsByTask.delete(task.id))
+    this.persistenceLoopsByTask.set(task.id, persistenceLoop)
+    return persistenceLoop
   }
 
   private async persist(taskId: number) {
