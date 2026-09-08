@@ -105,20 +105,7 @@ class ReadyToPlanCoordinator internal constructor(
     fun intentVersion(taskId: Int): Long = entries[taskId]?.intentVersion ?: 0
 
     fun setReady(task: BattleTask, ready: Boolean) {
-        var startWorker = false
-        synchronized(this) {
-            val current = entries[task.id] ?: ReadinessEntry(task, task.readyToPlan, task.readyToPlan)
-            if (current.task.status == TaskStatus.Completed) return
-            val updated = current.copy(
-                desired = ready,
-                failure = null,
-                intentVersion = current.intentVersion + 1,
-            )
-            startWorker = !updated.writing && updated.desired != updated.confirmed
-            entries[task.id] = updated.copy(writing = updated.writing || startWorker)
-            publish()
-        }
-        if (startWorker) scope.launch { persist(task.id) }
+        submitIntent(task, ready)
     }
 
     /**
@@ -126,10 +113,21 @@ class ReadyToPlanCoordinator internal constructor(
      * A choice made after that draft started saving wins and makes this submission a no-op.
      */
     fun setReadyFromDraft(task: BattleTask, ready: Boolean, observedIntentVersion: Long): Boolean {
+        return submitIntent(task, ready, observedIntentVersion)
+    }
+
+    private fun submitIntent(
+        task: BattleTask,
+        ready: Boolean,
+        expectedIntentVersion: Long? = null,
+    ): Boolean {
         var startWorker = false
         synchronized(this) {
             val current = entries[task.id] ?: ReadinessEntry(task, task.readyToPlan, task.readyToPlan)
-            if (current.intentVersion != observedIntentVersion || current.task.status == TaskStatus.Completed) {
+            if (
+                current.task.status == TaskStatus.Completed ||
+                expectedIntentVersion != null && current.intentVersion != expectedIntentVersion
+            ) {
                 return false
             }
             val updated = current.copy(
@@ -149,6 +147,7 @@ class ReadyToPlanCoordinator internal constructor(
         var startWorker = false
         synchronized(this) {
             val current = entries[taskId] ?: return
+            if (current.task.status == TaskStatus.Completed) return
             val failed = current.failure ?: return
             val updated = current.copy(
                 desired = failed.desired,
@@ -186,7 +185,15 @@ class ReadyToPlanCoordinator internal constructor(
                         }
                     }
                     val latestIntent = merged.desired == target
-                    if (!latestIntent) {
+                    if (merged.task.status == TaskStatus.Completed) {
+                        entries[taskId] = merged.copy(
+                            desired = merged.confirmed,
+                            writing = false,
+                            failure = null,
+                        )
+                        publish()
+                        false
+                    } else if (!latestIntent) {
                         val keepWriting = merged.desired != merged.confirmed
                         entries[taskId] = merged.copy(writing = keepWriting)
                         publish()
@@ -222,6 +229,28 @@ class ReadyToPlanCoordinator internal constructor(
             val continueWriting = synchronized(this) {
                 val current = entries[taskId] ?: return@synchronized false
                 val saved = result.getOrThrow()
+                if (saved.version < current.task.version) {
+                    val latestIntent = current.desired == target
+                    val keepWriting = !latestIntent && current.desired != current.confirmed
+                    entries[taskId] = when {
+                        !latestIntent -> current.copy(writing = keepWriting)
+                        current.confirmed == target -> current.copy(
+                            desired = target,
+                            writing = false,
+                            failure = null,
+                        )
+                        else -> current.copy(
+                            desired = current.confirmed,
+                            writing = false,
+                            failure = ReadinessFailure(
+                                desired = target,
+                                message = "Ready to Plan was not saved. Retry your latest choice.",
+                            ),
+                        )
+                    }
+                    publish()
+                    return@synchronized keepWriting
+                }
                 val newestTask = if (saved.version >= current.task.version) {
                     current.task.copy(
                         readyToPlan = saved.readyToPlan,

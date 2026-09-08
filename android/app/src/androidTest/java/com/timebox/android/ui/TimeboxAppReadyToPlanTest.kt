@@ -2,7 +2,6 @@ package com.timebox.android.ui
 
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -36,6 +35,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertEquals
@@ -164,6 +166,9 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").assertDoesNotExist()
         compose.onNodeWithText("Completed").performClick()
         compose.onNodeWithText("App projection Task").assertExists()
+        compose.onNodeWithContentDescription("App projection Task readiness error").assertDoesNotExist()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(true), transport.readinessCalls) }
 
         compose.onNodeWithText("Day").performClick()
         compose.onNodeWithTag("planning-mode-action").performClick()
@@ -244,10 +249,10 @@ class TimeboxAppReadyToPlanTest {
             compose.onAllNodesWithText("Edit details").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("Edit details").performClick()
-        compose.onAllNodes(hasSetTextAction())[1].performTextReplacement("Draft notes")
+        compose.onNodeWithTag("task-detail-description").performTextReplacement("Draft notes")
         compose.onNodeWithText("Ready to Plan").performClick()
 
-        compose.runOnIdle { assertEquals(emptyList<String>(), transport.patchBodies) }
+        compose.runOnIdle { assertEquals(emptyList<JsonObject>(), transport.patchBodies) }
 
         compose.onNodeWithText("Save changes").performClick()
         compose.waitUntil(5_000) { transport.patchBodies.size == 1 }
@@ -306,7 +311,7 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
     private var task = taskDto(ready = initialReady, version = 1)
     private val readinessContinuations = ArrayDeque<Continuation<Any?>>()
     val readinessCalls = mutableListOf<Boolean>()
-    val patchBodies = mutableListOf<String>()
+    val patchBodies = mutableListOf<JsonObject>()
     var failNextBattleTaskRead = false
 
     fun proxy(): TimeboxApi = Proxy.newProxyInstance(
@@ -314,11 +319,9 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
         arrayOf(TimeboxApi::class.java),
     ) { _, method, args ->
         if (method.name == "patchBattleTask") {
-            val body = args?.getOrNull(1).toString()
+            val body = args?.getOrNull(1) as JsonObject
             patchBodies += body
-            if ("ready_to_plan" in body) {
-                readinessCalls += "true" in body
-            }
+            body["ready_to_plan"]?.jsonPrimitive?.boolean?.let(readinessCalls::add)
             @Suppress("UNCHECKED_CAST")
             readinessContinuations.addLast(args?.lastOrNull() as Continuation<Any?>)
             COROUTINE_SUSPENDED

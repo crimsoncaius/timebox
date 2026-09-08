@@ -252,6 +252,57 @@ class ReadyToPlanCoordinatorTest {
     }
 
     @Test
+    fun `older success cannot confirm readiness against a fresher false server snapshot`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val original = task(22, ready = false).copy(version = 1)
+        coordinator.mergeServerTasks(listOf(original))
+
+        coordinator.setReady(original, true)
+        runCurrent()
+        coordinator.mergeServerTasks(listOf(original.copy(readyToPlan = false, version = 7)))
+        transport.completeNext(original.copy(readyToPlan = true, version = 6))
+        runCurrent()
+
+        val projected = coordinator.projectedTask(22)!!
+        assertFalse(projected.readyToPlan)
+        assertFalse(projected.readinessPending)
+        assertEquals(
+            "Ready to Plan was not saved. Retry your latest choice.",
+            projected.readinessFailureMessage,
+        )
+        assertEquals(listOf(22 to true), transport.calls)
+    }
+
+    @Test
+    fun `completed reconciliation clears failure and retry cannot issue a forbidden write`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val original = task(23, ready = false).copy(version = 1)
+        coordinator.mergeServerTasks(listOf(original))
+
+        coordinator.setReady(original, true)
+        runCurrent()
+        transport.failNext()
+        runCurrent()
+        transport.completeReconciliation(
+            original.copy(status = TaskStatus.Completed, readyToPlan = false, version = 2),
+        )
+        runCurrent()
+
+        val completed = coordinator.projectedTask(23)!!
+        assertEquals(TaskStatus.Completed, completed.status)
+        assertFalse(completed.readyToPlan)
+        assertFalse(completed.readinessPending)
+        assertEquals(null, completed.readinessFailureMessage)
+
+        coordinator.retry(23)
+        runCurrent()
+
+        assertEquals(listOf(23 to true), transport.calls)
+    }
+
+    @Test
     fun `different Tasks retain independent failures and retries`() = runTest {
         val transport = DeferredReadyToPlanTransport()
         val coordinator = ReadyToPlanCoordinator(transport, this)

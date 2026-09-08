@@ -2277,7 +2277,7 @@ private fun TaskEditForm(
             OutlinedTextField(
                 state.description,
                 onDescription,
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().testTag("task-detail-description"),
                 label = { Text("Description") },
                 minLines = 2,
             )
