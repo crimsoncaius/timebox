@@ -13,6 +13,7 @@ import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type Da
 import { WorkMode } from './WorkMode'
 import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteInTimeZone } from './workModeExecution'
 import { dateInTimeZone } from '../../lib/battlePlan'
+import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 import {
   addDaysIso,
   minuteFromPointerYInVisibleLane,
@@ -49,12 +50,14 @@ function localDateTimeAtMinute(date: string, minute: number): string {
 }
 
 export function TodayPage() {
+  const readiness = useReadinessCoordinator()
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [day, setDay] = useState<DayRead | null>(null)
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
-  const [battleTasks, setBattleTasks] = useState<BattleTask[]>([])
+  const [storedBattleTasks, setBattleTasks] = useState<BattleTask[]>([])
+  const battleTasks = readiness.projectTasks(storedBattleTasks)
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -107,6 +110,13 @@ export function TodayPage() {
     || (selectedBlockRef?.lane === 'planned' && inspectorDirty)
     || readyTaskDragging || planningTaskBusyId != null || planningSaves > 0
 
+  useEffect(() => {
+    if (planningTaskId == null || readiness.isSchedulable(planningTaskId)) return
+    setPlanningTaskId(null)
+    setDraft((current) => current?.task_id === planningTaskId ? null : current)
+    setInspectorDirty(false)
+  }, [planningTaskId, readiness])
+
   useLayoutEffect(() => {
     workModeExecution.setPlanningActive(planningActive)
   }, [planningActive, workModeExecution])
@@ -123,13 +133,14 @@ export function TodayPage() {
       ])
       setDay(d)
       setTaskTypes(tt)
+      readiness.observeTasks(battle?.items ?? [])
       setBattleTasks(battle?.items ?? [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load day')
     } finally {
       setLoading(false)
     }
-  }, [date])
+  }, [date, readiness])
 
   useEffect(() => {
     void load()
@@ -308,7 +319,7 @@ export function TodayPage() {
     async (taskId: number, startMinute: number) => {
       if (workModeExecution.state.session) return
       if (!date || !day || planningTaskInFlightRef.current) return
-      const task = allBattleTasks.find((item) => item.id === taskId && item.ready_to_plan)
+      const task = allBattleTasks.find((item) => item.id === taskId && item.ready_to_plan && readiness.isSchedulable(item.id))
       if (!task) return
 
       const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
@@ -334,6 +345,7 @@ export function TodayPage() {
           end_minute: end,
         })
         setDay(next)
+        readiness.observeTasks([{ ...task, ready_to_plan: false }])
         setPlanningTaskId(null)
         setDraft(null)
         setSelectedBlockRef(null)
@@ -348,7 +360,10 @@ export function TodayPage() {
           })),
         )
         const refreshed = await api.listBattleTasks('active', date).catch(() => null)
-        if (refreshed) setBattleTasks(refreshed.items)
+        if (refreshed) {
+          readiness.observeTasks(refreshed.items)
+          setBattleTasks(refreshed.items)
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to plan task')
       } finally {
@@ -356,7 +371,7 @@ export function TodayPage() {
         setPlanningTaskBusyId(null)
       }
     },
-    [allBattleTasks, date, day, workModeExecution],
+    [allBattleTasks, date, day, readiness, workModeExecution],
   )
 
   const onLaneSlotClick = useCallback(
@@ -476,6 +491,7 @@ export function TodayPage() {
         )
         if (draft.task_id) {
           const refreshed = await api.listBattleTasks('active', date)
+          readiness.observeTasks(refreshed.items)
           setBattleTasks(refreshed.items)
           setPlanningTaskId(null)
         }
@@ -502,7 +518,7 @@ export function TodayPage() {
         if (draft.lane === 'planned') setPlanningSaves((count) => count - 1)
       }
     },
-    [date, day, draft, workModeExecution, planThenWork, presentInstant],
+    [date, day, draft, readiness, workModeExecution, planThenWork, presentInstant],
   )
 
   const patchBlock = useCallback(
@@ -931,7 +947,9 @@ export function TodayPage() {
             setWorkModeSubtaskError(null)
             try {
               if (checked) await api.checkSubtask(id); else await api.uncheckSubtask(id)
-              setBattleTasks((await api.listBattleTasks('active', date)).items)
+              const refreshed = await api.listBattleTasks('active', date)
+              readiness.observeTasks(refreshed.items)
+              setBattleTasks(refreshed.items)
             } catch (cause) {
               setWorkModeSubtaskError(cause instanceof Error ? cause.message : 'Failed to update Subtask')
             } finally {
@@ -985,6 +1003,7 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTaskId, on
 }) {
   const [query, setQuery] = useState('')
   const visible = tasks.filter((task) => task.title.toLowerCase().includes(query.trim().toLowerCase()))
+  const readiness = useReadinessCoordinator()
 
   return (
     <section className="rounded-2xl bg-surface-container-lowest/90 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] dark:bg-dark-surface-container-lowest/85" aria-label="Ready to Plan tasks">
@@ -1013,13 +1032,15 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTaskId, on
         className={`mt-4 space-y-2 ${dragInstance === 'mobile' ? 'max-h-80 overflow-y-auto overscroll-contain pr-1' : ''}`}
       >
         {visible.map((task) => {
+          const pending = readiness.stateFor(task.id).pending
           return (
             <ReadyToPlanTaskCard
               key={task.id}
               task={task}
               selected={task.id === selectedTaskId}
               dragInstance={dragInstance}
-              disabled={busyTaskId != null}
+              disabled={busyTaskId != null || pending}
+              pending={pending}
               onSelect={() => onSelect(task.id === selectedTaskId ? null : task.id)}
             />
           )
@@ -1034,11 +1055,12 @@ function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTaskId, on
   )
 }
 
-function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, onSelect }: {
+function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, pending, onSelect }: {
   task: BattleTask
   selected: boolean
   dragInstance: 'mobile' | 'desktop'
   disabled: boolean
+  pending: boolean
   onSelect: () => void
 }) {
   const displayTitle = task.recurrence_kind === 'quota_session' && task.parent_title
@@ -1057,10 +1079,11 @@ function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, onSelect 
       ref={ref}
       data-ready-task-id={task.id}
       data-dragging={isDragging ? 'true' : undefined}
-      className={`flex w-full items-stretch rounded-xl border text-left transition ${selected ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/15' : 'border-outline-variant/20 bg-surface hover:border-primary/25 dark:border-dark-outline-variant dark:bg-dark-surface'} ${isDragging ? 'z-80 cursor-grabbing opacity-80 shadow-xl' : ''}`}
+      className={`flex w-full items-stretch rounded-xl border text-left transition ${selected ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/15' : 'border-outline-variant/20 bg-surface hover:border-primary/25 dark:border-dark-outline-variant dark:bg-dark-surface'} ${pending ? 'border-primary/30 bg-primary/5' : ''} ${isDragging ? 'z-80 cursor-grabbing opacity-80 shadow-xl' : ''}`}
     >
       <button
         type="button"
+        aria-label={pending ? `${displayTitle} is saving and unavailable to plan` : displayTitle}
         aria-pressed={selected}
         disabled={disabled}
         onClick={onSelect}
@@ -1068,7 +1091,7 @@ function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, onSelect 
       >
         <span className="block truncate text-sm font-medium text-on-surface">{displayTitle}</span>
         <span className="mt-1 block text-xs text-on-surface-variant">
-          {task.task_type?.name ?? 'Unspecified'}
+          {pending ? 'Saving · unavailable to plan' : task.task_type?.name ?? 'Unspecified'}
         </span>
       </button>
       <button

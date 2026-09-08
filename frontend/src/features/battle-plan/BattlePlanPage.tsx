@@ -33,6 +33,7 @@ import { ProjectEditor } from './ProjectEditor'
 import { TaskComposer } from './TaskComposer'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { TrashUndoNotice, type TrashUndoTarget } from './TrashUndoNotice'
+import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 
 type Scope = BattlePlanScope
 type SortMode = 'manual' | 'deadline' | 'urgency' | 'importance'
@@ -86,6 +87,7 @@ function taskCount(tasks: BattleTask[], projectId: number) {
 }
 
 export function BattlePlanPage() {
+  const readiness = useReadinessCoordinator()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedCollectionParam = searchParams.get('collection')
   const requestedCollection: TaskCollection = requestedCollectionParam === 'archived' || requestedCollectionParam === 'trash'
@@ -98,14 +100,14 @@ export function BattlePlanPage() {
   const [preferences, setPreferences] = useState<Preferences>(readPreferences)
   const collection = requestedCollection
   const [loadedCollection, setLoadedCollection] = useState<TaskCollection | null>(null)
-  const [tasks, setTasks] = useState<BattleTask[]>([])
+  const [storedTasks, setTasks] = useState<BattleTask[]>([])
+  const tasks = readiness.projectTasks(storedTasks)
   const [projects, setProjects] = useState<Project[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [timezone, setTimezone] = useState('UTC')
   const [serverNowIso, setServerNowIso] = useState('1970-01-01T00:00:00Z')
   const [error, setError] = useState<string | null>(null)
   const [readyRetry, setReadyRetry] = useState<{ id: number; ready: boolean } | null>(null)
-  const readyMutations = useRef(new Map<number, { confirmed: boolean; desired: boolean; running: boolean }>())
   const selectedTaskId = requestedTaskId
   const [movingTask, setMovingTask] = useState<BattleTask | null>(null)
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
@@ -126,23 +128,26 @@ export function BattlePlanPage() {
 
   const loadActive = useCallback(async () => {
     const result = await api.listBattleTasks('active')
+    readiness.observeTasks(result.items)
     setTasks(result.items)
     setTimezone(result.timezone)
     setServerNowIso(result.server_now_iso)
-  }, [])
+  }, [readiness])
 
   const loadCollection = useCallback(async (state: TaskCollection) => {
     const result = await api.listBattleTasks(state)
+    readiness.observeTasks(result.items)
     setTasks(result.items)
     setTimezone(result.timezone)
     setServerNowIso(result.server_now_iso)
-  }, [])
+  }, [readiness])
 
   useEffect(() => {
     let active = true
     Promise.all([api.listBattleTasks(collection), api.listProjects(), api.listTaskTypes()])
       .then(([taskResult, projectRows, typeRows]) => {
         if (!active) return
+        readiness.observeTasks(taskResult.items)
         setTasks(taskResult.items)
         setTimezone(taskResult.timezone)
         setServerNowIso(taskResult.server_now_iso)
@@ -162,7 +167,7 @@ export function BattlePlanPage() {
         setLoadedCollection(collection)
       })
     return () => { active = false }
-  }, [collection, preferences.scope, setPrefs])
+  }, [collection, preferences.scope, readiness, setPrefs])
 
   const switchCollection = (next: TaskCollection) => {
     setSearchParams(next === 'active' ? {} : { collection: next })
@@ -225,8 +230,16 @@ export function BattlePlanPage() {
   const patchTask = async (id: number, patch: Partial<BattleTaskWrite>) => {
     setError(null)
     try {
-      await api.patchBattleTask(id, patch)
-      await loadActive()
+      const current = tasks.find((task) => task.id === id)
+      if (patch.ready_to_plan !== undefined && current) {
+        await setReadyToPlan(id, patch.ready_to_plan)
+      }
+      const remaining = { ...patch }
+      delete remaining.ready_to_plan
+      if (Object.keys(remaining).length > 0) {
+        await api.patchBattleTask(id, remaining)
+        await loadActive()
+      }
     } catch (cause) {
       setError(errorMessage(cause))
       throw cause
@@ -236,29 +249,14 @@ export function BattlePlanPage() {
   const setReadyToPlan = async (id: number, ready: boolean) => {
     const current = tasks.find((task) => task.id === id)
     if (!current) return
-    const mutation = readyMutations.current.get(id) ?? { confirmed: Boolean(current.ready_to_plan), desired: Boolean(current.ready_to_plan), running: false }
-    mutation.desired = ready
-    readyMutations.current.set(id, mutation)
     setError(null)
     setReadyRetry(null)
-    setTasks((items) => items.map((item) => item.id === id ? { ...item, ready_to_plan: ready } : item))
-    if (mutation.running) return
-    mutation.running = true
-    while (mutation.desired !== mutation.confirmed) {
-      const target = mutation.desired
-      try {
-        await api.patchBattleTask(id, { ready_to_plan: target })
-        mutation.confirmed = target
-      } catch (cause) {
-        if (mutation.desired === target) {
-          setTasks((items) => items.map((item) => item.id === id ? { ...item, ready_to_plan: mutation.confirmed } : item))
-          setError(`Ready to Plan was not saved. ${errorMessage(cause)}`)
-          setReadyRetry({ id, ready: target })
-          break
-        }
-      }
+    try {
+      await readiness.setReadyToPlan(current, ready)
+    } catch (cause) {
+      setError(`Ready to Plan was not saved. ${errorMessage(cause)}`)
+      setReadyRetry({ id, ready })
     }
-    mutation.running = false
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -485,6 +483,7 @@ export function BattlePlanPage() {
         <TaskDetailPanel
           key={selectedTask.id}
           task={selectedTask}
+          readinessPending={readiness.stateFor(selectedTask.id).pending}
           error={error}
           projects={projects}
           taskTypes={taskTypes}
@@ -563,6 +562,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   onToggleReady: (id: number, ready: boolean) => Promise<void>
   onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
 }) {
+  const readiness = useReadinessCoordinator()
   const { ref, isDropTarget } = useDroppable({ id: `column:${status}`, accept: 'battle-task' })
   const fixedProjectId = scope === 'all'
     ? undefined
@@ -590,6 +590,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
           <BattlePlanCard
             key={task.id}
             task={task}
+            readinessPending={readiness.stateFor(task.id).pending}
             index={index}
             column={status}
             timezone={timezone}

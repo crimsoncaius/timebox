@@ -23,6 +23,7 @@ const cardSensors = [
 
 export function BattlePlanCard({
   task,
+  readinessPending,
   index,
   column,
   timezone,
@@ -36,6 +37,7 @@ export function BattlePlanCard({
 }: {
   onMoveProject: (task: BattleTask) => void
   task: BattleTask
+  readinessPending: boolean
   index: number
   column: TaskStatus
   timezone: string
@@ -152,6 +154,7 @@ export function BattlePlanCard({
             type="button"
             aria-label={`${task.ready_to_plan ? 'Remove' : 'Add'} ${task.title} ${task.ready_to_plan ? 'from' : 'to'} Ready to Plan`}
             aria-pressed={task.ready_to_plan}
+            aria-busy={readinessPending || undefined}
             disabled={task.status === 'completed'}
             title={task.ready_to_plan ? 'Remove from Ready to Plan' : 'Add to Ready to Plan'}
             className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium uppercase tracking-wide transition ${task.ready_to_plan ? 'bg-primary/12 text-primary' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}`}
@@ -164,6 +167,9 @@ export function BattlePlanCard({
             <span className="material-symbols-outlined text-[14px]" aria-hidden>{task.ready_to_plan ? 'event_available' : 'event_upcoming'}</span>
             {task.ready_to_plan ? 'Ready' : 'Plan'}
           </button>
+          {readinessPending ? (
+            <span role="status" aria-label={`${task.title} readiness`} className="text-[10px] text-on-surface-variant">Saving…</span>
+          ) : null}
           <button
           type="button"
           aria-label={progressLabel}

@@ -57,6 +57,7 @@ function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
 
 export function TaskDetailPanel({
   task,
+  readinessPending,
   error,
   projects,
   taskTypes,
@@ -70,6 +71,7 @@ export function TaskDetailPanel({
   onTrash,
 }: {
   task: BattleTask
+  readinessPending: boolean
   error?: string | null
   projects: Project[]
   taskTypes: TaskType[]
@@ -88,7 +90,6 @@ export function TaskDetailPanel({
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isReadyToPlan, setIsReadyToPlan] = useState(task.ready_to_plan)
   const [showAllPlannedDates, setShowAllPlannedDates] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -433,22 +434,15 @@ export function TaskDetailPanel({
               <div className="border-t border-[var(--task-detail-divider)] py-4">
                 <button
                   type="button"
-                  aria-pressed={isReadyToPlan}
-                  onClick={async () => {
-                    const next = !isReadyToPlan
-                    const previous = isReadyToPlan
-                    setIsReadyToPlan(next)
-                    try {
-                      await onPatch(task.id, { ready_to_plan: next })
-                    } catch {
-                      setIsReadyToPlan(previous)
-                    }
-                  }}
-                  className={`flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:opacity-50 ${isReadyToPlan ? 'bg-primary/12 text-primary' : 'border border-[var(--task-detail-input-border)] text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}
+                  aria-pressed={task.ready_to_plan}
+                  aria-busy={readinessPending || undefined}
+                  onClick={() => void onPatch(task.id, { ready_to_plan: !task.ready_to_plan })}
+                  className={`flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:opacity-50 ${task.ready_to_plan ? 'bg-primary/12 text-primary' : 'border border-[var(--task-detail-input-border)] text-[var(--task-detail-secondary)] hover:border-[var(--task-detail-input-hover)] hover:text-[var(--task-detail-primary)]'}`}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>{isReadyToPlan ? 'event_available' : 'event_upcoming'}</span>
-                  {isReadyToPlan ? 'Ready to Plan' : 'Add to Ready to Plan'}
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>{task.ready_to_plan ? 'event_available' : 'event_upcoming'}</span>
+                  {task.ready_to_plan ? 'Ready to Plan' : 'Add to Ready to Plan'}
                 </button>
+                {readinessPending ? <p role="status" aria-label={`${task.title} readiness`} className="mt-2 text-xs text-[var(--task-detail-muted)]">Saving Ready to Plan…</p> : null}
                 <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">Planning readiness is separate from work status.</p>
               </div>
             </div>

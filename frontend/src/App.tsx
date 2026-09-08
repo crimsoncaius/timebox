@@ -7,20 +7,23 @@ import { TaskTypesPage } from './features/task-types/TaskTypesPage'
 import { TodayPage } from './features/today/TodayPage'
 import { BattlePlanPage } from './features/battle-plan/BattlePlanPage'
 import { ReminderWatcher } from './components/ReminderWatcher'
+import { ReadinessProvider } from './features/readiness/ReadinessProvider'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
 
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="/day/:date" element={<TodayPage />} />
-      <Route path="/history" element={<HistoryPage />} />
-      <Route path="/task-types" element={<TaskTypesPage />} />
-      <Route path="/battle-plan" element={<BattlePlanRoute />} />
-      <Route path="/settings" element={<SettingsPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ReadinessProvider>
+      <Routes>
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/day/:date" element={<TodayPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/task-types" element={<TaskTypesPage />} />
+        <Route path="/battle-plan" element={<BattlePlanRoute />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ReadinessProvider>
   )
 }
 
