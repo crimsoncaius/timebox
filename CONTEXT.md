@@ -56,6 +56,10 @@ _Avoid_: Recurring Task Series, task reminder, notification task
 A recurrence rule and template that produces Task Occurrences. It represents an ongoing routine and does not belong to a Project.
 _Avoid_: Recurring template, recurring parent task
 
+**Recurring Pre-planning Schedule**:
+An optional configuration on a scheduled Recurring Task Series that allocates its eligible Task Occurrences to specific Planned Block slots. A slot that cannot be materialized because it is occupied leaves its Task Occurrence Ready to Plan.
+_Avoid_: Automatic scheduling, recurring time block
+
 **Task Occurrence**:
 A Battle Plan Task representing one instance of a Recurring Task Series, with its own completion, Subtask state, Planned Blocks, and Actual Blocks. It does not belong to a Project.
 _Avoid_: Recurring series, Quota Tracker
@@ -79,6 +83,10 @@ _Avoid_: Blocked status
 **Ready to Plan**:
 A queue condition indicating that an incomplete Battle Plan Task is available to receive a Planned Block. It is explicitly chosen for every Battle Plan Task, including a Task Occurrence; recurrence generation alone never adds it, and completed Tasks are never Ready to Plan.
 _Avoid_: Open status, unscheduled task
+
+**Pending Ready to Plan Change**:
+The latest, not-yet-confirmed choice to add or remove a Battle Plan Task from Ready to Plan. It is visible wherever readiness is shown, but a pending addition is not schedulable.
+_Avoid_: Saved Ready to Plan state, disabled task
 
 **Planned Block**:
 An allocation of time intended for one primary item. It records the plan, not whether work occurred.
