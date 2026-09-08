@@ -50,7 +50,7 @@ class ReadyToPlanCoordinatorTest {
     }
 
     @Test
-    fun `server lifecycle result remains authoritative`() = runTest {
+    fun `completed lifecycle response normalizes an inconsistent ready payload`() = runTest {
         val transport = DeferredReadyToPlanTransport()
         val coordinator = ReadyToPlanCoordinator(transport, this)
         val original = task(11, ready = false).copy(version = 1)
@@ -60,7 +60,7 @@ class ReadyToPlanCoordinatorTest {
         runCurrent()
         transport.completeNext(
             original.copy(
-                readyToPlan = false,
+                readyToPlan = true,
                 status = TaskStatus.Completed,
                 version = 2,
             ),
@@ -71,6 +71,11 @@ class ReadyToPlanCoordinatorTest {
         assertEquals(TaskStatus.Completed, projected.status)
         assertFalse(projected.readyToPlan)
         assertFalse(projected.readinessPending)
+        assertEquals(null, projected.readinessFailureMessage)
+
+        coordinator.retry(11)
+        runCurrent()
+        assertEquals(listOf(11 to true), transport.calls)
     }
 
     @Test
@@ -275,7 +280,7 @@ class ReadyToPlanCoordinatorTest {
     }
 
     @Test
-    fun `completed reconciliation clears failure and retry cannot issue a forbidden write`() = runTest {
+    fun `completed reconciliation normalizes an inconsistent ready payload and disables retry`() = runTest {
         val transport = DeferredReadyToPlanTransport()
         val coordinator = ReadyToPlanCoordinator(transport, this)
         val original = task(23, ready = false).copy(version = 1)
@@ -286,7 +291,7 @@ class ReadyToPlanCoordinatorTest {
         transport.failNext()
         runCurrent()
         transport.completeReconciliation(
-            original.copy(status = TaskStatus.Completed, readyToPlan = false, version = 2),
+            original.copy(status = TaskStatus.Completed, readyToPlan = true, version = 2),
         )
         runCurrent()
 

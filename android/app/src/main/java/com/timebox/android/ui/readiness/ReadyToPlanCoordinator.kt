@@ -52,6 +52,27 @@ private data class ReadinessEntry(
     )
 }
 
+private fun readinessEntry(task: BattleTask, intentVersion: Long = 0): ReadinessEntry =
+    ReadinessEntry(
+        task = task,
+        confirmed = task.readyToPlan,
+        desired = task.readyToPlan,
+        intentVersion = intentVersion,
+    ).normalizedForLifecycle()
+
+private fun ReadinessEntry.normalizedForLifecycle(): ReadinessEntry =
+    if (task.status == TaskStatus.Completed) {
+        copy(
+            task = task.copy(readyToPlan = false),
+            confirmed = false,
+            desired = false,
+            writing = false,
+            failure = null,
+        )
+    } else {
+        this
+    }
+
 /**
  * Owns the latest readiness choice for every Battle Plan Task in this app process.
  * Screens consume projected Tasks; only this coordinator writes readiness.
@@ -69,23 +90,9 @@ class ReadyToPlanCoordinator internal constructor(
         tasks.flattenBattleTasks().forEach { incoming ->
             val current = entries[incoming.id]
             if (current == null) {
-                val ready = incoming.readyToPlan && incoming.status != TaskStatus.Completed
-                entries[incoming.id] = ReadinessEntry(
-                    incoming.copy(readyToPlan = ready),
-                    ready,
-                    ready,
-                )
+                store(incoming.id, readinessEntry(incoming))
             } else if (incoming.version >= current.task.version) {
-                entries[incoming.id] = if (incoming.status == TaskStatus.Completed) {
-                    current.copy(
-                        task = incoming.copy(readyToPlan = false),
-                        confirmed = false,
-                        desired = false,
-                        writing = false,
-                        failure = null,
-                        removed = false,
-                    )
-                } else if (current.writing || current.desired != current.confirmed) {
+                val merged = if (current.writing || current.desired != current.confirmed) {
                     current.copy(
                         task = incoming,
                         confirmed = incoming.readyToPlan,
@@ -102,6 +109,7 @@ class ReadyToPlanCoordinator internal constructor(
                         removed = false,
                     )
                 }
+                store(incoming.id, merged)
             }
         }
         publish()
@@ -137,7 +145,7 @@ class ReadyToPlanCoordinator internal constructor(
     ): Boolean {
         var startWorker = false
         synchronized(this) {
-            val current = entries[task.id] ?: ReadinessEntry(task, task.readyToPlan, task.readyToPlan)
+            val current = entries[task.id] ?: readinessEntry(task)
             if (
                 current.task.status == TaskStatus.Completed ||
                 expectedIntentVersion != null && current.intentVersion != expectedIntentVersion
@@ -150,7 +158,7 @@ class ReadyToPlanCoordinator internal constructor(
                 intentVersion = current.intentVersion + 1,
             )
             startWorker = !updated.writing && updated.desired != updated.confirmed
-            entries[task.id] = updated.copy(writing = updated.writing || startWorker)
+            store(task.id, updated.copy(writing = updated.writing || startWorker))
             publish()
         }
         if (startWorker) scope.launch { persist(task.id) }
@@ -169,7 +177,7 @@ class ReadyToPlanCoordinator internal constructor(
                 intentVersion = current.intentVersion + 1,
             )
             startWorker = !updated.writing && updated.desired != updated.confirmed
-            entries[taskId] = updated.copy(writing = updated.writing || startWorker)
+            store(taskId, updated.copy(writing = updated.writing || startWorker))
             publish()
         }
         if (startWorker) scope.launch { persist(taskId) }
@@ -184,12 +192,7 @@ class ReadyToPlanCoordinator internal constructor(
                 val continueWriting = synchronized(this) {
                     val current = entries[taskId] ?: return@synchronized false
                     if (current.task.status == TaskStatus.Completed) {
-                        entries[taskId] = current.copy(
-                            desired = false,
-                            confirmed = false,
-                            writing = false,
-                            failure = null,
-                        )
+                        store(taskId, current)
                         publish()
                         return@synchronized false
                     }
@@ -210,37 +213,39 @@ class ReadyToPlanCoordinator internal constructor(
                     }
                     val latestIntent = merged.desired == target
                     if (merged.task.status == TaskStatus.Completed) {
-                        entries[taskId] = merged.copy(
-                            desired = merged.confirmed,
-                            writing = false,
-                            failure = null,
-                        )
+                        store(taskId, merged)
                         publish()
                         false
                     } else if (!latestIntent) {
                         val keepWriting = merged.desired != merged.confirmed
-                        entries[taskId] = merged.copy(writing = keepWriting)
+                        store(taskId, merged.copy(writing = keepWriting))
                         publish()
                         keepWriting
                     } else if (reconciliation.isSuccess && merged.confirmed == target && !merged.removed) {
-                        entries[taskId] = merged.copy(
-                            desired = target,
-                            writing = false,
-                            failure = null,
+                        store(
+                            taskId,
+                            merged.copy(
+                                desired = target,
+                                writing = false,
+                                failure = null,
+                            ),
                         )
                         publish()
                         false
                     } else {
-                        entries[taskId] = merged.copy(
-                            desired = merged.confirmed,
-                            writing = false,
-                            failure = ReadinessFailure(
-                                desired = target,
-                                message = if (reconciliation.isSuccess) {
-                                    "Ready to Plan was not saved. Retry your latest choice."
-                                } else {
-                                    "Ready to Plan could not be confirmed. Retry your latest choice."
-                                },
+                        store(
+                            taskId,
+                            merged.copy(
+                                desired = merged.confirmed,
+                                writing = false,
+                                failure = ReadinessFailure(
+                                    desired = target,
+                                    message = if (reconciliation.isSuccess) {
+                                        "Ready to Plan was not saved. Retry your latest choice."
+                                    } else {
+                                        "Ready to Plan could not be confirmed. Retry your latest choice."
+                                    },
+                                ),
                             ),
                         )
                         publish()
@@ -254,19 +259,14 @@ class ReadyToPlanCoordinator internal constructor(
                 val current = entries[taskId] ?: return@synchronized false
                 val saved = result.getOrThrow()
                 if (current.task.status == TaskStatus.Completed) {
-                    entries[taskId] = current.copy(
-                        desired = false,
-                        confirmed = false,
-                        writing = false,
-                        failure = null,
-                    )
+                    store(taskId, current)
                     publish()
                     return@synchronized false
                 }
                 if (saved.version < current.task.version) {
                     val latestIntent = current.desired == target
                     val keepWriting = !latestIntent && current.desired != current.confirmed
-                    entries[taskId] = when {
+                    val settled = when {
                         !latestIntent -> current.copy(writing = keepWriting)
                         current.confirmed == target -> current.copy(
                             desired = target,
@@ -282,6 +282,7 @@ class ReadyToPlanCoordinator internal constructor(
                             ),
                         )
                     }
+                    store(taskId, settled)
                     publish()
                     return@synchronized keepWriting
                 }
@@ -300,22 +301,20 @@ class ReadyToPlanCoordinator internal constructor(
                     saved.deletedAt != current.task.deletedAt
                 val lifecycleRejected = lifecycleChanged || saved.readyToPlan != target
                 if (lifecycleRejected) {
-                    entries[taskId] = ReadinessEntry(
-                        task = newestTask,
-                        confirmed = saved.readyToPlan,
-                        desired = saved.readyToPlan,
-                        intentVersion = current.intentVersion,
-                    )
+                    store(taskId, readinessEntry(newestTask, current.intentVersion))
                     publish()
                     false
                 } else {
                     val confirmed = target
                     val keepWriting = current.desired != confirmed
-                    entries[taskId] = current.copy(
-                        task = newestTask,
-                        confirmed = confirmed,
-                        writing = keepWriting,
-                        failure = null,
+                    store(
+                        taskId,
+                        current.copy(
+                            task = newestTask,
+                            confirmed = confirmed,
+                            writing = keepWriting,
+                            failure = null,
+                        ),
                     )
                     publish()
                     keepWriting
@@ -347,6 +346,10 @@ class ReadyToPlanCoordinator internal constructor(
 
     private fun publish() {
         _projections.value = entries.values.map(ReadinessEntry::projection)
+    }
+
+    private fun store(taskId: Int, entry: ReadinessEntry) {
+        entries[taskId] = entry.normalizedForLifecycle()
     }
 }
 
