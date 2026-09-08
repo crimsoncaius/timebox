@@ -150,7 +150,7 @@ class DayViewModel(
     init {
         workModeBridgeScope.launch {
             readinessCoordinator.projections.collect {
-                planningSession.applyReadinessProjection(readinessCoordinator.readyTasks())
+                planningSession.applyReadinessProjection(readinessCoordinator::projectTasks)
                 syncPlanningState()
             }
         }

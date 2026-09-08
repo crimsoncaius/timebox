@@ -73,11 +73,14 @@ class PlanningSessionTest {
 
     @Test
     fun `pending Ready to Plan addition is visible but cannot be selected or planned`() = runTest {
-        val session = PlanningSession(InMemoryPlanningSessionTransport(emptyList()))
+        val session = PlanningSession(InMemoryPlanningSessionTransport(listOf(task(7, ready = false))))
         val pendingAddition = task(7, ready = true).copy(readinessPending = true)
+        session.refreshQueue()
         session.begin()
 
-        session.applyReadinessProjection(listOf(pendingAddition))
+        session.applyReadinessProjection { tasks ->
+            tasks.map { task -> if (task.id == pendingAddition.id) pendingAddition else task }
+        }
         session.toggleSelection(7)
 
         assertEquals(listOf(7), session.state.value.readyTasks.map { it.id })
@@ -96,13 +99,19 @@ class PlanningSessionTest {
         session.toggleSelection(8)
         assertEquals(8, session.state.value.selectedTaskId)
 
-        session.applyReadinessProjection(emptyList())
+        session.applyReadinessProjection { tasks ->
+            tasks.map { task -> if (task.id == 8) task.copy(readyToPlan = false) else task }
+        }
 
         assertNull(session.state.value.selectedTaskId)
-        session.applyReadinessProjection(listOf(task(8, ready = true)))
+        session.applyReadinessProjection { tasks ->
+            tasks.map { task -> if (task.id == 8) task.copy(readyToPlan = true) else task }
+        }
         assertEquals(PlanningEditResult.Accepted, session.place(8, day(), 9 * 60))
 
-        session.applyReadinessProjection(emptyList())
+        session.applyReadinessProjection { tasks ->
+            tasks.map { task -> if (task.id == 8) task.copy(readyToPlan = false) else task }
+        }
 
         assertTrue(session.state.value.drafts.isEmpty())
         assertTrue(session.state.value.readyTasks.isEmpty())
@@ -215,9 +224,9 @@ private class InMemoryPlanningSessionTransport(
     var commitFailure: Throwable? = null
     var committedDays: List<Day> = emptyList()
 
-    override suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>> {
+    override suspend fun loadScopedTasks(planningDate: LocalDate?): Result<List<BattleTask>> {
         calls += "load"
-        return loadFailure?.let(Result.Companion::failure) ?: Result.success(readyTasks.readyToPlanTasks())
+        return loadFailure?.let(Result.Companion::failure) ?: Result.success(readyTasks)
     }
 
     override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> {

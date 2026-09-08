@@ -63,7 +63,7 @@ sealed interface PlanningCommitOutcome {
 
 /** Internal seam between planning policy and the owned Timebox transport. */
 internal interface PlanningSessionTransport {
-    suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>>
+    suspend fun loadScopedTasks(planningDate: LocalDate?): Result<List<BattleTask>>
     suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>>
 }
 
@@ -73,10 +73,10 @@ internal class RepositoryPlanningSessionTransport(
     private val readinessCoordinator: ReadyToPlanCoordinator =
         ReadyToPlanCoordinators.forRepository(repository),
 ) : PlanningSessionTransport {
-    override suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>> =
+    override suspend fun loadScopedTasks(planningDate: LocalDate?): Result<List<BattleTask>> =
         repository.listBattleTasks(planningDate = planningDate).map { result ->
             readinessCoordinator.mergeServerTasks(result.items)
-            readinessCoordinator.projectTasks(result.items).readyToPlanTasks()
+            readinessCoordinator.projectTasks(result.items)
         }
 
     override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> =
@@ -100,6 +100,7 @@ class PlanningSession internal constructor(
 
     private var calendar = emptyMap<LocalDate, Day>()
     private var planningDate: LocalDate? = null
+    private var scopedTasks: List<BattleTask> = emptyList()
 
     suspend fun refreshQueue(date: LocalDate? = planningDate) {
         planningDate = date
@@ -108,8 +109,10 @@ class PlanningSession internal constructor(
             queueLoading = current.readyTasks.isEmpty(),
             queueError = null,
         )
-        transport.loadReadyTasks(date).fold(
-            onSuccess = { ready ->
+        transport.loadScopedTasks(date).fold(
+            onSuccess = { tasks ->
+                scopedTasks = tasks
+                val ready = tasks.readyToPlanTasks()
                 _state.value = _state.value.copy(
                     readyTasks = ready,
                     queueLoading = false,
@@ -231,8 +234,10 @@ class PlanningSession internal constructor(
         )
     }
 
-    /** Apply the app-scoped readiness projection and enforce Day eligibility immediately. */
-    internal fun applyReadinessProjection(readyTasks: List<BattleTask>) {
+    /** Project the app-scoped readiness state over this planning date's authoritative Task set. */
+    internal fun applyReadinessProjection(project: (List<BattleTask>) -> List<BattleTask>) {
+        scopedTasks = project(scopedTasks)
+        val readyTasks = scopedTasks.readyToPlanTasks()
         val eligibleIds = readyTasks.asSequence()
             .filterNot(BattleTask::readinessPending)
             .mapTo(mutableSetOf(), BattleTask::id)
