@@ -18,6 +18,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -69,6 +70,7 @@ import com.timebox.android.ui.day.WorkModeScreen
 import com.timebox.android.ui.day.WorkModeEntryDialog
 import com.timebox.android.ui.day.WorkModeRestoreDialog
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.readiness.LocalReadyToPlanRetry
 import com.timebox.android.ui.settings.SettingsScreen
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -292,6 +294,7 @@ fun TimeboxApp(
         )
     }
 
+    CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         Column(
             modifier = Modifier.fillMaxSize().imePadding().then(
@@ -711,6 +714,7 @@ fun TimeboxApp(
                 onConfirm = dayViewModel::confirmWorkContinued,
             )
         }
+    }
     }
 }
 

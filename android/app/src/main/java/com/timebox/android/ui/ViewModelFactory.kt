@@ -62,7 +62,14 @@ fun timeboxViewModelFactory(
                 readinessCoordinator = readinessCoordinator,
             )
         }
-        initializer { TaskDetailViewModel(repository, taskCompletion, createSavedStateHandle()) }
+        initializer {
+            TaskDetailViewModel(
+                repository,
+                taskCompletion,
+                createSavedStateHandle(),
+                readinessCoordinator,
+            )
+        }
         initializer { ProjectEditorViewModel(repository) }
         initializer { RecurringViewModel(repository) }
         initializer { RecurringEditorViewModel(repository) }

@@ -72,6 +72,7 @@ import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.planning.PlanningDraftPlacement
 import com.timebox.android.ui.planning.PlanningEditResult
 import com.timebox.android.ui.planning.planningRangeAvailable
+import com.timebox.android.ui.readiness.ReadyToPlanFailureNotice
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -567,6 +568,7 @@ private fun PlanningTaskCard(
                 color = colors.onVariant,
             )
         }
+        ReadyToPlanFailureNotice(task, Modifier.padding(end = 7.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = task.taskType?.leaf ?: "Unspecified",

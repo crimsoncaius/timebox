@@ -144,6 +144,7 @@ import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
 import com.timebox.android.ui.hhmm
+import com.timebox.android.ui.readiness.ReadyToPlanFailureNotice
 import com.timebox.android.ui.theme.TimeboxColors
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
@@ -1340,6 +1341,7 @@ private fun MobileKanbanCard(
                 onToggleReady = onToggleReady,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             )
+            ReadyToPlanFailureNotice(task, Modifier.padding(horizontal = 8.dp))
         }
     }
 
@@ -1875,6 +1877,7 @@ private fun BattleTaskCard(
                     color = colors.planned,
                 )
             }
+            ReadyToPlanFailureNotice(task)
         }
         IconButton(onClick = { onToggleReady(task) }, enabled = task.status != TaskStatus.Completed) {
             Icon(
@@ -2310,11 +2313,18 @@ private fun TaskEditForm(
             TaskDetailDashboardTile(
                 icon = Icons.Outlined.CalendarMonth,
                 label = "Ready to Plan",
-                value = if (state.readyToPlan) "Ready" else "Not ready",
+                value = when {
+                    state.task?.readinessPending == true && state.readyToPlan -> "Saving · Ready"
+                    state.task?.readinessPending == true -> "Saving · Not ready"
+                    state.readyToPlan -> "Ready"
+                    else -> "Not ready"
+                },
                 modifier = Modifier.weight(1f),
                 accent = state.readyToPlan,
                 changeHint = editing,
                 enabled = editing,
+                contentDescription = state.task?.takeIf { it.readinessPending }
+                    ?.let(::readyToPlanActionDescription),
                 onClick = { onReady(!state.readyToPlan) },
             )
             TaskDetailMenuTile(
@@ -2331,6 +2341,7 @@ private fun TaskEditForm(
                 onSelect = onDeadlineMode,
             )
         }
+        state.task?.let { ReadyToPlanFailureNotice(it) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (state.isSubtask) {
                 TaskDetailDashboardTile(
@@ -2655,6 +2666,7 @@ private fun TaskDetailDashboardTile(
     accent: Boolean = false,
     changeHint: Boolean = false,
     enabled: Boolean,
+    contentDescription: String? = null,
     onClick: () -> Unit,
 ) {
     Column(
@@ -2664,6 +2676,11 @@ private fun TaskDetailDashboardTile(
             .background(if (accent) TimeboxTheme.colors.selected else TimeboxTheme.colors.card)
             .border(1.dp, if (accent) TimeboxTheme.colors.outlineVariant else TimeboxTheme.colors.hairline, TimeboxShapes.card)
             .clickable(enabled = enabled, onClick = onClick)
+            .then(
+                if (contentDescription == null) Modifier else Modifier.semantics {
+                    this.contentDescription = contentDescription
+                },
+            )
             .padding(13.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

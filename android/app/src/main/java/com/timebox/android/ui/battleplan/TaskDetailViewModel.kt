@@ -15,6 +15,7 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -111,10 +112,36 @@ class TaskDetailViewModel(
     private val repository: TimeboxRepository,
     private val taskCompletion: TaskCompletion,
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val readinessCoordinator: ReadyToPlanCoordinator? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TaskDetailUiState())
     val state: StateFlow<TaskDetailUiState> = _state.asStateFlow()
     private var clockJob: Job? = null
+
+    init {
+        readinessCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.projections.collect {
+                    val taskId = _state.value.taskId ?: return@collect
+                    val projected = coordinator.projectedTask(taskId) ?: return@collect
+                    _state.update { current ->
+                        if (current.taskId != taskId) return@update current
+                        if (current.editing) {
+                            current.copy(task = projected)
+                        } else {
+                            current.copy(
+                                task = projected,
+                                readyToPlan = projected.readyToPlan,
+                                baselineDraft = current.baselineDraft?.copy(
+                                    readyToPlan = projected.readyToPlan,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     fun load(taskId: Int) {
         _state.value = TaskDetailUiState(taskId = taskId)
@@ -127,7 +154,10 @@ class TaskDetailViewModel(
             val typesResult = typesDeferred.await()
             val failure = tasksResult.exceptionOrNull() ?: projectsResult.exceptionOrNull() ?: typesResult.exceptionOrNull()
             val taskList = tasksResult.getOrNull()
-            val task = taskList?.items?.findTask(taskId)
+            taskList?.let { readinessCoordinator?.mergeServerTasks(it.items) }
+            val task = taskList?.items
+                ?.let { readinessCoordinator?.projectTasks(it) ?: it }
+                ?.findTask(taskId)
             val parent: BattleTask? = null
             if (failure != null || task == null) {
                 _state.update { it.copy(loading = false, error = failure?.apiError?.message ?: "Task not found.") }
@@ -353,6 +383,8 @@ class TaskDetailViewModel(
         parsed as TaskDraftValidation.Valid
         val draft = current.toTaskDetailDraft().normalized()
         val normalizedBaseline = baseline.normalized()
+        val readinessBoundary = readinessCoordinator?.intentVersion(original.id)
+        val nonReadinessChanged = draft.copy(readyToPlan = normalizedBaseline.readyToPlan) != normalizedBaseline
         _state.update {
             it.copy(
                 saving = true,
@@ -363,9 +395,7 @@ class TaskDetailViewModel(
             )
         }
         viewModelScope.launch {
-            repository.patchBattleTask(
-                original.id,
-                BattleTaskPatch(
+            val patch = BattleTaskPatch(
                     title = draft.title.changedFrom(normalizedBaseline.title),
                     description = draft.description.changedFrom(normalizedBaseline.description),
                     status = draft.status.changedFrom(normalizedBaseline.status),
@@ -376,17 +406,33 @@ class TaskDetailViewModel(
                     deadlineDate = parsed.deadlineDate.changedNullableFrom(original.deadlineDate),
                     deadlineAt = parsed.deadlineAt.changedNullableFrom(original.deadlineAt),
                     reminderAt = parsed.reminderAt.changedNullableFrom(original.reminderAt),
-                    readyToPlan = draft.readyToPlan.changedFrom(normalizedBaseline.readyToPlan),
-                ),
-            ).getOrElse { error ->
-                _state.update {
-                    it.copy(
-                        saving = false,
-                        operation = null,
-                        saveError = error.apiError.message,
-                    )
+                    readyToPlan = if (readinessCoordinator == null) {
+                        draft.readyToPlan.changedFrom(normalizedBaseline.readyToPlan)
+                    } else {
+                        PatchField.Absent
+                    },
+                )
+            val saved = if (readinessCoordinator == null || nonReadinessChanged) {
+                repository.patchBattleTask(original.id, patch).getOrElse { error ->
+                    _state.update {
+                        it.copy(
+                            saving = false,
+                            operation = null,
+                            saveError = error.apiError.message,
+                        )
+                    }
+                    return@launch
                 }
-                return@launch
+            } else {
+                original
+            }
+            readinessCoordinator?.let { coordinator ->
+                coordinator.mergeServerTasks(listOf(saved))
+                coordinator.setReadyFromDraft(
+                    task = saved,
+                    ready = draft.readyToPlan,
+                    observedIntentVersion = checkNotNull(readinessBoundary),
+                )
             }
             clearPersistedDraft()
             load(original.id)

@@ -92,6 +92,8 @@ data class BattleTask(
     val readyToPlan: Boolean,
     /** True while the latest local Ready to Plan choice is not yet confirmed by the server. */
     val readinessPending: Boolean = false,
+    /** Task-scoped recovery copy for a latest Ready to Plan choice that was not confirmed. */
+    val readinessFailureMessage: String? = null,
     val status: TaskStatus,
     val completedAt: Instant? = null,
     val version: Int = 1,

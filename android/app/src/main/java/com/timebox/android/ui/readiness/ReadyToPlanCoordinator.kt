@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 /** Transport boundary for the app-scoped Ready to Plan coordinator. */
 internal interface ReadyToPlanTransport {
     suspend fun setReady(taskId: Int, ready: Boolean): Result<BattleTask>
+    suspend fun reconcile(taskId: Int): Result<BattleTask?> =
+        Result.failure(UnsupportedOperationException("Readiness reconciliation is unavailable"))
 }
 
 internal class RepositoryReadyToPlanTransport(
@@ -25,18 +27,28 @@ internal class RepositoryReadyToPlanTransport(
             taskId,
             BattleTaskPatch(readyToPlan = PatchField.of(ready)),
         )
+
+    override suspend fun reconcile(taskId: Int): Result<BattleTask?> =
+        repository.listBattleTasks().map { tasks ->
+            tasks.items.flattenBattleTasks().firstOrNull { it.id == taskId }
+        }
 }
+
+private data class ReadinessFailure(val desired: Boolean, val message: String)
 
 private data class ReadinessEntry(
     val task: BattleTask,
     val confirmed: Boolean,
     val desired: Boolean,
     val writing: Boolean = false,
-    val authoritativeLifecycle: Boolean = false,
+    val failure: ReadinessFailure? = null,
+    val removed: Boolean = false,
+    val intentVersion: Long = 0,
 ) {
     fun projection(): BattleTask = task.copy(
         readyToPlan = desired,
         readinessPending = writing || desired != confirmed,
+        readinessFailureMessage = failure?.message,
     )
 }
 
@@ -63,10 +75,18 @@ class ReadyToPlanCoordinator internal constructor(
                     current.copy(
                         task = incoming,
                         confirmed = incoming.readyToPlan,
-                        authoritativeLifecycle = false,
+                        removed = false,
                     )
                 } else {
-                    ReadinessEntry(incoming, incoming.readyToPlan, incoming.readyToPlan)
+                    current.copy(
+                        task = incoming,
+                        confirmed = incoming.readyToPlan,
+                        desired = incoming.readyToPlan,
+                        failure = current.failure?.let { failure ->
+                            failure.takeUnless { failure.desired == incoming.readyToPlan }
+                        },
+                        removed = false,
+                    )
                 }
             }
         }
@@ -74,17 +94,26 @@ class ReadyToPlanCoordinator internal constructor(
     }
 
     @Synchronized
-    fun projectTasks(tasks: List<BattleTask>): List<BattleTask> = tasks.map(::projectTree)
+    fun projectTasks(tasks: List<BattleTask>): List<BattleTask> = tasks
+        .filterNot { entries[it.id]?.removed == true }
+        .map(::projectTree)
 
     @Synchronized
     fun projectedTask(taskId: Int): BattleTask? = entries[taskId]?.projection()
+
+    @Synchronized
+    fun intentVersion(taskId: Int): Long = entries[taskId]?.intentVersion ?: 0
 
     fun setReady(task: BattleTask, ready: Boolean) {
         var startWorker = false
         synchronized(this) {
             val current = entries[task.id] ?: ReadinessEntry(task, task.readyToPlan, task.readyToPlan)
             if (current.task.status == TaskStatus.Completed) return
-            val updated = current.copy(desired = ready)
+            val updated = current.copy(
+                desired = ready,
+                failure = null,
+                intentVersion = current.intentVersion + 1,
+            )
             startWorker = !updated.writing && updated.desired != updated.confirmed
             entries[task.id] = updated.copy(writing = updated.writing || startWorker)
             publish()
@@ -92,59 +121,146 @@ class ReadyToPlanCoordinator internal constructor(
         if (startWorker) scope.launch { persist(task.id) }
     }
 
+    /**
+     * Submits the readiness field of a saved multi-field draft at its captured ordering boundary.
+     * A choice made after that draft started saving wins and makes this submission a no-op.
+     */
+    fun setReadyFromDraft(task: BattleTask, ready: Boolean, observedIntentVersion: Long): Boolean {
+        var startWorker = false
+        synchronized(this) {
+            val current = entries[task.id] ?: ReadinessEntry(task, task.readyToPlan, task.readyToPlan)
+            if (current.intentVersion != observedIntentVersion || current.task.status == TaskStatus.Completed) {
+                return false
+            }
+            val updated = current.copy(
+                desired = ready,
+                failure = null,
+                intentVersion = current.intentVersion + 1,
+            )
+            startWorker = !updated.writing && updated.desired != updated.confirmed
+            entries[task.id] = updated.copy(writing = updated.writing || startWorker)
+            publish()
+        }
+        if (startWorker) scope.launch { persist(task.id) }
+        return true
+    }
+
+    fun retry(taskId: Int) {
+        var startWorker = false
+        synchronized(this) {
+            val current = entries[taskId] ?: return
+            val failed = current.failure ?: return
+            val updated = current.copy(
+                desired = failed.desired,
+                failure = null,
+                intentVersion = current.intentVersion + 1,
+            )
+            startWorker = !updated.writing && updated.desired != updated.confirmed
+            entries[taskId] = updated.copy(writing = updated.writing || startWorker)
+            publish()
+        }
+        if (startWorker) scope.launch { persist(taskId) }
+    }
+
     private suspend fun persist(taskId: Int) {
         while (true) {
             val target = synchronized(this) { entries[taskId]?.desired } ?: return
             val result = transport.setReady(taskId, target)
+            if (result.isFailure) {
+                val reconciliation = transport.reconcile(taskId)
+                val continueWriting = synchronized(this) {
+                    val current = entries[taskId] ?: return@synchronized false
+                    val reconciled = reconciliation.getOrNull()
+                    var merged = current
+                    if (reconciliation.isSuccess) {
+                        merged = if (reconciled == null) {
+                            current.copy(confirmed = false, removed = true)
+                        } else if (reconciled.version >= current.task.version) {
+                            current.copy(
+                                task = reconciled,
+                                confirmed = reconciled.readyToPlan,
+                                removed = false,
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                    val latestIntent = merged.desired == target
+                    if (!latestIntent) {
+                        val keepWriting = merged.desired != merged.confirmed
+                        entries[taskId] = merged.copy(writing = keepWriting)
+                        publish()
+                        keepWriting
+                    } else if (reconciliation.isSuccess && merged.confirmed == target && !merged.removed) {
+                        entries[taskId] = merged.copy(
+                            desired = target,
+                            writing = false,
+                            failure = null,
+                        )
+                        publish()
+                        false
+                    } else {
+                        entries[taskId] = merged.copy(
+                            desired = merged.confirmed,
+                            writing = false,
+                            failure = ReadinessFailure(
+                                desired = target,
+                                message = if (reconciliation.isSuccess) {
+                                    "Ready to Plan was not saved. Retry your latest choice."
+                                } else {
+                                    "Ready to Plan could not be confirmed. Retry your latest choice."
+                                },
+                            ),
+                        )
+                        publish()
+                        false
+                    }
+                }
+                if (!continueWriting) return
+                continue
+            }
             val continueWriting = synchronized(this) {
                 val current = entries[taskId] ?: return@synchronized false
-                result.fold(
-                    onSuccess = { saved ->
-                        val newestTask = if (saved.version >= current.task.version) {
-                            current.task.copy(
-                                readyToPlan = saved.readyToPlan,
-                                status = saved.status,
-                                completedAt = saved.completedAt,
-                                version = saved.version,
-                                archivedAt = saved.archivedAt,
-                                deletedAt = saved.deletedAt,
-                                updatedAt = saved.updatedAt,
-                            )
-                        } else {
-                            current.task
-                        }
-                        val lifecycleChanged = saved.status != current.task.status ||
-                            saved.completedAt != current.task.completedAt ||
-                            saved.archivedAt != current.task.archivedAt ||
-                            saved.deletedAt != current.task.deletedAt
-                        val lifecycleRejected = lifecycleChanged || saved.readyToPlan != target
-                        if (lifecycleRejected) {
-                            entries[taskId] = ReadinessEntry(
-                                task = newestTask,
-                                confirmed = saved.readyToPlan,
-                                desired = saved.readyToPlan,
-                                authoritativeLifecycle = lifecycleChanged,
-                            )
-                            false
-                        } else {
-                            val confirmed = target
-                            val keepWriting = current.desired != confirmed
-                            entries[taskId] = current.copy(
-                                task = newestTask,
-                                confirmed = confirmed,
-                                writing = keepWriting,
-                            )
-                            keepWriting
-                        }
-                    },
-                    onFailure = {
-                        entries[taskId] = current.copy(
-                            desired = current.confirmed,
-                            writing = false,
-                        )
-                        false
-                    },
-                ).also { publish() }
+                val saved = result.getOrThrow()
+                val newestTask = if (saved.version >= current.task.version) {
+                    current.task.copy(
+                        readyToPlan = saved.readyToPlan,
+                        status = saved.status,
+                        completedAt = saved.completedAt,
+                        version = saved.version,
+                        archivedAt = saved.archivedAt,
+                        deletedAt = saved.deletedAt,
+                        updatedAt = saved.updatedAt,
+                    )
+                } else {
+                    current.task
+                }
+                val lifecycleChanged = saved.status != current.task.status ||
+                    saved.completedAt != current.task.completedAt ||
+                    saved.archivedAt != current.task.archivedAt ||
+                    saved.deletedAt != current.task.deletedAt
+                val lifecycleRejected = lifecycleChanged || saved.readyToPlan != target
+                if (lifecycleRejected && saved.version >= current.task.version) {
+                    entries[taskId] = ReadinessEntry(
+                        task = newestTask,
+                        confirmed = saved.readyToPlan,
+                        desired = saved.readyToPlan,
+                        intentVersion = current.intentVersion,
+                    )
+                    publish()
+                    false
+                } else {
+                    val confirmed = target
+                    val keepWriting = current.desired != confirmed
+                    entries[taskId] = current.copy(
+                        task = newestTask,
+                        confirmed = confirmed,
+                        writing = keepWriting,
+                        failure = null,
+                    )
+                    publish()
+                    keepWriting
+                }
             }
             if (!continueWriting) return
         }
@@ -152,26 +268,22 @@ class ReadyToPlanCoordinator internal constructor(
 
     private fun projectTree(task: BattleTask): BattleTask {
         val entry = entries[task.id]
+        val source = if (entry != null && entry.task.version > task.version) entry.task else task
         val readiness = entry?.projection()
-        var projection = if (readiness == null) {
+        val projection = if (readiness == null) {
             task
         } else {
-            task.copy(
+            source.copy(
                 readyToPlan = readiness.readyToPlan,
                 readinessPending = readiness.readinessPending,
+                readinessFailureMessage = readiness.readinessFailureMessage,
             )
         }
-        if (entry?.authoritativeLifecycle == true && entry.task.version >= task.version) {
-            projection = projection.copy(
-                status = entry.task.status,
-                completedAt = entry.task.completedAt,
-                archivedAt = entry.task.archivedAt,
-                deletedAt = entry.task.deletedAt,
-                version = entry.task.version,
-                updatedAt = entry.task.updatedAt,
-            )
-        }
-        return projection.copy(sessionTasks = task.sessionTasks.map(::projectTree))
+        return projection.copy(
+            sessionTasks = source.sessionTasks
+                .filterNot { entries[it.id]?.removed == true }
+                .map(::projectTree),
+        )
     }
 
     private fun publish() {

@@ -2,6 +2,7 @@ package com.timebox.android.ui
 
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.semantics.SemanticsActions
@@ -36,6 +38,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -153,7 +158,8 @@ class TimeboxAppReadyToPlanTest {
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
         compose.runOnIdle {
-            transport.completeReadiness(ready = false, version = 2, status = "completed")
+            transport.setServerTask(ready = false, version = 2, status = "completed")
+            transport.failReadiness()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").assertDoesNotExist()
         compose.onNodeWithText("Completed").performClick()
@@ -162,6 +168,100 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithText("Day").performClick()
         compose.onNodeWithTag("planning-mode-action").performClick()
         compose.onNodeWithContentDescription("Schedule App projection Task").assertDoesNotExist()
+    }
+
+    @Test
+    fun failedLatestChoiceReconcilesAndKeepsManualRetryAcrossNavigation() {
+        val transport = ControllableTimeboxApi()
+        setAppContent(transport)
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        compose.runOnIdle { transport.failReadiness() }
+
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("App projection Task readiness error")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Ready to Plan was not saved. Retry your latest choice.").assertExists()
+
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("App projection Task readiness error")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Retry").performClick()
+
+        compose.runOnIdle {
+            assertEquals(2, transport.readinessCalls.size)
+            assertEquals(listOf(true, true), transport.readinessCalls)
+        }
+    }
+
+    @Test
+    fun unavailableReconciliationFallsBackAndKeepsAdditionOutOfDay() {
+        val transport = ControllableTimeboxApi()
+        setAppContent(transport)
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        compose.runOnIdle {
+            transport.failNextBattleTaskRead = true
+            transport.failReadiness()
+        }
+
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Ready to Plan could not be confirmed. Retry your latest choice.")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        enterPlanningMode()
+        compose.onNodeWithContentDescription("Schedule App projection Task").assertDoesNotExist()
+    }
+
+    @Test
+    fun TaskDetailKeepsReadinessInDraftUntilSaveThenUsesCoordinator() {
+        val transport = ControllableTimeboxApi()
+        setAppContent(transport)
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("battle-plan-task-10").performTouchInput {
+            click(center.copy(y = center.y / 3f))
+        }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Edit details").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Edit details").performClick()
+        compose.onAllNodes(hasSetTextAction())[1].performTextReplacement("Draft notes")
+        compose.onNodeWithText("Ready to Plan").performClick()
+
+        compose.runOnIdle { assertEquals(emptyList<String>(), transport.patchBodies) }
+
+        compose.onNodeWithText("Save changes").performClick()
+        compose.waitUntil(5_000) { transport.patchBodies.size == 1 }
+        compose.runOnIdle {
+            assertTrue("description" in transport.patchBodies.single())
+            assertFalse("ready_to_plan" in transport.patchBodies.single())
+            assertEquals(emptyList<Boolean>(), transport.readinessCalls)
+            transport.completePatch(ready = false, version = 2)
+        }
+        compose.waitUntil(5_000) { transport.readinessCalls == listOf(true) }
+        compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
+            .assertExists()
+
+        compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
     }
 
     private fun setAppContent(transport: ControllableTimeboxApi) {
@@ -204,15 +304,23 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
         serverNowIso = "2026-09-08T12:00:00+08:00",
     )
     private var task = taskDto(ready = initialReady, version = 1)
-    private var readinessContinuation: Continuation<Any?>? = null
+    private val readinessContinuations = ArrayDeque<Continuation<Any?>>()
+    val readinessCalls = mutableListOf<Boolean>()
+    val patchBodies = mutableListOf<String>()
+    var failNextBattleTaskRead = false
 
     fun proxy(): TimeboxApi = Proxy.newProxyInstance(
         TimeboxApi::class.java.classLoader,
         arrayOf(TimeboxApi::class.java),
     ) { _, method, args ->
         if (method.name == "patchBattleTask") {
+            val body = args?.getOrNull(1).toString()
+            patchBodies += body
+            if ("ready_to_plan" in body) {
+                readinessCalls += "true" in body
+            }
             @Suppress("UNCHECKED_CAST")
-            readinessContinuation = args?.lastOrNull() as Continuation<Any?>
+            readinessContinuations.addLast(args?.lastOrNull() as Continuation<Any?>)
             COROUTINE_SUSPENDED
         } else {
             val value: Any? = when (method.name) {
@@ -222,7 +330,12 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
                 "getActiveActualBlock" -> null
                 "listTaskTypes" -> listOf(TaskTypeDto(1, "Work"))
                 "listProjects" -> emptyList<Any>()
-                "listBattleTasks" -> BattleTaskListDto(listOf(task), meta.timezone, meta.serverNowIso)
+                "listBattleTasks" -> if (failNextBattleTaskRead) {
+                    failNextBattleTaskRead = false
+                    throw IllegalStateException("task reconciliation unavailable")
+                } else {
+                    BattleTaskListDto(listOf(task), meta.timezone, meta.serverNowIso)
+                }
                 else -> Unit
             }
             @Suppress("UNCHECKED_CAST")
@@ -236,8 +349,22 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
 
     fun completeReadiness(ready: Boolean, version: Int, status: String = "open") {
         task = taskDto(ready, version, status)
-        checkNotNull(readinessContinuation).resumeWith(Result.success(task))
-        readinessContinuation = null
+        readinessContinuations.removeFirst().resumeWith(Result.success(task))
+    }
+
+    fun completePatch(ready: Boolean, version: Int, status: String = "open") {
+        task = taskDto(ready, version, status)
+        readinessContinuations.removeFirst().resumeWith(Result.success(task))
+    }
+
+    fun setServerTask(ready: Boolean, version: Int, status: String = "open") {
+        task = taskDto(ready, version, status)
+    }
+
+    fun failReadiness() {
+        readinessContinuations.removeFirst().resumeWith(
+            Result.failure(IllegalStateException("readiness write failed")),
+        )
     }
 
     private fun day(date: String) = DayDto(
