@@ -2,6 +2,7 @@ package com.timebox.android.data
 
 import com.timebox.android.data.remote.BattleTaskDto
 import com.timebox.android.data.remote.ActualBlockDto
+import com.timebox.android.data.remote.ApiFactory
 import com.timebox.android.data.remote.BattleTaskListDto
 import com.timebox.android.data.remote.DueReminderDto
 import com.timebox.android.data.remote.DayDto
@@ -22,10 +23,13 @@ import org.junit.Test
 import java.lang.reflect.Proxy
 import java.time.LocalDate
 import java.time.Instant
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 class BattlePlanRepositoryTest {
     private val calls = mutableListOf<String>()
     private var recurringCreateBody: RecurringTemplateCreateDto? = null
+    private var recurringPatchBody: JsonObject? = null
     private val repository = TimeboxRepository(fakeApi())
 
     @Test
@@ -113,10 +117,11 @@ class BattlePlanRepositoryTest {
         assertTrue(reminder.reminderAt.toString().startsWith("2026-08-17T"))
         val template = repository.getRecurringTemplate(5).getOrThrow()
         assertEquals(RecurrenceFrequency.Daily, template.frequency)
+        assertEquals(listOf("morning", "afternoon"), template.preplanningSchedule?.slots?.map { it.key })
     }
 
     @Test
-    fun `repository sends one Recurring Pre-planning Schedule slot on creation`() = runBlocking {
+    fun `repository creates multiple pre-planning slots without read-only wire fields`() = runBlocking {
         repository.createRecurringTemplate(RecurringTemplateCreate(
             title = "Morning review",
             rule = RecurrenceRule(
@@ -125,13 +130,68 @@ class BattlePlanRepositoryTest {
                 startDate = LocalDate.parse("2026-08-17"),
             ),
             preplanningSchedule = RecurringPreplanningSchedule(listOf(
-                RecurringPreplanningSlot(startMinute = 510, endMinute = 555)
+                RecurringPreplanningSlot(
+                    id = 31,
+                    key = "ignored-on-create",
+                    position = 0,
+                    startMinute = 510,
+                    endMinute = 555,
+                ),
+                RecurringPreplanningSlot(
+                    id = 32,
+                    key = "also-ignored-on-create",
+                    position = 1,
+                    startMinute = 900,
+                    endMinute = 960,
+                ),
             )),
         )).getOrThrow()
 
-        val slot = recurringCreateBody?.preplanningSchedule?.slots?.single()
-        assertEquals(510, slot?.startMinute)
-        assertEquals(555, slot?.endMinute)
+        val body = checkNotNull(recurringCreateBody)
+        val scheduleJson = ApiFactory.json.encodeToJsonElement(
+            RecurringTemplateCreateDto.serializer(),
+            body,
+        ).jsonObject["preplanning_schedule"]
+        assertEquals(
+            """{"slots":[{"start_minute":510,"end_minute":555},{"start_minute":900,"end_minute":960}]}""",
+            scheduleJson.toString(),
+        )
+    }
+
+    @Test
+    fun `repository patches multiple keyed Recurring Pre-planning Schedule slots`() = runBlocking {
+        repository.patchRecurringTemplate(
+            5,
+            RecurringTemplatePatch(
+                preplanningSchedule = PatchField.of(RecurringPreplanningSchedule(listOf(
+                    RecurringPreplanningSlot(
+                        key = "morning",
+                        startMinute = 510,
+                        endMinute = 555,
+                    ),
+                    RecurringPreplanningSlot(
+                        key = "afternoon",
+                        startMinute = 900,
+                        endMinute = 960,
+                    ),
+                ))),
+            ),
+        ).getOrThrow()
+
+        assertEquals(
+            """{"slots":[{"key":"morning","weekday":null,"start_minute":510,"end_minute":555},{"key":"afternoon","weekday":null,"start_minute":900,"end_minute":960}]}""",
+            recurringPatchBody?.get("preplanning_schedule")?.toString(),
+        )
+    }
+
+    @Test
+    fun `repository clears a Recurring Pre-planning Schedule with explicit null`() = runBlocking {
+        repository.patchRecurringTemplate(
+            5,
+            RecurringTemplatePatch(preplanningSchedule = PatchField.clear()),
+        ).getOrThrow()
+
+        assertEquals("null", recurringPatchBody?.get("preplanning_schedule")?.toString())
     }
 
     private fun fakeApi(): TimeboxApi {
@@ -144,6 +204,9 @@ class BattlePlanRepositoryTest {
             calls += method.name
             if (method.name == "createRecurringTemplate") {
                 recurringCreateBody = arguments?.first() as RecurringTemplateCreateDto
+            }
+            if (method.name == "patchRecurringTemplate") {
+                recurringPatchBody = arguments?.get(1) as JsonObject
             }
             when (method.name) {
                 "listProjects" -> listOf(project)
@@ -220,6 +283,14 @@ class BattlePlanRepositoryTest {
         createdAt = "2026-08-17T00:00:00Z",
         updatedAt = "2026-08-17T00:00:00Z",
         cadence = "Daily",
+        preplanningSchedule = com.timebox.android.data.remote.RecurringPreplanningScheduleDto(listOf(
+            com.timebox.android.data.remote.RecurringPreplanningSlotDto(
+                id = 31, key = "morning", position = 0, startMinute = 480, endMinute = 540,
+            ),
+            com.timebox.android.data.remote.RecurringPreplanningSlotDto(
+                id = 32, key = "afternoon", position = 1, startMinute = 900, endMinute = 960,
+            ),
+        )),
     )
 
     private fun actualDto() = ActualBlockDto(

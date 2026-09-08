@@ -11,8 +11,8 @@ import com.timebox.android.data.remote.RecurrencePreviewDto
 import com.timebox.android.data.remote.RecurrenceRuleDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
-import com.timebox.android.data.remote.RecurringPreplanningScheduleDto
-import com.timebox.android.data.remote.RecurringPreplanningSlotDto
+import com.timebox.android.data.remote.RecurringPreplanningScheduleWriteDto
+import com.timebox.android.data.remote.RecurringPreplanningSlotWriteDto
 import com.timebox.android.data.remote.ProjectCreateDto
 import com.timebox.android.data.remote.PlanningCommitDto
 import com.timebox.android.data.remote.PlanningPlacementDto
@@ -261,8 +261,8 @@ class BattlePlanContractTest {
                 mode = "scheduled",
                 frequency = "daily",
                 startDate = "2026-08-17",
-                preplanningSchedule = RecurringPreplanningScheduleDto(
-                    listOf(RecurringPreplanningSlotDto(startMinute = 510, endMinute = 555))
+                preplanningSchedule = RecurringPreplanningScheduleWriteDto(
+                    listOf(RecurringPreplanningSlotWriteDto(startMinute = 510, endMinute = 555))
                 ),
             ),
         )

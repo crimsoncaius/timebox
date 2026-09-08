@@ -31,6 +31,7 @@ internal class PatchBodyBuilder {
         put(name, field) { list -> JsonArray(list.map(::JsonPrimitive)) }
     fun ints(name: String, field: PatchField<List<Int>>) =
         put(name, field) { list -> JsonArray(list.map(::JsonPrimitive)) }
+    fun json(name: String, field: PatchField<JsonElement>) = put(name, field) { it }
 
     private fun <T> put(name: String, field: PatchField<T>, encode: (T) -> JsonElement) {
         when (field) {

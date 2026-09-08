@@ -165,11 +165,15 @@ def _lane_blocks(
     day: Day,
     lane: BlockLane,
     exclude_id: int | None = None,
+    exclude_ids: set[int] | None = None,
 ) -> list[TimeBlock]:
+    excluded = set(exclude_ids or ())
+    if exclude_id is not None:
+        excluded.add(exclude_id)
     return [
         b
         for b in day.time_blocks
-        if b.lane == lane and (exclude_id is None or b.id != exclude_id)
+        if b.lane == lane and b.id not in excluded
     ]
 
 
@@ -179,8 +183,11 @@ def _assert_no_overlap(
     start: int,
     end: int,
     exclude_id: int | None = None,
+    exclude_ids: set[int] | None = None,
 ) -> None:
-    for other in _lane_blocks(day, lane, exclude_id=exclude_id):
+    for other in _lane_blocks(
+        day, lane, exclude_id=exclude_id, exclude_ids=exclude_ids
+    ):
         if _intervals_overlap(start, end, other.start_minute, other.end_minute):
             raise ValueError("Block overlaps another block in the same lane")
 
@@ -484,6 +491,45 @@ def try_create_generated_planned_block(
     db.flush()
     _touch_day(day)
     return block
+
+
+def try_update_generated_planned_blocks(
+    db: Session,
+    updates: list[tuple[TimeBlock, int, int]],
+) -> set[int]:
+    """Move peer generated Planned Blocks without treating peers as conflicts."""
+
+    for _, start_minute, end_minute in updates:
+        _validate_minutes(start_minute, end_minute)
+    updated_ids: set[int] = set()
+    day_ids = sorted({block.day_id for block, _, _ in updates})
+    for day_id in day_ids:
+        day_updates = [update for update in updates if update[0].day_id == day_id]
+        peer_block_ids = {block.id for block, _, _ in day_updates}
+        day = db.execute(
+            select(Day)
+            .where(Day.id == day_id)
+            .options(selectinload(Day.time_blocks))
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one()
+        for block, start_minute, end_minute in day_updates:
+            try:
+                _assert_no_overlap(
+                    day,
+                    BlockLane.planned,
+                    start_minute,
+                    end_minute,
+                    exclude_ids=peer_block_ids,
+                )
+            except ValueError:
+                continue
+            block.start_minute = start_minute
+            block.end_minute = end_minute
+            updated_ids.add(block.id)
+        if any(block.id in updated_ids for block, _, _ in day_updates):
+            _touch_day(day)
+    return updated_ids
 
 
 def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBlock:

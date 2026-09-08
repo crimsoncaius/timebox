@@ -30,6 +30,9 @@ from app.schemas.battle_plan import (
     RecurringTemplateRead,
     RecurringPreplanningScheduleRead,
     RecurringPreplanningSlotRead,
+    RecurringPreplanningScheduleWrite,
+    RecurringPreplanningSlotWrite,
+    validate_preplanning_schedule,
 )
 
 from app.services.recurrence.cadence import _cadence
@@ -114,6 +117,48 @@ def create_template(
     return _load_template(db, row.id)
 
 
+def _replace_preplanning_schedule(
+    db: Session,
+    row: RecurringTemplate,
+    schedule: RecurringPreplanningScheduleWrite | None,
+) -> None:
+    active_by_key = {
+        slot.slot_key: slot for slot in row.preplanning_slots if slot.removed_at is None
+    }
+    requested = schedule.slots if schedule is not None else []
+    requested_keys = {slot.key for slot in requested if slot.key is not None}
+    unknown = requested_keys - active_by_key.keys()
+    if unknown:
+        raise ValueError("Pre-planning slot not found on this Recurring Task Series")
+
+    for temporary_position, slot in enumerate(active_by_key.values(), start=1):
+        slot.position = -temporary_position
+    db.flush()
+
+    removed_at = _utc_now()
+    for key, slot in active_by_key.items():
+        if key not in requested_keys:
+            slot.removed_at = removed_at
+    db.flush()
+
+    for position, value in enumerate(requested):
+        if value.key is None:
+            db.add(RecurringPreplanningSlot(
+                template_id=row.id,
+                slot_key=str(uuid.uuid4()),
+                position=position,
+                weekday=value.weekday,
+                start_minute=value.start_minute,
+                end_minute=value.end_minute,
+            ))
+            continue
+        slot = active_by_key[value.key]
+        slot.position = position
+        slot.weekday = value.weekday
+        slot.start_minute = value.start_minute
+        slot.end_minute = value.end_minute
+
+
 def patch_template(
     db: Session, template_id: int, body: RecurringTemplatePatch, settings: Settings
 ) -> RecurringTemplate:
@@ -161,7 +206,7 @@ def patch_template(
     )
     if cadence_changed:
         _cleanup_future(db, row, today, suppress=False)
-    for field in fields - {"weekdays", "checklist_titles"}:
+    for field in fields - {"weekdays", "checklist_titles", "preplanning_schedule"}:
         value = getattr(body, field)
         if field == "title" and value is not None:
             value = value.strip()
@@ -170,6 +215,29 @@ def patch_template(
         row.weekdays_json = json.dumps(sorted(set(body.weekdays or [])))
     if "checklist_titles" in fields:
         _replace_checklist(db, row, body.checklist_titles or [])
+    active_schedule = RecurringPreplanningScheduleWrite(slots=[
+        RecurringPreplanningSlotWrite(
+            key=slot.slot_key,
+            weekday=slot.weekday,
+            start_minute=slot.start_minute,
+            end_minute=slot.end_minute,
+        )
+        for slot in row.preplanning_slots
+        if slot.removed_at is None
+    ]) if any(slot.removed_at is None for slot in row.preplanning_slots) else None
+    next_preplanning_schedule = (
+        body.preplanning_schedule
+        if "preplanning_schedule" in fields
+        else active_schedule
+    )
+    validate_preplanning_schedule(
+        row.mode,
+        row.frequency,
+        _json_list(row.weekdays_json),
+        next_preplanning_schedule,
+    )
+    if "preplanning_schedule" in fields:
+        _replace_preplanning_schedule(db, row, body.preplanning_schedule)
     if cadence_changed:
         # New cadence starts now. Protected old-cadence occurrences coexist as
         # exceptions; they must never push the new generation window forward.

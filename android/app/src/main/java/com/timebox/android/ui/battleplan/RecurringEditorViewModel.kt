@@ -18,6 +18,7 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
+import com.timebox.android.ui.formatMinuteLabel24
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,13 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 enum class RecurrenceEndMode { Never, EndDate, CycleLimit }
+
+data class RecurringPreplanningSlotDraft(
+    val key: String? = null,
+    val weekday: Int? = null,
+    val start: String = "09:00",
+    val end: String = "10:00",
+)
 
 data class RecurringEditorUiState(
     val templateId: Int? = null,
@@ -50,10 +58,7 @@ data class RecurringEditorUiState(
     val cycleLimit: String = "",
     val checklistText: String = "",
     val keepUnfinishedOverdue: Boolean = false,
-    val preplanningEnabled: Boolean = false,
-    val preplanningStart: String = "09:00",
-    val preplanningEnd: String = "10:00",
-    val preplanningWeekday: Int? = null,
+    val preplanningSlots: List<RecurringPreplanningSlotDraft> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
     val preview: RecurrencePreview? = null,
     val previewLoading: Boolean = false,
@@ -129,10 +134,26 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     fun setCycleLimit(value: String) = edit { copy(cycleLimit = value.filter(Char::isDigit)) }
     fun setChecklistText(value: String) = edit { copy(checklistText = value) }
     fun setKeepUnfinishedOverdue(value: Boolean) = edit { copy(keepUnfinishedOverdue = value) }
-    fun setPreplanningEnabled(value: Boolean) = edit { copy(preplanningEnabled = value) }
-    fun setPreplanningStart(value: String) = edit { copy(preplanningStart = value) }
-    fun setPreplanningEnd(value: String) = edit { copy(preplanningEnd = value) }
-    fun setPreplanningWeekday(value: Int) = edit { copy(preplanningWeekday = value) }
+    fun setPreplanningEnabled(value: Boolean) = edit {
+        copy(
+            preplanningSlots = if (value) {
+                preplanningSlots.ifEmpty { listOf(RecurringPreplanningSlotDraft()) }
+            } else emptyList(),
+        )
+    }
+    fun addPreplanningSlot() = edit {
+        copy(
+            preplanningSlots = preplanningSlots + RecurringPreplanningSlotDraft(
+                weekday = if (frequency == RecurrenceFrequency.Weekly) weekdays.minOrNull() else null,
+            ),
+        )
+    }
+    fun removePreplanningSlot(index: Int) = edit {
+        copy(preplanningSlots = preplanningSlots.filterIndexed { slotIndex, _ -> slotIndex != index })
+    }
+    fun setPreplanningStart(index: Int, value: String) = updatePreplanningSlot(index) { copy(start = value) }
+    fun setPreplanningEnd(index: Int, value: String) = updatePreplanningSlot(index) { copy(end = value) }
+    fun setPreplanningWeekday(index: Int, value: Int) = updatePreplanningSlot(index) { copy(weekday = value) }
 
     fun refreshPreview() = schedulePreview(immediate = true)
 
@@ -183,6 +204,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                         keepUnfinishedOverdue = PatchField.of(
                             current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue
                         ),
+                        preplanningSchedule = current.toPreplanningSchedule().asPatch(),
                     ),
                 )
             }
@@ -214,6 +236,15 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     private fun edit(block: RecurringEditorUiState.() -> RecurringEditorUiState) {
         _state.update { it.block().copy(dirty = true, preview = null, previewError = null, savedTemplateId = null) }
         schedulePreview()
+    }
+
+    private fun updatePreplanningSlot(
+        index: Int,
+        block: RecurringPreplanningSlotDraft.() -> RecurringPreplanningSlotDraft,
+    ) = edit {
+        copy(preplanningSlots = preplanningSlots.mapIndexed { slotIndex, slot ->
+            if (slotIndex == index) slot.block() else slot
+        })
     }
 
     private fun schedulePreview(immediate: Boolean = false) {
@@ -250,18 +281,33 @@ internal fun validateRecurrenceDraft(state: RecurringEditorUiState, requireTitle
         if (state.frequency == RecurrenceFrequency.Monthly && state.monthDay.toIntOrNull() !in 1..31) {
             return "Month day must be between 1 and 31."
         }
-        if (state.preplanningEnabled) {
-            val startMinute = parseTimeMinute(state.preplanningStart)
+        val schedule = state.preplanningSlots
+        schedule.forEach { slot ->
+            val startMinute = parseTimeMinute(slot.start)
                 ?: return "Use HH:MM for the Planned Block start."
-            val endMinute = parseTimeMinute(state.preplanningEnd, endOfDay = true)
+            val endMinute = parseTimeMinute(slot.end, endOfDay = true)
                 ?: return "Use HH:MM for the Planned Block end."
             if (endMinute - startMinute < 30) {
                 return "A Planned Block must end at least 30 minutes after it starts."
             }
             if (state.frequency == RecurrenceFrequency.Weekly &&
-                (state.preplanningWeekday ?: state.weekdays.minOrNull()) !in state.weekdays
+                (slot.weekday ?: state.weekdays.minOrNull()) !in state.weekdays
             ) {
                 return "Choose a selected recurrence weekday for the pre-planning slot."
+            }
+        }
+        schedule.forEachIndexed { index, slot ->
+            val slotStart = parseTimeMinute(slot.start) ?: return@forEachIndexed
+            val slotEnd = parseTimeMinute(slot.end, endOfDay = true) ?: return@forEachIndexed
+            schedule.drop(index + 1).forEach { other ->
+                val otherStart = parseTimeMinute(other.start) ?: return@forEach
+                val otherEnd = parseTimeMinute(other.end, endOfDay = true) ?: return@forEach
+                val sameDate = state.frequency != RecurrenceFrequency.Weekly ||
+                    (slot.weekday ?: state.weekdays.minOrNull()) ==
+                    (other.weekday ?: state.weekdays.minOrNull())
+                if (sameDate && slotStart < otherEnd && otherStart < slotEnd) {
+                    return "Recurring Pre-planning Schedule slots cannot overlap."
+                }
             }
         }
     } else if (state.quotaCount.toIntOrNull() !in 1..100) {
@@ -292,16 +338,19 @@ private fun parseTimeMinute(value: String, endOfDay: Boolean = false): Int? {
 }
 
 internal fun RecurringEditorUiState.toPreplanningSchedule(): RecurringPreplanningSchedule? {
-    if (!preplanningEnabled || mode != RecurrenceMode.Scheduled) return null
-    val startMinute = parseTimeMinute(preplanningStart) ?: return null
-    val endMinute = parseTimeMinute(preplanningEnd, endOfDay = true) ?: return null
-    return RecurringPreplanningSchedule(listOf(RecurringPreplanningSlot(
-        weekday = if (frequency == RecurrenceFrequency.Weekly) {
-            preplanningWeekday ?: weekdays.minOrNull()
-        } else null,
-        startMinute = startMinute,
-        endMinute = endMinute,
-    )))
+    if (mode != RecurrenceMode.Scheduled) return null
+    if (preplanningSlots.isEmpty()) return null
+    return RecurringPreplanningSchedule(preplanningSlots.mapIndexed { position, slot ->
+        RecurringPreplanningSlot(
+            key = slot.key,
+            position = position,
+            weekday = if (frequency == RecurrenceFrequency.Weekly) {
+                slot.weekday ?: weekdays.minOrNull()
+            } else null,
+            startMinute = parseTimeMinute(slot.start) ?: return null,
+            endMinute = parseTimeMinute(slot.end, endOfDay = true) ?: return null,
+        )
+    })
 }
 
 internal fun RecurringEditorUiState.toRule(): RecurrenceRule? {
@@ -345,6 +394,14 @@ private fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = Recurri
     cycleLimit = cycleLimit?.toString().orEmpty(),
     checklistText = checklistItems.sortedBy { it.position }.joinToString("\n") { it.title },
     keepUnfinishedOverdue = keepUnfinishedOverdue,
+    preplanningSlots = preplanningSchedule?.slots?.sortedBy { it.position }?.map { slot ->
+        RecurringPreplanningSlotDraft(
+            key = slot.key,
+            weekday = slot.weekday,
+            start = formatMinuteLabel24(slot.startMinute),
+            end = formatMinuteLabel24(slot.endMinute),
+        )
+    }.orEmpty(),
     taskTypes = taskTypes,
 )
 

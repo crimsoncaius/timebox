@@ -187,6 +187,18 @@ data class RecurringPreplanningScheduleDto(
 )
 
 @Serializable
+data class RecurringPreplanningSlotWriteDto(
+    val weekday: Int? = null,
+    @SerialName("start_minute") val startMinute: Int,
+    @SerialName("end_minute") val endMinute: Int,
+)
+
+@Serializable
+data class RecurringPreplanningScheduleWriteDto(
+    val slots: List<RecurringPreplanningSlotWriteDto>,
+)
+
+@Serializable
 data class RecurringTemplateDto(
     val id: Int,
     val title: String,
@@ -237,5 +249,5 @@ data class RecurringTemplateCreateDto(
     @SerialName("checklist_titles") val checklistTitles: List<String> = emptyList(),
     @SerialName("confirm_backfill") val confirmBackfill: Boolean = false,
     @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
-    @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleDto? = null,
+    @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleWriteDto? = null,
 )

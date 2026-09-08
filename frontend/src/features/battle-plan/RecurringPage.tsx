@@ -16,6 +16,7 @@ import {
   type RecurringTemplateWrite,
   type TaskType,
 } from '../../lib/api'
+import { formatMinuteLabel24 } from '../../lib/time'
 import { BattlePlanSidebar } from './BattlePlanSidebar'
 import { persistBattlePlanScope, type BattlePlanScope } from './battlePlanState'
 import { ProjectEditor } from './ProjectEditor'
@@ -277,6 +278,19 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
           <div><dt className="text-xs text-on-surface-variant">Starts</dt><dd className="mt-1">{displayDate(template.start_date)}</dd></div>
           <div><dt className="text-xs text-on-surface-variant">Ends</dt><dd className="mt-1">{template.end_date ? displayDate(template.end_date) : template.cycle_limit ? `${template.cycle_limit} cycles` : 'Never'}</dd></div>
         </dl>
+        {template.preplanning_schedule ? (
+          <section className="mt-8" aria-labelledby={`preplanning-schedule-${template.id}`}>
+            <h3 id={`preplanning-schedule-${template.id}`} className="font-headline text-lg font-light">Recurring Pre-planning Schedule</h3>
+            <ul className="mt-3 space-y-2">
+              {template.preplanning_schedule.slots.map((slot) => (
+                <li key={slot.key} className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container-low">
+                  {slot.weekday == null ? '' : `${WEEKDAYS[slot.weekday]} · `}
+                  {formatMinuteLabel24(slot.start_minute)}–{formatMinuteLabel24(slot.end_minute)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section className="mt-8"><h3 className="font-headline text-lg font-light">Next five</h3><div className="mt-3 space-y-2">{template.upcoming.map((window) => <div key={window.key} className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container-low">{displayWindow(window.start, window.end)}</div>)}</div></section>
         {template.current_tasks.length ? <section className="mt-8"><h3 className="font-headline text-lg font-light">Current and overdue tasks</h3><div className="mt-3 space-y-2">{template.current_tasks.map((task) => <Link key={task.id} to={`/battle-plan?task=${task.id}`} className="flex items-center justify-between rounded-xl bg-surface-container-low px-3 py-2 text-sm hover:bg-surface-container-high dark:bg-dark-surface-container-low"><span>{task.title}</span><span className={task.overdue ? 'text-error' : 'text-on-surface-variant'}>{task.overdue ? 'Overdue' : displayDate(task.deadline_date)}</span></Link>)}</div></section> : null}
         <button type="button" className={`${buttonClass} mt-8 bg-primary text-on-primary`} onClick={onEdit}>Edit template</button>
@@ -311,6 +325,22 @@ function weekdayIndexForIsoDate(value: string) {
 
 function dayOfMonthForIsoDate(value: string) {
   return Number(value.slice(8, 10))
+}
+
+type PreplanningSlotDraft = {
+  key?: string
+  weekday: number | null
+  start: string
+  end: string
+}
+
+function initialPreplanningSlots(template: RecurringTemplate | null): PreplanningSlotDraft[] {
+  return (template?.preplanning_schedule?.slots ?? []).map((slot) => ({
+    key: slot.key,
+    weekday: slot.weekday,
+    start: formatMinuteLabel24(slot.start_minute),
+    end: formatMinuteLabel24(slot.end_minute),
+  }))
 }
 
 function initialPreset(mode: RecurrenceMode, frequency: RecurrenceFrequency, interval: number, weekdays: number[]): RecurrencePreset {
@@ -374,10 +404,9 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
   const [cycleLimit, setCycleLimit] = useState(template?.cycle_limit ?? 10)
   const [checklist, setChecklist] = useState(template?.checklist_items.map((item) => item.title).join('\n') ?? '')
   const [keepUnfinishedOverdue, setKeepUnfinishedOverdue] = useState(template?.keep_unfinished_overdue ?? false)
-  const [preplanningEnabled, setPreplanningEnabled] = useState(false)
-  const [preplanningStart, setPreplanningStart] = useState('09:00')
-  const [preplanningEnd, setPreplanningEnd] = useState('10:00')
-  const [preplanningWeekday, setPreplanningWeekday] = useState<number | null>(null)
+  const [preplanningSlots, setPreplanningSlots] = useState<PreplanningSlotDraft[]>(
+    () => initialPreplanningSlots(template),
+  )
   const [preview, setPreview] = useState<RecurrencePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -406,8 +435,8 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     || cycleLimit !== (template?.cycle_limit ?? 10)
     || checklist !== (template?.checklist_items.map((item) => item.title).join('\n') ?? '')
     || keepUnfinishedOverdue !== (template?.keep_unfinished_overdue ?? false)
-    || preplanningEnabled
-  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, preplanningEnabled, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
+    || JSON.stringify(preplanningSlots) !== JSON.stringify(initialPreplanningSlots(template))
+  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, preplanningSlots, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -479,16 +508,37 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     if (endOfDay && hour === 0 && minute === 0) return 24 * 60
     return hour * 60 + minute
   }
-  const preplanningStartMinute = minuteForTime(preplanningStart)
-  const preplanningEndMinute = minuteForTime(preplanningEnd, true)
-  const effectivePreplanningWeekday = frequency === 'weekly'
-    ? (preplanningWeekday != null && weekdays.includes(preplanningWeekday) ? preplanningWeekday : weekdays[0] ?? null)
-    : null
-  const preplanningError = preplanningEnabled && (
-    !Number.isFinite(preplanningStartMinute)
-    || !Number.isFinite(preplanningEndMinute)
-    || preplanningEndMinute - preplanningStartMinute < 30
-  ) ? 'A Planned Block must end at least 30 minutes after it starts.' : null
+  const scheduleSlots = preplanningSlots.map((slot) => ({
+    ...(slot.key ? { key: slot.key } : {}),
+    start_minute: minuteForTime(slot.start),
+    end_minute: minuteForTime(slot.end, true),
+    weekday: frequency === 'weekly'
+      ? (slot.weekday != null && weekdays.includes(slot.weekday) ? slot.weekday : weekdays[0] ?? null)
+      : null,
+  }))
+  const invalidSlot = scheduleSlots.some((slot) => (
+    !Number.isFinite(slot.start_minute)
+    || !Number.isFinite(slot.end_minute)
+    || slot.end_minute - slot.start_minute < 30
+  ))
+  const overlappingSlots = scheduleSlots.some((slot, index) => scheduleSlots.slice(index + 1).some((other) => (
+    slot.weekday === other.weekday
+    && slot.start_minute < other.end_minute
+    && other.start_minute < slot.end_minute
+  )))
+  const preplanningError = invalidSlot
+    ? 'A Planned Block must end at least 30 minutes after it starts.'
+    : overlappingSlots ? 'Recurring Pre-planning Schedule slots cannot overlap.' : null
+  const updatePreplanningSlot = (index: number, changes: Partial<PreplanningSlotDraft>) => {
+    setPreplanningSlots((slots) => slots.map((slot, slotIndex) => (
+      slotIndex === index ? { ...slot, ...changes } : slot
+    )))
+  }
+  const addPreplanningSlot = () => setPreplanningSlots((slots) => [...slots, {
+    weekday: frequency === 'weekly' ? weekdays[0] ?? null : null,
+    start: '09:00',
+    end: '10:00',
+  }])
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -509,18 +559,14 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
         checklist_titles: mode === 'scheduled' ? checklist.split('\n').map((value) => value.trim()).filter(Boolean) : [],
         confirm_backfill: confirmBackfill,
         keep_unfinished_overdue: mode === 'scheduled' && keepUnfinishedOverdue,
-        ...(!template && mode === 'scheduled' && preplanningEnabled ? {
-          preplanning_schedule: {
-            slots: [{
-              start_minute: preplanningStartMinute,
-              end_minute: preplanningEndMinute,
-              weekday: effectivePreplanningWeekday,
-            }],
-          },
+        ...(mode === 'scheduled' ? {
+          preplanning_schedule: scheduleSlots.length ? { slots: scheduleSlots } : null,
         } : {}),
       }
+      const patchBody: Partial<RecurringTemplateWrite> = { ...body }
+      delete patchBody.mode
       const saved = template
-        ? await api.patchRecurringTemplate(template.id, body)
+        ? await api.patchRecurringTemplate(template.id, patchBody)
         : await api.createRecurringTemplate(body)
       await onSaved(saved)
     } catch (cause) {
@@ -643,39 +689,53 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
             </label>
           ) : null}
 
-          {mode === 'scheduled' && !template ? (
+          {mode === 'scheduled' ? (
             <div className="mt-4 rounded-xl border border-[var(--task-detail-border)] p-3.5">
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
                   aria-label="Pre-plan each Task Occurrence"
-                  checked={preplanningEnabled}
-                  onChange={(event) => setPreplanningEnabled(event.target.checked)}
+                  checked={preplanningSlots.length > 0}
+                  onChange={(event) => {
+                    if (event.target.checked) addPreplanningSlot()
+                    else setPreplanningSlots([])
+                  }}
                   className="mt-0.5"
                 />
                 <span>
                   <span className="block text-sm text-[var(--task-detail-primary)]">Pre-plan each Task Occurrence</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-[var(--task-detail-muted)]">Create one attached Planned Block in the existing seven-day horizon.</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-[var(--task-detail-muted)]">Create attached Planned Blocks in the existing seven-day horizon.</span>
                 </span>
               </label>
-              {preplanningEnabled ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {frequency === 'weekly' ? (
-                    <Select
-                      label="Pre-planning weekday"
-                      value={String(effectivePreplanningWeekday ?? '')}
-                      onChange={(value) => setPreplanningWeekday(Number(value))}
-                    >
-                      {weekdays.map((weekday) => <option key={weekday} value={weekday}>{WEEKDAYS[weekday]}</option>)}
-                    </Select>
-                  ) : null}
-                  <Field label="Starts">
-                    <input aria-label="Pre-planning start" type="time" value={preplanningStart} onChange={(event) => setPreplanningStart(event.target.value)} className={recurringFieldClass} />
-                  </Field>
-                  <Field label="Ends">
-                    <input aria-label="Pre-planning end" type="time" value={preplanningEnd} onChange={(event) => setPreplanningEnd(event.target.value)} className={recurringFieldClass} />
-                  </Field>
-                  {preplanningError ? <p role="alert" className="text-xs text-error sm:col-span-2">{preplanningError}</p> : null}
+              {preplanningSlots.length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  {preplanningSlots.map((slot, index) => {
+                    const suffix = index === 0 ? '' : ` ${index + 1}`
+                    const effectiveWeekday = slot.weekday != null && weekdays.includes(slot.weekday)
+                      ? slot.weekday : weekdays[0] ?? null
+                    return (
+                      <div key={slot.key ?? `new-${index}`} className="grid gap-3 rounded-xl bg-surface-container-low p-3 sm:grid-cols-2 dark:bg-dark-surface-container-low">
+                        {frequency === 'weekly' ? (
+                          <Select
+                            label={`Pre-planning weekday${suffix}`}
+                            value={String(effectiveWeekday ?? '')}
+                            onChange={(value) => updatePreplanningSlot(index, { weekday: Number(value) })}
+                          >
+                            {weekdays.map((weekday) => <option key={weekday} value={weekday}>{WEEKDAYS[weekday]}</option>)}
+                          </Select>
+                        ) : null}
+                        <Field label="Starts">
+                          <input aria-label={`Pre-planning start${suffix}`} type="time" value={slot.start} onChange={(event) => updatePreplanningSlot(index, { start: event.target.value })} className={recurringFieldClass} />
+                        </Field>
+                        <Field label="Ends">
+                          <input aria-label={`Pre-planning end${suffix}`} type="time" value={slot.end} onChange={(event) => updatePreplanningSlot(index, { end: event.target.value })} className={recurringFieldClass} />
+                        </Field>
+                        <button type="button" aria-label={`Remove pre-planning slot ${index + 1}`} className={`${buttonClass} justify-self-start px-2.5 py-1.5 text-xs text-error`} onClick={() => setPreplanningSlots((slots) => slots.filter((_, slotIndex) => slotIndex !== index))}>Remove slot</button>
+                      </div>
+                    )
+                  })}
+                  <button type="button" className={`${buttonClass} border border-[var(--task-detail-border)]`} onClick={addPreplanningSlot}>Add Planned Block slot</button>
+                  {preplanningError ? <p role="alert" className="text-xs text-error">{preplanningError}</p> : null}
                 </div>
               ) : null}
             </div>

@@ -15,6 +15,7 @@ from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
+    RecurringPlannedBlockState,
     RecurringPlannedBlockRealization,
     RecurringTemplate,
     Task,
@@ -127,16 +128,65 @@ def _materialize_preplanning(
         return
     from app.services import day_service
 
-    for slot in template.preplanning_slots:
-        if slot.removed_at is not None:
-            continue
-        if slot.weekday is not None and slot.weekday != window.start.weekday():
-            continue
-        existing = db.execute(select(RecurringPlannedBlockRealization.id).where(
+    applicable_slots = [
+        slot for slot in template.preplanning_slots
+        if slot.removed_at is None
+        and (slot.weekday is None or slot.weekday == window.start.weekday())
+    ]
+    applicable_keys = {slot.slot_key for slot in applicable_slots}
+    realizations = list(db.execute(
+        select(RecurringPlannedBlockRealization).where(
             RecurringPlannedBlockRealization.occurrence_id == occurrence.id,
-            RecurringPlannedBlockRealization.slot_key == slot.slot_key,
-        )).scalar_one_or_none()
+        )
+    ).scalars())
+    for realization in realizations:
+        if (
+            realization.slot_key not in applicable_keys
+            and realization.state == RecurringPlannedBlockState.untouched
+            and realization.planned_block is not None
+        ):
+            db.delete(realization.planned_block)
+            realization.planned_block = None
+    db.flush()
+
+    by_key = {realization.slot_key: realization for realization in realizations}
+    planned_updates = []
+    for slot in applicable_slots:
+        existing = by_key.get(slot.slot_key)
+        if (
+            existing is not None
+            and existing.state == RecurringPlannedBlockState.untouched
+            and existing.planned_block is not None
+        ):
+            planned_updates.append(
+                (existing.planned_block, slot.start_minute, slot.end_minute)
+            )
+    updated_block_ids = day_service.try_update_generated_planned_blocks(
+        db, planned_updates
+    )
+    for slot in applicable_slots:
+        existing = by_key.get(slot.slot_key)
         if existing is not None:
+            if existing.state != RecurringPlannedBlockState.untouched:
+                continue
+            existing.slot_id = slot.id
+            if (
+                existing.planned_block is not None
+                and existing.planned_block.id not in updated_block_ids
+            ):
+                db.delete(existing.planned_block)
+                existing.planned_block = None
+                db.flush()
+            if existing.planned_block is None:
+                block = day_service.try_create_generated_planned_block(
+                    db,
+                    date=window.start,
+                    task=task,
+                    start_minute=slot.start_minute,
+                    end_minute=slot.end_minute,
+                )
+                if block is not None:
+                    existing.planned_block = block
             continue
         block = day_service.try_create_generated_planned_block(
             db,
@@ -170,6 +220,10 @@ def _materialize(
         )
     ).scalar_one_or_none()
     if existing is not None:
+        if preplanning_eligible and existing.task_id is not None:
+            task = db.get(Task, existing.task_id)
+            if task is not None:
+                _materialize_preplanning(db, template, existing, task, window)
         return
     try:
         with db.begin_nested():

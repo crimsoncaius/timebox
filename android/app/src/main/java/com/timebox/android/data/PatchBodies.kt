@@ -3,6 +3,10 @@ package com.timebox.android.data
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.data.remote.patchBody
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 internal fun ProjectPatch.toJson(): JsonObject = patchBody {
     string("name", name)
@@ -41,7 +45,19 @@ internal fun RecurringTemplatePatch.toJson(): JsonObject = patchBody {
     strings("checklist_titles", checklistTitles)
     boolean("confirm_backfill", confirmBackfill)
     boolean("keep_unfinished_overdue", keepUnfinishedOverdue)
+    json("preplanning_schedule", preplanningSchedule.map { it.toPatchJson() })
 }
+
+private fun RecurringPreplanningSchedule.toPatchJson(): JsonElement = JsonObject(mapOf(
+    "slots" to JsonArray(slots.map { slot ->
+        JsonObject(buildMap {
+            slot.key?.let { put("key", JsonPrimitive(it)) }
+            put("weekday", slot.weekday?.let(::JsonPrimitive) ?: JsonNull)
+            put("start_minute", JsonPrimitive(slot.startMinute))
+            put("end_minute", JsonPrimitive(slot.endMinute))
+        })
+    }),
+))
 
 internal fun timeBlockPatchBody(
     taskTypeId: Int?,

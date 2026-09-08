@@ -11,6 +11,12 @@ fun hhmm(minute: Int): String {
     return "%02d:%02d".format(h, m)
 }
 
+/** `00:00`–`23:59`, wrapping the end-of-day sentinel 1440 to `00:00`. */
+fun formatMinuteLabel24(minute: Int): String {
+    val normalized = Math.floorMod(minute, 24 * 60)
+    return "%02d:%02d".format(normalized / 60, normalized % 60)
+}
+
 /** `1 PM` — hour marks in the timeline gutter. */
 fun gutterLabel(minute: Int): String {
     val hour = minute / 60

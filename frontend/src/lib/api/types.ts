@@ -297,6 +297,7 @@ export type RecurringTemplateWrite = RecurrenceRuleWrite & {
   keep_unfinished_overdue?: boolean
   preplanning_schedule?: {
     slots: Array<{
+      key?: string
       weekday: number | null
       start_minute: number
       end_minute: number

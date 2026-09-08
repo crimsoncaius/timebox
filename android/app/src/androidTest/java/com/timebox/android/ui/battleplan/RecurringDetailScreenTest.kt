@@ -1,6 +1,7 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -8,6 +9,8 @@ import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrenceStatus
 import com.timebox.android.data.RecurringTemplate
+import com.timebox.android.data.RecurringPreplanningSchedule
+import com.timebox.android.data.RecurringPreplanningSlot
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -38,6 +41,35 @@ class RecurringDetailScreenTest {
 
         compose.onNodeWithText("End template").performClick()
         compose.runOnIdle { assertEquals(1, endCalls) }
+    }
+
+    @Test
+    fun detailShowsPersistedRecurringPreplanningScheduleSlots() {
+        val template = activeTemplate().copy(
+            frequency = RecurrenceFrequency.Weekly,
+            weekdays = listOf(0, 2),
+            cadence = "Every week on Mon, Wed",
+            preplanningSchedule = RecurringPreplanningSchedule(listOf(
+                RecurringPreplanningSlot(key = "morning", position = 0, weekday = 0, startMinute = 480, endMinute = 540),
+                RecurringPreplanningSlot(key = "afternoon", position = 1, weekday = 2, startMinute = 900, endMinute = 1440),
+            )),
+        )
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                RecurringDetailScreen(
+                    state = RecurringUiState(selectedTemplate = template),
+                    onBack = {}, onRetry = {}, onEdit = {}, onOpenTask = {},
+                    onPause = {}, onResume = {}, onEnd = {}, onRequestDelete = {},
+                    onDismissDelete = {}, onConfirmDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Recurring Pre-planning Schedule")
+            .performScrollTo()
+            .fetchSemanticsNode()
+        compose.onNodeWithText("Mon · 08:00–09:00").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithText("Wed · 15:00–00:00").performScrollTo().fetchSemanticsNode()
     }
 
     private fun activeTemplate() = RecurringTemplate(

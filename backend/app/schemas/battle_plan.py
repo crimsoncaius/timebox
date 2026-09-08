@@ -240,6 +240,7 @@ class RecurrenceRuleFields(BaseModel):
 class RecurringPreplanningSlotWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    key: str | None = Field(None, min_length=1)
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
     weekday: int | None = Field(None, ge=0, le=6)
@@ -256,7 +257,14 @@ class RecurringPreplanningSlotWrite(BaseModel):
 class RecurringPreplanningScheduleWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    slots: list[RecurringPreplanningSlotWrite] = Field(..., min_length=1, max_length=1)
+    slots: list[RecurringPreplanningSlotWrite] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_unique_keys(self):
+        keys = [slot.key for slot in self.slots if slot.key is not None]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Recurring Pre-planning Schedule slot keys must be unique")
+        return self
 
 
 class RecurringPreplanningSlotRead(RecurringPreplanningSlotWrite):
@@ -267,6 +275,36 @@ class RecurringPreplanningSlotRead(RecurringPreplanningSlotWrite):
 
 class RecurringPreplanningScheduleRead(BaseModel):
     slots: list[RecurringPreplanningSlotRead]
+
+
+def validate_preplanning_schedule(
+    mode: RecurrenceMode,
+    frequency: RecurrenceFrequency,
+    weekdays: list[int],
+    schedule: RecurringPreplanningScheduleWrite | None,
+) -> None:
+    if schedule is None:
+        return
+    if mode != RecurrenceMode.scheduled:
+        raise ValueError("Recurring Pre-planning Schedules require a scheduled Recurring Task Series")
+    for slot in schedule.slots:
+        if frequency == RecurrenceFrequency.weekly:
+            if slot.weekday is None or slot.weekday not in weekdays:
+                raise ValueError("A weekly pre-planning slot must use a selected recurrence weekday")
+        elif slot.weekday is not None:
+            raise ValueError("Daily and monthly pre-planning slots follow the Task Occurrence date")
+    for index, slot in enumerate(schedule.slots):
+        for other in schedule.slots[index + 1:]:
+            same_date_position = (
+                frequency != RecurrenceFrequency.weekly
+                or slot.weekday == other.weekday
+            )
+            overlaps = not (
+                slot.end_minute <= other.start_minute
+                or other.end_minute <= slot.start_minute
+            )
+            if same_date_position and overlaps:
+                raise ValueError("Recurring Pre-planning Schedule slots cannot overlap")
 
 
 class RecurringTemplateCreate(RecurrenceRuleFields):
@@ -286,15 +324,9 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
     def validate_carry_over(self):
         if self.mode == RecurrenceMode.quota and self.keep_unfinished_overdue:
             raise ValueError("Quota shortfalls cannot carry into the next period")
-        if self.preplanning_schedule is not None:
-            if self.mode != RecurrenceMode.scheduled:
-                raise ValueError("Recurring Pre-planning Schedules require a scheduled Recurring Task Series")
-            for slot in self.preplanning_schedule.slots:
-                if self.frequency == RecurrenceFrequency.weekly:
-                    if slot.weekday is None or slot.weekday not in self.weekdays:
-                        raise ValueError("A weekly pre-planning slot must use a selected recurrence weekday")
-                elif slot.weekday is not None:
-                    raise ValueError("Daily and monthly pre-planning slots follow the Task Occurrence date")
+        validate_preplanning_schedule(
+            self.mode, self.frequency, self.weekdays, self.preplanning_schedule
+        )
         return self
 
 
@@ -317,6 +349,7 @@ class RecurringTemplatePatch(BaseModel):
     checklist_titles: list[str] | None = None
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool | None = None
+    preplanning_schedule: "RecurringPreplanningScheduleWrite | None" = None
 
 
 class RecurrencePreviewRequest(RecurrenceRuleFields):

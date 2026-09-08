@@ -42,9 +42,11 @@ internal fun RecurringCreationContent(
     onChecklist: (String) -> Unit,
     onKeepUnfinishedOverdue: (Boolean) -> Unit = {},
     onPreplanningEnabled: (Boolean) -> Unit = {},
-    onPreplanningStart: (String) -> Unit = {},
-    onPreplanningEnd: (String) -> Unit = {},
-    onPreplanningWeekday: (Int) -> Unit = {},
+    onAddPreplanningSlot: () -> Unit = {},
+    onRemovePreplanningSlot: (Int) -> Unit = {},
+    onPreplanningStart: (Int, String) -> Unit = { _, _ -> },
+    onPreplanningEnd: (Int, String) -> Unit = { _, _ -> },
+    onPreplanningWeekday: (Int, Int) -> Unit = { _, _ -> },
     onRefreshPreview: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -96,46 +98,15 @@ internal fun RecurringCreationContent(
             if (state.endMode == RecurrenceEndMode.Never) Text("Keeps repeating until you end it.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             if (state.endMode == RecurrenceEndMode.CycleLimit) Text("Ends after ${state.cycleLimit} cycles.", style = TimeboxTheme.type.bodySmall)
             if (!quota) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Pre-plan each Task Occurrence", style = TimeboxTheme.type.body)
-                        Text("Create one attached Planned Block in the existing seven-day horizon.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                    }
-                    Switch(
-                        state.preplanningEnabled,
-                        onPreplanningEnabled,
-                        enabled = !state.saving,
-                        modifier = Modifier.semantics { contentDescription = "Pre-plan each Task Occurrence" },
-                    )
-                }
-                if (state.preplanningEnabled) {
-                    if (state.frequency == RecurrenceFrequency.Weekly) {
-                        RecurrenceMenu(
-                            "Pre-planning weekday",
-                            weekdayLabel(state.preplanningWeekday ?: state.weekdays.minOrNull()),
-                            state.weekdays.sorted().map { weekdayLabel(it) to it },
-                            onPreplanningWeekday,
-                        )
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            state.preplanningStart,
-                            onPreplanningStart,
-                            Modifier.weight(1f),
-                            label = { Text("Planned Block start") },
-                            placeholder = { Text("HH:MM") },
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            state.preplanningEnd,
-                            onPreplanningEnd,
-                            Modifier.weight(1f),
-                            label = { Text("Planned Block end") },
-                            placeholder = { Text("HH:MM") },
-                            singleLine = true,
-                        )
-                    }
-                }
+                RecurringPreplanningScheduleEditor(
+                    state,
+                    onPreplanningEnabled,
+                    onAddPreplanningSlot,
+                    onRemovePreplanningSlot,
+                    onPreplanningStart,
+                    onPreplanningEnd,
+                    onPreplanningWeekday,
+                )
             }
             TextButton({ details = !details }, contentPadding = PaddingValues(0.dp)) { Text(if (details) "−  Less detail" else "+  Notes, subtasks & more") }
             if (details) {
@@ -191,6 +162,69 @@ internal fun RecurringCreationContent(
                 dateTarget = null
             },
         )
+    }
+}
+
+@Composable
+internal fun RecurringPreplanningScheduleEditor(
+    state: RecurringEditorUiState,
+    onEnabled: (Boolean) -> Unit,
+    onAddSlot: () -> Unit,
+    onRemoveSlot: (Int) -> Unit,
+    onStart: (Int, String) -> Unit,
+    onEnd: (Int, String) -> Unit,
+    onWeekday: (Int, Int) -> Unit,
+) {
+    val slots = state.preplanningSlots
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Pre-plan each Task Occurrence", style = TimeboxTheme.type.body)
+            Text("Create attached Planned Blocks in the existing seven-day horizon.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+        }
+        Switch(
+            slots.isNotEmpty(),
+            onEnabled,
+            enabled = !state.saving,
+            modifier = Modifier.semantics { contentDescription = "Pre-plan each Task Occurrence" },
+        )
+    }
+    slots.forEachIndexed { index, slot ->
+        val suffix = if (index == 0) "" else " ${index + 1}"
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Planned Block slot ${index + 1}", style = TimeboxTheme.type.label)
+            if (state.frequency == RecurrenceFrequency.Weekly) {
+                RecurrenceMenu(
+                    "Pre-planning weekday$suffix",
+                    weekdayLabel(slot.weekday ?: state.weekdays.minOrNull()),
+                    state.weekdays.sorted().map { weekdayLabel(it) to it },
+                ) { onWeekday(index, it) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    slot.start,
+                    { onStart(index, it) },
+                    Modifier.weight(1f),
+                    label = { Text("Planned Block start$suffix") },
+                    placeholder = { Text("HH:MM") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    slot.end,
+                    { onEnd(index, it) },
+                    Modifier.weight(1f),
+                    label = { Text("Planned Block end$suffix") },
+                    placeholder = { Text("HH:MM") },
+                    singleLine = true,
+                )
+            }
+            TextButton(
+                { onRemoveSlot(index) },
+                modifier = Modifier.semantics { contentDescription = "Remove pre-planning slot ${index + 1}" },
+            ) { Text("Remove slot", color = TimeboxTheme.colors.error) }
+        }
+    }
+    if (slots.isNotEmpty()) {
+        TextButton(onAddSlot) { Text("Add Planned Block slot") }
     }
 }
 

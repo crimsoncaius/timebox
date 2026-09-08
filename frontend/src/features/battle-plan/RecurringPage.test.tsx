@@ -83,6 +83,12 @@ describe('RecurringPage', () => {
         active = [...active, created]
         return response(created, 201)
       }
+      if (url.endsWith('/recurring-templates/9') && method === 'PATCH') {
+        const body = JSON.parse(String(init?.body)) as Partial<RecurringTemplate>
+        const edited = { ...active[0], ...body } as RecurringTemplate
+        active = [edited]
+        return response(edited)
+      }
       if (url.endsWith('/recurring-templates/9/pause')) {
         const next = { ...template, status: 'paused' as const }
         active = []
@@ -118,6 +124,30 @@ describe('RecurringPage', () => {
     await user.click(screen.getByRole('button', { name: 'Paused' }))
     expect(await screen.findByText('Gym')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument()
+  })
+
+  it('shows persisted Recurring Pre-planning Schedule details', async () => {
+    active = [{
+      ...template,
+      mode: 'scheduled',
+      frequency: 'weekly',
+      weekdays: [0, 2],
+      quota_count: null,
+      cadence: 'Every week on Mon, Wed',
+      preplanning_schedule: { slots: [
+        { id: 31, key: 'morning', position: 0, weekday: 0, start_minute: 480, end_minute: 540 },
+        { id: 32, key: 'afternoon', position: 1, weekday: 2, start_minute: 900, end_minute: 1440 },
+      ] },
+    }]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: 'Gym' }))
+
+    const detail = screen.getByRole('dialog', { name: 'Recurring template Gym' })
+    const schedule = within(detail).getByRole('region', { name: 'Recurring Pre-planning Schedule' })
+    expect(within(schedule).getByText('Mon · 08:00–09:00')).toBeInTheDocument()
+    expect(within(schedule).getByText('Wed · 15:00–00:00')).toBeInTheDocument()
   })
 
   it('creates a scheduled template from the previewed form', async () => {
@@ -176,6 +206,50 @@ describe('RecurringPage', () => {
     )
     expect(JSON.parse(String(request?.[1]?.body)).preplanning_schedule).toEqual({
       slots: [{ start_minute: 1380, end_minute: 1440, weekday: null }],
+    })
+  })
+
+  it('edits an existing Recurring Pre-planning Schedule with multiple slots', async () => {
+    active = [{
+      ...template,
+      mode: 'scheduled',
+      frequency: 'daily',
+      weekdays: [],
+      quota_count: null,
+      cadence: 'Every day',
+      preplanning_schedule: { slots: [
+        { id: 31, key: 'morning', position: 0, weekday: null, start_minute: 480, end_minute: 540 },
+        { id: 32, key: 'afternoon', position: 1, weekday: null, start_minute: 780, end_minute: 840 },
+      ] },
+    }]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+    await screen.findByText('Every day')
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const form = screen.getByRole('dialog', { name: 'Edit Gym' })
+    expect(within(form).getByLabelText('Pre-planning start')).toHaveValue('08:00')
+    expect(within(form).getByLabelText('Pre-planning start 2')).toHaveValue('13:00')
+    await user.clear(within(form).getByLabelText('Pre-planning start'))
+    await user.type(within(form).getByLabelText('Pre-planning start'), '08:30')
+    await user.click(within(form).getByRole('button', { name: 'Remove pre-planning slot 2' }))
+    await user.click(within(form).getByRole('button', { name: 'Add Planned Block slot' }))
+    await user.clear(within(form).getByLabelText('Pre-planning start 2'))
+    await user.type(within(form).getByLabelText('Pre-planning start 2'), '15:00')
+    await user.clear(within(form).getByLabelText('Pre-planning end 2'))
+    await user.type(within(form).getByLabelText('Pre-planning end 2'), '16:00')
+    await user.click(within(form).getByRole('button', { name: 'Save changes' }))
+
+    const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([input, init]) => String(input).endsWith('/recurring-templates/9') && init?.method === 'PATCH',
+    )
+    const requestBody = JSON.parse(String(request?.[1]?.body))
+    expect(requestBody).not.toHaveProperty('mode')
+    expect(requestBody.preplanning_schedule).toEqual({
+      slots: [
+        { key: 'morning', start_minute: 510, end_minute: 540, weekday: null },
+        { start_minute: 900, end_minute: 960, weekday: null },
+      ],
     })
   })
 

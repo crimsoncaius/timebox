@@ -269,6 +269,313 @@ def test_one_preplanning_slot_uses_each_scheduled_recurrence_date(client, freque
     ]
 
 
+def test_editing_a_preplanning_slot_updates_current_and_future_planned_blocks(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{"start_minute": 540, "end_minute": 600}]},
+    ))
+    assert created.status_code == 201, created.text
+    slot = created.json()["preplanning_schedule"]["slots"][0]
+
+    edited = client.patch(f"/recurring-templates/{created.json()['id']}", json={
+        "preplanning_schedule": {"slots": [{
+            "key": slot["key"],
+            "start_minute": 630,
+            "end_minute": 690,
+        }]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["preplanning_schedule"]["slots"] == [{
+        **slot,
+        "start_minute": 630,
+        "end_minute": 690,
+    }]
+    for offset in (0, 1):
+        planned = client.get(f"/days/{(today + dt.timedelta(days=offset)).isoformat()}").json()[
+            "planned_blocks"
+        ]
+        assert [(item["start_minute"], item["end_minute"]) for item in planned] == [(630, 690)]
+
+
+def test_swapping_two_keyed_slot_times_reconciles_atomically_and_idempotently(client):
+    today = client.get("/health").json()["today"]
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [
+            {"start_minute": 480, "end_minute": 540},
+            {"start_minute": 960, "end_minute": 1020},
+        ]},
+    )).json()
+    first, second = created["preplanning_schedule"]["slots"]
+
+    edited = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [
+            {"key": first["key"], "start_minute": 960, "end_minute": 1020},
+            {"key": second["key"], "start_minute": 480, "end_minute": 540},
+        ]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    expected = [(480, 540), (960, 1020)]
+    assert [
+        (item["start_minute"], item["end_minute"])
+        for item in client.get(f"/days/{today}").json()["planned_blocks"]
+    ] == expected
+    for _ in range(2):
+        assert client.get(f"/recurring-templates/{created['id']}").status_code == 200
+        assert [
+            (item["start_minute"], item["end_minute"])
+            for item in client.get(f"/days/{today}").json()["planned_blocks"]
+        ] == expected
+
+
+def test_reordering_two_keyed_slots_persists_requested_order(client):
+    today = client.get("/health").json()["today"]
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [
+            {"start_minute": 480, "end_minute": 540},
+            {"start_minute": 960, "end_minute": 1020},
+        ]},
+    )).json()
+    first, second = created["preplanning_schedule"]["slots"]
+
+    edited = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [
+            {"key": second["key"], "start_minute": 960, "end_minute": 1020},
+            {"key": first["key"], "start_minute": 480, "end_minute": 540},
+        ]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    assert [slot["key"] for slot in edited.json()["preplanning_schedule"]["slots"]] == [
+        second["key"], first["key"]
+    ]
+    assert [slot["position"] for slot in edited.json()["preplanning_schedule"]["slots"]] == [0, 1]
+
+
+def test_duplicate_keyed_slots_are_rejected_without_changing_schedule_or_blocks(client):
+    today = client.get("/health").json()["today"]
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [
+            {"start_minute": 480, "end_minute": 540},
+            {"start_minute": 960, "end_minute": 1020},
+        ]},
+    )).json()
+    slots = created["preplanning_schedule"]["slots"]
+
+    response = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [
+            {"key": slots[0]["key"], "start_minute": 480, "end_minute": 540},
+            {"key": slots[0]["key"], "start_minute": 960, "end_minute": 1020},
+        ]},
+    })
+
+    assert response.status_code == 422, response.text
+    assert client.get(f"/recurring-templates/{created['id']}").json()[
+        "preplanning_schedule"
+    ]["slots"] == slots
+    assert [
+        (item["start_minute"], item["end_minute"])
+        for item in client.get(f"/days/{today}").json()["planned_blocks"]
+    ] == [(480, 540), (960, 1020)]
+
+
+def test_adding_a_second_preplanning_slot_is_idempotent_across_series_and_day_reads(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{"start_minute": 480, "end_minute": 540}]},
+    )).json()
+    first = created["preplanning_schedule"]["slots"][0]
+
+    edited = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [
+            {"key": first["key"], "start_minute": 480, "end_minute": 540},
+            {"start_minute": 960, "end_minute": 1020},
+        ]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    slots = edited.json()["preplanning_schedule"]["slots"]
+    assert [(slot["position"], slot["start_minute"], slot["end_minute"]) for slot in slots] == [
+        (0, 480, 540),
+        (1, 960, 1020),
+    ]
+    for _ in range(2):
+        assert client.get(f"/recurring-templates/{created['id']}").json()[
+            "preplanning_schedule"
+        ]["slots"] == slots
+        planned = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+        assert [(item["start_minute"], item["end_minute"]) for item in planned] == [
+            (480, 540),
+            (960, 1020),
+        ]
+
+
+def test_removing_a_slot_keeps_past_planned_blocks_and_removes_current_and_future_ones(
+    client, monkeypatch
+):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        checklist_titles=[],
+        preplanning_schedule={"slots": [
+            {"start_minute": 480, "end_minute": 540},
+            {"start_minute": 960, "end_minute": 1020},
+        ]},
+    )).json()
+    retained = created["preplanning_schedule"]["slots"][1]
+    simulated_today = today + dt.timedelta(days=1)
+    monkeypatch.setattr(
+        "app.services.recurrence.templates.today_in_tz",
+        lambda _timezone: simulated_today,
+    )
+
+    edited = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [{
+            "key": retained["key"],
+            "start_minute": retained["start_minute"],
+            "end_minute": retained["end_minute"],
+        }]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    assert [slot["key"] for slot in edited.json()["preplanning_schedule"]["slots"]] == [
+        retained["key"]
+    ]
+    past = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    assert [(item["start_minute"], item["end_minute"]) for item in past] == [
+        (480, 540),
+        (960, 1020),
+    ]
+    for offset in (1, 2):
+        planned = client.get(f"/days/{(today + dt.timedelta(days=offset)).isoformat()}").json()[
+            "planned_blocks"
+        ]
+        assert [(item["start_minute"], item["end_minute"]) for item in planned] == [
+            (960, 1020)
+        ]
+
+    cleared = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": None,
+    })
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["preplanning_schedule"] is None
+    assert len(client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]) == 2
+    assert client.get(f"/days/{simulated_today.isoformat()}").json()["planned_blocks"] == []
+
+
+def test_editing_a_weekly_slot_rejects_a_date_outside_the_recurrence_rule(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    selected_weekday = today.weekday()
+    unselected_weekday = (selected_weekday + 1) % 7
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        frequency="weekly",
+        weekdays=[selected_weekday],
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{
+            "weekday": selected_weekday,
+            "start_minute": 540,
+            "end_minute": 600,
+        }]},
+    )).json()
+    slot = created["preplanning_schedule"]["slots"][0]
+
+    response = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [{
+            "key": slot["key"],
+            "weekday": unselected_weekday,
+            "start_minute": 540,
+            "end_minute": 600,
+        }]},
+    })
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "A weekly pre-planning slot must use a selected recurrence weekday"
+    persisted = client.get(f"/recurring-templates/{created['id']}").json()
+    assert persisted["preplanning_schedule"]["slots"] == [slot]
+
+
+def test_weekly_slots_place_planned_blocks_only_on_their_selected_recurrence_dates(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    next_date = today + dt.timedelta(days=1)
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        frequency="weekly",
+        weekdays=sorted({today.weekday(), next_date.weekday()}),
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{
+            "weekday": today.weekday(),
+            "start_minute": 480,
+            "end_minute": 540,
+        }]},
+    )).json()
+    first = created["preplanning_schedule"]["slots"][0]
+
+    edited = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [
+            {
+                "key": first["key"],
+                "weekday": today.weekday(),
+                "start_minute": 480,
+                "end_minute": 540,
+            },
+            {
+                "weekday": next_date.weekday(),
+                "start_minute": 960,
+                "end_minute": 1020,
+            },
+        ]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    today_blocks = client.get(f"/days/{today.isoformat()}").json()["planned_blocks"]
+    next_blocks = client.get(f"/days/{next_date.isoformat()}").json()["planned_blocks"]
+    assert [(item["start_minute"], item["end_minute"]) for item in today_blocks] == [(480, 540)]
+    assert [(item["start_minute"], item["end_minute"]) for item in next_blocks] == [(960, 1020)]
+
+
+def test_editing_a_slot_never_overlaps_an_existing_planned_block(client):
+    today = client.get("/health").json()["today"]
+    task_type = client.post("/task-types", json={"name": "Occupied"}).json()
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{"start_minute": 540, "end_minute": 600}]},
+    )).json()
+    slot = created["preplanning_schedule"]["slots"][0]
+    occupied = client.post(f"/days/{today}/blocks", json={
+        "lane": "planned",
+        "task_type_id": task_type["id"],
+        "start_minute": 630,
+        "end_minute": 690,
+    })
+    assert occupied.status_code == 200, occupied.text
+
+    edited = client.patch(f"/recurring-templates/{created['id']}", json={
+        "preplanning_schedule": {"slots": [{
+            "key": slot["key"],
+            "start_minute": 630,
+            "end_minute": 690,
+        }]},
+    })
+
+    assert edited.status_code == 200, edited.text
+    assert [(item["start_minute"], item["end_minute"]) for item in client.get(
+        f"/days/{today}"
+    ).json()["planned_blocks"]] == [(630, 690)]
+
+
 @pytest.mark.parametrize(
     ("body_changes", "message"),
     [
@@ -283,9 +590,9 @@ def test_one_preplanning_slot_uses_each_scheduled_recurrence_date(client, freque
         (
             {"preplanning_schedule": {"slots": [
                 {"start_minute": 540, "end_minute": 600},
-                {"start_minute": 660, "end_minute": 720},
+                {"start_minute": 570, "end_minute": 630},
             ]}},
-            "at most 1 item",
+            "cannot overlap",
         ),
         (
             {

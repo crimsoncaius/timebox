@@ -46,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.PriorityLevel
@@ -53,6 +55,7 @@ import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrenceStatus
 import com.timebox.android.data.RecurringTemplate
+import com.timebox.android.ui.formatMinuteLabel24
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.LoadingState
@@ -259,6 +262,21 @@ private fun RecurringDetailContent(
             DetailLine("Ends", template.endDate?.toString() ?: template.cycleLimit?.let { "$it cycles" } ?: "Never")
             DetailLine("Priorities", listOfNotNull(template.urgency?.label, template.importance?.label).joinToString(" · ").ifBlank { "Not specified" })
         }
+        template.preplanningSchedule?.let { schedule ->
+            SectionCard(Modifier.semantics { contentDescription = "Recurring Pre-planning Schedule" }) {
+                SectionHeader("Recurring Pre-planning Schedule")
+                schedule.slots.sortedBy { it.position }.forEach { slot ->
+                    val weekday = slot.weekday?.let { preplanningWeekdayLabel(it) }
+                    val times = "${formatMinuteLabel24(slot.startMinute)}–${formatMinuteLabel24(slot.endMinute)}"
+                    Text(
+                        listOfNotNull(weekday, times).joinToString(" · "),
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = TimeboxTheme.type.bodySmall,
+                        color = colors.on,
+                    )
+                }
+            }
+        }
         SectionCard {
             SectionHeader("Next five windows")
             if (template.upcoming.isEmpty()) Text("No upcoming windows", Modifier.padding(16.dp), color = colors.onVariant)
@@ -307,6 +325,9 @@ private fun RecurringDetailContent(
     }
 }
 
+private fun preplanningWeekdayLabel(weekday: Int): String =
+    listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").getOrElse(weekday) { "" }
+
 @Composable
 private fun DetailLine(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -353,9 +374,11 @@ fun RecurringEditorScreen(
     onChecklist: (String) -> Unit,
     onKeepUnfinishedOverdue: (Boolean) -> Unit = {},
     onPreplanningEnabled: (Boolean) -> Unit = {},
-    onPreplanningStart: (String) -> Unit = {},
-    onPreplanningEnd: (String) -> Unit = {},
-    onPreplanningWeekday: (Int) -> Unit = {},
+    onAddPreplanningSlot: () -> Unit = {},
+    onRemovePreplanningSlot: (Int) -> Unit = {},
+    onPreplanningStart: (Int, String) -> Unit = { _, _ -> },
+    onPreplanningEnd: (Int, String) -> Unit = { _, _ -> },
+    onPreplanningWeekday: (Int, Int) -> Unit = { _, _ -> },
     onRefreshPreview: () -> Unit,
     onSave: () -> Unit,
     onConfirmBackfill: () -> Unit,
@@ -388,6 +411,8 @@ fun RecurringEditorScreen(
                 onChecklist = onChecklist,
                 onKeepUnfinishedOverdue = onKeepUnfinishedOverdue,
                 onPreplanningEnabled = onPreplanningEnabled,
+                onAddPreplanningSlot = onAddPreplanningSlot,
+                onRemovePreplanningSlot = onRemovePreplanningSlot,
                 onPreplanningStart = onPreplanningStart,
                 onPreplanningEnd = onPreplanningEnd,
                 onPreplanningWeekday = onPreplanningWeekday,
@@ -443,6 +468,15 @@ fun RecurringEditorScreen(
                         }
                         TimeboxSwitch(state.keepUnfinishedOverdue, onKeepUnfinishedOverdue)
                     }
+                    RecurringPreplanningScheduleEditor(
+                        state,
+                        onPreplanningEnabled,
+                        onAddPreplanningSlot,
+                        onRemovePreplanningSlot,
+                        onPreplanningStart,
+                        onPreplanningEnd,
+                        onPreplanningWeekday,
+                    )
                 } else {
                     OutlinedTextField(state.quotaCount, onQuotaCount, Modifier.fillMaxWidth(), label = { Text("Times per period") }, singleLine = true)
                     Text("Quota sessions are generated without being added to Ready to Plan. The server controls calendar period boundaries.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)

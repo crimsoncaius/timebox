@@ -10,7 +10,9 @@ import com.timebox.android.data.remote.RecurrenceWindowDto
 import com.timebox.android.data.remote.RecurringChecklistItemDto
 import com.timebox.android.data.remote.RecurringTaskLinkDto
 import com.timebox.android.data.remote.RecurringPreplanningScheduleDto
+import com.timebox.android.data.remote.RecurringPreplanningScheduleWriteDto
 import com.timebox.android.data.remote.RecurringPreplanningSlotDto
+import com.timebox.android.data.remote.RecurringPreplanningSlotWriteDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.SubtaskDto
 import java.time.Instant
@@ -287,6 +289,7 @@ data class RecurringTemplatePatch(
     val checklistTitles: PatchField<List<String>> = PatchField.Absent,
     val confirmBackfill: PatchField<Boolean> = PatchField.Absent,
     val keepUnfinishedOverdue: PatchField<Boolean> = PatchField.Absent,
+    val preplanningSchedule: PatchField<RecurringPreplanningSchedule> = PatchField.Absent,
 )
 
 internal fun ProjectDto.toModel() = Project(
@@ -348,12 +351,9 @@ internal fun RecurringPreplanningSlotDto.toModel() = RecurringPreplanningSlot(
     endMinute = endMinute,
 )
 internal fun RecurringPreplanningScheduleDto.toModel() = RecurringPreplanningSchedule(slots.map { it.toModel() })
-internal fun RecurringPreplanningSchedule.toDto() = RecurringPreplanningScheduleDto(
+internal fun RecurringPreplanningSchedule.toWriteDto() = RecurringPreplanningScheduleWriteDto(
     slots.map {
-        RecurringPreplanningSlotDto(
-            id = it.id,
-            key = it.key,
-            position = it.position,
+        RecurringPreplanningSlotWriteDto(
             weekday = it.weekday,
             startMinute = it.startMinute,
             endMinute = it.endMinute,

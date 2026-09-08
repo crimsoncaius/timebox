@@ -94,9 +94,9 @@ class RecurringEditorLogicTest {
     @Test
     fun `scheduled creation maps one valid Recurring Pre-planning Schedule slot`() {
         val state = base().copy(
-            preplanningEnabled = true,
-            preplanningStart = "08:30",
-            preplanningEnd = "09:15",
+            preplanningSlots = listOf(
+                RecurringPreplanningSlotDraft(start = "08:30", end = "09:15"),
+            ),
         )
 
         assertNull(validateRecurrenceDraft(state, requireTitle = true))
@@ -108,7 +108,9 @@ class RecurringEditorLogicTest {
         assertEquals(
             "A Planned Block must end at least 30 minutes after it starts.",
             validateRecurrenceDraft(
-                state.copy(preplanningStart = "09:00", preplanningEnd = "09:20"),
+                state.copy(preplanningSlots = listOf(
+                    RecurringPreplanningSlotDraft(start = "09:00", end = "09:20"),
+                )),
                 requireTitle = true,
             ),
         )
@@ -117,15 +119,37 @@ class RecurringEditorLogicTest {
     @Test
     fun `scheduled creation represents a Planned Block ending at midnight as minute 1440`() {
         val state = base().copy(
-            preplanningEnabled = true,
-            preplanningStart = "23:00",
-            preplanningEnd = "00:00",
+            preplanningSlots = listOf(
+                RecurringPreplanningSlotDraft(start = "23:00", end = "00:00"),
+            ),
         )
 
         assertNull(validateRecurrenceDraft(state, requireTitle = true))
         val slot = state.toPreplanningSchedule()!!.slots.single()
         assertEquals(1380, slot.startMinute)
         assertEquals(1440, slot.endMinute)
+    }
+
+    @Test
+    fun `existing Recurring Pre-planning Schedule maps multiple keyed slot edits`() {
+        val state = base().copy(preplanningSlots = listOf(
+            RecurringPreplanningSlotDraft(
+                key = "morning",
+                start = "08:30",
+                end = "09:15",
+            ),
+            RecurringPreplanningSlotDraft(
+                key = "afternoon",
+                start = "15:00",
+                end = "16:00",
+            ),
+        ))
+
+        assertNull(validateRecurrenceDraft(state, requireTitle = true))
+        val slots = state.toPreplanningSchedule()!!.slots
+        assertEquals(listOf("morning", "afternoon"), slots.map { it.key })
+        assertEquals(listOf(510, 900), slots.map { it.startMinute })
+        assertEquals(listOf(555, 960), slots.map { it.endMinute })
     }
 
     private fun base() = RecurringEditorUiState(
