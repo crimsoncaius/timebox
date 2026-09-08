@@ -76,7 +76,7 @@ internal class RepositoryPlanningSessionTransport(
     override suspend fun loadReadyTasks(planningDate: LocalDate?): Result<List<BattleTask>> =
         repository.listBattleTasks(planningDate = planningDate).map { result ->
             readinessCoordinator.mergeServerTasks(result.items)
-            readinessCoordinator.readyTasks()
+            readinessCoordinator.projectTasks(result.items).readyToPlanTasks()
         }
 
     override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> =
