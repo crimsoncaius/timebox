@@ -69,9 +69,23 @@ class ReadyToPlanCoordinator internal constructor(
         tasks.flattenBattleTasks().forEach { incoming ->
             val current = entries[incoming.id]
             if (current == null) {
-                entries[incoming.id] = ReadinessEntry(incoming, incoming.readyToPlan, incoming.readyToPlan)
+                val ready = incoming.readyToPlan && incoming.status != TaskStatus.Completed
+                entries[incoming.id] = ReadinessEntry(
+                    incoming.copy(readyToPlan = ready),
+                    ready,
+                    ready,
+                )
             } else if (incoming.version >= current.task.version) {
-                entries[incoming.id] = if (current.writing || current.desired != current.confirmed) {
+                entries[incoming.id] = if (incoming.status == TaskStatus.Completed) {
+                    current.copy(
+                        task = incoming.copy(readyToPlan = false),
+                        confirmed = false,
+                        desired = false,
+                        writing = false,
+                        failure = null,
+                        removed = false,
+                    )
+                } else if (current.writing || current.desired != current.confirmed) {
                     current.copy(
                         task = incoming,
                         confirmed = incoming.readyToPlan,
@@ -169,6 +183,16 @@ class ReadyToPlanCoordinator internal constructor(
                 val reconciliation = transport.reconcile(taskId)
                 val continueWriting = synchronized(this) {
                     val current = entries[taskId] ?: return@synchronized false
+                    if (current.task.status == TaskStatus.Completed) {
+                        entries[taskId] = current.copy(
+                            desired = false,
+                            confirmed = false,
+                            writing = false,
+                            failure = null,
+                        )
+                        publish()
+                        return@synchronized false
+                    }
                     val reconciled = reconciliation.getOrNull()
                     var merged = current
                     if (reconciliation.isSuccess) {
@@ -229,6 +253,16 @@ class ReadyToPlanCoordinator internal constructor(
             val continueWriting = synchronized(this) {
                 val current = entries[taskId] ?: return@synchronized false
                 val saved = result.getOrThrow()
+                if (current.task.status == TaskStatus.Completed) {
+                    entries[taskId] = current.copy(
+                        desired = false,
+                        confirmed = false,
+                        writing = false,
+                        failure = null,
+                    )
+                    publish()
+                    return@synchronized false
+                }
                 if (saved.version < current.task.version) {
                     val latestIntent = current.desired == target
                     val keepWriting = !latestIntent && current.desired != current.confirmed
@@ -251,25 +285,21 @@ class ReadyToPlanCoordinator internal constructor(
                     publish()
                     return@synchronized keepWriting
                 }
-                val newestTask = if (saved.version >= current.task.version) {
-                    current.task.copy(
-                        readyToPlan = saved.readyToPlan,
-                        status = saved.status,
-                        completedAt = saved.completedAt,
-                        version = saved.version,
-                        archivedAt = saved.archivedAt,
-                        deletedAt = saved.deletedAt,
-                        updatedAt = saved.updatedAt,
-                    )
-                } else {
-                    current.task
-                }
+                val newestTask = current.task.copy(
+                    readyToPlan = saved.readyToPlan,
+                    status = saved.status,
+                    completedAt = saved.completedAt,
+                    version = saved.version,
+                    archivedAt = saved.archivedAt,
+                    deletedAt = saved.deletedAt,
+                    updatedAt = saved.updatedAt,
+                )
                 val lifecycleChanged = saved.status != current.task.status ||
                     saved.completedAt != current.task.completedAt ||
                     saved.archivedAt != current.task.archivedAt ||
                     saved.deletedAt != current.task.deletedAt
                 val lifecycleRejected = lifecycleChanged || saved.readyToPlan != target
-                if (lifecycleRejected && saved.version >= current.task.version) {
+                if (lifecycleRejected) {
                     entries[taskId] = ReadinessEntry(
                         task = newestTask,
                         confirmed = saved.readyToPlan,

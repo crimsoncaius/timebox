@@ -303,6 +303,70 @@ class ReadyToPlanCoordinatorTest {
     }
 
     @Test
+    fun `normal completed refresh cancels pending readiness and late response cannot resurrect it`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val original = task(24, ready = false).copy(version = 1)
+        coordinator.mergeServerTasks(listOf(original))
+
+        coordinator.setReady(original, true)
+        runCurrent()
+        coordinator.mergeServerTasks(
+            listOf(original.copy(status = TaskStatus.Completed, readyToPlan = false, version = 2)),
+        )
+
+        val completed = coordinator.projectedTask(24)!!
+        assertEquals(TaskStatus.Completed, completed.status)
+        assertFalse(completed.readyToPlan)
+        assertFalse(completed.readinessPending)
+        assertEquals(null, completed.readinessFailureMessage)
+
+        coordinator.retry(24)
+        runCurrent()
+        assertEquals(listOf(24 to true), transport.calls)
+
+        transport.completeNext(original.copy(readyToPlan = true, version = 3))
+        runCurrent()
+
+        val afterLateResponse = coordinator.projectedTask(24)!!
+        assertEquals(TaskStatus.Completed, afterLateResponse.status)
+        assertFalse(afterLateResponse.readyToPlan)
+        assertFalse(afterLateResponse.readinessPending)
+        assertEquals(null, afterLateResponse.readinessFailureMessage)
+        assertEquals(listOf(24 to true), transport.calls)
+    }
+
+    @Test
+    fun `normal completed refresh clears an existing readiness failure and disables retry`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val original = task(25, ready = false).copy(version = 1)
+        coordinator.mergeServerTasks(listOf(original))
+
+        coordinator.setReady(original, true)
+        runCurrent()
+        transport.failNext()
+        runCurrent()
+        transport.completeReconciliation(original.copy(version = 2))
+        runCurrent()
+        assertTrue(coordinator.projectedTask(25)!!.readinessFailureMessage != null)
+
+        coordinator.mergeServerTasks(
+            listOf(original.copy(status = TaskStatus.Completed, readyToPlan = false, version = 3)),
+        )
+
+        val completed = coordinator.projectedTask(25)!!
+        assertEquals(TaskStatus.Completed, completed.status)
+        assertFalse(completed.readyToPlan)
+        assertFalse(completed.readinessPending)
+        assertEquals(null, completed.readinessFailureMessage)
+
+        coordinator.retry(25)
+        runCurrent()
+        assertEquals(listOf(25 to true), transport.calls)
+    }
+
+    @Test
     fun `different Tasks retain independent failures and retries`() = runTest {
         val transport = DeferredReadyToPlanTransport()
         val coordinator = ReadyToPlanCoordinator(transport, this)

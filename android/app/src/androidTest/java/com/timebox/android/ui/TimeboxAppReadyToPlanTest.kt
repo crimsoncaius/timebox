@@ -176,6 +176,41 @@ class TimeboxAppReadyToPlanTest {
     }
 
     @Test
+    fun ordinaryCompletedRefreshOverridesPendingReadinessAndIgnoresLateWriteResponse() {
+        val transport = ControllableTimeboxApi()
+        setAppContent(transport)
+
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
+            .assertExists()
+
+        compose.runOnIdle { transport.setServerTask(ready = false, version = 2, status = "completed") }
+        compose.onNodeWithText("Day").performClick()
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Completed").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Completed").performClick()
+        compose.onNodeWithText("App projection Task").assertExists()
+        compose.onNodeWithContentDescription("App projection Task readiness error").assertDoesNotExist()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+
+        compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("App projection Task").assertExists()
+        compose.onNodeWithContentDescription("Remove App projection Task from Ready to Plan")
+            .assertDoesNotExist()
+        compose.onNodeWithContentDescription("App projection Task readiness error").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(true), transport.readinessCalls) }
+    }
+
+    @Test
     fun failedLatestChoiceReconcilesAndKeepsManualRetryAcrossNavigation() {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
