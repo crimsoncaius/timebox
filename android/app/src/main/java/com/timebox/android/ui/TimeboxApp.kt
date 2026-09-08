@@ -225,6 +225,7 @@ fun TimeboxApp(
             val result = snackbarHostState.showSnackbar(
                 message = notice.message,
                 actionLabel = if (notice.canUndo) "Undo" else null,
+                duration = taskCompletionSnackbarDuration(),
             )
             if (result == SnackbarResult.ActionPerformed && notice.canUndo) {
                 taskCompletionScope.launch {
@@ -734,6 +735,9 @@ internal fun shouldShowBottomNavigation(
     taskComposerVisible: Boolean,
     isImeVisible: Boolean,
 ): Boolean = !taskComposerVisible && !isImeVisible
+
+/** Completion feedback must dismiss even when it offers Undo. */
+internal fun taskCompletionSnackbarDuration(): SnackbarDuration = SnackbarDuration.Short
 
 internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
     AppRoutes.BattlePlan,

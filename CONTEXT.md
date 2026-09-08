@@ -57,7 +57,7 @@ A recurrence rule and template that produces Task Occurrences. It represents an 
 _Avoid_: Recurring template, recurring parent task
 
 **Recurring Pre-planning Schedule**:
-An optional configuration on a scheduled Recurring Task Series that allocates its eligible Task Occurrences to specific Planned Block slots. A slot that cannot be materialized because it is occupied leaves its Task Occurrence Ready to Plan.
+An optional configuration on a scheduled Recurring Task Series that allocates its eligible Task Occurrences to specific Planned Block slots. A slot that cannot be materialized because it is occupied creates no Planned Block; its Task Occurrence remains available for an explicit Ready to Plan choice.
 _Avoid_: Automatic scheduling, recurring time block
 
 **Task Occurrence**:

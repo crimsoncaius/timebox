@@ -1,5 +1,6 @@
 package com.timebox.android.ui
 
+import androidx.compose.material3.SnackbarDuration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,6 +18,11 @@ class AppRoutesTest {
     fun `on-screen keyboard hides bottom navigation`() {
         assertFalse(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = true))
         assertFalse(shouldShowBottomNavigation(taskComposerVisible = true, isImeVisible = true))
+    }
+
+    @Test
+    fun `completion undo notice uses a finite snackbar duration`() {
+        assertEquals(SnackbarDuration.Short, taskCompletionSnackbarDuration())
     }
 
     @Test

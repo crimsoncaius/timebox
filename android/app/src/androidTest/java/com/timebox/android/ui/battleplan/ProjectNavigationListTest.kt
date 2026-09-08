@@ -107,6 +107,22 @@ class ProjectNavigationListTest {
         assertTrue(alpha.top > beta.top)
     }
 
+    @Test fun projectDragTargetDoesNotReverseAtTheSameBoundaryItJustCrossed() {
+        val rowHeight = 56f
+        var target = 0
+
+        target = projectDragTarget(0, target, rowHeight * 0.66f, rowHeight, lastIndex = 2)
+        assertEquals(1, target)
+
+        // Small finger movement back over the ordinary 50% midpoint must not make
+        // the neighbouring rows reverse their active placement animation.
+        target = projectDragTarget(0, target, rowHeight * 0.49f, rowHeight, lastIndex = 2)
+        assertEquals(1, target)
+
+        target = projectDragTarget(0, target, rowHeight * 0.34f, rowHeight, lastIndex = 2)
+        assertEquals(0, target)
+    }
+
     private fun dragAlphaBelowBeta() {
         val first = compose.onNodeWithText("Alpha").fetchSemanticsNode().boundsInRoot
         val second = compose.onNodeWithText("Beta").fetchSemanticsNode().boundsInRoot

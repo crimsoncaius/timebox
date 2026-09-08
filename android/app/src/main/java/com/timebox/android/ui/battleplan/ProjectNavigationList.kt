@@ -43,7 +43,30 @@ import com.timebox.android.data.Project
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
+
+private const val ProjectReorderHysteresis = 0.15f
+
+/**
+ * Keeps the pending drop target stable while a finger wobbles around a row boundary.
+ *
+ * A new row is entered after 65% of its height, but returning to the previous row
+ * requires crossing back past 35%. That gap prevents placement animations from
+ * repeatedly reversing around the ordinary 50% midpoint.
+ */
+internal fun projectDragTarget(
+    sourceIndex: Int,
+    currentTargetIndex: Int,
+    distance: Float,
+    rowHeight: Float,
+    lastIndex: Int,
+): Int {
+    if (lastIndex < 0 || rowHeight <= 0f) return sourceIndex
+    var target = currentTargetIndex.coerceIn(0, lastIndex)
+    val crossingDistance = rowHeight * (0.5f + ProjectReorderHysteresis)
+    while (target < lastIndex && distance >= (target - sourceIndex) * rowHeight + crossingDistance) target += 1
+    while (target > 0 && distance <= (target - sourceIndex) * rowHeight - crossingDistance) target -= 1
+    return target
+}
 
 /** The primary Project list: taps navigate, while holding a Project row reorders it. */
 @Composable
@@ -67,6 +90,7 @@ internal fun ProjectNavigationList(
     var actionsId by remember { mutableStateOf<Int?>(null) }
     var orderedProjects by remember { mutableStateOf(projects) }
     var pendingOrder by remember { mutableStateOf<List<Int>?>(null) }
+    var dragTargetIndex by remember { mutableIntStateOf(-1) }
     LaunchedEffect(projects) {
         val incomingOrder = projects.map { it.id }
         if (pendingOrder == null || incomingOrder == pendingOrder) {
@@ -75,8 +99,6 @@ internal fun ProjectNavigationList(
         }
     }
     val sourceIndex = orderedProjects.indexOfFirst { it.id == draggedId }
-    val targetIndex = if (sourceIndex < 0) -1 else
-        (sourceIndex + (distance / rowHeight).roundToInt()).coerceIn(orderedProjects.indices)
     val latestOnReorder by rememberUpdatedState(onReorder)
 
     fun move(from: Int, to: Int) {
@@ -97,7 +119,12 @@ internal fun ProjectNavigationList(
                 pointerY > viewport.bottom - edge -> rowHeight / 8f
                 else -> 0f
             }
-            if (step != 0f) distance += scroll.scrollBy(step)
+            if (step != 0f) {
+                distance += scroll.scrollBy(step)
+                if (sourceIndex >= 0) {
+                    dragTargetIndex = projectDragTarget(sourceIndex, dragTargetIndex, distance, rowHeight, orderedProjects.lastIndex)
+                }
+            }
             delay(16)
         }
     }
@@ -114,8 +141,8 @@ internal fun ProjectNavigationList(
                 val dragging = draggedId == project.id
                 val shift = when {
                     sourceIndex < 0 -> 0f
-                    index > sourceIndex && index <= targetIndex -> -rowHeight
-                    index < sourceIndex && index >= targetIndex -> rowHeight
+                    index > sourceIndex && index <= dragTargetIndex -> -rowHeight
+                    index < sourceIndex && index >= dragTargetIndex -> rowHeight
                     else -> 0f
                 }
                 val animatedShift by animateFloatAsState(shift, label = "Project position")
@@ -152,28 +179,35 @@ internal fun ProjectNavigationList(
                                         distance = 0f
                                         pointerY = rowBounds.top + offset.y
                                         draggedId = project.id
+                                        dragTargetIndex = index
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
                                 },
-                                onDragCancel = { draggedId = null; distance = 0f },
+                                onDragCancel = { draggedId = null; distance = 0f; dragTargetIndex = -1 },
                                 onDragEnd = {
                                     if (draggedId == project.id) {
-                                        val destination = (index + (distance / rowHeight).roundToInt()).coerceIn(projects.indices)
+                                        val destination = projectDragTarget(index, dragTargetIndex, distance, rowHeight, projects.lastIndex)
                                         move(index, destination)
                                     }
                                     draggedId = null
                                     distance = 0f
+                                    dragTargetIndex = -1
                                 },
                                 onDrag = { change, amount ->
                                     if (draggedId == project.id && !saving) {
                                         change.consume()
                                         pointerY += amount.y
                                         distance += amount.y
+                                        dragTargetIndex = projectDragTarget(index, dragTargetIndex, distance, rowHeight, orderedProjects.lastIndex)
                                     }
                                 },
                             )
                         }
-                        .clickable(enabled = draggedId == null) { onSelect(project) },
+                        .clickable(enabled = draggedId == null) { onSelect(project) }
+                        // Keep Project rows aligned with the shared menu-item inset.
+                        // The pointer modifiers remain outside this padding, so the
+                        // complete row continues to support selection and reordering.
+                        .padding(start = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
