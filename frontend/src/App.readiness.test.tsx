@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -143,7 +143,7 @@ describe('Ready to Plan persistence resilience', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add Prepare launch narrative to Ready to Plan' })).not.toHaveAttribute('aria-busy'))
   })
 
-  it('uses task versions to keep stale responses and reloads from reverting newer readiness', async () => {
+  it('uses task versions to keep stale responses and reloads from reverting a newer task snapshot', async () => {
     const transport = controllableTransport([battleTask({ version: 5 })])
     globalThis.fetch = transport.fetch as typeof fetch
     const user = userEvent.setup()
@@ -162,7 +162,8 @@ describe('Ready to Plan persistence resilience', () => {
     transport.setServerTasks([battleTask({ ready_to_plan: false, version: 5, title: 'Stale reload title' })])
     await user.click(screen.getByRole('link', { name: 'Battle Plan' }))
 
-    expect(await screen.findByRole('button', { name: 'Remove Stale reload title from Ready to Plan' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Remove Prepare newer narrative from Ready to Plan' })).toBeInTheDocument()
+    expect(screen.queryByText('Stale reload title')).not.toBeInTheDocument()
     expect(transport.patchRequests).toHaveLength(1)
   })
 
@@ -211,6 +212,29 @@ describe('Ready to Plan persistence resilience', () => {
     await user.click(await screen.findByRole('button', { name: 'Retry Ready to Plan for Prepare launch narrative' }))
     await waitFor(() => expect(transport.patchRequests).toHaveLength(2))
     expect(transport.patchRequests[1]).toMatchObject({ taskId: 77, ready: true })
+  })
+
+  it('projects authoritative lifecycle state when the server rejects the latest readiness intent', async () => {
+    const transport = controllableTransport([battleTask()])
+    globalThis.fetch = transport.fetch as typeof fetch
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><AppRoutes /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: 'Add Prepare launch narrative to Ready to Plan' }))
+    transport.setServerTasks([battleTask({
+      title: 'Server completed task',
+      status: 'completed',
+      completed_at: '2026-04-13T12:01:00Z',
+      ready_to_plan: false,
+      version: 2,
+    })])
+    transport.patchRequests[0].reject(409, 'Completed tasks cannot be Ready to Plan')
+
+    const completed = await screen.findByRole('region', { name: 'Completed tasks' })
+    expect(within(completed).getByRole('heading', { name: 'Server completed task' })).toBeInTheDocument()
+    expect(within(completed).getByRole('button', { name: 'Add Server completed task to Ready to Plan' })).toBeDisabled()
+    expect(screen.getByRole('alert', { name: 'Server completed task readiness error' })).toHaveTextContent('Ready to Plan was not saved')
+    expect(screen.queryByText('Prepare launch narrative')).not.toBeInTheDocument()
   })
 
   it('settles silently when reconciliation shows that the latest desired readiness was saved', async () => {

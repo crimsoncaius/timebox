@@ -4,7 +4,7 @@ import { useReadinessCoordinator } from './readinessCoordinator'
 export function ReadinessFailureNotice({ task, className = '' }: { task: BattleTask; className?: string }) {
   const readiness = useReadinessCoordinator()
   const state = readiness.stateFor(task.id)
-  if (state.failedDesired == null || !state.error) return null
+  if (!state.failure) return null
 
   return (
     <div
@@ -12,7 +12,7 @@ export function ReadinessFailureNotice({ task, className = '' }: { task: BattleT
       aria-label={`${task.title} readiness error`}
       className={`flex items-center justify-between gap-2 text-xs text-error ${className}`}
     >
-      <span>{state.error}</span>
+      <span>{state.failure.message}</span>
       <button
         type="button"
         className="shrink-0 font-medium underline"
