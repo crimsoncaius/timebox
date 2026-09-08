@@ -102,6 +102,7 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
             .assertIsEnabled()
 
+        awaitReadinessRequest(transport)
         compose.runOnIdle { transport.completeReadiness(ready = true, version = 2) }
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Remove App projection Task from Ready to Plan")
@@ -127,6 +128,7 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithText("Day").performClick()
         compose.onNodeWithText("App projection Task selected", useUnmergedTree = true).assertDoesNotExist()
 
+        awaitReadinessRequest(transport)
         compose.runOnIdle { transport.completeReadiness(ready = false, version = 2) }
         compose.onNodeWithText("Battle Plan").performClick()
         compose.waitUntil(5_000) {
@@ -134,6 +136,7 @@ class TimeboxAppReadyToPlanTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        awaitReadinessRequest(transport)
         compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
 
         compose.onNodeWithText("Day").performClick()
@@ -159,6 +162,7 @@ class TimeboxAppReadyToPlanTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        awaitReadinessRequest(transport)
         compose.runOnIdle {
             transport.setServerTask(ready = false, version = 2, status = "completed")
             transport.failReadiness()
@@ -189,6 +193,7 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
             .assertExists()
 
+        awaitReadinessRequest(transport)
         compose.runOnIdle { transport.setServerTask(ready = false, version = 2, status = "completed") }
         compose.onNodeWithText("Day").performClick()
         compose.onNodeWithText("Battle Plan").performClick()
@@ -221,6 +226,7 @@ class TimeboxAppReadyToPlanTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        awaitReadinessRequest(transport)
         compose.runOnIdle { transport.failReadiness() }
 
         compose.waitUntil(5_000) {
@@ -254,6 +260,7 @@ class TimeboxAppReadyToPlanTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").performClick()
+        awaitReadinessRequest(transport)
         compose.runOnIdle {
             transport.failNextBattleTaskRead = true
             transport.failReadiness()
@@ -291,6 +298,7 @@ class TimeboxAppReadyToPlanTest {
 
         compose.onNodeWithText("Save changes").performClick()
         compose.waitUntil(5_000) { transport.patchBodies.size == 1 }
+        awaitNonReadinessPatchRequest(transport)
         compose.runOnIdle {
             assertTrue("description" in transport.patchBodies.single())
             assertFalse("ready_to_plan" in transport.patchBodies.single())
@@ -301,6 +309,7 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
             .assertExists()
 
+        awaitReadinessRequest(transport)
         compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
     }
 
@@ -335,18 +344,36 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithText("Day").performClick()
         compose.onNodeWithTag("planning-mode-action").performClick()
     }
+
+    private fun awaitReadinessRequest(transport: ControllableTimeboxApi) {
+        compose.waitUntil(5_000) { transport.hasPendingReadinessRequest() }
+    }
+
+    private fun awaitNonReadinessPatchRequest(transport: ControllableTimeboxApi) {
+        compose.waitUntil(5_000) { transport.hasPendingNonReadinessPatchRequest() }
+    }
 }
 
 private class ControllableTimeboxApi(initialReady: Boolean = false) {
+    private data class PendingPatch(
+        val body: JsonObject,
+        val continuation: Continuation<Any?>,
+    )
+
     private val meta = DayMetaDto(
         timezone = "Asia/Singapore",
         today = "2026-09-08",
         serverNowIso = "2026-09-08T12:00:00+08:00",
     )
     private var task = taskDto(ready = initialReady, version = 1)
-    private val readinessContinuations = ArrayDeque<Continuation<Any?>>()
-    val readinessCalls = mutableListOf<Boolean>()
-    val patchBodies = mutableListOf<JsonObject>()
+    private val patchLock = Any()
+    private val pendingPatches = ArrayDeque<PendingPatch>()
+    private val observedReadinessCalls = mutableListOf<Boolean>()
+    private val observedPatchBodies = mutableListOf<JsonObject>()
+    val readinessCalls: List<Boolean>
+        get() = synchronized(patchLock) { observedReadinessCalls.toList() }
+    val patchBodies: List<JsonObject>
+        get() = synchronized(patchLock) { observedPatchBodies.toList() }
     var failNextBattleTaskRead = false
 
     fun proxy(): TimeboxApi = Proxy.newProxyInstance(
@@ -355,10 +382,13 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
     ) { _, method, args ->
         if (method.name == "patchBattleTask") {
             val body = args?.getOrNull(1) as JsonObject
-            patchBodies += body
-            body["ready_to_plan"]?.jsonPrimitive?.boolean?.let(readinessCalls::add)
             @Suppress("UNCHECKED_CAST")
-            readinessContinuations.addLast(args?.lastOrNull() as Continuation<Any?>)
+            val continuation = args?.lastOrNull() as Continuation<Any?>
+            synchronized(patchLock) {
+                observedPatchBodies += body
+                body["ready_to_plan"]?.jsonPrimitive?.boolean?.let(observedReadinessCalls::add)
+                pendingPatches.addLast(PendingPatch(body, continuation))
+            }
             COROUTINE_SUSPENDED
         } else {
             val value: Any? = when (method.name) {
@@ -385,14 +415,30 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
         }
     } as TimeboxApi
 
+    fun hasPendingReadinessRequest(): Boolean = synchronized(patchLock) {
+        pendingPatches.any { "ready_to_plan" in it.body }
+    }
+
+    fun hasPendingNonReadinessPatchRequest(): Boolean = synchronized(patchLock) {
+        pendingPatches.any { "ready_to_plan" !in it.body }
+    }
+
     fun completeReadiness(ready: Boolean, version: Int, status: String = "open") {
-        task = taskDto(ready, version, status)
-        readinessContinuations.removeFirst().resumeWith(Result.success(task))
+        val response = taskDto(ready, version, status)
+        val continuation = synchronized(patchLock) {
+            task = response
+            removePendingPatch { "ready_to_plan" in it.body }.continuation
+        }
+        continuation.resumeWith(Result.success(response))
     }
 
     fun completePatch(ready: Boolean, version: Int, status: String = "open") {
-        task = taskDto(ready, version, status)
-        readinessContinuations.removeFirst().resumeWith(Result.success(task))
+        val response = taskDto(ready, version, status)
+        val continuation = synchronized(patchLock) {
+            task = response
+            removePendingPatch { "ready_to_plan" !in it.body }.continuation
+        }
+        continuation.resumeWith(Result.success(response))
     }
 
     fun setServerTask(ready: Boolean, version: Int, status: String = "open") {
@@ -400,9 +446,18 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
     }
 
     fun failReadiness() {
-        readinessContinuations.removeFirst().resumeWith(
+        val continuation = synchronized(patchLock) {
+            removePendingPatch { "ready_to_plan" in it.body }.continuation
+        }
+        continuation.resumeWith(
             Result.failure(IllegalStateException("readiness write failed")),
         )
+    }
+
+    private fun removePendingPatch(predicate: (PendingPatch) -> Boolean): PendingPatch {
+        val index = pendingPatches.indexOfFirst(predicate)
+        check(index >= 0) { "Expected a matching queued patch request" }
+        return pendingPatches.removeAt(index)
     }
 
     private fun day(date: String) = DayDto(
