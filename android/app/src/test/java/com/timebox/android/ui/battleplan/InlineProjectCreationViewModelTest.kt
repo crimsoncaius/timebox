@@ -9,6 +9,8 @@ import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -100,9 +102,33 @@ class InlineProjectCreationViewModelTest {
         assertEquals(42, model.state.first { !it.projectCreation.saving }.selectedScope.projectId)
     }
 
-    private fun TestScope.viewModel(beforeCreate: () -> Unit = {}): BattlePlanViewModel {
+    @Test fun `a late reorder response retains a Project created during that request`() = runTest(dispatcher) {
+        val reorderStarted = CompletableDeferred<Unit>()
+        val finishReorder = CompletableDeferred<Unit>()
+        val model = viewModel(reorder = {
+            reorderStarted.complete(Unit)
+            runBlocking { finishReorder.await() }
+            listOf(ProjectDto(1, "Alpha", "2026-09-09T00:00:00Z", "2026-09-09T00:00:00Z"))
+        })
+        model.reorderProjects(listOf(1))
+        reorderStarted.await()
+        model.startProjectCreation()
+        model.setNewProjectName("Launch")
+        model.createProject()
+        model.state.first { !it.projectCreation.saving }
+        finishReorder.complete(Unit)
+        val state = model.state.first { !it.projectOrderSaving }
+        assertEquals(listOf("Alpha", "Launch"), state.projects.map { it.name })
+        assertEquals(42, state.selectedScope.projectId)
+    }
+
+    private fun TestScope.viewModel(
+        reorder: () -> List<ProjectDto> = { error("Unexpected reorder") },
+        beforeCreate: () -> Unit = {},
+    ): BattlePlanViewModel {
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
             when (method.name) {
+                "reorderProjects" -> reorder()
                 "createProject" -> {
                     beforeCreate()
                     ProjectDto(42, (args!![0] as ProjectCreateDto).name, "2026-09-09T00:00:00Z", "2026-09-09T00:00:00Z")

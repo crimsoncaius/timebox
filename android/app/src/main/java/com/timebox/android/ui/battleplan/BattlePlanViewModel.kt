@@ -291,7 +291,15 @@ class BattlePlanViewModel internal constructor(
         _state.update { it.copy(projectOrderSaving = true, error = null) }
         viewModelScope.launch {
             repository.reorderProjects(ids).fold(
-                onSuccess = { projects -> _state.update { it.copy(projects = projects, projectOrderSaving = false) } },
+                onSuccess = { projects ->
+                    _state.update { current ->
+                        // A Project created after this reorder began must remain appended.
+                        val additions = current.projects.filter { project ->
+                            project.id !in ids && projects.none { it.id == project.id }
+                        }
+                        current.copy(projects = projects + additions, projectOrderSaving = false)
+                    }
+                },
                 onFailure = { _state.update { it.copy(projectOrderSaving = false, error = "Could not save project order. Refresh and try again.") } },
             )
         }
@@ -330,7 +338,7 @@ class BattlePlanViewModel internal constructor(
                 onSuccess = { project ->
                     _state.update {
                         it.copy(
-                            projects = it.projects + project,
+                            projects = it.projects.filterNot { row -> row.id == project.id } + project,
                             selectedScope = BattlePlanScope.project(project),
                             projectCreation = InlineProjectCreation(),
                             lastCreatedProjectId = project.id,
