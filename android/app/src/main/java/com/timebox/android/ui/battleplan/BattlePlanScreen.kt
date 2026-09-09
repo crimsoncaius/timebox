@@ -1339,7 +1339,7 @@ private fun MobileKanbanCard(
                 task = task,
                 plannedSummary = null,
                 onToggleReady = onToggleReady,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.align(Alignment.End).padding(horizontal = 8.dp),
             )
             ReadyToPlanFailureNotice(task, Modifier.padding(horizontal = 8.dp))
         }
@@ -2563,45 +2563,39 @@ private fun MobilePlanningControl(
         task.readyToPlan -> "Ready to Plan"
         else -> "Add to Ready to Plan"
     }
-    val icon = when {
-        completed -> Icons.Outlined.CheckCircle
-        plannedSummary != null -> Icons.Outlined.CalendarMonth
-        task.readyToPlan -> Icons.Outlined.CheckCircle
-        else -> Icons.Outlined.EventAvailable
-    }
     val accented = !completed && (plannedSummary != null || task.readyToPlan)
     val interactiveModifier = if (interactive) Modifier.clickable { onToggleReady(task) } else Modifier
-
-    Row(
-        modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (accented) colors.plannedSurface else colors.lowest)
-            .border(1.dp, if (accented) colors.plannedBorder else colors.hairline, RoundedCornerShape(10.dp))
-            .then(interactiveModifier)
-            .semantics {
-                contentDescription = when {
-                    completed -> "Completed Task"
-                    plannedSummary != null -> plannedSummary.label
-                    else -> readyToPlanActionDescription(task)
-                }
+    Box(
+        modifier.heightIn(min = 48.dp).then(interactiveModifier).semantics {
+            contentDescription = when {
+                completed -> "Completed Task"
+                plannedSummary != null -> plannedSummary.label
+                else -> readyToPlanActionDescription(task)
             }
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            stateDescription = label
+        },
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (accented) colors.planned else colors.onVariant,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            label,
-            style = TimeboxTheme.type.label,
-            color = if (accented) colors.planned else colors.onVariant,
-            modifier = Modifier.padding(start = 8.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            Modifier.clip(TimeboxShapes.chip)
+                .background(if (accented) colors.plannedSurface else Color.Transparent)
+                .border(1.dp, if (accented) colors.plannedBorder else colors.hairline, TimeboxShapes.chip)
+                .padding(horizontal = 12.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                if (!completed && plannedSummary == null && !task.readinessPending && !task.readyToPlan) "Add to Plan" else label,
+                style = TimeboxTheme.type.bodySmall,
+                color = if (accented) colors.planned else colors.onVariant,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (interactive) Text(
+                if (task.readyToPlan) "→" else "+",
+                style = TimeboxTheme.type.bodySmall,
+                color = if (accented) colors.planned else colors.onVariant,
+            )
+        }
     }
 }
 
