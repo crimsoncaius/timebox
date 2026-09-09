@@ -2,6 +2,7 @@ package com.timebox.android.ui.battleplan
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -78,6 +80,7 @@ internal fun ProjectNavigationList(
     onReorder: (List<Int>) -> Unit,
     onEdit: (Project) -> Unit = {},
     onDelete: (Project) -> Unit = {},
+    maxHeight: androidx.compose.ui.unit.Dp = 344.dp,
 ) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
@@ -130,9 +133,12 @@ internal fun ProjectNavigationList(
     }
 
     Column(
-        Modifier.fillMaxWidth().heightIn(max = 336.dp)
+        Modifier.fillMaxWidth().heightIn(max = maxHeight)
             .clip(TimeboxShapes.card)
             .background(colors.card)
+            // Keep 10dp row corners inside the 14dp container corners, including
+            // the enclosing Projects section. Preserve the 336dp scroll viewport.
+            .padding(vertical = 4.dp)
             .onGloballyPositioned { viewport = it.boundsInWindow() }
             .verticalScroll(scroll, enabled = draggedId == null),
     ) {
@@ -226,11 +232,24 @@ internal fun ProjectNavigationList(
                         IconButton(onClick = { actionsId = project.id }, enabled = !saving && draggedId == null) {
                             Icon(Icons.Outlined.MoreHoriz, "More actions for ${project.name}", tint = colors.onVariant)
                         }
-                        DropdownMenu(expanded = actionsId == project.id, onDismissRequest = { actionsId = null }) {
+                        DropdownMenu(
+                            expanded = actionsId == project.id,
+                            onDismissRequest = { actionsId = null },
+                            modifier = Modifier.width(208.dp),
+                            shape = TimeboxShapes.card,
+                            containerColor = colors.raised,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(1.dp, colors.outlineVariant),
+                        ) {
                             DropdownMenuItem(
                                 text = { Text("Edit") },
                                 leadingIcon = { Icon(Icons.Outlined.Edit, null) },
                                 onClick = { actionsId = null; onEdit(project) },
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                color = colors.outlineVariant,
                             )
                             DropdownMenuItem(
                                 text = { Text("Delete", color = colors.error) },

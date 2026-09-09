@@ -16,6 +16,14 @@ Replace Android's navigation to a separate creation screen with inline Project c
 - Explicit Cancel discards the draft and restores **New project**.
 - Losing focus never submits the draft.
 
+## Stable menu geometry
+
+- Entering inline creation must not change the menu's outer size or position.
+- The name field and confirm/cancel controls occupy the same fixed-height row as **New project**; neighboring rows stay in place.
+- Reserve a small message area within that row for validation errors and saving status. Messages must not expand the row or menu, and failures retain the draft.
+- The keyboard may reduce the menu height only as needed to stay above it. Keep the top anchored and scroll the Project list within the available space.
+- Cancel restores **New project** in the same row without changing the menu height, apart from space becoming available when the keyboard closes.
+
 ## Keyboard and dismissal
 
 - Back first hides the keyboard. A subsequent Back closes the menu while preserving the draft.

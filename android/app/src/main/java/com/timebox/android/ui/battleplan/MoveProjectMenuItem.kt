@@ -148,11 +148,12 @@ internal fun MoveProjectMenuItem(task: BattleTask, actions: ProjectMoveActions, 
 internal class DownwardProjectPositionProvider(
     private val margin: Int,
     private val parentOffset: () -> IntOffset = { IntOffset.Zero },
+    private val startAligned: Boolean = false,
     private val onAvailableHeight: (Int) -> Unit,
 ) : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         val offset = parentOffset()
-        val x = offset.x + if (layoutDirection == LayoutDirection.Ltr) anchorBounds.right - popupContentSize.width else anchorBounds.left
+        val x = offset.x + if ((layoutDirection == LayoutDirection.Ltr) == startAligned) anchorBounds.left else anchorBounds.right - popupContentSize.width
         val y = offset.y + anchorBounds.bottom
         onAvailableHeight((windowSize.height - y - margin).coerceAtLeast(1))
         return IntOffset(x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)), y)

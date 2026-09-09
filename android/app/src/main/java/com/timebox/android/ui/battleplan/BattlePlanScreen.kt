@@ -14,6 +14,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -585,90 +586,119 @@ private fun MobileKanbanBoard(
                     Spacer(Modifier.width(2.dp))
                     Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
                 }
-                DropdownMenu(
-                    expanded = scopeMenu,
-                    onDismissRequest = { closeScopeMenu() },
-                    properties = PopupProperties(
-                        focusable = true,
-                        dismissOnBackPress = !state.projectCreation.saving,
-                        dismissOnClickOutside = !state.projectCreation.saving,
-                    ),
-                    modifier = Modifier
-                        .width(304.dp)
-                        .testTag("battle-plan-scope-menu"),
-                    shape = TimeboxShapes.group,
-                    containerColor = colors.raised,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 8.dp,
-                ) {
-                    Column(
-                        modifier = Modifier.padding(11.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                if (scopeMenu) {
+                    var availableMenuHeight by remember { mutableStateOf<Int?>(null) }
+                    val keyboardInset = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density)
+                    // Recalculate the visible window when the IME changes, even
+                    // if the anchor and popup content have not changed size yet.
+                    val menuPosition = remember(density, keyboardInset) {
+                        DownwardProjectPositionProvider(with(density) { 8.dp.roundToPx() },
+                            startAligned = true) {
+                            availableMenuHeight = it
+                        }
+                    }
+                    androidx.compose.ui.window.Popup(
+                        popupPositionProvider = menuPosition,
+                        onDismissRequest = { closeScopeMenu() },
+                        properties = PopupProperties(
+                            focusable = true,
+                            dismissOnBackPress = !state.projectCreation.saving,
+                            dismissOnClickOutside = !state.projectCreation.saving,
+                        ),
                     ) {
-                        val taskScopes = state.scopes.filter { it.kind != BattlePlanScopeKind.Project }
-                        ScopeMenuInsetSection("Tasks", "battle-plan-scope-menu-tasks") {
-                            taskScopes.forEachIndexed { index, scope ->
-                                ScopeMenuItem(
-                                    label = scope.label,
-                                    icon = when (scope.kind) {
-                                        BattlePlanScopeKind.All -> Icons.AutoMirrored.Outlined.ListAlt
-                                        BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
-                                        BattlePlanScopeKind.Project -> Icons.Outlined.Folder
-                                    },
-                                    selected = scope.preferenceKey == state.selectedScope.preferenceKey,
-                                    onClick = { closeScopeMenu { onSelectScope(scope) } },
-                                )
-                                if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
-                            }
-                        }
+                        Surface(
+                            modifier = Modifier
+                                .width(304.dp)
+                                .testTag("battle-plan-scope-menu"),
+                            shape = TimeboxShapes.group,
+                            color = colors.raised,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 8.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = availableMenuHeight?.let { with(density) { it.toDp() } }
+                                        ?: androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 11.dp, vertical = 19.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                val taskScopes = state.scopes.filter { it.kind != BattlePlanScopeKind.Project }
+                                ScopeMenuInsetSection("Tasks", "battle-plan-scope-menu-tasks") {
+                                    taskScopes.forEachIndexed { index, scope ->
+                                        ScopeMenuItem(
+                                            label = scope.label,
+                                            icon = when (scope.kind) {
+                                                BattlePlanScopeKind.All -> Icons.AutoMirrored.Outlined.ListAlt
+                                                BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
+                                                BattlePlanScopeKind.Project -> Icons.Outlined.Folder
+                                            },
+                                            selected = scope.preferenceKey == state.selectedScope.preferenceKey,
+                                            onClick = { closeScopeMenu { onSelectScope(scope) } },
+                                        )
+                                        if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
+                                    }
+                                }
 
-                        ScopeMenuInsetSection("Projects", "battle-plan-scope-menu-projects") {
-                            ProjectNavigationList(
-                                projects = state.projects,
-                                selectedId = state.selectedScope.projectId,
-                                saving = state.projectOrderSaving || state.projectCreation.saving,
-                                onSelect = { project -> closeScopeMenu { onSelectScope(BattlePlanScope.project(project)) } },
-                                onReorder = onReorderProjects,
-                                onEdit = { project -> closeScopeMenu { onEditProject(project) } },
-                                onDelete = { project -> closeScopeMenu { onPrepareDeleteProject(project) } },
-                            )
-                            if (state.projectOrderSaving) Text("Saving project order…", color = colors.onVariant)
-                            state.error?.let { Text(it, color = colors.error) }
-                            if (state.projectCreation.active) {
-                                InlineProjectInput(
-                                    state = state.projectCreation,
-                                    requestFocus = focusNewProject,
-                                    onFocusRequested = { focusNewProject = false },
-                                    onNameChange = onNewProjectNameChange,
-                                    onSubmit = onCreateProject,
-                                    onCancel = {
-                                        if (!state.projectCreation.saving) {
-                                            keyboard?.hide()
-                                            focusManager.clearFocus()
-                                            onCancelProjectCreation()
+                                ScopeMenuInsetSection(
+                                    if (state.projectOrderSaving) "Projects · Saving…" else "Projects",
+                                    "battle-plan-scope-menu-projects",
+                                ) {
+                                    ProjectNavigationList(
+                                        // Reserve space for Tasks, headings, the input, and insets.
+                                        // Scroll Project rows instead of moving the menu to reveal the input.
+                                        maxHeight = if (state.projectCreation.active && keyboardInset > 0) {
+                                            (availableMenuHeight?.let { with(density) { it.toDp() } } ?: 344.dp)
+                                                .minus(280.dp).coerceIn(56.dp, 344.dp)
+                                        } else 344.dp,
+                                        projects = state.projects,
+                                        selectedId = state.selectedScope.projectId,
+                                        saving = state.projectOrderSaving || state.projectCreation.saving,
+                                        onSelect = { project -> closeScopeMenu { onSelectScope(BattlePlanScope.project(project)) } },
+                                        onReorder = onReorderProjects,
+                                        onEdit = { project -> closeScopeMenu { onEditProject(project) } },
+                                        onDelete = { project -> closeScopeMenu { onPrepareDeleteProject(project) } },
+                                    )
+                                    state.error?.let { Text(it, color = colors.error) }
+                                    if (state.projectCreation.active) {
+                                        InlineProjectInput(
+                                            state = state.projectCreation,
+                                            requestFocus = focusNewProject,
+                                            onFocusRequested = { focusNewProject = false },
+                                            onNameChange = onNewProjectNameChange,
+                                            onSubmit = onCreateProject,
+                                            onCancel = {
+                                                if (!state.projectCreation.saving) {
+                                                    keyboard?.hide()
+                                                    focusManager.clearFocus()
+                                                    onCancelProjectCreation()
+                                                }
+                                            },
+                                        )
+                                    } else {
+                                        Box(Modifier.fillMaxWidth().height(ProjectCreationRowHeight), contentAlignment = Alignment.CenterStart) {
+                                            ScopeMenuItem(
+                                                label = "New project",
+                                                icon = Icons.Outlined.Add,
+                                                onClick = { focusNewProject = true; onNewProject() },
+                                            )
                                         }
-                                    },
-                                )
-                            } else {
-                                ScopeMenuItem(
-                                    label = "New project",
-                                    icon = Icons.Outlined.Add,
-                                    onClick = { focusNewProject = true; onNewProject() },
-                                )
-                            }
-                        }
+                                    }
+                                }
 
-                        ScopeMenuInsetSection("Library", "battle-plan-scope-menu-library") {
-                            ScopeMenuItem("Recurring", Icons.Outlined.Repeat) {
-                                closeScopeMenu { onOpenRecurring() }
-                            }
-                            ScopeMenuInsetDivider()
-                            ScopeMenuItem("Archive", Icons.Outlined.Archive) {
-                                closeScopeMenu { onSelectCollection(TaskCollection.Archived) }
-                            }
-                            ScopeMenuInsetDivider()
-                            ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
-                                closeScopeMenu { onSelectCollection(TaskCollection.Trash) }
+                                ScopeMenuInsetSection("Library", "battle-plan-scope-menu-library") {
+                                    ScopeMenuItem("Recurring", Icons.Outlined.Repeat) {
+                                        closeScopeMenu { onOpenRecurring() }
+                                    }
+                                    ScopeMenuInsetDivider()
+                                    ScopeMenuItem("Archive", Icons.Outlined.Archive) {
+                                        closeScopeMenu { onSelectCollection(TaskCollection.Archived) }
+                                    }
+                                    ScopeMenuInsetDivider()
+                                    ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
+                                        closeScopeMenu { onSelectCollection(TaskCollection.Trash) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1076,6 +1106,8 @@ private fun ScopeMenuInsetSection(
     Column {
         Text(
             text = label.uppercase(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             style = TimeboxTheme.type.laneLabel,
             color = colors.onVariant,
             modifier = Modifier

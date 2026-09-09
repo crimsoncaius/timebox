@@ -11,20 +11,43 @@ import com.timebox.android.data.Project
 import java.time.Instant
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
 
 class InlineProjectCreationTest {
     @get:Rule val compose = createComposeRule()
     private var state by mutableStateOf(BattlePlanUiState(loading = false))
     private var submit: () -> Unit = {}
 
+    @Test fun inlineDraftSavingAndErrorsKeepTheMenuAndLibraryInPlace() {
+        showBoard()
+        compose.onNodeWithText("All Tasks").performClick()
+        val menu = compose.onNodeWithTag("battle-plan-scope-menu")
+        val library = compose.onNodeWithTag("battle-plan-scope-menu-library")
+        val height = menu.fetchSemanticsNode().boundsInRoot.height
+        val libraryTop = library.fetchSemanticsNode().boundsInRoot.top
+        // Change draft state without opening the IME: keyboard resizing is a
+        // separate, allowed constraint; the editor itself must never grow.
+        listOf(
+            InlineProjectCreation(active = true, name = "Launch"),
+            InlineProjectCreation(active = true, name = "Launch", saving = true),
+            InlineProjectCreation(active = true, name = "Launch", error = "Project already exists."),
+            InlineProjectCreation(active = true, name = "Launch", error = "Unable to save the project. Check your connection and try again."),
+            InlineProjectCreation(),
+        ).forEach { draft ->
+            compose.runOnIdle { state = state.copy(projectCreation = draft) }
+            assertEquals("Menu height changed for $draft", height, menu.fetchSemanticsNode().boundsInRoot.height, 0.5f)
+            assertEquals("Library moved for $draft", libraryTop, library.fetchSemanticsNode().boundsInRoot.top, 0.5f)
+        }
+    }
+
     @Test fun newProjectReplacesActionWithFocusedInputAndCancelRestoresAction() {
         showBoard()
         compose.onNodeWithText("All Tasks").performClick()
         compose.onNodeWithText("New project").performScrollTo().performClick()
-        compose.onNodeWithText("Project name").assertIsFocused().performTextInput("Launch")
+        compose.onNodeWithContentDescription("Project name").assertIsFocused().performTextInput("Launch")
         compose.onNodeWithText("New project").assertDoesNotExist()
         compose.onNodeWithContentDescription("Cancel project creation").performScrollTo().performClick()
-        compose.onNodeWithText("Project name").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Project name").assertDoesNotExist()
         compose.onNodeWithText("New project").assertExists()
     }
 
@@ -37,8 +60,8 @@ class InlineProjectCreationTest {
         showBoard()
         compose.onNodeWithText("All Tasks").performClick()
         compose.onNodeWithText("New project").performScrollTo().performClick()
-        compose.onNodeWithText("Project name").performTextInput("Launch")
-        compose.onNodeWithText("Project name").performImeAction()
+        compose.onNodeWithContentDescription("Project name").performTextInput("Launch")
+        compose.onNodeWithContentDescription("Project name").performImeAction()
         compose.onNodeWithTag("battle-plan-scope-menu").assertDoesNotExist()
         compose.onNodeWithText("Launch").assertExists()
     }
@@ -47,11 +70,11 @@ class InlineProjectCreationTest {
         showBoard()
         compose.onNodeWithText("All Tasks").performClick()
         compose.onNodeWithText("New project").performScrollTo().performClick()
-        compose.onNodeWithText("Project name").performTextInput("Launch")
+        compose.onNodeWithContentDescription("Project name").performTextInput("Launch")
         compose.onNodeWithText("Admin").performScrollTo().performClick()
         compose.onNodeWithTag("battle-plan-scope-menu").assertDoesNotExist()
         compose.onNodeWithText("Admin").performClick()
-        compose.onNodeWithText("Project name").assertIsNotFocused()
+        compose.onNodeWithContentDescription("Project name").assertIsNotFocused()
         compose.onNodeWithText("Launch").assertExists()
     }
 
@@ -59,7 +82,7 @@ class InlineProjectCreationTest {
         state = state.copy(projectCreation = InlineProjectCreation(active = true, name = "Launch", saving = true))
         showBoard()
         compose.onNodeWithText("All Tasks").performClick()
-        compose.onNodeWithText("Project name").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Project name").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Cancel project creation").assertIsNotEnabled()
         compose.onNodeWithText("Creating project…").assertExists()
         Espresso.pressBackUnconditionally()
@@ -72,7 +95,7 @@ class InlineProjectCreationTest {
         compose.onNodeWithText("All Tasks").performClick()
         compose.onNodeWithText("New project").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Create project").assertIsNotEnabled()
-        compose.onNodeWithText("Project name").performTextInput("Launch")
+        compose.onNodeWithContentDescription("Project name").performTextInput("Launch")
         compose.onNodeWithContentDescription("Create project").performScrollTo().performClick()
         compose.onNodeWithText("Project already exists.").assertExists()
         compose.onNodeWithText("Launch").assertExists()

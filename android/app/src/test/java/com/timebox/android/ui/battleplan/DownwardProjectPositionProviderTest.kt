@@ -8,6 +8,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class DownwardProjectPositionProviderTest {
+    @Test fun keyboardReducesTheViewportWithoutMovingTheScopeMenu() {
+        var height = 0
+        val provider = DownwardProjectPositionProvider(8, startAligned = true) { height = it }
+        val anchor = IntRect(12, 130, 330, 178)
+        val popup = IntSize(304, 640)
+        assertEquals(IntOffset(12, 178), provider.calculatePosition(anchor, IntSize(412, 900), LayoutDirection.Ltr, popup))
+        assertEquals(714, height)
+        assertEquals(IntOffset(12, 178), provider.calculatePosition(anchor, IntSize(412, 560), LayoutDirection.Ltr, popup))
+        assertEquals(374, height)
+    }
+
     @Test fun growingContentKeepsItsTopBelowTheMenuRow() {
         var height = 0
         val provider = DownwardProjectPositionProvider(8) { height = it }

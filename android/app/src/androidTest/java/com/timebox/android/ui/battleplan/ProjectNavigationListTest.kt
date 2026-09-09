@@ -1,6 +1,14 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.unit.dp
+import com.timebox.android.ui.theme.TimeboxShapes
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -17,6 +25,56 @@ class ProjectNavigationListTest {
     @get:Rule val compose = createComposeRule()
     private val projects = listOf("Alpha", "Beta", "Gamma").mapIndexed { index, name ->
         Project(index + 1, name, Instant.EPOCH, Instant.EPOCH)
+    }
+
+    @Test fun boundarySelectionCornersMatchAnUnclippedMiddleRow() {
+        var selected by mutableStateOf(2)
+        var rows by mutableStateOf(projects)
+        var outline = androidx.compose.ui.graphics.Color.Unspecified
+        compose.setContent {
+            TimeboxTheme(darkTheme = true) {
+                outline = TimeboxTheme.colors.project
+                // Include the rounded ancestor used by the Projects menu section.
+                Box(Modifier.width(280.dp).clip(TimeboxShapes.card)) {
+                    ProjectNavigationList(rows, selected, false, {}, {})
+                }
+            }
+        }
+        fun cornerPixels(index: Int): List<androidx.compose.ui.graphics.Color> {
+            val row = compose.onAllNodes(
+                SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions),
+                useUnmergedTree = true,
+            )[index]
+            row.performScrollTo()
+            val pixels = row.captureToImage().toPixelMap()
+            val corner = pixels.height / 6
+            return buildList {
+                for (y in 0 until corner) for (x in 0 until corner) {
+                    add(pixels[x, y])
+                    add(pixels[pixels.width - 1 - x, y])
+                    add(pixels[x, pixels.height - 1 - y])
+                    add(pixels[pixels.width - 1 - x, pixels.height - 1 - y])
+                }
+            }
+        }
+        val reference = cornerPixels(1)
+        for ((count, index) in listOf(3 to 0, 3 to 2, 1 to 0, 8 to 0, 8 to 7)) {
+            compose.runOnIdle {
+                rows = List(count) { projects[it % projects.size].copy(id = it + 1) }
+                selected = index + 1
+            }
+            compose.waitForIdle()
+            val actual = cornerPixels(index)
+            val differing = reference.zip(actual).count { (a, b) ->
+                // Compare the outline itself; pixels outside the row can legitimately
+                // show the ancestor's rounded background rather than the list fill.
+                val isOutline = kotlin.math.abs(a.red - outline.red) +
+                    kotlin.math.abs(a.green - outline.green) + kotlin.math.abs(a.blue - outline.blue) < 0.25f
+                isOutline && kotlin.math.abs(a.red - b.red) + kotlin.math.abs(a.green - b.green) +
+                    kotlin.math.abs(a.blue - b.blue) > 0.15f
+            }
+            assertTrue("Row $index of $count has $differing clipped corner pixels", differing < reference.size / 100)
+        }
     }
 
     @Test fun primaryProjectMenuSupportsHoldingAProjectRowToReorderWithoutOpeningAnotherDialog() {
