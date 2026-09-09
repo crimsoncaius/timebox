@@ -13,6 +13,7 @@ import com.timebox.android.data.remote.RecurringPreplanningScheduleDto
 import com.timebox.android.data.remote.RecurringPreplanningScheduleWriteDto
 import com.timebox.android.data.remote.RecurringPreplanningSlotDto
 import com.timebox.android.data.remote.RecurringPreplanningSlotWriteDto
+import com.timebox.android.data.remote.RecurringPreplanningUnavailableSlotDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.SubtaskDto
 import java.time.Instant
@@ -165,7 +166,16 @@ data class RecurringPreplanningSlot(
     val startMinute: Int,
     val endMinute: Int,
 )
-data class RecurringPreplanningSchedule(val slots: List<RecurringPreplanningSlot>)
+data class RecurringPreplanningUnavailableSlot(
+    val date: LocalDate,
+    val slotKey: String,
+    val startMinute: Int,
+    val endMinute: Int,
+)
+data class RecurringPreplanningSchedule(
+    val slots: List<RecurringPreplanningSlot>,
+    val unavailableSlots: List<RecurringPreplanningUnavailableSlot> = emptyList(),
+)
 
 data class RecurringTemplate(
     val id: Int,
@@ -350,7 +360,16 @@ internal fun RecurringPreplanningSlotDto.toModel() = RecurringPreplanningSlot(
     startMinute = startMinute,
     endMinute = endMinute,
 )
-internal fun RecurringPreplanningScheduleDto.toModel() = RecurringPreplanningSchedule(slots.map { it.toModel() })
+internal fun RecurringPreplanningUnavailableSlotDto.toModel() = RecurringPreplanningUnavailableSlot(
+    date = LocalDate.parse(date),
+    slotKey = slotKey,
+    startMinute = startMinute,
+    endMinute = endMinute,
+)
+internal fun RecurringPreplanningScheduleDto.toModel() = RecurringPreplanningSchedule(
+    slots = slots.map { it.toModel() },
+    unavailableSlots = unavailableSlots.map { it.toModel() },
+)
 internal fun RecurringPreplanningSchedule.toWriteDto() = RecurringPreplanningScheduleWriteDto(
     slots.map {
         RecurringPreplanningSlotWriteDto(

@@ -835,6 +835,180 @@ def test_editing_a_slot_never_overlaps_an_existing_planned_block(client):
     ).json()["planned_blocks"]] == [(630, 690)]
 
 
+def test_occupied_preplanning_slot_is_exposed_and_materializes_when_conflict_clears(client):
+    today = client.get("/health").json()["today"]
+    task_type = client.post("/task-types", json={"name": "Occupied"}).json()
+    occupied = client.post(f"/days/{today}/blocks", json={
+        "lane": "planned",
+        "task_type_id": task_type["id"],
+        "start_minute": 540,
+        "end_minute": 600,
+    })
+    assert occupied.status_code == 200, occupied.text
+
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{"start_minute": 540, "end_minute": 600}]},
+    ))
+
+    assert created.status_code == 201, created.text
+    template = created.json()
+    slot = template["preplanning_schedule"]["slots"][0]
+    assert template["preplanning_schedule"]["unavailable_slots"] == [{
+        "date": today,
+        "slot_key": slot["key"],
+        "start_minute": 540,
+        "end_minute": 600,
+    }]
+    occurrence = _task_for_planning_date(client, dt.date.fromisoformat(today), template["id"])
+    assert occurrence["ready_to_plan"] is False
+    assert occurrence["status"] == "open"
+    assert client.get(f"/days/{today}").json()["actual_blocks"] == []
+    assert [block["id"] for block in client.get(f"/days/{today}").json()["planned_blocks"]] == [
+        occupied.json()["id"]
+    ]
+
+    assert client.delete(f"/days/{today}/blocks/{occupied.json()['id']}").status_code == 200
+    refreshed = client.get(f"/recurring-templates/{template['id']}")
+
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["preplanning_schedule"]["unavailable_slots"] == []
+    expected = [(540, 600, occurrence["id"])]
+    assert [(block["start_minute"], block["end_minute"], block["task_id"]) for block in client.get(
+        f"/days/{today}"
+    ).json()["planned_blocks"]] == expected
+    assert [(block["start_minute"], block["end_minute"], block["task_id"]) for block in client.get(
+        f"/days/{today}"
+    ).json()["planned_blocks"]] == expected
+
+
+def test_pause_resume_and_end_reconcile_untouched_generated_planned_blocks(client):
+    today = client.get("/health").json()["today"]
+    created = client.post("/recurring-templates", json=_daily_body(
+        today,
+        checklist_titles=[],
+        preplanning_schedule={"slots": [{"start_minute": 540, "end_minute": 600}]},
+    ))
+    assert created.status_code == 201, created.text
+    template = created.json()
+    assert len(client.get(f"/days/{today}").json()["planned_blocks"]) == 1
+
+    paused = client.post(f"/recurring-templates/{template['id']}/pause")
+
+    assert paused.status_code == 200, paused.text
+    assert client.get(f"/days/{today}").json()["planned_blocks"] == []
+
+    resumed = client.post(f"/recurring-templates/{template['id']}/resume")
+
+    assert resumed.status_code == 200, resumed.text
+    assert [(block["start_minute"], block["end_minute"]) for block in client.get(
+        f"/days/{today}"
+    ).json()["planned_blocks"]] == [(540, 600)]
+    ended = client.post(f"/recurring-templates/{template['id']}/end")
+
+    assert ended.status_code == 200, ended.text
+    assert client.get(f"/days/{today}").json()["planned_blocks"] == []
+
+
+def test_cadence_change_removes_only_untouched_generated_blocks_and_keeps_exceptions(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    tomorrow = today + dt.timedelta(days=1)
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        checklist_titles=[],
+        preplanning_schedule={"slots": [
+            {"start_minute": 540, "end_minute": 600},
+            {"start_minute": 630, "end_minute": 690},
+            {"start_minute": 720, "end_minute": 780},
+        ]},
+    ))
+    assert created.status_code == 201, created.text
+    template = created.json()
+    blocks = client.get(f"/days/{tomorrow.isoformat()}").json()["planned_blocks"]
+    by_start = {block["start_minute"]: block for block in blocks}
+    assert client.patch(
+        f"/days/{tomorrow.isoformat()}/blocks/{by_start[630]['id']}",
+        json={"name": "Keep this exception"},
+    ).status_code == 200
+    assert client.delete(
+        f"/days/{tomorrow.isoformat()}/blocks/{by_start[720]['id']}"
+    ).status_code == 200
+
+    weekly_slots = [
+        {
+            "key": slot["key"],
+            "weekday": today.weekday(),
+            "start_minute": slot["start_minute"],
+            "end_minute": slot["end_minute"],
+        }
+        for slot in template["preplanning_schedule"]["slots"]
+    ]
+    changed = client.patch(f"/recurring-templates/{template['id']}", json={
+        "frequency": "weekly",
+        "weekdays": [today.weekday()],
+        "preplanning_schedule": {"slots": weekly_slots},
+    })
+
+    assert changed.status_code == 200, changed.text
+    remaining = client.get(f"/days/{tomorrow.isoformat()}").json()["planned_blocks"]
+    assert [(block["start_minute"], block["name"]) for block in remaining] == [
+        (630, "Keep this exception")
+    ]
+    with Session(get_engine()) as db:
+        tombstone = db.execute(
+            select(RecurringPlannedBlockRealization)
+            .join(RecurrenceOccurrence)
+            .where(
+                RecurrenceOccurrence.template_id == template["id"],
+                RecurrenceOccurrence.cycle_start == tomorrow,
+                RecurringPlannedBlockRealization.planned_block_id.is_(None),
+                RecurringPlannedBlockRealization.state == "deleted",
+            )
+        ).scalar_one()
+        assert tombstone.state.value == "deleted"
+
+
+def test_lifecycle_preserves_generated_block_exceptions_while_reconciling_untouched_peers(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    tomorrow = today + dt.timedelta(days=1)
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(),
+        checklist_titles=[],
+        preplanning_schedule={"slots": [
+            {"start_minute": 540, "end_minute": 600},
+            {"start_minute": 630, "end_minute": 690},
+            {"start_minute": 720, "end_minute": 780},
+        ]},
+    ))
+    assert created.status_code == 201, created.text
+    template = created.json()
+    blocks = client.get(f"/days/{tomorrow.isoformat()}").json()["planned_blocks"]
+    by_start = {block["start_minute"]: block for block in blocks}
+    assert client.patch(
+        f"/days/{tomorrow.isoformat()}/blocks/{by_start[630]['id']}",
+        json={"name": "Keep this exception"},
+    ).status_code == 200
+    assert client.delete(
+        f"/days/{tomorrow.isoformat()}/blocks/{by_start[720]['id']}"
+    ).status_code == 200
+
+    assert client.post(f"/recurring-templates/{template['id']}/pause").status_code == 200
+    assert [(block["start_minute"], block["name"]) for block in client.get(
+        f"/days/{tomorrow.isoformat()}"
+    ).json()["planned_blocks"]] == [(630, "Keep this exception")]
+
+    assert client.post(f"/recurring-templates/{template['id']}/resume").status_code == 200
+    assert [(block["start_minute"], block["name"]) for block in client.get(
+        f"/days/{tomorrow.isoformat()}"
+    ).json()["planned_blocks"]] == [(540, None), (630, "Keep this exception")]
+
+    assert client.post(f"/recurring-templates/{template['id']}/end").status_code == 200
+    assert [(block["start_minute"], block["name"]) for block in client.get(
+        f"/days/{tomorrow.isoformat()}"
+    ).json()["planned_blocks"]] == [(630, "Keep this exception")]
+
+
 @pytest.mark.parametrize(
     ("body_changes", "message"),
     [

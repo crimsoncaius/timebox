@@ -241,7 +241,16 @@ export type RecurringPreplanningSlot = {
   start_minute: number
   end_minute: number
 }
-export type RecurringPreplanningSchedule = { slots: RecurringPreplanningSlot[] }
+export type RecurringPreplanningUnavailableSlot = {
+  date: string
+  slot_key: string
+  start_minute: number
+  end_minute: number
+}
+export type RecurringPreplanningSchedule = {
+  slots: RecurringPreplanningSlot[]
+  unavailable_slots?: RecurringPreplanningUnavailableSlot[]
+}
 
 export interface RecurringTemplate {
   id: number

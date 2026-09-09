@@ -16,26 +16,17 @@ from app.db.base import Base
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_migration_adds_nullable_name_without_backfilling_existing_blocks(monkeypatch):
+def test_migration_adds_nullable_name_without_backfilling_existing_blocks(
+    monkeypatch, prepare_legacy_schema
+):
     with tempfile.TemporaryDirectory(prefix=".block-name-", dir=BACKEND_ROOT / "tests") as path:
         database_path = Path(path) / "before-block-name.sqlite3"
         engine = sa.create_engine(
             f"sqlite:///{database_path.as_posix()}", poolclass=sa.pool.NullPool
         )
-        Base.metadata.create_all(engine)
+        prepare_legacy_schema(engine, "017_non_accumulating_recurrence")
 
         with engine.begin() as connection:
-            connection.execute(sa.text("ALTER TABLE projects DROP COLUMN position"))
-            connection.execute(sa.text("ALTER TABLE time_blocks DROP COLUMN name"))
-            connection.execute(
-                sa.text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)")
-            )
-            connection.execute(
-                sa.text(
-                    "INSERT INTO alembic_version (version_num) "
-                    "VALUES ('017_non_accumulating_recurrence')"
-                )
-            )
             connection.execute(
                 Base.metadata.tables["task_types"].insert().values(id=1, name="meetings")
             )

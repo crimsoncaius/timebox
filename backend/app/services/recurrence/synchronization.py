@@ -196,7 +196,13 @@ def _materialize_preplanning(
             end_minute=slot.end_minute,
         )
         if block is None:
-            # Unavailable-slot reads and reconciliation belong to #106.
+            # A missing untouched block is the durable realization of an occupied
+            # configured slot. A later synchronization retries this exact slot.
+            db.add(RecurringPlannedBlockRealization(
+                occurrence_id=occurrence.id,
+                slot_id=slot.id,
+                slot_key=slot.slot_key,
+            ))
             continue
         db.add(RecurringPlannedBlockRealization(
             occurrence_id=occurrence.id,
@@ -292,6 +298,28 @@ def _is_pristine(db: Session, task: Task) -> bool:
     )
 
 
+def _remove_untouched_generated_planned_blocks(
+    db: Session, occurrence: RecurrenceOccurrence
+) -> None:
+    """Remove only the schedule-owned Planned Blocks for one occurrence.
+
+    Lifecycle actions may discard an untouched generated allocation even when a
+    sibling customized realization keeps the Task Occurrence itself durable.
+    """
+
+    realizations = list(db.execute(
+        select(RecurringPlannedBlockRealization).where(
+            RecurringPlannedBlockRealization.occurrence_id == occurrence.id,
+            RecurringPlannedBlockRealization.state == RecurringPlannedBlockState.untouched,
+            RecurringPlannedBlockRealization.planned_block_id.is_not(None),
+        )
+    ).scalars())
+    for realization in realizations:
+        if realization.planned_block is not None:
+            db.delete(realization.planned_block)
+        realization.planned_block = None
+
+
 def _cleanup_future(db: Session, template: RecurringTemplate, today: dt.date, *, suppress: bool) -> None:
     ledgers = list(db.execute(
         select(RecurrenceOccurrence).where(
@@ -300,6 +328,8 @@ def _cleanup_future(db: Session, template: RecurringTemplate, today: dt.date, *,
         )
     ).scalars())
     for ledger in ledgers:
+        _remove_untouched_generated_planned_blocks(db, ledger)
+        db.flush()
         task = db.get(Task, ledger.task_id) if ledger.task_id is not None else None
         if task is not None and _is_pristine(db, task):
             ledger.task_id = None

@@ -175,7 +175,7 @@ fun SettingsScreen(
                 description = if (notificationsAllowed) {
                     "This device can display Battle Plan and Daily Reminders. Delivery may be delayed by battery restrictions."
                 } else {
-                    "Daily Reminder preferences stay saved on this device, but notifications cannot display until enabled."
+                    "Battle Plan reminders still save to the server. Daily Reminder preferences stay saved on this device, but this device cannot display either until notifications are enabled."
                 },
             )
             Column(

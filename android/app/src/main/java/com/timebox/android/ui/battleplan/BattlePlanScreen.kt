@@ -192,9 +192,10 @@ fun BattlePlanScreen(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
-    onNewProjectNameChange: (String) -> Unit = {},
-    onCreateProject: () -> Unit = {},
-    onCancelProjectCreation: () -> Unit = {},
+    onProjectNameChange: (String) -> Unit = {},
+    onSaveProject: () -> Unit = {},
+    onCancelProjectEditor: () -> Unit = {},
+    onDismissProjectEditor: () -> Unit = {},
     onEditProject: (Project) -> Unit = {},
     onPrepareDeleteProject: (Project) -> Unit,
     onDismissDeleteProject: () -> Unit,
@@ -251,9 +252,6 @@ fun BattlePlanScreen(
                             onShowComposer = onShowComposer,
                             onOpenRecurring = onOpenRecurring,
                             onNewProject = onNewProject,
-                            onNewProjectNameChange = onNewProjectNameChange,
-                            onCreateProject = onCreateProject,
-                            onCancelProjectCreation = onCancelProjectCreation,
                             onReorderProjects = onReorderProjects,
                             onEditProject = onEditProject,
                             onPrepareDeleteProject = onPrepareDeleteProject,
@@ -269,6 +267,16 @@ fun BattlePlanScreen(
                     )
                 }
             }
+        }
+
+        state.projectEditor?.let { draft ->
+            ProjectNameSheet(
+                state = draft,
+                onNameChange = onProjectNameChange,
+                onSave = onSaveProject,
+                onCancel = onCancelProjectEditor,
+                onDismiss = onDismissProjectEditor,
+            )
         }
 
         if (state.showComposer) {
@@ -404,9 +412,6 @@ private fun MobileKanbanBoard(
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
-    onNewProjectNameChange: (String) -> Unit,
-    onCreateProject: () -> Unit,
-    onCancelProjectCreation: () -> Unit,
     onReorderProjects: (List<Int>) -> Unit,
     onEditProject: (Project) -> Unit,
     onPrepareDeleteProject: (Project) -> Unit,
@@ -417,21 +422,7 @@ private fun MobileKanbanBoard(
     val dragScope = rememberCoroutineScope()
     val initialPage = battlePlanStatuses.indexOf(state.selectedStatus).coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { battlePlanStatuses.size })
-    var scopeMenu by remember { mutableStateOf(false) }
-    var focusNewProject by remember { mutableStateOf(false) }
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
-    fun closeScopeMenu(action: () -> Unit = {}) {
-        if (state.projectCreation.saving) return
-        keyboard?.hide()
-        focusManager.clearFocus()
-        focusNewProject = false
-        scopeMenu = false
-        action()
-    }
-    LaunchedEffect(state.lastCreatedProjectId) {
-        if (state.lastCreatedProjectId != null) closeScopeMenu()
-    }
+    val projectMotion = projectSelectionMotion(state.selectedScope.preferenceKey)
     var filterSheet by remember { mutableStateOf(false) }
     var dragLayerBounds by remember { mutableStateOf(Rect.Zero) }
     var dragLayerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -573,137 +564,13 @@ private fun MobileKanbanBoard(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.weight(1f)) {
-                TextButton(onClick = { scopeMenu = true }) {
-                    Icon(
-                        imageVector = if (state.selectedScope.kind == BattlePlanScopeKind.Project) Icons.Outlined.Folder else Icons.AutoMirrored.Outlined.ListAlt,
-                        contentDescription = null,
-                        tint = if (state.selectedScope.kind == BattlePlanScopeKind.Project) colors.project else colors.on,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    Text(state.selectedScope.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.width(2.dp))
-                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-                }
-                if (scopeMenu) {
-                    var availableMenuHeight by remember { mutableStateOf<Int?>(null) }
-                    val keyboardInset = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density)
-                    // Recalculate the visible window when the IME changes, even
-                    // if the anchor and popup content have not changed size yet.
-                    val menuPosition = remember(density, keyboardInset) {
-                        DownwardProjectPositionProvider(with(density) { 8.dp.roundToPx() },
-                            startAligned = true) {
-                            availableMenuHeight = it
-                        }
-                    }
-                    androidx.compose.ui.window.Popup(
-                        popupPositionProvider = menuPosition,
-                        onDismissRequest = { closeScopeMenu() },
-                        properties = PopupProperties(
-                            focusable = true,
-                            dismissOnBackPress = !state.projectCreation.saving,
-                            dismissOnClickOutside = !state.projectCreation.saving,
-                        ),
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .width(304.dp)
-                                .testTag("battle-plan-scope-menu"),
-                            shape = TimeboxShapes.group,
-                            color = colors.raised,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 8.dp,
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .heightIn(max = availableMenuHeight?.let { with(density) { it.toDp() } }
-                                        ?: androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 11.dp, vertical = 19.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                val taskScopes = state.scopes.filter { it.kind != BattlePlanScopeKind.Project }
-                                ScopeMenuInsetSection("Tasks", "battle-plan-scope-menu-tasks") {
-                                    taskScopes.forEachIndexed { index, scope ->
-                                        ScopeMenuItem(
-                                            label = scope.label,
-                                            icon = when (scope.kind) {
-                                                BattlePlanScopeKind.All -> Icons.AutoMirrored.Outlined.ListAlt
-                                                BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
-                                                BattlePlanScopeKind.Project -> Icons.Outlined.Folder
-                                            },
-                                            selected = scope.preferenceKey == state.selectedScope.preferenceKey,
-                                            onClick = { closeScopeMenu { onSelectScope(scope) } },
-                                        )
-                                        if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
-                                    }
-                                }
-
-                                ScopeMenuInsetSection(
-                                    if (state.projectOrderSaving) "Projects · Saving…" else "Projects",
-                                    "battle-plan-scope-menu-projects",
-                                ) {
-                                    ProjectNavigationList(
-                                        // Reserve space for Tasks, headings, the input, and insets.
-                                        // Scroll Project rows instead of moving the menu to reveal the input.
-                                        maxHeight = if (state.projectCreation.active && keyboardInset > 0) {
-                                            (availableMenuHeight?.let { with(density) { it.toDp() } } ?: 344.dp)
-                                                .minus(280.dp).coerceIn(56.dp, 344.dp)
-                                        } else 344.dp,
-                                        projects = state.projects,
-                                        selectedId = state.selectedScope.projectId,
-                                        saving = state.projectOrderSaving || state.projectCreation.saving,
-                                        onSelect = { project -> closeScopeMenu { onSelectScope(BattlePlanScope.project(project)) } },
-                                        onReorder = onReorderProjects,
-                                        onEdit = { project -> closeScopeMenu { onEditProject(project) } },
-                                        onDelete = { project -> closeScopeMenu { onPrepareDeleteProject(project) } },
-                                    )
-                                    state.error?.let { Text(it, color = colors.error) }
-                                    if (state.projectCreation.active) {
-                                        InlineProjectInput(
-                                            state = state.projectCreation,
-                                            requestFocus = focusNewProject,
-                                            onFocusRequested = { focusNewProject = false },
-                                            onNameChange = onNewProjectNameChange,
-                                            onSubmit = onCreateProject,
-                                            onCancel = {
-                                                if (!state.projectCreation.saving) {
-                                                    keyboard?.hide()
-                                                    focusManager.clearFocus()
-                                                    onCancelProjectCreation()
-                                                }
-                                            },
-                                        )
-                                    } else {
-                                        Box(Modifier.fillMaxWidth().height(ProjectCreationRowHeight), contentAlignment = Alignment.CenterStart) {
-                                            ScopeMenuItem(
-                                                label = "New project",
-                                                icon = Icons.Outlined.Add,
-                                                onClick = { focusNewProject = true; onNewProject() },
-                                            )
-                                        }
-                                    }
-                                }
-
-                                ScopeMenuInsetSection("Library", "battle-plan-scope-menu-library") {
-                                    ScopeMenuItem("Recurring", Icons.Outlined.Repeat) {
-                                        closeScopeMenu { onOpenRecurring() }
-                                    }
-                                    ScopeMenuInsetDivider()
-                                    ScopeMenuItem("Archive", Icons.Outlined.Archive) {
-                                        closeScopeMenu { onSelectCollection(TaskCollection.Archived) }
-                                    }
-                                    ScopeMenuInsetDivider()
-                                    ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
-                                        closeScopeMenu { onSelectCollection(TaskCollection.Trash) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            TaskNavigationMenu(
+                state = state, modifier = Modifier.weight(1f),
+                onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
+                onOpenRecurring = onOpenRecurring, onReorderProjects = onReorderProjects,
+                onEditProject = onEditProject, onPrepareDeleteProject = onPrepareDeleteProject,
+                onNewProject = onNewProject,
+            )
             IconButton(onClick = { filterSheet = true }) {
                 Icon(Icons.Outlined.FilterList, contentDescription = "Filter tasks", tint = colors.on)
             }
@@ -805,7 +672,7 @@ private fun MobileKanbanBoard(
         ) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().then(projectMotion),
                 beyondViewportPageCount = battlePlanStatuses.size,
                 userScrollEnabled = visualDrag == null,
             ) { page ->
@@ -3008,62 +2875,6 @@ private fun <T> SelectionMenu(
 }
 
 @Composable
-fun ProjectEditorScreen(
-    state: ProjectEditorUiState,
-    deleteSummary: ProjectDeleteSummary?,
-    deleteSummaryLoading: Boolean,
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
-    onNameChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onPrepareDelete: () -> Unit,
-    onDismissDelete: () -> Unit,
-    onConfirmDelete: () -> Unit,
-    onSaved: () -> Unit,
-) {
-    LaunchedEffect(state.saved) { if (state.saved) onSaved() }
-    var confirmDiscard by remember { mutableStateOf(false) }
-    fun requestBack() { if (state.dirty) confirmDiscard = true else onBack() }
-    BackHandler(onBack = ::requestBack)
-    when {
-        state.loading -> LoadingState()
-        state.error != null -> ErrorState(state.error, onRetry)
-        else -> Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            TextButton(onClick = ::requestBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, null)
-                Spacer(Modifier.width(5.dp))
-                Text("Battle Plan")
-            }
-            Text(
-                if (state.projectId == null) "Create project" else "Edit project",
-                style = TimeboxTheme.type.screenTitle,
-            )
-            OutlinedTextField(state.name, onNameChange, Modifier.fillMaxWidth(), label = { Text("Name") }, singleLine = true)
-            PrimaryButton("Save project", onSave, Modifier.fillMaxWidth(), enabled = state.name.isNotBlank() && !state.saving)
-            if (state.projectId != null) {
-                TextButton(onClick = onPrepareDelete, enabled = !deleteSummaryLoading) {
-                    Icon(Icons.Outlined.Delete, null)
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (deleteSummaryLoading) "Counting affected tasks…" else "Delete project")
-                }
-            }
-        }
-    }
-    if (confirmDiscard) {
-        AlertDialog(
-            onDismissRequest = { confirmDiscard = false },
-            title = { Text("Discard unsaved changes?") },
-            confirmButton = { TextButton(onClick = onBack) { Text("Discard") } },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
-        )
-    }
-    deleteSummary?.let { ProjectDeleteDialog(it, onDismissDelete, onConfirmDelete) }
-}
-
-@Composable
 internal fun MoveTaskProjectDialog(
     task: BattleTask,
     projects: List<Project>,
@@ -3091,4 +2902,135 @@ internal fun MoveTaskProjectDialog(
         confirmButton = { TextButton(enabled = !saving && destination != task.projectId, onClick = { onMove(destination) }) { Text("Move") } },
         dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@Composable
+internal fun TaskNavigationMenu(
+    state: BattlePlanUiState,
+    modifier: Modifier = Modifier,
+    recurring: Boolean = false,
+    onSelectScope: (BattlePlanScope) -> Unit = {},
+    onSelectCollection: (TaskCollection) -> Unit = {},
+    onOpenRecurring: () -> Unit = {},
+    onReorderProjects: (List<Int>) -> Unit = {},
+    onEditProject: (Project) -> Unit = {},
+    onPrepareDeleteProject: (Project) -> Unit = {},
+    onNewProject: () -> Unit = {},
+) {
+    val colors = TimeboxTheme.colors
+    val density = LocalDensity.current
+    var scopeMenu by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    fun closeScopeMenu(action: () -> Unit = {}) {
+        keyboard?.hide()
+        focusManager.clearFocus()
+        scopeMenu = false
+        action()
+    }
+    Box(modifier) {
+        TextButton(onClick = { scopeMenu = true }) {
+            Icon(
+                imageVector = if (recurring) Icons.Outlined.Repeat else if (state.selectedScope.kind == BattlePlanScopeKind.Project) Icons.Outlined.Folder else Icons.AutoMirrored.Outlined.ListAlt,
+                contentDescription = null,
+                tint = if (!recurring && state.selectedScope.kind == BattlePlanScopeKind.Project) colors.project else colors.on,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(if (recurring) "Recurring" else state.selectedScope.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(2.dp))
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+        }
+        if (scopeMenu) {
+            var availableMenuHeight by remember { mutableStateOf<Int?>(null) }
+            val keyboardInset = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density)
+            // Recalculate the visible window when the IME changes, even
+            // if the anchor and popup content have not changed size yet.
+            val menuPosition = remember(density, keyboardInset) {
+                DownwardProjectPositionProvider(with(density) { 8.dp.roundToPx() },
+                    startAligned = true) {
+                    availableMenuHeight = it
+                }
+            }
+            androidx.compose.ui.window.Popup(
+                popupPositionProvider = menuPosition,
+                onDismissRequest = { closeScopeMenu() },
+                properties = PopupProperties(
+                    focusable = true,
+                ),
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .width(304.dp)
+                        .testTag("battle-plan-scope-menu"),
+                    shape = TimeboxShapes.group,
+                    color = colors.raised,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = availableMenuHeight?.let { with(density) { it.toDp() } }
+                                ?: androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 11.dp, vertical = 19.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        val taskScopes = state.scopes.filter { it.kind != BattlePlanScopeKind.Project }
+                        ScopeMenuInsetSection("Tasks", "battle-plan-scope-menu-tasks") {
+                            taskScopes.forEachIndexed { index, scope ->
+                                ScopeMenuItem(
+                                    label = scope.label,
+                                    icon = when (scope.kind) {
+                                        BattlePlanScopeKind.All -> Icons.AutoMirrored.Outlined.ListAlt
+                                        BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
+                                        BattlePlanScopeKind.Project -> Icons.Outlined.Folder
+                                    },
+                                    selected = !recurring && scope.preferenceKey == state.selectedScope.preferenceKey,
+                                    onClick = { closeScopeMenu { onSelectScope(scope) } },
+                                )
+                                if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
+                            }
+                            ScopeMenuInsetDivider()
+                            ScopeMenuItem("Recurring", Icons.Outlined.Repeat, selected = recurring) {
+                                closeScopeMenu { onOpenRecurring() }
+                            }
+                        }
+
+                        ScopeMenuInsetSection(
+                            if (state.projectOrderSaving) "Projects · Saving…" else "Projects",
+                            "battle-plan-scope-menu-projects",
+                        ) {
+                            ProjectNavigationList(
+                                maxHeight = 344.dp,
+                                projects = state.projects,
+                                selectedId = if (recurring) null else state.selectedScope.projectId,
+                                saving = state.projectOrderSaving,
+                                onSelect = { project -> closeScopeMenu { onSelectScope(BattlePlanScope.project(project)) } },
+                                onReorder = onReorderProjects,
+                                onEdit = { project -> closeScopeMenu { onEditProject(project) } },
+                                onDelete = { project -> closeScopeMenu { onPrepareDeleteProject(project) } },
+                            )
+                            state.error?.let { Text(it, color = colors.error) }
+                            ScopeMenuItem(
+                                label = "New project",
+                                icon = Icons.Outlined.Add,
+                                onClick = { closeScopeMenu { onNewProject() } },
+                            )
+                        }
+
+                        ScopeMenuInsetSection("Library", "battle-plan-scope-menu-library") {
+                            ScopeMenuItem("Archive", Icons.Outlined.Archive) {
+                                closeScopeMenu { onSelectCollection(TaskCollection.Archived) }
+                            }
+                            ScopeMenuInsetDivider()
+                            ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
+                                closeScopeMenu { onSelectCollection(TaskCollection.Trash) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

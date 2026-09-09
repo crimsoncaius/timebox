@@ -289,6 +289,18 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
                 </li>
               ))}
             </ul>
+            {template.preplanning_schedule.unavailable_slots?.length ? (
+              <div role="status" aria-live="polite" className="mt-3 rounded-xl bg-error-container/20 px-3 py-2 text-sm text-on-error-container">
+                <p className="font-medium">Unavailable configured slots</p>
+                <ul className="mt-1 space-y-1">
+                  {template.preplanning_schedule.unavailable_slots.map((slot) => (
+                    <li key={`${slot.date}-${slot.slot_key}`}>
+                      Unavailable on {displayDate(slot.date)}, {formatMinuteLabel24(slot.start_minute)}–{formatMinuteLabel24(slot.end_minute)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
         ) : null}
         <section className="mt-8"><h3 className="font-headline text-lg font-light">Next five</h3><div className="mt-3 space-y-2">{template.upcoming.map((window) => <div key={window.key} className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container-low">{displayWindow(window.start, window.end)}</div>)}</div></section>

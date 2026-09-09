@@ -10,8 +10,6 @@ class BattlePlanRouteTest {
         listOf(
             AppRoutes.BattlePlan,
             AppRoutes.TaskDetailPattern,
-            AppRoutes.ProjectNew,
-            AppRoutes.ProjectDetailPattern,
             AppRoutes.Recurring,
             AppRoutes.RecurringNew,
             AppRoutes.RecurringDetailPattern,

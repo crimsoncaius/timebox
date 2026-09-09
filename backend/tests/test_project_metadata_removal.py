@@ -1,9 +1,17 @@
 import importlib.util
 from pathlib import Path
+import tempfile
 
 import sqlalchemy as sa
+from alembic import command
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+
+from app.core.config import get_settings
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_project_contract_and_task_metadata_remain_independent(client):
@@ -23,6 +31,31 @@ def test_project_contract_and_task_metadata_remain_independent(client):
     assert saved['project']['name'] == 'Release'
     assert saved['description'] == 'Keep these instructions'
     assert saved['deadline_date'] == '2026-10-01'
+
+
+def test_fresh_schema_can_be_stamped_at_head(monkeypatch):
+    with tempfile.TemporaryDirectory(prefix=".fresh-migration-", dir=BACKEND_ROOT / "tests") as path:
+        database_path = Path(path) / "fresh.sqlite3"
+        import app.models  # noqa: F401
+        from app.db.base import Base
+
+        engine = sa.create_engine(f"sqlite:///{database_path.as_posix()}")
+        Base.metadata.create_all(engine)
+        monkeypatch.setattr(
+            get_settings(), "database_url", f"sqlite:///{database_path.as_posix()}"
+        )
+        config = Config(str(BACKEND_ROOT / "alembic.ini"))
+
+        command.stamp(config, "head")
+        command.check(config)
+
+        with engine.connect() as connection:
+            columns = {
+                column["name"] for column in sa.inspect(connection).get_columns("projects")
+            }
+        engine.dispose()
+
+        assert {"description", "deadline_date", "deadline_at"}.isdisjoint(columns)
 
 
 def test_migration_discards_only_project_metadata():

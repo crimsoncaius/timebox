@@ -11,6 +11,7 @@ import com.timebox.android.data.RecurrenceStatus
 import com.timebox.android.data.RecurringTemplate
 import com.timebox.android.data.RecurringPreplanningSchedule
 import com.timebox.android.data.RecurringPreplanningSlot
+import com.timebox.android.data.RecurringPreplanningUnavailableSlot
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -52,6 +53,13 @@ class RecurringDetailScreenTest {
             preplanningSchedule = RecurringPreplanningSchedule(listOf(
                 RecurringPreplanningSlot(key = "morning", position = 0, weekday = 0, startMinute = 480, endMinute = 540),
                 RecurringPreplanningSlot(key = "afternoon", position = 1, weekday = 2, startMinute = 900, endMinute = 1440),
+            ), unavailableSlots = listOf(
+                RecurringPreplanningUnavailableSlot(
+                    date = LocalDate.parse("2026-08-19"),
+                    slotKey = "afternoon",
+                    startMinute = 900,
+                    endMinute = 1440,
+                ),
             )),
         )
         compose.setContent {
@@ -70,6 +78,9 @@ class RecurringDetailScreenTest {
             .fetchSemanticsNode()
         compose.onNodeWithText("Mon · 08:00–09:00").performScrollTo().fetchSemanticsNode()
         compose.onNodeWithText("Wed · 15:00–00:00").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithContentDescription("Unavailable configured slot on 2026-08-19, 15:00–00:00")
+            .performScrollTo()
+            .fetchSemanticsNode()
     }
 
     private fun activeTemplate() = RecurringTemplate(

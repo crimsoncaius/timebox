@@ -12,6 +12,7 @@ import com.timebox.android.data.BattleTaskPatch
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
 import com.timebox.android.data.ProjectCreate
+import com.timebox.android.data.ProjectPatch
 import com.timebox.android.data.TaskCollection
 import com.timebox.android.data.TaskPlacement
 import com.timebox.android.data.TaskStatus
@@ -57,8 +58,8 @@ data class BattlePlanScope(val kind: BattlePlanScopeKind, val projectId: Int? = 
 
 data class ProjectDeleteSummary(val project: Project, val taskCount: Int)
 
-data class InlineProjectCreation(
-    val active: Boolean = false,
+data class ProjectNameDraft(
+    val projectId: Int? = null,
     val name: String = "",
     val saving: Boolean = false,
     val error: String? = null,
@@ -111,8 +112,7 @@ data class BattlePlanUiState(
     val saving: Boolean = false,
     val projects: List<Project> = emptyList(),
     val projectOrderSaving: Boolean = false,
-    val projectCreation: InlineProjectCreation = InlineProjectCreation(),
-    val lastCreatedProjectId: Int? = null,
+    val projectEditor: ProjectNameDraft? = null,
     val taskTypes: List<TaskType> = emptyList(),
     val tasks: List<BattleTask> = emptyList(),
     val collection: TaskCollection = TaskCollection.Active,
@@ -207,6 +207,8 @@ class BattlePlanViewModel internal constructor(
     )
     val state: StateFlow<BattlePlanUiState> = _state.asStateFlow()
     private var preferencesLoaded = false
+    // Session-only drafts: null is creation; each existing Project owns its edit.
+    private val projectDrafts = mutableMapOf<Int?, ProjectNameDraft>()
     private var clockJob: Job? = null
     private var nextTrashUndoId = 1L
     private var undoExposureActive = false
@@ -305,49 +307,69 @@ class BattlePlanViewModel internal constructor(
         }
     }
 
-    fun startProjectCreation() {
-        _state.update { it.copy(projectCreation = it.projectCreation.copy(active = true)) }
+    fun startProjectCreation() = openProjectEditor(null)
+
+    fun editProject(project: Project) = openProjectEditor(project)
+
+    private fun openProjectEditor(project: Project?) {
+        if (_state.value.projectEditor?.saving == true) return
+        dismissProjectEditor()
+        val draft = projectDrafts[project?.id] ?: ProjectNameDraft(projectId = project?.id, name = project?.name.orEmpty())
+        _state.update { it.copy(projectEditor = draft) }
     }
 
-    fun setNewProjectName(name: String) {
-        _state.update {
-            if (it.projectCreation.saving) it
-            else it.copy(projectCreation = it.projectCreation.copy(name = name, error = null))
+    fun setProjectName(name: String) {
+        _state.update { current ->
+            val draft = current.projectEditor
+            if (draft == null || draft.saving) current
+            else current.copy(projectEditor = draft.copy(name = name, error = null))
         }
     }
 
-    fun cancelProjectCreation() {
-        _state.update {
-            if (it.projectCreation.saving) it else it.copy(projectCreation = InlineProjectCreation())
-        }
+    fun dismissProjectEditor() {
+        val draft = _state.value.projectEditor ?: return
+        if (draft.saving) return
+        projectDrafts[draft.projectId] = draft
+        _state.update { it.copy(projectEditor = null) }
     }
 
-    fun createProject() {
-        val draft = _state.value.projectCreation
-        if (!draft.active || draft.saving) return
+    fun cancelProjectEditor() {
+        val draft = _state.value.projectEditor ?: return
+        if (draft.saving) return
+        projectDrafts.remove(draft.projectId)
+        _state.update { it.copy(projectEditor = null) }
+    }
+
+    fun saveProject() {
+        val draft = _state.value.projectEditor ?: return
+        if (draft.saving) return
         val name = draft.name.trim()
         if (name.isBlank() || name.codePointCount(0, name.length) > 200) {
             _state.update {
-                it.copy(projectCreation = draft.copy(error = "Enter a Project name of 1–200 characters."))
+                it.copy(projectEditor = draft.copy(error = "Enter a Project name of 1–200 characters."))
             }
             return
         }
-        _state.update { it.copy(projectCreation = draft.copy(saving = true, error = null)) }
+        _state.update { it.copy(projectEditor = draft.copy(saving = true, error = null)) }
         viewModelScope.launch {
-            repository.createProject(ProjectCreate(name = name)).fold(
+            val result = if (draft.projectId == null) repository.createProject(ProjectCreate(name = name))
+            else repository.patchProject(draft.projectId, ProjectPatch(name = PatchField.of(name)))
+            result.fold(
                 onSuccess = { project ->
+                    projectDrafts.remove(draft.projectId)
                     _state.update {
                         it.copy(
-                            projects = it.projects.filterNot { row -> row.id == project.id } + project,
-                            selectedScope = BattlePlanScope.project(project),
-                            projectCreation = InlineProjectCreation(),
-                            lastCreatedProjectId = project.id,
+                            projects = if (draft.projectId == null) it.projects.filterNot { row -> row.id == project.id } + project
+                                else it.projects.map { row -> if (row.id == project.id) project else row },
+                            selectedScope = if (draft.projectId == null || it.selectedScope.projectId == project.id)
+                                BattlePlanScope.project(project) else it.selectedScope,
+                            projectEditor = null,
                         )
                     }
                     persistView()
                 },
                 onFailure = { error ->
-                    _state.update { it.copy(projectCreation = draft.copy(error = error.apiError.message)) }
+                    _state.update { it.copy(projectEditor = draft.copy(error = error.apiError.message)) }
                 },
             )
         }
@@ -733,7 +755,7 @@ class BattlePlanViewModel internal constructor(
     fun confirmProjectDelete() {
         val project = _state.value.projectDeleteSummary?.project ?: return
         _state.update { it.copy(projectDeleteSummary = null) }
-        mutate("Project deleted") { repository.deleteProject(project.id) }
+        mutate("Project deleted", onSuccess = { projectDrafts.remove(project.id) }) { repository.deleteProject(project.id) }
     }
 
     private fun optimisticReorder(placements: List<TaskPlacement>, message: String) {

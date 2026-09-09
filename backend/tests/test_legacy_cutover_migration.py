@@ -41,21 +41,15 @@ def _insert_task(connection: sa.Connection, task_id: int, title: str, **values) 
     )
 
 
-def _prepare_database(tmp_path: Path, monkeypatch) -> tuple[sa.Engine, Config]:
+def _prepare_database(tmp_path: Path, monkeypatch, prepare_legacy_schema) -> tuple[sa.Engine, Config]:
     database_path = tmp_path / "legacy-cutover.sqlite3"
     engine = sa.create_engine(
         f"sqlite:///{database_path.as_posix()}", poolclass=sa.pool.NullPool
     )
-    Base.metadata.create_all(engine)
-    with engine.begin() as connection:
-        connection.execute(sa.text("ALTER TABLE projects DROP COLUMN position"))
-        connection.execute(sa.text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
-        connection.execute(
-            sa.text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
-            {"revision": CUTOVER_BASE},
-        )
+    prepare_legacy_schema(engine, CUTOVER_BASE)
     monkeypatch.setattr(get_settings(), "database_url", f"sqlite:///{database_path.as_posix()}")
-    return engine, Config(str(BACKEND_ROOT / "alembic.ini"))
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    return engine, config
 
 
 def _upgrade(config: Config) -> None:
@@ -70,9 +64,9 @@ def _as_utc(value: str | dt.datetime | None) -> dt.datetime | None:
 
 
 def test_cutover_preserves_tasks_and_plans_but_deletes_legacy_actual_and_undo(
-    cutover_tmp_path, monkeypatch
+    cutover_tmp_path, monkeypatch, prepare_legacy_schema
 ):
-    engine, config = _prepare_database(cutover_tmp_path, monkeypatch)
+    engine, config = _prepare_database(cutover_tmp_path, monkeypatch, prepare_legacy_schema)
     completed_at = dt.datetime(2026, 8, 21, 9, 30, tzinfo=UTC)
     with engine.begin() as connection:
         connection.execute(
@@ -170,9 +164,9 @@ def test_cutover_preserves_tasks_and_plans_but_deletes_legacy_actual_and_undo(
 
 
 def test_cutover_detaches_every_stateful_or_malformed_child_without_orphaning_plans(
-    cutover_tmp_path, monkeypatch
+    cutover_tmp_path, monkeypatch, prepare_legacy_schema
 ):
-    engine, config = _prepare_database(cutover_tmp_path, monkeypatch)
+    engine, config = _prepare_database(cutover_tmp_path, monkeypatch, prepare_legacy_schema)
     completed_at = dt.datetime(2026, 8, 22, 16, tzinfo=UTC)
     with engine.begin() as connection:
         connection.execute(Base.metadata.tables["task_types"].insert().values(id=1, name="owned"))
@@ -242,9 +236,9 @@ def test_cutover_detaches_every_stateful_or_malformed_child_without_orphaning_pl
 
 
 def test_cutover_reinterprets_scheduled_checklists_in_place_and_keeps_quota_semantics(
-    cutover_tmp_path, monkeypatch
+    cutover_tmp_path, monkeypatch, prepare_legacy_schema
 ):
-    engine, config = _prepare_database(cutover_tmp_path, monkeypatch)
+    engine, config = _prepare_database(cutover_tmp_path, monkeypatch, prepare_legacy_schema)
     completed_at = dt.datetime(2026, 8, 23, 11, tzinfo=UTC)
     with engine.begin() as connection:
         connection.execute(Base.metadata.tables["task_types"].insert().values(id=1, name="series"))
@@ -255,12 +249,16 @@ def test_cutover_reinterprets_scheduled_checklists_in_place_and_keeps_quota_sema
             )
         )
         connection.execute(
-            Base.metadata.tables["recurring_templates"].insert(),
+            sa.text(
+                "INSERT INTO recurring_templates "
+                "(id, title, description, mode, frequency, quota_count, start_date, generation_start_date) "
+                "VALUES (:id, :title, :description, :mode, :frequency, :quota_count, :start_date, :generation_start_date)"
+            ),
             [
                 {
                     "id": 1, "title": "Scheduled", "description": "", "mode": "scheduled",
                     "frequency": "daily", "start_date": dt.date(2026, 8, 23),
-                    "generation_start_date": dt.date(2026, 8, 23),
+                    "generation_start_date": dt.date(2026, 8, 23), "quota_count": None,
                 },
                 {
                     "id": 2, "title": "Quota", "description": "", "mode": "quota",
@@ -308,7 +306,11 @@ def test_cutover_reinterprets_scheduled_checklists_in_place_and_keeps_quota_sema
             quota_period_end=dt.date(2026, 8, 23), session_index=2,
         )
         connection.execute(
-            Base.metadata.tables["recurrence_occurrences"].insert(),
+            sa.text(
+                "INSERT INTO recurrence_occurrences "
+                "(id, template_id, occurrence_key, cycle_start, cycle_end, task_id, structurally_protected) "
+                "VALUES (:id, :template_id, :occurrence_key, :cycle_start, :cycle_end, :task_id, :structurally_protected)"
+            ),
             [
                 {
                     "id": 1, "template_id": 1, "occurrence_key": "2026-08-23",
@@ -377,8 +379,10 @@ def test_cutover_reinterprets_scheduled_checklists_in_place_and_keeps_quota_sema
         assert ledgers[0].structurally_protected == 1
 
 
-def test_cutover_downgrade_is_explicitly_restore_only(cutover_tmp_path, monkeypatch):
-    _, config = _prepare_database(cutover_tmp_path, monkeypatch)
+def test_cutover_downgrade_is_explicitly_restore_only(
+    cutover_tmp_path, monkeypatch, prepare_legacy_schema
+):
+    _, config = _prepare_database(cutover_tmp_path, monkeypatch, prepare_legacy_schema)
     _upgrade(config)
 
     try:

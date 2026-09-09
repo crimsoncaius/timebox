@@ -73,9 +73,24 @@ fun RecurringScreen(
     onSelectStatus: (RecurrenceStatus) -> Unit,
     onNew: () -> Unit,
     onOpen: (Int) -> Unit,
+    navigationState: BattlePlanUiState = BattlePlanUiState(),
+    onSelectScope: (BattlePlanScope) -> Unit = {},
+    onSelectCollection: (com.timebox.android.data.TaskCollection) -> Unit = {},
+    onReorderProjects: (List<Int>) -> Unit = {},
+    onEditProject: (com.timebox.android.data.Project) -> Unit = {},
+    onPrepareDeleteProject: (com.timebox.android.data.Project) -> Unit = {},
+    onNewProject: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+            TaskNavigationMenu(
+                state = navigationState, recurring = true,
+                onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
+                onReorderProjects = onReorderProjects, onEditProject = onEditProject,
+                onPrepareDeleteProject = onPrepareDeleteProject, onNewProject = onNewProject,
+            )
+        }
         RecurringStatusTabs(state.selectedStatus, onSelectStatus)
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -274,6 +289,28 @@ private fun RecurringDetailContent(
                         style = TimeboxTheme.type.bodySmall,
                         color = colors.on,
                     )
+                }
+                if (schedule.unavailableSlots.isNotEmpty()) {
+                    Text(
+                        "Unavailable configured slots",
+                        Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                        style = TimeboxTheme.type.bodySmall,
+                        color = colors.error,
+                    )
+                    schedule.unavailableSlots.forEach { slot ->
+                        val times = "${formatMinuteLabel24(slot.startMinute)}–${formatMinuteLabel24(slot.endMinute)}"
+                        Text(
+                            "Unavailable on ${slot.date}, $times",
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .semantics {
+                                    contentDescription = "Unavailable configured slot on ${slot.date}, $times"
+                                },
+                            style = TimeboxTheme.type.bodySmall,
+                            color = colors.error,
+                        )
+                    }
                 }
             }
         }

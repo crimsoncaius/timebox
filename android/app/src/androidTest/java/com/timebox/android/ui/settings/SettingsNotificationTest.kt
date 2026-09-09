@@ -13,7 +13,7 @@ class SettingsNotificationTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun deniedPermissionExplainsServerStateAndOffersBothRecoveryPaths() {
+    fun deniedPermissionExplainsBothReminderStoresAndOffersBothRecoveryPaths() {
         var requested = 0
         var openedSettings = 0
         compose.setContent {
@@ -36,7 +36,10 @@ class SettingsNotificationTest {
             }
         }
 
-        compose.onNodeWithText("Reminders still save to the server", substring = true).fetchSemanticsNode()
+        compose.onNodeWithText("Battle Plan reminders still save to the server", substring = true).fetchSemanticsNode()
+        compose.onNodeWithText("Daily Reminder preferences stay saved on this device", substring = true).fetchSemanticsNode()
+        compose.onNodeWithText("this device cannot display either until notifications are enabled", substring = true)
+            .fetchSemanticsNode()
         compose.onNodeWithText("Enable notifications").performScrollTo().performClick()
         compose.onNodeWithText("Open notification settings").performScrollTo().performClick()
         compose.runOnIdle {

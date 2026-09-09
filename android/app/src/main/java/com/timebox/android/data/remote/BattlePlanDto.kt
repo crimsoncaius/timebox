@@ -182,8 +182,17 @@ data class RecurringPreplanningSlotDto(
 )
 
 @Serializable
+data class RecurringPreplanningUnavailableSlotDto(
+    val date: String,
+    @SerialName("slot_key") val slotKey: String,
+    @SerialName("start_minute") val startMinute: Int,
+    @SerialName("end_minute") val endMinute: Int,
+)
+
+@Serializable
 data class RecurringPreplanningScheduleDto(
     val slots: List<RecurringPreplanningSlotDto>,
+    @SerialName("unavailable_slots") val unavailableSlots: List<RecurringPreplanningUnavailableSlotDto> = emptyList(),
 )
 
 @Serializable

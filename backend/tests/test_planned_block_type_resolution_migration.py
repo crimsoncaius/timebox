@@ -17,27 +17,16 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_migration_consolidates_raced_task_types_before_enforcing_uniqueness(
-    monkeypatch,
+    monkeypatch, prepare_legacy_schema,
 ):
     with tempfile.TemporaryDirectory(prefix=".task-type-", dir=BACKEND_ROOT / "tests") as path:
         database_path = Path(path) / "before-resolution.sqlite3"
         engine = sa.create_engine(
             f"sqlite:///{database_path.as_posix()}", poolclass=sa.pool.NullPool
         )
-        Base.metadata.create_all(engine)
+        prepare_legacy_schema(engine, "015_definitive_legacy_cutover")
 
         with engine.begin() as connection:
-            connection.execute(sa.text("ALTER TABLE projects DROP COLUMN position"))
-            connection.execute(sa.text("DROP INDEX uq_task_types_name"))
-            connection.execute(
-                sa.text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)")
-            )
-            connection.execute(
-                sa.text(
-                    "INSERT INTO alembic_version (version_num) "
-                    "VALUES ('015_definitive_legacy_cutover')"
-                )
-            )
             connection.execute(
                 Base.metadata.tables["task_types"].insert(),
                 [{"id": 1, "name": "unspecified"}, {"id": 2, "name": "unspecified"}],
@@ -75,8 +64,7 @@ def test_migration_consolidates_raced_task_types_before_enforcing_uniqueness(
         monkeypatch.setattr(
             get_settings(), "database_url", f"sqlite:///{database_path.as_posix()}"
         )
-        config = Config(str(BACKEND_ROOT / "alembic.ini"))
-        command.upgrade(config, "head")
+        command.upgrade(Config(str(BACKEND_ROOT / "alembic.ini")), "head")
 
         with engine.connect() as connection:
             task_types = connection.execute(

@@ -52,8 +52,6 @@ import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.battleplan.BattlePlanScreen
 import com.timebox.android.ui.battleplan.BattlePlanTrashUndoNotice
 import com.timebox.android.ui.battleplan.BattlePlanViewModel
-import com.timebox.android.ui.battleplan.ProjectEditorScreen
-import com.timebox.android.ui.battleplan.ProjectEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringDetailScreen
 import com.timebox.android.ui.battleplan.RecurringEditorScreen
 import com.timebox.android.ui.battleplan.RecurringEditorViewModel
@@ -105,7 +103,6 @@ fun TimeboxApp(
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
     val battlePlanViewModel: BattlePlanViewModel = viewModel(factory = factory)
     val taskDetailViewModel: TaskDetailViewModel = viewModel(factory = factory)
-    val projectEditorViewModel: ProjectEditorViewModel = viewModel(factory = factory)
     val recurringViewModel: RecurringViewModel = viewModel(factory = factory)
     val recurringEditorViewModel: RecurringEditorViewModel = viewModel(factory = factory)
     val dayState by dayViewModel.state.collectAsState()
@@ -115,7 +112,6 @@ fun TimeboxApp(
     val battlePlanState by battlePlanViewModel.state.collectAsState()
     val taskDetailState by taskDetailViewModel.state.collectAsState()
     val taskCompletionNotice by taskCompletion.notice.collectAsState()
-    val projectEditorState by projectEditorViewModel.state.collectAsState()
     val recurringState by recurringViewModel.state.collectAsState()
     val recurringEditorState by recurringEditorViewModel.state.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -136,13 +132,12 @@ fun TimeboxApp(
     }
     val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
     val routeBlockId = backStackEntry?.arguments?.getInt(AppRoutes.BlockIdArg)?.takeIf { it >= 0 }
-    val routeProjectId = backStackEntry?.arguments?.getInt(AppRoutes.ProjectIdArg)
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
     val taskCompletionScope = rememberCoroutineScope()
     val openedDayEntryIds = remember { mutableSetOf<String>() }
 
-    LaunchedEffect(route, routeDate, routeTaskId, routeProjectId, routeTemplateId, backStackEntry?.id) {
+    LaunchedEffect(route, routeDate, routeTaskId, routeTemplateId, backStackEntry?.id) {
         when (route) {
             AppRoutes.DayPattern -> {
                 val entryId = backStackEntry?.id ?: return@LaunchedEffect
@@ -161,8 +156,6 @@ fun TimeboxApp(
             AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)
             AppRoutes.BattlePlan -> battlePlanViewModel.load()
             AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
-            AppRoutes.ProjectNew -> projectEditorViewModel.open(null)
-            AppRoutes.ProjectDetailPattern -> projectEditorViewModel.open(routeProjectId)
             AppRoutes.Recurring -> recurringViewModel.load()
             AppRoutes.RecurringNew -> recurringEditorViewModel.open(null)
             AppRoutes.RecurringDetailPattern -> routeTemplateId?.let(recurringViewModel::openDetail)
@@ -240,9 +233,7 @@ fun TimeboxApp(
             }
         }
     }
-    LaunchedEffect(projectEditorState.message) {
-        projectEditorState.message?.let { snackbarHostState.showSnackbar(it); projectEditorViewModel.consumeMessage() }
-    }
+
     LaunchedEffect(recurringState.message) {
         recurringState.message?.let { snackbarHostState.showSnackbar(it); recurringViewModel.consumeMessage() }
     }
@@ -264,8 +255,8 @@ fun TimeboxApp(
     val selectedTab = when (route) {
         AppRoutes.DayPattern -> TimeboxTab.Day
         AppRoutes.Chronicle -> TimeboxTab.Chronicle
-        AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern, AppRoutes.ProjectNew,
-        AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
+        AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
+        AppRoutes.Recurring, AppRoutes.RecurringNew,
         AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> TimeboxTab.BattlePlan
         AppRoutes.Types -> TimeboxTab.Types
         AppRoutes.Settings, AppRoutes.ThemePreview -> TimeboxTab.Settings
@@ -405,10 +396,11 @@ fun TimeboxApp(
                             onRequestNotificationPermission = onRequestNotificationPermission,
                             onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
                             onNewProject = battlePlanViewModel::startProjectCreation,
-                            onNewProjectNameChange = battlePlanViewModel::setNewProjectName,
-                            onCreateProject = battlePlanViewModel::createProject,
-                            onCancelProjectCreation = battlePlanViewModel::cancelProjectCreation,
-                            onEditProject = { navController.navigate(AppRoutes.projectDetail(it.id)) },
+                            onProjectNameChange = battlePlanViewModel::setProjectName,
+                            onSaveProject = battlePlanViewModel::saveProject,
+                            onCancelProjectEditor = battlePlanViewModel::cancelProjectEditor,
+                            onDismissProjectEditor = battlePlanViewModel::dismissProjectEditor,
+                            onEditProject = battlePlanViewModel::editProject,
                             onPrepareDeleteProject = battlePlanViewModel::prepareProjectDelete,
                             onDismissDeleteProject = battlePlanViewModel::dismissProjectDelete,
                             onConfirmDeleteProject = battlePlanViewModel::confirmProjectDelete,
@@ -473,55 +465,23 @@ fun TimeboxApp(
                             onSave = taskDetailViewModel::save,
                         )
                     }
-                    composable(AppRoutes.ProjectNew) {
-                        ProjectEditorScreen(
-                            state = projectEditorState,
-                            deleteSummary = battlePlanState.projectDeleteSummary,
-                            deleteSummaryLoading = battlePlanState.deleteSummaryLoading,
-                            onBack = { navController.popBackStack() },
-                            onRetry = { projectEditorViewModel.open(null) },
-                            onNameChange = projectEditorViewModel::setName,
-                            onSave = projectEditorViewModel::save,
-                            onPrepareDelete = {},
-                            onDismissDelete = battlePlanViewModel::dismissProjectDelete,
-                            onConfirmDelete = battlePlanViewModel::confirmProjectDelete,
-                            onSaved = {
-                                battlePlanViewModel.load(showSpinner = false)
-                                navController.popBackStack()
-                            },
-                        )
-                    }
-                    composable(
-                        AppRoutes.ProjectDetailPattern,
-                        arguments = listOf(navArgument(AppRoutes.ProjectIdArg) { type = NavType.IntType }),
-                    ) { entry ->
-                        val projectId = entry.arguments?.getInt(AppRoutes.ProjectIdArg) ?: return@composable
-                        ProjectEditorScreen(
-                            state = projectEditorState,
-                            deleteSummary = battlePlanState.projectDeleteSummary,
-                            deleteSummaryLoading = battlePlanState.deleteSummaryLoading,
-                            onBack = { navController.popBackStack() },
-                            onRetry = { projectEditorViewModel.open(projectId) },
-                            onNameChange = projectEditorViewModel::setName,
-                            onSave = projectEditorViewModel::save,
-                            onPrepareDelete = {
-                                battlePlanState.projects.firstOrNull { it.id == projectId }
-                                    ?.let(battlePlanViewModel::prepareProjectDelete)
-                            },
-                            onDismissDelete = battlePlanViewModel::dismissProjectDelete,
-                            onConfirmDelete = {
-                                battlePlanViewModel.confirmProjectDelete()
-                                navController.popBackStack()
-                            },
-                            onSaved = {
-                                battlePlanViewModel.load(showSpinner = false)
-                                navController.popBackStack()
-                            },
-                        )
-                    }
                     composable(AppRoutes.Recurring) {
+                        fun returnToTasks() {
+                            navController.popBackStack(AppRoutes.BattlePlan, inclusive = false)
+                        }
                         RecurringScreen(
                             state = recurringState,
+                            navigationState = battlePlanState,
+                            onSelectScope = {
+                                battlePlanViewModel.selectCollection(com.timebox.android.data.TaskCollection.Active)
+                                battlePlanViewModel.selectScope(it)
+                                returnToTasks()
+                            },
+                            onSelectCollection = { battlePlanViewModel.selectCollection(it); returnToTasks() },
+                            onReorderProjects = battlePlanViewModel::reorderProjects,
+                            onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
+                            onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
+                            onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
                             onRetry = { recurringViewModel.load() },
                             onSelectStatus = recurringViewModel::selectStatus,
                             onNew = { navController.navigate(AppRoutes.RecurringNew) },
@@ -745,8 +705,6 @@ internal fun taskCompletionSnackbarDuration(): SnackbarDuration = SnackbarDurati
 internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
     AppRoutes.BattlePlan,
     AppRoutes.TaskDetailPattern,
-    AppRoutes.ProjectNew,
-    AppRoutes.ProjectDetailPattern,
     AppRoutes.Recurring,
     AppRoutes.RecurringNew,
     AppRoutes.RecurringDetailPattern,
@@ -756,8 +714,8 @@ internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
 private fun routeKicker(route: String): String = when (route) {
     AppRoutes.DayPattern -> "Day"
     AppRoutes.Chronicle -> "Chronicle"
-    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern, AppRoutes.ProjectNew,
-    AppRoutes.ProjectDetailPattern, AppRoutes.Recurring, AppRoutes.RecurringNew,
+    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
+    AppRoutes.Recurring, AppRoutes.RecurringNew,
     AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Battle Plan"
     AppRoutes.Types -> "Task types"
     AppRoutes.Settings, AppRoutes.ThemePreview -> "Settings"
@@ -770,8 +728,6 @@ internal fun routeTitle(route: String, day: String, chronicle: String): String =
         AppRoutes.Chronicle -> chronicle
         AppRoutes.BattlePlan -> "Tasks"
         AppRoutes.TaskDetailPattern -> "Task details"
-        AppRoutes.ProjectNew -> "New project"
-        AppRoutes.ProjectDetailPattern -> "Project"
         AppRoutes.Recurring -> "Recurring"
         AppRoutes.RecurringNew -> "New recurrence"
         AppRoutes.RecurringDetailPattern -> "Template details"

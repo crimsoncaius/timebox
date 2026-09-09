@@ -273,8 +273,20 @@ class RecurringPreplanningSlotRead(RecurringPreplanningSlotWrite):
     position: int
 
 
+class RecurringPreplanningUnavailableSlotRead(BaseModel):
+    """An occupied configured slot for one eligible Task Occurrence."""
+
+    date: date
+    slot_key: str
+    start_minute: int
+    end_minute: int
+
+
 class RecurringPreplanningScheduleRead(BaseModel):
     slots: list[RecurringPreplanningSlotRead]
+    unavailable_slots: list[RecurringPreplanningUnavailableSlotRead] = Field(
+        default_factory=list
+    )
 
 
 def validate_preplanning_schedule(

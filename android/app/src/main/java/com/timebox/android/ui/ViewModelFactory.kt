@@ -10,7 +10,6 @@ import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.battleplan.BattlePlanViewModel
-import com.timebox.android.ui.battleplan.ProjectEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
@@ -70,7 +69,6 @@ fun timeboxViewModelFactory(
                 readinessCoordinator,
             )
         }
-        initializer { ProjectEditorViewModel(repository) }
         initializer { RecurringViewModel(repository) }
         initializer { RecurringEditorViewModel(repository) }
     }

@@ -102,9 +102,10 @@ class BattlePlanContractTest {
 
         val scheduled = json.decodeFromString(
             RecurringTemplateDto.serializer(),
-            """{"id":6,"title":"Morning review","description":"","task_type_id":null,"task_type":null,"mode":"scheduled","status":"active","frequency":"daily","interval":1,"weekdays":[],"month_day":null,"quota_count":null,"start_date":"2026-08-17","end_date":null,"cycle_limit":null,"preplanning_schedule":{"slots":[{"id":8,"position":0,"weekday":null,"start_minute":510,"end_minute":555}]},"urgency":null,"importance":null,"paused_at":null,"ended_at":null,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-16T00:00:00Z","checklist_items":[],"upcoming":[],"current_tasks":[],"cadence":"Daily","next_occurrence":"2026-08-17"}""",
+            """{"id":6,"title":"Morning review","description":"","task_type_id":null,"task_type":null,"mode":"scheduled","status":"active","frequency":"daily","interval":1,"weekdays":[],"month_day":null,"quota_count":null,"start_date":"2026-08-17","end_date":null,"cycle_limit":null,"preplanning_schedule":{"slots":[{"id":8,"position":0,"weekday":null,"start_minute":510,"end_minute":555}],"unavailable_slots":[{"date":"2026-08-18","slot_key":"morning","start_minute":510,"end_minute":555}]},"urgency":null,"importance":null,"paused_at":null,"ended_at":null,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-16T00:00:00Z","checklist_items":[],"upcoming":[],"current_tasks":[],"cadence":"Daily","next_occurrence":"2026-08-17"}""",
         ).toModel()
         assertEquals(510, scheduled.preplanningSchedule?.slots?.single()?.startMinute)
+        assertEquals(LocalDate.parse("2026-08-18"), scheduled.preplanningSchedule?.unavailableSlots?.single()?.date)
     }
 
     @Test

@@ -15,6 +15,8 @@ from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
+    RecurringPlannedBlockRealization,
+    RecurringPlannedBlockState,
     RecurringPreplanningSlot,
     RecurringTemplate,
     Task,
@@ -30,6 +32,7 @@ from app.schemas.battle_plan import (
     RecurringTemplateRead,
     RecurringPreplanningScheduleRead,
     RecurringPreplanningSlotRead,
+    RecurringPreplanningUnavailableSlotRead,
     RecurringPreplanningScheduleWrite,
     RecurringPreplanningSlotWrite,
     validate_preplanning_schedule,
@@ -436,6 +439,39 @@ def to_read(
             .order_by(RecurrenceOccurrence.cycle_start, Task.id)
         ).scalars()
     )
+    active_slots = {
+        slot.slot_key: slot
+        for slot in row.preplanning_slots
+        if slot.removed_at is None
+    }
+    unavailable_slots = []
+    if row.status == RecurrenceStatus.active and active_slots:
+        unavailable_slots = [
+            RecurringPreplanningUnavailableSlotRead(
+                date=occurrence.cycle_start,
+                slot_key=realization.slot_key,
+                start_minute=active_slots[realization.slot_key].start_minute,
+                end_minute=active_slots[realization.slot_key].end_minute,
+            )
+            for occurrence, realization in db.execute(
+                select(RecurrenceOccurrence, RecurringPlannedBlockRealization)
+                .join(
+                    RecurringPlannedBlockRealization,
+                    RecurringPlannedBlockRealization.occurrence_id == RecurrenceOccurrence.id,
+                )
+                .where(
+                    RecurrenceOccurrence.template_id == row.id,
+                    RecurrenceOccurrence.cycle_start >= today,
+                    RecurringPlannedBlockRealization.state == RecurringPlannedBlockState.untouched,
+                    RecurringPlannedBlockRealization.planned_block_id.is_(None),
+                )
+                .order_by(
+                    RecurrenceOccurrence.cycle_start,
+                    RecurringPlannedBlockRealization.slot_key,
+                )
+            ).all()
+            if realization.slot_key in active_slots
+        ]
     return RecurringTemplateRead(
         id=row.id,
         title=row.title,
@@ -454,19 +490,22 @@ def to_read(
         cycle_limit=row.cycle_limit,
         keep_unfinished_overdue=row.keep_unfinished_overdue,
         preplanning_schedule=(
-            RecurringPreplanningScheduleRead(slots=[
-                RecurringPreplanningSlotRead(
-                    id=slot.id,
-                    key=slot.slot_key,
-                    position=slot.position,
-                    weekday=slot.weekday,
-                    start_minute=slot.start_minute,
-                    end_minute=slot.end_minute,
-                )
-                for slot in row.preplanning_slots
-                if slot.removed_at is None
-            ])
-            if any(slot.removed_at is None for slot in row.preplanning_slots) else None
+            RecurringPreplanningScheduleRead(
+                slots=[
+                    RecurringPreplanningSlotRead(
+                        id=slot.id,
+                        key=slot.slot_key,
+                        position=slot.position,
+                        weekday=slot.weekday,
+                        start_minute=slot.start_minute,
+                        end_minute=slot.end_minute,
+                    )
+                    for slot in row.preplanning_slots
+                    if slot.removed_at is None
+                ],
+                unavailable_slots=unavailable_slots,
+            )
+            if active_slots else None
         ),
         urgency=row.urgency,
         importance=row.importance,

@@ -1,6 +1,8 @@
 # Issue #112: Android inline Project creation
 
-Design decisions accepted during the grilling session on 2026-09-09.
+Historical design decisions accepted during the grilling session on 2026-09-09.
+
+Superseded by [Android Project bottom sheet](project-bottom-sheet.md), confirmed later on 2026-09-09. The current design uses bottom sheets for both creation and editing; the inline input and stable-menu requirements below no longer apply.
 
 ## Scope
 

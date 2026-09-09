@@ -45,3 +45,7 @@ backend/e2e.sqlite.*
 test-results/
 playwright-report/
 playwright/.cache/
+.playwright-cli/
+
+# Android local tooling
+android/.kotlin/

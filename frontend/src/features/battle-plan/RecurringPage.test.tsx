@@ -137,6 +137,8 @@ describe('RecurringPage', () => {
       preplanning_schedule: { slots: [
         { id: 31, key: 'morning', position: 0, weekday: 0, start_minute: 480, end_minute: 540 },
         { id: 32, key: 'afternoon', position: 1, weekday: 2, start_minute: 900, end_minute: 1440 },
+      ], unavailable_slots: [
+        { date: '2026-08-19', slot_key: 'afternoon', start_minute: 900, end_minute: 1440 },
       ] },
     }]
     const user = userEvent.setup()
@@ -148,6 +150,7 @@ describe('RecurringPage', () => {
     const schedule = within(detail).getByRole('region', { name: 'Recurring Pre-planning Schedule' })
     expect(within(schedule).getByText('Mon · 08:00–09:00')).toBeInTheDocument()
     expect(within(schedule).getByText('Wed · 15:00–00:00')).toBeInTheDocument()
+    expect(within(schedule).getByRole('status')).toHaveTextContent('Unavailable on 19 Aug 2026, 15:00–00:00')
   })
 
   it('creates a scheduled template from the previewed form', async () => {

@@ -17,8 +17,15 @@ type MutableReadinessState = ReadinessState & {
 
 type ReadinessTask = Pick<BattleTask, 'id' | 'ready_to_plan' | 'version'>
 
+function isCompleted(task: unknown) {
+  return typeof task === 'object'
+    && task !== null
+    && 'status' in task
+    && task.status === 'completed'
+}
+
 function initialState(task: ReadinessTask, snapshot: BattleTask | null): MutableReadinessState {
-  const ready = Boolean(task.ready_to_plan)
+  const ready = isCompleted(snapshot ?? task) ? false : Boolean(task.ready_to_plan)
   return {
     confirmed: ready,
     desired: ready,
@@ -66,21 +73,30 @@ export class ReadinessCoordinator {
       if (!current) {
         this.entries.set(task.id, initialState(task, task))
         changed = true
-      } else if (current.newestVersion == null || (task.version != null && task.version >= current.newestVersion)) {
+      } else if (isCompleted(task) || current.newestVersion == null || (task.version != null && task.version >= current.newestVersion)) {
         const wasConfirmed = current.confirmed
         const wasDesired = current.desired
         const wasPending = current.pending
         const previousFailure = current.failure
         const wasRemoved = current.removed
-        current.newestVersion = task.version ?? current.newestVersion
+        if (task.version != null && (current.newestVersion == null || task.version >= current.newestVersion)) {
+          current.newestVersion = task.version
+        }
         current.newestSnapshot = task
         current.removed = false
-        current.confirmed = ready
-        if (!current.pending && !current.running) {
-          current.desired = ready
-          if (current.failure?.desired === ready) current.failure = null
+        if (isCompleted(task)) {
+          current.confirmed = false
+          current.desired = false
+          current.pending = false
+          current.failure = null
+        } else {
+          current.confirmed = ready
+          if (!current.pending && !current.running) {
+            current.desired = ready
+            if (current.failure?.desired === ready) current.failure = null
+          }
+          current.pending = current.running || current.desired !== current.confirmed
         }
-        current.pending = current.running || current.desired !== current.confirmed
         changed = wasConfirmed !== current.confirmed
           || wasDesired !== current.desired
           || wasPending !== current.pending
@@ -113,7 +129,7 @@ export class ReadinessCoordinator {
     const source = taskIsStale && state.newestSnapshot ? state.newestSnapshot : task
     return {
       ...source,
-      ready_to_plan: state?.desired ?? Boolean(source.ready_to_plan),
+      ready_to_plan: isCompleted(source) ? false : (state?.desired ?? Boolean(source.ready_to_plan)),
       session_tasks: source.session_tasks
         ?.filter((session) => !this.entries.get(session.id)?.removed)
         .map((session) => this.projectTask(session)),
@@ -128,15 +144,17 @@ export class ReadinessCoordinator {
 
   isSchedulable(taskId: number) {
     const state = this.entries.get(taskId)
-    return state ? state.desired && !state.pending && !state.removed : false
+    return state ? state.desired && !state.pending && !state.removed && !isCompleted(state.newestSnapshot) : false
   }
 
   async setReadyToPlan(task: ReadinessTask, ready: boolean) {
+    if (isCompleted(task)) return
     if (!this.entries.has(task.id)) {
       this.entries.set(task.id, initialState(task, null))
       this.emit()
     }
     const state = this.entries.get(task.id)!
+    if (isCompleted(state.newestSnapshot)) return
     state.failure = null
     state.desired = ready
     state.pending = state.running || state.desired !== state.confirmed
@@ -152,12 +170,15 @@ export class ReadinessCoordinator {
   }
 
   retry(task: ReadinessTask) {
-    const failure = this.entries.get(task.id)?.failure
+    const state = this.entries.get(task.id)
+    if (isCompleted(task) || isCompleted(state?.newestSnapshot)) return Promise.resolve()
+    const failure = state?.failure
     if (!failure) return Promise.resolve()
     return this.setReadyToPlan(task, failure.desired)
   }
 
   private mergeConfirmed(state: MutableReadinessState, task: BattleTask) {
+    if (isCompleted(state.newestSnapshot)) return false
     if (state.newestVersion != null && (task.version == null || task.version < state.newestVersion)) return false
     state.confirmed = Boolean(task.ready_to_plan)
     state.newestVersion = task.version ?? state.newestVersion
@@ -165,6 +186,18 @@ export class ReadinessCoordinator {
   }
 
   private mergeReadSnapshot(state: MutableReadinessState, task: BattleTask) {
+    if (isCompleted(task)) {
+      if (task.version != null && (state.newestVersion == null || task.version >= state.newestVersion)) {
+        state.newestVersion = task.version
+      }
+      state.newestSnapshot = task
+      state.confirmed = false
+      state.desired = false
+      state.pending = false
+      state.failure = null
+      state.removed = false
+      return true
+    }
     if (!this.mergeConfirmed(state, task)) return false
     state.newestSnapshot = task
     state.removed = false
@@ -198,6 +231,13 @@ export class ReadinessCoordinator {
           else if (reconciliation.available) {
             state.confirmed = false
             state.removed = true
+          }
+
+          if (isCompleted(state.newestSnapshot)) {
+            state.pending = false
+            state.failure = null
+            this.emit()
+            break
           }
 
           if (!isLatestIntent) {
