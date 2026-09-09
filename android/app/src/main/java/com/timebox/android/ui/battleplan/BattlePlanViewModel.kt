@@ -11,6 +11,7 @@ import com.timebox.android.data.BattleTaskCreate
 import com.timebox.android.data.BattleTaskPatch
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
+import com.timebox.android.data.ProjectCreate
 import com.timebox.android.data.TaskCollection
 import com.timebox.android.data.TaskPlacement
 import com.timebox.android.data.TaskStatus
@@ -55,6 +56,13 @@ data class BattlePlanScope(val kind: BattlePlanScopeKind, val projectId: Int? = 
 }
 
 data class ProjectDeleteSummary(val project: Project, val taskCount: Int)
+
+data class InlineProjectCreation(
+    val active: Boolean = false,
+    val name: String = "",
+    val saving: Boolean = false,
+    val error: String? = null,
+)
 
 data class TaskComposerDraft(
     val title: String = "",
@@ -103,6 +111,8 @@ data class BattlePlanUiState(
     val saving: Boolean = false,
     val projects: List<Project> = emptyList(),
     val projectOrderSaving: Boolean = false,
+    val projectCreation: InlineProjectCreation = InlineProjectCreation(),
+    val lastCreatedProjectId: Int? = null,
     val taskTypes: List<TaskType> = emptyList(),
     val tasks: List<BattleTask> = emptyList(),
     val collection: TaskCollection = TaskCollection.Active,
@@ -283,6 +293,54 @@ class BattlePlanViewModel internal constructor(
             repository.reorderProjects(ids).fold(
                 onSuccess = { projects -> _state.update { it.copy(projects = projects, projectOrderSaving = false) } },
                 onFailure = { _state.update { it.copy(projectOrderSaving = false, error = "Could not save project order. Refresh and try again.") } },
+            )
+        }
+    }
+
+    fun startProjectCreation() {
+        _state.update { it.copy(projectCreation = it.projectCreation.copy(active = true)) }
+    }
+
+    fun setNewProjectName(name: String) {
+        _state.update {
+            if (it.projectCreation.saving) it
+            else it.copy(projectCreation = it.projectCreation.copy(name = name, error = null))
+        }
+    }
+
+    fun cancelProjectCreation() {
+        _state.update {
+            if (it.projectCreation.saving) it else it.copy(projectCreation = InlineProjectCreation())
+        }
+    }
+
+    fun createProject() {
+        val draft = _state.value.projectCreation
+        if (!draft.active || draft.saving) return
+        val name = draft.name.trim()
+        if (name.isBlank() || name.codePointCount(0, name.length) > 200) {
+            _state.update {
+                it.copy(projectCreation = draft.copy(error = "Enter a Project name of 1–200 characters."))
+            }
+            return
+        }
+        _state.update { it.copy(projectCreation = draft.copy(saving = true, error = null)) }
+        viewModelScope.launch {
+            repository.createProject(ProjectCreate(name = name)).fold(
+                onSuccess = { project ->
+                    _state.update {
+                        it.copy(
+                            projects = it.projects + project,
+                            selectedScope = BattlePlanScope.project(project),
+                            projectCreation = InlineProjectCreation(),
+                            lastCreatedProjectId = project.id,
+                        )
+                    }
+                    persistView()
+                },
+                onFailure = { error ->
+                    _state.update { it.copy(projectCreation = draft.copy(error = error.apiError.message)) }
+                },
             )
         }
     }

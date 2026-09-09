@@ -110,6 +110,9 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
@@ -188,6 +191,9 @@ fun BattlePlanScreen(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
+    onNewProjectNameChange: (String) -> Unit = {},
+    onCreateProject: () -> Unit = {},
+    onCancelProjectCreation: () -> Unit = {},
     onEditProject: (Project) -> Unit = {},
     onPrepareDeleteProject: (Project) -> Unit,
     onDismissDeleteProject: () -> Unit,
@@ -244,6 +250,9 @@ fun BattlePlanScreen(
                             onShowComposer = onShowComposer,
                             onOpenRecurring = onOpenRecurring,
                             onNewProject = onNewProject,
+                            onNewProjectNameChange = onNewProjectNameChange,
+                            onCreateProject = onCreateProject,
+                            onCancelProjectCreation = onCancelProjectCreation,
                             onReorderProjects = onReorderProjects,
                             onEditProject = onEditProject,
                             onPrepareDeleteProject = onPrepareDeleteProject,
@@ -394,6 +403,9 @@ private fun MobileKanbanBoard(
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
     onNewProject: () -> Unit,
+    onNewProjectNameChange: (String) -> Unit,
+    onCreateProject: () -> Unit,
+    onCancelProjectCreation: () -> Unit,
     onReorderProjects: (List<Int>) -> Unit,
     onEditProject: (Project) -> Unit,
     onPrepareDeleteProject: (Project) -> Unit,
@@ -405,6 +417,20 @@ private fun MobileKanbanBoard(
     val initialPage = battlePlanStatuses.indexOf(state.selectedStatus).coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { battlePlanStatuses.size })
     var scopeMenu by remember { mutableStateOf(false) }
+    var focusNewProject by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    fun closeScopeMenu(action: () -> Unit = {}) {
+        if (state.projectCreation.saving) return
+        keyboard?.hide()
+        focusManager.clearFocus()
+        focusNewProject = false
+        scopeMenu = false
+        action()
+    }
+    LaunchedEffect(state.lastCreatedProjectId) {
+        if (state.lastCreatedProjectId != null) closeScopeMenu()
+    }
     var filterSheet by remember { mutableStateOf(false) }
     var dragLayerBounds by remember { mutableStateOf(Rect.Zero) }
     var dragLayerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -561,7 +587,12 @@ private fun MobileKanbanBoard(
                 }
                 DropdownMenu(
                     expanded = scopeMenu,
-                    onDismissRequest = { scopeMenu = false },
+                    onDismissRequest = { closeScopeMenu() },
+                    properties = PopupProperties(
+                        focusable = true,
+                        dismissOnBackPress = !state.projectCreation.saving,
+                        dismissOnClickOutside = !state.projectCreation.saving,
+                    ),
                     modifier = Modifier
                         .width(304.dp)
                         .testTag("battle-plan-scope-menu"),
@@ -585,7 +616,7 @@ private fun MobileKanbanBoard(
                                         BattlePlanScopeKind.Project -> Icons.Outlined.Folder
                                     },
                                     selected = scope.preferenceKey == state.selectedScope.preferenceKey,
-                                    onClick = { scopeMenu = false; onSelectScope(scope) },
+                                    onClick = { closeScopeMenu { onSelectScope(scope) } },
                                 )
                                 if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
                             }
@@ -595,35 +626,49 @@ private fun MobileKanbanBoard(
                             ProjectNavigationList(
                                 projects = state.projects,
                                 selectedId = state.selectedScope.projectId,
-                                saving = state.projectOrderSaving,
-                                onSelect = { project -> scopeMenu = false; onSelectScope(BattlePlanScope.project(project)) },
+                                saving = state.projectOrderSaving || state.projectCreation.saving,
+                                onSelect = { project -> closeScopeMenu { onSelectScope(BattlePlanScope.project(project)) } },
                                 onReorder = onReorderProjects,
-                                onEdit = { project -> scopeMenu = false; onEditProject(project) },
-                                onDelete = { project -> scopeMenu = false; onPrepareDeleteProject(project) },
+                                onEdit = { project -> closeScopeMenu { onEditProject(project) } },
+                                onDelete = { project -> closeScopeMenu { onPrepareDeleteProject(project) } },
                             )
                             if (state.projectOrderSaving) Text("Saving project order…", color = colors.onVariant)
                             state.error?.let { Text(it, color = colors.error) }
-                            ScopeMenuItem(
-                                label = "New project",
-                                icon = Icons.Outlined.Add,
-                                onClick = { scopeMenu = false; onNewProject() },
-                            )
+                            if (state.projectCreation.active) {
+                                InlineProjectInput(
+                                    state = state.projectCreation,
+                                    requestFocus = focusNewProject,
+                                    onFocusRequested = { focusNewProject = false },
+                                    onNameChange = onNewProjectNameChange,
+                                    onSubmit = onCreateProject,
+                                    onCancel = {
+                                        if (!state.projectCreation.saving) {
+                                            keyboard?.hide()
+                                            focusManager.clearFocus()
+                                            onCancelProjectCreation()
+                                        }
+                                    },
+                                )
+                            } else {
+                                ScopeMenuItem(
+                                    label = "New project",
+                                    icon = Icons.Outlined.Add,
+                                    onClick = { focusNewProject = true; onNewProject() },
+                                )
+                            }
                         }
 
                         ScopeMenuInsetSection("Library", "battle-plan-scope-menu-library") {
                             ScopeMenuItem("Recurring", Icons.Outlined.Repeat) {
-                                scopeMenu = false
-                                onOpenRecurring()
+                                closeScopeMenu { onOpenRecurring() }
                             }
                             ScopeMenuInsetDivider()
                             ScopeMenuItem("Archive", Icons.Outlined.Archive) {
-                                scopeMenu = false
-                                onSelectCollection(TaskCollection.Archived)
+                                closeScopeMenu { onSelectCollection(TaskCollection.Archived) }
                             }
                             ScopeMenuInsetDivider()
                             ScopeMenuItem("Trash", Icons.Outlined.Delete, destructive = true) {
-                                scopeMenu = false
-                                onSelectCollection(TaskCollection.Trash)
+                                closeScopeMenu { onSelectCollection(TaskCollection.Trash) }
                             }
                         }
                     }
