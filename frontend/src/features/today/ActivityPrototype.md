@@ -1,5 +1,17 @@
 # Activity Tracking UI prototype
 
+## Progressive review — current round
+
+The user found the combined A/B/C demo too dense to assess. Apply the supplied progressive-prototype workflow: discuss, build one focused experiment, wait for feedback, then capture and advance.
+
+Round 1: does a compact current-activity strip above the Day timeline make tracking discoverable and understandable? One provisional layout, with start, switch, and stop. Uses the real DayTimeline renderer with memory fixtures and a static navigation shell to avoid the real Layout's storage effects. Existing timeline appearance stays stable. Task types and task selection are fixture simplifications, not settled design choices.
+
+Open http://127.0.0.1:12003/day/2026-09-10?variant=A&round=1 (old variant URLs also show round 1). Try starting with the plan, advance the sample clock, switch to Reading, advance again, and stop. Reset restores the initial state. Build and browser start/stop checks passed. No human verdict yet.
+
+Next questions, provisionally ordered: Focus entry/exit; unnamed activity; planned suggestions; inactivity prompts; correction and recovery. Dependencies may change with review. Do not build dependent rounds before feedback. End with a combined experience review. Android remains a separate native prototype ticket.
+
+The earlier combined experiment is preserved at `?variant=A&round=legacy` (also B/C); its layouts remain unaccepted. The rest of this note describes that earlier experiment.
+
 Throwaway, in-memory UI study for issue 136. Three structurally different prompt layouts share the existing `/day/:date?variant=A|B|C` route in development only. The production app is unchanged unless the development variant parameter is present. A fixture shell mirrors Timebox navigation/style; real providers, API reads and writes are bypassed for this interactive study.
 
 ## Run

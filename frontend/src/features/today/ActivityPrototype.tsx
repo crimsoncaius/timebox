@@ -3,11 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import './ActivityPrototype.css'
+import { TrackingRoundPrototype } from './TrackingRoundPrototype'
 type RecordRow = { name: string; start: number; end: number }
 const names = ['A', 'B', 'C']
 const labels = ['Inline question', 'Side companion', 'Bottom dock']
 const clock = (n: number) => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`
 export function ActivityPrototype() {
+  return new URLSearchParams(location.search).get('round') === 'legacy'
+    ? <LegacyActivityPrototype /> : <TrackingRoundPrototype />
+}
+function LegacyActivityPrototype() {
   const [params, setParams] = useSearchParams()
   const variant = names.includes(params.get('variant') || '') ? params.get('variant')! : 'A'
   const [now, setNow] = useState(675)
