@@ -95,3 +95,13 @@ Question: is the time boundary and affected recording clear before applying a co
 URL /day/2026-09-10?variant=A&round=6. Browser verified switch to Break at noon retains Writing 10–12 and records Break 12–12:15; earlier stop leaves Writing 10–12 only. Earlier rounds remain accessible. Await review before recovery/combined rounds.
 
 Round 6 design refinement: user found functionality adequate but design lacking. Revised correction forms into bounded panels with title, grouped timing controls, aligned activity/time rows under After this change, and primary action at the bottom right. Behavior unchanged. Build passed; revised switch panel left open. Visual verdict pending.
+
+### Round 6 verdict
+
+User accepted the revised correction panel design and requested the next round.
+
+## Round 7 — offline recovery feedback (awaiting review)
+
+Question: does a compact offline/synced status plus a short remote-change explanation make reconciliation understandable? Sample starts offline at 12:30, Writing 10–12 and Lunch from noon. Reconnect simulates receiving a newer change: Reading since 12:10. Keeps earlier time, replaces only the later interval, displays nonblocking notice. Same status/notice available in Focus. Correction controls remain available.
+
+URL /day/2026-09-10?variant=A&round=7. This is a scripted visual scenario, not real persistence or conflict resolution. Reconnect always supplies the winning remote change; arbitrary mutation-order conflict cases are outside this experiment. Build passed; browser verified Writing retained, Lunch ends 12:10, Reading begins 12:10, and synced notice. Await review; combined experience and wider history corrections remain unresolved.
