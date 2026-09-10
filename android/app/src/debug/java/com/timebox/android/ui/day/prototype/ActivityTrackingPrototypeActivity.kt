@@ -77,12 +77,11 @@ private fun TrackingRound() {
      Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
       listOf("Work", "Break", "Personal").forEach { choice -> FilterChip(selected=type==choice, onClick={type=choice}, label={Text(choice)}) }
      }
-     OutlinedTextField(value=name, onValueChange={name=it}, label={Text("Activity name (optional)")}, singleLine=true, modifier=Modifier.fillMaxWidth())
      Spacer(Modifier.height(12.dp))
      Text("Apply to the time already recorded, or leave it unspecified and start now.", style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
      Spacer(Modifier.height(12.dp))
-     Button(enabled=type.isNotEmpty(), onClick={entries=entries.map { if(it.end==null) it.copy(type=type,name=name.trim()) else it };type="";name=""}, modifier=Modifier.fillMaxWidth()) { Text("Apply from ${clock(active.start)}") }
-     TextButton(enabled=type.isNotEmpty(), onClick={start(type,name.trim());type="";name=""}) { Text("Start now") }
+     Button(enabled=type.isNotEmpty(), onClick={entries=entries.map { if(it.end==null) it.copy(type=type,name="") else it };type="";name=""}, modifier=Modifier.fillMaxWidth()) { Text("Apply from ${clock(active.start)}") }
+     TextButton(enabled=type.isNotEmpty(), onClick={start(type,"");type="";name=""}) { Text("Start now") }
     } else TextButton(onClick={type="";name="";editing=true}) { Text("Switch activity") }
    }
    Text("Tracking continues when you exit Focus.", modifier=Modifier.fillMaxWidth().padding(20.dp), textAlign=TextAlign.Center, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
