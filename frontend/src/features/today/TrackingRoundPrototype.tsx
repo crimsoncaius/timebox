@@ -16,10 +16,11 @@ const planned: TimeBlock[] = [
 ]
 
 export function TrackingRoundPrototype() {
-  const roundTwo = new URLSearchParams(location.search).get('round') === '2'
-  const [focus, setFocus] = useState(false)
-  const [now, setNow] = useState(660)
-  const [entries, setEntries] = useState<Entry[]>([])
+  const roundThree = new URLSearchParams(location.search).get('round') === '3'
+  const roundTwo = new URLSearchParams(location.search).get('round') === '2' || roundThree
+  const [focus, setFocus] = useState(roundThree)
+  const [now, setNow] = useState(roundThree ? 810 : 660)
+  const [entries, setEntries] = useState<Entry[]>(roundThree ? [{ name: '', taskType: taskTypes[3], plannedId: null, start: 800, end: null }] : [])
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [selectedType, setSelectedType] = useState('')
@@ -31,36 +32,44 @@ export function TrackingRoundPrototype() {
     setEntries(old => [...old.map(e => e.end === null ? { ...e, end: now } : e), { name: requestedName.trim() || plan?.name || '', taskType: chosenType, plannedId: plan?.id ?? null, start: now, end: null }])
     setName(''); setSelectedType(''); setEditing(false)
   }
+  const needsDescription = focus && current?.taskType.id === 4 && !current.name
+  function describeCurrent() {
+    const chosenType = taskTypes.find(t => t.id === Number(selectedType))
+    if (!chosenType) return
+    setEntries(old => old.map(e => e.end === null ? { ...e, name: name.trim(), taskType: chosenType } : e))
+    setName(''); setSelectedType(''); setEditing(false)
+  }
   const day: DayRead = {
     id: 1, date, start_hour: 9, end_hour: 15, show_full_day: false, created_at: stamp, updated_at: stamp,
     time_blocks: planned,
     actual_blocks: entries.map((entry, i) => ({ date, start_minute: entry.start, end_minute: entry.end ?? now,
       duration_minutes: (entry.end ?? now) - entry.start,
       actual_block: { id: 100 + i, task_type_id: entry.taskType.id, task_type: entry.taskType, task_id: null, task: null,
-        name: entry.name, note: null, planned_block_id: entry.plannedId,
+        name: entry.name || entry.taskType.name, note: null, planned_block_id: entry.plannedId,
         start_at: `${date}T${time(entry.start)}:00+08:00`, end_at: entry.end === null ? null : `${date}T${time(entry.end)}:00+08:00`, created_at: stamp, updated_at: stamp },
     })),
     meta: { timezone: 'Asia/Singapore', today: date, server_now_iso: `${date}T${time(now)}:00+08:00` },
   }
   const button = 'rounded px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-  const switchForm = <form className="mt-6 w-full max-w-sm text-left" onSubmit={e => { e.preventDefault(); if (selectedType) startOrSwitch(name, Number(selectedType)) }}>
+  const switchForm = <form className="mt-6 w-full max-w-sm text-left" onSubmit={e => { e.preventDefault(); if (selectedType) { if (needsDescription) describeCurrent(); else startOrSwitch(name, Number(selectedType)) } }}>
     <label className="text-sm">Task type<select autoFocus required value={selectedType} onChange={e => setSelectedType(e.target.value)} className="mt-2 block w-full rounded border border-outline-variant bg-surface p-2"><option value="" disabled>Choose a task type</option>{taskTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
     <label className="mt-4 block text-sm">Activity name (optional)<input className="mt-2 block w-full rounded border border-outline-variant bg-surface p-2" value={name} onChange={e => setName(e.target.value)} /></label>
-    <div className="mt-3 flex gap-2"><button disabled={!selectedType} className={`${button} disabled:opacity-40`}>Switch now</button><button type="button" className={button} onClick={() => { setEditing(false); setName(''); setSelectedType('') }}>Cancel</button></div>
+    {needsDescription && <p className="mt-3 text-xs text-on-surface-variant">Apply to the time since {time(current!.start)}, or start now and leave earlier time unspecified.</p>}
+    <div className="mt-3 flex gap-2"><button disabled={!selectedType} className={`${button} disabled:opacity-40`}>{needsDescription ? `Apply from ${time(current!.start)}` : 'Switch now'}</button>{needsDescription ? <button type="button" disabled={!selectedType} className={`${button} disabled:opacity-40`} onClick={() => startOrSwitch(name, Number(selectedType))}>Start now</button> : <button type="button" className={button} onClick={() => { setEditing(false); setName(''); setSelectedType('') }}>Cancel</button>}</div>
   </form>
   return <div className="min-h-screen bg-surface font-body text-on-surface">
     <div className="bg-on-surface px-6 py-2 text-xs text-surface flex items-center justify-between gap-4">
-      <span>THROWAWAY · {roundTwo ? 'Round 2: Focus entry and exit' : 'Round 1: tracking above the Day timeline'} · sample data</span>
-      <div className="flex items-center gap-4"><span>Sample clock {time(now)}</span><button onClick={() => setNow(n => n + 5)}>+5 min</button><button onClick={() => { setEntries([]); setNow(660); setEditing(false); setName(''); setFocus(false) }}>Reset</button></div>
+      <span>THROWAWAY · {roundThree ? 'Round 3: describe an unspecified activity' : roundTwo ? 'Round 2: Focus entry and exit' : 'Round 1: tracking above the Day timeline'} · sample data</span>
+      <div className="flex items-center gap-4"><span>Sample clock {time(now)}</span><button onClick={() => setNow(n => n + 5)}>+5 min</button><button onClick={() => { setEntries(roundThree ? [{ name: '', taskType: taskTypes[3], plannedId: null, start: 800, end: null }] : []); setNow(roundThree ? 810 : 660); setEditing(false); setName(''); setSelectedType(''); setFocus(roundThree) }}>Reset</button></div>
     </div>
     {focus && current ? <main className="mx-auto flex min-h-[calc(100vh-40px)] max-w-5xl flex-col px-8 py-8">
       <header className="flex items-center justify-between"><span className="text-xs uppercase tracking-widest text-on-surface-variant">Focus</span><button className={button} onClick={() => { setFocus(false); setEditing(false); setName('') }}>Exit Focus</button></header>
       <section className="flex flex-1 flex-col items-center justify-center py-20 text-center" aria-label="Focused activity">
         <p className="mb-5 text-xs text-on-surface-variant">Recording · since {time(current.start)}</p>
-        <h1 className="max-w-2xl font-headline text-4xl sm:text-5xl">{current.name || current.taskType.name}</h1>
+        <h1 className="max-w-2xl font-headline text-4xl sm:text-5xl">{needsDescription ? 'What are you doing right now?' : current.name || current.taskType.name}</h1>
         <p className="mt-6 text-2xl tabular-nums text-on-surface-variant">{now-current.start} min</p>
-        <button className={`${button} mt-8`} onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch activity</button>
-        {editing && switchForm}
+        {!needsDescription && <button className={`${button} mt-8`} onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch activity</button>}
+        {(editing || needsDescription) && switchForm}
       </section>
       <p className="text-center text-xs text-on-surface-variant">Tracking continues when you exit Focus.</p>
     </main> : <><aside className="fixed left-0 top-16 hidden w-64 px-8 py-8 lg:block" aria-label="Surrounding app context">
@@ -79,4 +88,5 @@ export function TrackingRoundPrototype() {
     </main></>}
   </div>
 }
+
 

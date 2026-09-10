@@ -51,3 +51,9 @@ Review: /day/2026-09-10?variant=A&round=2. Enter Focus, advance the sample clock
 ### Round 2 verdict and switch correction
 
 User accepted the Focus experience. Requested correction: switching should primarily ask for required Task Type; Activity Name is optional. Both Day and Focus now share a type-first switch form, disabled until a type is chosen. A nameless activity displays its type. Explicit switches store the selected type and do not inherit the current plan name/link. Immediate Start still assumes the plan; no-plan fallback uses unspecified. Fixture task types only. Build passed and browser verified required type, optional name, and disabled submission before selection. Revised form awaits user review.
+
+## Round 3 — unspecified activity in Focus
+
+Previous round switching correction accepted by user's request to advance. Round 3 opens at 13:30 with an unspecified interval since 13:20, no current plan, and Focus active. Persistent inline question: What are you doing right now? Required task type and optional name; no dismissal or Stop. Apply from 13:20 describes the full current interval; Start now preserves earlier unspecified time. Choosing a meaningful task type resolves the prompt even without a name, reflecting the user's optional-name clarification. This interpretation and visual treatment await review.
+
+URL: /day/2026-09-10?variant=A&round=3. Reset repeats fixture. Previous rounds remain accessible. In-memory entry names stay optional; timeline display projection falls back to type name. Build and browser checks passed for applying from original start and splitting at now. No dependent round until feedback.
