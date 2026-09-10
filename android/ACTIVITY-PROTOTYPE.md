@@ -94,3 +94,7 @@ User accepted disabled Focus entry during planning, the explanation, and Finish 
 ## Connected Android review
 
 Accepted flows connected at 11:55 Writing; Scenarios collapses simulation controls for inactivity, unknown activity, return, offline/reconnect and remote stop. Plan day, Task tracking, correction sheets and Focus available. Build passed. Emulator verified Focus at noon, inactivity sheet Back dismissal leaves Check-in waiting, and planned Lunch switch clears old question while preserving Focus. No real persistence, detection, wake, notification or synchronization. Connected human verdict pending.
+
+### Connected review verdict
+
+User accepted the connected Android experience. This concludes visual review of the explored flows. All platform simulation limits above remain; production implementation must preserve actual Task links and verify lifecycle, offline persistence, device detection and optional system notification delivery.
