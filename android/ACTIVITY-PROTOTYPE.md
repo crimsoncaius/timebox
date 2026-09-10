@@ -20,3 +20,7 @@ Launch shortcut: scripts/android-activity-prototype.ps1 builds, installs the iso
 ## Round 2: Focus entry and exit
 
 Round 1 accepted by user. Added quiet Focus control beside tracking. Starts immediately if off, preserves interval if already active. Dedicated centered activity display with Switch sheet and Exit Focus; no Stop or navigation. Android Back exits Focus without stopping; Back inside sheet dismisses the sheet first. Back policy and layout await human review. Build succeeded; emulator verified entry from off, elapsed time, no Stop in Focus, and Back returning to Day with the same recording.
+
+### Round 2 verdict
+
+User accepted the native Focus layout and Android Back exiting Focus while preserving tracking. Next unresolved presentation: persistent unspecified-activity prompt in Focus, task type first with optional name, original-start versus Start now choice.
