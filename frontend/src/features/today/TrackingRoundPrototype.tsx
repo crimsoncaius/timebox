@@ -20,8 +20,8 @@ export function TrackingRoundPrototype() {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const current = entries.find(e => e.end === null)
-  function startOrSwitch() {
-    const chosen = name.trim() || planned.find(p => p.start_minute <= now && p.end_minute > now)?.name || 'Unnamed activity'
+  function startOrSwitch(requestedName = '') {
+    const chosen = requestedName.trim() || planned.find(p => p.start_minute <= now && p.end_minute > now)?.name || 'Unnamed activity'
     setEntries(old => [...old.map(e => e.end === null ? { ...e, end: now } : e), { name: chosen, start: now, end: null }])
     setName(''); setEditing(false)
   }
@@ -36,7 +36,7 @@ export function TrackingRoundPrototype() {
     })),
     meta: { timezone: 'Asia/Singapore', today: date, server_now_iso: `${date}T${time(now)}:00+08:00` },
   }
-  const button = 'rounded-lg border border-outline-variant px-4 py-2 text-sm hover:bg-surface-container'
+  const button = 'rounded px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
   return <div className="min-h-screen bg-surface font-body text-on-surface">
     <div className="bg-on-surface px-6 py-2 text-xs text-surface flex items-center justify-between gap-4">
       <span>THROWAWAY · Round 1: tracking above the Day timeline · sample data</span>
@@ -48,13 +48,13 @@ export function TrackingRoundPrototype() {
     </aside>
     <main className="mx-auto max-w-6xl p-8 lg:ml-64">
       <header className="mb-8"><p className="text-xs uppercase tracking-widest text-on-surface-variant">Day</p><h1 className="mt-2 font-headline text-3xl">Thursday, September 10, 2026</h1></header>
-      <section aria-label="Activity tracking" className="mb-6 rounded-xl border border-outline-variant bg-surface-container-low p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs text-on-surface-variant">{current ? 'Recording now' : 'Tracking is off'}</p><h2 className="mt-1 text-lg font-medium">{current ? current.name : 'Start with your current plan or name an activity'}</h2>{current && <p className="mt-1 text-sm text-on-surface-variant">Since {time(current.start)} · {now-current.start} min</p>}</div>
-          <div className="flex gap-2">{current ? <><button className={button} onClick={() => setEditing(true)}>Switch activity</button><button className={button} onClick={() => { setEntries(old => old.map(e => e.end === null ? { ...e, end: now } : e)); setEditing(false) }}>Stop tracking</button></> : <button className={button} onClick={() => setEditing(true)}>Start tracking</button>}</div>
-        </div>
-        {editing && <form className="mt-4 border-t border-outline-variant pt-4" onSubmit={e => { e.preventDefault(); startOrSwitch() }}><label className="text-sm">Activity name<input autoFocus className="mt-2 block w-full max-w-md rounded border border-outline-variant bg-surface p-2" placeholder="Writing a proposal (current plan)" value={name} onChange={e => setName(e.target.value)} /></label><p className="my-3 text-xs text-on-surface-variant">Leave empty to use the current Planned Block. Recording starts at {time(now)}.</p><div className="flex gap-2"><button className={button}>{current ? 'Switch now' : 'Start now'}</button><button type="button" className={button} onClick={() => { setEditing(false); setName('') }}>Cancel</button></div></form>}
+      <section aria-label="Activity tracking" className="mb-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-on-surface-variant">
+          {current ? <><span aria-label="Tracking active" className="h-1.5 w-1.5 rounded-full bg-actual" /><span>{current.name}</span><span className="tabular-nums">· {now-current.start} min</span><button className={button} onClick={() => setEditing(true)}>Switch</button><button className={button} onClick={() => { setEntries(old => old.map(e => e.end === null ? { ...e, end: now } : e)); setEditing(false); setName('') }}>Stop tracking</button></> : <button className={button} onClick={() => startOrSwitch()}>Start tracking</button>}
+        </div>        {editing && <form className="mt-4 border-t border-outline-variant pt-4" onSubmit={e => { e.preventDefault(); startOrSwitch(name) }}><label className="text-sm">Activity name<input autoFocus className="mt-2 block w-full max-w-md rounded border border-outline-variant bg-surface p-2" placeholder="Writing a proposal (current plan)" value={name} onChange={e => setName(e.target.value)} /></label><p className="my-3 text-xs text-on-surface-variant">Leave empty to use the current Planned Block. Recording starts at {time(now)}.</p><div className="flex gap-2"><button className={button}>{current ? 'Switch now' : 'Start now'}</button><button type="button" className={button} onClick={() => { setEditing(false); setName('') }}>Cancel</button></div></form>}
       </section>
       <DragDropProvider><DayTimeline day={day} readOnly draft={null} selectedBlockId={null} onLaneSlotClick={() => {}} onPatchBlock={async () => {}} /></DragDropProvider>
     </main>
   </div>
 }
+

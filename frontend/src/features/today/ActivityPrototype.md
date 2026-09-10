@@ -33,3 +33,7 @@ Browser reload resets fixtures intentionally. No real wake locks, device signals
 Awaiting live user feedback. Do not close the decision ticket or promote any variant without a human verdict. The Wayfinder map remains planning-only; accepted design decisions feed the later implementation specification.
 
 Validated: TypeScript/Vite build, Focus control restriction, variant navigation, and late-switch preview/result in browser. No automated tests added for this throwaway code.
+
+### Round 1 feedback and revision
+
+Accepted user direction: tracking should be smaller and less obvious; Start tracking must immediately assume the current plan without asking for a name. Revised the large card into a quiet, right-aligned line above the timeline. Starting uses the current Planned Block, or unnamed when none exists. Explicit Switch retains its editor. Placement/visual revision still awaits review. Build passed; browser verified a single Start tracking click enters recording with Writing a proposal and no form.
