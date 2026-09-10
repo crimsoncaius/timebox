@@ -8,7 +8,7 @@ The map records an explicitly started activity continuing until switch/stop, eve
 
 ## Repository baseline
 
-Android is native Kotlin/Compose, minimum API 26, compile/target API 34, with WorkManager and DataStore ([build](../..//android/app/build.gradle.kts)). The [manifest](../../android/app/src/main/AndroidManifest.xml) declares notification and boot permissions but no usage-access permission. The [reminder infrastructure](../../android/app/src/main/java/com/timebox/android/reminders/ReminderInfrastructure.kt) uses network-constrained 15-minute periodic WorkManager sync and notification channels; [daily reminders](../../android/app/src/main/java/com/timebox/android/reminders/DailyReminderInfrastructure.kt) use delayed one-time work. Neither establishes device inactivity detection.
+Android is native Kotlin/Compose, minimum API 26, compile/target API 34, with WorkManager and DataStore ([build](../../android/app/build.gradle.kts)). The [manifest](../../android/app/src/main/AndroidManifest.xml) declares notification and boot permissions but no usage-access permission. The [reminder infrastructure](../../android/app/src/main/java/com/timebox/android/reminders/ReminderInfrastructure.kt) uses network-constrained 15-minute periodic WorkManager sync and notification channels; [daily reminders](../../android/app/src/main/java/com/timebox/android/reminders/DailyReminderInfrastructure.kt) use delayed one-time work. Neither establishes device inactivity detection.
 
 Web is a React 19/Vite browser application ([package](../../frontend/package.json)). A source search found no IdleDetector, screen wake-lock, or service-worker integration in `frontend/src`. Existing visibility handlers establish application visibility only.
 
