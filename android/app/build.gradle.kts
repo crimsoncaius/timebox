@@ -20,7 +20,7 @@ android {
     }
 
     buildTypes {
-        debug {
+        debug { applicationIdSuffix = ".activityprototype"
             // 10.0.2.2 is the host machine from inside the emulator.
             // Port 8001 is the registered Timebox API allocation on this workspace.
             buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8001/\"")
@@ -90,3 +90,4 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
