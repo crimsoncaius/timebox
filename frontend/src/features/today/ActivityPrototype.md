@@ -87,3 +87,9 @@ Round 5 action hierarchy refinement: filled Still doing this primary button; out
 ### Round 5 verdict
 
 User accepted the refined inactivity prompt: small muted question label, larger semibold activity name, filled Still doing this primary button, outlined Switch activity secondary button, and quieter Stop outside Focus only. Placement and persistent nonblocking behavior accepted. Next unresolved experiment: correcting an activity switch or stop to an earlier time, with an affected-time preview. Offline/remote recovery and combined review remain later work.
+
+## Round 6 — earlier switch or stop (awaiting review)
+
+Question: is the time boundary and affected recording clear before applying a correction? Sample clock 12:15, Writing since 10:00. Switch adds a time field (defaults now), 15 min ago shortcut, and preview of old/new intervals. Stop in Day opens a matching preview with later time untracked. Focus supports switch corrections without Stop. Time is bounded to current interval, not future; wider historical corrections remain later scope. Cancel leaves recording unchanged. This round provisionally changes Stop to a preview-first flow for evaluation.
+
+URL /day/2026-09-10?variant=A&round=6. Browser verified switch to Break at noon retains Writing 10–12 and records Break 12–12:15; earlier stop leaves Writing 10–12 only. Earlier rounds remain accessible. Await review before recovery/combined rounds.

@@ -16,13 +16,16 @@ const planned: TimeBlock[] = [
 ]
 
 export function TrackingRoundPrototype() {
+  const roundSix = new URLSearchParams(location.search).get('round') === '6'
+  const [endEditor, setEndEditor] = useState(false)
+  const [atTime, setAtTime] = useState('12:15')
   const roundFive = new URLSearchParams(location.search).get('round') === '5'
   const [pending, setPending] = useState(roundFive)
   const roundFour = new URLSearchParams(location.search).get('round') === '4'
   const roundThree = new URLSearchParams(location.search).get('round') === '3'
-  const roundTwo = new URLSearchParams(location.search).get('round') === '2' || roundThree || roundFour || roundFive
-  const initialEntries: Entry[] = roundFour || roundFive ? [{ name: 'Writing a proposal', taskType, plannedId: 1, start: 600, end: null }] : roundThree ? [{ name: '', taskType: taskTypes[3], plannedId: null, start: 800, end: null }] : []
-  const initialNow = roundFive ? 690 : roundFour ? 715 : roundThree ? 810 : 660
+  const roundTwo = new URLSearchParams(location.search).get('round') === '2' || roundThree || roundFour || roundFive || roundSix
+  const initialEntries: Entry[] = roundFour || roundFive || roundSix ? [{ name: 'Writing a proposal', taskType, plannedId: 1, start: 600, end: null }] : roundThree ? [{ name: '', taskType: taskTypes[3], plannedId: null, start: 800, end: null }] : []
+  const initialNow = roundSix ? 735 : roundFive ? 690 : roundFour ? 715 : roundThree ? 810 : 660
   const [focus, setFocus] = useState(roundThree)
   const [now, setNow] = useState(initialNow)
   const [entries, setEntries] = useState<Entry[]>(initialEntries)
@@ -30,15 +33,24 @@ export function TrackingRoundPrototype() {
   const [name, setName] = useState('')
   const [selectedType, setSelectedType] = useState('')
   const current = entries.find(e => e.end === null)
-  function startOrSwitch(requestedName = '', typeId?: number) {
+  function startOrSwitch(requestedName = '', typeId?: number, at = now) {
+    if (!Number.isFinite(at) || at > now || (current && at < current.start)) return
     const plan = typeId === undefined ? planned.find(p => p.start_minute <= now && p.end_minute > now) : undefined
     const chosenType = typeId === undefined ? plan?.task_type ?? taskTypes[3] : taskTypes.find(t => t.id === typeId)
     if (!chosenType) return
-    setEntries(old => [...old.map(e => e.end === null ? { ...e, end: now } : e), { name: requestedName.trim() || plan?.name || '', taskType: chosenType, plannedId: plan?.id ?? null, start: now, end: null }])
+    setEntries(old => [...old.map(e => e.end === null ? { ...e, end: at } : e), { name: requestedName.trim() || plan?.name || '', taskType: chosenType, plannedId: plan?.id ?? null, start: at, end: null }])
     setName(''); setSelectedType(''); setEditing(false); setPending(false)
   }
-  function stopTracking() {
-    setEntries(old => old.map(e => e.end === null ? { ...e, end: now } : e))
+  const parsedTime = atTime.split(':').map(Number)
+  const correctionTime = parsedTime.length === 2 ? parsedTime[0] * 60 + parsedTime[1] : NaN
+  const validTime = Number.isFinite(correctionTime) && correctionTime <= now && !!current && correctionTime >= current.start
+  function openSwitch() {
+    setSelectedType(''); setName(''); setAtTime(time(now)); setEndEditor(false); setEditing(true)
+  }
+  function stopTracking(at = now) {
+    if (!Number.isFinite(at) || at > now || (current && at < current.start)) return
+    setEndEditor(false)
+    setEntries(old => old.map(e => e.end === null ? { ...e, end: at } : e))
     setEditing(false); setName(''); setSelectedType(''); setPending(false)
   }
   const needsDescription = focus && current?.taskType.id === 4 && !current.name
@@ -64,21 +76,25 @@ export function TrackingRoundPrototype() {
   const suggestion = suggestedPlan && <div className={`flex flex-wrap items-center gap-2 rounded-md bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant ${focus ? 'mt-10 justify-center' : 'mt-2 justify-end'}`} aria-label="Planned activity suggestion">
     <span className="font-medium text-on-surface">{suggestedPlan.name} is planned now.</span><button className={button} onClick={() => startOrSwitch()}>Switch to {suggestedPlan.name}</button>
   </div>
-  const switchForm = <form className="mt-6 w-full max-w-sm text-left" onSubmit={e => { e.preventDefault(); if (selectedType) { if (needsDescription) describeCurrent(); else startOrSwitch(name, Number(selectedType)) } }}>
+  const timeField = <label className="mt-4 block text-sm">{endEditor ? 'Stop at' : 'Switch at'}<input type="time" required min={current ? time(current.start) : undefined} max={time(now)} value={atTime} onChange={e => setAtTime(e.target.value)} className="mt-2 block rounded border border-outline-variant bg-surface p-2" /><button type="button" className={`${button} mt-2`} onClick={() => setAtTime(time(Math.max(current?.start ?? 0, now - 15)))}>15 min ago</button></label>
+  const preview = current && <div className="mt-4 rounded-md bg-surface-container-low p-3 text-xs" aria-label="Recording preview">{validTime ? <><p>{current.name || current.taskType.name}: {time(current.start)}–{atTime}</p><p className="mt-2">{endEditor ? `${atTime}–${time(now)} will be untracked.` : `${name.trim() || taskTypes.find(t => t.id === Number(selectedType))?.name || 'Next activity'}: ${atTime}–now`}</p></> : <p>Choose a time between {time(current.start)} and {time(now)}.</p>}</div>
+  const stopForm = <form className="mt-6 max-w-sm" onSubmit={e => { e.preventDefault(); if (validTime) stopTracking(correctionTime) }}><h2 className="text-sm font-medium">Stop tracking</h2>{timeField}{preview}<div className="mt-3 flex gap-2"><button disabled={!validTime} className="rounded-md bg-on-surface px-3 py-2 text-xs text-surface disabled:opacity-40">Stop at {atTime}</button><button type="button" className={button} onClick={() => setEndEditor(false)}>Cancel</button></div></form>
+  const switchForm = <form className="mt-6 w-full max-w-sm text-left" onSubmit={e => { e.preventDefault(); if (selectedType) { if (needsDescription) describeCurrent(); else startOrSwitch(name, Number(selectedType), roundSix ? correctionTime : now) } }}>
     <label className="text-sm">Task type<select autoFocus required value={selectedType} onChange={e => setSelectedType(e.target.value)} className="mt-2 block w-full rounded border border-outline-variant bg-surface p-2"><option value="" disabled>Choose a task type</option>{taskTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
     <label className="mt-4 block text-sm">Activity name (optional)<input className="mt-2 block w-full rounded border border-outline-variant bg-surface p-2" value={name} onChange={e => setName(e.target.value)} /></label>
+    {roundSix && !needsDescription && <>{timeField}{preview}</>}
     {needsDescription && <p className="mt-3 text-xs text-on-surface-variant">Apply to the time since {time(current!.start)}, or start now and leave earlier time unspecified.</p>}
-    <div className="mt-3 flex gap-2"><button disabled={!selectedType} className={`${button} disabled:opacity-40`}>{needsDescription ? `Apply from ${time(current!.start)}` : 'Switch now'}</button>{needsDescription ? <button type="button" disabled={!selectedType} className={`${button} disabled:opacity-40`} onClick={() => startOrSwitch(name, Number(selectedType))}>Start now</button> : <button type="button" className={button} onClick={() => { setEditing(false); setName(''); setSelectedType('') }}>Cancel</button>}</div>
+    <div className="mt-3 flex gap-2"><button disabled={!selectedType || (roundSix && !validTime)} className="rounded-md bg-on-surface px-3 py-2 text-xs text-surface disabled:opacity-40">{needsDescription ? `Apply from ${time(current!.start)}` : roundSix ? `Switch at ${atTime}` : 'Switch now'}</button>{needsDescription ? <button type="button" disabled={!selectedType} className={`${button} disabled:opacity-40`} onClick={() => startOrSwitch(name, Number(selectedType))}>Start now</button> : <button type="button" className={button} onClick={() => { setEditing(false); setName(''); setSelectedType('') }}>Cancel</button>}</div>
   </form>
   const inactivityPrompt = pending && current && <section aria-label="Inactivity check-in" className={`rounded-lg border border-outline-variant bg-surface-container-low p-4 text-left ${focus ? 'mt-10 w-full max-w-md' : 'mt-4'}`}>
     <p className="text-xs text-on-surface-variant">Still doing this?</p><p className="mt-1 text-lg font-semibold text-on-surface">{current.name || current.taskType.name}</p>
     <p className="mt-1 text-xs text-on-surface-variant">Your device has been quiet for an hour. Tracking is still running.</p>
-    <div className="mt-3 flex flex-wrap gap-2"><button className="rounded-md bg-on-surface px-3 py-2 text-xs font-medium text-surface hover:opacity-90" onClick={() => { setPending(false); setEditing(false); setName(''); setSelectedType('') }}>Still doing this</button><button className="rounded-md border border-outline-variant bg-surface px-3 py-2 text-xs font-medium text-on-surface hover:bg-surface-container" onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch activity</button>{!focus && <button className={button} onClick={stopTracking}>Stop tracking</button>}</div>
+    <div className="mt-3 flex flex-wrap gap-2"><button className="rounded-md bg-on-surface px-3 py-2 text-xs font-medium text-surface hover:opacity-90" onClick={() => { setPending(false); setEditing(false); setName(''); setSelectedType('') }}>Still doing this</button><button className="rounded-md border border-outline-variant bg-surface px-3 py-2 text-xs font-medium text-on-surface hover:bg-surface-container" onClick={openSwitch}>Switch activity</button>{!focus && <button className={button} onClick={() => { if (roundSix) { setEditing(false); setEndEditor(true); setAtTime(time(now)) } else stopTracking() }}>Stop tracking</button>}</div>
   </section>
   return <div className="min-h-screen bg-surface font-body text-on-surface">
     <div className="bg-on-surface px-6 py-2 text-xs text-surface flex items-center justify-between gap-4">
-      <span>THROWAWAY · {roundFive ? 'Round 5: inactivity check-in (simulated)' : roundFour ? 'Round 4: planned activity suggestion' : roundThree ? 'Round 3: describe an unspecified activity' : roundTwo ? 'Round 2: Focus entry and exit' : 'Round 1: tracking above the Day timeline'} · sample data</span>
-      <div className="flex items-center gap-4"><span>Sample clock {time(now)}</span><button onClick={() => setNow(n => n + 5)}>+5 min</button><button onClick={() => { setEntries(initialEntries); setNow(initialNow); setEditing(false); setName(''); setSelectedType(''); setFocus(roundThree); setPending(roundFive) }}>Reset</button></div>
+      <span>THROWAWAY · {roundSix ? 'Round 6: earlier switch or stop' : roundFive ? 'Round 5: inactivity check-in (simulated)' : roundFour ? 'Round 4: planned activity suggestion' : roundThree ? 'Round 3: describe an unspecified activity' : roundTwo ? 'Round 2: Focus entry and exit' : 'Round 1: tracking above the Day timeline'} · sample data</span>
+      <div className="flex items-center gap-4"><span>Sample clock {time(now)}</span><button onClick={() => setNow(n => n + 5)}>+5 min</button><button onClick={() => { setEntries(initialEntries); setNow(initialNow); setEditing(false); setName(''); setSelectedType(''); setFocus(roundThree); setPending(roundFive); setEndEditor(false); setAtTime(time(initialNow)) }}>Reset</button></div>
     </div>
     {focus && current ? <main className="mx-auto flex min-h-[calc(100vh-40px)] max-w-5xl flex-col px-8 py-8">
       <header className="flex items-center justify-between"><span className="text-xs uppercase tracking-widest text-on-surface-variant">Focus</span><button className={button} onClick={() => { setFocus(false); setEditing(false); setName('') }}>Exit Focus</button></header>
@@ -86,7 +102,7 @@ export function TrackingRoundPrototype() {
         <p className="mb-5 text-xs text-on-surface-variant">Recording · since {time(current.start)}</p>
         <h1 className="max-w-2xl font-headline text-4xl sm:text-5xl">{needsDescription ? 'What are you doing right now?' : current.name || current.taskType.name}</h1>
         <p className="mt-6 text-2xl tabular-nums text-on-surface-variant">{now-current.start} min</p>
-        {!needsDescription && <button className={`${button} mt-8`} onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch activity</button>}
+        {!needsDescription && <button className={`${button} mt-8`} onClick={openSwitch}>Switch activity</button>}
         {(editing || needsDescription) && switchForm}
         {suggestion}
         {inactivityPrompt}
@@ -100,12 +116,13 @@ export function TrackingRoundPrototype() {
       <header className="mb-8"><p className="text-xs uppercase tracking-widest text-on-surface-variant">Day</p><h1 className="mt-2 font-headline text-3xl">Thursday, September 10, 2026</h1></header>
       <section aria-label="Activity tracking" className="mb-3">
         <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-on-surface-variant">
-          {current ? <><span aria-label="Tracking active" className="h-1.5 w-1.5 rounded-full bg-actual" /><span>{current.name || current.taskType.name}</span><span className="tabular-nums">· {now-current.start} min</span><button className={button} onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch</button><button className={button} onClick={stopTracking}>Stop tracking</button></> : <button className={button} onClick={() => startOrSwitch()}>Start tracking</button>}
-          {roundTwo && <button className={button} onClick={() => { if (!current) startOrSwitch(); setEditing(false); setName(''); setFocus(true) }}>Focus</button>}
+          {current ? <><span aria-label="Tracking active" className="h-1.5 w-1.5 rounded-full bg-actual" /><span>{current.name || current.taskType.name}</span><span className="tabular-nums">· {now-current.start} min</span><button className={button} onClick={openSwitch}>Switch</button><button className={button} onClick={() => { if (roundSix) { setEditing(false); setEndEditor(true); setAtTime(time(now)) } else stopTracking() }}>Stop tracking</button></> : <button className={button} onClick={() => startOrSwitch()}>Start tracking</button>}
+          {roundTwo && <button className={button} onClick={() => { if (!current) startOrSwitch(); setEditing(false); setEndEditor(false); setName(''); setFocus(true) }}>Focus</button>}
         </div>
         {suggestion}
         {inactivityPrompt}
         {editing && switchForm}
+        {endEditor && stopForm}
       </section>
       <DragDropProvider><DayTimeline day={day} readOnly draft={null} selectedBlockId={null} onLaneSlotClick={() => {}} onPatchBlock={async () => {}} /></DragDropProvider>
     </main></>}
