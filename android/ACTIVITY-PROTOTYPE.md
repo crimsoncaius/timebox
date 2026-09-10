@@ -34,3 +34,7 @@ Round 3 feedback: user accepted the prompt with removal of name input. Unspecifi
 ## Round 4: planned suggestion
 
 Round 3 accepted with no name field in unspecified prompt. Round 4 starts at 11:55 tracking Writing. Advance five minutes to see a subtle surface with Lunch is planned now and Switch. Available above Day timeline and under Focus controls. No automatic transition. Build passed; emulator verified Writing persists at noon and explicit switch begins Lunch and clears suggestion. Reset left ready; visual review pending.
+
+### Round 4 verdict
+
+User accepted the native planned-activity suggestion in Day and Focus. Next unresolved presentation: persistent inactivity check-in with clear primary/secondary actions and no Stop inside Focus.
