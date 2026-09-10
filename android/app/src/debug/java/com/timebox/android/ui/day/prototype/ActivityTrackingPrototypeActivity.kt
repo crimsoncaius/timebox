@@ -35,6 +35,7 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
+ var checkInOpen by remember { mutableStateOf(true) }
  var pending by remember { mutableStateOf(true) }
  var focus by remember { mutableStateOf(false) }
  var now by remember { mutableIntStateOf(690) }
@@ -63,16 +64,7 @@ private fun TrackingRound() {
   }
  }
  val checkIn: @Composable () -> Unit = {
-  if(pending && active != null) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow, shape=MaterialTheme.shapes.medium, modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)) {
-   Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-    Text("Still doing this?", style=MaterialTheme.typography.labelMedium, color=MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(active.name.ifBlank { active.type }, style=MaterialTheme.typography.titleLarge)
-    Text("Your device has been quiet for an hour. Tracking is still running.", style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
-    Button(onClick={pending=false}, modifier=Modifier.fillMaxWidth()) { Text("Still doing this") }
-    OutlinedButton(onClick={type="";name="";editing=true}, modifier=Modifier.fillMaxWidth()) { Text("Switch activity") }
-    if(!focus) TextButton(onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it };pending=false}) { Text("Stop tracking") }
-   }
-  }
+  if(pending && active != null) TextButton(onClick={checkInOpen=true}) { Text("Check-in waiting") }
  }
  val actual = entries.mapIndexed { i, e -> block(100+i, Lane.Actual, e.name.ifBlank { e.type }, e.type, e.start, e.end ?: now) }
  val day = Day(date, 9, 15, false, plans + actual, timezone = "Asia/Singapore", today = date, serverNowMinute = now)
@@ -81,7 +73,7 @@ private fun TrackingRound() {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
    Text("PROTOTYPE 5 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=690; pending=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=690; pending=true; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
   if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -141,6 +133,21 @@ private fun TrackingRound() {
   }
  }
  }
+ }
+ if(pending && active != null && checkInOpen && !editing) ModalBottomSheet(
+  onDismissRequest={checkInOpen=false},
+  sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+  shape=androidx.compose.foundation.shape.RoundedCornerShape(topStart=28.dp,topEnd=28.dp),
+  containerColor=MaterialTheme.colorScheme.surface
+ ) {
+  Column(Modifier.fillMaxWidth().padding(horizontal=24.dp).padding(top=28.dp,bottom=32.dp), verticalArrangement=Arrangement.spacedBy(16.dp)) {
+   Text("Still working on this activity?", style=MaterialTheme.typography.headlineMedium, fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
+   Text(active.name.ifBlank { active.type }, style=MaterialTheme.typography.titleMedium)
+   Text("We haven't detected device activity for a while. Your time is still being recorded.", style=MaterialTheme.typography.bodyLarge, color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Spacer(Modifier.height(8.dp))
+   Button(onClick={pending=false;checkInOpen=false}, shape=androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)) { Text("Still doing this") }
+   OutlinedButton(onClick={checkInOpen=false;type="";name="";editing=true}, shape=androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)) { Text("Switch activity") }
+  }
  }
  if(editing) ModalBottomSheet(onDismissRequest={editing=false}) {
   Column(Modifier.fillMaxWidth().imePadding().padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
