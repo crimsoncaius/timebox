@@ -115,3 +115,7 @@ User accepted offline status and remote change explanation.
 Combines accepted tracking, Focus, unspecified description, planned suggestions, inactivity, current-interval corrections, and scripted offline recovery at round=8. Starts tracking Writing at 11:55. Enter Focus, advance to noon, simulate inactivity, then switch to Lunch: both the suggestion and old question clear. Exit and correct activity; go offline/reconnect to inspect feedback. Reset restores starting scenario. Prior rounds remain references.
 
 Browser verified concurrent suggestion/check-in in Focus and clearing both after planned switch. Remote reconciliation remains scripted, not a conflict engine. Planning restrictions, native lifecycle/notifications, broader historical corrections, and actual persistence remain outside this throwaway fixture. Combined visual acceptance is pending; do not close the web prototype ticket yet.
+
+### Round 8 verdict
+
+User accepted the connected experience and requested proceeding. Web visual review is complete for the explored flows. Preserve the documented fixture limitations; acceptance does not validate real persistence, device sensing, or synchronization. Native Android review remains separate.
