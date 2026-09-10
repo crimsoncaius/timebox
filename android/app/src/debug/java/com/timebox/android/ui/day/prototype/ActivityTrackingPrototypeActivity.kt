@@ -35,8 +35,9 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
+ var pending by remember { mutableStateOf(true) }
  var focus by remember { mutableStateOf(false) }
- var now by remember { mutableIntStateOf(715) }
+ var now by remember { mutableIntStateOf(690) }
  var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600))) }
  var editing by remember { mutableStateOf(false) }
  BackHandler(enabled = focus && !editing) { focus = false }
@@ -47,6 +48,7 @@ private fun TrackingRound() {
  fun start(nextType: String, nextName: String) {
   entries = entries.map { if(it.end == null) it.copy(end = now) else it } + Entry(nextType, nextName, now)
   editing = false
+  pending = false
  }
  val date = LocalDate.of(2026, 9, 10)
  fun block(id: Int, lane: Lane, title: String, category: String, from: Int, to: Int) = TimeBlock(id, lane, 1, category, null, null, null, null, startMinute = from, endMinute = to, name = title)
@@ -60,14 +62,26 @@ private fun TrackingRound() {
    }
   }
  }
+ val checkIn: @Composable () -> Unit = {
+  if(pending && active != null) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow, shape=MaterialTheme.shapes.medium, modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)) {
+   Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    Text("Still doing this?", style=MaterialTheme.typography.labelMedium, color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(active.name.ifBlank { active.type }, style=MaterialTheme.typography.titleLarge)
+    Text("Your device has been quiet for an hour. Tracking is still running.", style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Button(onClick={pending=false}, modifier=Modifier.fillMaxWidth()) { Text("Still doing this") }
+    OutlinedButton(onClick={type="";name="";editing=true}, modifier=Modifier.fillMaxWidth()) { Text("Switch activity") }
+    if(!focus) TextButton(onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it };pending=false}) { Text("Stop tracking") }
+   }
+  }
+ }
  val actual = entries.mapIndexed { i, e -> block(100+i, Lane.Actual, e.name.ifBlank { e.type }, e.type, e.start, e.end ?: now) }
  val day = Day(date, 9, 15, false, plans + actual, timezone = "Asia/Singapore", today = date, serverNowMinute = now)
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 4 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 5 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=715; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=690; pending=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
   if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -93,6 +107,7 @@ private fun TrackingRound() {
      TextButton(enabled=type.isNotEmpty(), onClick={start(type,"");type="";name=""}) { Text("Start now") }
     } else TextButton(onClick={type="";name="";editing=true}) { Text("Switch activity") }
     suggestion()
+    checkIn()
    }
    Text("Tracking continues when you exit Focus.", modifier=Modifier.fillMaxWidth().padding(20.dp), textAlign=TextAlign.Center, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
   } else {
@@ -109,7 +124,7 @@ private fun TrackingRound() {
       Text("Recording · ${now-active.start} min", style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
      }
      TextButton(onClick={type="";name="";editing=true}) { Text("Switch") }
-     TextButton(onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it }}) { Text("Stop") }
+     TextButton(onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it };pending=false}) { Text("Stop") }
     }
     TextButton(onClick={
      if(active == null) { val plan=plans.find { now >= it.startMinute && now < it.endMinute }; start(plan?.taskTypeName ?: "unspecified", plan?.name ?: "") }
@@ -117,7 +132,7 @@ private fun TrackingRound() {
     }) { Text("Focus") }
    }
   }
-  Box(Modifier.padding(horizontal=20.dp)) { suggestion() }
+  Column(Modifier.padding(horizontal=20.dp)) { suggestion(); checkIn() }
   Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal=16.dp)) {
    DayTimeline(day=day, selectedBlockId=null, draft=null, onTapSlot={_,_->}, onSelectBlock={}, onCommitMove={_,_,_->}, blockGesturesEnabled=false)
   }

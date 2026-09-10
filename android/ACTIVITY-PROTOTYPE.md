@@ -38,3 +38,7 @@ Round 3 accepted with no name field in unspecified prompt. Round 4 starts at 11:
 ### Round 4 verdict
 
 User accepted the native planned-activity suggestion in Day and Focus. Next unresolved presentation: persistent inactivity check-in with clear primary/secondary actions and no Stop inside Focus.
+
+## Round 5: inactivity check-in
+
+Simulated pending prompt at 11:30, recording Writing since 10. Native stacked filled confirmation and outlined switch actions; Stop only in Day. Prominent activity name below smaller question. Switch and stop clear pending question; confirmation preserves interval. Build passed; emulator verified prompt survives Focus entry, no Stop in Focus, and confirmation preserves 90-minute recording. Reset ready for human review. Device detection and notification delivery are not implemented in this presentation round.
