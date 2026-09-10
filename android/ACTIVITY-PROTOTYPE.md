@@ -16,3 +16,7 @@ Install android/app/build/outputs/apk/debug/app-debug.apk with adb, then launch:
 Review task: Start tracking, advance +5 min, switch to Break, advance, stop. Evaluate touch layout and bottom-sheet interaction. No human verdict yet. Subsequent rounds: Focus, unspecified prompt, planned suggestion, inactivity, corrections, recovery/lifecycle, combined experience. Carry shared domain decisions forward; evaluate presentation progressively.
 
 Launch shortcut: scripts/android-activity-prototype.ps1 builds, installs the isolated APK, and opens the prototype. Validation: assembleDebug succeeded; emulator verified immediate planned start, elapsed-time display, and native sheet switch to Break with empty name. Human review pending.
+
+## Round 2: Focus entry and exit
+
+Round 1 accepted by user. Added quiet Focus control beside tracking. Starts immediately if off, preserves interval if already active. Dedicated centered activity display with Switch sheet and Exit Focus; no Stop or navigation. Android Back exits Focus without stopping; Back inside sheet dismisses the sheet first. Back policy and layout await human review. Build succeeded; emulator verified entry from off, elapsed time, no Stop in Focus, and Back returning to Day with the same recording.
