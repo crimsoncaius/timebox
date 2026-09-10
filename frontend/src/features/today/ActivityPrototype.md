@@ -67,3 +67,15 @@ User accepted the prompt and timing choice. Settled: persistent inline question 
 Question: is a quiet inline suggestion noticeable enough without interrupting Day or Focus? Opens at 11:55 while tracking Writing a proposal since 10:00. Advance +5 min to noon: Lunch is planned now, with Switch to Lunch. Day places it below compact tracking; Focus places it below activity controls. Existing accepted layouts remain otherwise stable. No automatic switch or dismissal requirement. Suggestion ends when its plan ends, tracking stops, or that plan is adopted. Switching assumes plan details and starts at the current time, preserving earlier actual time. Late correction is a later round.
 
 URL: /day/2026-09-10?variant=A&round=4. Reset repeats the scenario. Build passed. Browser verified no suggestion before noon, tracking unchanged at noon, suggestion visible in Day and Focus, and explicit switch at 12:05 starting Lunch then and clearing suggestion. User verdict pending.
+
+Round 4 refinement: user requested very slightly more visibility. Added a faint surface background, modest padding, and medium-weight suggestion text; placement and behavior unchanged. Awaiting review.
+
+### Round 4 verdict
+
+User accepted the refined suggestion with faint background and stronger text.
+
+## Round 5 — inactivity check-in (awaiting review)
+
+Question: does a persistent inline check-in fit the accepted Day and Focus layouts without interrupting work? One layout begins with a simulated one-hour device-inactivity prompt. Tracking continues unanswered. Still doing this clears the prompt without changing recorded time. Switch opens the accepted type-first form; applying a switch clears the pending question. Stop is available in Day only. Focus entry/exit preserves the pending question. Reset repeats the sample.
+
+URL: /day/2026-09-10?variant=A&round=5. Device detection, notifications, re-trigger scheduling, and earlier-time corrections are not implemented in this placement experiment; immediate switch/stop only for now. Later recovery round covers time corrections. Browser verified persistence while advancing time and entering Focus, absence of Stop in Focus, and confirmation preserving the original start. Build passed. Await human feedback before dependent rounds.
