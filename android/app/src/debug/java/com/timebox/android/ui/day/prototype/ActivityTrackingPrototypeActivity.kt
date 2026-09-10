@@ -35,9 +35,9 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
- var focus by remember { mutableStateOf(true) }
- var now by remember { mutableIntStateOf(810) }
- var entries by remember { mutableStateOf(listOf(Entry("unspecified", "", 800))) }
+ var focus by remember { mutableStateOf(false) }
+ var now by remember { mutableIntStateOf(715) }
+ var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600))) }
  var editing by remember { mutableStateOf(false) }
  BackHandler(enabled = focus && !editing) { focus = false }
  var type by remember { mutableStateOf("") }
@@ -51,14 +51,23 @@ private fun TrackingRound() {
  val date = LocalDate.of(2026, 9, 10)
  fun block(id: Int, lane: Lane, title: String, category: String, from: Int, to: Int) = TimeBlock(id, lane, 1, category, null, null, null, null, startMinute = from, endMinute = to, name = title)
  val plans = listOf(block(1, Lane.Planned, "Writing a proposal", "Work", 600, 720), block(2, Lane.Planned, "Lunch", "Break", 720, 780))
+ val suggested = plans.find { active != null && it.startMinute > active.start && now >= it.startMinute && now < it.endMinute }
+ val suggestion: @Composable () -> Unit = {
+  if(suggested != null) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow, shape=MaterialTheme.shapes.medium, modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)) {
+   Row(Modifier.padding(start=12.dp,end=4.dp), verticalAlignment=Alignment.CenterVertically) {
+    Text("${suggested.name} is planned now", modifier=Modifier.weight(1f), style=MaterialTheme.typography.bodySmall, fontWeight=androidx.compose.ui.text.font.FontWeight.Medium)
+    TextButton(onClick={start(suggested.taskTypeName,suggested.name ?: "")}) { Text("Switch") }
+   }
+  }
+ }
  val actual = entries.mapIndexed { i, e -> block(100+i, Lane.Actual, e.name.ifBlank { e.type }, e.type, e.start, e.end ?: now) }
  val day = Day(date, 9, 15, false, plans + actual, timezone = "Asia/Singapore", today = date, serverNowMinute = now)
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 3 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 4 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=810; entries=listOf(Entry("unspecified", "", 800)); editing=false; focus=true; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=715; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
   if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -83,6 +92,7 @@ private fun TrackingRound() {
      Button(enabled=type.isNotEmpty(), onClick={entries=entries.map { if(it.end==null) it.copy(type=type,name="") else it };type="";name=""}, modifier=Modifier.fillMaxWidth()) { Text("Apply from ${clock(active.start)}") }
      TextButton(enabled=type.isNotEmpty(), onClick={start(type,"");type="";name=""}) { Text("Start now") }
     } else TextButton(onClick={type="";name="";editing=true}) { Text("Switch activity") }
+    suggestion()
    }
    Text("Tracking continues when you exit Focus.", modifier=Modifier.fillMaxWidth().padding(20.dp), textAlign=TextAlign.Center, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
   } else {
@@ -107,6 +117,7 @@ private fun TrackingRound() {
     }) { Text("Focus") }
    }
   }
+  Box(Modifier.padding(horizontal=20.dp)) { suggestion() }
   Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal=16.dp)) {
    DayTimeline(day=day, selectedBlockId=null, draft=null, onTapSlot={_,_->}, onSelectBlock={}, onCommitMove={_,_,_->}, blockGesturesEnabled=false)
   }

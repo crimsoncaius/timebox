@@ -30,3 +30,7 @@ User accepted the native Focus layout and Android Back exiting Focus while prese
 Starts in Focus at 13:30, unspecified since 13:20. Inline required type chips and optional name, Apply from 13:20 retains original start; Start now preserves earlier unspecified interval. No modal dismissal. Focus content scrolls with keyboard insets. Reset restores sample; no persistence. Build succeeded; emulator verified applying Break with no name resolves prompt and retains 10 minutes from 13:20. Human review pending.
 
 Round 3 feedback: user accepted the prompt with removal of name input. Unspecified Focus prompt now asks only for Task Type and timing; stores no name. Explicit switch sheet remains separately scoped. Build passed; updated app installed and launched.
+
+## Round 4: planned suggestion
+
+Round 3 accepted with no name field in unspecified prompt. Round 4 starts at 11:55 tracking Writing. Advance five minutes to see a subtle surface with Lunch is planned now and Switch. Available above Day timeline and under Focus controls. No automatic transition. Build passed; emulator verified Writing persists at noon and explicit switch begins Lunch and clears suggestion. Reset left ready; visual review pending.
