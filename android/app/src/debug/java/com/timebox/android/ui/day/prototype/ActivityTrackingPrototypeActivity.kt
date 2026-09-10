@@ -35,19 +35,23 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
+ val context = androidx.compose.ui.platform.LocalContext.current
+ var stopEditing by remember { mutableStateOf(false) }
+ var changeAt by remember { mutableIntStateOf(735) }
  var checkInOpen by remember { mutableStateOf(true) }
- var pending by remember { mutableStateOf(true) }
+ var pending by remember { mutableStateOf(false) }
  var focus by remember { mutableStateOf(false) }
- var now by remember { mutableIntStateOf(690) }
+ var now by remember { mutableIntStateOf(735) }
  var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600))) }
  var editing by remember { mutableStateOf(false) }
- BackHandler(enabled = focus && !editing) { focus = false }
+ BackHandler(enabled = focus && !editing && !stopEditing) { focus = false }
  var type by remember { mutableStateOf("") }
  var name by remember { mutableStateOf("") }
  val active = entries.lastOrNull { it.end == null }
  val needsDescription = active?.type == "unspecified" && active.name.isBlank()
- fun start(nextType: String, nextName: String) {
-  entries = entries.map { if(it.end == null) it.copy(end = now) else it } + Entry(nextType, nextName, now)
+ fun start(nextType: String, nextName: String, at: Int = now) {
+  if(at > now || (active != null && at < active.start)) return
+  entries = entries.map { if(it.end == null) it.copy(end = at) else it } + Entry(nextType, nextName, at)
   editing = false
   pending = false
  }
@@ -71,9 +75,9 @@ private fun TrackingRound() {
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 5 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 6 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=690; pending=true; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=735; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
   if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -97,7 +101,7 @@ private fun TrackingRound() {
      Spacer(Modifier.height(12.dp))
      Button(enabled=type.isNotEmpty(), onClick={entries=entries.map { if(it.end==null) it.copy(type=type,name="") else it };type="";name=""}, modifier=Modifier.fillMaxWidth()) { Text("Apply from ${clock(active.start)}") }
      TextButton(enabled=type.isNotEmpty(), onClick={start(type,"");type="";name=""}) { Text("Start now") }
-    } else TextButton(onClick={type="";name="";editing=true}) { Text("Switch activity") }
+    } else TextButton(onClick={type="";name="";changeAt=now;editing=true}) { Text("Switch activity") }
     suggestion()
     checkIn()
    }
@@ -115,8 +119,8 @@ private fun TrackingRound() {
       Text(active.name.ifBlank { active.type }, maxLines=1, overflow=TextOverflow.Ellipsis, style=MaterialTheme.typography.bodySmall)
       Text("Recording · ${now-active.start} min", style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
      }
-     TextButton(onClick={type="";name="";editing=true}) { Text("Switch") }
-     TextButton(onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it };pending=false}) { Text("Stop") }
+     TextButton(onClick={type="";name="";changeAt=now;editing=true}) { Text("Switch") }
+     TextButton(onClick={changeAt=now;stopEditing=true}) { Text("Stop") }
     }
     TextButton(onClick={
      if(active == null) { val plan=plans.find { now >= it.startMinute && now < it.endMinute }; start(plan?.taskTypeName ?: "unspecified", plan?.name ?: "") }
@@ -146,18 +150,41 @@ private fun TrackingRound() {
    Text("We haven't detected device activity for a while. Your time is still being recorded.", style=MaterialTheme.typography.bodyLarge, color=MaterialTheme.colorScheme.onSurfaceVariant)
    Spacer(Modifier.height(8.dp))
    Button(onClick={pending=false;checkInOpen=false}, shape=androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)) { Text("Still doing this") }
-   OutlinedButton(onClick={checkInOpen=false;type="";name="";editing=true}, shape=androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)) { Text("Switch activity") }
+   OutlinedButton(onClick={checkInOpen=false;type="";name="";changeAt=now;editing=true}, shape=androidx.compose.foundation.shape.RoundedCornerShape(12.dp), modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)) { Text("Switch activity") }
   }
  }
- if(editing) ModalBottomSheet(onDismissRequest={editing=false}) {
-  Column(Modifier.fillMaxWidth().imePadding().padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-   Text("Switch activity", style=MaterialTheme.typography.titleLarge)
-   Text("Task type", style=MaterialTheme.typography.labelMedium)
-   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-    listOf("Work", "Break", "Personal").forEach { choice -> FilterChip(selected=type==choice, onClick={type=choice}, label={Text(choice)}) }
+ if((editing || stopEditing) && active != null) ModalBottomSheet(onDismissRequest={editing=false;stopEditing=false}, sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
+  val valid = changeAt in active.start..now
+  Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
+   Text(if(stopEditing) "Finish tracking" else "Switch activity", style=MaterialTheme.typography.titleLarge)
+   if(!stopEditing) {
+    Text("Task type", style=MaterialTheme.typography.labelMedium)
+    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+     listOf("Work", "Break", "Personal").forEach { choice -> FilterChip(selected=type==choice, onClick={type=choice}, label={Text(choice)}) }
+    }
+    OutlinedTextField(value=name, onValueChange={name=it}, label={Text("Activity name (optional)")}, singleLine=true, modifier=Modifier.fillMaxWidth())
    }
-   OutlinedTextField(value=name, onValueChange={name=it}, label={Text("Activity name (optional)")}, singleLine=true, modifier=Modifier.fillMaxWidth())
-   Button(enabled=type.isNotEmpty(), onClick={start(type,name.trim())}, modifier=Modifier.fillMaxWidth()) { Text("Switch now") }
+   HorizontalDivider()
+   Text(if(stopEditing) "When did you stop?" else "When did you switch?", style=MaterialTheme.typography.labelMedium)
+   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+    OutlinedButton(onClick={android.app.TimePickerDialog(context, { _, h, m -> changeAt=h*60+m }, changeAt/60,changeAt%60,true).show()}) { Text(clock(changeAt)) }
+    TextButton(onClick={changeAt=(now-15).coerceAtLeast(active.start)}) { Text("15 min ago") }
+   }
+   Surface(color=MaterialTheme.colorScheme.surfaceContainerLow,shape=MaterialTheme.shapes.medium,modifier=Modifier.fillMaxWidth()) {
+    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+     Text("After this change", style=MaterialTheme.typography.labelMedium)
+     if(valid) {
+      Row { Text(active.name.ifBlank { active.type },modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodySmall); Text("${clock(active.start)}–${clock(changeAt)}",style=MaterialTheme.typography.bodySmall) }
+      HorizontalDivider()
+      Row { Text(if(stopEditing) "Untracked" else name.ifBlank { type.ifBlank { "Next activity" } },modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodySmall); Text("${clock(changeAt)}–${if(stopEditing) clock(now) else "now"}",style=MaterialTheme.typography.bodySmall) }
+     } else Text("Choose a time between ${clock(active.start)} and ${clock(now)}.",style=MaterialTheme.typography.bodySmall)
+    }
+   }
+   Button(enabled=valid && (stopEditing || type.isNotEmpty()),onClick={
+    if(stopEditing) { entries=entries.map { if(it.end==null) it.copy(end=changeAt) else it };pending=false;stopEditing=false }
+    else start(type,name.trim(),changeAt)
+   },modifier=Modifier.fillMaxWidth()) { Text("${if(stopEditing) "Stop" else "Switch"} at ${clock(changeAt)}") }
+   TextButton(onClick={editing=false;stopEditing=false},modifier=Modifier.fillMaxWidth()) { Text("Cancel") }
   }
  }
 }

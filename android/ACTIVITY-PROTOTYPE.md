@@ -48,3 +48,9 @@ Round 5 revised to user's supplied visual reference: rounded modal bottom sheet,
 ### Round 5 verdict
 
 User accepted the reference-inspired bottom sheet: dimmed background, rounded top corners, clear heading/activity hierarchy and two full-width actions. Dismissal leaves a persistent Check-in waiting reminder while tracking continues. This supersedes the earlier inline presentation for Android; web retains its accepted inline design. Stop remains available in Day outside the sheet and absent in Focus. Next round: native earlier switch/stop correction with affected-time preview.
+
+## Round 6: native correction sheet
+
+Sample at 12:15, Writing since 10. Switch sheet now groups task details, native time-picker action, 15 min ago shortcut, and After this change preview. Stop in Day opens matching timing/preview sheet. Cancel/Back leaves recording unchanged. Bounds limited to current interval; wider history corrections not represented. No Stop inside Focus. Human review pending.
+
+Validation: assembleDebug passed; emulator verified native correction sheet and switch to Break at noon yielding 15 recorded minutes at 12:15. Revised sheet left open for review.
