@@ -15,6 +15,7 @@ import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteIn
 import { dateInTimeZone } from '../../lib/battlePlan'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
+import { TransientFeedback } from '../../components/TransientFeedback'
 import {
   addDaysIso,
   minuteFromPointerYInVisibleLane,
@@ -832,12 +833,10 @@ export function TodayPage() {
             </div>
           )}
 
-          {completionUndo ? (
-            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">
-              <span>Task completed · {completionUndo.removed} future Planned {completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.</span>
+          {completionUndo && !recordActualUndo ? (
+            <TransientFeedback floating title="Task completed" detail={`${completionUndo.removed} future Planned ${completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.`} action={
               <button
                 type="button"
-                className="font-medium text-primary underline"
                 onClick={async () => {
                   setError(null)
                   try {
@@ -849,13 +848,12 @@ export function TodayPage() {
               >
                 Undo
               </button>
-            </div>
+            } />
           ) : null}
-          {dayNotice ? <div role="status" className="mb-6 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">{dayNotice}</div> : null}
+          {dayNotice && !completionUndo && !recordActualUndo ? <TransientFeedback floating title={dayNotice} /> : null}
           {recordActualUndo ? (
-            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">
-              <span>Actual recorded as planned.</span>
-              <button type="button" className="font-medium text-primary underline" onClick={async () => {
+            <TransientFeedback floating title="Actual recorded as planned." action={
+              <button type="button" onClick={async () => {
                 setError(null)
                 try {
                   await api.undoRecordActualAsPlanned(recordActualUndo.plannedBlockId, recordActualUndo.token)
@@ -863,7 +861,7 @@ export function TodayPage() {
                   setDay(await api.getDay(date))
                 } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo recorded Actual') }
               }}>Undo</button>
-            </div>
+            } />
           ) : null}
 
           <div className="mb-6 xl:hidden">

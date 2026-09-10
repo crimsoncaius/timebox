@@ -30,6 +30,7 @@ import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.SectionCard
 import com.timebox.android.ui.components.SectionHeader
 import com.timebox.android.ui.components.TimeboxChip
+import com.timebox.android.ui.components.TransientFeedback
 
 /** A small, data-free component gallery used for theme changes and visual QA. */
 @Composable
@@ -47,6 +48,21 @@ fun ThemePreviewScreen(onBack: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TextButton(onClick = onBack) { Text("Back to Settings") }
+
+        SectionHeader("Transient Feedback", "Floating paper · actions and recovery")
+        TransientFeedback(
+            message = "Task completed",
+            detail = "2 future Planned Blocks removed.",
+            actionLabel = "Undo",
+            onDismiss = {},
+        )
+        TransientFeedback(
+            message = "Could not restore task",
+            detail = "Try again when your connection returns.",
+            actionLabel = "Retry",
+            onDismiss = {},
+            isError = true,
+        )
 
         SectionCard {
             SectionHeader("Surface ladder", "Page → embedded → card → raised → selected")

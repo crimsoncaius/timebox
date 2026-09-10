@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, type DueReminder } from '../lib/api'
+import { TransientFeedback } from './TransientFeedback'
 
 type Toast = DueReminder & { key: number }
 
@@ -59,26 +60,25 @@ export function ReminderWatcher() {
 
   if (toasts.length === 0) return null
   return (
-    <div className="fixed bottom-5 right-5 z-100 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2" aria-live="polite">
+    <div className="feedback-reminders" aria-live="polite">
       {toasts.map((toast) => (
-        <div
+        <TransientFeedback
           key={toast.key}
-          className="rounded-2xl bg-on-surface px-4 py-3 text-surface shadow-[0_16px_50px_rgba(0,0,0,0.22)] dark:bg-dark-on-surface dark:text-dark-background"
-        >
-          <div className="flex items-start gap-3">
+          role="group"
+          onDismiss={() => dismiss(toast.key)}
+          dismissLabel="Dismiss reminder"
+          title={
             <button
               type="button"
-              className="min-w-0 flex-1 text-left"
+              className="feedback-reminder-link"
               onClick={() => navigate(`/battle-plan?task=${toast.id}`)}
             >
-              <span className="block font-headline text-xs uppercase tracking-[0.16em] opacity-65">Reminder</span>
-              <span className="mt-1 block truncate font-body text-sm">{toast.title}</span>
+              <span className="feedback-reminder-label">Reminder</span>
+              <span className="feedback-reminder-title">{toast.title}</span>
+              <span className="feedback-reminder-open">Open task</span>
             </button>
-            <button type="button" aria-label="Dismiss reminder" onClick={() => dismiss(toast.key)}>
-              <span className="material-symbols-outlined text-[18px]" aria-hidden>close</span>
-            </button>
-          </div>
-        </div>
+          }
+        />
       ))}
     </div>
   )

@@ -1115,7 +1115,7 @@ class BattlePlanScreenTest {
 
         compose.onNodeWithText("Draft launch brief moved to Trash").fetchSemanticsNode()
         compose.onNodeWithText("Undo").assertIsEnabled()
-        compose.onNodeWithText("Dismiss").assertIsEnabled()
+        compose.onNodeWithContentDescription("Dismiss").assertIsEnabled()
     }
 
     @Test
@@ -1137,9 +1137,10 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Could not restore Draft launch brief. Restore unavailable").fetchSemanticsNode()
+        compose.onNodeWithText("Could not restore Draft launch brief").fetchSemanticsNode()
+        compose.onNodeWithText("Restore unavailable").fetchSemanticsNode()
         compose.onNodeWithText("Retry").assertIsEnabled()
-        compose.onNodeWithText("Dismiss").assertIsEnabled()
+        compose.onNodeWithContentDescription("Dismiss").assertIsEnabled()
     }
 
     @Test
@@ -1157,7 +1158,7 @@ class BattlePlanScreenTest {
 
         compose.onNodeWithText("Restoring Draft launch brief").fetchSemanticsNode()
         compose.onNodeWithText("Restoring…").assertIsNotEnabled()
-        compose.onNodeWithText("Dismiss").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Dismiss").assertIsNotEnabled()
     }
 
     @Test

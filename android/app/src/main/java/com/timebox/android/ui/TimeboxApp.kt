@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.Snackbar
+import com.timebox.android.ui.components.TransientFeedback
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -32,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -639,22 +642,19 @@ fun TimeboxApp(
             }
         }
 
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp)) { data ->
-            if (data.visuals.actionLabel != null) {
-                Snackbar(
-                    snackbarData = data,
-                    shape = RoundedCornerShape(12.dp),
-                    containerColor = colors.on,
-                    contentColor = colors.bg,
-                    actionColor = colors.bg,
+        // Keep the queued snackbar available while task-scoped Trash recovery owns the slot.
+        if (!withinBattlePlan || battlePlanState.trashUndo == null) {
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp)) { data ->
+                TransientFeedback(
+                    message = data.visuals.message,
+                    modifier = Modifier.semantics {
+                        paneTitle = "Feedback"
+                        dismiss { data.dismiss(); true }
+                    },
+                    actionLabel = data.visuals.actionLabel,
+                    onAction = data::performAction,
+                    onDismiss = if (data.visuals.withDismissAction) data::dismiss else null,
                 )
-            } else {
-                Box(
-                    Modifier.padding(horizontal = 16.dp).background(colors.on, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                ) {
-                    Text(data.visuals.message, style = TimeboxTheme.type.bodySmall, color = colors.bg)
-                }
             }
         }
 

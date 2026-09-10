@@ -36,6 +36,14 @@ _Avoid_: Task, tag, Block Name
 An optional user-defined identity for one Planned Block or Actual Block, distinct from its reusable Task Type and supporting Note. It remains the Block's own identity regardless of Battle Plan Task linkage.
 _Avoid_: Label, title, tag, Task Type
 
+**Transient Feedback**:
+A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app task reminders; it excludes validation, persistent errors, loading states, and native OS notifications.
+_Avoid_: Toast, notification, banner
+
+**Transient Feedback Variant**:
+The semantic form of Transient Feedback: general feedback, destructive undo, recoverable failure, or navigational feedback. Variants share a visual family while retaining their own actions, urgency, lifetime, and dismissal behavior.
+_Avoid_: One-size-fits-all toast
+
 **Work Mode**:
 A full-screen, present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
 _Avoid_: Task detail, Task status, timer mode

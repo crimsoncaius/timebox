@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { TransientFeedback } from '../../components/TransientFeedback'
 
 export type TrashUndoTarget = {
   noticeId: number
@@ -77,7 +78,13 @@ export function TrashUndoNotice({ target, onUndo, onDismiss, onExpire }: {
   const actionsDisabled = phase === 'restoring' || phase === 'expiring'
 
   return (
-    <div
+    <TransientFeedback
+      floating
+      error={isError}
+      title={isError ? `Could not restore ${target.title}` : `${target.title} moved to Trash`}
+      detail={isError ? failure : undefined}
+      onDismiss={onDismiss}
+      disabled={actionsDisabled}
       role={isError ? 'alert' : 'status'}
       aria-label={isError ? 'Trash undo failed' : 'Trash undo'}
       aria-live={isError ? 'assertive' : 'polite'}
@@ -87,19 +94,17 @@ export function TrashUndoNotice({ target, onUndo, onDismiss, onExpire }: {
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false)
       }}
-      className={`fixed bottom-5 left-1/2 z-100 flex -translate-x-1/2 items-center gap-4 rounded-full bg-on-surface px-5 py-3 text-sm text-surface shadow-xl transition-opacity duration-150 motion-reduce:transition-none dark:bg-dark-on-surface dark:text-dark-background ${phase === 'expiring' ? 'opacity-0' : 'opacity-100'}`}
-    >
-      {isError ? `Could not restore ${target.title}. ${failure}` : `${target.title} moved to Trash`}
+      className={`transition-opacity duration-150 motion-reduce:transition-none ${phase === 'expiring' ? 'opacity-0' : 'opacity-100'}`}
+      action={
       <button
         type="button"
         aria-label={phase === 'restoring' ? `Restoring ${target.title}` : undefined}
-        className="font-medium underline disabled:opacity-50"
         disabled={actionsDisabled}
         onClick={() => void restore()}
       >
         {phase === 'restoring' ? 'Restoring…' : isError ? 'Retry' : 'Undo'}
       </button>
-      <button type="button" aria-label="Dismiss" disabled={actionsDisabled} onClick={onDismiss}>×</button>
-    </div>
+      }
+    />
   )
 }

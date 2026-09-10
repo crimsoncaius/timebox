@@ -33,6 +33,7 @@ import { ProjectEditor } from './ProjectEditor'
 import { TaskComposer } from './TaskComposer'
 import { TaskDetailPanel } from './TaskDetailPanel'
 import { TrashUndoNotice, type TrashUndoTarget } from './TrashUndoNotice'
+import { TransientFeedback } from '../../components/TransientFeedback'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 
 type Scope = BattlePlanScope
@@ -409,18 +410,17 @@ export function BattlePlanPage() {
           </header>
 
           {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
-          {completionUndo ? (
-            <div className="mb-5 flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3 text-sm">
-              <span>Task completed · {completionUndo.removed} future Planned {completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.</span>
-              <button type="button" className="font-medium text-primary underline" onClick={async () => {
+          {completionUndo && !trashUndo ? (
+            <TransientFeedback floating title="Task completed" detail={`${completionUndo.removed} future Planned ${completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.`}
+              action={<button type="button" onClick={async () => {
                 setError(null)
                 try {
                   await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
                   setCompletionUndo(null)
                   await loadActive()
                 } catch (cause) { setError(errorMessage(cause)) }
-              }}>Undo</button>
-            </div>
+              }}>Undo</button>}
+            />
           ) : null}
           {loadedCollection !== collection ? <p className="text-on-surface-variant">Loading Battle Plan…</p> : collection === 'active' ? (
             <>
