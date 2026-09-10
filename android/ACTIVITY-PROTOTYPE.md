@@ -70,3 +70,7 @@ User accepted native recovery feedback.
 ## Round 8: Focus lifecycle presentation
 
 Starts in Focus with Lunch. Simulated Return +15m preserves ongoing activity and shows return feedback; Remote stop ends current record and exits Focus with explanation. Keep screen awake switch and visible-only request label are simulated, not actual wake APIs. Build passed; emulator verified remote stop returns to Day with tracking off after advancing 15 minutes. Reset left Focus ready. Real background/restart durability, notification presentation, planning restrictions and connected review remain separate work. User verdict pending.
+
+### Round 8 verdict
+
+User accepted the Focus lifecycle presentation: return feedback, visible-only wake preference, and remote-stop exit explanation. This accepts the simulated UX only, not real platform integration. Remaining review includes planning-entry restriction, direct Task selection, notification presentation, and connected experience before closing the Android prototype ticket.
