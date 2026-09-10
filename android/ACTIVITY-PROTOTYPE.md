@@ -74,3 +74,7 @@ Starts in Focus with Lunch. Simulated Return +15m preserves ongoing activity and
 ### Round 8 verdict
 
 User accepted the Focus lifecycle presentation: return feedback, visible-only wake preference, and remote-stop exit explanation. This accepts the simulated UX only, not real platform integration. Remaining review includes planning-entry restriction, direct Task selection, notification presentation, and connected experience before closing the Android prototype ticket.
+
+## Round 9: direct Task tracking handoff
+
+Minimal native Battle Plan fixture with Track beside each Task. One tap switches immediately using its title/type and returns to Day with brief feedback; no Planned Block required or created. Fixture models visible handoff, not real Task identity/persistence. Build passed; emulator verified Track on Read a chapter returns to Day recording that activity, preserving prior intervals. Reset left Task list ready. Human verdict pending; planning-entry and connected review remain.

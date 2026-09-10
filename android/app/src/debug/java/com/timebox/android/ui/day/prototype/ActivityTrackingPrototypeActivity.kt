@@ -35,6 +35,7 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
+ var taskView by remember { mutableStateOf(true) }
  var offline by remember { mutableStateOf(false) }
  var keepAwake by remember { mutableStateOf(true) }
  var lifecycleNotice by remember { mutableStateOf("") }
@@ -44,13 +45,14 @@ private fun TrackingRound() {
  var changeAt by remember { mutableIntStateOf(750) }
  var checkInOpen by remember { mutableStateOf(true) }
  var pending by remember { mutableStateOf(false) }
- var focus by remember { mutableStateOf(true) }
+ var focus by remember { mutableStateOf(false) }
  var now by remember { mutableIntStateOf(750) }
  var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600,720), Entry("Break", "Lunch", 720))) }
  var editing by remember { mutableStateOf(false) }
  BackHandler(enabled = focus && !editing && !stopEditing) { focus = false }
  var type by remember { mutableStateOf("") }
  var name by remember { mutableStateOf("") }
+ BackHandler(enabled=taskView) { taskView=false }
  val active = entries.lastOrNull { it.end == null }
  val needsDescription = active?.type == "unspecified" && active.name.isBlank()
  fun start(nextType: String, nextName: String, at: Int = now) {
@@ -88,9 +90,9 @@ private fun TrackingRound() {
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 8 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 9 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=750; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=true; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=750;taskView=true; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
    Text("SIMULATE",style=MaterialTheme.typography.labelSmall,modifier=Modifier.weight(1f))
@@ -103,7 +105,21 @@ private fun TrackingRound() {
     TextButton(onClick={lifecycleNotice=""}) { Text("Got it") }
    }
   }
-  if (focus && active != null) {
+  if(taskView) {
+   Column(Modifier.weight(1f).fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+    Text("Battle Plan",style=MaterialTheme.typography.headlineMedium)
+    Text("Ready to work on",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    listOf("Read a chapter" to "Personal", "Draft recommendations" to "Work").forEach { (title, category) ->
+     Surface(color=MaterialTheme.colorScheme.surfaceContainerLow,shape=MaterialTheme.shapes.medium) {
+      Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically) {
+       Column(Modifier.weight(1f)) { Text(title,style=MaterialTheme.typography.titleMedium);Text(category,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) }
+       TextButton(onClick={start(category,title);taskView=false;lifecycleNotice="Tracking $title"}) { Text("Track") }
+      }
+     }
+    }
+    TextButton(onClick={taskView=false}) { Text("Back to Day") }
+   }
+  } else if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
     Text("Focus", style=MaterialTheme.typography.labelMedium, modifier=Modifier.weight(1f))
     TextButton(onClick={focus=false}) { Text("Exit Focus") }
@@ -167,7 +183,7 @@ private fun TrackingRound() {
    DayTimeline(day=day, selectedBlockId=null, draft=null, onTapSlot={_,_->}, onSelectBlock={}, onCommitMove={_,_,_->}, blockGesturesEnabled=false)
   }
   Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement=Arrangement.SpaceAround) {
-   listOf("Day", "Battle Plan", "Chronicle", "Settings").forEach { Text(it, style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant) }
+   listOf("Day", "Battle Plan", "Chronicle", "Settings").forEach { label -> if(label == "Battle Plan") TextButton(onClick={taskView=true}) { Text(label,style=MaterialTheme.typography.labelSmall) } else Text(label, style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant) }
   }
  }
  }
