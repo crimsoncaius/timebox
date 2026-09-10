@@ -61,3 +61,9 @@ URL: /day/2026-09-10?variant=A&round=3. Reset repeats fixture. Previous rounds r
 ### Round 3 verdict
 
 User accepted the prompt and timing choice. Settled: persistent inline question for an unnamed unspecified activity in Focus; required task type, optional name; applying describes the current interval from its original start, while Start now preserves earlier unspecified time. A meaningful type resolves the prompt without requiring a name. Next unresolved round: quiet planned-block transition suggestions while tracking continues; no automatic activity switch.
+
+## Round 4 — planned activity suggestions (awaiting review)
+
+Question: is a quiet inline suggestion noticeable enough without interrupting Day or Focus? Opens at 11:55 while tracking Writing a proposal since 10:00. Advance +5 min to noon: Lunch is planned now, with Switch to Lunch. Day places it below compact tracking; Focus places it below activity controls. Existing accepted layouts remain otherwise stable. No automatic switch or dismissal requirement. Suggestion ends when its plan ends, tracking stops, or that plan is adopted. Switching assumes plan details and starts at the current time, preserving earlier actual time. Late correction is a later round.
+
+URL: /day/2026-09-10?variant=A&round=4. Reset repeats the scenario. Build passed. Browser verified no suggestion before noon, tracking unchanged at noon, suggestion visible in Day and Focus, and explicit switch at 12:05 starting Lunch then and clearing suggestion. User verdict pending.
