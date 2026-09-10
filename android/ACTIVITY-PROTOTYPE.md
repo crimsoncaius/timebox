@@ -62,3 +62,11 @@ User accepted native correction sheet and preview.
 ## Round 7: offline recovery feedback
 
 Starts offline with Lunch from noon at 12:30. Scripted Reconnect receives newer Reading change from 12:10, preserves Writing and Lunch before that boundary. Compact offline/synced text, dismissible explanation available in Day and Focus. No real persistence/network/conflict engine. Build passed; emulator verified Reading 20 minutes, Synced status, explanation and prior timeline retained. Reset ready; human verdict pending. Lifecycle, notification presentation and connected review remain.
+
+### Round 7 verdict
+
+User accepted native recovery feedback.
+
+## Round 8: Focus lifecycle presentation
+
+Starts in Focus with Lunch. Simulated Return +15m preserves ongoing activity and shows return feedback; Remote stop ends current record and exits Focus with explanation. Keep screen awake switch and visible-only request label are simulated, not actual wake APIs. Build passed; emulator verified remote stop returns to Day with tracking off after advancing 15 minutes. Reset left Focus ready. Real background/restart durability, notification presentation, planning restrictions and connected review remain separate work. User verdict pending.

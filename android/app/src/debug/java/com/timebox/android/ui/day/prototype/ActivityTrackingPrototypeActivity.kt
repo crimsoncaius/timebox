@@ -35,14 +35,16 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
- var offline by remember { mutableStateOf(true) }
+ var offline by remember { mutableStateOf(false) }
+ var keepAwake by remember { mutableStateOf(true) }
+ var lifecycleNotice by remember { mutableStateOf("") }
  var remoteNotice by remember { mutableStateOf(false) }
  val context = androidx.compose.ui.platform.LocalContext.current
  var stopEditing by remember { mutableStateOf(false) }
  var changeAt by remember { mutableIntStateOf(750) }
  var checkInOpen by remember { mutableStateOf(true) }
  var pending by remember { mutableStateOf(false) }
- var focus by remember { mutableStateOf(false) }
+ var focus by remember { mutableStateOf(true) }
  var now by remember { mutableIntStateOf(750) }
  var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600,720), Entry("Break", "Lunch", 720))) }
  var editing by remember { mutableStateOf(false) }
@@ -86,16 +88,20 @@ private fun TrackingRound() {
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 7 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 8 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=750; offline=true;remoteNotice=false; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=750; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=true; type=""; name=""}) { Text("Reset") }
   }
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-   Text("SIMULATED",style=MaterialTheme.typography.labelSmall,modifier=Modifier.weight(1f))
-   TextButton(enabled=offline,onClick={
-    entries=entries.filter { it.start<730 }.map { if(it.end==null || it.end>730) it.copy(end=730) else it } + Entry("Personal","Reading",730)
-    offline=false;remoteNotice=true;pending=false;editing=false;stopEditing=false
-   }) { Text("Reconnect: newer change") }
+   Text("SIMULATE",style=MaterialTheme.typography.labelSmall,modifier=Modifier.weight(1f))
+   TextButton(onClick={now+=15;lifecycleNotice="Back in Focus. Your activity continued while away."}) { Text("Return +15m") }
+   TextButton(enabled=active!=null,onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it };focus=false;pending=false;editing=false;stopEditing=false;lifecycleNotice="Tracking stopped on another device. Focus ended."}) { Text("Remote stop") }
+  }
+  if(lifecycleNotice.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow,modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp)) {
+   Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
+    Text(lifecycleNotice,style=MaterialTheme.typography.bodySmall,modifier=Modifier.weight(1f))
+    TextButton(onClick={lifecycleNotice=""}) { Text("Got it") }
+   }
   }
   if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -124,6 +130,13 @@ private fun TrackingRound() {
     suggestion()
     checkIn()
     recovery()
+   }
+   Row(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalAlignment=Alignment.CenterVertically) {
+    Column(Modifier.weight(1f)) {
+     Text("Keep screen awake",style=MaterialTheme.typography.bodySmall)
+     Text(if(keepAwake) "Requested while visible · simulated" else "Off",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    Switch(checked=keepAwake,onCheckedChange={keepAwake=it})
    }
    Text("Tracking continues when you exit Focus.", modifier=Modifier.fillMaxWidth().padding(20.dp), textAlign=TextAlign.Center, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
   } else {
