@@ -24,3 +24,7 @@ Round 1 accepted by user. Added quiet Focus control beside tracking. Starts imme
 ### Round 2 verdict
 
 User accepted the native Focus layout and Android Back exiting Focus while preserving tracking. Next unresolved presentation: persistent unspecified-activity prompt in Focus, task type first with optional name, original-start versus Start now choice.
+
+## Round 3: persistent unspecified prompt
+
+Starts in Focus at 13:30, unspecified since 13:20. Inline required type chips and optional name, Apply from 13:20 retains original start; Start now preserves earlier unspecified interval. No modal dismissal. Focus content scrolls with keyboard insets. Reset restores sample; no persistence. Build succeeded; emulator verified applying Break with no name resolves prompt and retains 10 minutes from 13:20. Human review pending.
