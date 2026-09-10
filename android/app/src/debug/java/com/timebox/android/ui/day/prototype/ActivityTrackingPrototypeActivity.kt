@@ -35,7 +35,9 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
- var planning by remember { mutableStateOf(true) }
+ var simulations by remember { mutableStateOf(false) }
+ var remoteAt by remember { mutableIntStateOf(730) }
+ var planning by remember { mutableStateOf(false) }
  var taskView by remember { mutableStateOf(false) }
  var offline by remember { mutableStateOf(false) }
  var keepAwake by remember { mutableStateOf(true) }
@@ -47,8 +49,8 @@ private fun TrackingRound() {
  var checkInOpen by remember { mutableStateOf(true) }
  var pending by remember { mutableStateOf(false) }
  var focus by remember { mutableStateOf(false) }
- var now by remember { mutableIntStateOf(750) }
- var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600,720), Entry("Break", "Lunch", 720))) }
+ var now by remember { mutableIntStateOf(715) }
+ var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600))) }
  var editing by remember { mutableStateOf(false) }
  BackHandler(enabled = focus && !editing && !stopEditing) { focus = false }
  var type by remember { mutableStateOf("") }
@@ -81,7 +83,7 @@ private fun TrackingRound() {
   if(remoteNotice) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow,shape=MaterialTheme.shapes.medium,modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)) {
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
     Text("Updated from another device",style=MaterialTheme.typography.titleSmall)
-    Text("A newer change set Reading from 12:10. Earlier recorded time was kept.",style=MaterialTheme.typography.bodySmall)
+    Text("A newer change set Reading from ${clock(remoteAt)}. Earlier recorded time was kept.",style=MaterialTheme.typography.bodySmall)
     TextButton(onClick={remoteNotice=false}) { Text("Got it") }
    }
   }
@@ -91,14 +93,22 @@ private fun TrackingRound() {
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 10 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("CONNECTED · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   TextButton(onClick={simulations=!simulations}) { Text("Scenarios") }
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=750;taskView=false;planning=true; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=715;taskView=false;planning=false; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
+  if(simulations) Column {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
    Text("SIMULATE",style=MaterialTheme.typography.labelSmall,modifier=Modifier.weight(1f))
-   TextButton(onClick={now+=15;lifecycleNotice="Back in Focus. Your activity continued while away."}) { Text("Return +15m") }
+   TextButton(enabled=active!=null,onClick={now+=15;lifecycleNotice=if(focus) "Back in Focus. Your activity continued while away." else "Your activity continued while away."}) { Text("Return +15m") }
    TextButton(enabled=active!=null,onClick={entries=entries.map { if(it.end==null) it.copy(end=now) else it };focus=false;pending=false;editing=false;stopEditing=false;lifecycleNotice="Tracking stopped on another device. Focus ended."}) { Text("Remote stop") }
+  }
+  Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+   TextButton(enabled=active!=null && !pending,onClick={pending=true;checkInOpen=true;simulations=false}) { Text("Inactivity") }
+   TextButton(onClick={offline=!offline; if(!offline) { remoteAt=now-5;entries=entries.filter { it.start<remoteAt }.map { if(it.end==null || it.end>remoteAt) it.copy(end=remoteAt) else it } + Entry("Personal","Reading",remoteAt);remoteNotice=true;pending=false;editing=false;stopEditing=false }}) { Text(if(offline) "Reconnect" else "Go offline") }
+   TextButton(onClick={now=810;entries=listOf(Entry("unspecified","",800));focus=true;taskView=false;planning=false;pending=false;editing=false;stopEditing=false;type="";name="";simulations=false}) { Text("Unspecified") }
+  }
   }
   if(lifecycleNotice.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow,modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp)) {
    Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically) {

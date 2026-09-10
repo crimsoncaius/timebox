@@ -90,3 +90,7 @@ Starts with simulated planning active. Focus is disabled and brief explanation p
 ### Round 10 verdict
 
 User accepted disabled Focus entry during planning, the explanation, and Finish planning enabling Focus without interrupting tracking. Connected Android review remains pending.
+
+## Connected Android review
+
+Accepted flows connected at 11:55 Writing; Scenarios collapses simulation controls for inactivity, unknown activity, return, offline/reconnect and remote stop. Plan day, Task tracking, correction sheets and Focus available. Build passed. Emulator verified Focus at noon, inactivity sheet Back dismissal leaves Check-in waiting, and planned Lunch switch clears old question while preserving Focus. No real persistence, detection, wake, notification or synchronization. Connected human verdict pending.
