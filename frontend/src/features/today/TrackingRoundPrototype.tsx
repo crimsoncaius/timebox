@@ -16,19 +16,21 @@ const planned: TimeBlock[] = [
 ]
 
 export function TrackingRoundPrototype() {
+  const combined = new URLSearchParams(location.search).get('round') === '8'
   const roundSeven = new URLSearchParams(location.search).get('round') === '7'
   const [offline, setOffline] = useState(roundSeven)
+  const [remoteStart, setRemoteStart] = useState(730)
   const [syncNotice, setSyncNotice] = useState(false)
-  const roundSix = new URLSearchParams(location.search).get('round') === '6' || roundSeven
+  const roundSix = new URLSearchParams(location.search).get('round') === '6' || roundSeven || combined
   const [endEditor, setEndEditor] = useState(false)
   const [atTime, setAtTime] = useState('12:15')
   const roundFive = new URLSearchParams(location.search).get('round') === '5'
   const [pending, setPending] = useState(roundFive)
-  const roundFour = new URLSearchParams(location.search).get('round') === '4'
+  const roundFour = new URLSearchParams(location.search).get('round') === '4' || combined
   const roundThree = new URLSearchParams(location.search).get('round') === '3'
   const roundTwo = new URLSearchParams(location.search).get('round') === '2' || roundThree || roundFour || roundFive || roundSix
   const initialEntries: Entry[] = roundSeven ? [{ name: 'Writing a proposal', taskType, plannedId: 1, start: 600, end: 720 }, { name: 'Lunch', taskType: taskTypes[1], plannedId: null, start: 720, end: null }] : roundFour || roundFive || roundSix ? [{ name: 'Writing a proposal', taskType, plannedId: 1, start: 600, end: null }] : roundThree ? [{ name: '', taskType: taskTypes[3], plannedId: null, start: 800, end: null }] : []
-  const initialNow = roundSeven ? 750 : roundSix ? 735 : roundFive ? 690 : roundFour ? 715 : roundThree ? 810 : 660
+  const initialNow = combined ? 715 : roundSeven ? 750 : roundSix ? 735 : roundFive ? 690 : roundFour ? 715 : roundThree ? 810 : 660
   const [focus, setFocus] = useState(roundThree)
   const [now, setNow] = useState(initialNow)
   const [entries, setEntries] = useState<Entry[]>(initialEntries)
@@ -65,11 +67,12 @@ export function TrackingRoundPrototype() {
   }
   function simulateReconnect() {
     // Scripted latest-made-change reconciliation, not a sync implementation.
-    const remoteAt = 730
+    const remoteAt = Math.min(730, now)
+    setRemoteStart(remoteAt)
     setEntries(old => [...old.filter(e => e.start < remoteAt).map(e => e.end === null || e.end > remoteAt ? { ...e, end: remoteAt } : e), { name: 'Reading', taskType: taskTypes[2], plannedId: null, start: remoteAt, end: null }])
     setOffline(false); setSyncNotice(true); setEditing(false); setEndEditor(false); setPending(false)
   }
-  const recoveryNotice = syncNotice && <div role="status" className="mt-4 rounded-lg bg-surface-container-low p-4 text-left text-xs text-on-surface-variant"><p className="font-medium text-on-surface">Activity updated from another device</p><p className="mt-1">A newer change set Reading from 12:10. Earlier recorded time was kept.</p><button className="mt-2 underline underline-offset-4" onClick={() => setSyncNotice(false)}>Got it</button></div>
+  const recoveryNotice = syncNotice && <div role="status" className="mt-4 rounded-lg bg-surface-container-low p-4 text-left text-xs text-on-surface-variant"><p className="font-medium text-on-surface">Activity updated from another device</p><p className="mt-1">A newer change set Reading from {time(remoteStart)}. Earlier recorded time was kept.</p><button className="mt-2 underline underline-offset-4" onClick={() => setSyncNotice(false)}>Got it</button></div>
   const day: DayRead = {
     id: 1, date, start_hour: 9, end_hour: 15, show_full_day: false, created_at: stamp, updated_at: stamp,
     time_blocks: planned,
@@ -104,13 +107,13 @@ export function TrackingRoundPrototype() {
   </section>
   return <div className="min-h-screen bg-surface font-body text-on-surface">
     <div className="bg-on-surface px-6 py-2 text-xs text-surface flex items-center justify-between gap-4">
-      <span>THROWAWAY · {roundSeven ? 'Round 7: offline recovery (simulated)' : roundSix ? 'Round 6: earlier switch or stop' : roundFive ? 'Round 5: inactivity check-in (simulated)' : roundFour ? 'Round 4: planned activity suggestion' : roundThree ? 'Round 3: describe an unspecified activity' : roundTwo ? 'Round 2: Focus entry and exit' : 'Round 1: tracking above the Day timeline'} · sample data</span>
-      <div className="flex items-center gap-4"><span>Sample clock {time(now)}</span>{roundSeven && <button disabled={!offline} onClick={simulateReconnect}>Reconnect · receive newer change</button>}<button onClick={() => setNow(n => n + 5)}>+5 min</button><button onClick={() => { setEntries(initialEntries); setNow(initialNow); setEditing(false); setName(''); setSelectedType(''); setFocus(roundThree); setPending(roundFive); setEndEditor(false); setAtTime(time(initialNow)); setOffline(roundSeven); setSyncNotice(false) }}>Reset</button></div>
+      <span>THROWAWAY · {combined ? 'Round 8: connected experience' : roundSeven ? 'Round 7: offline recovery (simulated)' : roundSix ? 'Round 6: earlier switch or stop' : roundFive ? 'Round 5: inactivity check-in (simulated)' : roundFour ? 'Round 4: planned activity suggestion' : roundThree ? 'Round 3: describe an unspecified activity' : roundTwo ? 'Round 2: Focus entry and exit' : 'Round 1: tracking above the Day timeline'} · sample data</span>
+      <div className="flex items-center gap-4"><span>Sample clock {time(now)}</span>{combined && <><button disabled={!current || pending} onClick={() => setPending(true)}>Simulate inactivity</button><button disabled={offline} onClick={() => setOffline(true)}>Go offline</button></>}{(roundSeven || combined) && <button disabled={!offline} onClick={simulateReconnect}>Reconnect · receive newer change</button>}<button onClick={() => setNow(n => n + 5)}>+5 min</button><button onClick={() => { setEntries(initialEntries); setNow(initialNow); setEditing(false); setName(''); setSelectedType(''); setFocus(roundThree); setPending(roundFive); setEndEditor(false); setAtTime(time(initialNow)); setOffline(roundSeven); setSyncNotice(false) }}>Reset</button></div>
     </div>
     {focus && current ? <main className="mx-auto flex min-h-[calc(100vh-40px)] max-w-5xl flex-col px-8 py-8">
       <header className="flex items-center justify-between"><span className="text-xs uppercase tracking-widest text-on-surface-variant">Focus</span><button className={button} onClick={() => { setFocus(false); setEditing(false); setName('') }}>Exit Focus</button></header>
       <section className="flex flex-1 flex-col items-center justify-center py-20 text-center" aria-label="Focused activity">
-        {roundSeven && <p className="mb-3 text-xs text-on-surface-variant">{offline ? "Offline · changes saved on this device" : "Synced"}</p>}
+        {(roundSeven || combined) && <p className="mb-3 text-xs text-on-surface-variant">{offline ? "Offline · changes saved on this device" : "Synced"}</p>}
         <p className="mb-5 text-xs text-on-surface-variant">Recording · since {time(current.start)}</p>
         <h1 className="max-w-2xl font-headline text-4xl sm:text-5xl">{needsDescription ? 'What are you doing right now?' : current.name || current.taskType.name}</h1>
         <p className="mt-6 text-2xl tabular-nums text-on-surface-variant">{now-current.start} min</p>
@@ -129,7 +132,7 @@ export function TrackingRoundPrototype() {
       <header className="mb-8"><p className="text-xs uppercase tracking-widest text-on-surface-variant">Day</p><h1 className="mt-2 font-headline text-3xl">Thursday, September 10, 2026</h1></header>
       <section aria-label="Activity tracking" className="mb-3">
         <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-on-surface-variant">
-          {roundSeven && <span>{offline ? "Offline · saved on this device" : "Synced"}</span>}
+          {(roundSeven || combined) && <span>{offline ? "Offline · saved on this device" : "Synced"}</span>}
           {current ? <><span aria-label="Tracking active" className="h-1.5 w-1.5 rounded-full bg-actual" /><span>{current.name || current.taskType.name}</span><span className="tabular-nums">· {now-current.start} min</span><button className={button} onClick={openSwitch}>Switch</button><button className={button} onClick={() => { if (roundSix) { setEditing(false); setEndEditor(true); setAtTime(time(now)) } else stopTracking() }}>Stop tracking</button></> : <button className={button} onClick={() => startOrSwitch()}>Start tracking</button>}
           {roundTwo && <button className={button} onClick={() => { if (!current) startOrSwitch(); setEditing(false); setEndEditor(false); setName(''); setFocus(true) }}>Focus</button>}
         </div>

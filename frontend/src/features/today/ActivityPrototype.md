@@ -105,3 +105,13 @@ User accepted the revised correction panel design and requested the next round.
 Question: does a compact offline/synced status plus a short remote-change explanation make reconciliation understandable? Sample starts offline at 12:30, Writing 10–12 and Lunch from noon. Reconnect simulates receiving a newer change: Reading since 12:10. Keeps earlier time, replaces only the later interval, displays nonblocking notice. Same status/notice available in Focus. Correction controls remain available.
 
 URL /day/2026-09-10?variant=A&round=7. This is a scripted visual scenario, not real persistence or conflict resolution. Reconnect always supplies the winning remote change; arbitrary mutation-order conflict cases are outside this experiment. Build passed; browser verified Writing retained, Lunch ends 12:10, Reading begins 12:10, and synced notice. Await review; combined experience and wider history corrections remain unresolved.
+
+### Round 7 verdict
+
+User accepted offline status and remote change explanation.
+
+## Round 8 — connected review (awaiting review)
+
+Combines accepted tracking, Focus, unspecified description, planned suggestions, inactivity, current-interval corrections, and scripted offline recovery at round=8. Starts tracking Writing at 11:55. Enter Focus, advance to noon, simulate inactivity, then switch to Lunch: both the suggestion and old question clear. Exit and correct activity; go offline/reconnect to inspect feedback. Reset restores starting scenario. Prior rounds remain references.
+
+Browser verified concurrent suggestion/check-in in Focus and clearing both after planned switch. Remote reconciliation remains scripted, not a conflict engine. Planning restrictions, native lifecycle/notifications, broader historical corrections, and actual persistence remain outside this throwaway fixture. Combined visual acceptance is pending; do not close the web prototype ticket yet.
