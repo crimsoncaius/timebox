@@ -41,3 +41,9 @@ Accepted user direction: tracking should be smaller and less obvious; Start trac
 ### Round 1 verdict
 
 User accepted the revised compact tracking line as discreet enough. Settled: quiet controls above the timeline; Start tracking immediately assumes the current Planned Block without a naming step (unnamed fallback when no plan exists). This is the accepted base for later rounds. Next experiment: Focus entry and exit, carrying this base forward. Focus layout and entry placement remain unresolved; no production implementation authorized.
+
+## Round 2 — Focus entry and exit (awaiting review)
+
+Question: does a quiet Focus action beside tracking lead naturally into a dedicated work screen? One provisional centered activity layout replaces the Day navigation/timeline. The accepted compact tracking base remains unchanged except for the Focus action. Entering while off starts tracking immediately; entering while active preserves the interval. Exit Focus returns to Day with tracking still active. No Stop action inside Focus; explicit Switch is available. Planning, unnamed naming prompts, inactivity, wake/lifecycle and remote events are outside this round.
+
+Review: /day/2026-09-10?variant=A&round=2. Enter Focus, advance the sample clock, exit, and observe the same activity interval. Round 1 remains at round=1. Build passed; browser verified start on entry, absence of Stop/navigation, and interval continuity after exit. Human verdict pending; do not advance dependent rounds yet.
