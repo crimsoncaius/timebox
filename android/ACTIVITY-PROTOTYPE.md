@@ -78,3 +78,7 @@ User accepted the Focus lifecycle presentation: return feedback, visible-only wa
 ## Round 9: direct Task tracking handoff
 
 Minimal native Battle Plan fixture with Track beside each Task. One tap switches immediately using its title/type and returns to Day with brief feedback; no Planned Block required or created. Fixture models visible handoff, not real Task identity/persistence. Build passed; emulator verified Track on Read a chapter returns to Day recording that activity, preserving prior intervals. Reset left Task list ready. Human verdict pending; planning-entry and connected review remain.
+
+### Round 9 verdict
+
+User accepted direct Task tracking: Track starts immediately using the Task and returns to Day, without requiring a Planned Block. This settles the handoff presentation; real Task identity/linking remains required in production. Next review: planning blocks Focus entry while ordinary tracking remains available, then connected Android review.
