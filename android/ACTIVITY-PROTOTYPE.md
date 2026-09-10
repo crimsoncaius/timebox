@@ -82,3 +82,7 @@ Minimal native Battle Plan fixture with Track beside each Task. One tap switches
 ### Round 9 verdict
 
 User accepted direct Task tracking: Track starts immediately using the Task and returns to Day, without requiring a Planned Block. This settles the handoff presentation; real Task identity/linking remains required in production. Next review: planning blocks Focus entry while ordinary tracking remains available, then connected Android review.
+
+## Round 10: planning and Focus boundary
+
+Starts with simulated planning active. Focus is disabled and brief explanation points to Finish planning. Tracking remains available. Finishing planning enables Focus without changing the record. Build passed; emulator verified disabled parent semantics, Finish planning, then Focus retaining Lunch since noon. Reset ready for review. Planning editing itself remains stubbed.

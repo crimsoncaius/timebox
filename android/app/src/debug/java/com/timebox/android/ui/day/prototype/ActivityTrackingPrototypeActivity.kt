@@ -35,7 +35,8 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
- var taskView by remember { mutableStateOf(true) }
+ var planning by remember { mutableStateOf(true) }
+ var taskView by remember { mutableStateOf(false) }
  var offline by remember { mutableStateOf(false) }
  var keepAwake by remember { mutableStateOf(true) }
  var lifecycleNotice by remember { mutableStateOf("") }
@@ -90,9 +91,9 @@ private fun TrackingRound() {
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 9 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 10 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=750;taskView=true; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=750;taskView=false;planning=true; offline=false;remoteNotice=false;keepAwake=true;lifecycleNotice=""; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
   }
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
    Text("SIMULATE",style=MaterialTheme.typography.labelSmall,modifier=Modifier.weight(1f))
@@ -157,7 +158,11 @@ private fun TrackingRound() {
    Text("Tracking continues when you exit Focus.", modifier=Modifier.fillMaxWidth().padding(20.dp), textAlign=TextAlign.Center, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
   } else {
   Column(Modifier.padding(horizontal=20.dp)) {
-   Text("Day", style=MaterialTheme.typography.headlineMedium)
+   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+    Text("Day", style=MaterialTheme.typography.headlineMedium, modifier=Modifier.weight(1f))
+    TextButton(onClick={planning=!planning}) { Text(if(planning) "Finish planning" else "Plan day") }
+   }
+   if(planning) Text("Planning · finish planning to enter Focus",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    Text(if(offline) "Offline · saved on this device" else "Synced",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    Text("Thursday, 10 September", style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
@@ -172,7 +177,8 @@ private fun TrackingRound() {
      TextButton(onClick={type="";name="";changeAt=now;editing=true}) { Text("Switch") }
      TextButton(onClick={changeAt=now;stopEditing=true}) { Text("Stop") }
     }
-    TextButton(onClick={
+    TextButton(enabled=!planning,onClick={
+     if(planning) return@TextButton
      if(active == null) { val plan=plans.find { now >= it.startMinute && now < it.endMinute }; start(plan?.taskTypeName ?: "unspecified", plan?.name ?: "") }
      focus=true
     }) { Text("Focus") }
