@@ -79,3 +79,11 @@ User accepted the refined suggestion with faint background and stronger text.
 Question: does a persistent inline check-in fit the accepted Day and Focus layouts without interrupting work? One layout begins with a simulated one-hour device-inactivity prompt. Tracking continues unanswered. Still doing this clears the prompt without changing recorded time. Switch opens the accepted type-first form; applying a switch clears the pending question. Stop is available in Day only. Focus entry/exit preserves the pending question. Reset repeats the sample.
 
 URL: /day/2026-09-10?variant=A&round=5. Device detection, notifications, re-trigger scheduling, and earlier-time corrections are not implemented in this placement experiment; immediate switch/stop only for now. Later recovery round covers time corrections. Browser verified persistence while advancing time and entering Focus, absence of Stop in Focus, and confirmation preserving the original start. Build passed. Await human feedback before dependent rounds.
+
+Round 5 refinement: separate the muted Still doing this? label from the activity on its own larger, semibold line, as requested. Shared by Day and Focus. Awaiting review.
+
+Round 5 action hierarchy refinement: filled Still doing this primary button; outlined Switch activity secondary button. Stop remains tertiary outside Focus. Requested to make actions clearly recognizable as buttons.
+
+### Round 5 verdict
+
+User accepted the refined inactivity prompt: small muted question label, larger semibold activity name, filled Still doing this primary button, outlined Switch activity secondary button, and quieter Stop outside Focus only. Placement and persistent nonblocking behavior accepted. Next unresolved experiment: correcting an activity switch or stop to an earlier time, with an affected-time preview. Offline/remote recovery and combined review remain later work.

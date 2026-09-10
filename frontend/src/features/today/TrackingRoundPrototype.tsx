@@ -71,9 +71,9 @@ export function TrackingRoundPrototype() {
     <div className="mt-3 flex gap-2"><button disabled={!selectedType} className={`${button} disabled:opacity-40`}>{needsDescription ? `Apply from ${time(current!.start)}` : 'Switch now'}</button>{needsDescription ? <button type="button" disabled={!selectedType} className={`${button} disabled:opacity-40`} onClick={() => startOrSwitch(name, Number(selectedType))}>Start now</button> : <button type="button" className={button} onClick={() => { setEditing(false); setName(''); setSelectedType('') }}>Cancel</button>}</div>
   </form>
   const inactivityPrompt = pending && current && <section aria-label="Inactivity check-in" className={`rounded-lg border border-outline-variant bg-surface-container-low p-4 text-left ${focus ? 'mt-10 w-full max-w-md' : 'mt-4'}`}>
-    <p className="text-sm font-medium">Still doing {current.name || current.taskType.name}?</p>
+    <p className="text-xs text-on-surface-variant">Still doing this?</p><p className="mt-1 text-lg font-semibold text-on-surface">{current.name || current.taskType.name}</p>
     <p className="mt-1 text-xs text-on-surface-variant">Your device has been quiet for an hour. Tracking is still running.</p>
-    <div className="mt-3 flex flex-wrap gap-2"><button className={`${button} font-medium text-on-surface`} onClick={() => { setPending(false); setEditing(false); setName(''); setSelectedType('') }}>Still doing this</button><button className={button} onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch activity</button>{!focus && <button className={button} onClick={stopTracking}>Stop tracking</button>}</div>
+    <div className="mt-3 flex flex-wrap gap-2"><button className="rounded-md bg-on-surface px-3 py-2 text-xs font-medium text-surface hover:opacity-90" onClick={() => { setPending(false); setEditing(false); setName(''); setSelectedType('') }}>Still doing this</button><button className="rounded-md border border-outline-variant bg-surface px-3 py-2 text-xs font-medium text-on-surface hover:bg-surface-container" onClick={() => { setSelectedType(''); setName(''); setEditing(true) }}>Switch activity</button>{!focus && <button className={button} onClick={stopTracking}>Stop tracking</button>}</div>
   </section>
   return <div className="min-h-screen bg-surface font-body text-on-surface">
     <div className="bg-on-surface px-6 py-2 text-xs text-surface flex items-center justify-between gap-4">
@@ -111,6 +111,8 @@ export function TrackingRoundPrototype() {
     </main></>}
   </div>
 }
+
+
 
 
 
