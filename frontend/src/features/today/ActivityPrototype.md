@@ -57,3 +57,7 @@ User accepted the Focus experience. Requested correction: switching should prima
 Previous round switching correction accepted by user's request to advance. Round 3 opens at 13:30 with an unspecified interval since 13:20, no current plan, and Focus active. Persistent inline question: What are you doing right now? Required task type and optional name; no dismissal or Stop. Apply from 13:20 describes the full current interval; Start now preserves earlier unspecified time. Choosing a meaningful task type resolves the prompt even without a name, reflecting the user's optional-name clarification. This interpretation and visual treatment await review.
 
 URL: /day/2026-09-10?variant=A&round=3. Reset repeats fixture. Previous rounds remain accessible. In-memory entry names stay optional; timeline display projection falls back to type name. Build and browser checks passed for applying from original start and splitting at now. No dependent round until feedback.
+
+### Round 3 verdict
+
+User accepted the prompt and timing choice. Settled: persistent inline question for an unnamed unspecified activity in Focus; required task type, optional name; applying describes the current interval from its original start, while Start now preserves earlier unspecified time. A meaningful type resolves the prompt without requiring a name. Next unresolved round: quiet planned-block transition suggestions while tracking continues; no automatic activity switch.
