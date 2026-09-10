@@ -8,6 +8,7 @@ import { TodayPage } from './features/today/TodayPage'
 import { BattlePlanPage } from './features/battle-plan/BattlePlanPage'
 import { ReminderWatcher } from './components/ReminderWatcher'
 import { ReadinessProvider } from './features/readiness/ReadinessProvider'
+import { ActivityPrototype } from './features/today/ActivityPrototype'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
 
@@ -35,6 +36,9 @@ function BattlePlanRoute() {
 }
 
 export default function App() {
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('variant')) {
+    return <BrowserRouter><ActivityPrototype /></BrowserRouter>
+  }
   return (
     <BrowserRouter>
       <AppRoutes />
