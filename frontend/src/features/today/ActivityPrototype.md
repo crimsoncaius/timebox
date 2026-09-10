@@ -37,3 +37,7 @@ Validated: TypeScript/Vite build, Focus control restriction, variant navigation,
 ### Round 1 feedback and revision
 
 Accepted user direction: tracking should be smaller and less obvious; Start tracking must immediately assume the current plan without asking for a name. Revised the large card into a quiet, right-aligned line above the timeline. Starting uses the current Planned Block, or unnamed when none exists. Explicit Switch retains its editor. Placement/visual revision still awaits review. Build passed; browser verified a single Start tracking click enters recording with Writing a proposal and no form.
+
+### Round 1 verdict
+
+User accepted the revised compact tracking line as discreet enough. Settled: quiet controls above the timeline; Start tracking immediately assumes the current Planned Block without a naming step (unnamed fallback when no plan exists). This is the accepted base for later rounds. Next experiment: Focus entry and exit, carrying this base forward. Focus layout and entry placement remain unresolved; no production implementation authorized.
