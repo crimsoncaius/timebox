@@ -35,14 +35,16 @@ private fun clock(n: Int) = "%02d:%02d".format(n / 60, n % 60)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrackingRound() {
+ var offline by remember { mutableStateOf(true) }
+ var remoteNotice by remember { mutableStateOf(false) }
  val context = androidx.compose.ui.platform.LocalContext.current
  var stopEditing by remember { mutableStateOf(false) }
- var changeAt by remember { mutableIntStateOf(735) }
+ var changeAt by remember { mutableIntStateOf(750) }
  var checkInOpen by remember { mutableStateOf(true) }
  var pending by remember { mutableStateOf(false) }
  var focus by remember { mutableStateOf(false) }
- var now by remember { mutableIntStateOf(735) }
- var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600))) }
+ var now by remember { mutableIntStateOf(750) }
+ var entries by remember { mutableStateOf(listOf(Entry("Work", "Writing a proposal", 600,720), Entry("Break", "Lunch", 720))) }
  var editing by remember { mutableStateOf(false) }
  BackHandler(enabled = focus && !editing && !stopEditing) { focus = false }
  var type by remember { mutableStateOf("") }
@@ -70,14 +72,30 @@ private fun TrackingRound() {
  val checkIn: @Composable () -> Unit = {
   if(pending && active != null) TextButton(onClick={checkInOpen=true}) { Text("Check-in waiting") }
  }
+ val recovery: @Composable () -> Unit = {
+  if(remoteNotice) Surface(color=MaterialTheme.colorScheme.surfaceContainerLow,shape=MaterialTheme.shapes.medium,modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)) {
+   Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    Text("Updated from another device",style=MaterialTheme.typography.titleSmall)
+    Text("A newer change set Reading from 12:10. Earlier recorded time was kept.",style=MaterialTheme.typography.bodySmall)
+    TextButton(onClick={remoteNotice=false}) { Text("Got it") }
+   }
+  }
+ }
  val actual = entries.mapIndexed { i, e -> block(100+i, Lane.Actual, e.name.ifBlank { e.type }, e.type, e.start, e.end ?: now) }
  val day = Day(date, 9, 15, false, plans + actual, timezone = "Asia/Singapore", today = date, serverNowMinute = now)
  Surface(modifier = Modifier.fillMaxSize()) {
  Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
   Row(Modifier.fillMaxWidth().padding(horizontal=12.dp), verticalAlignment=Alignment.CenterVertically) {
-   Text("PROTOTYPE 6 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
+   Text("PROTOTYPE 7 · ${clock(now)}", style=MaterialTheme.typography.labelSmall, modifier=Modifier.weight(1f))
    TextButton(onClick={now+=5}) { Text("+5 min") }
-   TextButton(onClick={now=735; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+   TextButton(onClick={now=750; offline=true;remoteNotice=false; stopEditing=false; pending=false; checkInOpen=true; entries=listOf(Entry("Work", "Writing a proposal", 600,720),Entry("Break","Lunch",720)); editing=false; focus=false; type=""; name=""}) { Text("Reset") }
+  }
+  Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
+   Text("SIMULATED",style=MaterialTheme.typography.labelSmall,modifier=Modifier.weight(1f))
+   TextButton(enabled=offline,onClick={
+    entries=entries.filter { it.start<730 }.map { if(it.end==null || it.end>730) it.copy(end=730) else it } + Entry("Personal","Reading",730)
+    offline=false;remoteNotice=true;pending=false;editing=false;stopEditing=false
+   }) { Text("Reconnect: newer change") }
   }
   if (focus && active != null) {
    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -85,6 +103,7 @@ private fun TrackingRound() {
     TextButton(onClick={focus=false}) { Text("Exit Focus") }
    }
    Column(Modifier.weight(1f).fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(28.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center) {
+    Text(if(offline) "Offline · saved on this device" else "Synced",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     Text("Recording since ${clock(active.start)}", style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(20.dp))
     Text(if(needsDescription) "What are you doing right now?" else active.name.ifBlank { active.type }, style=MaterialTheme.typography.headlineLarge, textAlign=TextAlign.Center)
@@ -104,11 +123,13 @@ private fun TrackingRound() {
     } else TextButton(onClick={type="";name="";changeAt=now;editing=true}) { Text("Switch activity") }
     suggestion()
     checkIn()
+    recovery()
    }
    Text("Tracking continues when you exit Focus.", modifier=Modifier.fillMaxWidth().padding(20.dp), textAlign=TextAlign.Center, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
   } else {
   Column(Modifier.padding(horizontal=20.dp)) {
    Text("Day", style=MaterialTheme.typography.headlineMedium)
+   Text(if(offline) "Offline · saved on this device" else "Synced",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    Text("Thursday, 10 September", style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
     if(active == null) {
@@ -128,7 +149,7 @@ private fun TrackingRound() {
     }) { Text("Focus") }
    }
   }
-  Column(Modifier.padding(horizontal=20.dp)) { suggestion(); checkIn() }
+  Column(Modifier.padding(horizontal=20.dp)) { suggestion(); checkIn(); recovery() }
   Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal=16.dp)) {
    DayTimeline(day=day, selectedBlockId=null, draft=null, onTapSlot={_,_->}, onSelectBlock={}, onCommitMove={_,_,_->}, blockGesturesEnabled=false)
   }

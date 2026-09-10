@@ -54,3 +54,11 @@ User accepted the reference-inspired bottom sheet: dimmed background, rounded to
 Sample at 12:15, Writing since 10. Switch sheet now groups task details, native time-picker action, 15 min ago shortcut, and After this change preview. Stop in Day opens matching timing/preview sheet. Cancel/Back leaves recording unchanged. Bounds limited to current interval; wider history corrections not represented. No Stop inside Focus. Human review pending.
 
 Validation: assembleDebug passed; emulator verified native correction sheet and switch to Break at noon yielding 15 recorded minutes at 12:15. Revised sheet left open for review.
+
+### Round 6 verdict
+
+User accepted native correction sheet and preview.
+
+## Round 7: offline recovery feedback
+
+Starts offline with Lunch from noon at 12:30. Scripted Reconnect receives newer Reading change from 12:10, preserves Writing and Lunch before that boundary. Compact offline/synced text, dismissible explanation available in Day and Focus. No real persistence/network/conflict engine. Build passed; emulator verified Reading 20 minutes, Synced status, explanation and prior timeline retained. Reset ready; human verdict pending. Lifecycle, notification presentation and connected review remain.
