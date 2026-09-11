@@ -2,14 +2,32 @@ package com.timebox.android.ui.battleplan
 
 import androidx.lifecycle.SavedStateHandle
 import com.timebox.android.data.PriorityLevel
+import com.timebox.android.data.Project
 import com.timebox.android.data.TaskStatus
 import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TaskComposerValidationTest {
+    @Test
+    fun meaningfulDraftChangesCompareAgainstOpeningDefaults() {
+        val initial = initialComposerDraft(BattlePlanScope.project(Project(42, "Timebox", Instant.EPOCH, Instant.EPOCH)), TaskStatus.InProgress)
+
+        assertFalse(initial.copy(title = "Prepare launch notes").copy(title = "", description = "\n", moreOpen = true).hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(title = "Prepare launch notes").hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(projectId = null).hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(status = TaskStatus.Open).hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(taskTypeId = 7).hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(urgency = PriorityLevel.High).hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(importance = PriorityLevel.High).hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(deadlineMode = TaskDeadlineMode.DateTime, deadlineDate = "2026-09-10", deadlineTime = "09:00").hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(reminderEnabled = true, reminderDate = "2026-09-10", reminderTime = "08:00").hasMeaningfulChangesFrom(initial))
+        assertTrue(initial.copy(readyToPlan = true).hasMeaningfulChangesFrom(initial))
+    }
+
     @Test
     fun titleIsRequired() {
         val result = validateTaskComposer(TaskComposerDraft(title = "   "), "UTC")
@@ -101,6 +119,8 @@ class TaskComposerValidationTest {
                     "battlePlan.composer.taskTypeId" to 12,
                     "battlePlan.composer.moreOpen" to true,
                     "battlePlan.composer.dirty" to true,
+                    "battlePlan.composer.initialStatus" to TaskStatus.Open.name,
+                    "battlePlan.composer.initialProjectId" to 4,
                 ),
             ),
         )
@@ -111,5 +131,16 @@ class TaskComposerValidationTest {
         assertEquals(12, draft.taskTypeId)
         assertEquals(true, draft.moreOpen)
         assertEquals(true, draft.dirty)
+
+        val initial = restoreComposerInitialDraft(
+            SavedStateHandle(
+                mapOf(
+                    "battlePlan.composer.initialStatus" to TaskStatus.Open.name,
+                    "battlePlan.composer.initialProjectId" to 4,
+                ),
+            ),
+        )
+        assertEquals(TaskStatus.Open, initial.status)
+        assertEquals(4, initial.projectId)
     }
 }

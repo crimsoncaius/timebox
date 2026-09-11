@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import uuid
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -71,12 +72,8 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
     new_path = canonicalize_task_type_path(body.name)
     if new_path == old_path:
         return row
-
-    for prefix in path_prefixes(new_path)[:-1]:
-        exists = db.execute(select(TaskType.id).where(TaskType.name == prefix).limit(1)).scalar_one_or_none()
-        if exists is None:
-            db.add(TaskType(name=prefix))
-            db.flush()
+    if old_path == "unspecified" or new_path == "unspecified":
+        raise ValueError("The unspecified task type cannot be renamed")
 
     child_pat, child_esc = _descendants_like(old_path)
     branch_rows = list(
@@ -102,10 +99,20 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
         raise ValueError("A task type with this path already exists")
 
     now = _utc_now()
+    # Free all old paths before assigning overlapping destination paths.
+    temporary_prefix = f"__rename_{uuid.uuid4().hex}"
+    for br in branch_rows:
+        br.name = f"{temporary_prefix}/{br.id}"
+    db.flush()
     for br in branch_rows:
         br.name = replacements[br.id]
         br.updated_at = now
         db.add(br)
+    db.flush()
+    for prefix in path_prefixes(new_path)[:-1]:
+        exists = db.execute(select(TaskType.id).where(TaskType.name == prefix).limit(1)).scalar_one_or_none()
+        if exists is None:
+            db.add(TaskType(name=prefix))
     db.commit()
     db.refresh(row)
     return row
@@ -131,6 +138,8 @@ def delete_task_type(
     row = get_task_type(db, task_type_id)
     if row is None:
         raise ValueError("Task type not found")
+    if row.name == "unspecified":
+        raise ValueError("The unspecified task type cannot be deleted")
     desc_pat, desc_esc = _descendants_like(row.name)
     has_descendants = db.execute(
         select(TaskType.id).where(TaskType.name.like(desc_pat, escape=desc_esc)).limit(1)

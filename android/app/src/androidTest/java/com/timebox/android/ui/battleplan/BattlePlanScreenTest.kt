@@ -244,6 +244,49 @@ class BattlePlanScreenTest {
     }
 
     @Test
+    fun composerCloseSkipsConfirmationForEmptyDraft() {
+        var dismisses = 0
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskComposerOverlay(
+                    state = BattlePlanUiState(showComposer = true, composerDraft = TaskComposerDraft()),
+                    notificationsAllowed = true,
+                    onRequestNotificationPermission = {},
+                    onDraftChange = {},
+                    onReminderEnabledChange = {},
+                    onDismiss = { dismisses++ },
+                    onCreate = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Close new task composer").performClick()
+        compose.runOnIdle { check(dismisses == 1) }
+    }
+
+    @Test
+    fun composerCloseConfirmsMeaningfulChanges() {
+        var dismisses = 0
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskComposerOverlay(
+                    state = BattlePlanUiState(showComposer = true, composerDraft = TaskComposerDraft(title = "Prepare launch notes", dirty = true)),
+                    notificationsAllowed = true,
+                    onRequestNotificationPermission = {},
+                    onDraftChange = {},
+                    onReminderEnabledChange = {},
+                    onDismiss = { dismisses++ },
+                    onCreate = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Close new task composer").performClick()
+        compose.onNodeWithText("Discard new task?").fetchSemanticsNode()
+        compose.runOnIdle { check(dismisses == 0) }
+    }
+
+    @Test
     fun pendingReadyToPlanControlAnnouncesSavingAndStillAllowsReversal() {
         val toggled = mutableListOf<Int>()
         compose.setContent {

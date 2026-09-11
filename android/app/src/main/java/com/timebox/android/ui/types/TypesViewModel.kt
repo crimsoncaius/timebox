@@ -27,6 +27,9 @@ data class TypesUiState(
     /** Set when a delete needs the user to confirm dropping its blocks too. */
     val pendingCascade: TaskType? = null,
     val migrateBlocksTo: Int? = null,
+    val renaming: TaskType? = null,
+    val renameInput: String = "",
+    val renameError: String? = null,
 )
 
 class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -49,6 +52,44 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 
     fun onInputChange(value: String) = _state.update { it.copy(input = value) }
+
+    fun beginRename(type: TaskType) {
+        if (type.name == "unspecified" || _state.value.saving) return
+        _state.update { it.copy(renaming = type, renameInput = type.name, renameError = null) }
+    }
+
+    fun changeRename(value: String) = _state.update { it.copy(renameInput = value, renameError = null) }
+
+    fun cancelRename() {
+        if (!_state.value.saving) _state.update { it.copy(renaming = null, renameError = null) }
+    }
+
+    fun saveRename() {
+        val state = _state.value
+        val type = state.renaming ?: return
+        if (state.saving) return
+        val name = state.renameInput.split('/').joinToString("/") { it.trim().lowercase(java.util.Locale.ROOT) }
+        if (name.split('/').any { it.isEmpty() }) {
+            _state.update { it.copy(renameError = "Enter a path with no empty segments.") }
+            return
+        }
+        _state.update { it.copy(saving = true, renameError = null) }
+        viewModelScope.launch {
+            repository.renameTaskType(type.id, name).fold(
+                onSuccess = {
+                    _state.update { current -> current.copy(
+                        groups = group(current.groups.flatMap { it.items }.map { item ->
+                            if (item.id == type.id || item.name.startsWith("${type.name}/"))
+                                item.copy(name = name + item.name.removePrefix(type.name)) else item
+                        }),
+                        saving = false, renaming = null, message = "Renamed ${type.name} to $name",
+                    ) }
+                    load()
+                },
+                onFailure = { e -> _state.update { it.copy(saving = false, renameError = e.apiError.message) } },
+            )
+        }
+    }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
@@ -73,6 +114,7 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
     }
 
     fun deleteType(type: TaskType) {
+        if (type.name == "unspecified" || _state.value.saving) return
         val allTypes = _state.value.groups.flatMap { it.items }
         if (allTypes.any { it.id != type.id && it.name.startsWith("${type.name}/") }) {
             _state.update { it.copy(message = "Delete saved subpaths under ${type.name} first.") }
