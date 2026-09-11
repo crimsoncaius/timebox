@@ -102,3 +102,27 @@ exercises the production constraints and migration chain.
 Web screen tests: `frontend/src/features/activity/ActivityTracking.test.tsx`.
 Android repository tests: `ActivityRepositoryTest`; Compose interaction test:
 `com.timebox.android.ui.day.ActivityTrackingTest`.
+
+## Implementation validation (2026-09-11)
+
+- Backend full suite: 250 passed, one PostgreSQL-only test skipped on SQLite.
+- Dedicated PostgreSQL activity suite: nine passed, including simultaneous
+  starts and duplicate concurrent switches. Fresh review database upgraded through
+  the complete Alembic chain and exercised the migrated constraints live.
+- Web full suite: 249 passed; TypeScript checking and changed-file ESLint passed.
+- Android full unit suite: 198 passed, one `UncaughtExceptionsBeforeTest`
+  coroutine-isolation failure in the legacy `WorkModeExecutionTest`. The new
+  repository test and that complete legacy test class passed on focused rerun.
+  An earlier full run also hit a timing-dependent legacy catch-up assertion;
+  the complete affected class passed on its focused rerun. These full-suite
+  limitations remain visible rather than being reported as an all-green run.
+- Native Compose start/switch/stop interaction test passed on Pixel 9a.
+- Live web start required no dialog; web switch appeared on Android, Android
+  stop appeared on web, and web restart retained a gap. Background/lock, return,
+  browser reload and API restart retained the same saved running identity/start.
+- Standards and specification review findings were fixed and re-reviewed with
+  no remaining actionable findings. Both review apps use the final working tree.
+
+Local test logs and screenshots are under `artifacts/activity-147-*` and are
+not production data or tracked deliverables. Review leaves tracking enabled in
+the isolated database; use either client's Stop control when finished.
