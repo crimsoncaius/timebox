@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.parseActivityInstant
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -76,14 +78,14 @@ fun ActivityTracking(
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         if (focus && current != null) {
             Text(current.name ?: current.taskType.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.on)
-            Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.onVariant)
+            Text("${Duration.between(parseActivityInstant(current.startAt), now).toMinutes().coerceAtLeast(0)}m", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.onVariant)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (current == null) {
                 TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } }) { Text("Start tracking") }
             } else {
                 if (!focus) Text(current.name ?: current.taskType.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.on)
-                if (!focus) Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
+                if (!focus) Text("${Duration.between(parseActivityInstant(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
                 TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch") }
                 if (!focus) TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; stopping = true }) { Text("Stop") }
             }
@@ -110,7 +112,7 @@ fun ActivityTracking(
         }
         current?.plannedBlockId?.let { id ->
             val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
-            val minutes = linked.sumOf { Duration.between(Instant.parse(it.startAt), it.endAt?.let(Instant::parse) ?: now).seconds }.coerceAtLeast(0) / 60
+            val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
             Text("${linked.size} linked Actual Blocks · ${minutes}m recorded", color = colors.onVariant)
         }
         if (state.busy) Text("Saving…", color = colors.onVariant)

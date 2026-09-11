@@ -25,10 +25,13 @@ class CheckInNotifier(private val context: Context) : CheckInNotificationSink {
         val intent = Intent(context, MainActivity::class.java).putExtra(QUESTION, question)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pending = PendingIntent.getActivity(context, ID, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val dismissal = PendingIntent.getBroadcast(context, ID,
+            Intent(context, CheckInDismissReceiver::class.java).putExtra(QUESTION, question),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         manager.notify(ID, NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification_reminder).setContentTitle("Still doing this?")
             .setContentText("Review your Current Activity. Recording continues.")
-            .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true).build())
+            .setContentIntent(pending).setDeleteIntent(dismissal).setAutoCancel(true).setOnlyAlertOnce(true).build())
     }
     companion object {
         const val QUESTION = "activity_check_in_question"

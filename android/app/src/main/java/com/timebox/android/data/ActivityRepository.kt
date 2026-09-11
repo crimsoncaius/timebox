@@ -75,13 +75,13 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         journal.outbox.forEach { command ->
             var checkIn = snapshot.checkIn ?: return@forEach
             val event = command.checkIn
-            if (event?.action == "observe" && event.observed == "active" && event.generation == checkIn.generation && event.capability in listOf("supported", "approximate") && event.permission == "granted" && event.coverageStart != null && event.coverageEnd != null && Instant.parse(event.coverageStart) <= Instant.parse(event.coverageEnd) && Instant.parse(event.coverageEnd) <= now().plusSeconds(5)) {
-                checkIn = checkIn.copy(activeAt = maxOf(Instant.parse(event.coverageEnd), checkIn.activeAt?.let(Instant::parse) ?: Instant.MIN).toString())
+            if (event?.action == "observe" && event.observed == "active" && event.generation == checkIn.generation && event.capability in listOf("supported", "approximate") && event.permission == "granted" && event.coverageStart != null && event.coverageEnd != null && parseActivityInstant(event.coverageStart) <= parseActivityInstant(event.coverageEnd) && parseActivityInstant(event.coverageEnd) <= now().plusSeconds(5)) {
+                checkIn = checkIn.copy(activeAt = maxOf(parseActivityInstant(event.coverageEnd), checkIn.activeAt?.let(::parseActivityInstant) ?: Instant.MIN).toString())
                 snapshot = snapshot.copy(checkIn = checkIn)
             }
-            if (event?.action == "candidate" && event.generation == checkIn.generation && event.rearm == checkIn.rearm && checkIn.question == null && event.enabled != false && event.capability in listOf("supported", "approximate") && event.permission == "granted" && event.observed in listOf("idle", "locked") && event.coverageStart != null && event.coverageEnd != null && Instant.parse(event.coverageEnd) <= now().plusSeconds(5) && checkIn.armedAt != null) {
-                val start = maxOf(Instant.parse(event.coverageStart), Instant.parse(checkIn.armedAt), checkIn.activeAt?.let(Instant::parse) ?: Instant.MIN)
-                if (java.time.Duration.between(start, Instant.parse(event.coverageEnd)).toMinutes() >= (event.thresholdMinutes ?: 60))
+            if (event?.action == "candidate" && event.generation == checkIn.generation && event.rearm == checkIn.rearm && checkIn.question == null && event.enabled != false && event.capability in listOf("supported", "approximate") && event.permission == "granted" && event.observed in listOf("idle", "locked") && event.coverageStart != null && event.coverageEnd != null && parseActivityInstant(event.coverageEnd) <= now().plusSeconds(5) && checkIn.armedAt != null) {
+                val start = maxOf(parseActivityInstant(event.coverageStart), parseActivityInstant(checkIn.armedAt), checkIn.activeAt?.let(::parseActivityInstant) ?: Instant.MIN)
+                if (java.time.Duration.between(start, parseActivityInstant(event.coverageEnd)).toMinutes() >= (event.thresholdMinutes ?: 60))
                     snapshot = snapshot.copy(checkIn = checkIn.copy(question = CheckInQuestionDto("${checkIn.generation}:${checkIn.rearm}", command.actionAt, journal.device, command.operationId)))
             }
             if (event?.action == "confirm" && event.questionId == checkIn.question?.id)
@@ -97,17 +97,17 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private fun projectRanges(snapshot: ActivitySnapshotDto): ActivitySnapshotDto {
         val provenance = snapshot.provenance.toMutableMap()
         val coverage = snapshot.coverage.ifEmpty { snapshot.records.map { ActivityCoverageDto(it.startAt, it.endAt, it.id, listOf(kotlinx.serialization.json.JsonPrimitive(""), kotlinx.serialization.json.JsonPrimitive(""), kotlinx.serialization.json.JsonPrimitive(0), kotlinx.serialization.json.JsonPrimitive("baseline"))) } }
-        var pieces = coverage.map { p -> Piece(Instant.parse(p.start), p.end?.let(Instant::parse) ?: Instant.MAX,
-            snapshot.records.find { it.id == p.recordId }, Order(p.order[0].content.takeIf { it.isNotEmpty() }?.let(Instant::parse) ?: Instant.MIN,
+        var pieces = coverage.map { p -> Piece(parseActivityInstant(p.start), p.end?.let(::parseActivityInstant) ?: Instant.MAX,
+            snapshot.records.find { it.id == p.recordId }, Order(p.order[0].content.takeIf { it.isNotEmpty() }?.let(::parseActivityInstant) ?: Instant.MIN,
                 p.order[1].content, p.order[2].content.toInt(), p.order[3].content)) }
         journal.outbox.forEach { command ->
             if (command.kind == ActivityKind.CheckIn || command.effective.mode == "server_now") return@forEach
             val at = checkNotNull(command.effective.at)
-            val start = Instant.parse(at)
-            val end = command.effective.end?.let(Instant::parse) ?: Instant.MAX
-            val target = pieces.find { p -> p.row != null && command.targetSource != null && (provenance[p.row.id.toString()] ?: "baseline:${p.row.id}") == command.targetSource && p.start == command.targetStartAt?.let(Instant::parse) }?.row
+            val start = parseActivityInstant(at)
+            val end = command.effective.end?.let(::parseActivityInstant) ?: Instant.MAX
+            val target = pieces.find { p -> p.row != null && command.targetSource != null && (provenance[p.row.id.toString()] ?: "baseline:${p.row.id}") == command.targetSource && p.start == command.targetStartAt?.let(::parseActivityInstant) }?.row
                 ?: pieces.find { it.row?.id == command.targetId }?.row
-            val order = Order(Instant.parse(command.actionAt), command.deviceId, command.sequence, command.operationId)
+            val order = Order(parseActivityInstant(command.actionAt), command.deviceId, command.sequence, command.operationId)
             val type = snapshot.taskTypes.find { it.id == command.taskTypeId } ?: TaskTypeDto(command.taskTypeId ?: 0, "unspecified")
             val row = if (command.kind == ActivityKind.Stop || command.kind == ActivityKind.Delete) null else ActualBlockDto(
                 if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe)) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
@@ -115,8 +115,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 name = command.name, taskId = command.taskId, task = target?.task, note = command.note,
                 plannedBlockId = if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe) && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
             if (row != null) provenance[row.id.toString()] = if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe)) command.targetSource!! else command.operationId
-            val oldStart = target?.startAt?.let(Instant::parse) ?: start
-            val oldEnd = target?.endAt?.let(Instant::parse) ?: end
+            val oldStart = target?.startAt?.let(::parseActivityInstant) ?: start
+            val oldEnd = target?.endAt?.let(::parseActivityInstant) ?: end
             val boundaries = (pieces.flatMap { listOf(it.start, it.end) } + start + end + Instant.MAX).distinct().sorted()
             pieces = boundaries.zipWithNext().mapNotNull { (a, b) ->
                 val previous = pieces.find { it.start <= a && it.end > a }
@@ -153,7 +153,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private fun newer(snapshot: ActivitySnapshotDto): Boolean {
         check(snapshot.protocol == "activity-online-v1") { "Incompatible activity server" }
         val previous = journal.snapshot ?: return true
-        return snapshot.cursor > previous.cursor || (snapshot.cursor == previous.cursor && Instant.parse(snapshot.serverAt) >= Instant.parse(previous.serverAt))
+        return snapshot.cursor > previous.cursor || (snapshot.cursor == previous.cursor && parseActivityInstant(snapshot.serverAt) >= parseActivityInstant(previous.serverAt))
     }
     suspend fun dismissFeedback() = mutex.withLock { feedback = null; publish(state.value.error) }
     private fun noteReconciliation(snapshot: ActivitySnapshotDto) {
@@ -232,7 +232,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             offline = false
             if (newer(snapshot)) {
                 noteReconciliation(snapshot)
-                val server = Instant.parse(snapshot.serverAt).toEpochMilli()
+                val server = parseActivityInstant(snapshot.serverAt).toEpochMilli()
                 save(journal.copy(snapshot = snapshot, calibration = ActivityCalibrationDto(snapshot.serverAt, server - wallTime())))
                 serverAnchor = server
                 monotonicAnchor = monotonicTime()
@@ -262,10 +262,10 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 check((kind == ActivityKind.Start) != (current != null)) { "Activity changed. Review the current activity." }
                 check(kind !in listOf(ActivityKind.Switch, ActivityKind.Describe) || selectedType != null || taskId != null) { "Task Type is required" }
                 check(kind != ActivityKind.Describe || (current?.name.isNullOrBlank() && current?.taskType?.name == "unspecified")) { "Only an unknown Current Activity can be described" }
-                val latest = project()?.records?.maxOfOrNull { Instant.parse(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
+                val latest = project()?.records?.maxOfOrNull { parseActivityInstant(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
                 val action = maxOf(journal.lastAction + 1, latest + 1, requestedAt)
                 val at = Instant.ofEpochMilli(action).toString()
-                if (observedTargetId != null) check(current != null && observedTargetId == current.id && (effectiveAt == null || (effectiveAt >= Instant.parse(current.startAt) && effectiveAt.toEpochMilli() <= requestedAt))) { "Choose a time after the current activity started and no later than now. Review the current activity if it changed." }
+                if (observedTargetId != null) check(current != null && observedTargetId == current.id && (effectiveAt == null || (effectiveAt >= parseActivityInstant(current.startAt) && effectiveAt.toEpochMilli() <= requestedAt))) { "Choose a time after the current activity started and no later than now. Review the current activity if it changed." }
                 val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) } ?: observed.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) }
                 val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
                     at, observed.calibration ?: calibration, observed.snapshot?.cursor ?: snapshot.cursor,
@@ -297,9 +297,9 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 check(kind == ActivityKind.Add || target?.endAt != null) { "Select an ended Actual Block. Use Switch or Stop for the Current Activity." }
                 val start = checkNotNull(if (kind == ActivityKind.Delete) target?.startAt else startAt ?: target?.startAt)
                 val end = checkNotNull(if (kind == ActivityKind.Delete) target?.endAt else endAt ?: target?.endAt)
-                val a = Instant.parse(start); val b = Instant.parse(end)
+                val a = parseActivityInstant(start); val b = parseActivityInstant(end)
                 check(a < b && b <= now()) { "Choose a positive time range ending no later than now." }
-                check(kind == ActivityKind.Delete || snapshot.records.none { it.id != targetId && a < (it.endAt?.let(Instant::parse) ?: Instant.MAX) && Instant.parse(it.startAt) < b }) { "Activity overlaps recorded time. Adjust the other record first." }
+                check(kind == ActivityKind.Delete || snapshot.records.none { it.id != targetId && a < (it.endAt?.let(::parseActivityInstant) ?: Instant.MAX) && parseActivityInstant(it.startAt) < b }) { "Activity overlaps recorded time. Adjust the other record first." }
                 val action = maxOf(now().toEpochMilli(), journal.lastAction + 1)
                 val source = journal.outbox.lastOrNull { it.kind == ActivityKind.Edit && it.targetId == targetId }?.targetSource
                     ?: journal.outbox.find { -it.sequence == targetId }?.operationId ?: snapshot.provenance[targetId.toString()] ?: "baseline:$targetId"
@@ -315,7 +315,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         if (saved) refresh()
         return saved
     }
-    fun currentPlan(): ActivityPlanDto? = state.value.snapshot?.plans?.find { Instant.parse(it.startAt) <= now() && now() < Instant.parse(it.endAt) }
+    fun currentPlan(): ActivityPlanDto? = state.value.snapshot?.plans?.find { parseActivityInstant(it.startAt) <= now() && now() < parseActivityInstant(it.endAt) }
     suspend fun trackTask(task: BattleTask): Boolean {
         if (task.recurrenceKind == "quota_parent" || task.status == TaskStatus.Completed) return false
         if (state.value.snapshot == null) refresh()

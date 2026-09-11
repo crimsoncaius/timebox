@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.parseActivityInstant
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,9 +27,9 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
     val snapshot by repository.state.collectAsState()
     val actual = snapshot.snapshot?.records?.find { it.id == state.selectedBlockId }
     val zone = ZoneId.of(snapshot.snapshot?.reportingTimezone ?: state.day?.timezone ?: "UTC")
-    val initialStart = actual?.let { ActivityTimeValue.from(Instant.parse(it.startAt), zone) }
+    val initialStart = actual?.let { ActivityTimeValue.from(parseActivityInstant(it.startAt), zone) }
         ?: ActivityTimeValue(state.date.atStartOfDay().plusMinutes(state.sheetStart.toLong()).toString())
-    val initialEnd = actual?.endAt?.let { ActivityTimeValue.from(Instant.parse(it), zone) }
+    val initialEnd = actual?.endAt?.let { ActivityTimeValue.from(parseActivityInstant(it), zone) }
         ?: ActivityTimeValue(state.date.atStartOfDay().plusMinutes(state.sheetEnd.toLong()).toString())
     var start by remember { mutableStateOf(initialStart) }; var end by remember { mutableStateOf(initialEnd) }
     var name by remember { mutableStateOf(actual?.name.orEmpty()) }; var note by remember { mutableStateOf(actual?.note.orEmpty()) }

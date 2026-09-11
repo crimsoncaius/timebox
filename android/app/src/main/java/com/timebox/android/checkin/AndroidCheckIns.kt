@@ -1,5 +1,7 @@
 package com.timebox.android.checkin
 
+import com.timebox.android.data.parseActivityInstant
+
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -120,6 +122,7 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
             val event = UsageEvents.Event()
             while (history.hasNextEvent()) {
                 history.getNextEvent(event)
+                if (event.timeStamp !in floor..wall) continue
                 when (event.eventType) {
                     UsageEvents.Event.SCREEN_NON_INTERACTIVE -> events += ScreenObservation(event.timeStamp, false)
                     UsageEvents.Event.SCREEN_INTERACTIVE, UsageEvents.Event.KEYGUARD_HIDDEN,
@@ -132,8 +135,8 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
             val offset = repository.now().toEpochMilli() - wall
             val start = interval?.first?.plus(offset)
             val end = interval?.second?.plus(offset)
-            val armed = shared.armedAt?.let { Instant.parse(it).toEpochMilli() } ?: Long.MAX_VALUE
-            val active = shared.activeAt?.let { Instant.parse(it).toEpochMilli() } ?: Long.MIN_VALUE
+            val armed = shared.armedAt?.let { parseActivityInstant(it).toEpochMilli() } ?: Long.MAX_VALUE
+            val active = shared.activeAt?.let { parseActivityInstant(it).toEpochMilli() } ?: Long.MIN_VALUE
             if (question == null && start != null && end != null && end - maxOf(start, armed, active) >= repository.checkInPreferences().thresholdMinutes * 60_000L) {
                 // Mark this locally produced candidate consumed BEFORE transport. Crash/offline replay loses
                 // optional notification eligibility rather than escalating a question discovered on reconnect.
@@ -141,7 +144,7 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
                 if (storage.getString("candidate", null) == candidate) return@withLock
                 check(storage.edit().putString("candidate", candidate).commit())
                 delivery.candidate(CheckInEventDto("candidate", shared.generation, shared.rearm,
-                    capability = "approximate", permission = "granted", observed = "locked",
+                    capability = "approximate", permission = "granted", observed = "idle",
                     coverageStart = Instant.ofEpochMilli(start).toString(), coverageEnd = Instant.ofEpochMilli(end).toString()))
             } else {
                 // Only positive device-use events are synchronized. Their absence says nothing.

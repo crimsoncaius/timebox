@@ -44,6 +44,7 @@
             </intent-filter>
         </activity>
 
+        <receiver android:name=".checkin.CheckInDismissReceiver" android:exported="false" />
         <receiver
             android:name=".reminders.ReminderBootReceiver"
             android:enabled="true"

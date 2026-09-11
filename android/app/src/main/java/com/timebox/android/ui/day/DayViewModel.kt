@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.parseActivityInstant
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.ActivityRepository
@@ -155,7 +157,7 @@ class DayViewModel(
             val activityClock = MutableStateFlow(activityRepository.now())
             launch { while (true) { kotlinx.coroutines.delay(60_000); activityClock.value = activityRepository.now() } }
             combine(_state, activityRepository.state, activityClock) { ui, activity, now ->
-                ui to activity.snapshot?.let { it.copy(serverAt = maxOf(Instant.parse(it.serverAt), now).toString()) }
+                ui to activity.snapshot?.let { it.copy(serverAt = maxOf(parseActivityInstant(it.serverAt), now).toString()) }
             }.collect { (ui, snapshot) ->
                 if (snapshot != null) {
                     val dates = ui.pages.keys + ui.date

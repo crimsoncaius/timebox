@@ -11,7 +11,7 @@ fun ActivitySnapshotDto.projectDay(date: LocalDate, previous: Day?): Day {
     val zone = ZoneId.of(reportingTimezone)
     val start = date.atStartOfDay(zone).toInstant()
     val end = date.plusDays(1).atStartOfDay(zone).toInstant()
-    val now = Instant.parse(serverAt)
+    val now = parseActivityInstant(serverAt)
     val actuals = records.mapNotNull { dto ->
         val row = dto.toModel()
         val a = maxOf(start, row.startAt)
