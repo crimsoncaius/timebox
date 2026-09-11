@@ -29,7 +29,7 @@ export class BrowserCheckIns {
   private timer?: ReturnType<typeof setInterval>
   private unsubscribe?: () => void
   private unsubscribeStart?: () => void
-  private floor = 0
+  private observationStarted = 0
   private lastTick = 0
   private lastWall = 0
   private epoch = 0
@@ -65,7 +65,7 @@ export class BrowserCheckIns {
     window.removeEventListener('pagehide', this.suspend); window.removeEventListener('pageshow', this.resume)
     window.removeEventListener('focus', this.refreshPermission)
   }
-  private reset() { this.epoch++; this.abort?.abort(); this.floor = this.repository.now(); this.lastTick = performance.now(); this.lastWall = Date.now() }
+  private reset() { this.epoch++; this.abort?.abort(); this.observationStarted = performance.now(); this.lastTick = this.observationStarted; this.lastWall = Date.now() }
   private suspend = () => { this.paused = true; this.reset(); this.publish({ detail: 'Detection paused; unobserved time is not counted.' }) }
   private resume = () => { this.paused = false; this.reset(); void this.refreshPermission() }
   private permissionChanged = () => { this.reset(); this.publish({ permission: this.permission!.state }); void this.sample() }
@@ -135,7 +135,10 @@ export class BrowserCheckIns {
       // Active means some input within the threshold, not input at this instant.
       // Its earliest possible time is the only conservative shared lower bound.
       const end = active ? now - 60000 : now
-      const start = active ? end : Math.max(this.floor, now - threshold, Date.parse(prompt.armed_at), Date.parse(prompt.active_at ?? prompt.armed_at))
+      // Calibration may change on reconnect. Session coverage is elapsed live
+      // execution, not a persisted wall-clock instant from an older calibration.
+      const floor = now - Math.max(0, performance.now() - this.observationStarted)
+      const start = active ? end : Math.max(floor, now - threshold, Date.parse(prompt.armed_at), Date.parse(prompt.active_at ?? prompt.armed_at))
       if (!active && (prompt.question || now - start < threshold)) return
       const operation = await this.repository.checkIn({ action: active ? 'observe' : 'candidate', generation: prompt.generation, rearm: prompt.rearm,
         capability: 'supported', permission: 'granted', observed: active ? 'active' : observation.screen === 'locked' ? 'locked' : 'idle', coverage_start: new Date(start).toISOString(), coverage_end: new Date(end).toISOString() })

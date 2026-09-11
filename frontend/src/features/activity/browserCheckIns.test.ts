@@ -17,7 +17,7 @@ it('unsupported browsers never request detection permission or infer inactivity'
 async function supported() {
   vi.useFakeTimers()
   let now = Date.parse('2026-09-11T10:00:00Z')
-  let lastInput = now
+  let lastInput = performance.now()
   let unavailable: 'no' | 'null' | 'error' = 'no'
   let connected = true
   const permission = new EventTarget() as EventTarget & { state: PermissionState }
@@ -30,7 +30,7 @@ async function supported() {
     async start({ threshold }: { threshold: number }) {
       if (unavailable === 'error') throw new Error('Sensor unavailable')
       if (unavailable === 'null') return
-      this.userState = now - lastInput >= threshold ? 'idle' : 'active'
+      this.userState = performance.now() - lastInput >= threshold ? 'idle' : 'active'
       this.screenState = 'unlocked'
     }
   }
@@ -57,7 +57,7 @@ async function supported() {
   const adapter = new BrowserCheckIns(repository)
   await adapter.start()
   return { repository, adapter, commands, permission, Detector,
-    idle: () => { lastInput = now - 15 * 60000 }, sensor: (state: typeof unavailable) => { unavailable = state }, offline: () => { connected = false }, online: () => { connected = true },
+    idle: () => { lastInput = performance.now() - 15 * 60000 }, calibrate: (milliseconds: number) => { now += milliseconds }, sensor: (state: typeof unavailable) => { unavailable = state }, offline: () => { connected = false }, online: () => { connected = true },
     advance: async (milliseconds: number) => { for (let elapsed = 0; elapsed < milliseconds; elapsed += 15000) { now += 15000; await vi.advanceTimersByTimeAsync(15000) } },
   }
 }
@@ -147,5 +147,15 @@ it('a delayed notification list cannot close a newly created current question; a
   lists.splice(0).forEach(resolve => resolve([notification]))
   await vi.advanceTimersByTimeAsync(0)
   expect(notification.close).toHaveBeenCalled()
+  test.adapter.stop()
+})
+
+it('server clock recalibration cannot turn time before page startup into observed coverage', async () => {
+  const test = await supported(); test.idle()
+  test.calibrate(3600000)
+  await test.advance(14 * 60000)
+  expect(test.repository.state.snapshot?.check_in?.question).toBeNull()
+  await test.advance(60000)
+  expect(test.repository.state.snapshot?.check_in?.question?.id).toBe('reading:0')
   test.adapter.stop()
 })
