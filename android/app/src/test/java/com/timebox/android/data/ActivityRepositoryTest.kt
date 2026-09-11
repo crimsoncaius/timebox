@@ -6,6 +6,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ActivityRepositoryTest {
+    @Test fun describeUnknownRetainsIdentityAcrossOfflineRestart() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val type = TaskTypeDto(1, "unspecified")
+        val current = ActualBlockDto(7, 1, type, startAt = at, createdAt = at, updatedAt = at)
+        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = at, reportingTimezone = "UTC", current = current, records = listOf(current), taskTypes = listOf(type, TaskTypeDto(2, "Reading")))
+        var durable: String? = null
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        assertTrue(repository.command(ActivityKind.Describe, 2, observedTargetId = 7))
+        val restored = ActivityRepository(transport, store)
+        assertEquals(1, restored.state.value.snapshot!!.records.size)
+        assertEquals(7, restored.state.value.snapshot!!.current!!.id)
+        assertEquals(at, restored.state.value.snapshot!!.current!!.startAt)
+        assertEquals("Reading", restored.state.value.snapshot!!.current!!.taskType.name)
+        assertFalse(restored.command(ActivityKind.Describe, 2, observedTargetId = 7))
+    }
+
     @Test fun historicalCorrectionsRejectOverlapAndKeepGapsOffline() = runTest {
         val type = TaskTypeDto(1, "work")
         val writing = ActualBlockDto(1, 1, type, name = "Writing", startAt = "2026-09-10T10:00:00Z", endAt = "2026-09-10T12:00:00Z", createdAt = "2026-09-10T10:00:00Z", updatedAt = "2026-09-10T10:00:00Z")

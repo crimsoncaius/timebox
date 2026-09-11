@@ -1,12 +1,15 @@
+import { getFocusController } from './focusController'
 import { ActivityTimeField } from './ActivityTimeField'
 import { activityTimeValue, resolveActivityTime, type ActivityTimeValue } from './activityTime'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TaskType } from '../../lib/api'
 import { ActivityRepository, getActivityRepository } from './activityRepository'
 
-export function ActivityTracking({ taskTypes, onChanged, repository = getActivityRepository() }: {
-  taskTypes: TaskType[]; onChanged: () => void; repository?: ActivityRepository
+export function ActivityTracking({ taskTypes, onChanged, repository = getActivityRepository(), focus = false }: {
+  taskTypes: TaskType[]; onChanged: () => void; repository?: ActivityRepository; focus?: boolean
 }) {
+  const focusController = getFocusController()
+  const focusState = useSyncExternalStore(focusController.subscribe, focusController.getSnapshot)
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot)
   const [switching, setSwitching] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -44,11 +47,14 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
         <span className="max-w-64 truncate text-on-surface dark:text-dark-on-surface">{current.name || current.task_type.name}</span>
         <span aria-label="Elapsed time">{elapsed}m</span>
         <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
-        <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>
+        {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
       </> : <button className="py-2" disabled={disabled} onClick={() => void repository.command('start')}>Start tracking</button>}
+      {!focus && <button disabled={disabled || focusState.planning || focusState.entering} onClick={() => void focusController.enter(repository)}>Focus</button>}
       {state.busy ? <span role="status">Saving…</span> : null}
       <span role="status">{state.offline ? 'Offline' : state.pending ? 'Unsynced' : state.snapshot ? 'Synced' : 'Connection required'}{state.offline && state.pending ? ' · Unsynced' : ''}</span>
     </div>
+    {!focus && focusState.planning && <p className="text-right">Finish or cancel planning to enter Focus.</p>}
+    {focus && current && !current.name && current.task_type.name === 'unspecified' && <UnknownActivity key={current.id} repository={repository} />}
     {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {plan.name || availableTypes.find(t => t.id === plan.task_type_id)?.name} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
     {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000)}m recorded</p> : null}
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
@@ -74,4 +80,18 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       <div className="flex justify-end gap-4"><button type="button" onClick={() => { setSwitching(false); setStopping(false) }}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || (!stopping && !typeId)}>{stopping ? "Stop tracking" : "Switch activity"}</button></div>
     </form> : null}
   </div>
+}
+
+function UnknownActivity({ repository }: { repository: ActivityRepository }) {
+  const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot)
+  const current = state.snapshot!.current!
+  const [type, setType] = useState(''), [name, setName] = useState('')
+  const describe = (now: boolean) => repository.command(now ? 'switch' : 'describe', Number(type), name.trim(), false, undefined, { targetId: current.id })
+  return <section aria-label="Unknown activity" className="my-8 rounded-xl bg-surface-container-low dark:bg-dark-surface-container p-6 space-y-4">
+    <h2 className="text-xl font-semibold">What are you doing right now?</h2><p>Recording continues while you decide.</p>
+    <label className="block">Task Type<select aria-label="Describe Task Type" value={type} onChange={e => setType(e.target.value)} className="block w-full p-2 dark:bg-dark-surface"><option value="">Choose Task Type</option>{state.snapshot?.task_types?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+    <label className="block">Block Name (optional)<input aria-label="Describe Block Name" value={name} maxLength={500} onChange={e => setName(e.target.value)} className="block w-full p-2 dark:bg-dark-surface" /></label>
+    <p>Apply from the original start ({new Date(current.start_at).toLocaleTimeString()}) describes all this activity. Start now keeps preceding unspecified time.</p>
+    <div className="flex gap-4"><button disabled={!type} onClick={() => void describe(false)}>Apply from original start</button><button disabled={!type} onClick={() => void describe(true)}>Start now</button></div>
+  </section>
 }

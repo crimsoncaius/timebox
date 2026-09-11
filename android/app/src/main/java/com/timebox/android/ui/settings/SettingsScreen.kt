@@ -73,6 +73,7 @@ fun SettingsScreen(
             .padding(bottom = TimeboxDimens.bottomInset),
     ) {
         if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) SectionCard {
+            com.timebox.android.ui.focus.FocusWakeSettings()
             SectionHeader(title = "Reporting Time Zone", description = "Shared by all devices. Changes recalculate daily shares without changing recorded times or elapsed duration. Travel does not change it.")
             OutlinedTextField(value = state.reportingZoneInput, onValueChange = onReportingZoneChange, label = { Text("Reporting Time Zone") }, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = onSaveReportingZone, enabled = !state.saving && state.reportingZoneInput.isNotBlank() && state.reportingZoneInput != state.timezone) { Text("Save time zone") }

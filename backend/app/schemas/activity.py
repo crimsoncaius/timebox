@@ -35,7 +35,7 @@ class ActivityCommand(BaseModel):
     clear_fields: list[Literal["name", "note"]] = []
     target_source: str | None = None
     target_start_at: AwareDatetime | None = None
-    kind: Literal["start", "switch", "stop", "add", "edit", "delete"]
+    kind: Literal["start", "switch", "stop", "describe", "add", "edit", "delete"]
     selection_snapshot: bool = False
     task_type_id: int | None = None
     name: str | None = Field(default=None, max_length=500)

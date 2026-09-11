@@ -22,7 +22,7 @@ interface Command {
   calibration: { server_at: string; offset_ms: number }; base_cursor: number
   effective: { mode: 'server_now' | 'instant' | 'range'; at?: string; end?: string }; target_id: number | null
   selection_snapshot?: boolean; task_id?: number | null; planned_block_id?: number | null; note?: string | null
-  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'add' | 'edit' | 'delete'; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
+  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'describe' | 'add' | 'edit' | 'delete'; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
 }
 interface Journal {
   device: string; sequence: number; lastAction: number; pending: Command | null
@@ -88,8 +88,8 @@ export class ActivityRepository {
       const historical = command.effective.mode === 'range'
       const order: Piece['order'] = [instant(command.action_at), command.device_id, command.sequence, command.operation_id]
       const type = snapshot.task_types?.find(t => t.id === command.task_type_id) ?? { id: command.task_type_id ?? 0, name: 'unspecified', created_at: at, updated_at: at }
-      const row: ActualBlock | null = ['stop', 'delete'].includes(command.kind) ? null : { ...target, id: command.kind === 'edit' ? target?.id ?? command.target_id! : -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: historical ? target?.task ?? null : null, name: command.name ?? null, note: command.note ?? null, planned_block_id: command.kind === 'edit' && target?.task_type_id === command.task_type_id && target?.task_id === command.task_id ? target?.planned_block_id ?? null : command.planned_block_id ?? null, start_at: at, end_at: historical ? command.effective.end! : null, created_at: target?.created_at ?? at, updated_at: command.action_at }
-      if (row) snapshot.provenance = { ...snapshot.provenance, [row.id]: command.kind === 'edit' ? command.target_source! : command.operation_id }
+      const row: ActualBlock | null = ['stop', 'delete'].includes(command.kind) ? null : { ...target, id: ['edit', 'describe'].includes(command.kind) ? target?.id ?? command.target_id! : -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: historical ? target?.task ?? null : null, name: command.name ?? null, note: command.note ?? null, planned_block_id: ['edit', 'describe'].includes(command.kind) && target?.task_type_id === command.task_type_id && target?.task_id === command.task_id ? target?.planned_block_id ?? null : command.planned_block_id ?? null, start_at: at, end_at: historical ? command.effective.end! : null, created_at: target?.created_at ?? at, updated_at: command.action_at }
+      if (row) snapshot.provenance = { ...snapshot.provenance, [row.id]: ['edit', 'describe'].includes(command.kind) ? command.target_source! : command.operation_id }
       const oldStart = target ? instant(target.start_at) : start
       const oldEnd = target?.end_at ? instant(target.end_at) : end
       const boundaries = [...new Set([start, end, ...pieces.flatMap(p => [p.start, p.end])])].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
@@ -200,7 +200,7 @@ export class ActivityRepository {
       return true
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save time zone'); return false }
   }
-  async command(kind: 'start' | 'switch' | 'stop', taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection, timing?: { at?: string; targetId: number }) {
+  async command(kind: 'start' | 'switch' | 'stop' | 'describe', taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection, timing?: { at?: string; targetId: number }) {
     if (retryOnly) { await this.refresh(); return !this.state.pending && !this.state.error }
     let saved = false
     const requestedAt = this.now()
@@ -218,7 +218,8 @@ export class ActivityRepository {
         if (this.journal.outbox.some(command => command.effective.mode === 'server_now')) throw new Error('Reconnect to confirm the previous online change first.')
         const projected = this.project()!
         if ((kind === 'start') === !!projected.current) throw new Error('Activity changed. Review the current activity.')
-        if (kind === 'switch' && !taskTypeId && !selection?.task_id) throw new Error('Task Type is required')
+        if (['switch', 'describe'].includes(kind) && !taskTypeId && !selection?.task_id) throw new Error('Task Type is required')
+        if (kind === 'describe' && (projected.current?.name || projected.current?.task_type.name !== 'unspecified')) throw new Error('Only an unknown Current Activity can be described')
         const latest = projected.records.reduce((value, row) => Math.max(value, Date.parse(row.end_at ?? row.start_at)), 0)
         const action = Math.max(this.journal.lastAction + 1, latest + 1, requestedAt)
         const at = new Date(action).toISOString()
@@ -226,9 +227,10 @@ export class ActivityRepository {
         const predecessor = this.journal.outbox.findLast(c => ['start', 'switch', 'stop'].includes(c.kind)) ?? (observed.predecessor && ['start', 'switch', 'stop'].includes(observed.predecessor.kind) ? observed.predecessor : undefined)
         const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence: this.journal.sequence + 1,
           action_at: at, calibration: observed.calibration ?? this.journal.calibration, base_cursor: observed.snapshot?.cursor ?? this.journal.snapshot.cursor,
-          effective: { mode: 'instant', at: timing?.at ?? at }, target_id: predecessor ? null : observed.current?.id ?? null,
+          effective: { mode: 'instant', at: kind === 'describe' ? projected.current!.start_at : timing?.at ?? at }, target_id: predecessor ? null : observed.current?.id ?? null,
           ...(predecessor ? { predecessor_id: predecessor.operation_id } : {}), kind,
           selection_snapshot: true, ...selection,
+          ...(kind === 'describe' ? { task_id: projected.current!.task_id, planned_block_id: projected.current!.planned_block_id, note: projected.current!.note, target_id: projected.current!.id, target_source: projected.provenance?.[projected.current!.id] ?? this.journal.outbox.find(c => -c.sequence === projected.current!.id)?.operation_id ?? `baseline:${projected.current!.id}`, target_start_at: projected.current!.start_at } : {}),
           ...(taskTypeId == null ? {} : { task_type_id: taskTypeId }), ...(name ? { name } : {}) }
         this.save({ ...this.journal, sequence: command.sequence, lastAction: action, outbox: [...this.journal.outbox, command] })
         saved = true

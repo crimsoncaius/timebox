@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.models.activity import ActivityOperation
 from app.models.time_block import BlockLane, TimeBlock
+from app.models.task_type import TaskType
 from app.schemas.time_block import ActualBlockRead
 from app.services import actual_block_service as actuals
 
@@ -134,6 +135,16 @@ def prepare(db, state, body, operations, timezone="UTC"):
         if body.effective.mode == "instant" and (start > body.action_at or (body.kind == "start" and start != body.action_at)):
             raise ValueError("Effective time must be within the current interval and action time")
         current = next((p for p in known if p["data"] and p["end"] is None), None)
+        if body.kind == "describe":
+            if current is None or start != instant(current["start"]):
+                raise ValueError("Description must begin at the observed Current Activity start")
+            if body.target_source is not None and (target is not current):
+                raise ValueError("Description does not match the observed Current Activity")
+            if body.task_type_id is None:
+                raise ValueError("Task Type is required")
+            target = current
+            if current["data"].get("name") or db.get(TaskType, current["data"]["task_type_id"]).name != "unspecified":
+                raise ValueError("Only an unknown Current Activity can be described")
         if not body.predecessor_id:
             if (body.kind == "start") == (current is not None) or body.target_id != (identity(current) if current else None):
                 raise ValueError("Transition does not match the observed activity")
@@ -143,11 +154,14 @@ def prepare(db, state, body, operations, timezone="UTC"):
             raise ValueError("Activity instant overlaps known history")
     data = None
     if body.kind not in {"stop", "delete"}:
-        data = dict(target["data"]) if target and body.kind == "edit" else {}
+        data = dict(target["data"]) if target and body.kind in {"edit", "describe"} else {}
         type_id = body.task_type_id or data.get("task_type_id")
         if not historical:
             from app.services.activity_selection import resolve
-            data.update(resolve(db, body, start, timezone))
+            selected = resolve(db, body, start, timezone)
+            if body.kind == "describe":
+                selected.update({field: target["data"].get(field) for field in ("task_id", "planned_block_id", "note")})
+            data.update(selected)
             type_id, task_id = data["task_type_id"], data["task_id"]
         elif body.kind == "add":
             type_id, task_id, planned_name = actuals._resolve_origin_item(

@@ -87,6 +87,7 @@ fun DayScreen(
     onRetryReadyTasks: () -> Unit,
     onNavigateToday: (LocalDate) -> Unit = {},
     onOpenWorkMode: () -> Unit = {},
+    onEnterFocus: () -> Unit = {},
 ) {
     var displayedDate by remember(state.date) { mutableStateOf(state.date) }
 
@@ -109,7 +110,7 @@ fun DayScreen(
         )
 
         if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-            ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) })
+            ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
         }
         Box(Modifier.weight(1f)) {
             if (state.isPlanningMode) {

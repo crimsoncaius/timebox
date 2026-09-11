@@ -88,11 +88,11 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             val order = Order(Instant.parse(command.actionAt), command.deviceId, command.sequence, command.operationId)
             val type = snapshot.taskTypes.find { it.id == command.taskTypeId } ?: TaskTypeDto(command.taskTypeId ?: 0, "unspecified")
             val row = if (command.kind == ActivityKind.Stop || command.kind == ActivityKind.Delete) null else ActualBlockDto(
-                if (command.kind == ActivityKind.Edit) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
+                if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe)) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
                 startAt = at, endAt = command.effective.end, createdAt = target?.createdAt ?: at, updatedAt = command.actionAt,
                 name = command.name, taskId = command.taskId, task = target?.task, note = command.note,
-                plannedBlockId = if (command.kind == ActivityKind.Edit && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
-            if (row != null) provenance[row.id.toString()] = if (command.kind == ActivityKind.Edit) command.targetSource!! else command.operationId
+                plannedBlockId = if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe) && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
+            if (row != null) provenance[row.id.toString()] = if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe)) command.targetSource!! else command.operationId
             val oldStart = target?.startAt?.let(Instant::parse) ?: start
             val oldEnd = target?.endAt?.let(Instant::parse) ?: end
             val boundaries = (pieces.flatMap { listOf(it.start, it.end) } + start + end + Instant.MAX).distinct().sorted()
@@ -198,7 +198,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 check(journal.outbox.none { it.effective.mode == "server_now" }) { "Reconnect to confirm the previous online change first." }
                 val current = project()?.current
                 check((kind == ActivityKind.Start) != (current != null)) { "Activity changed. Review the current activity." }
-                check(kind != ActivityKind.Switch || selectedType != null || taskId != null) { "Task Type is required" }
+                check(kind !in listOf(ActivityKind.Switch, ActivityKind.Describe) || selectedType != null || taskId != null) { "Task Type is required" }
+                check(kind != ActivityKind.Describe || (current?.name.isNullOrBlank() && current?.taskType?.name == "unspecified")) { "Only an unknown Current Activity can be described" }
                 val latest = project()?.records?.maxOfOrNull { Instant.parse(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
                 val action = maxOf(journal.lastAction + 1, latest + 1, requestedAt)
                 val at = Instant.ofEpochMilli(action).toString()
@@ -206,10 +207,12 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) } ?: observed.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) }
                 val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
                     at, observed.calibration ?: calibration, observed.snapshot?.cursor ?: snapshot.cursor,
-                    ActivityEffectiveDto("instant", effectiveAt?.toString() ?: at), if (predecessor == null) observedCurrent?.id else null,
+                    ActivityEffectiveDto("instant", if (kind == ActivityKind.Describe) current!!.startAt else effectiveAt?.toString() ?: at), if (predecessor == null) observedCurrent?.id else null,
                     kind, selectedType, selectedName?.trim()?.ifEmpty { null },
-                    taskId = selectedPlan?.taskId ?: taskId, plannedBlockId = selectedPlan?.id,
-                    note = selectedPlan?.note, selectionSnapshot = true, predecessorId = predecessor?.operationId)
+                    taskId = if (kind == ActivityKind.Describe) current?.taskId else selectedPlan?.taskId ?: taskId, plannedBlockId = if (kind == ActivityKind.Describe) current?.plannedBlockId else selectedPlan?.id,
+                    note = if (kind == ActivityKind.Describe) current?.note else selectedPlan?.note, selectionSnapshot = true, predecessorId = predecessor?.operationId,
+                    targetSource = if (kind == ActivityKind.Describe) project()?.provenance?.get(current!!.id.toString()) ?: journal.outbox.find { -it.sequence == current!!.id }?.operationId ?: "baseline:${current!!.id}" else null,
+                    targetStartAt = if (kind == ActivityKind.Describe) current!!.startAt else null)
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command))
                 publish()
                 true

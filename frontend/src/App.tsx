@@ -1,3 +1,5 @@
+import { FocusHost } from './features/activity/FocusMode'
+import { activityDevelopmentEnabled } from './features/activity/activityRepository'
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { HistoryPage } from './features/history/HistoryPage'
@@ -37,8 +39,7 @@ function BattlePlanRoute() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
-      <ReminderWatcher />
+      {activityDevelopmentEnabled ? <FocusHost><AppRoutes /><ReminderWatcher /></FocusHost> : <><AppRoutes /><ReminderWatcher /></>}
     </BrowserRouter>
   )
 }

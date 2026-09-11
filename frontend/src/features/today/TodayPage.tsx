@@ -1,3 +1,4 @@
+import { getFocusController } from '../activity/focusController'
 import { activityDay } from '../activity/activityDay'
 import { needsElapsedDayView, ReportingDayActuals } from '../activity/ReportingDayActuals'
 import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
@@ -121,7 +122,7 @@ export function TodayPage() {
   const planningActive = allBattleTasks.some((task) => task.id === planningTaskId && task.ready_to_plan)
     || draft?.lane === 'planned'
     || (selectedBlockRef?.lane === 'planned' && inspectorDirty)
-    || readyTaskDragging || planningTaskBusyId != null || planningSaves > 0
+    || blockDragActive || readyTaskDragging || planningTaskBusyId != null || planningSaves > 0
   const planningTaskSchedulable = planningTaskId == null || readiness.isSchedulable(planningTaskId)
   const draftTaskId = draft?.task_id ?? null
   const draftTaskSchedulable = draftTaskId == null || readiness.isSchedulable(draftTaskId)
@@ -136,6 +137,7 @@ export function TodayPage() {
 
   useLayoutEffect(() => {
     workModeExecution.setPlanningActive(planningActive)
+    if (activityDevelopmentEnabled) getFocusController().setPlanning(planningActive)
   }, [planningActive, workModeExecution])
 
   const load = useCallback(async () => {

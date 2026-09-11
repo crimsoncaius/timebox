@@ -108,6 +108,7 @@ data class DayUiState(
     val readyTasks: List<BattleTask> get() = planning.readyTasks
     val readyTasksLoading: Boolean get() = planning.queueLoading
     val readyTasksError: String? get() = planning.queueError
+    val focusPlanningBlocked: Boolean get() = planning.active || planning.saving || planning.drafts.isNotEmpty() || saving || (sheetOpen && sheetLane == Lane.Planned)
     val isPlanningMode: Boolean get() = planning.active
     val accessibilityPlanningTaskId: Int? get() = planning.selectedTaskId
     val accessibilityPlanningTask: BattleTask? get() = planning.selectedTask

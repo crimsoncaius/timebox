@@ -199,3 +199,22 @@ def test_offline_intent_cannot_use_other_device_predecessor_or_overlap_history(t
     invalid = command(current, 'stop', sequence=2, effective={'mode': 'instant', 'at': at}, action_at=at)
     assert tracking.post('/activity/commands', json=invalid).status_code == 422
     assert tracking.get('/activity').json()['current'] == saved['current']
+
+
+def test_describe_unknown_preserves_identity_start_and_retry(tracking):
+    initial = tracking.get("/activity").json()
+    first = tracking.post("/activity/commands", json=command(initial, "start", selection_snapshot=True)).json()
+    reading = tracking.post("/task-types", json={"name": "reading"}).json()
+    describe = command(first, "describe", sequence=2, task_type_id=reading["id"], name="Chapter",
+                       effective={"mode": "instant", "at": first["current"]["start_at"]})
+    result = tracking.post("/activity/commands", json=describe)
+    assert result.status_code == 200, result.text
+    saved = result.json()
+    assert len(saved["records"]) == 1
+    assert saved["current"]["id"] == first["current"]["id"]
+    assert saved["current"]["start_at"] == first["current"]["start_at"]
+    assert saved["current"]["name"] == "Chapter"
+    assert saved["current"]["task_type"]["name"] == "reading"
+    assert tracking.post("/activity/commands", json=describe).json()["current"] == saved["current"]
+    invalid = command(saved, "describe", sequence=3, task_type_id=reading["id"], effective={"mode": "instant", "at": saved["current"]["start_at"]})
+    assert tracking.post("/activity/commands", json=invalid).status_code == 422

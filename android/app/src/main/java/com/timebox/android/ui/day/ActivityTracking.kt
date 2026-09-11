@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 fun ActivityTracking(
     taskTypes: List<TaskType>, onChanged: () -> Unit,
     repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
+    focus: Boolean = false, planning: Boolean = false, onEnterFocus: () -> Unit = {},
 ) {
     val state by repository.state.collectAsState()
     val owner = LocalLifecycleOwner.current
@@ -68,8 +69,18 @@ fun ActivityTracking(
                 Text(current.name ?: current.taskType.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.on)
                 Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
                 TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch") }
-                TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; stopping = true }) { Text("Stop") }
+                if (!focus) TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; stopping = true }) { Text("Stop") }
             }
+        }
+        if (!focus) TextButton(enabled = enabled && !planning, onClick = onEnterFocus) { Text("Focus") }
+        if (!focus && planning) Text("Finish or cancel planning to enter Focus.")
+        if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
+            Text("What are you doing right now?", style = MaterialTheme.typography.headlineSmall)
+            Text("Recording continues while you decide.")
+            availableTypes.forEach { type -> TextButton(onClick = { selectedType = type }) { Text((if (selectedType?.id == type.id) "Selected: " else "") + type.name) } }
+            Text("Apply from the original start (${current.startAt}) describes all this activity. Start now keeps preceding unspecified time.")
+            Button(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Describe, selectedType!!.id, observedTargetId = id) } }) { Text("Apply from original start") }
+            TextButton(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, observedTargetId = id) } }) { Text("Start now") }
         }
         if (current != null && plan != null && current.plannedBlockId != plan.id) {
             TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {

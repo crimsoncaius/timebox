@@ -110,6 +110,12 @@ fun TimeboxApp(
     val recurringViewModel: RecurringViewModel = viewModel(factory = factory)
     val recurringEditorViewModel: RecurringEditorViewModel = viewModel(factory = factory)
     val dayState by dayViewModel.state.collectAsState()
+    val focusController = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).focusController else null
+    val focusState = focusController?.state?.collectAsState()?.value
+    val currentActivity = activityRepository?.state?.collectAsState()?.value
+    val focused = focusState?.active == true && currentActivity?.snapshot?.current != null && !dayState.focusPlanningBlocked
+    LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) { if (activityRepository != null) focusController?.reconcile(activityRepository, dayState.focusPlanningBlocked) }
+
     val chronicleState by chronicleViewModel.state.collectAsState()
     val typesState by typesViewModel.state.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
@@ -293,7 +299,7 @@ fun TimeboxApp(
 
     CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
-        Column(
+        if (!focused) Column(
             modifier = Modifier.fillMaxSize().imePadding().then(
                 if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
@@ -357,6 +363,7 @@ fun TimeboxApp(
                             onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,
                             onRetryReadyTasks = dayViewModel::refreshReadyToPlan,
                             onOpenWorkMode = dayViewModel::startWorkMode,
+                            onEnterFocus = { trackingScope.launch { if (activityRepository != null) focusController?.enter(activityRepository) { dayViewModel.state.value.focusPlanningBlocked } } },
                         )
                     }
                     composable(AppRoutes.Chronicle) {
@@ -687,6 +694,7 @@ fun TimeboxApp(
             }
         }
 
+        if (focused) com.timebox.android.ui.focus.FocusMode()
         dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
             WorkModeScreen(
                 state = workMode,
