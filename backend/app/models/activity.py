@@ -13,6 +13,7 @@ class ActivityState(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     cursor: Mapped[int] = mapped_column(Integer, default=0)
     reporting_timezone: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    check_in: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reconciliation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 

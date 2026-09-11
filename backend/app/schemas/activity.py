@@ -21,6 +21,21 @@ class EffectiveTime(BaseModel):
     end: AwareDatetime | None = None
 
 
+class CheckInEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["candidate", "observe", "confirm", "delivery", "notification_dismiss"]
+    generation: str | None = None
+    rearm: int = Field(default=0, ge=0)
+    question_id: str | None = None
+    enabled: bool | None = None
+    threshold_minutes: int | None = Field(default=None, ge=15, le=480)
+    capability: Literal["supported", "unsupported", "approximate"] = "unsupported"
+    permission: Literal["granted", "denied", "prompt", "unavailable"] = "unavailable"
+    observed: Literal["active", "idle", "locked", "unknown"] = "unknown"
+    coverage_start: AwareDatetime | None = None
+    coverage_end: AwareDatetime | None = None
+
+
 class ActivityCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     operation_id: UUID
@@ -35,7 +50,8 @@ class ActivityCommand(BaseModel):
     clear_fields: list[Literal["name", "note"]] = []
     target_source: str | None = None
     target_start_at: AwareDatetime | None = None
-    kind: Literal["start", "switch", "stop", "describe", "add", "edit", "delete"]
+    kind: Literal["start", "switch", "stop", "describe", "add", "edit", "delete", "check_in"]
+    check_in: CheckInEvent | None = None
     selection_snapshot: bool = False
     task_type_id: int | None = None
     name: str | None = Field(default=None, max_length=500)
@@ -67,3 +83,4 @@ class ActivitySnapshot(BaseModel):
     operation_outcomes: dict[str, dict[str, str]] = {}
     coverage: list[dict] = []
     acknowledgement: ActivityAcknowledgement | None = None
+    check_in: dict = {}

@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 
+@Serializable data class CheckInPreferences(val enabled: Boolean = true, val thresholdMinutes: Int = 60)
+
 interface ActivityTransport {
     suspend fun read(): ActivitySnapshotDto
     suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto
@@ -32,6 +34,8 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
 }
 @Serializable private data class ActivityJournal(
     val device: String = UUID.randomUUID().toString(), val sequence: Int = 0,
+    val checkInPreferences: CheckInPreferences = CheckInPreferences(),
+    val dismissedQuestions: Set<String> = emptySet(),
     val lastAction: Long = 0, val endpoint: String? = null,
     val pending: ActivityCommandDto? = null, val snapshot: ActivitySnapshotDto? = null,
     val rejected: ActivityCommandDto? = null,
@@ -43,6 +47,7 @@ data class ActivityUiState(
     val snapshot: ActivitySnapshotDto? = null, val pending: Boolean = false,
     val busy: Boolean = false, val error: String? = null, val offline: Boolean = false,
     val feedback: String? = null,
+    val checkInPreferences: CheckInPreferences = CheckInPreferences(),
 )
 /** Confirmed history plus durable local intent. Acknowledgements never restamp intent. */
 class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage,
@@ -65,7 +70,14 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         } catch (error: Exception) { storageError = "Activity storage unavailable: ${error.message}"; publish(storageError) }
     }
     private fun project(): ActivitySnapshotDto? {
-        val snapshot = journal.snapshot ?: return null
+        var snapshot = journal.snapshot ?: return null
+        journal.outbox.forEach { command ->
+            val checkIn = snapshot.checkIn ?: return@forEach
+            val event = command.checkIn
+            if (event?.action == "confirm" && event.questionId == checkIn.question?.id)
+                snapshot = snapshot.copy(checkIn = checkIn.copy(question = null, rearm = checkIn.rearm + 1, armedAt = command.actionAt))
+            if (command.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop)) snapshot = snapshot.copy(checkIn = checkIn.copy(question = null))
+        }
         return if (journal.outbox.isNotEmpty()) projectRanges(snapshot.copy(serverAt = now().toString())) else snapshot
     }
     private data class Order(val at: Instant, val device: String, val sequence: Int, val id: String) : Comparable<Order> {
@@ -79,7 +91,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             snapshot.records.find { it.id == p.recordId }, Order(p.order[0].content.takeIf { it.isNotEmpty() }?.let(Instant::parse) ?: Instant.MIN,
                 p.order[1].content, p.order[2].content.toInt(), p.order[3].content)) }
         journal.outbox.forEach { command ->
-            if (command.effective.mode == "server_now") return@forEach
+            if (command.kind == ActivityKind.CheckIn || command.effective.mode == "server_now") return@forEach
             val at = checkNotNull(command.effective.at)
             val start = Instant.parse(at)
             val end = command.effective.end?.let(Instant::parse) ?: Instant.MAX
@@ -115,7 +127,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         return snapshot.copy(records = records, current = records.find { it.endAt == null }, provenance = provenance)
     }
     private fun publish(error: String? = null, busy: Boolean = false) {
-        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback)
+        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback, journal.checkInPreferences)
     }
     private fun save(value: ActivityJournal) {
         try { storage.save(ApiFactory.json.encodeToString(value)) }
@@ -161,6 +173,36 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             offline = false
             check(applied) { "Activity changed on another device. Pending changes were retained for review." }
         }
+    }
+    fun checkInPreferences() = journal.checkInPreferences
+    suspend fun setCheckInPreferences(preferences: CheckInPreferences) = mutex.withLock {
+        try {
+            require(preferences.thresholdMinutes in 15..480) { "Choose 15 to 480 minutes." }
+            save(journal.copy(checkInPreferences = preferences)); publish()
+        } catch (error: Exception) { publish(error.message) }
+    }
+    fun checkInDismissed(id: String) = id in journal.dismissedQuestions
+    suspend fun dismissCheckIn(id: String) = mutex.withLock {
+        try { save(journal.copy(dismissedQuestions = journal.dismissedQuestions + id)); publish() }
+        catch (error: Exception) { publish(error.message) }
+    }
+    suspend fun checkIn(event: CheckInEventDto): Boolean = mutex.withLock {
+        var saved = false
+        try {
+            checkEndpoint()
+            val snapshot = checkNotNull(project())
+            val prompt = checkNotNull(snapshot.checkIn)
+            val calibration = checkNotNull(journal.calibration)
+            val millis = maxOf(now().toEpochMilli(), journal.lastAction + 1)
+            val at = Instant.ofEpochMilli(millis).toString()
+            val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
+                at, calibration, snapshot.cursor, ActivityEffectiveDto("instant", at), snapshot.current?.id,
+                ActivityKind.CheckIn, checkIn = event.copy(enabled = if (event.action == "candidate") journal.checkInPreferences.enabled else event.enabled, thresholdMinutes = if (event.action == "candidate") journal.checkInPreferences.thresholdMinutes else event.thresholdMinutes, generation = event.generation ?: prompt.generation, rearm = if (event.generation == null) prompt.rearm else event.rearm))
+            save(journal.copy(sequence = command.sequence, lastAction = millis, outbox = journal.outbox + command))
+            saved = true; publish(); drain(); publish()
+        } catch (cancelled: CancellationException) { publish(); throw cancelled }
+        catch (error: Exception) { publish(error.message) }
+        saved
     }
     suspend fun refresh() = mutex.withLock {
         try {

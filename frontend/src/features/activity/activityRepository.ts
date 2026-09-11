@@ -6,7 +6,18 @@ export interface ActivityPlan {
   id: number; task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string
 }
 export interface ActivitySelection { task_id?: number | null; planned_block_id?: number | null; note?: string | null }
+export interface CheckInState {
+  enabled: boolean; threshold_minutes: number; generation: string; rearm: number; armed_at: string | null
+  question: { id: string; created_at: string; candidate_device?: string; candidate_operation_id?: string; delivery: { device_id: string; operation_id: string; at: string; dismissed: boolean } | null } | null
+}
+export interface CheckInEvent {
+  action: 'candidate' | 'observe' | 'confirm' | 'delivery' | 'notification_dismiss'
+  generation?: string; rearm?: number; question_id?: string; enabled?: boolean; threshold_minutes?: number
+  capability?: 'supported' | 'unsupported' | 'approximate'; permission?: 'granted' | 'denied' | 'prompt' | 'unavailable'
+  observed?: 'active' | 'idle' | 'locked' | 'unknown'; coverage_start?: string; coverage_end?: string
+}
 export interface ActivitySnapshot {
+  check_in?: CheckInState
   protocol: 'activity-online-v1'; cursor: number; server_at: string; reporting_timezone: string
   current: ActualBlock | null; records: ActualBlock[]; provenance?: Record<string, string>; task_types?: TaskType[]
   reporting_timezone_initialized?: boolean
@@ -22,9 +33,11 @@ interface Command {
   calibration: { server_at: string; offset_ms: number }; base_cursor: number
   effective: { mode: 'server_now' | 'instant' | 'range'; at?: string; end?: string }; target_id: number | null
   selection_snapshot?: boolean; task_id?: number | null; planned_block_id?: number | null; note?: string | null
-  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'describe' | 'add' | 'edit' | 'delete'; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
+  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'describe' | 'add' | 'edit' | 'delete' | 'check_in'; check_in?: CheckInEvent; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
 }
+export interface CheckInPreferences { enabled: boolean; thresholdMinutes: number }
 interface Journal {
+  checkInPreferences?: CheckInPreferences
   device: string; sequence: number; lastAction: number; pending: Command | null
   outbox: Command[]; rejected?: Command[] | Command | null; snapshot: ActivitySnapshot | null
   calibration?: Command['calibration']
@@ -57,6 +70,12 @@ export class ActivityRepository {
   private project(): ActivitySnapshot | null {
     if (!this.journal.snapshot) return null
     const snapshot = { ...this.journal.snapshot, records: [...this.journal.snapshot.records] }
+    for (const command of this.journal.outbox) {
+      if (!snapshot.check_in) continue
+      const event = command.check_in
+      if (event?.action === 'confirm' && event.question_id === snapshot.check_in.question?.id) snapshot.check_in = { ...snapshot.check_in, question: null, rearm: snapshot.check_in.rearm + 1, armed_at: command.action_at }
+      if (['start', 'switch', 'stop'].includes(command.kind)) snapshot.check_in = { ...snapshot.check_in, question: null }
+    }
     if (this.journal.outbox.length) return this.projectRanges(snapshot)
     return snapshot
   }
@@ -80,7 +99,7 @@ export class ActivityRepository {
       row: snapshot.records.find(r => r.id === p.record_id) ?? null,
       order: [p.order[0] ? instant(p.order[0]) : -infinity, p.order[1], p.order[2], p.order[3]] }))
     for (const command of this.journal.outbox) {
-      if (command.effective.mode === 'server_now') continue
+      if (command.kind === 'check_in' || command.effective.mode === 'server_now') continue
       const at = command.effective.at!
       const start = instant(at)
       const end = command.effective.end ? instant(command.effective.end) : infinity
@@ -188,6 +207,37 @@ export class ActivityRepository {
         this.publish()
       })
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not refresh activity') }
+  }
+  checkInPreferences = (): CheckInPreferences => this.journal.checkInPreferences ?? { enabled: true, thresholdMinutes: 60 }
+  async setCheckInPreferences(preferences: CheckInPreferences) {
+    try {
+      await this.exclusive(async () => {
+        this.journal = this.readJournal()
+        if (!Number.isInteger(preferences.thresholdMinutes) || preferences.thresholdMinutes < 15 || preferences.thresholdMinutes > 480) throw new Error('Choose 15 to 480 minutes.')
+        this.save({ ...this.journal, checkInPreferences: preferences }); this.publish()
+      }); return true
+    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save settings'); return false }
+  }
+  async checkIn(event: CheckInEvent) {
+    let saved = false
+    const observed = this.state.snapshot?.check_in
+    if (event.action === 'candidate') event = { ...event, enabled: this.checkInPreferences().enabled, threshold_minutes: this.checkInPreferences().thresholdMinutes }
+    try {
+      await this.exclusive(async () => {
+        if (this.storageError) throw new Error(this.storageError)
+        this.journal = this.readJournal()
+        if (!this.journal.calibration || !observed) throw new Error('Connect to initialize check-ins.')
+        const sequence = this.journal.sequence + 1
+        const at = Math.max(this.now(), this.journal.lastAction + 1)
+        const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence,
+          action_at: new Date(at).toISOString(), calibration: this.journal.calibration, base_cursor: this.journal.snapshot!.cursor,
+          target_id: this.state.snapshot?.current?.id ?? null, effective: { mode: 'instant', at: new Date(at).toISOString() }, kind: 'check_in',
+          check_in: { generation: observed.generation, rearm: observed.rearm, ...event } }
+        this.save({ ...this.journal, sequence, lastAction: at, outbox: [...this.journal.outbox, command] })
+        saved = true; this.publish(); await this.drain(); this.publish()
+      })
+    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save check-in') }
+    return saved
   }
   async setReportingTimezone(timezone: string) {
     try {

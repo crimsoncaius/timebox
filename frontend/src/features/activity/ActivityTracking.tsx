@@ -42,6 +42,12 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const availableTypes = state.snapshot?.task_types ?? taskTypes
   const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
   return <div className="mb-3 text-sm text-on-surface-variant dark:text-dark-on-surface-variant" aria-label="Activity tracking">
+    {current && state.snapshot?.check_in?.question && <section aria-label="Inactivity check-in" className="my-4 rounded-2xl bg-surface-container-low p-6 dark:bg-dark-surface-container">
+      <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{current.name || current.task_type.name}</p>
+      <div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 text-on-primary" onClick={() => void repository.checkIn({ action: 'confirm', question_id: state.snapshot!.check_in!.question!.id })}>Yes, still doing this</button>
+      <button className="rounded-xl border px-5 py-3" onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch activity</button></div>
+      <p className="mt-3 text-sm">Recording continues while you decide.</p>
+    </section>}
     <div className={focus ? "mt-8 flex flex-col items-center gap-4 text-center" : "flex flex-wrap items-center justify-end gap-x-4 gap-y-1"}>
       {current ? <>
         <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>

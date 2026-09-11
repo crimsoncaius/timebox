@@ -6,6 +6,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ActivityRepositoryTest {
+    @Test fun checkInConfirmationAndDismissalAreDurableOfflineWithoutChangingActivity() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, endAt = null, createdAt = at, updatedAt = at)
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = at, reportingTimezone = "UTC", offlineReady = true,
+            current = row, records = listOf(row), checkIn = CheckInStateDto(generation = "a", rearm = 0, armedAt = at, question = CheckInQuestionDto("a:0", at)))
+        var durable: String? = null
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        repository.dismissCheckIn("a:0")
+        val dismissed = ActivityRepository(transport, store)
+        assertTrue(dismissed.checkInDismissed("a:0"))
+        assertEquals("a:0", dismissed.state.value.snapshot!!.checkIn!!.question!!.id)
+        assertTrue(dismissed.checkIn(CheckInEventDto("confirm", questionId = "a:0")))
+        val restored = ActivityRepository(transport, store)
+        assertNull(restored.state.value.snapshot!!.checkIn!!.question)
+        assertEquals(row, restored.state.value.snapshot!!.current)
+        assertTrue(restored.state.value.pending)
+    }
+
     @Test fun describeUnknownRetainsIdentityAcrossOfflineRestart() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val type = TaskTypeDto(1, "unspecified")

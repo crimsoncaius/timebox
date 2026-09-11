@@ -10,6 +10,27 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class ActivityTrackingTest {
+    @Test fun pendingQuestionDismissesToWaitingAndReopensOnlyExplicitlyInFocus() {
+        val at = "2026-09-11T10:00:00Z"
+        val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, createdAt = at, updatedAt = at)
+        val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = at, reportingTimezone = "UTC", current = row, records = listOf(row),
+            checkIn = CheckInStateDto(generation = "a", rearm = 0, armedAt = at, question = CheckInQuestionDto("a:0", at)))
+        var journal: String? = null
+        val repository = ActivityRepository(object : ActivityTransport { override suspend fun read() = snapshot; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }, object : ActivityStorage { override fun load() = journal; override fun save(value: String) { journal = value } })
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = true) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Yes, still doing this").assertIsDisplayed()
+        compose.onNodeWithText("Stop").assertDoesNotExist()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("Check-in waiting").assertIsDisplayed()
+        compose.onNodeWithText("Yes, still doing this").assertDoesNotExist()
+        compose.onNodeWithText("Check-in waiting").performClick()
+        compose.onNodeWithText("Yes, still doing this").performClick()
+        compose.waitUntil(5000) { repository.state.value.snapshot!!.checkIn!!.question == null }
+        compose.onNodeWithText("Check-in waiting").assertDoesNotExist()
+        assertEquals(row, repository.state.value.snapshot!!.current)
+    }
+
     @Test fun focusUnknownPromptIsTypeOnlyAndBackDismissesSwitchSheet() {
         val at = "2026-09-11T10:00:00Z"
         val type = TaskTypeDto(1, "unspecified")

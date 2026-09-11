@@ -17,7 +17,7 @@ from app.schemas.activity import ActivityCommand, ActivitySnapshot, ActivityAckn
 from app.schemas.time_block import ActualBlockRead
 from app.services import actual_block_service as actuals
 from app.services import activity_reconciliation as reconciliation
-from app.services import activity_selection
+from app.services import activity_selection, activity_check_in
 
 
 def _lock(db: Session) -> ActivityState:
@@ -40,7 +40,9 @@ def _snapshot(db, state, timezone, acknowledgement=None):
         select(TimeBlock).where(TimeBlock.lane == BlockLane.actual, TimeBlock.start_at.is_not(None))
         .order_by(TimeBlock.start_at, TimeBlock.id)
     )]
+    check_in = activity_check_in.synchronize(state, next((row for row in records if row.end_at is None), None))
     return ActivitySnapshot(
+        check_in=check_in,
         cursor=state.cursor, server_at=dt.datetime.now(dt.timezone.utc),
         reporting_timezone=timezone, reporting_timezone_initialized=state.reporting_timezone is not None, records=records,
         plans=activity_selection.plans(db, timezone),
@@ -79,6 +81,18 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
             operation_id=previous.operation_id, outcome=previous.outcome,
             effective_at=effective_at,
         ))
+        db.commit()
+        return result
+    if body.kind == "check_in":
+        activity_check_in.synchronize(state, actuals.get_active_actual_block(db))
+        outcome = activity_check_in.apply(state, body)
+        state.cursor += 1
+        db.add(ActivityOperation(operation_id=str(body.operation_id), device_id=body.device_id,
+                                sequence=body.sequence, envelope=envelope, cursor=state.cursor,
+                                outcome=outcome, effective_at=None))
+        db.flush()
+        result = _snapshot(db, state, timezone, ActivityAcknowledgement(
+            operation_id=str(body.operation_id), outcome=outcome, effective_at=None))
         db.commit()
         return result
     if body.effective.mode != "server_now" or state.reconciliation is not None or body.selection_snapshot or body.task_id is not None or body.planned_block_id is not None:

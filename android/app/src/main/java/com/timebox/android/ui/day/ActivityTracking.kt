@@ -57,6 +57,10 @@ fun ActivityTracking(
         if (state.feedback != null) { delay(6000); repository.dismissFeedback() }
     }
     val current = state.snapshot?.current
+    val question = state.snapshot?.checkIn?.question
+    var checkInOpen by remember(question?.id) { mutableStateOf(question != null && !repository.checkInDismissed(question.id)) }
+    fun dismissCheckIn() { checkInOpen = false; question?.let { scope.launch { repository.dismissCheckIn(it.id) } } }
+
     LaunchedEffect(current?.id) { selectedType = null }
     val plan = repository.currentPlan()
     val enabled = !state.busy && state.snapshot != null
@@ -78,6 +82,7 @@ fun ActivityTracking(
             }
             if (!focus) TextButton(enabled = enabled && !planning, onClick = onEnterFocus) { Text("Focus") }
         }
+        if (question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
         if (!focus && planning) Text("Finish or cancel planning to enter Focus.")
         if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
             Text("What are you doing right now?", style = MaterialTheme.typography.headlineSmall)
@@ -103,6 +108,15 @@ fun ActivityTracking(
         if (state.error != null || state.pending) {
             Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
             TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }
+        }
+    }
+    if (question != null && current != null && checkInOpen) ModalBottomSheet(onDismissRequest = { dismissCheckIn() }) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Text("Still doing this?", style = MaterialTheme.typography.headlineLarge)
+            Text(current.name ?: current.taskType.name, style = MaterialTheme.typography.headlineSmall)
+            Button(modifier = Modifier.fillMaxWidth(), onClick = { scope.launch { if (repository.checkIn(com.timebox.android.data.remote.CheckInEventDto("confirm", questionId = question.id))) checkInOpen = false } }) { Text("Yes, still doing this") }
+            OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { dismissCheckIn(); targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch activity") }
+            Text("Recording continues while you decide.")
         }
     }
     if (switching || stopping) ModalBottomSheet(onDismissRequest = { switching = false; stopping = false }) {

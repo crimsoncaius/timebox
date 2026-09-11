@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable enum class ActivityKind {
+    @SerialName("check_in") CheckIn,
     @SerialName("start") Start,
     @SerialName("switch") Switch,
     @SerialName("stop") Stop,
@@ -41,6 +42,7 @@ import kotlinx.serialization.Serializable
     @SerialName("selection_snapshot") val selectionSnapshot: Boolean = false,
     @SerialName("target_source") val targetSource: String? = null,
     @SerialName("target_start_at") val targetStartAt: String? = null,
+    @SerialName("check_in") val checkIn: CheckInEventDto? = null,
     val clear_fields: List<String> = emptyList(),
     @SerialName("predecessor_id") val predecessorId: String? = null,
 )
@@ -49,6 +51,7 @@ import kotlinx.serialization.Serializable
     val outcome: ActivityOutcome,
 )
 @Serializable data class ActivitySnapshotDto(
+    @SerialName("check_in") val checkIn: CheckInStateDto? = null,
     val protocol: String = "activity-online-v1",
     val cursor: Int,
     @SerialName("server_at") val serverAt: String,
@@ -85,3 +88,19 @@ import kotlinx.serialization.Serializable
 
 @kotlinx.serialization.Serializable
 data class ReportingTimezoneDto(val timezone: String)
+
+@Serializable data class CheckInStateDto(
+    val enabled: Boolean = true, @SerialName("threshold_minutes") val thresholdMinutes: Int = 60,
+    val generation: String, val rearm: Int, @SerialName("armed_at") val armedAt: String? = null,
+    val question: CheckInQuestionDto? = null,
+)
+@Serializable data class CheckInQuestionDto(val id: String, @SerialName("created_at") val createdAt: String, @SerialName("candidate_device") val candidateDevice: String? = null, @SerialName("candidate_operation_id") val candidateOperationId: String? = null, val delivery: CheckInDeliveryDto? = null)
+@Serializable data class CheckInDeliveryDto(@SerialName("device_id") val deviceId: String, @SerialName("operation_id") val operationId: String, val at: String, val dismissed: Boolean = false)
+@Serializable data class CheckInEventDto(
+    val action: String, val generation: String? = null, val rearm: Int = 0,
+    @SerialName("question_id") val questionId: String? = null, val enabled: Boolean? = null,
+    @SerialName("threshold_minutes") val thresholdMinutes: Int? = null,
+    val capability: String = "unsupported", val permission: String = "unavailable", val observed: String = "unknown",
+    @SerialName("coverage_start") val coverageStart: String? = null,
+    @SerialName("coverage_end") val coverageEnd: String? = null,
+)

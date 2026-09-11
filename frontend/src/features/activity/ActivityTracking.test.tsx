@@ -344,3 +344,27 @@ it('keeps add then multiple moves and delete correct while only the first acknow
   expect(await restored.correct('delete', restored.state.snapshot!.records[0].id)).toBe(true)
   expect(restored.state.snapshot!.records).toEqual([])
 })
+
+it('confirms inline while offline, survives restart and never offers Stop in Focus', async () => {
+  const at = '2026-09-11T10:00:00Z'
+  const row = { id: 1, name: 'Writing', task_type_id: 1, task_type: { id: 1, name: 'writing' }, start_at: at, end_at: null }
+  const initial = { protocol: 'activity-online-v1', offline_ready: true, cursor: 1, server_at: at, current: row, records: [row], check_in: { enabled: true, threshold_minutes: 60, generation: 'a', rearm: 0, armed_at: at, question: { id: 'a:0', created_at: at, delivery: null } } }
+  let online = true
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+    if (!online || init?.method) throw new Error('Offline')
+    return new Response(JSON.stringify(initial))
+  }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  online = false
+  const view = render(<ActivityTracking repository={repository} taskTypes={[]} onChanged={() => {}} focus />)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Yes, still doing this' }))
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Inactivity check-in' })).not.toBeInTheDocument())
+  view.unmount()
+  const restored = new ActivityRepository(localStorage, work => work())
+  expect(restored.state.snapshot?.check_in?.question).toBeNull()
+  expect(restored.state.snapshot?.current).toEqual(row)
+  expect(restored.state.pending).toBe(true)
+})
