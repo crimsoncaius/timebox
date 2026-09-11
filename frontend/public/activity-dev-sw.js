@@ -4,6 +4,21 @@ const cacheName = 'timebox-activity-development-shell-v1'
 const eligible = url => url.origin === self.location.origin && !url.pathname.startsWith('/api') && !url.pathname.includes('activity-dev-sw.js')
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
+self.addEventListener('notificationclick', event => {
+  const question = event.notification.data?.activityQuestion
+  if (!question) return
+  event.notification.close()
+  event.waitUntil((async () => {
+    const url = new URL('/settings', self.location.origin)
+    url.searchParams.set('activity_check_in', question)
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const client = windows.find(item => new URL(item.url).origin === self.location.origin)
+    if (client) { await client.navigate(url.href); await client.focus() }
+    else await self.clients.openWindow(url.href)
+  })())
+})
+// Dismissal intentionally leaves the shared question pending. No new delivery
+// is scheduled by the worker, reconnect, or a subsequent app launch.
 self.addEventListener('message', event => {
   if (event.data?.type !== 'cache-shell') return
   event.waitUntil((async () => {

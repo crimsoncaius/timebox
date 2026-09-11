@@ -37,6 +37,7 @@ interface Command {
 }
 export interface CheckInPreferences { enabled: boolean; thresholdMinutes: number }
 interface Journal {
+  notificationAttempts?: string[]
   checkInPreferences?: CheckInPreferences
   device: string; sequence: number; lastAction: number; pending: Command | null
   outbox: Command[]; rejected?: Command[] | Command | null; snapshot: ActivitySnapshot | null
@@ -49,6 +50,8 @@ const browserExclusive: Exclusive = (work) => {
   return navigator.locks.request(storageKey, work)
 }
 export class ActivityRepository {
+  private startListeners = new Set<() => void>()
+  subscribeTrackingStart = (listener: () => void) => { this.startListeners.add(listener); return () => { this.startListeners.delete(listener) } }
   private listeners = new Set<() => void>()
   private journal: Journal = { device: crypto.randomUUID(), sequence: 0, lastAction: 0, pending: null, outbox: [], snapshot: null }
   private anchor: { server: number; monotonic: number } | null = null
@@ -224,8 +227,8 @@ export class ActivityRepository {
       }); return true
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save settings'); return false }
   }
-  async checkIn(event: CheckInEvent) {
-    let saved = false
+  async checkIn(event: CheckInEvent): Promise<string | false> {
+    let saved: string | false = false
     const observed = this.state.snapshot?.check_in
     if (event.action === 'candidate') event = { ...event, enabled: this.checkInPreferences().enabled, threshold_minutes: this.checkInPreferences().thresholdMinutes }
     try {
@@ -240,10 +243,25 @@ export class ActivityRepository {
           target_id: this.state.snapshot?.current?.id ?? null, effective: { mode: 'instant', at: new Date(at).toISOString() }, kind: 'check_in',
           check_in: { generation: observed.generation, rearm: observed.rearm, ...event } }
         this.save({ ...this.journal, sequence, lastAction: at, outbox: [...this.journal.outbox, command] })
-        saved = true; this.publish(); await this.drain(); this.publish()
+        saved = command.operation_id; this.publish(); await this.drain(); this.publish()
       })
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save check-in') }
     return saved
+  }
+  async claimCheckInNotification(candidateOperation: string) {
+    const question = this.state.snapshot?.check_in?.question
+    if (!question || this.state.offline || this.state.pending || question.candidate_operation_id !== candidateOperation || question.candidate_device !== this.journal.device) return false
+    let eligible = false
+    await this.exclusive(async () => {
+      this.journal = this.readJournal()
+      if (this.journal.notificationAttempts?.includes(question.id)) return
+      this.save({ ...this.journal, notificationAttempts: [...(this.journal.notificationAttempts ?? []), question.id] })
+      eligible = true
+    })
+    if (!eligible) return false
+    const operation = await this.checkIn({ action: 'delivery', question_id: question.id })
+    const current = this.state.snapshot?.check_in?.question
+    return !this.state.offline && !this.state.pending && current?.id === question.id && current.delivery?.operation_id === operation ? current : false
   }
   async setReportingTimezone(timezone: string) {
     try {
@@ -258,6 +276,7 @@ export class ActivityRepository {
   }
   async command(kind: 'start' | 'switch' | 'stop' | 'describe', taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection, timing?: { at?: string; targetId: number }) {
     if (retryOnly) { await this.refresh(); return !this.state.pending && !this.state.error }
+    if (kind === 'start') this.startListeners.forEach(listener => listener())
     let saved = false
     const requestedAt = this.now()
     if (kind === 'start' && !selection && taskTypeId == null && !name) {

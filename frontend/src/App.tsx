@@ -1,4 +1,5 @@
 import { FocusHost } from './features/activity/FocusMode'
+import { BrowserCheckInHost } from './features/activity/BrowserCheckInHost'
 import { activityDevelopmentEnabled } from './features/activity/activityRepository'
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
@@ -16,7 +17,7 @@ const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').
 export function AppRoutes() {
   return (
     <ReadinessProvider>
-      {activityDevelopmentEnabled ? <FocusHost><AppRouteContent /><ReminderWatcher /></FocusHost> : <><AppRouteContent /><ReminderWatcher /></>}
+      {activityDevelopmentEnabled ? <><BrowserCheckInHost /><FocusHost><AppRouteContent /><ReminderWatcher /></FocusHost></> : <><AppRouteContent /><ReminderWatcher /></>}
     </ReadinessProvider>
   )
 }
