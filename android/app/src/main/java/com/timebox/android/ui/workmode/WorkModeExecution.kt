@@ -263,6 +263,9 @@ class WorkModeExecution(
     }
 
     private suspend fun enter(day: Day, entryAt: Instant, active: ActualBlock? = null) {
+        // All legacy entry paths, including resume and continue-entry, stop here
+        // after cutover. Focus owns restoration without changing saved recovery data.
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) return
         val now = clock()
         val (clockCurrent, clockNext) = selection(day, now)
         val current = active?.let { activeBlock(day, it, now) } ?: clockCurrent
