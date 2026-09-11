@@ -48,6 +48,10 @@ _Avoid_: One-size-fits-all toast
 A full-screen, present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
 _Avoid_: Task detail, Task status, timer mode
 
+**Inactivity Prompt**:
+A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting. It is distinct from the Focus Mode question used to name an unknown activity.
+_Avoid_: Periodic check-in, Transient Feedback
+
 **Day Planning**:
 The daily activity of allocating Planned Blocks to intended work. It is performed on the Day surface and is distinct from Work Mode.
 _Avoid_: Plan Mode, scheduling reminder

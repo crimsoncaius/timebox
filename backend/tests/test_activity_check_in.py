@@ -100,3 +100,32 @@ def test_candidate_switch_race_is_serialized_in_postgres(tracking):
     final = tracking.get('/activity').json()
     assert final['current'] is None
     assert final['check_in']['question'] is None
+
+def test_concurrent_candidates_have_one_durable_question(tracking):
+    from app.db.session import get_engine
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    import pytest
+    if get_engine().dialect.name != 'postgresql':
+        pytest.skip('Requires isolated PostgreSQL')
+    first = running(tracking)
+    barrier = Barrier(2)
+    def detect(device):
+        barrier.wait()
+        return candidate(tracking, first, device=device)['check_in']['question']['id']
+    with ThreadPoolExecutor(2) as pool:
+        jobs = [pool.submit(detect, device) for device in ['one', 'two']]
+        ids = [job.result() for job in jobs]
+    assert ids[0] == ids[1] == tracking.get('/activity').json()['check_in']['question']['id']
+
+
+def test_remote_active_arriving_after_offline_confirmation_is_not_discarded(tracking):
+    first = running(tracking)
+    pending = candidate(tracking, first)
+    now = dt.datetime.fromisoformat(first['server_at'].replace('Z', '+00:00'))
+    confirmed_at = (now - dt.timedelta(minutes=90)).isoformat()
+    active_at = (now - dt.timedelta(minutes=85)).isoformat()
+    confirmed = event(tracking, pending, 'confirm', device='offline-answer', question_id=pending['check_in']['question']['id'], action_at=confirmed_at)
+    event(tracking, pending, 'observe', device='active', observed='active', capability='supported', permission='granted', coverage_start=active_at, coverage_end=active_at)
+    result = event(tracking, confirmed, 'candidate', device='returning', observed='idle', capability='supported', permission='granted', coverage_start=confirmed_at, coverage_end=(now-dt.timedelta(minutes=30)).isoformat())
+    assert result['check_in']['question'] is None

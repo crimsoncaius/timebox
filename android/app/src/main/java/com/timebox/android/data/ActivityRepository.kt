@@ -72,11 +72,20 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private fun project(): ActivitySnapshotDto? {
         var snapshot = journal.snapshot ?: return null
         journal.outbox.forEach { command ->
-            val checkIn = snapshot.checkIn ?: return@forEach
+            var checkIn = snapshot.checkIn ?: return@forEach
             val event = command.checkIn
+            if (event?.action == "observe" && event.observed == "active" && event.generation == checkIn.generation && event.capability in listOf("supported", "approximate") && event.permission == "granted" && event.coverageStart != null && event.coverageEnd != null && Instant.parse(event.coverageStart) <= Instant.parse(event.coverageEnd) && Instant.parse(event.coverageEnd) <= now().plusSeconds(5)) {
+                checkIn = checkIn.copy(activeAt = maxOf(Instant.parse(event.coverageEnd), checkIn.activeAt?.let(Instant::parse) ?: Instant.MIN).toString())
+                snapshot = snapshot.copy(checkIn = checkIn)
+            }
+            if (event?.action == "candidate" && event.generation == checkIn.generation && event.rearm == checkIn.rearm && checkIn.question == null && event.enabled != false && event.capability in listOf("supported", "approximate") && event.permission == "granted" && event.observed in listOf("idle", "locked") && event.coverageStart != null && event.coverageEnd != null && Instant.parse(event.coverageEnd) <= now().plusSeconds(5) && checkIn.armedAt != null) {
+                val start = maxOf(Instant.parse(event.coverageStart), Instant.parse(checkIn.armedAt), checkIn.activeAt?.let(Instant::parse) ?: Instant.MIN)
+                if (java.time.Duration.between(start, Instant.parse(event.coverageEnd)).toMinutes() >= (event.thresholdMinutes ?: 60))
+                    snapshot = snapshot.copy(checkIn = checkIn.copy(question = CheckInQuestionDto("${checkIn.generation}:${checkIn.rearm}", command.actionAt, journal.device, command.operationId)))
+            }
             if (event?.action == "confirm" && event.questionId == checkIn.question?.id)
                 snapshot = snapshot.copy(checkIn = checkIn.copy(question = null, rearm = checkIn.rearm + 1, armedAt = command.actionAt))
-            if (command.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop)) snapshot = snapshot.copy(checkIn = checkIn.copy(question = null))
+            if (command.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop)) snapshot = snapshot.copy(checkIn = checkIn.copy(question = null, generation = "pending:${command.operationId}", rearm = 0, armedAt = command.actionAt))
         }
         return if (journal.outbox.isNotEmpty()) projectRanges(snapshot.copy(serverAt = now().toString())) else snapshot
     }

@@ -368,3 +368,21 @@ it('confirms inline while offline, survives restart and never offers Stop in Foc
   expect(restored.state.snapshot?.current).toEqual(row)
   expect(restored.state.pending).toBe(true)
 })
+
+it('retains a qualified offline candidate and its original question identity across restart', async () => {
+  const at = '2026-09-11T10:00:00Z', end = '2026-09-11T14:00:00Z'
+  const row = { id: 1, name: 'Writing', task_type_id: 1, task_type: { id: 1, name: 'writing' }, start_at: at, end_at: null }
+  const initial = { protocol: 'activity-online-v1', offline_ready: true, cursor: 1, server_at: end, current: row, records: [row], check_in: { enabled: true, threshold_minutes: 60, generation: 'a', rearm: 0, armed_at: at, question: null } }
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => { if (init?.method) throw new Error('Offline'); return new Response(JSON.stringify(initial)) }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  await repository.checkIn({ action: 'observe', generation: 'a', rearm: 0, capability: 'supported', permission: 'granted', observed: 'active', coverage_start: '2026-09-11T11:30:00Z', coverage_end: '2026-09-11T11:30:00Z' })
+  await repository.checkIn({ action: 'candidate', generation: 'a', rearm: 0, capability: 'supported', permission: 'granted', observed: 'idle', coverage_start: at, coverage_end: '2026-09-11T12:00:00Z' })
+  expect(repository.state.snapshot?.check_in?.question).toBeNull()
+  await repository.checkIn({ action: 'candidate', generation: 'a', rearm: 0, capability: 'supported', permission: 'granted', observed: 'idle', coverage_start: at, coverage_end: end })
+  const restored = new ActivityRepository(localStorage, work => work())
+  expect(restored.state.snapshot?.check_in?.question?.id).toBe('a:0')
+  await restored.checkIn({ action: 'confirm', question_id: 'a:0' })
+  expect(new ActivityRepository(localStorage, work => work()).state.snapshot?.check_in?.question).toBeNull()
+  expect(restored.state.snapshot?.current).toEqual(row)
+})

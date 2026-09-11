@@ -91,7 +91,7 @@ data class ReportingTimezoneDto(val timezone: String)
 
 @Serializable data class CheckInStateDto(
     val enabled: Boolean = true, @SerialName("threshold_minutes") val thresholdMinutes: Int = 60,
-    val generation: String, val rearm: Int, @SerialName("armed_at") val armedAt: String? = null,
+    val generation: String, val rearm: Int, @SerialName("armed_at") val armedAt: String? = null, @SerialName("active_at") val activeAt: String? = null,
     val question: CheckInQuestionDto? = null,
 )
 @Serializable data class CheckInQuestionDto(val id: String, @SerialName("created_at") val createdAt: String, @SerialName("candidate_device") val candidateDevice: String? = null, @SerialName("candidate_operation_id") val candidateOperationId: String? = null, val delivery: CheckInDeliveryDto? = null)

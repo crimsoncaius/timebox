@@ -9,13 +9,18 @@ class ActivityRepositoryTest {
     @Test fun checkInConfirmationAndDismissalAreDurableOfflineWithoutChangingActivity() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, endAt = null, createdAt = at, updatedAt = at)
-        val initial = ActivitySnapshotDto(cursor = 1, serverAt = at, reportingTimezone = "UTC", offlineReady = true,
-            current = row, records = listOf(row), checkIn = CheckInStateDto(generation = "a", rearm = 0, armedAt = at, question = CheckInQuestionDto("a:0", at)))
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = "2026-09-11T14:00:00Z", reportingTimezone = "UTC", offlineReady = true,
+            current = row, records = listOf(row), checkIn = CheckInStateDto(generation = "a", rearm = 0, armedAt = at, question = null))
         var durable: String? = null
         val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
         val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
         val repository = ActivityRepository(transport, store)
         repository.refresh()
+        assertTrue(repository.checkIn(CheckInEventDto("observe", generation = "a", observed = "active", capability = "supported", permission = "granted", coverageStart = "2026-09-11T11:30:00Z", coverageEnd = "2026-09-11T11:30:00Z")))
+        assertTrue(repository.checkIn(CheckInEventDto("candidate", generation = "a", capability = "supported", permission = "granted", observed = "idle", coverageStart = at, coverageEnd = "2026-09-11T12:00:00Z")))
+        assertNull(repository.state.value.snapshot!!.checkIn!!.question)
+        assertTrue(repository.checkIn(CheckInEventDto("candidate", generation = "a", rearm = 0, capability = "supported", permission = "granted", observed = "idle", coverageStart = at, coverageEnd = "2026-09-11T14:00:00Z")))
+        assertEquals("a:0", ActivityRepository(transport, store).state.value.snapshot!!.checkIn!!.question!!.id)
         repository.dismissCheckIn("a:0")
         val dismissed = ActivityRepository(transport, store)
         assertTrue(dismissed.checkInDismissed("a:0"))

@@ -7,7 +7,7 @@ export interface ActivityPlan {
 }
 export interface ActivitySelection { task_id?: number | null; planned_block_id?: number | null; note?: string | null }
 export interface CheckInState {
-  enabled: boolean; threshold_minutes: number; generation: string; rearm: number; armed_at: string | null
+  enabled: boolean; threshold_minutes: number; generation: string; rearm: number; armed_at: string | null; active_at?: string | null
   question: { id: string; created_at: string; candidate_device?: string; candidate_operation_id?: string; delivery: { device_id: string; operation_id: string; at: string; dismissed: boolean } | null } | null
 }
 export interface CheckInEvent {
@@ -73,8 +73,14 @@ export class ActivityRepository {
     for (const command of this.journal.outbox) {
       if (!snapshot.check_in) continue
       const event = command.check_in
+      if (event?.action === 'observe' && event.observed === 'active' && event.generation === snapshot.check_in.generation && ['supported', 'approximate'].includes(event.capability ?? '') && event.permission === 'granted' && event.coverage_start && event.coverage_end && Date.parse(event.coverage_start) <= Date.parse(event.coverage_end) && Date.parse(event.coverage_end) <= this.now() + 5000) snapshot.check_in = { ...snapshot.check_in, active_at: new Date(Math.max(Date.parse(event.coverage_end), snapshot.check_in.active_at ? Date.parse(snapshot.check_in.active_at) : 0)).toISOString() }
+      const prompt = snapshot.check_in
+      if (event?.action === 'candidate' && event.generation === prompt.generation && event.rearm === prompt.rearm && !prompt.question && event.enabled !== false && ['supported', 'approximate'].includes(event.capability ?? '') && event.permission === 'granted' && ['idle', 'locked'].includes(event.observed ?? '') && event.coverage_start && event.coverage_end && Date.parse(event.coverage_end) <= this.now() + 5000 && prompt.armed_at) {
+        const start = Math.max(Date.parse(event.coverage_start), Date.parse(prompt.armed_at), prompt.active_at ? Date.parse(prompt.active_at) : 0)
+        if (Date.parse(event.coverage_end) - start >= (event.threshold_minutes ?? 60) * 60000) snapshot.check_in = { ...prompt, question: { id: `${prompt.generation}:${prompt.rearm}`, created_at: command.action_at, candidate_device: command.device_id, candidate_operation_id: command.operation_id, delivery: null } }
+      }
       if (event?.action === 'confirm' && event.question_id === snapshot.check_in.question?.id) snapshot.check_in = { ...snapshot.check_in, question: null, rearm: snapshot.check_in.rearm + 1, armed_at: command.action_at }
-      if (['start', 'switch', 'stop'].includes(command.kind)) snapshot.check_in = { ...snapshot.check_in, question: null }
+      if (['start', 'switch', 'stop'].includes(command.kind)) snapshot.check_in = { ...snapshot.check_in, question: null, generation: `pending:${command.operation_id}`, rearm: 0, armed_at: command.action_at }
     }
     if (this.journal.outbox.length) return this.projectRanges(snapshot)
     return snapshot

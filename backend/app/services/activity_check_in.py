@@ -29,7 +29,8 @@ def apply(state, command):
     if command.action_at > now + dt.timedelta(seconds=5):
         raise ValueError('Check-in instant is in the future')
     outcome = 'applied'
-    if event.generation != value['generation'] or event.rearm != value['rearm'] or not value['activity']:
+    active_observation = event.action == 'observe' and event.observed == 'active'
+    if event.generation != value['generation'] or (event.rearm != value['rearm'] and not active_observation) or not value['activity']:
         outcome = 'superseded'
     elif event.action in ('observe', 'candidate'):
         qualified = (event.capability in ('supported', 'approximate') and event.permission == 'granted'

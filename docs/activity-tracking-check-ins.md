@@ -17,3 +17,13 @@ Question `id` is the stable notification identity. `candidate_device` and `candi
 ## Isolation
 
 Migration 027 adds one nullable JSON column. Rehearse only with isolated data and back up activity_review before applying it. No production migration or deployment. Review web uses the gated activity-review bundle on12005, API12004, PostgreSQL12006; native remains com.timebox.android.activitydev.
+
+Qualified offline candidates also project into the local pending question after durable journal save; queued active observations participate in that projection. Restart retains the original evidence, generation and rearm. Confirmation can follow a pending candidate in the same outbox. A queued activity transition invalidates the projected generation, so an old candidate cannot reopen its question. Delivery requires an acknowledged server claim; offline notification delivery is not advertised in this slice.
+
+## Verification and review launch
+
+Full backend suite: 286 passed/3 skipped before final extra race tests. Final isolated PostgreSQL check-in suite: 8 passed, including simultaneous candidate merge, candidate/Stop race, both active/confirmation arrival permutations and stable delivery/dismissal. Broader PostgreSQL activity suite:39 passed. Full web:271 passed; final activity focused15 passed and TypeScript/build passed after offline projection. Native ActivityRepository:9 passed after final changes; Compose ActivityTracking:5 passed. Broad Android repeated the known legacy Work Mode restoration assertion and coroutine timeout; its exact test worker was stopped after recording those failures.
+
+Two-axis review: Standards no blocking findings. Spec found active-evidence arrival/projection gaps; both were fixed with regression checks and re-reviewed clear. API migration027 was applied only to isolated activity_review after artifacts/activity-154-before.dump backup.
+
+Real review: controlled qualified candidate became one shared question in web Focus and native Focus. Android Back retained Check-in waiting, including after force-stop/restart. Web confirmation cleared the native waiting state on sync, retaining Actual162596304 and original start2026-09-11T08:49:02.436Z with rearm1. Web local threshold480 survived reload. Both final rebuilt applications are running in Focus recording reading; artifacts/activity-154-* retain screenshots, UI trees, test/build logs and the controlled candidate result. Actual sensing, permission flows and OS delivery are intentionally #155/#156, not proven by this controlled check.
