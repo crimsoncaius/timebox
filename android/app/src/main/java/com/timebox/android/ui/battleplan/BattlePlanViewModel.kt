@@ -551,7 +551,7 @@ class BattlePlanViewModel internal constructor(
 
     fun createSubtask(parent: BattleTask, title: String) {
         if (title.isBlank() || parent.status == TaskStatus.Completed) return
-        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id, projectId = parent.projectId)) }
+        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id)) }
     }
 
     fun moveProject(task: BattleTask, projectId: Int?) {

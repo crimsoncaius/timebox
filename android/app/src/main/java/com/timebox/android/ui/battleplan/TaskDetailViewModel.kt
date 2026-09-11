@@ -312,7 +312,7 @@ class TaskDetailViewModel(
     fun addSubtask(title: String) {
         val parent = _state.value.task?.takeIf { it.parentId == null && it.status != TaskStatus.Completed } ?: return
         if (title.isBlank() || _state.value.saving) return
-        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id, projectId = parent.projectId)) }
+        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id)) }
     }
 
     fun toggleSubtask(task: Subtask) {
