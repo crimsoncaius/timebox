@@ -69,7 +69,8 @@ import com.timebox.android.ui.theme.TimeboxTheme
     val notice by app.taskCompletion.notice.collectAsState()
     var task by remember(taskId) { mutableStateOf<BattleTask?>(null) }
     var error by remember(taskId) { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    var busy by remember(taskId) { mutableStateOf(false) }
+    var ownCompletion by remember(taskId) { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(taskId) { if (taskId != null) app.repository.listBattleTasks().onSuccess { task = it.items.flattenBattleTasks().find { it.id == taskId } } }
     task?.takeIf { it.id == taskId }?.let { current ->
@@ -86,10 +87,10 @@ import com.timebox.android.ui.theme.TimeboxTheme
         } }
         if (current.status != TaskStatus.Completed) Button(enabled = !busy, onClick = {
             busy = true; scope.launch {
-                app.taskCompletion.transition(current.id, current.status, TaskStatus.Completed).onSuccess { if (task?.id == current.id) task = it; onTaskChanged() }.onFailure { error = "Could not complete Task." }; busy = false
+                app.taskCompletion.transition(current.id, current.status, TaskStatus.Completed).onSuccess { if (task?.id == current.id) { task = it; ownCompletion = app.taskCompletion.notice.value?.id }; onTaskChanged() }.onFailure { error = "Could not complete Task." }; busy = false
             }
         }) { Text("Complete Task") }
-        notice?.takeIf { it.canUndo }?.let { saved -> TextButton(enabled = !busy, onClick = {
+        notice?.takeIf { it.canUndo && it.id == ownCompletion }?.let { saved -> TextButton(enabled = !busy, onClick = {
             busy = true; scope.launch { app.taskCompletion.undo(saved.id).onSuccess { if (task?.id == it.id) task = it; onTaskChanged() }.onFailure { error = "Could not undo Task completion." }; busy = false }
         }) { Text("Undo Task completion") } }
         error?.let { Text(it) }
