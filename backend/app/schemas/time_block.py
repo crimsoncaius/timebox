@@ -152,6 +152,7 @@ class ActualBlockDayProjectionRead(BaseModel):
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
     duration_minutes: int = Field(..., ge=0)
+    day_length_minutes: int = 1440
 
 
 class ActualBlockDayRead(BaseModel):

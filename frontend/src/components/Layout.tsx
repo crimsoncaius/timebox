@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { activityDevelopmentEnabled } from "../features/activity/activityRepository";
+import { activityDevelopmentEnabled, getActivityRepository } from "../features/activity/activityRepository";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
@@ -34,10 +34,15 @@ export function Layout({
         setWorkModeAvailable(readStoredWorkMode() != null || active != null);
       })
       .catch(() => setToday(null));
+    const unsubscribe = activityDevelopmentEnabled ? getActivityRepository().subscribe(() => {
+      const snapshot = getActivityRepository().getSnapshot().snapshot
+      if (snapshot) setToday(new Intl.DateTimeFormat('en-CA', { timeZone: snapshot.reporting_timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(getActivityRepository().now())))
+    }) : () => {}
     const refresh = () => setWorkModeAvailable(readStoredWorkMode() != null)
     window.addEventListener(WORK_MODE_CHANGED_EVENT, refresh)
     window.addEventListener('storage', refresh)
     return () => {
+      unsubscribe()
       window.removeEventListener(WORK_MODE_CHANGED_EVENT, refresh)
       window.removeEventListener('storage', refresh)
     }

@@ -171,6 +171,7 @@ export interface ActualBlockDayProjection {
   start_minute: number
   end_minute: number
   duration_minutes: number
+  day_length_minutes?: number
 }
 
 export interface DayMeta {

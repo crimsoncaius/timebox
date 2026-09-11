@@ -63,6 +63,7 @@ data class ActualBlockDayProjectionDto(
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
     @SerialName("duration_minutes") val durationMinutes: Int,
+    @SerialName("day_length_minutes") val dayLengthMinutes: Int = 1440,
 )
 
 @Serializable

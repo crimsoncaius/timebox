@@ -13,6 +13,9 @@ from app.api.routes import activity, actual_blocks, battle_plan, days, recurring
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from sqlalchemy import inspect
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.services.activity_service import reporting_settings
 
 from app.db.base import Base
 from app.db.session import get_engine, repair_sqlite_actual_record_operation_references
@@ -77,8 +80,9 @@ app.include_router(activity.router, dependencies=_protected)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    settings = get_settings()
+def health(db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict[str, str]:
+    if settings.activity_tracking_dev:
+        settings = reporting_settings(db, settings)
     return {
         "status": "ok",
         "today": today_in_tz(settings.app_timezone).isoformat(),

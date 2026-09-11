@@ -197,6 +197,7 @@ class DayViewModel(
             return
         }
         launchScope.launch {
+            if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) runCatching { repository.getActivity() }
             val today = repository.getDaySummary(_state.value.date).getOrNull()?.today
             todayResolved = today != null
             if (today != null) _state.update { it.copy(today = today) }
@@ -250,7 +251,7 @@ class DayViewModel(
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
-                            state.copy(today = state.today ?: day.today).withPage(date) {
+                            state.copy(today = day.today).withPage(date) {
                                 DayPageState(
                                     day = day,
                                     loading = false,
@@ -304,7 +305,7 @@ class DayViewModel(
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
-                            state.copy(today = state.today ?: day.today).withPage(date) {
+                            state.copy(today = day.today).withPage(date) {
                                 DayPageState(day = day, loading = false, materialized = false)
                             }
                         }

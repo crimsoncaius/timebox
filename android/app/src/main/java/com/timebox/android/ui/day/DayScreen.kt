@@ -375,7 +375,7 @@ private fun DayPage(
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
             ) {
-                val elapsedDay = com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && day.actualBlocks.any { it.durationMinutes != it.endMinute - it.startMinute }
+                val elapsedDay = com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && day.actualBlocks.any { it.dayLengthMinutes != 1440 }
                 Column {
                 if (elapsedDay) ReportingDayActuals(day, onSelectBlock)
                 DayTimeline(

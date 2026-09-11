@@ -741,6 +741,7 @@ def project_actual_blocks_for_day(
                 start_minute=start_minute,
                 end_minute=end_minute,
                 duration_minutes=duration,
+                day_length_minutes=int((day_end - day_start).total_seconds() // 60),
             )
         )
 

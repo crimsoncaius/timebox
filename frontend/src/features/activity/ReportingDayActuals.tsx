@@ -1,6 +1,6 @@
 import type { DayRead } from '../../lib/api'
 
-export const needsElapsedDayView = (day: DayRead) => day.actual_blocks.some(p => p.duration_minutes !== p.end_minute - p.start_minute)
+export const needsElapsedDayView = (day: DayRead) => day.actual_blocks.some(p => (p.day_length_minutes ?? 1440) !== 1440)
 
 /** Wall-clock grids cannot represent a repeated/skipped hour faithfully. */
 export function ReportingDayActuals({ day, onSelect }: { day: DayRead; onSelect: (id: number) => void }) {

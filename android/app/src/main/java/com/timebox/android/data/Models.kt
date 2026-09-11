@@ -118,6 +118,7 @@ data class ActualBlockDayProjection(
     val startMinute: Int,
     val endMinute: Int,
     val durationMinutes: Int,
+    val dayLengthMinutes: Int = 1440,
 )
 
 data class LinkedTask(
@@ -272,6 +273,7 @@ fun ActualBlockDayProjectionDto.toModel() = ActualBlockDayProjection(
     startMinute = startMinute,
     endMinute = endMinute,
     durationMinutes = durationMinutes,
+    dayLengthMinutes = dayLengthMinutes,
 )
 
 private fun ActualBlockDayProjectionDto.toTimelineBlock() = TimeBlock(

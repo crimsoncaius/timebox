@@ -9,6 +9,7 @@ def test_reporting_initializes_once_and_changes_only_explicitly(tracking):
     assert tracking.get('/days/2026-09-11').json()['meta']['timezone'] == 'Asia/Singapore'
     assert tracking.put('/activity/reporting-timezone', json={'timezone': 'America/New_York'}).json()['reporting_timezone'] == 'America/New_York'
     assert tracking.get('/days/2026-09-11').json()['meta']['timezone'] == 'America/New_York'
+    assert tracking.get('/health').json()['timezone'] == 'America/New_York'
     assert tracking.put('/activity/reporting-timezone', json={'timezone': 'Unknown/Zone'}).status_code == 422
 
 
@@ -22,6 +23,7 @@ def test_cross_midnight_day_shares_use_elapsed_dst_duration(tracking):
     day = tracking.get('/days/2025-11-02')
     assert day.status_code == 200, day.text
     assert day.json()['actual_blocks'][0]['duration_minutes'] == 1500
+    assert day.json()['actual_blocks'][0]['day_length_minutes'] == 1500
     next_day = tracking.get('/days/2025-11-03').json()
     assert next_day['actual_blocks'][0]['actual_block']['id'] == row['id']
     assert next_day['actual_blocks'][0]['duration_minutes'] == 60
