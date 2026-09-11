@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
+import { RenameTaskTypeSheet } from './RenameTaskTypeSheet'
 import { DeleteTaskTypeResolutionModal } from '../../components/DeleteTaskTypeResolutionModal'
 import { ApiHttpError, api, TASK_TYPE_STILL_IN_USE_DETAIL, type TaskType } from '../../lib/api'
 import {
@@ -29,7 +30,7 @@ export function TaskTypesPage() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editValue, setEditValue] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
   const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string; blockCount: number; taskCount: number } | null>(null)
   const [resolveBusy, setResolveBusy] = useState(false)
 
@@ -84,6 +85,7 @@ export function TaskTypesPage() {
   }
 
   const rename = async (id: number, name: string) => {
+    setRenameError(null)
     setSaveState('saving')
     setError(null)
     try {
@@ -93,7 +95,7 @@ export function TaskTypesPage() {
       setSaveState('saved')
     } catch (e) {
       setSaveState('error')
-      setError(apiErrorMessage(e, 'Failed to update task type'))
+      setRenameError(apiErrorMessage(e, 'Failed to update task type'))
     }
   }
 
@@ -181,21 +183,10 @@ export function TaskTypesPage() {
 
   const startEdit = (t: TaskType) => {
     setEditingId(t.id)
-    setEditValue(t.name)
+    setRenameError(null)
   }
 
-  const commitEdit = (t: TaskType) => {
-    const v = editValue.trim()
-    if (!v) {
-      setEditValue(t.name)
-      setEditingId(null)
-      return
-    }
-    if (v !== t.name) void rename(t.id, v)
-    else setEditingId(null)
-  }
-
-  if (loading) {
+  if (loading && types.length === 0) {
     return (
       <Layout>
         <p className="font-body text-on-surface-variant">Loading…</p>
@@ -321,7 +312,6 @@ export function TaskTypesPage() {
                         const parts = formatTaskTypePathParts(t.name)
                         const depth = pathDepth(t.name)
                         const indentPx = 8 + depth * 14
-                        const isEditing = editingId === t.id
                         return (
                           <li
                             key={t.id}
@@ -330,27 +320,6 @@ export function TaskTypesPage() {
                               stripeIndex % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low/50 dark:bg-dark-surface-container/35',
                             ].join(' ')}
                           >
-                            {isEditing ? (
-                              <input
-                                className="min-w-0 flex-1 rounded-md border-0 bg-surface-container-highest/80 px-3 py-2 font-body text-base font-light text-on-surface shadow-none outline-none ring-0 transition-colors focus-visible:ring-1 focus-visible:ring-primary/15 dark:bg-dark-surface-container-high/70 dark:text-dark-on-surface"
-                                value={editValue}
-                                aria-label={`Task type name ${t.id}`}
-                                autoFocus
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onBlur={() => commitEdit(t)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') {
-                                    e.preventDefault()
-                                    setEditValue(t.name)
-                                    setEditingId(null)
-                                  }
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault()
-                                    ;(e.target as HTMLInputElement).blur()
-                                  }
-                                }}
-                              />
-                            ) : (
                               <div
                                 className="min-w-0 flex-1 py-2 font-body text-base font-light"
                                 style={{ paddingLeft: indentPx }}
@@ -367,17 +336,17 @@ export function TaskTypesPage() {
                                   )}
                                 </span>
                               </div>
-                            )}
-                            {!isEditing && (
+                            {t.name !== 'unspecified' && (
                               <button
                                 type="button"
                                 className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent px-3 py-2 font-label text-xs uppercase tracking-wider text-on-surface-variant transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/30 dark:border-dark-outline-variant dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container-high"
-                                aria-label={`Edit ${t.name}`}
+                                aria-label={`Rename ${t.name}`}
                                 onClick={() => startEdit(t)}
                               >
-                                Edit
+                                Rename
                               </button>
                             )}
+                            {t.name !== 'unspecified' && (
                             <button
                               type="button"
                               className="shrink-0 rounded-md border border-outline-variant/15 bg-transparent p-2 text-error transition-colors hover:bg-error-container/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error/30 dark:border-dark-outline-variant dark:hover:bg-error-container/10"
@@ -388,7 +357,7 @@ export function TaskTypesPage() {
                               <span className="material-symbols-outlined text-[20px]" aria-hidden>
                                 delete
                               </span>
-                            </button>
+                            </button>)}
                           </li>
                         )
                       })}
@@ -400,6 +369,15 @@ export function TaskTypesPage() {
           </section>
         </div>
       </div>
+      {types.find(t => t.id === editingId) && <RenameTaskTypeSheet
+        key={editingId}
+        type={types.find(t => t.id === editingId)!}
+        types={types}
+        busy={saveState === 'saving'}
+        error={renameError}
+        onClose={() => setEditingId(null)}
+        onSave={(name) => void rename(editingId!, name)}
+      />}
       <DeleteTaskTypeResolutionModal
         open={resolveDelete !== null}
         taskTypeName={resolveDelete?.name ?? ''}

@@ -16,6 +16,7 @@ describe('TaskTypesPage', () => {
   const originalFetch = globalThis.fetch
 
   beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -97,8 +98,8 @@ describe('TaskTypesPage', () => {
     renderPage()
 
     expect(await screen.findByLabelText('Task type Deep work')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Edit Deep work' }))
-    expect(await screen.findByRole('textbox', { name: /Task type name 2/i })).toHaveValue('Deep work')
+    await user.click(screen.getByRole('button', { name: 'Rename Deep work' }))
+    expect(await screen.findByRole('textbox', { name: 'Task type path' })).toHaveValue('Deep work')
   })
 
   it('POSTs new task type on Add', async () => {
@@ -155,8 +156,8 @@ describe('TaskTypesPage', () => {
 
     expect(await screen.findByLabelText('Task type work')).toBeInTheDocument()
     expect(input).toHaveValue('')
-    await user.click(screen.getByRole('button', { name: 'Edit work' }))
-    expect(await screen.findByRole('textbox', { name: /Task type name 1/i })).toHaveValue('work')
+    await user.click(screen.getByRole('button', { name: 'Rename work' }))
+    expect(await screen.findByRole('textbox', { name: 'Task type path' })).toHaveValue('work')
   })
 
   it('filters saved types as the user types in the composer', async () => {
@@ -289,12 +290,15 @@ describe('TaskTypesPage', () => {
     }) as typeof fetch
 
     renderPage()
-    await screen.findByRole('button', { name: 'Edit coding' })
-    await user.click(screen.getByRole('button', { name: 'Edit coding' }))
-    const input = await screen.findByRole('textbox', { name: /Task type name 1/i })
+    await screen.findByRole('button', { name: 'Rename coding' })
+    await user.click(screen.getByRole('button', { name: 'Rename coding' }))
+    const input = await screen.findByRole('textbox', { name: 'Task type path' })
     await user.clear(input)
     await user.type(input, 'development')
     await user.tab()
+    expect(screen.getByLabelText('Task type coding/ai')).toBeInTheDocument()
+    expect(screen.getByText('development/ai')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByLabelText('Task type development/ai')).toBeInTheDocument()
   })
@@ -389,4 +393,28 @@ describe('TaskTypesPage', () => {
       expect(screen.queryByLabelText('Task type Deep work')).not.toBeInTheDocument()
     })
   })
+  it('keeps failed rename draft and cancels without saving; protects unspecified', async () => {
+    const user = userEvent.setup()
+    const rows = [{ id: 1, name: 'coding', created_at: '', updated_at: '' }, { id: 2, name: 'unspecified', created_at: '', updated_at: '' }]
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/task-types') && init?.method === 'PATCH') return Promise.resolve(jsonResponse({ detail: 'A task type with this path already exists' }, 422))
+      if (url.includes('/task-types')) return Promise.resolve(jsonResponse(rows))
+      return Promise.resolve(jsonResponse({ today: '2026-04-13', timezone: 'UTC' }))
+    }) as typeof fetch
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Rename coding' }))
+    expect(screen.queryByRole('button', { name: 'Rename unspecified' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete unspecified' })).not.toBeInTheDocument()
+    const field = screen.getByRole('textbox', { name: 'Task type path' })
+    await user.clear(field)
+    await user.type(field, 'exercise')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
+    expect(field).toHaveValue('exercise')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Task type coding')).toBeInTheDocument()
+  })
+
 })
