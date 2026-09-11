@@ -31,7 +31,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
     }
     Text("On this device. Battery policy applies; manual locking still works.")
 }
-@Composable fun FocusMode() {
+@Composable fun FocusMode(onTaskChanged: () -> Unit = {}) {
     val app = LocalContext.current.applicationContext as TimeboxApplication
     val controller = app.focusController
     val state by controller.state.collectAsState()
@@ -49,21 +49,24 @@ import com.timebox.android.ui.theme.TimeboxTheme
     }
     BackHandler { controller.exit() }
     Surface(Modifier.fillMaxSize(), color = TimeboxTheme.colors.bg) {
-        Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxSize().imePadding().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             TextButton(onClick = controller::exit, modifier = Modifier.align(Alignment.End)) { Text("Exit Focus") }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(64.dp))
             Text("Focus", style = MaterialTheme.typography.labelLarge)
             ActivityTracking(taskTypes = emptyList(), onChanged = {}, focus = true)
-            FocusTask()
+            FocusTask(onTaskChanged)
             wakeMessage?.let { Text(it) }; state.error?.let { Text(it) }
+            }
         }
     }
 }
 
-@Composable private fun FocusTask() {
+@Composable private fun FocusTask(onTaskChanged: () -> Unit) {
     val app = LocalContext.current.applicationContext as TimeboxApplication
     val activity by app.activityRepository.state.collectAsState()
     val taskId = activity.snapshot?.current?.taskId
+    val notice by app.taskCompletion.notice.collectAsState()
     var task by remember(taskId) { mutableStateOf<BattleTask?>(null) }
     var error by remember(taskId) { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -83,9 +86,12 @@ import com.timebox.android.ui.theme.TimeboxTheme
         } }
         if (current.status != TaskStatus.Completed) Button(enabled = !busy, onClick = {
             busy = true; scope.launch {
-                app.taskCompletion.transition(current.id, current.status, TaskStatus.Completed).onSuccess { if (task?.id == current.id) task = it }.onFailure { error = "Could not complete Task." }; busy = false
+                app.taskCompletion.transition(current.id, current.status, TaskStatus.Completed).onSuccess { if (task?.id == current.id) task = it; onTaskChanged() }.onFailure { error = "Could not complete Task." }; busy = false
             }
         }) { Text("Complete Task") }
+        notice?.takeIf { it.canUndo }?.let { saved -> TextButton(enabled = !busy, onClick = {
+            busy = true; scope.launch { app.taskCompletion.undo(saved.id).onSuccess { if (task?.id == it.id) task = it; onTaskChanged() }.onFailure { error = "Could not undo Task completion." }; busy = false }
+        }) { Text("Undo Task completion") } }
         error?.let { Text(it) }
     }
 }

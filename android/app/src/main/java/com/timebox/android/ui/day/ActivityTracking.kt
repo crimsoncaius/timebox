@@ -57,22 +57,27 @@ fun ActivityTracking(
         if (state.feedback != null) { delay(6000); repository.dismissFeedback() }
     }
     val current = state.snapshot?.current
+    LaunchedEffect(current?.id) { selectedType = null }
     val plan = repository.currentPlan()
     val enabled = !state.busy && state.snapshot != null
     val availableTypes = state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        if (focus && current != null) {
+            Text(current.name ?: current.taskType.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.on)
+            Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.onVariant)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (current == null) {
                 TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } }) { Text("Start tracking") }
             } else {
-                Text(current.name ?: current.taskType.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.on)
-                Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
+                if (!focus) Text(current.name ?: current.taskType.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.on)
+                if (!focus) Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
                 TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch") }
                 if (!focus) TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; stopping = true }) { Text("Stop") }
             }
+            if (!focus) TextButton(enabled = enabled && !planning, onClick = onEnterFocus) { Text("Focus") }
         }
-        if (!focus) TextButton(enabled = enabled && !planning, onClick = onEnterFocus) { Text("Focus") }
         if (!focus && planning) Text("Finish or cancel planning to enter Focus.")
         if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
             Text("What are you doing right now?", style = MaterialTheme.typography.headlineSmall)

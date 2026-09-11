@@ -181,7 +181,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (monotonicTime() - monotonicAnchor) / 1_000_000) }
         ?: Instant.ofEpochMilli(wallTime() + (journal.calibration?.offsetMs ?: 0))
-    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false, taskId: Int? = null, plan: ActivityPlanDto? = null, effectiveAt: Instant? = null, observedTargetId: Int? = null): Boolean {
+    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false, taskId: Int? = null, plan: ActivityPlanDto? = null, effectiveAt: Instant? = null, observedTargetId: Int? = null, onPersisted: () -> Unit = {}): Boolean {
         if (retryOnly) { refresh(); return !state.value.pending && state.value.error == null }
         val requestedAt = now().toEpochMilli()
         val selectedPlan = plan ?: if (kind == ActivityKind.Start && taskId == null && taskTypeId == null && name == null) currentPlan() else null
@@ -219,7 +219,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             } catch (error: Exception) { publish(error.message ?: "Could not save activity"); false }
         }
         // The durable projection is already observable while transport is pending.
-        if (saved) refresh()
+        if (saved) { onPersisted(); refresh() }
         return saved
     }
     suspend fun correct(kind: ActivityKind, targetId: Int? = null, startAt: String? = null, endAt: String? = null,

@@ -164,6 +164,12 @@ export function TodayPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    const changed = () => { void load(); void activityRepository.refresh() }
+    window.addEventListener('timebox:focus-task-changed', changed)
+    return () => window.removeEventListener('timebox:focus-task-changed', changed)
+  }, [load, activityRepository])
+
   const serverNowIso = day?.meta.server_now_iso
   useEffect(() => {
     if (!serverNowIso) return

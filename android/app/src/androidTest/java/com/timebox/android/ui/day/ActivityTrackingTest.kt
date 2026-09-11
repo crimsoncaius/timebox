@@ -10,6 +10,29 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class ActivityTrackingTest {
+    @Test fun focusUnknownPromptIsTypeOnlyAndBackDismissesSwitchSheet() {
+        val at = "2026-09-11T10:00:00Z"
+        val type = TaskTypeDto(1, "unspecified")
+        val row = ActualBlockDto(7, 1, type, startAt = at, createdAt = at, updatedAt = at)
+        val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = at, reportingTimezone = "UTC", current = row, records = listOf(row), taskTypes = listOf(type, TaskTypeDto(2, "Reading")))
+        var journal: String? = null
+        val repository = ActivityRepository(object : ActivityTransport { override suspend fun read() = snapshot; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }, object : ActivityStorage { override fun load() = journal; override fun save(value: String) { journal = value } })
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = true) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Stop").assertDoesNotExist()
+        compose.onNodeWithText("What are you doing right now?").assertIsDisplayed()
+        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
+        compose.onNodeWithText("Switch").performClick()
+        compose.onNodeWithText("Block Name (optional)").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
+        assertEquals(7, repository.state.value.snapshot!!.current!!.id)
+        compose.onNodeWithText("Reading").performClick()
+        compose.onNodeWithText("Apply from original start").performClick()
+        compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskType?.name == "Reading" }
+        assertEquals(at, repository.state.value.snapshot!!.current!!.startAt)
+    }
+
     @get:Rule val compose = createComposeRule()
 
     @Test fun newerRemoteChangeShowsCanonicalActivityAndTransientFeedback() {

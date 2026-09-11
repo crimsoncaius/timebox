@@ -694,7 +694,7 @@ fun TimeboxApp(
             }
         }
 
-        if (focused) com.timebox.android.ui.focus.FocusMode()
+        if (focused) com.timebox.android.ui.focus.FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
         dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
             WorkModeScreen(
                 state = workMode,

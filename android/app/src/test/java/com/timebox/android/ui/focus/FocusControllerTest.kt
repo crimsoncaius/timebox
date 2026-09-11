@@ -36,7 +36,7 @@ class FocusControllerTest {
         val repository = ActivityRepository(object : ActivityTransport { override suspend fun read() = snapshot; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto { gate.await(); error("Offline") } }, object : ActivityStorage { var text: String? = null; override fun load() = text; override fun save(value: String) { text = value } })
         repository.refresh(); val focus = FocusController(Store())
         val entry = launch { focus.enter(repository) { false } }
-        runCurrent(); focus.exit(); gate.complete(Unit); entry.join()
+        runCurrent(); assertTrue(focus.state.value.active); focus.exit(); gate.complete(Unit); entry.join()
         assertFalse(focus.state.value.active)
         assertNotNull(repository.state.value.snapshot!!.current)
     }

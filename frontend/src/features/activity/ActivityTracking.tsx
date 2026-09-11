@@ -42,10 +42,10 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const availableTypes = state.snapshot?.task_types ?? taskTypes
   const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
   return <div className="mb-3 text-sm text-on-surface-variant dark:text-dark-on-surface-variant" aria-label="Activity tracking">
-    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+    <div className={focus ? "mt-8 flex flex-col items-center gap-4 text-center" : "flex flex-wrap items-center justify-end gap-x-4 gap-y-1"}>
       {current ? <>
-        <span className="max-w-64 truncate text-on-surface dark:text-dark-on-surface">{current.name || current.task_type.name}</span>
-        <span aria-label="Elapsed time">{elapsed}m</span>
+        <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>
+        <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{elapsed}m</span>
         <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
         {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
       </> : <button className="py-2" disabled={disabled} onClick={() => void repository.command('start')}>Start tracking</button>}

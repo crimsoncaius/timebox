@@ -30,7 +30,9 @@ class FocusController(private val storage: FocusStorage) {
     suspend fun enter(repository: ActivityRepository, planning: () -> Boolean): Boolean {
         if (planning() || state.value.entering || repository.state.value.snapshot == null) return false
         val token = synchronized(this) { generation++; update(state.value.copy(entering = true)); generation }
-        val started = repository.state.value.snapshot?.current != null || repository.command(ActivityKind.Start)
+        val started = repository.state.value.snapshot?.current != null || repository.command(ActivityKind.Start, onPersisted = {
+            synchronized(this) { if (token == generation && !planning()) update(state.value.copy(active = true, entering = false)) }
+        })
         synchronized(this) {
             if (token != generation) return false
             update(state.value.copy(active = started && !planning() && repository.state.value.snapshot?.current != null, entering = false))

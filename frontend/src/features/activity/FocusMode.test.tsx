@@ -69,3 +69,14 @@ it('releases a stale pending wake request and reacquires only for visible Focus'
   stop(); resolve({ release, addEventListener: vi.fn() } as unknown as WakeLockSentinel)
   await Promise.resolve(); expect(release).toHaveBeenCalledTimes(2)
 })
+
+it('requests no wake for ordinary tracking or off setting, and quietly tolerates refusal', async () => {
+  const request = vi.fn(async () => { throw Error('Battery policy') }), explain = vi.fn()
+  Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } })
+  const off = observeFocusWake(false, explain)
+  expect(request).not.toHaveBeenCalled(); off()
+  const enabled = observeFocusWake(true, explain)
+  await Promise.resolve()
+  expect(explain).toHaveBeenCalledWith('The display may sleep. Focus and recording continue.')
+  enabled()
+})

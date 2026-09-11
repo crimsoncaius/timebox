@@ -138,7 +138,7 @@ def prepare(db, state, body, operations, timezone="UTC"):
         if body.kind == "describe":
             if current is None or start != instant(current["start"]):
                 raise ValueError("Description must begin at the observed Current Activity start")
-            if body.target_source is not None and (target is not current):
+            if target is not current:
                 raise ValueError("Description does not match the observed Current Activity")
             if body.task_type_id is None:
                 raise ValueError("Task Type is required")
