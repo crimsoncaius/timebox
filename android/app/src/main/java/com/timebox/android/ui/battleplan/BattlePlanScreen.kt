@@ -2036,6 +2036,7 @@ fun TaskDetailScreen(
     onComplete: () -> Unit,
     onReopen: () -> Unit,
     onSave: () -> Unit,
+    onTrackTask: (() -> Unit)? = null,
 ) {
     LaunchedEffect(state.trashed) { if (state.trashed) onTrashed() }
     var confirmDiscard by remember(state.taskId) { mutableStateOf(false) }
@@ -2053,7 +2054,9 @@ fun TaskDetailScreen(
     when {
         state.loading -> LoadingState()
         state.error != null -> ErrorState(state.error, onRetry)
-        else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+        else -> Column(Modifier.fillMaxSize()) {
+            if (onTrackTask != null && !state.editing) TextButton(onClick = onTrackTask) { Text("Track Task") }
+            BoxWithConstraints(Modifier.weight(1f)) {
             val expanded = maxWidth >= 840.dp
             if (expanded && !state.isSubtask) {
                 Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -2067,6 +2070,7 @@ fun TaskDetailScreen(
                 }
             }
         }
+    }
     }
     if (confirmDiscard) {
         AlertDialog(
