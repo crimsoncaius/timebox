@@ -107,6 +107,7 @@ class WorkModeExecution(
         private set
 
     suspend fun begin(day: Day, force: Boolean = false) {
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) return
         if (_state.value.session != null) {
             _state.update { it.copy(visible = true) }
             return
@@ -134,6 +135,10 @@ class WorkModeExecution(
     }
 
     suspend fun restore(day: Day) {
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
+            restorationComplete = true
+            return
+        }
         if (restoreChecked) return
         restoreChecked = true
         val snapshot = persistence.load()

@@ -107,6 +107,9 @@ fun DayScreen(
             onNavigateToday = onNavigateToday,
         )
 
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
+            ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) })
+        }
         Box(Modifier.weight(1f)) {
             if (state.isPlanningMode) {
                 PlanningDayPage(

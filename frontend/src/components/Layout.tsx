@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { activityDevelopmentEnabled } from "../features/activity/activityRepository";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
@@ -43,6 +44,7 @@ export function Layout({
   }, []);
 
   useEffect(() => {
+    if (activityDevelopmentEnabled) return;
     const touch = () => {
       const stored = readStoredWorkMode()
       if (!stored) return
@@ -149,7 +151,7 @@ export function Layout({
             </h2>
           </div>
           <div className="flex items-center gap-3 text-on-surface dark:text-dark-on-surface">
-            {planningActive ? (
+            {activityDevelopmentEnabled ? null : planningActive ? (
               <div data-work-mode-action className="text-right">
                 <button type="button" disabled aria-describedby="work-mode-disabled-reason" className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary opacity-40">
                   {workModeAvailable ? "Work Mode" : "Start Work Mode"}

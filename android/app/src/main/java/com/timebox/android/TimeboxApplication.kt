@@ -22,6 +22,12 @@ class TimeboxApplication : Application() {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var preferences: AppPreferences
+    val activityRepository by lazy {
+        com.timebox.android.data.ActivityRepository(
+            com.timebox.android.data.RepositoryActivityTransport(repository),
+            com.timebox.android.data.AndroidActivityStorage(this),
+        )
+    }
 
     lateinit var repository: TimeboxRepository
         private set

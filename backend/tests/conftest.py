@@ -39,6 +39,8 @@ def prepare_legacy_schema():
     def prepare(engine, revision: str) -> None:
         Base.metadata.create_all(engine)
         with engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS activity_operations"))
+            connection.execute(text("DROP TABLE IF EXISTS activity_state"))
             connection.execute(text("DROP TABLE IF EXISTS recurring_planned_block_realizations"))
             connection.execute(text("DROP TABLE IF EXISTS recurring_preplanning_slots"))
             project_columns = {

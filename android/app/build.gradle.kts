@@ -21,11 +21,15 @@ android {
 
     buildTypes {
         debug {
+            val activityDev = providers.gradleProperty("activityTrackingDev").orNull == "true"
+            buildConfigField("boolean", "ACTIVITY_TRACKING_DEV", activityDev.toString())
+            if (activityDev) applicationIdSuffix = ".activitydev"
             // 10.0.2.2 is the host machine from inside the emulator.
             // Port 8001 is the registered Timebox API allocation on this workspace.
-            buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8001/\"")
+            buildConfigField("String", "DEFAULT_BASE_URL", if (activityDev) "\"http://10.0.2.2:12004/\"" else "\"http://10.0.2.2:8001/\"")
         }
         release {
+            buildConfigField("boolean", "ACTIVITY_TRACKING_DEV", "false")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

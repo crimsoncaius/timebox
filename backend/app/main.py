@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.deps import require_api_key
-from app.api.routes import actual_blocks, battle_plan, days, recurring, settings, task_types
+from app.api.activity_gate import guard_legacy_actual_writes
+from app.api.routes import activity, actual_blocks, battle_plan, days, recurring, settings, task_types
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from sqlalchemy import inspect
@@ -63,7 +64,7 @@ app.add_middleware(
 )
 
 # /health stays open so container health checks keep working without a key.
-_protected = [Depends(require_api_key)]
+_protected = [Depends(require_api_key), Depends(guard_legacy_actual_writes)]
 
 app.include_router(days.router, dependencies=_protected)
 app.include_router(settings.router, dependencies=_protected)
@@ -72,6 +73,7 @@ app.include_router(battle_plan.router, dependencies=_protected)
 app.include_router(recurring.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
+app.include_router(activity.router, dependencies=_protected)
 
 
 @app.get("/health")

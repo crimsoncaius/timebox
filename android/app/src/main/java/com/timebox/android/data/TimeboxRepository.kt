@@ -98,6 +98,10 @@ class TimeboxRepository private constructor(
         preferences?.setWorkMode(snapshot)
     }
 
+    suspend fun getActivity() = api().getActivity()
+    suspend fun activityCommand(body: com.timebox.android.data.remote.ActivityCommandDto) = api().activityCommand(body)
+    suspend fun activityEndpoint(): String = preferences?.settings?.first()?.baseUrl ?: "test"
+
     suspend fun setDailyReminders(value: DailyReminderSettings) {
         preferences?.setDailyReminders(value)
     }

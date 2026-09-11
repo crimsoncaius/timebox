@@ -131,7 +131,9 @@ internal fun DayCalendarHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                WorkModeAction(enabled = !isPlanningMode, onClick = onOpenWorkMode)
+                if (!com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
+                    WorkModeAction(enabled = !isPlanningMode, onClick = onOpenWorkMode)
+                }
                 PlanningModeAction(
                     isPlanningMode = isPlanningMode,
                     enabled = planningActionEnabled,
@@ -140,7 +142,7 @@ internal fun DayCalendarHeader(
             }
         }
 
-        if (isPlanningMode) {
+        if (isPlanningMode && !com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
             Text(
                 "Finish planning to start Work Mode.",
                 modifier = Modifier.padding(horizontal = 20.dp),

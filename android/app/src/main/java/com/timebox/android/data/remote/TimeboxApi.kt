@@ -11,6 +11,12 @@ import retrofit2.http.Query
 
 interface TimeboxApi {
 
+    @GET("activity")
+    suspend fun getActivity(): ActivitySnapshotDto
+
+    @POST("activity/commands")
+    suspend fun activityCommand(@Body body: ActivityCommandDto): ActivitySnapshotDto
+
     @POST("days/plan")
     suspend fun commitPlan(@Body body: PlanningCommitDto): PlanningCommitResponseDto
 

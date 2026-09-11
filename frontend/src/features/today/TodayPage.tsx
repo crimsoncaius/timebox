@@ -11,6 +11,8 @@ import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType, type TimeBlock } from '../../lib/api'
 import { WorkMode } from './WorkMode'
+import { ActivityTracking } from '../activity/ActivityTracking'
+import { activityDevelopmentEnabled } from '../activity/activityRepository'
 import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteInTimeZone } from './workModeExecution'
 import { dateInTimeZone } from '../../lib/battlePlan'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
@@ -70,7 +72,7 @@ export function TodayPage() {
   const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const [dayNotice, setDayNotice] = useState<string | null>(null)
   const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
-  const [workModeExecution] = useState(() => new WorkModeExecution(apiWorkModeTransport, browserWorkModeStore))
+  const [workModeExecution] = useState(() => new WorkModeExecution(apiWorkModeTransport, activityDevelopmentEnabled ? { load: () => null, save: () => {} } : browserWorkModeStore))
   const [workModeState, setWorkModeState] = useState(workModeExecution.state)
   useEffect(() => workModeExecution.subscribe(() => setWorkModeState({ ...workModeExecution.state })), [workModeExecution])
   useEffect(() => () => workModeExecution.dispose(), [workModeExecution])
@@ -180,6 +182,7 @@ export function TodayPage() {
   }, [day, presentInstant, workModeExecution])
 
   const enterWorkMode = useCallback((entryAt = presentInstant()) => {
+    if (activityDevelopmentEnabled) return
     const next = workModeExecution.begin(entryAt)
     if (!next) return null
     setSelectedBlockRef(null)
@@ -258,12 +261,12 @@ export function TodayPage() {
   }, [day, selectedBlockRef])
 
   useEffect(() => {
-    if (!day || !nowIso) return
+    if (activityDevelopmentEnabled || !day || !nowIso) return
     workModeExecution.restoreIfAbsent(nowIso)
   }, [day, nowIso, workModeExecution])
 
   useEffect(() => {
-    void workModeExecution.hydrateActive()
+    if (!activityDevelopmentEnabled) void workModeExecution.hydrateActive()
   }, [workMode, workModeActual, workModeExecution])
 
   useEffect(() => {
@@ -273,7 +276,7 @@ export function TodayPage() {
   }, [day, navigate, nowIso, workMode])
 
   useEffect(() => {
-    if (searchParams.get('workMode') !== 'start') {
+    if (activityDevelopmentEnabled || searchParams.get('workMode') !== 'start') {
       workModeRequestRef.current = null
       return
     }
@@ -704,6 +707,7 @@ export function TodayPage() {
       if (lane === 'actual' && day) {
         const actual = day.actual_blocks.find((projection) => projection.actual_block.id === blockId)?.actual_block
         if (actual && actual.end_at == null) {
+          if (activityDevelopmentEnabled) return false
           workModeExecution.attachActive(day, presentInstant(), actual)
           setSelectedBlockRef(null)
           return true
@@ -880,6 +884,9 @@ export function TodayPage() {
             </p>
           ) : null}
 
+          {activityDevelopmentEnabled ? <ActivityTracking taskTypes={taskTypes} onChanged={() => {
+            void api.getDay(date).then(setDay).catch(() => {})
+          }} /> : null}
           <section className="overflow-x-auto pb-24">
             <DayTimeline
               ref={timelineRef}
