@@ -12,6 +12,7 @@ class ActivityState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     cursor: Mapped[int] = mapped_column(Integer, default=0)
+    reconciliation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ActivityOperation(Base):
@@ -24,3 +25,4 @@ class ActivityOperation(Base):
     cursor: Mapped[int] = mapped_column(Integer, unique=True)
     outcome: Mapped[str] = mapped_column(String(30))
     effective_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    intent: Mapped[dict | None] = mapped_column(JSON, nullable=True)

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { Layout } from '../../components/Layout'
+import { ActivityTracking } from '../activity/ActivityTracking'
+import { activityDevelopmentEnabled } from '../activity/activityRepository'
 
 export function HomeRedirect() {
   const [target, setTarget] = useState<string | null>(null)
@@ -17,6 +19,7 @@ export function HomeRedirect() {
   if (error) {
     return (
       <Layout>
+        {activityDevelopmentEnabled ? <ActivityTracking taskTypes={[]} onChanged={() => {}} /> : null}
         <div className="rounded-xl bg-error-container/20 px-4 py-3 text-on-error-container outline-1 outline-error/20 dark:bg-error-container/15 dark:outline-error/30">
           <p className="font-medium">Cannot load today from server.</p>
           <p className="mt-1 text-sm">{error}</p>

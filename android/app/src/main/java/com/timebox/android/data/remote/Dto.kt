@@ -34,6 +34,8 @@ data class TimeBlockDto(
     val note: String? = null,
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
     @SerialName("actual_block_id") val actualBlockId: Int? = null,
+    @SerialName("actual_block_ids") val actualBlockIds: List<Int> = emptyList(),
+    @SerialName("actual_duration_minutes") val actualDurationMinutes: Double = 0.0,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
 )

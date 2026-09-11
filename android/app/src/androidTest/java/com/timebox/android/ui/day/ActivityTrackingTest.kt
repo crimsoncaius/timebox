@@ -12,13 +12,82 @@ import org.junit.Assert.*
 class ActivityTrackingTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun newerRemoteChangeShowsCanonicalActivityAndTransientFeedback() {
+        var journal: String? = null
+        val storage = object : ActivityStorage {
+            override fun load() = journal
+            override fun save(value: String) { journal = value }
+        }
+        var saved = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = "2026-09-11T10:00:00Z",
+            reportingTimezone = "UTC", current = null, records = emptyList())
+        val transport = object : ActivityTransport {
+            override suspend fun read() = saved
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                val reading = ActualBlockDto(9, 2, TaskTypeDto(2, "Reading"), startAt = "2026-09-11T12:10:00Z",
+                    createdAt = saved.serverAt, updatedAt = saved.serverAt)
+                saved = saved.copy(cursor = 2, current = reading, records = listOf(reading),
+                    operationOutcomes = mapOf(command.operationId to ActivityOperationOutcomeDto(command.deviceId, ActivityOutcome.Superseded)),
+                    acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Superseded))
+                return saved
+            }
+        }
+        val repository = ActivityRepository(transport, storage)
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Start tracking").performClick()
+        compose.waitUntil(5000) { repository.state.value.feedback != null }
+        compose.onNodeWithText("Reading").assertIsDisplayed()
+        compose.onNodeWithText("A newer change on another device updated this time.").assertIsDisplayed()
+        compose.onNodeWithText("Stop").assertIsEnabled()
+        assertFalse(repository.state.value.pending)
+        assertNull(repository.state.value.error)
+    }
+
+    @Test fun planStartAndExplicitResumeShowMultipleActuals() {
+        val at = "2026-09-11T10:00:00Z"
+        val plan = ActivityPlanDto(4, 2, 7, "Chapter", "Outline", at, "2026-09-11T11:00:00Z")
+        var journal: String? = null
+        val store = object : ActivityStorage {
+            override fun load() = journal
+            override fun save(value: String) { journal = value }
+        }
+        var saved = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = at, reportingTimezone = "UTC",
+            current = null, records = emptyList(), taskTypes = listOf(TaskTypeDto(2, "Writing")), plans = listOf(plan))
+        val transport = object : ActivityTransport {
+            override suspend fun read() = saved
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                val current = if (command.kind == ActivityKind.Stop) null else ActualBlockDto(command.sequence, 2, TaskTypeDto(2, "Writing"),
+                    startAt = command.actionAt, createdAt = at, updatedAt = at, name = command.name,
+                    taskId = command.taskId, plannedBlockId = command.plannedBlockId)
+                val records = saved.records.map { if (it.endAt == null) it.copy(endAt = command.actionAt) else it } + listOfNotNull(current)
+                saved = saved.copy(cursor = command.sequence, current = current, records = records,
+                    acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+                return saved
+            }
+        }
+        val repository = ActivityRepository(transport, store)
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Start tracking").performClick()
+        compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == 4 }
+        compose.onNodeWithText("Chapter").assertIsDisplayed()
+        compose.onNodeWithText("Switch").performClick()
+        compose.onNodeWithText("Writing").performClick()
+        compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
+        compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
+        compose.onNodeWithText("Planned now: Chapter · Switch").performClick()
+        compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
+        compose.onNodeWithText("2 linked Actual Blocks", substring = true).assertIsDisplayed()
+        assertEquals(7, repository.state.value.snapshot?.current?.taskId)
+    }
+
     @Test fun immediateStartTypeFirstSwitchAndStop() {
         var journal: String? = null
         val storage = object : ActivityStorage {
             override fun load() = journal
             override fun save(value: String) { journal = value }
         }
-        var saved = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-11T10:00:00Z", reportingTimezone = "UTC", current = null, records = emptyList())
+        var saved = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = "2026-09-11T10:00:00Z", reportingTimezone = "UTC", current = null, records = emptyList())
         val commands = mutableListOf<ActivityCommandDto>()
         val transport = object : ActivityTransport {
             override suspend fun read() = saved

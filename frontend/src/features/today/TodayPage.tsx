@@ -740,6 +740,7 @@ export function TodayPage() {
   if (!day) {
     return (
       <Layout>
+        {activityDevelopmentEnabled ? <ActivityTracking taskTypes={taskTypes} onChanged={() => {}} /> : null}
         <p className="text-error">{error ?? 'Failed to load day.'}</p>
       </Layout>
     )

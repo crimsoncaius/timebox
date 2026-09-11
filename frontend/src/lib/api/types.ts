@@ -129,6 +129,8 @@ export type BattleTaskWrite = {
 }
 
 export interface TimeBlock {
+  actual_block_ids?: number[]
+  actual_duration_minutes?: number
   id: number
   lane: BlockLane
   task_type_id: number
@@ -196,6 +198,8 @@ export interface DayRead {
     start_minute: number
     end_minute: number
     actual_block_id: number | null
+    actual_block_ids?: number[]
+    actual_duration_minutes?: number
     created_at: string
     updated_at: string
   }>

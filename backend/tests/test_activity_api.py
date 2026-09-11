@@ -149,3 +149,53 @@ def test_recording_crosses_midnight_and_plan_boundaries_without_completion(track
     assert len(later["records"]) == 1
     assert tracking.get("/days/2026-09-11").json()["actual_blocks"][0]["actual_block"]["id"] == first["current"]["id"]
     assert tracking.get("/days/2026-09-12").json()["actual_blocks"][0]["actual_block"]["id"] == first["current"]["id"]
+
+def test_offline_restart_chain_replays_original_instants_once(tracking):
+    import datetime as dt
+    initial = tracking.get('/activity').json()
+    reading = tracking.post('/task-types', json={'name': 'reading'}).json()
+    origin = dt.datetime.fromisoformat(initial['server_at'].replace('Z', '+00:00')) - dt.timedelta(hours=2)
+    operations = []
+    for index, kind in enumerate(['start', 'switch', 'stop', 'start']):
+        at = (origin + dt.timedelta(minutes=index * 20)).isoformat()
+        operation = command(initial, kind, sequence=index + 1,
+                            action_at=at, effective={'mode': 'instant', 'at': at})
+        if index:
+            operation['predecessor_id'] = operations[-1]['operation_id']
+        if kind == 'switch':
+            operation['task_type_id'] = reading['id']
+        operations.append(operation)
+    # A disconnected process stores these envelopes, then sends them after restart.
+    for operation in operations:
+        response = tracking.post('/activity/commands', json=operation)
+        assert response.status_code == 200, response.text
+        saved = response.json()
+        assert saved['acknowledgement']['outcome'] == 'applied'
+        duplicate = tracking.post('/activity/commands', json=operation).json()
+        assert duplicate == {**saved, 'server_at': duplicate['server_at']}
+    restored = tracking.get('/activity').json()
+    assert restored['cursor'] == 4
+    assert len(restored['records']) == 3
+    def instant(value):
+        return dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
+    assert instant(restored['records'][0]['start_at']) == origin
+    assert instant(restored['records'][0]['end_at']) == origin + dt.timedelta(minutes=20)
+    assert instant(restored['records'][1]['start_at']) == origin + dt.timedelta(minutes=20)
+    assert instant(restored['records'][1]['end_at']) == origin + dt.timedelta(minutes=40)
+    assert instant(restored['current']['start_at']) == origin + dt.timedelta(minutes=60)
+    assert restored['current']['task_id'] is None
+    # Lost local storage is recovered only from saved history; old retries never revive it.
+    assert tracking.post('/activity/commands', json=operations[0]).json()['current'] == restored['current']
+
+
+def test_offline_intent_cannot_use_other_device_predecessor_or_overlap_history(tracking):
+    initial = tracking.get('/activity').json()
+    start = command(initial, 'start')
+    saved = tracking.post('/activity/commands', json=start).json()
+    other = command(initial, 'stop', device='other', predecessor_id=start['operation_id'])
+    assert tracking.post('/activity/commands', json=other).json()['acknowledgement']['outcome'] == 'conflict'
+    current = tracking.get('/activity').json()
+    at = initial['server_at']
+    invalid = command(current, 'stop', sequence=2, effective={'mode': 'instant', 'at': at}, action_at=at)
+    assert tracking.post('/activity/commands', json=invalid).status_code == 422
+    assert tracking.get('/activity').json()['current'] == saved['current']

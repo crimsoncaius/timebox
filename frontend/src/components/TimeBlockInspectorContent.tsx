@@ -274,6 +274,7 @@ export function TimeBlockInspectorContent({
 
   return (
     <div className={formClassName}>
+      {block?.lane === 'planned' && !!block.actual_block_ids?.length ? <p>{block.actual_block_ids.length} linked Actual Blocks · {Math.floor(block.actual_duration_minutes ?? 0)}m recorded</p> : null}
       {/* Header: lane pill + duration pill + close */}
       <div className="flex shrink-0 items-center gap-2">
         <h2

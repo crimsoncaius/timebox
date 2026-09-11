@@ -274,6 +274,7 @@ fun TimeboxApp(
         containsText = true,
         containsControls = true,
     ) ?: 10_000L
+    val trackingScope = rememberCoroutineScope()
     val context = LocalContext.current
     val reducedMotion = Settings.Global.getFloat(
         context.contentResolver,
@@ -427,6 +428,14 @@ fun TimeboxApp(
                         val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@composable
                         TaskDetailScreen(
                             state = taskDetailState,
+                            onTrackTask = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && taskDetailState.task?.let { it.status != com.timebox.android.data.TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
+                                trackingScope.launch {
+                                    val activity = (context.applicationContext as com.timebox.android.TimeboxApplication).activityRepository
+                                    val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activity.trackTask(taskDetailState.task!!) }
+                                    if (saved) navController.navigate(AppRoutes.day(LocalDate.now()))
+                                    else snackbarHostState.showSnackbar(activity.state.value.error ?: "Could not start tracking")
+                                }
+                            }) else null,
                             onBack = { navController.popBackStack() },
                             onRetry = { taskDetailViewModel.load(taskId) },
                             onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
@@ -595,6 +604,10 @@ fun TimeboxApp(
                             onConfirmMigrate = typesViewModel::confirmMigrateDelete,
                             onDismissCascade = typesViewModel::dismissCascadePrompt,
                             onRetry = typesViewModel::load,
+                            onRename = typesViewModel::beginRename,
+                            onRenameChange = typesViewModel::changeRename,
+                            onSaveRename = typesViewModel::saveRename,
+                            onCancelRename = typesViewModel::cancelRename,
                         )
                     }
                     composable(AppRoutes.Settings) {

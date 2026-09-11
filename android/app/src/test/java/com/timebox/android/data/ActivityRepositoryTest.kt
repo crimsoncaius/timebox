@@ -6,8 +6,45 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ActivityRepositoryTest {
+    @Test fun planSnapshotSurvivesRestartAndExplicitSwitchClearsItsLinks() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val plan = ActivityPlanDto(4, 2, 7, "Chapter", "Outline", at, "2026-09-11T11:00:00Z")
+        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = at, reportingTimezone = "UTC",
+            current = null, records = emptyList(), taskTypes = listOf(TaskTypeDto(2, "Writing")), plans = listOf(plan))
+        var durable: String? = null
+        var online = true
+        val store = object : ActivityStorage {
+            override fun load() = durable
+            override fun save(value: String) { durable = value }
+        }
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto { check(online); return initial }
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline")
+        }
+        var clock = java.time.Instant.parse(at).toEpochMilli()
+        val repository = ActivityRepository(transport, store, { clock }, { 0 })
+        repository.refresh()
+        online = false
+        assertTrue(repository.command(ActivityKind.Start))
+        val restored = ActivityRepository(transport, store, { clock }, { 0 })
+        assertEquals(4, restored.state.value.snapshot?.current?.plannedBlockId)
+        assertEquals(7, restored.state.value.snapshot?.current?.taskId)
+        assertEquals("Outline", restored.state.value.snapshot?.current?.note)
+        clock += 60_000
+        assertTrue(restored.command(ActivityKind.Switch, 2, "Break"))
+        assertNull(restored.state.value.snapshot?.current?.plannedBlockId)
+        assertNull(restored.state.value.snapshot?.current?.taskId)
+        assertNotNull(restored.currentPlan())
+        clock += 60_000
+        assertTrue(restored.command(ActivityKind.Switch, plan = plan))
+        assertEquals(2, restored.state.value.snapshot?.records?.count { it.plannedBlockId == 4 })
+        clock += 3_600_000
+        assertNull(restored.currentPlan())
+        assertEquals(4, restored.state.value.snapshot?.current?.plannedBlockId)
+    }
+
     @Test fun lostAcknowledgementSurvivesRestartAndOldReadCannotStopRecording() = runTest {
-        val initial = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-11T10:00:00Z", reportingTimezone = "UTC", current = null, records = emptyList())
+        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = "2026-09-11T10:00:00Z", reportingTimezone = "UTC", current = null, records = emptyList())
         val current = ActualBlockDto(1, 1, TaskTypeDto(1, "unspecified"), startAt = initial.serverAt, createdAt = initial.serverAt, updatedAt = initial.serverAt)
         var durable: String? = null
         val store = object : ActivityStorage {
@@ -34,5 +71,160 @@ class ActivityRepositoryTest {
         restored.refresh()
         assertEquals(1, restored.state.value.snapshot?.current?.id)
         assertFalse(restored.state.value.pending)
+    }
+    @Test fun offlineSequenceRestoresProjectionAndReplaysOnce() = runTest {
+        val at = java.time.Instant.now().toString()
+        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = at, reportingTimezone = "UTC", current = null, records = emptyList(), taskTypes = listOf(TaskTypeDto(2, "reading")))
+        var durable: String? = null
+        var failStorage = false
+        val store = object : ActivityStorage {
+            override fun load() = durable
+            override fun save(value: String) { check(!failStorage) { "Disk full" }; durable = value }
+        }
+        var connected = true
+        val sent = mutableListOf<ActivityCommandDto>()
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto { check(connected) { "Offline" }; return initial.copy(cursor = sent.size) }
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                check(connected) { "Offline" }
+                sent += command
+                return initial.copy(cursor = command.sequence, acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+            }
+        }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        connected = false
+        assertTrue(repository.command(ActivityKind.Start))
+        assertTrue(repository.command(ActivityKind.Switch, 2))
+        val restored = ActivityRepository(transport, store)
+        assertEquals("reading", restored.state.value.snapshot?.current?.taskType?.name)
+        assertEquals(2, restored.state.value.snapshot?.records?.size)
+        val originalStart = restored.state.value.snapshot!!.records.first().startAt
+        assertEquals(restored.state.value.snapshot!!.records.first().endAt, restored.state.value.snapshot!!.current!!.startAt)
+        assertTrue(restored.command(ActivityKind.Stop))
+        assertNull(restored.state.value.snapshot?.current)
+        assertTrue(restored.state.value.pending)
+        failStorage = true
+        assertFalse(restored.command(ActivityKind.Start))
+        assertNull(restored.state.value.snapshot?.current)
+        assertTrue(restored.state.value.error!!.contains("storage failed"))
+        failStorage = false
+        connected = true
+        restored.refresh()
+        assertEquals(3, sent.size)
+        assertEquals(originalStart, sent.first().effective.at)
+        assertEquals(sent[0].operationId, sent[1].predecessorId)
+        assertEquals(sent[1].operationId, sent[2].predecessorId)
+        assertFalse(restored.state.value.pending)
+        restored.refresh()
+        assertEquals(3, sent.size)
+    }
+
+    @Test fun initialOfflineInstallationCannotGuessActivity() = runTest {
+        val storage = object : ActivityStorage {
+            override fun load(): String? = null
+            override fun save(value: String) {}
+        }
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto = error("Offline")
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Must not send")
+        }
+        val repository = ActivityRepository(transport, storage)
+        repository.refresh()
+        assertFalse(repository.command(ActivityKind.Start))
+        assertNull(repository.state.value.snapshot)
+        assertTrue(repository.state.value.error!!.contains("Connect once"))
+    }
+
+    @Test fun competingOfflineChangesKeepCanonicalRemoteActivityAndDrainTheWholeChain() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val row = ActualBlockDto(1, 1, TaskTypeDto(1, "writing"), startAt = at, createdAt = at, updatedAt = at, name = "Writing")
+        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = at, reportingTimezone = "UTC", current = row, records = listOf(row))
+        var saved = initial
+        var durable: String? = null
+        val store = object : ActivityStorage {
+            override fun load() = durable
+            override fun save(value: String) { durable = value }
+        }
+        var connected = true
+        var allowStop = false
+        var elapsed = 0L
+        val sent = mutableListOf<ActivityCommandDto>()
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto { check(connected) { "Offline" }; return saved }
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                check(connected) { "Offline" }
+                sent += command
+                check(command.kind != ActivityKind.Stop || allowStop) { "Connection lost" }
+                val reading = row.copy(id = 3, name = "Reading", startAt = "2026-09-11T12:10:00Z")
+                fun coverage(start: String, end: String?, id: Int, action: String, device: String) = ActivityCoverageDto(
+                    start, end, id, listOf(kotlinx.serialization.json.JsonPrimitive(action), kotlinx.serialization.json.JsonPrimitive(device),
+                        kotlinx.serialization.json.JsonPrimitive(1), kotlinx.serialization.json.JsonPrimitive("op-$id")))
+                saved = initial.copy(cursor = if (command.kind == ActivityKind.Stop) 4 else 3, current = reading,
+                    records = listOf(row.copy(endAt = "2026-09-11T12:00:00Z"), row.copy(id = 2, name = "Lunch", startAt = "2026-09-11T12:00:00Z", endAt = reading.startAt), reading),
+                    operationOutcomes = mapOf(command.operationId to ActivityOperationOutcomeDto(command.deviceId, ActivityOutcome.Superseded)),
+                    coverage = listOf(coverage(at, "2026-09-11T12:00:00Z", 1, "", ""),
+                        coverage("2026-09-11T12:00:00Z", reading.startAt, 2, "2026-09-11T12:00:00Z", command.deviceId),
+                        coverage(reading.startAt, null, 3, reading.startAt, "remote")),
+                    acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Superseded))
+                return saved
+            }
+        }
+        val repository = ActivityRepository(transport, store, monotonicTime = { elapsed })
+        repository.refresh()
+        connected = false
+        elapsed = 2L * 3600 * 1_000_000_000
+        assertTrue(repository.command(ActivityKind.Switch, 1, "Lunch"))
+        elapsed += 5L * 60 * 1_000_000_000
+        assertTrue(repository.command(ActivityKind.Stop))
+        connected = true
+        val restored = ActivityRepository(transport, store)
+        restored.refresh()
+        assertTrue(restored.state.value.pending)
+        assertEquals("Reading", restored.state.value.snapshot?.current?.name)
+        assertEquals("2026-09-11T12:05:00Z", restored.state.value.snapshot?.records?.find { it.name == "Lunch" }?.endAt)
+        assertEquals("A newer change on another device updated this time.", restored.state.value.feedback)
+        allowStop = true
+        restored.refresh()
+        assertFalse(restored.state.value.pending)
+        assertNull(restored.state.value.error)
+        assertEquals("Reading", restored.state.value.snapshot?.current?.name)
+        assertEquals(sent.filter { it.kind == ActivityKind.Stop }.first(), sent.last())
+        restored.dismissFeedback()
+        assertNull(restored.state.value.feedback)
+    }
+
+    @Test fun backwardWallClockAndRestartNeverRestampQueuedActions() = runTest {
+        var wall = java.time.Instant.parse("2026-09-11T10:00:00Z").toEpochMilli()
+        var mono = 0L
+        var connected = true
+        var durable: String? = null
+        val sent = mutableListOf<ActivityCommandDto>()
+        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = "2026-09-11T10:00:00Z", reportingTimezone = "UTC", current = null, records = emptyList())
+        val store = object : ActivityStorage {
+            override fun load() = durable
+            override fun save(value: String) { durable = value }
+        }
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto { check(connected); return initial.copy(cursor = sent.size) }
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                check(connected); sent += command
+                return initial.copy(cursor = sent.size, acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+            }
+        }
+        val repository = ActivityRepository(transport, store, { wall }, { mono })
+        repository.refresh()
+        connected = false
+        mono += 60_000_000_000
+        wall -= 3_600_000
+        repository.command(ActivityKind.Start)
+        val start = repository.state.value.snapshot!!.current!!.startAt
+        val restored = ActivityRepository(transport, store, { wall }, { mono })
+        restored.command(ActivityKind.Stop)
+        connected = true
+        restored.refresh()
+        assertEquals(start, sent[0].actionAt)
+        assertTrue(java.time.Instant.parse(sent[1].actionAt) > java.time.Instant.parse(sent[0].actionAt))
+        assertEquals(sent[0].calibration, sent[1].calibration)
     }
 }

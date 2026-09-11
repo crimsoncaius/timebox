@@ -48,8 +48,13 @@ fun ActivityTracking(
         }
     }
     LaunchedEffect(state.snapshot?.cursor) { if (state.snapshot != null) changed() }
+    LaunchedEffect(state.feedback) {
+        if (state.feedback != null) { delay(6000); repository.dismissFeedback() }
+    }
     val current = state.snapshot?.current
-    val enabled = !state.busy && !state.pending && state.snapshot != null
+    val plan = repository.currentPlan()
+    val enabled = !state.busy && state.snapshot != null
+    val availableTypes = state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -62,7 +67,19 @@ fun ActivityTracking(
                 TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Stop) } }) { Text("Stop") }
             }
         }
+        if (current != null && plan != null && current.plannedBlockId != plan.id) {
+            TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {
+                Text("Planned now: ${plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name} · Switch")
+            }
+        }
+        current?.plannedBlockId?.let { id ->
+            val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
+            val minutes = linked.sumOf { Duration.between(Instant.parse(it.startAt), it.endAt?.let(Instant::parse) ?: now).seconds }.coerceAtLeast(0) / 60
+            Text("${linked.size} linked Actual Blocks · ${minutes}m recorded", color = colors.onVariant)
+        }
         if (state.busy) Text("Saving…", color = colors.onVariant)
+        state.feedback?.let { Text(it, color = colors.onVariant) }
+        Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else if (state.snapshot != null) "Synced" else "Connection required", color = colors.onVariant)
         if (state.error != null || state.pending) {
             Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
             TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }
@@ -72,7 +89,7 @@ fun ActivityTracking(
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Switch activity", style = MaterialTheme.typography.titleLarge)
             Text("Task Type", style = MaterialTheme.typography.labelLarge)
-            taskTypes.forEach { type ->
+            availableTypes.forEach { type ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedType?.id == type.id, onClick = { selectedType = type })
                     TextButton(onClick = { selectedType = type }) { Text(type.name) }

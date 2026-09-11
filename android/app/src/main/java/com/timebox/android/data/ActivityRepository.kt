@@ -1,13 +1,7 @@
 package com.timebox.android.data
 
 import android.content.Context
-import com.timebox.android.data.remote.ActivityCalibrationDto
-import com.timebox.android.data.remote.ActivityCommandDto
-import com.timebox.android.data.remote.ActivityEffectiveDto
-import com.timebox.android.data.remote.ActivityKind
-import com.timebox.android.data.remote.ActivityOutcome
-import com.timebox.android.data.remote.ActivitySnapshotDto
-import com.timebox.android.data.remote.ApiFactory
+import com.timebox.android.data.remote.*
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -28,15 +22,12 @@ class RepositoryActivityTransport(private val repository: TimeboxRepository) : A
     override suspend fun execute(command: ActivityCommandDto) = repository.activityCommand(command)
     override suspend fun endpoint() = repository.activityEndpoint()
 }
-interface ActivityStorage {
-    fun load(): String?
-    fun save(value: String)
-}
+interface ActivityStorage { fun load(): String?; fun save(value: String) }
 class AndroidActivityStorage(context: Context) : ActivityStorage {
     private val preferences = context.getSharedPreferences("activity-online-v1", Context.MODE_PRIVATE)
     override fun load() = preferences.getString("journal", null)
     override fun save(value: String) {
-        check(preferences.edit().putString("journal", value).commit()) { "Activity storage failed. Change has not been confirmed." }
+        check(preferences.edit().putString("journal", value).commit()) { "Activity storage failed. Change was not saved on this device." }
     }
 }
 @Serializable private data class ActivityJournal(
@@ -44,36 +35,89 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     val lastAction: Long = 0, val endpoint: String? = null,
     val pending: ActivityCommandDto? = null, val snapshot: ActivitySnapshotDto? = null,
     val rejected: ActivityCommandDto? = null,
+    val outbox: List<ActivityCommandDto> = emptyList(),
+    val rejectedOutbox: List<ActivityCommandDto> = emptyList(),
+    val calibration: ActivityCalibrationDto? = null,
 )
 data class ActivityUiState(
     val snapshot: ActivitySnapshotDto? = null, val pending: Boolean = false,
-    val busy: Boolean = false, val error: String? = null,
+    val busy: Boolean = false, val error: String? = null, val offline: Boolean = false,
+    val feedback: String? = null,
 )
-
-/** A durable online receipt/retry boundary, independent of navigation and Work Mode. */
-class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage) {
+/** Confirmed history plus durable local intent. Acknowledgements never restamp intent. */
+class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage,
+                         private val wallTime: () -> Long = System::currentTimeMillis,
+                         private val monotonicTime: () -> Long = System::nanoTime) {
     private val mutex = Mutex()
     private var journal = ActivityJournal()
     private val mutableState = MutableStateFlow(ActivityUiState())
     val state = mutableState.asStateFlow()
     private var serverAnchor: Long? = null
     private var monotonicAnchor = 0L
-    private var calibration: ActivityCalibrationDto? = null
     private var storageError: String? = null
+    private var offline = false
+    private var feedback: String? = null
     init {
         try {
             storage.load()?.let { journal = ApiFactory.json.decodeFromString<ActivityJournal>(it) }
+            journal.pending?.let { journal = journal.copy(outbox = journal.outbox + it, pending = null) }
             publish()
-        } catch (error: Exception) {
-            storageError = "Activity storage unavailable: ${error.message}"
-            publish(storageError)
+        } catch (error: Exception) { storageError = "Activity storage unavailable: ${error.message}"; publish(storageError) }
+    }
+    private fun project(): ActivitySnapshotDto? {
+        var snapshot = journal.snapshot ?: return null
+        if (snapshot.coverage.isNotEmpty() && journal.outbox.isNotEmpty()) return projectRanges(snapshot)
+        journal.outbox.forEach { command ->
+            if (command.effective.mode != "instant") return@forEach
+            val at = checkNotNull(command.effective.at)
+            val records = snapshot.records.map { if (it.id == snapshot.current?.id) it.copy(endAt = at) else it }
+            val type = snapshot.taskTypes.find { it.id == command.taskTypeId }
+                ?: TaskTypeDto(command.taskTypeId ?: 0, if (command.taskTypeId == null) "unspecified" else "Activity")
+            val current = if (command.kind == ActivityKind.Stop) null else ActualBlockDto(
+                -command.sequence, type.id, type, startAt = at, createdAt = at, updatedAt = at, name = command.name, taskId = command.taskId, plannedBlockId = command.plannedBlockId, note = command.note)
+            snapshot = snapshot.copy(current = current, records = records + listOfNotNull(current))
         }
+        return snapshot
+    }
+    private data class Order(val at: Instant, val device: String, val sequence: Int, val id: String) : Comparable<Order> {
+        override fun compareTo(other: Order) = compareValuesBy(this, other, { it.at }, { it.device }, { it.sequence }, { it.id })
+    }
+    private data class Piece(val start: Instant, val end: Instant, val row: ActualBlockDto?, val order: Order)
+    private fun projectRanges(snapshot: ActivitySnapshotDto): ActivitySnapshotDto {
+        var pieces = snapshot.coverage.map { p -> Piece(Instant.parse(p.start), p.end?.let(Instant::parse) ?: Instant.MAX,
+            snapshot.records.find { it.id == p.recordId }, Order(p.order[0].content.takeIf { it.isNotEmpty() }?.let(Instant::parse) ?: Instant.MIN,
+                p.order[1].content, p.order[2].content.toInt(), p.order[3].content)) }
+        journal.outbox.forEach { command ->
+            if (command.effective.mode != "instant") return@forEach
+            val at = checkNotNull(command.effective.at)
+            val start = Instant.parse(at)
+            val order = Order(Instant.parse(command.actionAt), command.deviceId, command.sequence, command.operationId)
+            val type = snapshot.taskTypes.find { it.id == command.taskTypeId } ?: TaskTypeDto(command.taskTypeId ?: 0, "unspecified")
+            val row = if (command.kind == ActivityKind.Stop) null else ActualBlockDto(-command.sequence, type.id, type,
+                startAt = at, createdAt = at, updatedAt = at, name = command.name, taskId = command.taskId, plannedBlockId = command.plannedBlockId, note = command.note)
+            val boundaries = (pieces.flatMap { listOf(it.start, it.end) } + start + Instant.MAX).distinct().sorted()
+            pieces = boundaries.zipWithNext().mapNotNull { (a, b) ->
+                val previous = pieces.find { it.start <= a && it.end > a }
+                if (a >= start && (previous == null || order > previous.order)) Piece(a, b, row, order)
+                else previous?.copy(start = a, end = b)
+            }
+        }
+        val merged = mutableListOf<Piece>()
+        pieces.forEach { piece ->
+            val previous = merged.lastOrNull()
+            if (previous != null && previous.end == piece.start && previous.row?.id == piece.row?.id && previous.order == piece.order)
+                merged[merged.lastIndex] = previous.copy(end = piece.end)
+            else merged += piece
+        }
+        val records = merged.mapNotNull { p -> p.row?.copy(startAt = p.start.toString(), endAt = if (p.end == Instant.MAX) null else p.end.toString()) }
+        return snapshot.copy(records = records, current = records.find { it.endAt == null })
     }
     private fun publish(error: String? = null, busy: Boolean = false) {
-        mutableState.value = ActivityUiState(journal.snapshot, journal.pending != null, busy, error)
+        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback)
     }
     private fun save(value: ActivityJournal) {
-        storage.save(ApiFactory.json.encodeToString(value))
+        try { storage.save(ApiFactory.json.encodeToString(value)) }
+        catch (error: Exception) { throw IllegalStateException("Activity storage failed. Change was not saved on this device.", error) }
         journal = value
     }
     private suspend fun checkEndpoint() {
@@ -82,52 +126,104 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         check(journal.endpoint == null || journal.endpoint == endpoint) { "Return to the original activity server to recover this device's recording." }
         if (journal.endpoint == null) save(journal.copy(endpoint = endpoint))
     }
-    private fun accept(snapshot: ActivitySnapshotDto) {
+    private fun newer(snapshot: ActivitySnapshotDto): Boolean {
         check(snapshot.protocol == "activity-online-v1") { "Incompatible activity server" }
-        if (snapshot.cursor >= (journal.snapshot?.cursor ?: -1)) save(journal.copy(snapshot = snapshot))
+        val previous = journal.snapshot ?: return true
+        return snapshot.cursor > previous.cursor || (snapshot.cursor == previous.cursor && Instant.parse(snapshot.serverAt) >= Instant.parse(previous.serverAt))
+    }
+    suspend fun dismissFeedback() = mutex.withLock { feedback = null; publish(state.value.error) }
+    private fun noteReconciliation(snapshot: ActivitySnapshotDto) {
+        if (newer(snapshot) && snapshot.operationOutcomes.any { (id, result) ->
+            result.deviceId == journal.device && result.outcome == ActivityOutcome.Superseded &&
+                journal.snapshot?.operationOutcomes?.get(id)?.outcome != ActivityOutcome.Superseded
+        }) feedback = "A newer change on another device updated this time."
+    }
+    private suspend fun drain() {
+        while (journal.outbox.isNotEmpty()) {
+            val command = journal.outbox.first()
+            val response = try { transport.execute(command) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (error is retrofit2.HttpException && error.code() == 422) {
+                    save(journal.copy(rejectedOutbox = journal.outbox, outbox = emptyList()))
+                } else offline = true
+                throw error
+            }
+            val ack = checkNotNull(response.acknowledgement) { "Activity acknowledgement missing" }
+            check(ack.operationId == command.operationId) { "Activity acknowledgement does not match" }
+            val applied = ack.outcome == ActivityOutcome.Applied || ack.outcome == ActivityOutcome.Superseded
+            noteReconciliation(response)
+            save(journal.copy(snapshot = if (newer(response)) response else journal.snapshot,
+                outbox = if (applied) journal.outbox.drop(1) else emptyList(),
+                rejectedOutbox = if (applied) journal.rejectedOutbox else journal.outbox))
+            offline = false
+            check(applied) { "Activity changed on another device. Pending changes were retained for review." }
+        }
     }
     suspend fun refresh() = mutex.withLock {
         try {
             checkEndpoint()
-            val snapshot = transport.read()
-            accept(snapshot)
-            serverAnchor = Instant.parse(snapshot.serverAt).toEpochMilli()
-            monotonicAnchor = System.nanoTime()
-            calibration = ActivityCalibrationDto(snapshot.serverAt, serverAnchor!! - System.currentTimeMillis())
-            publish(if (journal.pending != null) "Change not confirmed. Retry to check the saved result." else null)
-        } catch (cancelled: CancellationException) { throw cancelled
-        } catch (error: Exception) { publish(error.message ?: "Could not refresh activity") }
-    }
-    fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (System.nanoTime() - monotonicAnchor) / 1_000_000) } ?: Instant.now()
-    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false): Boolean = mutex.withLock {
-        publish(busy = true)
-        try {
-            checkEndpoint()
-            if (retryOnly && journal.pending == null) { publish(); return@withLock false }
-            check(retryOnly || journal.pending == null) { "Retry the unconfirmed change before recording another activity" }
-            if (journal.pending == null) {
-                val snapshot = checkNotNull(journal.snapshot) { "Refresh before recording" }
-                val server = checkNotNull(serverAnchor) { "Refresh before recording" }
-                val action = maxOf(journal.lastAction, server + (System.nanoTime() - monotonicAnchor) / 1_000_000)
-                val sequence = journal.sequence + 1
-                val pending = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, sequence,
-                    Instant.ofEpochMilli(action).toString(), checkNotNull(calibration), snapshot.cursor,
-                    ActivityEffectiveDto("server_now"), snapshot.current?.id, kind, taskTypeId, name?.trim()?.ifEmpty { null })
-                save(journal.copy(sequence = sequence, lastAction = action, pending = pending))
+            drain()
+            val snapshot = try { transport.read() } catch (error: Exception) { offline = true; throw error }
+            offline = false
+            if (newer(snapshot)) {
+                noteReconciliation(snapshot)
+                val server = Instant.parse(snapshot.serverAt).toEpochMilli()
+                save(journal.copy(snapshot = snapshot, calibration = ActivityCalibrationDto(snapshot.serverAt, server - wallTime())))
+                serverAnchor = server
+                monotonicAnchor = monotonicTime()
             }
-            val pending = checkNotNull(journal.pending)
-            val response = try { transport.execute(pending) } catch (error: retrofit2.HttpException) {
-                if (error.code() == 422) save(journal.copy(rejected = pending, pending = null))
-                throw error
-            }
-            val ack = checkNotNull(response.acknowledgement) { "Activity acknowledgement missing" }
-            check(ack.operationId == pending.operationId) { "Activity acknowledgement does not match" }
-            accept(response)
-            save(journal.copy(pending = null))
-            publish(if (ack.outcome == ActivityOutcome.Conflict) "Activity changed on another device. Review before trying again." else null)
-            ack.outcome == ActivityOutcome.Applied
-        } catch (cancelled: CancellationException) { publish("Change not confirmed. Retry to check the saved result."); throw cancelled
-        } catch (error: Exception) { publish(error.message ?: "Change not confirmed"); false }
+            publish()
+        } catch (cancelled: CancellationException) { publish(); throw cancelled }
+        catch (error: Exception) { publish(error.message ?: "Could not refresh activity") }
     }
-    suspend fun retry() = command(journal.pending?.kind ?: ActivityKind.Start, retryOnly = true)
+    fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (monotonicTime() - monotonicAnchor) / 1_000_000) }
+        ?: Instant.ofEpochMilli(wallTime() + (journal.calibration?.offsetMs ?: 0))
+    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false, taskId: Int? = null, plan: ActivityPlanDto? = null): Boolean {
+        if (retryOnly) { refresh(); return !state.value.pending && state.value.error == null }
+        val requestedAt = now().toEpochMilli()
+        val selectedPlan = plan ?: if (kind == ActivityKind.Start && taskId == null && taskTypeId == null && name == null) currentPlan() else null
+        val selectedType = selectedPlan?.taskTypeId ?: taskTypeId
+        val selectedName = selectedPlan?.name ?: name
+        val observed = journal
+        val observedCurrent = project()?.current
+        val saved = mutex.withLock {
+            try {
+                checkEndpoint()
+                val snapshot = checkNotNull(journal.snapshot) { "Connect once to initialize Activity Tracking before recording offline." }
+                check(snapshot.offlineReady) { "Connect once to an updated server to initialize Activity Tracking before recording offline." }
+                val calibration = checkNotNull(journal.calibration) { "Connect once to initialize Activity Tracking before recording offline." }
+                check(journal.outbox.none { it.effective.mode == "server_now" }) { "Reconnect to confirm the previous online change first." }
+                val current = project()?.current
+                check((kind == ActivityKind.Start) != (current != null)) { "Activity changed. Review the current activity." }
+                check(kind != ActivityKind.Switch || selectedType != null || taskId != null) { "Task Type is required" }
+                val latest = project()?.records?.maxOfOrNull { Instant.parse(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
+                val action = maxOf(journal.lastAction + 1, latest + 1, requestedAt)
+                val at = Instant.ofEpochMilli(action).toString()
+                val predecessor = journal.outbox.lastOrNull() ?: observed.outbox.lastOrNull()
+                val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
+                    at, observed.calibration ?: calibration, observed.snapshot?.cursor ?: snapshot.cursor,
+                    ActivityEffectiveDto("instant", at), if (predecessor == null) observedCurrent?.id else null,
+                    kind, selectedType, selectedName?.trim()?.ifEmpty { null },
+                    taskId = selectedPlan?.taskId ?: taskId, plannedBlockId = selectedPlan?.id,
+                    note = selectedPlan?.note, selectionSnapshot = true, predecessorId = predecessor?.operationId)
+                save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command))
+                publish()
+                true
+            } catch (error: Exception) { publish(error.message ?: "Could not save activity"); false }
+        }
+        // The durable projection is already observable while transport is pending.
+        if (saved) refresh()
+        return saved
+    }
+    fun currentPlan(): ActivityPlanDto? = state.value.snapshot?.plans?.find { Instant.parse(it.startAt) <= now() && now() < Instant.parse(it.endAt) }
+    suspend fun trackTask(task: BattleTask): Boolean {
+        if (task.recurrenceKind == "quota_parent" || task.status == TaskStatus.Completed) return false
+        if (state.value.snapshot == null) refresh()
+        val type = task.taskTypeId ?: state.value.snapshot?.taskTypes?.find { it.name == "unspecified" }?.id
+        val saved = command(if (state.value.snapshot?.current == null) ActivityKind.Start else ActivityKind.Switch, type, task.title, taskId = task.id)
+        if (saved) { feedback = "Tracking ${task.title}"; publish(state.value.error) }
+        return saved
+    }
+    suspend fun retry() = refresh()
 }

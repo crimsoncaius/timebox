@@ -18,7 +18,7 @@ from app.models.battle_plan import (
 )
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
-from app.services import actual_block_service, task_type_service
+from app.services import actual_block_service, task_type_service, activity_selection
 from app.services.recurrence.protection import protect_task_occurrence
 from app.schemas.day import (
     DayListItem,
@@ -203,7 +203,7 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
         .options(
             selectinload(Day.time_blocks).selectinload(TimeBlock.task_type),
             selectinload(Day.time_blocks).selectinload(TimeBlock.task),
-            selectinload(Day.time_blocks).selectinload(TimeBlock.completion_actual),
+            selectinload(Day.time_blocks).selectinload(TimeBlock.completion_actuals),
         )
     )
     return db.execute(stmt).scalar_one_or_none()
@@ -682,6 +682,7 @@ def commit_planning_session(
 
 
 def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch) -> TimeBlock:
+    activity_selection.lock_if_enabled(db)
     data = patch.model_dump(exclude_unset=True)
     target_date = data.pop("date", None) or day.date
     target_task = None
@@ -750,12 +751,13 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         block.task_type_id,
         block.task_id,
     ):
-        linked_actual = db.execute(
+        activity_selection.detach_plan(db, block.id)
+        linked_actuals = db.execute(
             select(TimeBlock)
             .where(TimeBlock.planned_block_id == block.id)
             .with_for_update()
-        ).scalar_one_or_none()
-        if linked_actual is not None:
+        ).scalars().all()
+        for linked_actual in linked_actuals:
             actual_block_service.invalidate_record_actual_undo(db, linked_actual.id)
             linked_actual.planned_block_id = None
     _touch_day(day)
@@ -772,6 +774,7 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
 
 
 def delete_time_block(db: Session, day: Day, block_id: int) -> None:
+    activity_selection.lock_if_enabled(db)
     # Same Planned -> Actual lock order as relink and Undo.
     block = get_block(db, day, block_id, for_update=True)
     if block is None:
@@ -780,12 +783,13 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
         if block.task_id is not None:
             protect_task_occurrence(db, block.task_id)
         _mark_generated_planned_block(db, block, RecurringPlannedBlockState.deleted)
-        linked_actual = db.execute(
+        activity_selection.detach_plan(db, block.id)
+        linked_actuals = db.execute(
             select(TimeBlock)
             .where(TimeBlock.planned_block_id == block.id)
             .with_for_update()
-        ).scalar_one_or_none()
-        if linked_actual is not None:
+        ).scalars().all()
+        for linked_actual in linked_actuals:
             actual_block_service.invalidate_record_actual_undo(db, linked_actual.id)
             linked_actual.planned_block_id = None
     db.delete(block)

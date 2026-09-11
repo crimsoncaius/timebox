@@ -1,5 +1,8 @@
 # Activity Tracking: online development slice
 
+The durable offline/restart extension and current review-bundle launch are in
+[Activity Tracking offline development](activity-tracking-offline.md).
+
 Implements [#147](https://github.com/crimsoncaius/timebox/issues/147), under
 [#144](https://github.com/crimsoncaius/timebox/issues/144). This is an additive,
 online development protocol, not the production replacement for Work Mode.
