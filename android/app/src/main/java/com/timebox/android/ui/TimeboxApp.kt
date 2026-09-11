@@ -95,8 +95,9 @@ fun TimeboxApp(
     readinessCoordinator: ReadyToPlanCoordinator,
     imeVisibleOverride: Boolean? = null,
 ) {
-    val factory = remember(repository, taskCompletion, readinessCoordinator) {
-        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator)
+    val activityRepository = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository else null
+    val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository) {
+        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository)
     }
     val navController = rememberNavController()
 

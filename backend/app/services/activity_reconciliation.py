@@ -108,8 +108,10 @@ def prepare(db, state, body, operations, timezone="UTC"):
     start = instant(start)
     if start > dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=5):
         raise ValueError("Activity instant is in the future; check the device clock")
-    known = replay(state.reconciliation["baseline"], [op for op in operations if op.cursor <= body.base_cursor])
+    known = replay(state.reconciliation["baseline"], [op for op in operations if op.cursor <= body.base_cursor or (op.device_id == body.device_id and op.sequence < body.sequence)])
     target = next((p for p in known if p["data"] and identity(p) == body.target_id), None)
+    if body.target_source is not None:
+        target = next((p for p in known if p["data"] and p["data"]["source"] == body.target_source and instant(p["start"]) == body.target_start_at), None)
     historical = body.kind in {"add", "edit", "delete"}
     if historical:
         if body.effective.mode != "range" or body.effective.end is None or body.effective.end <= start:
@@ -129,14 +131,14 @@ def prepare(db, state, body, operations, timezone="UTC"):
         end = INF
         if body.effective.mode == "range" or body.effective.end is not None:
             raise ValueError("Tracking transitions require an instant")
-        if body.effective.mode == "instant" and start != body.action_at:
-            raise ValueError("Immediate commands require their original action instant")
+        if body.effective.mode == "instant" and (start > body.action_at or (body.kind == "start" and start != body.action_at)):
+            raise ValueError("Effective time must be within the current interval and action time")
         current = next((p for p in known if p["data"] and p["end"] is None), None)
         if not body.predecessor_id:
             if (body.kind == "start") == (current is not None) or body.target_id != (identity(current) if current else None):
                 raise ValueError("Transition does not match the observed activity")
-            if current and start <= instant(current["start"]):
-                raise ValueError("Transition must follow the observed activity start")
+        if current and start < instant(current["start"]):
+            raise ValueError("Transition must follow the observed activity start")
         if any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
             raise ValueError("Activity instant overlaps known history")
     data = None
@@ -175,6 +177,8 @@ def prepare(db, state, body, operations, timezone="UTC"):
         for field in ("name", "note"):
             if historical and field in body.model_fields_set or field not in data:
                 data[field] = getattr(body, field)
+            if historical and field in body.clear_fields:
+                data[field] = None
     ranges = []
     if body.kind == "edit":
         ranges.append({"start": target["start"], "end": target["end"], "data": None})

@@ -1,3 +1,5 @@
+import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
+import { activityDevelopmentEnabled, type ActivityCorrection } from '../features/activity/activityRepository'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BlockDraftPlacement, DayRead, TaskType, TimeBlock } from '../lib/api'
 import { formatMinuteLabel24 } from '../lib/time'
@@ -14,7 +16,14 @@ const NAME_DEBOUNCE_MS = 450
  * Start/end times are display-only; adjust duration on the timeline.
  * Task type, Block Name, and Note persist automatically.
  */
-export function TimeBlockInspectorContent({
+export function TimeBlockInspectorContent(props: Parameters<typeof LegacyTimeBlockInspectorContent>[0]) {
+  if (activityDevelopmentEnabled && (props.block?.lane ?? props.draft?.lane) === 'actual') return <ActivityActualEditor
+    actual={props.day.actual_blocks.find(p => p.actual_block.id === props.block?.id)?.actual_block}
+    draft={props.draft} day={props.day} taskTypes={props.taskTypes} onSave={props.onSave} onCreate={props.onCreateFromDraft}
+    onDelete={props.onDelete} onClose={props.onClose} onDirtyChange={props.onDirtyChange} />
+  return <LegacyTimeBlockInspectorContent {...props} />
+}
+function LegacyTimeBlockInspectorContent({
   block,
   draft,
   taskTypes,
@@ -33,8 +42,8 @@ export function TimeBlockInspectorContent({
   taskTypes: TaskType[]
   variant: TimeBlockInspectorVariant
   onClose: () => void
-  onSave: (patch: { task_type_id?: number; name?: string | null; note?: string | null }) => Promise<void>
-  onCreateFromDraft?: (payload: { task_type_id?: number; name: string | null; note: string | null }) => Promise<void>
+  onSave: (patch: ActivityCorrection) => Promise<void>
+  onCreateFromDraft?: (payload: ActivityCorrection & { name: string | null; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
   onCreateTaskTypePath: (path: string) => Promise<TaskType>

@@ -115,6 +115,8 @@ it('requires Task Type for switching, allows no name, and stops without completi
   expect(commands[0]).toMatchObject({ kind: 'switch', task_type_id: 2, target_id: 1 })
   expect(commands[0]).not.toHaveProperty('name')
   fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+  expect(screen.getByRole('region', { name: 'After this change' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Stop tracking' }))
   await screen.findByRole('button', { name: 'Start tracking' })
   expect(commands[1]).toMatchObject({ kind: 'stop', target_id: 2 })
 })
@@ -293,4 +295,52 @@ it('records a direct Session Task offline without a plan or completion mutation'
   expect(restored.state.snapshot?.current).toMatchObject({ task_id: 8, name: 'Session 1', planned_block_id: null })
   expect(await restored.trackTask({ id: 9, title: 'Quota', task_type_id: 2, status: 'todo', recurrence_kind: 'quota_parent' })).toBe(false)
   expect(restored.state.snapshot?.current?.task_id).toBe(8)
+})
+
+it('keeps historical corrections offline, rejects occupied time, and leaves deletion gaps after restart', async () => {
+  const writing = { id: 1, name: 'Writing', task_type_id: 1, task_type: { id: 1, name: 'work' }, start_at: '2026-09-10T10:00:00Z', end_at: '2026-09-10T12:00:00Z' }
+  const current = { ...writing, id: 2, name: 'Reading', start_at: '2026-09-11T10:00:00Z', end_at: null }
+  let online = true
+  vi.stubGlobal('fetch', vi.fn(async () => {
+    if (!online) throw new Error('Offline')
+    return new Response(JSON.stringify({ protocol: 'activity-online-v1', offline_ready: true, cursor: 2, server_at: '2026-09-11T13:00:00Z', reporting_timezone: 'UTC', current, records: [writing, current], task_types: [writing.task_type] }))
+  }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh(); online = false
+  expect(await repository.correct('add', null, { start_at: '2026-09-10T11:00:00Z', end_at: '2026-09-10T11:30:00Z', name: 'Lunch', task_type_id: 1 })).toBe(false)
+  expect(repository.state.snapshot?.records[0]).toEqual(writing)
+  expect(await repository.correct('edit', 1, { end_at: '2026-09-10T11:00:00Z' })).toBe(true)
+  expect(await repository.correct('add', null, { start_at: '2026-09-10T11:00:00Z', end_at: '2026-09-10T11:30:00Z', name: 'Lunch', task_type_id: 1 })).toBe(true)
+  const restored = new ActivityRepository(localStorage, work => work())
+  expect(restored.state.snapshot?.records.find(r => r.name === 'Lunch')).toBeDefined()
+  expect(await restored.correct('delete', 1)).toBe(true)
+  expect(restored.state.snapshot?.records.map(r => r.name).sort()).toEqual(['Lunch', 'Reading'])
+  expect(restored.state.snapshot?.current).toEqual(current)
+})
+
+it('keeps add then multiple moves and delete correct while only the first acknowledgement arrives', async () => {
+  const initial = { protocol: 'activity-online-v1', offline_ready: true, cursor: 0, server_at: '2026-09-11T13:00:00Z', reporting_timezone: 'UTC', current: null, records: [], task_types: [{ id: 1, name: 'work' }] }
+  let online = false, acknowledgeOne = false
+  let canonical: Record<string, unknown> = initial
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+    if (!init?.method) return new Response(JSON.stringify(canonical))
+    if (!online || !acknowledgeOne) throw new Error('Offline')
+    acknowledgeOne = false
+    const command = JSON.parse(init.body)
+    const row = { id: 88, task_type_id: 1, task_type: initial.task_types[0], name: 'Writing', start_at: command.effective.at, end_at: command.effective.end, task_id: null, planned_block_id: null, note: null }
+    canonical = { ...initial, cursor: 1, records: [row], provenance: { 88: command.operation_id }, acknowledgement: { operation_id: command.operation_id, outcome: 'applied' } }
+    return new Response(JSON.stringify(canonical))
+  }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  await repository.correct('add', null, { name: 'Writing', task_type_id: 1, start_at: '2026-09-10T10:00:00Z', end_at: '2026-09-10T12:00:00Z' })
+  const localId = repository.state.snapshot!.records[0].id
+  await repository.correct('edit', localId, { start_at: '2026-09-10T08:00:00Z', end_at: '2026-09-10T09:00:00Z' })
+  await repository.correct('edit', localId, { start_at: '2026-09-10T06:00:00Z', end_at: '2026-09-10T07:00:00Z' })
+  online = true; acknowledgeOne = true; await repository.refresh()
+  expect(repository.state.snapshot!.records).toHaveLength(1)
+  expect(repository.state.snapshot!.records[0].start_at).toBe('2026-09-10T06:00:00Z')
+  const restored = new ActivityRepository(localStorage, work => work())
+  expect(await restored.correct('delete', restored.state.snapshot!.records[0].id)).toBe(true)
+  expect(restored.state.snapshot!.records).toEqual([])
 })

@@ -38,6 +38,7 @@ fun timeboxViewModelFactory(
     repository: TimeboxRepository,
     taskCompletion: TaskCompletion,
     readinessCoordinator: ReadyToPlanCoordinator,
+    activityRepository: com.timebox.android.data.ActivityRepository? = null,
 ): ViewModelProvider.Factory =
     viewModelFactory {
         initializer {
@@ -48,6 +49,7 @@ fun timeboxViewModelFactory(
                     RepositoryPlanningSessionTransport(repository, readinessCoordinator),
                 ),
                 readinessCoordinator = readinessCoordinator,
+                activityRepository = activityRepository,
             )
         }
         initializer { ChronicleViewModel(repository) }

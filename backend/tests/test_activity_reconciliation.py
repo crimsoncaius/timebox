@@ -224,3 +224,40 @@ def test_competing_disjoint_moves_preserve_both_unaffected_destinations(tracking
     assert len({r['id'] for r in final['records']}) == 2
     assert len(set(final['provenance'].values())) == 1
     assert target in final['tombstones']
+
+def test_late_stop_uses_action_order_but_only_changes_current_interval(tracking):
+    base = send(tracking, make(tracking.get('/activity').json(), 'start', 10, name='Writing'))
+    late = make(base, 'stop', 12, action_at=at(13), sequence=2)
+    result = send(tracking, late)
+    assert ranges(result) == [('Writing', '2026-09-10T10:00:00Z', '2026-09-10T12:00:00Z')]
+    assert result['current'] is None
+    for hour in (9, 14):
+        invalid = make(base, 'stop', hour, action_at=at(13), device='other')
+        assert tracking.post('/activity/commands', json=invalid).status_code == 422
+    assert tracking.get('/activity').json()['records'] == result['records']
+
+def test_offline_corrections_follow_own_edits_and_keep_current_unchanged(tracking):
+    initial = tracking.get('/activity').json()
+    running = send(tracking, make(initial, 'start', 18, name='Reading', device='running'))
+    add = correction(running, 'add', 10, 12, 19, name='Writing')
+    base = send(tracking, add)
+    row = next(r for r in base['records'] if r['name'] == 'Writing')
+    first = correction(base, 'edit', 8, 9, 20, sequence=2, target_id=row['id'])
+    moved = send(tracking, first)
+    second = correction(base, 'edit', 6, 7, 21, sequence=3, target_id=row['id'], target_source=add['operation_id'], target_start_at=at(8))
+    moved_again = send(tracking, second)
+    assert [(r['start_at'], r['end_at']) for r in moved_again['records'] if r['name'] == 'Writing'] == [('2026-09-10T06:00:00Z', '2026-09-10T07:00:00Z')]
+    deletion = correction(base, 'delete', 6, 7, 22, sequence=4, target_id=row['id'], target_source=add['operation_id'], target_start_at=at(6))
+    final = send(tracking, deletion)
+    assert final['records'] == running['records']
+    assert final['current'] == running['current']
+
+
+def test_predecessor_late_transition_cannot_rewrite_before_current_start(tracking):
+    initial = tracking.get('/activity').json()
+    start = make(initial, 'start', 10)
+    started = send(tracking, start)
+    for kind in ('switch', 'stop'):
+        invalid = make(initial, kind, 9, action_at=at(13), sequence=2, predecessor_id=start['operation_id'], target_id=None)
+        assert tracking.post('/activity/commands', json=invalid).status_code == 422
+    assert tracking.get('/activity').json()['records'] == started['records']

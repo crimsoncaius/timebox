@@ -1,3 +1,5 @@
+import { ActivityTimeField } from './ActivityTimeField'
+import { activityTimeValue, resolveActivityTime, type ActivityTimeValue } from './activityTime'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TaskType } from '../../lib/api'
 import { ActivityRepository, getActivityRepository } from './activityRepository'
@@ -7,6 +9,10 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
 }) {
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot)
   const [switching, setSwitching] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const [targetId, setTargetId] = useState<number | null>(null)
+  const [timing, setTiming] = useState<ActivityTimeValue | null>(null)
+  const [timingError, setTimingError] = useState<string | null>(null)
   const [typeId, setTypeId] = useState('')
   const [name, setName] = useState('')
   const [now, setNow] = useState(() => repository.now())
@@ -37,8 +43,8 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       {current ? <>
         <span className="max-w-64 truncate text-on-surface dark:text-dark-on-surface">{current.name || current.task_type.name}</span>
         <span aria-label="Elapsed time">{elapsed}m</span>
-        <button className="py-2" disabled={disabled} onClick={() => setSwitching(true)}>Switch</button>
-        <button className="py-2" disabled={disabled} onClick={() => void repository.command('stop')}>Stop</button>
+        <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
+        <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>
       </> : <button className="py-2" disabled={disabled} onClick={() => void repository.command('start')}>Start tracking</button>}
       {state.busy ? <span role="status">Saving…</span> : null}
       <span role="status">{state.offline ? 'Offline' : state.pending ? 'Unsynced' : state.snapshot ? 'Synced' : 'Connection required'}{state.offline && state.pending ? ' · Unsynced' : ''}</span>
@@ -49,15 +55,23 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {state.error || state.pending ? <p role="alert" className="text-right">
       {state.error || 'Change not confirmed.'} <button disabled={state.busy} className="underline" onClick={() => void (state.pending ? repository.retry() : repository.refresh())}>Retry</button>
     </p> : null}
-    {switching ? <form aria-label="Switch activity" className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {
+    {switching || stopping ? <form aria-label={stopping ? "Stop tracking" : "Switch activity"} className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {
       event.preventDefault()
-      if (await repository.command('switch', Number(typeId), name.trim())) { setSwitching(false); setTypeId(''); setName('') }
+      try {
+        const at = timing ? resolveActivityTime(timing, state.snapshot?.reporting_timezone ?? 'UTC') : undefined
+        if (await repository.command(stopping ? 'stop' : 'switch', stopping ? undefined : Number(typeId), stopping ? undefined : name.trim(), false, undefined, { at, targetId: targetId! })) { setSwitching(false); setStopping(false); setTypeId(''); setName('') }
+      } catch (error) { setTimingError(String(error)) }
     }}>
-      <label className="block">Task Type<select className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" required value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+      {!stopping ? <><label className="block">Task Type<select className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" required value={typeId} onChange={(e) => setTypeId(e.target.value)}>
         <option value="">Choose Task Type</option>{availableTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
       </select></label>
-      <label className="block">Block Name (optional)<input className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div className="flex justify-end gap-4"><button type="button" onClick={() => setSwitching(false)}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || !typeId}>Switch activity</button></div>
+      <label className="block">Block Name (optional)<input className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={(e) => setName(e.target.value)} /></label></> : null}
+      <p>When did this {stopping ? "stop" : "change"} happen?</p>
+      <div className="flex gap-4"><button type="button" onClick={() => setTiming(null)}>Now</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now - 15 * 60000).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>15 min ago</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>Choose time</button></div>
+      {timing ? <ActivityTimeField label="Change time" value={timing} onChange={setTiming} timezone={state.snapshot?.reporting_timezone ?? "UTC"} /> : <p>Now</p>}
+      <section aria-label="After this change"><h3>After this change</h3><p>{current?.name || current?.task_type.name} ends {timing?.local.replace("T", " ") ?? "now"}.</p><p>{stopping ? "Time after this is unrecorded." : `${name || availableTypes.find(t => t.id === Number(typeId))?.name || "Next activity"} starts at the same time and continues.`}</p></section>
+      {timingError ? <p role="alert">{timingError}</p> : null}
+      <div className="flex justify-end gap-4"><button type="button" onClick={() => { setSwitching(false); setStopping(false) }}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || (!stopping && !typeId)}>{stopping ? "Stop tracking" : "Switch activity"}</button></div>
     </form> : null}
   </div>
 }

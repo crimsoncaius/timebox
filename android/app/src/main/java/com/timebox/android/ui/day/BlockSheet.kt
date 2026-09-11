@@ -68,6 +68,10 @@ fun BlockSheet(
     onOpenLinkedTask: (Int) -> Unit,
     allowComplete: Boolean = true,
 ) {
+    if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
+        ActivityActualEditor(state, onDismiss)
+        return
+    }
     val colors = TimeboxTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val isDraft = state.draft != null

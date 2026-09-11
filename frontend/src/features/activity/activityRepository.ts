@@ -8,7 +8,7 @@ export interface ActivityPlan {
 export interface ActivitySelection { task_id?: number | null; planned_block_id?: number | null; note?: string | null }
 export interface ActivitySnapshot {
   protocol: 'activity-online-v1'; cursor: number; server_at: string; reporting_timezone: string
-  current: ActualBlock | null; records: ActualBlock[]; task_types?: TaskType[]
+  current: ActualBlock | null; records: ActualBlock[]; provenance?: Record<string, string>; task_types?: TaskType[]
   reporting_timezone_initialized?: boolean
   plans?: ActivityPlan[]
   offline_ready?: boolean
@@ -16,12 +16,13 @@ export interface ActivitySnapshot {
   coverage?: { start: string; end: string | null; record_id: number | null; order: [string, string, number, string] }[]
   acknowledgement?: { operation_id: string; outcome: string } | null
 }
+export type ActivityCorrection = Partial<Pick<ActualBlock, 'start_at' | 'task_type_id' | 'task_id' | 'name' | 'note'>> & { end_at?: string }
 interface Command {
   operation_id: string; device_id: string; sequence: number; action_at: string
   calibration: { server_at: string; offset_ms: number }; base_cursor: number
-  effective: { mode: 'server_now' | 'instant'; at?: string }; target_id: number | null
+  effective: { mode: 'server_now' | 'instant' | 'range'; at?: string; end?: string }; target_id: number | null
   selection_snapshot?: boolean; task_id?: number | null; planned_block_id?: number | null; note?: string | null
-  predecessor_id?: string; kind: 'start' | 'switch' | 'stop'; task_type_id?: number; name?: string
+  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'add' | 'edit' | 'delete'; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
 }
 interface Journal {
   device: string; sequence: number; lastAction: number; pending: Command | null
@@ -56,19 +57,7 @@ export class ActivityRepository {
   private project(): ActivitySnapshot | null {
     if (!this.journal.snapshot) return null
     const snapshot = { ...this.journal.snapshot, records: [...this.journal.snapshot.records] }
-    if (snapshot.coverage?.length && this.journal.outbox.length) return this.projectRanges(snapshot)
-    for (const command of this.journal.outbox) {
-      // Old online receipts have no client effective instant; retain the confirmed view until replay.
-      if (command.effective.mode !== 'instant') continue
-      const at = command.effective.at!
-      if (snapshot.current) snapshot.records = snapshot.records.map(row => row.id === snapshot.current!.id ? { ...row, end_at: at } : row)
-      snapshot.current = null
-      if (command.kind !== 'stop') {
-        const type = snapshot.task_types?.find(t => t.id === command.task_type_id) ?? { id: command.task_type_id ?? 0, name: command.task_type_id ? 'Activity' : 'unspecified', created_at: at, updated_at: at }
-        snapshot.current = { id: -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: null, name: command.name ?? null, note: command.note ?? null, planned_block_id: command.planned_block_id ?? null, start_at: at, end_at: null, created_at: at, updated_at: at }
-        snapshot.records.push(snapshot.current)
-      }
-    }
+    if (this.journal.outbox.length) return this.projectRanges(snapshot)
     return snapshot
   }
   private projectRanges(snapshot: ActivitySnapshot): ActivitySnapshot {
@@ -87,23 +76,31 @@ export class ActivityRepository {
       for (let i = 0; i < 4; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1 }
       return 0
     }
-    let pieces: Piece[] = snapshot.coverage!.map(p => ({ start: instant(p.start), end: p.end ? instant(p.end) : infinity,
+    let pieces: Piece[] = (snapshot.coverage?.length ? snapshot.coverage : snapshot.records.map(r => ({ start: r.start_at, end: r.end_at, record_id: r.id, order: ['', '', 0, 'baseline'] as [string, string, number, string] }))).map(p => ({ start: instant(p.start), end: p.end ? instant(p.end) : infinity,
       row: snapshot.records.find(r => r.id === p.record_id) ?? null,
       order: [p.order[0] ? instant(p.order[0]) : -infinity, p.order[1], p.order[2], p.order[3]] }))
     for (const command of this.journal.outbox) {
-      if (command.effective.mode !== 'instant') continue
+      if (command.effective.mode === 'server_now') continue
       const at = command.effective.at!
       const start = instant(at)
+      const end = command.effective.end ? instant(command.effective.end) : infinity
+      const target = pieces.find(p => p.row && (command.target_source ? (snapshot.provenance?.[p.row.id] ?? `baseline:${p.row.id}`) === command.target_source && p.start === instant(command.target_start_at!) : p.row.id === command.target_id))?.row ?? pieces.find(p => p.row?.id === command.target_id)?.row
+      const historical = command.effective.mode === 'range'
       const order: Piece['order'] = [instant(command.action_at), command.device_id, command.sequence, command.operation_id]
       const type = snapshot.task_types?.find(t => t.id === command.task_type_id) ?? { id: command.task_type_id ?? 0, name: 'unspecified', created_at: at, updated_at: at }
-      const row: ActualBlock | null = command.kind === 'stop' ? null : { id: -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: null, name: command.name ?? null, note: command.note ?? null, planned_block_id: command.planned_block_id ?? null, start_at: at, end_at: null, created_at: at, updated_at: at }
-      const boundaries = [...new Set([start, ...pieces.flatMap(p => [p.start, p.end])])].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
+      const row: ActualBlock | null = ['stop', 'delete'].includes(command.kind) ? null : { ...target, id: command.kind === 'edit' ? target?.id ?? command.target_id! : -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: historical ? target?.task ?? null : null, name: command.name ?? null, note: command.note ?? null, planned_block_id: command.kind === 'edit' && target?.task_type_id === command.task_type_id && target?.task_id === command.task_id ? target?.planned_block_id ?? null : command.planned_block_id ?? null, start_at: at, end_at: historical ? command.effective.end! : null, created_at: target?.created_at ?? at, updated_at: command.action_at }
+      if (row) snapshot.provenance = { ...snapshot.provenance, [row.id]: command.kind === 'edit' ? command.target_source! : command.operation_id }
+      const oldStart = target ? instant(target.start_at) : start
+      const oldEnd = target?.end_at ? instant(target.end_at) : end
+      const boundaries = [...new Set([start, end, ...pieces.flatMap(p => [p.start, p.end])])].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
       if (boundaries.at(-1) !== infinity) boundaries.push(infinity)
       const next: Piece[] = []
       for (let i = 0; i < boundaries.length - 1; i++) {
         const a = boundaries[i], b = boundaries[i + 1]
         const previous = pieces.find(p => p.start <= a && p.end > a)
-        const winner = a >= start && (!previous || compare(order, previous.order) > 0) ? { row, order } : previous
+        const inRange = a >= start && a < end
+        const removed = command.kind === 'edit' && a >= oldStart && a < oldEnd
+        const winner = (inRange || removed) && (!previous || compare(order, previous.order) > 0) ? { row: inRange ? row : null, order } : previous
         if (winner) next.push({ start: a, end: b, row: winner.row, order: winner.order })
       }
       pieces = next
@@ -114,7 +111,7 @@ export class ActivityRepository {
       if (previous && previous.end === piece.start && previous.row?.id === piece.row?.id && compare(previous.order, piece.order) === 0) previous.end = piece.end
       else merged.push({ ...piece })
     }
-    const records = merged.filter(p => p.row).map(p => ({ ...p.row!, start_at: format(p.start), end_at: p.end === infinity ? null : format(p.end) }))
+    const records = merged.filter(p => p.row).map(p => ({ ...p.row!, start_at: instant(p.row!.start_at) === p.start ? p.row!.start_at : format(p.start), end_at: p.end === infinity ? null : p.row!.end_at && instant(p.row!.end_at) === p.end ? p.row!.end_at : format(p.end) }))
     return { ...snapshot, records, current: records.find(r => r.end_at === null) ?? null }
   }
   private publish(error: string | null = null, busy = false) {
@@ -203,7 +200,7 @@ export class ActivityRepository {
       return true
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save time zone'); return false }
   }
-  async command(kind: Command['kind'], taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection) {
+  async command(kind: 'start' | 'switch' | 'stop', taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection, timing?: { at?: string; targetId: number }) {
     if (retryOnly) { await this.refresh(); return !this.state.pending && !this.state.error }
     let saved = false
     const requestedAt = this.now()
@@ -225,10 +222,11 @@ export class ActivityRepository {
         const latest = projected.records.reduce((value, row) => Math.max(value, Date.parse(row.end_at ?? row.start_at)), 0)
         const action = Math.max(this.journal.lastAction + 1, latest + 1, requestedAt)
         const at = new Date(action).toISOString()
-        const predecessor = this.journal.outbox.at(-1) ?? observed.predecessor
+        if (timing && (timing.targetId !== projected.current?.id || (timing.at != null && (Date.parse(timing.at) < Date.parse(projected.current.start_at) || Date.parse(timing.at) > requestedAt)))) throw new Error('Choose a time after the current activity started and no later than now. Review the current activity if it changed.')
+        const predecessor = this.journal.outbox.findLast(c => ['start', 'switch', 'stop'].includes(c.kind)) ?? (observed.predecessor && ['start', 'switch', 'stop'].includes(observed.predecessor.kind) ? observed.predecessor : undefined)
         const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence: this.journal.sequence + 1,
           action_at: at, calibration: observed.calibration ?? this.journal.calibration, base_cursor: observed.snapshot?.cursor ?? this.journal.snapshot.cursor,
-          effective: { mode: 'instant', at }, target_id: predecessor ? null : observed.current?.id ?? null,
+          effective: { mode: 'instant', at: timing?.at ?? at }, target_id: predecessor ? null : observed.current?.id ?? null,
           ...(predecessor ? { predecessor_id: predecessor.operation_id } : {}), kind,
           selection_snapshot: true, ...selection,
           ...(taskTypeId == null ? {} : { task_type_id: taskTypeId }), ...(name ? { name } : {}) }
@@ -239,6 +237,35 @@ export class ActivityRepository {
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save activity'); return false }
     if (saved) void this.refresh()
     return saved
+  }
+  async correct(kind: 'add' | 'edit' | 'delete', targetId: number | null, patch: ActivityCorrection = {}) {
+    try {
+      await this.exclusive(async () => {
+        this.journal = this.readJournal()
+        const snapshot = this.project()
+        if (this.storageError) throw new Error(this.storageError)
+        if (!snapshot?.offline_ready || !this.journal.calibration) throw new Error('Connect once to initialize Activity Tracking.')
+        const target = snapshot.records.find(r => r.id === targetId)
+        if (kind !== 'add' && (!target || !target.end_at)) throw new Error('Select an ended Actual Block. Use Switch or Stop for the Current Activity.')
+        const data = { ...target, ...patch }
+        const start = kind === 'delete' ? target!.start_at : data.start_at
+        const end = kind === 'delete' ? target!.end_at : data.end_at
+        if (!start || !end || !(Date.parse(start) < Date.parse(end)) || Date.parse(end) > this.now()) throw new Error('Choose a positive time range ending no later than now.')
+        if (kind !== 'delete' && snapshot.records.some(r => r.id !== targetId && Date.parse(start) < Date.parse(r.end_at ?? '9999-01-01') && Date.parse(r.start_at) < Date.parse(end))) throw new Error('Activity overlaps recorded time. Adjust the other record first.')
+        const action = Math.max(this.now(), this.journal.lastAction + 1)
+        const localOrigin = this.journal.outbox.find(c => -c.sequence === targetId)
+        const priorEdit = this.journal.outbox.findLast(c => c.kind === 'edit' && c.target_id === targetId)
+        const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence: this.journal.sequence + 1,
+          action_at: new Date(action).toISOString(), calibration: this.journal.calibration, base_cursor: this.journal.snapshot!.cursor,
+          kind, effective: { mode: 'range', at: start, end }, target_id: targetId,
+          ...(target ? { target_source: priorEdit?.target_source ?? localOrigin?.operation_id ?? snapshot.provenance?.[target.id] ?? `baseline:${target.id}`, target_start_at: target.start_at } : {}),
+          task_type_id: data.task_type_id, task_id: data.task_id, name: data.name, note: data.note }
+        this.save({ ...this.journal, sequence: command.sequence, lastAction: action, outbox: [...this.journal.outbox, command] })
+        this.publish()
+      })
+      void this.refresh()
+      return true
+    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save correction'); return false }
   }
   currentPlan = () => this.state.snapshot?.plans?.find(p => Date.parse(p.start_at) <= this.now() && this.now() < Date.parse(p.end_at))
   async trackTask(task: { id: number; title: string; task_type_id: number | null; recurrence_kind?: string | null; status: string }) {

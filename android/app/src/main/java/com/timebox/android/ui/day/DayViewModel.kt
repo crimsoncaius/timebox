@@ -2,6 +2,9 @@ package com.timebox.android.ui.day
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.timebox.android.data.ActivityRepository
+import com.timebox.android.data.projectDay
+import kotlinx.coroutines.flow.combine
 import com.timebox.android.data.ActualBlock
 import com.timebox.android.data.Day
 import com.timebox.android.data.BattleTask
@@ -124,6 +127,7 @@ class DayViewModel(
     private val workModePersistence: WorkModePersistence = RepositoryWorkModePersistence(repository),
     workModeExecution: WorkModeExecution? = null,
     private val readinessCoordinator: ReadyToPlanCoordinator,
+    private val activityRepository: ActivityRepository? = null,
 ) : ViewModel() {
 
     private val launchScope: CoroutineScope get() = injectedScope ?: viewModelScope
@@ -146,6 +150,23 @@ class DayViewModel(
     private var planThenWork = false
 
     init {
+        if (activityRepository != null) workModeBridgeScope.launch {
+            val activityClock = MutableStateFlow(activityRepository.now())
+            launch { while (true) { kotlinx.coroutines.delay(60_000); activityClock.value = activityRepository.now() } }
+            combine(_state, activityRepository.state, activityClock) { ui, activity, now ->
+                ui to activity.snapshot?.let { it.copy(serverAt = maxOf(Instant.parse(it.serverAt), now).toString()) }
+            }.collect { (ui, snapshot) ->
+                if (snapshot != null) {
+                    val dates = ui.pages.keys + ui.date
+                    val pages = dates.associateWith { date ->
+                        val old = ui.page(date)
+                        old.copy(day = snapshot.projectDay(date, old.day), loading = if (old.day == null) false else old.loading)
+                    }
+                    if (pages != ui.pages) _state.update { it.copy(pages = pages, taskTypes = snapshot.taskTypes.map { t -> TaskType(t.id, t.name, 0) }) }
+                }
+            }
+        }
+
         workModeBridgeScope.launch {
             readinessCoordinator.projections.collect {
                 planningSession.applyReadinessProjection(readinessCoordinator::projectTasks)
@@ -215,7 +236,7 @@ class DayViewModel(
     }
 
     fun setPlanningMode(enabled: Boolean) {
-        if (!workMode.restorationComplete || workMode.state.value.session != null || _state.value.saving) return
+        if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
         if (!enabled) {
             cancelPlanningSession()
             return
@@ -233,7 +254,7 @@ class DayViewModel(
     }
 
     fun armAccessiblePlanningTask(taskId: Int?) {
-        if (!workMode.restorationComplete || workMode.state.value.session != null || _state.value.saving) return
+        if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
         planningSession.toggleSelection(taskId)
         syncPlanningState()
         _state.update { it.copy(draft = null, selectedBlockId = null) }
@@ -380,11 +401,15 @@ class DayViewModel(
         val block = _state.value.day?.blocks?.firstOrNull { it.id == blockId }
         if (block?.lane == Lane.Actual) {
             if (_state.value.isPlanningMode || _state.value.saving) return
+            if (activityRepository != null) {
+                _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
+                return
+            }
             _state.update { it.copy(saving = true) }
             launchScope.launch {
                 val actual = repository.getActualBlock(block.actualBlockId ?: block.id).getOrNull()
                 if (_state.value.isPlanningMode) return@launch
-                if (actual != null && actual.endAt == null) {
+                if (actual != null && actual.endAt == null && activityRepository == null) {
                     _state.value.day?.let { workMode.resume(it, actual) }
                 } else {
                     _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
@@ -405,7 +430,7 @@ class DayViewModel(
     }
 
     fun startDraft(lane: Lane, startMinute: Int) {
-        if (!workMode.restorationComplete || workMode.state.value.session != null || _state.value.saving) return
+        if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
         planThenWork = false
         val day = _state.value.day ?: return
         val start = startMinute.coerceIn(
@@ -432,7 +457,7 @@ class DayViewModel(
         val current = _state.value
         val selected = current.selectedBlock
         // Text fields save together on dismiss so Name and Note cannot race stale responses.
-        if (selected != null &&
+        if (!(activityRepository != null && selected?.lane == Lane.Actual) && selected != null &&
             (current.nameInput != selected.name.orEmpty() || current.noteInput != selected.note.orEmpty())
         ) {
             saveBlockText(selected, current.nameInput, current.noteInput)
@@ -700,11 +725,14 @@ class DayViewModel(
         }
         launchScope.launch {
             if (actualPatch != null) {
-                repository.patchActualBlock(
+                (if (activityRepository != null) runCatching {
+                    check(activityRepository.correct(com.timebox.android.data.remote.ActivityKind.Edit, actualPatch.first,
+                        startAt = actualPatch.second.toString(), endAt = actualPatch.third.toString())) { activityRepository.state.value.error ?: "Could not save correction" }
+                } else repository.patchActualBlock(
                     actualPatch.first,
                     startAt = actualPatch.second,
                     endAt = actualPatch.third,
-                ).fold(
+                )).fold(
                     onSuccess = {
                         _state.update { state -> state.copy(saving = false) }
                     },

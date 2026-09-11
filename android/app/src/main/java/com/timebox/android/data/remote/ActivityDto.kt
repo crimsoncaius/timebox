@@ -7,6 +7,9 @@ import kotlinx.serialization.Serializable
     @SerialName("start") Start,
     @SerialName("switch") Switch,
     @SerialName("stop") Stop,
+    @SerialName("add") Add,
+    @SerialName("edit") Edit,
+    @SerialName("delete") Delete,
 }
 @Serializable enum class ActivityOutcome {
     @SerialName("applied") Applied,
@@ -18,7 +21,7 @@ import kotlinx.serialization.Serializable
     @SerialName("server_at") val serverAt: String,
     @SerialName("offset_ms") val offsetMs: Long,
 )
-@Serializable data class ActivityEffectiveDto(val mode: String, val at: String? = null)
+@Serializable data class ActivityEffectiveDto(val mode: String, val at: String? = null, val end: String? = null)
 @Serializable data class ActivityCommandDto(
     @SerialName("operation_id") val operationId: String,
     @SerialName("device_id") val deviceId: String,
@@ -35,6 +38,9 @@ import kotlinx.serialization.Serializable
     @SerialName("planned_block_id") val plannedBlockId: Int? = null,
     val note: String? = null,
     @SerialName("selection_snapshot") val selectionSnapshot: Boolean = false,
+    @SerialName("target_source") val targetSource: String? = null,
+    @SerialName("target_start_at") val targetStartAt: String? = null,
+    val clear_fields: List<String> = emptyList(),
     @SerialName("predecessor_id") val predecessorId: String? = null,
 )
 @Serializable data class ActivityAcknowledgementDto(
@@ -54,6 +60,7 @@ import kotlinx.serialization.Serializable
     @SerialName("offline_ready") val offlineReady: Boolean = false,
     @SerialName("operation_outcomes") val operationOutcomes: Map<String, ActivityOperationOutcomeDto> = emptyMap(),
     val plans: List<ActivityPlanDto> = emptyList(),
+    val provenance: Map<String, String> = emptyMap(),
     val coverage: List<ActivityCoverageDto> = emptyList(),
 )
 @Serializable data class ActivityCoverageDto(

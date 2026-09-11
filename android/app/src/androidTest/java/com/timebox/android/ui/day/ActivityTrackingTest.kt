@@ -117,6 +117,8 @@ class ActivityTrackingTest {
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
         compose.onNodeWithText("Stop").performClick()
+        compose.onNodeWithText("After this change").assertExists()
+        compose.onNode(hasText("Stop tracking") and hasClickAction()).performScrollTo().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         compose.onNodeWithText("Start tracking").assertIsDisplayed()
         assertEquals(listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop), commands.map { it.kind })

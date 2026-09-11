@@ -6,6 +6,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ActivityRepositoryTest {
+    @Test fun historicalCorrectionsRejectOverlapAndKeepGapsOffline() = runTest {
+        val type = TaskTypeDto(1, "work")
+        val writing = ActualBlockDto(1, 1, type, name = "Writing", startAt = "2026-09-10T10:00:00Z", endAt = "2026-09-10T12:00:00Z", createdAt = "2026-09-10T10:00:00Z", updatedAt = "2026-09-10T10:00:00Z")
+        val current = writing.copy(id = 2, name = "Reading", startAt = "2026-09-11T10:00:00Z", endAt = null)
+        val initial = ActivitySnapshotDto(cursor = 2, serverAt = "2026-09-11T13:00:00Z", reportingTimezone = "UTC", offlineReady = true, current = current, records = listOf(writing, current), taskTypes = listOf(type))
+        var durable: String? = null
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        assertFalse(repository.correct(ActivityKind.Add, startAt = "2026-09-10T11:00:00Z", endAt = "2026-09-10T11:30:00Z", name = "Lunch", taskTypeId = 1))
+        assertTrue(repository.correct(ActivityKind.Edit, 1, endAt = "2026-09-10T11:00:00Z"))
+        assertTrue(repository.correct(ActivityKind.Add, startAt = "2026-09-10T11:00:00Z", endAt = "2026-09-10T11:30:00Z", name = "Lunch", taskTypeId = 1))
+        val restored = ActivityRepository(transport, store)
+        assertTrue(restored.correct(ActivityKind.Delete, 1))
+        assertEquals(listOf("Lunch", "Reading"), restored.state.value.snapshot!!.records.map { it.name }.sortedBy { it })
+        assertEquals(current, restored.state.value.snapshot!!.current)
+    }
+
     @Test fun planSnapshotSurvivesRestartAndExplicitSwitchClearsItsLinks() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val plan = ActivityPlanDto(4, 2, 7, "Chapter", "Outline", at, "2026-09-11T11:00:00Z")

@@ -1,6 +1,7 @@
+import { activityDay } from '../activity/activityDay'
 import { needsElapsedDayView, ReportingDayActuals } from '../activity/ReportingDayActuals'
 import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DayCalendarPopover } from '../../components/DayCalendarPopover'
 import {
@@ -13,7 +14,7 @@ import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorCo
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType, type TimeBlock } from '../../lib/api'
 import { WorkMode } from './WorkMode'
 import { ActivityTracking } from '../activity/ActivityTracking'
-import { activityDevelopmentEnabled } from '../activity/activityRepository'
+import { getActivityRepository, type ActivityCorrection, activityDevelopmentEnabled } from '../activity/activityRepository'
 import { apiWorkModeTransport, browserWorkModeStore, WorkModeExecution, minuteInTimeZone } from './workModeExecution'
 import { dateInTimeZone } from '../../lib/battlePlan'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
@@ -59,7 +60,10 @@ export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [day, setDay] = useState<DayRead | null>(null)
+  const [storedDay, setDay] = useState<DayRead | null>(null)
+  const activityRepository = useMemo(() => getActivityRepository(), [])
+  const activityState = useSyncExternalStore(activityRepository.subscribe, activityRepository.getSnapshot)
+  const day = useMemo(() => activityDevelopmentEnabled && date && activityState.snapshot ? activityDay(date, activityState.snapshot, storedDay, activityRepository.now()) : storedDay, [date, activityState.snapshot, storedDay, activityRepository])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [storedBattleTasks, setBattleTasks] = useState<BattleTask[]>([])
   const battleTasks = readiness.projectTasks(storedBattleTasks)
@@ -477,7 +481,7 @@ export function TodayPage() {
   }, [draft, selectedBlock, tryClosePanel])
 
   const commitDraft = useCallback(
-    async (payload: { task_type_id?: number; name: string | null; note: string | null }) => {
+    async (payload: ActivityCorrection & { name: string | null; note: string | null }) => {
       if (!date || !draft || draftCommitInFlightRef.current) return
       if (workModeExecution.state.session) return
       draftCommitInFlightRef.current = true
@@ -486,6 +490,11 @@ export function TodayPage() {
       try {
         if (draft.lane === 'actual') {
           if (!day) return
+          if (activityDevelopmentEnabled) {
+            const repo = getActivityRepository()
+            if (!await repo.correct('add', null, { ...payload, task_id: draft.task_id ?? null, start_at: payload.start_at ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, draft.start_minute), day.meta.timezone), end_at: payload.end_at ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, draft.end_minute), day.meta.timezone) })) throw new Error(repo.state.error ?? 'Could not save correction')
+            setDraft(null); setInspectorDirty(false); return
+          }
           const local = (minute: number) => `${date}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
           const created = await api.createActualBlock({
             task_type_id: payload.task_type_id,
@@ -586,7 +595,11 @@ export function TodayPage() {
               day.meta.timezone,
             )
           }
-          await api.patchActualBlock(blockId, actualPatch)
+          if (activityDevelopmentEnabled) {
+            const repo = getActivityRepository()
+            if (!await repo.correct('edit', blockId, actualPatch)) throw new Error(repo.state.error ?? 'Could not save correction')
+            return
+          } else await api.patchActualBlock(blockId, actualPatch)
           setDay(await api.getDay(date))
           return
         }
@@ -620,12 +633,15 @@ export function TodayPage() {
   )
 
   const patchActual = useCallback(
-    async (blockId: number, patch: { task_type_id?: number; name?: string | null; note?: string | null }) => {
+    async (blockId: number, patch: ActivityCorrection) => {
       if (!date) return
       setError(null)
       try {
-        await api.patchActualBlock(blockId, patch)
-        setDay(await api.getDay(date))
+        if (activityDevelopmentEnabled) {
+          const repo = getActivityRepository()
+          if (!await repo.correct('edit', blockId, patch)) throw new Error(repo.state.error ?? 'Could not save correction')
+          setInspectorDirty(false)
+        } else { await api.patchActualBlock(blockId, patch); setDay(await api.getDay(date)) }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Failed to update Actual block')
         throw cause
@@ -639,8 +655,11 @@ export function TodayPage() {
       if (!date) return
       setError(null)
       try {
-        await api.deleteActualBlock(blockId)
-        setDay(await api.getDay(date))
+        if (activityDevelopmentEnabled) {
+          const repo = getActivityRepository()
+          if (!await repo.correct('delete', blockId)) throw new Error(repo.state.error ?? 'Could not save correction')
+          setSelectedBlockRef(null); setInspectorDirty(false)
+        } else { await api.deleteActualBlock(blockId); setDay(await api.getDay(date)) }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Failed to delete Actual block')
         throw cause
@@ -707,7 +726,7 @@ export function TodayPage() {
       setDraft(null)
       if (lane === 'actual' && day) {
         const actual = day.actual_blocks.find((projection) => projection.actual_block.id === blockId)?.actual_block
-        if (actual && actual.end_at == null) {
+        if (actual && actual.end_at == null && !activityDevelopmentEnabled) {
           if (activityDevelopmentEnabled) return false
           workModeExecution.attachActive(day, presentInstant(), actual)
           setSelectedBlockRef(null)
@@ -751,7 +770,7 @@ export function TodayPage() {
     day,
     taskTypes,
     onClose: tryClosePanel,
-    onSave: (patch: { task_type_id?: number; name?: string | null; note?: string | null }) => {
+    onSave: (patch: ActivityCorrection) => {
       if (!selectedBlock) return Promise.resolve()
       return selectedBlock.lane === 'actual'
         ? patchActual(selectedBlock.id, patch)
