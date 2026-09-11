@@ -117,7 +117,10 @@ fun TimeboxApp(
     val checkIns = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).checkIns else null
     val requestedCheckIn = checkIns?.openQuestion?.collectAsState()?.value
     LaunchedEffect(requestedCheckIn) {
-        if (requestedCheckIn != null && !focused) navController.navigate(AppRoutes.day(java.time.LocalDate.now())) { launchSingleTop = true }
+        if (requestedCheckIn != null && !focused && activityRepository != null) {
+            val zone = java.time.ZoneId.of(activityRepository.state.value.snapshot?.reportingTimezone ?: "UTC")
+            navController.navigate(AppRoutes.day(activityRepository.now().atZone(zone).toLocalDate())) { launchSingleTop = true }
+        }
     }
     LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) { if (activityRepository != null) focusController?.reconcile(activityRepository, dayState.focusPlanningBlocked) }
 

@@ -58,4 +58,22 @@ class ActivityCheckInPlatformTest {
         Log.i("ActivityCheckInProbe", "Dismissal kept pending; original OS PendingIntent sent for ${question.id}")
         Unit
     }
+    @Test fun originalNotificationIntentOpensVisibleQuestion() = runBlocking {
+        org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("platformReview") == "true")
+        check(BuildConfig.ACTIVITY_TRACKING_DEV)
+        val pending = android.app.PendingIntent.getActivity(app, 15501, android.content.Intent(app, MainActivity::class.java),
+            android.app.PendingIntent.FLAG_NO_CREATE or android.app.PendingIntent.FLAG_IMMUTABLE)
+        assertNotNull("Original notification PendingIntent must already exist", pending)
+        pending.send()
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun texts(node: android.view.accessibility.AccessibilityNodeInfo?): List<String> =
+            if (node == null) emptyList() else listOfNotNull(node.text?.toString()) + (0 until node.childCount).flatMap { texts(node.getChild(it)) }
+        val deadline = android.os.SystemClock.elapsedRealtime() + 20_000
+        while (android.os.SystemClock.elapsedRealtime() < deadline && "Yes, still doing this" !in texts(automation.rootInActiveWindow)) kotlinx.coroutines.delay(250)
+        val visible = texts(automation.rootInActiveWindow)
+        Log.i("ActivityCheckInProbe", "Visible UI: $visible")
+        assertTrue("Yes, still doing this" in visible)
+        Log.i("ActivityCheckInProbe", "Original OS PendingIntent opened the visible current question")
+        Unit
+    }
 }
