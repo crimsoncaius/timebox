@@ -23,6 +23,7 @@ class TimeboxApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var preferences: AppPreferences
     val focusController by lazy { com.timebox.android.ui.focus.FocusController(com.timebox.android.ui.focus.AndroidFocusStorage(this)) }
+    val checkIns by lazy { com.timebox.android.checkin.AndroidCheckIns(this, activityRepository) }
     val activityRepository by lazy {
         com.timebox.android.data.ActivityRepository(
             com.timebox.android.data.RepositoryActivityTransport(repository),
@@ -59,5 +60,6 @@ class TimeboxApplication : Application() {
         repository.onActiveTasksLoaded = { tasks -> reminderScheduler.replaceSchedules(tasks.items) }
         repository.onConnectionChanged = reminderScheduler::enqueueImmediateSync
         reminderScheduler.start()
+        com.timebox.android.checkin.CheckInWorker.schedule(this)
     }
 }

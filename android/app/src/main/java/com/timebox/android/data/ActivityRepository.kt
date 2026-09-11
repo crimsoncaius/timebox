@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 
 @Serializable data class CheckInPreferences(val enabled: Boolean = true, val thresholdMinutes: Int = 60)
+data class CheckInSubmission(val saved: Boolean, val operationId: String? = null, val deviceId: String? = null, val acknowledged: Boolean = false)
 
 interface ActivityTransport {
     suspend fun read(): ActivitySnapshotDto
@@ -195,8 +196,11 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         try { save(journal.copy(dismissedQuestions = journal.dismissedQuestions + id)); publish() }
         catch (error: Exception) { publish(error.message) }
     }
-    suspend fun checkIn(event: CheckInEventDto): Boolean = mutex.withLock {
+    suspend fun checkIn(event: CheckInEventDto): Boolean = submitCheckIn(event).saved
+    suspend fun submitCheckIn(event: CheckInEventDto): CheckInSubmission = mutex.withLock {
         var saved = false
+        var operationId: String? = null
+        var acknowledged = false
         try {
             checkEndpoint()
             val snapshot = checkNotNull(project())
@@ -208,10 +212,17 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 at, calibration, snapshot.cursor, ActivityEffectiveDto("instant", at), snapshot.current?.id,
                 ActivityKind.CheckIn, checkIn = event.copy(enabled = if (event.action == "candidate") journal.checkInPreferences.enabled else event.enabled, thresholdMinutes = if (event.action == "candidate") journal.checkInPreferences.thresholdMinutes else event.thresholdMinutes, generation = event.generation ?: prompt.generation, rearm = if (event.generation == null) prompt.rearm else event.rearm))
             save(journal.copy(sequence = command.sequence, lastAction = millis, outbox = journal.outbox + command))
+            operationId = command.operationId
             saved = true; publish(); drain(); publish()
+            acknowledged = !offline && journal.outbox.none { it.operationId == operationId }
         } catch (cancelled: CancellationException) { publish(); throw cancelled }
         catch (error: Exception) { publish(error.message) }
-        saved
+        CheckInSubmission(saved, operationId, journal.device, acknowledged)
+    }
+    suspend fun reopenCheckIn(id: String) = mutex.withLock {
+        if (project()?.checkIn?.question?.id == id) {
+            save(journal.copy(dismissedQuestions = journal.dismissedQuestions - id)); publish()
+        }
     }
     suspend fun refresh() = mutex.withLock {
         try {

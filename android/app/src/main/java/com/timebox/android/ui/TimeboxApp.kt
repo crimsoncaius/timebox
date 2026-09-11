@@ -114,6 +114,11 @@ fun TimeboxApp(
     val focusState = focusController?.state?.collectAsState()?.value
     val currentActivity = activityRepository?.state?.collectAsState()?.value
     val focused = focusState?.active == true && currentActivity?.snapshot?.current != null && !dayState.focusPlanningBlocked
+    val checkIns = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).checkIns else null
+    val requestedCheckIn = checkIns?.openQuestion?.collectAsState()?.value
+    LaunchedEffect(requestedCheckIn) {
+        if (requestedCheckIn != null && !focused) navController.navigate(AppRoutes.day(java.time.LocalDate.now())) { launchSingleTop = true }
+    }
     LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) { if (activityRepository != null) focusController?.reconcile(activityRepository, dayState.focusPlanningBlocked) }
 
     val chronicleState by chronicleViewModel.state.collectAsState()
