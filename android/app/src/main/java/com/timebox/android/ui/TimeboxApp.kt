@@ -626,10 +626,6 @@ fun TimeboxApp(
                             onConfirmMigrate = typesViewModel::confirmMigrateDelete,
                             onDismissCascade = typesViewModel::dismissCascadePrompt,
                             onRetry = typesViewModel::load,
-                            onRename = typesViewModel::beginRename,
-                            onRenameChange = typesViewModel::changeRename,
-                            onSaveRename = typesViewModel::saveRename,
-                            onCancelRename = typesViewModel::cancelRename,
                         )
                     }
                     composable(AppRoutes.Settings) {
