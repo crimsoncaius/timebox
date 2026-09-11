@@ -67,7 +67,7 @@ it('requires Task Type for switching, allows no name, and stops without completi
 })
 
 it('does not send a command when durable storage fails', async () => {
-  const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ protocol: 'activity-online-v1', cursor: 0, server_at: '2026-09-11T10:00:00Z', current: null, records: [] })))
+  const fetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ protocol: 'activity-online-v1', cursor: 0, server_at: '2026-09-11T10:00:00Z', current: null, records: [] })))
   vi.stubGlobal('fetch', fetch)
   const repository = new ActivityRepository(localStorage, (work) => work())
   await repository.refresh()
@@ -78,4 +78,19 @@ it('does not send a command when durable storage fails', async () => {
   expect(fetch.mock.calls.some((args) => args[1]?.method === 'POST')).toBe(false)
   expect(repository.state.snapshot?.current).toBeNull()
   failure.mockRestore()
+})
+
+it('a delayed older refresh cannot replace newer clock calibration', async () => {
+  let release!: (response: Response) => void
+  const delayed = new Promise<Response>((resolve) => { release = resolve })
+  let reads = 0
+  const snapshot = (cursor: number, time: string) => new Response(JSON.stringify({ protocol: 'activity-online-v1', cursor, server_at: time, current: null, records: [] }))
+  vi.stubGlobal('fetch', vi.fn(() => ++reads === 1 ? delayed : Promise.resolve(snapshot(2, '2026-09-11T12:00:00Z'))))
+  const repository = new ActivityRepository(localStorage, (work) => work())
+  const oldRead = repository.refresh()
+  await repository.refresh()
+  release(snapshot(1, '2026-09-11T11:00:00Z'))
+  await oldRead
+  expect(repository.now()).toBeGreaterThanOrEqual(Date.parse('2026-09-11T12:00:00Z'))
+  expect(repository.state.snapshot?.cursor).toBe(2)
 })

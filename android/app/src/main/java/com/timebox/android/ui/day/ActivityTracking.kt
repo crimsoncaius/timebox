@@ -16,6 +16,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
 import com.timebox.android.data.TaskType
+import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
 import java.time.Instant
@@ -53,12 +54,12 @@ fun ActivityTracking(
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (current == null) {
-                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command("start") } }) { Text("Start tracking") }
+                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } }) { Text("Start tracking") }
             } else {
                 Text(current.name ?: current.taskType.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.on)
                 Text("${Duration.between(Instant.parse(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
                 TextButton(enabled = enabled, onClick = { switching = true }) { Text("Switch") }
-                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command("stop") } }) { Text("Stop") }
+                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Stop) } }) { Text("Stop") }
             }
         }
         if (state.busy) Text("Saving…", color = colors.onVariant)
@@ -80,7 +81,7 @@ fun ActivityTracking(
             OutlinedTextField(value = name, onValueChange = { if (it.length <= 500) name = it }, label = { Text("Block Name (optional)") }, modifier = Modifier.fillMaxWidth())
             Button(enabled = enabled && selectedType != null, onClick = {
                 scope.launch {
-                    if (withContext(Dispatchers.IO) { repository.command("switch", selectedType!!.id, name) }) {
+                    if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name) }) {
                         switching = false; selectedType = null; name = ""
                     }
                 }

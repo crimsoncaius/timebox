@@ -15,6 +15,10 @@ async def guard_legacy_actual_writes(
         return
     path = request.url.path
     legacy = path.startswith(("/actual-blocks", "/planned-blocks"))
+    if path.startswith("/task-types/") and request.method == "DELETE":
+        # These legacy options rewrite/delete Actuals as a side effect. Reject
+        # before inspecting usage so a concurrent switch cannot race the check.
+        legacy = "cascade_blocks" in request.query_params or "migrate_blocks_to" in request.query_params
     if path.startswith("/days/") and "/blocks" in path:
         block_id = request.path_params.get("block_id")
         if block_id is not None:

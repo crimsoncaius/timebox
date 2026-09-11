@@ -24,13 +24,13 @@ class ActivityTrackingTest {
             override suspend fun read() = saved
             override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
                 commands += command
-                val current = if (command.kind == "stop") null else ActualBlockDto(
+                val current = if (command.kind == ActivityKind.Stop) null else ActualBlockDto(
                     id = commands.size, taskTypeId = command.taskTypeId ?: 1,
-                    taskType = TaskTypeDto(command.taskTypeId ?: 1, if (command.kind == "start") "unspecified" else "reading"),
+                    taskType = TaskTypeDto(command.taskTypeId ?: 1, if (command.kind == ActivityKind.Start) "unspecified" else "reading"),
                     startAt = saved.serverAt, createdAt = saved.serverAt, updatedAt = saved.serverAt,
                 )
                 saved = saved.copy(cursor = commands.size, current = current,
-                    acknowledgement = ActivityAcknowledgementDto(command.operationId, "applied"))
+                    acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
                 return saved
             }
         }
@@ -50,7 +50,7 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Stop").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         compose.onNodeWithText("Start tracking").assertIsDisplayed()
-        assertEquals(listOf("start", "switch", "stop"), commands.map { it.kind })
+        assertEquals(listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop), commands.map { it.kind })
         assertNull(commands[1].name)
     }
 }

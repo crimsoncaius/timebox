@@ -46,7 +46,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
         <option value="">Choose Task Type</option>{taskTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
       </select></label>
       <label className="block">Block Name (optional)<input className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div className="flex justify-end gap-4"><button type="button" onClick={() => setSwitching(false)}>Cancel</button><button className="rounded-full bg-primary px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || !typeId}>Switch activity</button></div>
+      <div className="flex justify-end gap-4"><button type="button" onClick={() => setSwitching(false)}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || !typeId}>Switch activity</button></div>
     </form> : null}
   </div>
 }

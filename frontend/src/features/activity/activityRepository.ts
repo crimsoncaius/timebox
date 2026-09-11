@@ -78,7 +78,10 @@ export class ActivityRepository {
   }
   private accept(snapshot: ActivitySnapshot) {
     if (snapshot.protocol !== 'activity-online-v1') throw new Error('Incompatible activity server')
-    if (snapshot.cursor >= (this.journal.snapshot?.cursor ?? -1)) this.save({ ...this.journal, snapshot })
+    const previous = this.journal.snapshot
+    if (previous && (snapshot.cursor < previous.cursor || (snapshot.cursor === previous.cursor && Date.parse(snapshot.server_at) < Date.parse(previous.server_at)))) return false
+    this.save({ ...this.journal, snapshot })
+    return true
   }
 
   async refresh() {
@@ -86,7 +89,7 @@ export class ActivityRepository {
       const snapshot = await fetchJson<ActivitySnapshot>('/activity')
       await this.exclusive(async () => {
         this.journal = this.readJournal()
-        this.accept(snapshot)
+        if (!this.accept(snapshot)) { this.publish(this.state.error); return }
         const server = Date.parse(snapshot.server_at)
         this.anchor = { server, monotonic: performance.now(), calibration: { server_at: snapshot.server_at, offset_ms: server - Date.now() } }
         this.publish(this.journal.pending ? 'Change not confirmed. Retry to check the saved result.' : null)

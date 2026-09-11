@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.activity import ActivityOperation, ActivityState
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.activity import ActivityCommand, ActivitySnapshot, ActivityAcknowledgement
+from app.schemas.time_block import ActualBlockRead
 from app.services import actual_block_service as actuals
 
 
@@ -31,7 +32,7 @@ def _lock(db: Session) -> ActivityState:
 
 
 def _snapshot(db, state, timezone, acknowledgement=None):
-    records = [actuals._read(row) for row in db.scalars(
+    records = [ActualBlockRead.model_validate(row) for row in db.scalars(
         select(TimeBlock).where(TimeBlock.lane == BlockLane.actual, TimeBlock.start_at.is_not(None))
         .order_by(TimeBlock.start_at, TimeBlock.id)
     )]
@@ -57,9 +58,12 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
     if previous:
         if previous.envelope != envelope:
             raise ValueError("Operation ID already used with different content")
+        effective_at = previous.effective_at
+        if effective_at is not None and effective_at.tzinfo is None:
+            effective_at = effective_at.replace(tzinfo=dt.timezone.utc)
         result = _snapshot(db, state, timezone, ActivityAcknowledgement(
             operation_id=previous.operation_id, outcome=previous.outcome,
-            effective_at=actuals._as_utc(previous.effective_at) if previous.effective_at else None,
+            effective_at=effective_at,
         ))
         db.commit()
         return result
@@ -74,28 +78,9 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
     elif (body.kind == "start") == (current is not None):
         outcome = "conflict"
     else:
-        if body.kind == "switch" and body.task_type_id is None:
-            raise ValueError("Task Type is required when switching")
-        if body.kind != "switch" and (body.task_type_id is not None or body.name is not None):
-            raise ValueError("Only switch accepts Task Type and Block Name in this slice")
-        type_id = body.task_type_id
-        if body.kind != "stop":
-            if type_id is None:
-                type_id = actuals._get_or_create_unspecified_task_type(db).id
-            actuals._validate_item(db, type_id, None)
-        # Capture after the lock, never before waiting for a concurrent writer.
-        effective_at = dt.datetime.now(dt.timezone.utc)
-        if current:
-            if effective_at <= actuals._as_utc(current.start_at):
-                raise ValueError("Server clock is behind the current activity; retry later")
-            row = actuals._load_actual(db, current.id)
-            row.end_at = effective_at
-            actuals.invalidate_record_actual_undo(db, row.id)
-            db.flush()  # close before insert; never expose this intermediate state
-        if body.kind != "stop":
-            db.add(TimeBlock(lane=BlockLane.actual, task_type_id=type_id,
-                             name=(body.name or "").strip() or None, start_at=effective_at))
-            db.flush()
+        effective_at = actuals.transition_unplanned_activity(
+            db, kind=body.kind, task_type_id=body.task_type_id, name=body.name,
+        )
     state.cursor += 1
     db.add(ActivityOperation(operation_id=str(body.operation_id), device_id=body.device_id,
                              sequence=body.sequence, envelope=envelope, cursor=state.cursor,

@@ -3,6 +3,16 @@ package com.timebox.android.data.remote
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+@Serializable enum class ActivityKind {
+    @SerialName("start") Start,
+    @SerialName("switch") Switch,
+    @SerialName("stop") Stop,
+}
+@Serializable enum class ActivityOutcome {
+    @SerialName("applied") Applied,
+    @SerialName("conflict") Conflict,
+}
+
 @Serializable data class ActivityCalibrationDto(
     @SerialName("server_at") val serverAt: String,
     @SerialName("offset_ms") val offsetMs: Long,
@@ -17,13 +27,13 @@ import kotlinx.serialization.Serializable
     @SerialName("base_cursor") val baseCursor: Int,
     val effective: ActivityEffectiveDto,
     @SerialName("target_id") val targetId: Int?,
-    val kind: String,
+    val kind: ActivityKind,
     @SerialName("task_type_id") val taskTypeId: Int? = null,
     val name: String? = null,
 )
 @Serializable data class ActivityAcknowledgementDto(
     @SerialName("operation_id") val operationId: String,
-    val outcome: String,
+    val outcome: ActivityOutcome,
 )
 @Serializable data class ActivitySnapshotDto(
     val protocol: String = "activity-online-v1",

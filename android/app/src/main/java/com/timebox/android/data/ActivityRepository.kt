@@ -4,6 +4,8 @@ import android.content.Context
 import com.timebox.android.data.remote.ActivityCalibrationDto
 import com.timebox.android.data.remote.ActivityCommandDto
 import com.timebox.android.data.remote.ActivityEffectiveDto
+import com.timebox.android.data.remote.ActivityKind
+import com.timebox.android.data.remote.ActivityOutcome
 import com.timebox.android.data.remote.ActivitySnapshotDto
 import com.timebox.android.data.remote.ApiFactory
 import java.time.Instant
@@ -97,7 +99,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         } catch (error: Exception) { publish(error.message ?: "Could not refresh activity") }
     }
     fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (System.nanoTime() - monotonicAnchor) / 1_000_000) } ?: Instant.now()
-    suspend fun command(kind: String, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false): Boolean = mutex.withLock {
+    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false): Boolean = mutex.withLock {
         publish(busy = true)
         try {
             checkEndpoint()
@@ -122,10 +124,10 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             check(ack.operationId == pending.operationId) { "Activity acknowledgement does not match" }
             accept(response)
             save(journal.copy(pending = null))
-            publish(if (ack.outcome == "conflict") "Activity changed on another device. Review before trying again." else null)
-            ack.outcome == "applied"
+            publish(if (ack.outcome == ActivityOutcome.Conflict) "Activity changed on another device. Review before trying again." else null)
+            ack.outcome == ActivityOutcome.Applied
         } catch (cancelled: CancellationException) { publish("Change not confirmed. Retry to check the saved result."); throw cancelled
         } catch (error: Exception) { publish(error.message ?: "Change not confirmed"); false }
     }
-    suspend fun retry() = command(journal.pending?.kind ?: "start", retryOnly = true)
+    suspend fun retry() = command(journal.pending?.kind ?: ActivityKind.Start, retryOnly = true)
 }

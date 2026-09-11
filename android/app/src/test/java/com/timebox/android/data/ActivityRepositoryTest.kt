@@ -20,12 +20,12 @@ class ActivityRepositoryTest {
             override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
                 commands += command
                 if (commands.size == 1) error("Connection lost")
-                return initial.copy(cursor = 1, current = current, records = listOf(current), acknowledgement = ActivityAcknowledgementDto(command.operationId, "applied"))
+                return initial.copy(cursor = 1, current = current, records = listOf(current), acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
             }
         }
         val repository = ActivityRepository(transport, store)
         repository.refresh()
-        repository.command("start")
+        repository.command(ActivityKind.Start)
         assertTrue(repository.state.value.pending)
         val restored = ActivityRepository(transport, store)
         restored.retry()

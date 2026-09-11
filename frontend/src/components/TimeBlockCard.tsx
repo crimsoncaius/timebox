@@ -8,6 +8,7 @@ import {
 } from '../lib/time'
 import type { TimeBlockLike } from '../lib/time'
 import { blockPrimaryIdentity, blockSecondaryIdentity } from '../lib/blockIdentity'
+import { activityDevelopmentEnabled } from '../features/activity/activityRepository'
 
 /** Ignore tiny jitter before moving a block. */
 const SWIPE_AXIS_DEAD_ZONE_PX = 8
@@ -335,7 +336,9 @@ export function TimeBlockCard({
     ],
   )
 
-  const displayLabel = blockPrimaryIdentity(block)
+  const displayLabel = activityDevelopmentEnabled && lane === 'actual'
+    ? block.name?.trim() || block.task_type.name
+    : blockPrimaryIdentity(block)
   const secondaryLabel = blockSecondaryIdentity(block)
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
   const durationMin = displayEnd - displayStart

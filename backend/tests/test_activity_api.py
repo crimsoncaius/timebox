@@ -91,6 +91,16 @@ def test_development_gate_blocks_legacy_writers_even_after_flag_is_disabled(trac
     assert tracking.post(f'/actual-blocks/{saved["current"]["id"]}/finish').status_code == 409
 
 
+def test_task_type_cascade_and_migration_cannot_bypass_activity_protocol(tracking):
+    saved = tracking.post("/activity/commands", json=command(tracking.get("/activity").json(), "start")).json()
+    reading = tracking.post("/task-types", json={"name": "reading"}).json()
+    other = tracking.post("/task-types", json={"name": "break"}).json()
+    saved = tracking.post("/activity/commands", json=command(saved, "switch", sequence=2, task_type_id=reading["id"])).json()
+    assert tracking.delete(f'/task-types/{reading["id"]}?cascade_blocks=true').status_code == 409
+    assert tracking.delete(f'/task-types/{reading["id"]}?migrate_blocks_to={other["id"]}').status_code == 409
+    assert tracking.get("/activity").json()["current"] == saved["current"]
+
+
 def test_concurrent_postgres_writers_and_duplicate_switches(tracking):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
