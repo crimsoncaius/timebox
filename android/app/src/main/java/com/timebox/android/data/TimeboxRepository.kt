@@ -157,6 +157,9 @@ class TimeboxRepository private constructor(
     suspend fun createTaskType(name: String): Result<TaskType> =
         call { api().createTaskType(TaskTypeCreateDto(name)).toModel() }
 
+    suspend fun renameTaskType(id: Int, name: String): Result<TaskType> =
+        call { api().renameTaskType(id, TaskTypeCreateDto(name)).toModel() }
+
     suspend fun deleteTaskType(
         id: Int,
         cascadeBlocks: Boolean = false,

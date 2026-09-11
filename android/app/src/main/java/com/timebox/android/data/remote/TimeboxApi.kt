@@ -93,6 +93,9 @@ interface TimeboxApi {
     @POST("task-types")
     suspend fun createTaskType(@Body body: TaskTypeCreateDto): TaskTypeDto
 
+    @PATCH("task-types/{id}")
+    suspend fun renameTaskType(@Path("id") id: Int, @Body body: TaskTypeCreateDto): TaskTypeDto
+
     @DELETE("task-types/{id}")
     suspend fun deleteTaskType(
         @Path("id") id: Int,

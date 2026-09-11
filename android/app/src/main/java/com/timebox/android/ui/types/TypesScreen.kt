@@ -63,6 +63,10 @@ fun TypesScreen(
     onConfirmMigrate: () -> Unit,
     onDismissCascade: () -> Unit,
     onRetry: () -> Unit,
+    onRename: (TaskType) -> Unit = {},
+    onRenameChange: (String) -> Unit = {},
+    onSaveRename: () -> Unit = {},
+    onCancelRename: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
 
@@ -154,7 +158,7 @@ fun TypesScreen(
                         ) {
                             group.items.forEachIndexed { index, type ->
                                 if (index > 0) Hairline()
-                                TypeRow(type = type, onDelete = { onDelete(type) })
+                                TypeRow(type = type, onDelete = { onDelete(type) }, onRename = { onRename(type) })
                             }
                         }
                         Spacer(Modifier.height(16.dp))
@@ -164,6 +168,9 @@ fun TypesScreen(
         }
     }
 
+    if (state.renaming != null) {
+        RenameTaskTypeSheet(state, onRenameChange, onSaveRename, onCancelRename)
+    }
     val pending = state.pendingCascade
     if (pending != null) {
         val otherTypes = state.groups.flatMap { it.items }.filter { it.id != pending.id }
@@ -212,7 +219,7 @@ fun TypesScreen(
 }
 
 @Composable
-private fun TypeRow(type: TaskType, onDelete: () -> Unit) {
+private fun TypeRow(type: TaskType, onDelete: () -> Unit, onRename: () -> Unit) {
     val colors = TimeboxTheme.colors
     Row(
         modifier = Modifier
@@ -245,19 +252,22 @@ private fun TypeRow(type: TaskType, onDelete: () -> Unit) {
             style = TimeboxTheme.type.mono,
             color = colors.onVariant,
         )
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .clickable(onClick = onDelete),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Delete,
-                contentDescription = "Delete ${type.name}",
-                tint = colors.error,
-                modifier = Modifier.size(18.dp),
-            )
+        if (type.name != "unspecified") {
+            TextButton(onClick = onRename) { Text("Rename", color = colors.on) }
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onDelete),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "Delete ${type.name}",
+                    tint = colors.error,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }
