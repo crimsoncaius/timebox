@@ -13,6 +13,8 @@ import android.provider.Settings
 import com.timebox.android.data.ActivityRepository
 import com.timebox.android.data.remote.CheckInEventDto
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -20,6 +22,8 @@ import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 
 /** Queries the real OS history. No timers or absence of Timebox input establish inactivity. */
+enum class DetectionAccess { Unknown, Unsupported, Disabled, Denied, Granted }
+
 class AndroidCheckIns(private val context: Context, private val repository: ActivityRepository) {
     private val lock = Mutex()
     private val storage = context.getSharedPreferences("activity-screen-evidence-v1", Context.MODE_PRIVATE)
@@ -30,6 +34,8 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
     })
     private val mutableStatus = MutableStateFlow("Checking device detection…")
     val status = mutableStatus.asStateFlow()
+    private val mutableAccess = MutableStateFlow(DetectionAccess.Unknown)
+    val access = mutableAccess.asStateFlow()
     private val mutableOpenQuestion = MutableStateFlow<String?>(null)
     val openQuestion = mutableOpenQuestion.asStateFlow()
 
@@ -41,7 +47,7 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
         mutableStatus.value = reason
     }
 
-    suspend fun open(id: String) {
+    suspend fun open(id: String) = withContext(Dispatchers.IO) {
         repository.refresh()
         if (repository.state.value.snapshot?.checkIn?.question?.id == id) {
             repository.reopenCheckIn(id)
@@ -51,24 +57,36 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
     }
 
     fun consumeOpen() { mutableOpenQuestion.value = null }
-    suspend fun settingsChanged() { lock.withLock { reset(System.currentTimeMillis(), "Observation restarted after changing detection settings.") }; tick() }
+    fun reconcileNotification(questionId: String?) {
+        if (questionId != storage.getString("attempt", null)) notifier.cancel()
+    }
+    suspend fun settingsChanged() = withContext(Dispatchers.IO) {
+        lock.withLock { reset(System.currentTimeMillis(), "Observation restarted after changing detection settings.") }; tick()
+    }
 
-    suspend fun tick() = lock.withLock {
+    suspend fun tick() = withContext(Dispatchers.IO) { lock.withLock {
         try {
+            repository.refresh()
+            val snapshot = repository.state.value.snapshot
+            reconcileNotification(snapshot?.checkIn?.question?.id)
             val wall = System.currentTimeMillis()
             if (!ScreenEvidence.supported(Build.VERSION.SDK_INT)) {
+                mutableAccess.value = DetectionAccess.Unsupported
                 reset(wall, "Detection unavailable on Android 8. Screen history requires Android 9 or later.")
                 return@withLock
             }
             if (!repository.checkInPreferences().enabled) {
+                mutableAccess.value = DetectionAccess.Disabled
                 reset(wall, "Detection is off on this device. Recording continues.")
                 notifier.cancel()
                 return@withLock
             }
             if (!usageGranted()) {
+                mutableAccess.value = DetectionAccess.Denied
                 reset(wall, "Usage access is not allowed or was revoked. Enable usage access to detect screen-off intervals. Recording continues.")
                 return@withLock
             }
+            mutableAccess.value = DetectionAccess.Granted
             if (!context.getSystemService(UserManager::class.java).isUserUnlocked) {
                 reset(wall, "Screen history unavailable until the first unlock after reboot.")
                 return@withLock
@@ -80,8 +98,6 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
                 reset(wall, "Observation restarted after a reboot or clock change; earlier coverage is unknown.")
                 check(storage.edit().putInt("boot", boot).putLong("clockOrigin", clockOrigin).commit())
             }
-            repository.refresh()
-            val snapshot = repository.state.value.snapshot
             val shared = snapshot?.checkIn
             val question = shared?.question
             if (question == null) notifier.cancel()
@@ -94,7 +110,6 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
                 check(storage.edit().putString("boundary", boundary).putLong("boundaryAt", wall).commit())
             }
             mutableStatus.value = "Approximate detection: Android screen-off intervals only, not lack of touch while the screen is on. Missing history is unknown. Checks may be delayed by battery policy or until you return."
-            if (question != null) return@withLock // Downloaded questions never confer notification eligibility.
             val floor = maxOf(storage.getLong("floor", wall), wall - 9 * 60 * 60_000L)
             val history = context.getSystemService(UsageStatsManager::class.java).queryEvents(floor, wall)
             if (history == null) {
@@ -112,13 +127,14 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
                     UsageEvents.Event.DEVICE_SHUTDOWN, UsageEvents.Event.DEVICE_STARTUP -> events.clear()
                 }
             }
-            val interval = ScreenEvidence.interval(events, wall, context.getSystemService(PowerManager::class.java).isInteractive)
+            val interval = ScreenEvidence.interval(events, wall, context.getSystemService(PowerManager::class.java).isInteractive,
+                storage.getLong("boundaryAt", storage.getLong("floor", wall)))
             val offset = repository.now().toEpochMilli() - wall
-            val start = interval?.first?.let { maxOf(it, storage.getLong("boundaryAt", storage.getLong("floor", wall))) }?.plus(offset)
+            val start = interval?.first?.plus(offset)
             val end = interval?.second?.plus(offset)
             val armed = shared.armedAt?.let { Instant.parse(it).toEpochMilli() } ?: Long.MAX_VALUE
             val active = shared.activeAt?.let { Instant.parse(it).toEpochMilli() } ?: Long.MIN_VALUE
-            if (start != null && end != null && end - maxOf(start, armed, active) >= repository.checkInPreferences().thresholdMinutes * 60_000L) {
+            if (question == null && start != null && end != null && end - maxOf(start, armed, active) >= repository.checkInPreferences().thresholdMinutes * 60_000L) {
                 // Mark this locally produced candidate consumed BEFORE transport. Crash/offline replay loses
                 // optional notification eligibility rather than escalating a question discovered on reconnect.
                 val candidate = "$boundary:${interval.first}"
@@ -140,5 +156,5 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
             runCatching { reset(System.currentTimeMillis(), reason) }
             mutableStatus.value = reason
         }
-    }
+    } }
 }

@@ -60,7 +60,7 @@ fun ActivityTracking(
     val question = state.snapshot?.checkIn?.question
     var checkInOpen by remember(question?.id) { mutableStateOf(question != null && !repository.checkInDismissed(question.id)) }
     val checkIns = (LocalContext.current.applicationContext as? TimeboxApplication)?.checkIns
-    val detectionStatus = checkIns?.status?.collectAsState()?.value
+    val detectionAccess = checkIns?.access?.collectAsState()?.value
     val context = LocalContext.current
     val requestedQuestion = checkIns?.openQuestion?.collectAsState()?.value
     LaunchedEffect(requestedQuestion, question?.id) {
@@ -90,7 +90,7 @@ fun ActivityTracking(
             if (!focus) TextButton(enabled = enabled && !planning, onClick = onEnterFocus) { Text("Focus") }
         }
         if (question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
-        if (current != null && android.os.Build.VERSION.SDK_INT >= 28 && state.checkInPreferences.enabled && detectionStatus?.startsWith("Usage access is not allowed") == true) {
+        if (current != null && state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
             Text("Optional screen-off detection needs usage access. Recording continues without it.")
             TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(android.net.Uri.parse("package:${context.packageName}"))) }) { Text("Enable screen-off detection") }
         }

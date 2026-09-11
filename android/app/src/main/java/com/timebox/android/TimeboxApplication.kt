@@ -61,5 +61,8 @@ class TimeboxApplication : Application() {
         repository.onConnectionChanged = reminderScheduler::enqueueImmediateSync
         reminderScheduler.start()
         com.timebox.android.checkin.CheckInWorker.schedule(this)
+        if (BuildConfig.ACTIVITY_TRACKING_DEV) applicationScope.launch {
+            activityRepository.state.collect { checkIns.reconcileNotification(it.snapshot?.checkIn?.question?.id) }
+        }
     }
 }

@@ -31,4 +31,12 @@ class ScreenEvidenceTest {
     @Test fun `future transitions are unknown rather than negative coverage`() {
         assertNull(ScreenEvidence.interval(listOf(ScreenObservation(2000, false)), 1000, false))
     }
+    @Test fun `rearm during continuous off state starts a fresh interval without requiring another off event`() {
+        val events = listOf(ScreenObservation(100, false))
+        assertNull(ScreenEvidence.interval(events, 1000, false, observedSince = 1000))
+        assertEquals(1000L to 901000L, ScreenEvidence.interval(events, 901000, false, observedSince = 1000))
+    }
+    @Test fun `completed interval before newly captured generation cannot qualify`() {
+        assertNull(ScreenEvidence.interval(listOf(ScreenObservation(100, false), ScreenObservation(900, true)), 2000, true, observedSince = 1000))
+    }
 }

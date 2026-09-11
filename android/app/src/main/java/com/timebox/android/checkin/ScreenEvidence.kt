@@ -7,7 +7,7 @@ object ScreenEvidence {
     fun supported(api: Int) = api >= 28
 
     /** Latest explicit off interval; an open interval requires the current power state. */
-    fun interval(events: List<ScreenObservation>, now: Long, interactive: Boolean): Pair<Long, Long>? {
+    fun interval(events: List<ScreenObservation>, now: Long, interactive: Boolean, observedSince: Long = Long.MIN_VALUE): Pair<Long, Long>? {
         var off: Long? = null
         var completed: Pair<Long, Long>? = null
         for (event in events.sortedBy { it.at }) {
@@ -19,6 +19,7 @@ object ScreenEvidence {
                 off = null
             }
         }
-        return off?.let { if (!interactive && it < now) it to now else null } ?: completed
+        val interval = off?.let { if (!interactive && it < now) it to now else null } ?: completed
+        return interval?.let { (start, end) -> maxOf(start, observedSince).takeIf { it < end }?.let { it to end } }
     }
 }
