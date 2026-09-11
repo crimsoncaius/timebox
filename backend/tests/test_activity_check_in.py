@@ -129,3 +129,20 @@ def test_remote_active_arriving_after_offline_confirmation_is_not_discarded(trac
     event(tracking, pending, 'observe', device='active', observed='active', capability='supported', permission='granted', coverage_start=active_at, coverage_end=active_at)
     result = event(tracking, confirmed, 'candidate', device='returning', observed='idle', capability='supported', permission='granted', coverage_start=confirmed_at, coverage_end=(now-dt.timedelta(minutes=30)).isoformat())
     assert result['check_in']['question'] is None
+
+
+def test_browser_active_lower_bound_suppresses_other_browser_full_idle_interval(tracking):
+    first = running(tracking)
+    now = dt.datetime.fromisoformat(first['server_at'].replace('Z', '+00:00'))
+    # The browser's short native detector proves input within the last minute.
+    # Preserve only its earliest possible instant; do not fabricate input now.
+    active_at = (now - dt.timedelta(minutes=1)).isoformat()
+    event(tracking, first, 'observe', device='active-browser', observed='active',
+          capability='supported', permission='granted', coverage_start=active_at,
+          coverage_end=active_at)
+    result = event(tracking, first, 'candidate', device='idle-browser', observed='idle',
+                   capability='supported', permission='granted', threshold_minutes=15,
+                   coverage_start=(now - dt.timedelta(minutes=15)).isoformat(),
+                   coverage_end=first['server_at'])
+    assert result['check_in']['question'] is None
+    assert result['current'] == first['current']

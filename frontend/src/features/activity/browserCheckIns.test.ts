@@ -17,16 +17,22 @@ it('unsupported browsers never request detection permission or infer inactivity'
 async function supported() {
   vi.useFakeTimers()
   let now = Date.parse('2026-09-11T10:00:00Z')
-  let idle = false
+  let lastInput = now
+  let unavailable: 'no' | 'null' | 'error' = 'no'
   let connected = true
   const permission = new EventTarget() as EventTarget & { state: PermissionState }
   permission.state = 'granted'
   vi.stubGlobal('navigator', { permissions: { query: async () => permission } })
   class Detector extends EventTarget {
-    userState = idle ? 'idle' : 'active'
-    screenState = 'unlocked'
+    userState: string | null = null
+    screenState: string | null = null
     static requestPermission = vi.fn(async () => 'granted')
-    async start() {}
+    async start({ threshold }: { threshold: number }) {
+      if (unavailable === 'error') throw new Error('Sensor unavailable')
+      if (unavailable === 'null') return
+      this.userState = now - lastInput >= threshold ? 'idle' : 'active'
+      this.screenState = 'unlocked'
+    }
   }
   vi.stubGlobal('IdleDetector', Detector)
   const row = { id: 1, name: 'Reading', task_type_id: 1, task_type: { id: 1, name: 'reading' }, start_at: new Date(now).toISOString(), end_at: null }
@@ -50,7 +56,7 @@ async function supported() {
   const adapter = new BrowserCheckIns(repository)
   await adapter.start()
   return { repository, adapter, commands, permission, Detector,
-    idle: () => { idle = true }, offline: () => { connected = false }, online: () => { connected = true },
+    idle: () => { lastInput = now - 15 * 60000 }, sensor: (state: typeof unavailable) => { unavailable = state }, offline: () => { connected = false }, online: () => { connected = true },
     advance: async (milliseconds: number) => { for (let elapsed = 0; elapsed < milliseconds; elapsed += 15000) { now += 15000; await vi.advanceTimersByTimeAsync(15000) } },
   }
 }
@@ -58,10 +64,10 @@ async function supported() {
 it('native activity is a conservative lower bound; idle qualifies at the configured threshold, not twice it', async () => {
   const test = await supported()
   expect(test.Detector.requestPermission).not.toHaveBeenCalled()
-  expect(test.commands[0].check_in.coverage_end).toBe('2026-09-11T09:45:00.000Z')
+  expect(test.commands[0].check_in.coverage_end).toBe('2026-09-11T09:59:00.000Z')
   await test.advance(14 * 60000)
   expect(test.commands.some(command => command.check_in.action === 'candidate')).toBe(false)
-  test.idle(); await test.advance(60000)
+  await test.advance(60000)
   expect(test.repository.state.snapshot?.check_in?.question?.id).toBe('reading:0')
   expect(test.repository.state.snapshot?.current?.start_at).toBe('2026-09-11T10:00:00.000Z')
   test.adapter.stop()
@@ -111,4 +117,16 @@ it('an offline candidate remains inline but reconnection does not deliver a noti
   expect(showNotification).not.toHaveBeenCalled()
   expect(test.commands.some(command => command.check_in.action === 'delivery')).toBe(false)
   restarted.stop()
+})
+
+it.each(['null', 'error'] as const)('missing native state (%s) breaks coverage and recovery starts a full new interval', async sensor => {
+  const test = await supported(); test.idle()
+  await test.advance(14 * 60000)
+  test.sensor(sensor); await test.advance(60000)
+  expect(test.repository.state.snapshot?.check_in?.question).toBeNull()
+  test.sensor('no'); await test.advance(14 * 60000)
+  expect(test.repository.state.snapshot?.check_in?.question).toBeNull()
+  await test.advance(90000)
+  expect(test.repository.state.snapshot?.check_in?.question?.id).toBe('reading:0')
+  test.adapter.stop()
 })

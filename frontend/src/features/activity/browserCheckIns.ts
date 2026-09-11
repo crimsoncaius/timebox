@@ -7,6 +7,19 @@ interface NativeIdleDetector extends EventTarget {
 }
 interface IdleConstructor { new(): NativeIdleDetector; requestPermission(): Promise<PermissionState> }
 const idleConstructor = () => (globalThis as typeof globalThis & { IdleDetector?: IdleConstructor }).IdleDetector
+async function readNativeState(Native: IdleConstructor, threshold: number, signal: AbortSignal) {
+  const detector = new Native()
+  await detector.start({ threshold, signal })
+  if (detector.userState === null || detector.screenState === null) {
+    await new Promise<void>(resolve => {
+      const done = () => { clearTimeout(timeout); detector.removeEventListener('change', done); signal.removeEventListener('abort', done); resolve() }
+      const timeout = setTimeout(done, 2000)
+      detector.addEventListener('change', done); signal.addEventListener('abort', done)
+      if (signal.aborted) done()
+    })
+  }
+  return { user: detector.userState, screen: detector.screenState }
+}
 
 export class BrowserCheckIns {
   private listeners = new Set<() => void>()
@@ -18,6 +31,7 @@ export class BrowserCheckIns {
   private unsubscribeStart?: () => void
   private floor = 0
   private lastTick = 0
+  private lastWall = 0
   private epoch = 0
   private running = false
   private paused = false
@@ -30,7 +44,7 @@ export class BrowserCheckIns {
   private publish(patch: Partial<typeof this.state>) { this.state = { ...this.state, ...patch }; this.listeners.forEach(listener => listener()) }
   async start() {
     if (this.running) return
-    this.running = true
+    this.running = true; this.paused = false
     this.reset()
     this.unsubscribe = this.repository.subscribe(this.reconcile)
     this.unsubscribeStart = this.repository.subscribeTrackingStart(() => {
@@ -51,7 +65,7 @@ export class BrowserCheckIns {
     window.removeEventListener('pagehide', this.suspend); window.removeEventListener('pageshow', this.resume)
     window.removeEventListener('focus', this.refreshPermission)
   }
-  private reset() { this.epoch++; this.abort?.abort(); this.floor = this.repository.now(); this.lastTick = performance.now() }
+  private reset() { this.epoch++; this.abort?.abort(); this.floor = this.repository.now(); this.lastTick = performance.now(); this.lastWall = Date.now() }
   private suspend = () => { this.paused = true; this.reset(); this.publish({ detail: 'Detection paused; unobserved time is not counted.' }) }
   private resume = () => { this.paused = false; this.reset(); void this.refreshPermission() }
   private permissionChanged = () => { this.reset(); this.publish({ permission: this.permission!.state }); void this.sample() }
@@ -97,8 +111,8 @@ export class BrowserCheckIns {
     if (!this.running || this.paused || this.sampling) return
     this.reconcile()
     const tick = performance.now()
-    if (tick - this.lastTick > 45000 || tick < this.lastTick) this.reset()
-    this.lastTick = tick
+    if (tick - this.lastTick > 45000 || tick < this.lastTick || Math.abs(Date.now() - this.lastWall - (tick - this.lastTick)) > 5000) this.reset()
+    this.lastTick = tick; this.lastWall = Date.now()
     const Native = idleConstructor(), preferences = this.repository.checkInPreferences()
     const prompt = this.repository.state.snapshot?.check_in
     if (!Native || this.state.permission !== 'granted' || !preferences.enabled || !prompt?.armed_at || !this.repository.state.snapshot?.current) { this.reset(); return }
@@ -106,39 +120,35 @@ export class BrowserCheckIns {
     this.sampling = true
     this.abort?.abort()
     const abort = new AbortController(); this.abort = abort
-    const detector = new Native()
     try {
       // A fresh initial native state establishes the preceding threshold. Reading
       // an old detector property after a suspended task would not establish it.
-      await detector.start({ threshold, signal: abort.signal })
-      if (detector.userState === null || detector.screenState === null) {
-        await new Promise<void>(resolve => {
-          const timeout = setTimeout(resolve, 2000)
-          const done = () => { clearTimeout(timeout); resolve() }
-          detector.addEventListener('change', done, { once: true })
-          abort.signal.addEventListener('abort', done, { once: true })
-        })
-      }
+      const short = await readNativeState(Native, 60000, abort.signal)
+      if (epoch !== this.epoch || !this.running || abort.signal.aborted) return
+      const active = short.user === 'active' && short.screen === 'unlocked'
+      const observation = active ? short : await readNativeState(Native, threshold, abort.signal)
       if (epoch !== this.epoch || !this.running || abort.signal.aborted) return
       const now = this.repository.now()
-      const active = detector.userState === 'active' && detector.screenState === 'unlocked'
-      const idle = detector.userState === 'idle'
+      const idle = observation.user === 'idle'
       this.publish({ detail: 'Native device detection is connected while this page can run.' })
+      if (short.user === null || short.screen === null || observation.user === null || observation.screen === null) { this.reset(); return }
       if (!active && !idle) return // Locked alone supplies no lock duration.
       // Active means some input within the threshold, not input at this instant.
       // Its earliest possible time is the only conservative shared lower bound.
-      const end = active ? now - threshold : now
+      const end = active ? now - 60000 : now
       const start = active ? end : Math.max(this.floor, now - threshold, Date.parse(prompt.armed_at), Date.parse(prompt.active_at ?? prompt.armed_at))
       if (!active && (prompt.question || now - start < threshold)) return
       const operation = await this.repository.checkIn({ action: active ? 'observe' : 'candidate', generation: prompt.generation, rearm: prompt.rearm,
-        capability: 'supported', permission: 'granted', observed: active ? 'active' : detector.screenState === 'locked' ? 'locked' : 'idle', coverage_start: new Date(start).toISOString(), coverage_end: new Date(end).toISOString() })
+        capability: 'supported', permission: 'granted', observed: active ? 'active' : observation.screen === 'locked' ? 'locked' : 'idle', coverage_start: new Date(start).toISOString(), coverage_end: new Date(end).toISOString() })
       if (!active && operation && epoch === this.epoch && typeof Notification !== 'undefined' && Notification.permission === 'granted' && navigator.serviceWorker) {
-        const registration = await navigator.serviceWorker.getRegistration()
-        if (!registration) return
-        const question = await this.repository.claimCheckInNotification(operation)
-        if (question) await registration.showNotification('Still doing this?', { body: 'Recording continues. Open Timebox to confirm or switch activity.', tag: `activity:${question.id}`, data: { activityQuestion: question.id }, renotify: false } as NotificationOptions)
+        try {
+          const registration = await navigator.serviceWorker.getRegistration()
+          if (!registration) return
+          const question = await this.repository.claimCheckInNotification(operation)
+          if (question) await registration.showNotification('Still doing this?', { body: 'Recording continues. Open Timebox to confirm or switch activity.', tag: `activity:${question.id}`, data: { activityQuestion: question.id }, renotify: false } as NotificationOptions)
+        } catch { /* A consumed optional delivery attempt is never escalated again. */ }
       }
-    } catch (error) { if (!abort.signal.aborted) this.publish({ detail: `Device detection paused: ${error instanceof Error ? error.message : 'unavailable'}` }) }
+    } catch (error) { if (!abort.signal.aborted) { this.reset(); this.publish({ detail: `Device detection paused: ${error instanceof Error ? error.message : 'unavailable'}` }) } }
     finally { abort.abort(); this.sampling = false }
   }
 }
