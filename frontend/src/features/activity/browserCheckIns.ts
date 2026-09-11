@@ -102,9 +102,8 @@ export class BrowserCheckIns {
     if (!navigator.serviceWorker) return
     const registration = await navigator.serviceWorker.getRegistration()
     if (!registration) return
-    const id = this.repository.state.snapshot?.check_in?.question?.id
     for (const notification of await registration.getNotifications()) {
-      if (notification.data?.activityQuestion && notification.data.activityQuestion !== id) notification.close()
+      if (notification.data?.activityQuestion && notification.data.activityQuestion !== this.repository.state.snapshot?.check_in?.question?.id) notification.close()
     }
   }
   private async sample() {

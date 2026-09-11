@@ -46,6 +46,7 @@ async function supported() {
       if (event.action === 'candidate') canonical.check_in.question = { id: 'reading:0', created_at: new Date(now).toISOString(), candidate_device: command.device_id, candidate_operation_id: command.operation_id, delivery: null }
       if (event.action === 'observe') canonical.check_in.active_at = event.coverage_end
       if (event.action === 'delivery') canonical.check_in.question!.delivery = { operation_id: command.operation_id, device_id: command.device_id, at: new Date(now).toISOString(), dismissed: false }
+      if (event.action === 'confirm') canonical.check_in = { ...canonical.check_in, question: null, rearm: canonical.check_in.rearm + 1 }
       canonical = { ...canonical, cursor: canonical.cursor + 1, server_at: new Date(now).toISOString(), acknowledgement: { operation_id: command.operation_id, outcome: 'applied' } }
     }
     return new Response(JSON.stringify(canonical))
@@ -128,5 +129,23 @@ it.each(['null', 'error'] as const)('missing native state (%s) breaks coverage a
   expect(test.repository.state.snapshot?.check_in?.question).toBeNull()
   await test.advance(90000)
   expect(test.repository.state.snapshot?.check_in?.question?.id).toBe('reading:0')
+  test.adapter.stop()
+})
+
+it('a delayed notification list cannot close a newly created current question; a synchronized answer does close it', async () => {
+  const test = await supported(); test.idle()
+  const notification = { data: { activityQuestion: 'reading:0' }, close: vi.fn() }
+  const lists: ((notifications: typeof notification[]) => void)[] = []
+  Object.assign(navigator, { serviceWorker: { getRegistration: async () => ({ getNotifications: () => new Promise(resolve => lists.push(resolve)) }) } })
+  await test.advance(15 * 60000)
+  expect(test.repository.state.snapshot?.check_in?.question?.id).toBe('reading:0')
+  lists.splice(0).forEach(resolve => resolve([notification]))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notification.close).not.toHaveBeenCalled()
+  await test.repository.checkIn({ action: 'confirm', question_id: 'reading:0' })
+  await vi.advanceTimersByTimeAsync(0)
+  lists.splice(0).forEach(resolve => resolve([notification]))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notification.close).toHaveBeenCalled()
   test.adapter.stop()
 })
