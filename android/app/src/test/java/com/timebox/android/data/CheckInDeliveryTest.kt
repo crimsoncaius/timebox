@@ -90,4 +90,10 @@ class CheckInDeliveryTest {
         try { s.delivery(repo).candidate(s.event()); fail() } catch (_: IllegalStateException) { }
         assertTrue(s.shown.isEmpty())
     }
+    @Test fun `retry after consumed eligibility can recover pending question without escalating`() = runTest {
+        val s = Scenario(); val repo = s.repository(); repo.refresh()
+        s.delivery(repo).candidate(s.event(), notificationEligible = false)
+        assertNotNull(repo.state.value.snapshot!!.checkIn!!.question)
+        assertTrue(s.shown.isEmpty())
+    }
 }

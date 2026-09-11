@@ -40,4 +40,22 @@ class ActivityCheckInPlatformTest {
         Log.i("ActivityCheckInProbe", "durable=${app.getSharedPreferences("activity-screen-evidence-v1", Context.MODE_PRIVATE).all}")
         Unit
     }
+    @Test fun dismissThenOpenOriginalNotificationIntent() = runBlocking {
+        org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("platformReview") == "true")
+        check(BuildConfig.ACTIVITY_TRACKING_DEV)
+        app.checkIns.tick()
+        val manager = app.getSystemService(android.app.NotificationManager::class.java)
+        val notification = manager.activeNotifications.single { it.id == 15501 }
+        val question = app.activityRepository.state.value.snapshot!!.checkIn!!.question!!
+        Log.i("ActivityCheckInProbe", "DISMISS READY: swipe the real notification within 60 seconds")
+        val deadline = android.os.SystemClock.elapsedRealtime() + 60_000
+        while (manager.activeNotifications.any { it.id == 15501 } && android.os.SystemClock.elapsedRealtime() < deadline) kotlinx.coroutines.delay(250)
+        assertFalse(manager.activeNotifications.any { it.id == 15501 })
+        assertEquals(question.id, app.activityRepository.state.value.snapshot!!.checkIn!!.question!!.id)
+        notification.notification.contentIntent.send()
+        kotlinx.coroutines.delay(2000)
+        assertEquals(question.id, app.activityRepository.state.value.snapshot!!.checkIn!!.question!!.id)
+        Log.i("ActivityCheckInProbe", "Dismissal kept pending; original OS PendingIntent sent for ${question.id}")
+        Unit
+    }
 }

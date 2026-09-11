@@ -15,11 +15,11 @@ class CheckInDelivery(
     private val notifier: CheckInNotificationSink,
     private val attempts: ActivityStorage,
 ) {
-    suspend fun candidate(event: CheckInEventDto) {
+    suspend fun candidate(event: CheckInEventDto, notificationEligible: Boolean = true) {
         require(event.action == "candidate")
         val result = repository.submitCheckIn(event)
         val pending = repository.state.value.snapshot?.checkIn?.question ?: return
-        if (!result.acknowledged || pending.candidateDevice != result.deviceId ||
+        if (!notificationEligible || !result.acknowledged || pending.candidateDevice != result.deviceId ||
             pending.candidateOperationId != result.operationId || !notifier.allowed() || attempts.load() == pending.id) return
         val claim = repository.submitCheckIn(CheckInEventDto("delivery", event.generation, event.rearm, questionId = pending.id))
         val current = repository.state.value.snapshot?.checkIn?.question ?: return

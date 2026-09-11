@@ -141,11 +141,11 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
                 // Mark this locally produced candidate consumed BEFORE transport. Crash/offline replay loses
                 // optional notification eligibility rather than escalating a question discovered on reconnect.
                 val candidate = "$boundary:${interval.first}"
-                if (storage.getString("candidate", null) == candidate) return@withLock
+                val notificationEligible = storage.getString("candidate", null) != candidate
                 check(storage.edit().putString("candidate", candidate).commit())
                 delivery.candidate(CheckInEventDto("candidate", shared.generation, shared.rearm,
                     capability = "approximate", permission = "granted", observed = "idle",
-                    coverageStart = Instant.ofEpochMilli(start).toString(), coverageEnd = Instant.ofEpochMilli(end).toString()))
+                    coverageStart = Instant.ofEpochMilli(start).toString(), coverageEnd = Instant.ofEpochMilli(end).toString()), notificationEligible)
             } else {
                 // Only positive device-use events are synchronized. Their absence says nothing.
                 val lastActive = events.lastOrNull { it.interactive }?.at?.plus(offset)
