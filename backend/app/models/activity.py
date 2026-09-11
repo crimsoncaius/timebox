@@ -15,6 +15,7 @@ class ActivityState(Base):
     reporting_timezone: Mapped[str | None] = mapped_column(String(100), nullable=True)
     check_in: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reconciliation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    cutover: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ActivityOperation(Base):

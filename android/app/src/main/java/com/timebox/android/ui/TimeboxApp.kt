@@ -122,7 +122,13 @@ fun TimeboxApp(
             navController.navigate(AppRoutes.day(activityRepository.now().atZone(zone).toLocalDate())) { launchSingleTop = true }
         }
     }
-    LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) { if (activityRepository != null) focusController?.reconcile(activityRepository, dayState.focusPlanningBlocked) }
+    val activityApplication = LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
+    LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) {
+        if (activityRepository != null) {
+            activityApplication.recoverLegacyWorkMode(dayViewModel.state.value.focusPlanningBlocked)
+            focusController?.reconcile(activityRepository, dayViewModel.state.value.focusPlanningBlocked)
+        }
+    }
 
     val chronicleState by chronicleViewModel.state.collectAsState()
     val typesState by typesViewModel.state.collectAsState()

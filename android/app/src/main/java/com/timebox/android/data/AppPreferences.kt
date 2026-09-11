@@ -13,6 +13,7 @@ import com.timebox.android.reminders.DailyReminderSettings
 import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "timebox")
 
@@ -189,6 +190,24 @@ class AppPreferences(private val context: Context) {
             snapshot.activePlannedBlockId?.let { prefs[Keys.workModeActivePlannedId] = it.toString() }
             snapshot.activePlannedEndAt?.let { prefs[Keys.workModeActivePlannedEndAt] = it }
         }
+    }
+
+    suspend fun legacyWorkModeRecovered(): Boolean = context.dataStore.data.first()[booleanPreferencesKey("activity_legacy_recovered")] == true
+    suspend fun legacyWorkModeRecovery(): String? = context.dataStore.data.first()[stringPreferencesKey("activity_legacy_recovery")]?.takeUnless { it == "{}" }
+
+    suspend fun archiveLegacyWorkMode() {
+        context.dataStore.edit { prefs ->
+            val archive = stringPreferencesKey("activity_legacy_recovery")
+            if (prefs[archive] == null) {
+                val source = org.json.JSONObject()
+                prefs.asMap().filterKeys { it.name.startsWith("work_mode_") }.forEach { (key, value) -> source.put(key.name, value) }
+                prefs[archive] = source.toString()
+            }
+        }
+    }
+
+    suspend fun markLegacyWorkModeRecovered() {
+        context.dataStore.edit { it[booleanPreferencesKey("activity_legacy_recovered")] = true }
     }
 }
 

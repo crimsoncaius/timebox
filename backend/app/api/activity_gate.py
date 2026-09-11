@@ -11,6 +11,13 @@ from app.models.time_block import BlockLane, TimeBlock
 async def guard_legacy_actual_writes(
     request: Request, db: Session = Depends(get_db), settings: Settings = Depends(get_settings),
 ):
+    state = db.get(ActivityState, 1)
+    if state is not None and state.cutover:
+        if not request.url.path.startswith("/activity") and request.headers.get("X-Timebox-Protocol") != "activity-online-v1":
+            raise HTTPException(426, "Timebox was upgraded. Update Android or reload the web app. Unsaved work must be reviewed, not replayed.", headers={"X-Timebox-Protocol": "activity-online-v1"})
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            if state.cutover.get("paused"):
+                raise HTTPException(503, "Activity updates are paused for recovery. Keep local changes for retry.")
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
     path = request.url.path
@@ -29,6 +36,5 @@ async def guard_legacy_actual_writes(
             legacy = legacy or body.get("lane") == "actual"
     if not legacy:
         return
-    state = db.get(ActivityState, 1)
     if settings.activity_tracking_dev or (state is not None and state.enabled):
-        raise HTTPException(409, "Legacy Actual writes are disabled for this activity development database")
+        raise HTTPException(409, "Legacy Actual writes are disabled. Update Android or reload the web app; review unsaved work through Day corrections.")

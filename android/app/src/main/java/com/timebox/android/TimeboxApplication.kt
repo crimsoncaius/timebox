@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
@@ -33,6 +34,21 @@ class TimeboxApplication : Application() {
 
     lateinit var repository: TimeboxRepository
         private set
+
+    suspend fun recoverLegacyWorkMode(planning: Boolean) {
+        if (!activityRepository.bootstrappedThisRun) return
+        if (preferences.legacyWorkModeRecovered()) {
+            activityRepository.setLegacyRecovery(preferences.legacyWorkModeRecovery())
+            return
+        }
+        val saved = preferences.workMode.first()
+        preferences.archiveLegacyWorkMode()
+        if (saved == null || focusController.restoreLegacy(saved, activityRepository, planning)) {
+            preferences.markLegacyWorkModeRecovered()
+            activityRepository.setLegacyRecovery(preferences.legacyWorkModeRecovery())
+            if (saved != null) activityRepository.showLegacyRecoveryNotice()
+        }
+    }
     lateinit var taskCompletion: TaskCompletion
         private set
     lateinit var readinessCoordinator: ReadyToPlanCoordinator

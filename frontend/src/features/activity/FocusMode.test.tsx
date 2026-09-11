@@ -6,6 +6,23 @@ import { FocusController } from './focusController'
 import { observeFocusWake } from './focusWake'
 
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+it.each([['matching', 7, false, true], ['stale', 8, false, false], ['planning', 7, true, false]] as const)('upgrades %s legacy Focus only after online bootstrap and keeps raw recovery data', async (_name, id, planning, active) => {
+  const raw = JSON.stringify({ entryAt: '2026-09-11T09:00:00Z', lastConfirmedAt: '2026-09-11T09:30:00Z', lastObservedAt: '2026-09-11T10:00:00Z', activeActualId: id })
+  localStorage.setItem('timebox.work-mode.v2', raw)
+  const offline = new ActivityRepository(localStorage, work => work())
+  const controller = new FocusController(localStorage)
+  controller.setPlanning(planning)
+  controller.reconcile(offline)
+  expect(controller.state.active).toBe(false)
+  expect(localStorage.getItem('timebox.work-mode.v2')).toBe(raw)
+  const { repository } = await fixture()
+  controller.reconcile(repository)
+  expect(controller.state.active).toBe(active)
+  expect(localStorage.getItem('timebox.focus.v1:/api:legacy-recovery')).toBe(raw)
+  controller.exit(); controller.reconcile(repository)
+  expect(controller.state.active).toBe(false)
+  expect(repository.state.snapshot?.current?.id).toBe(7)
+})
 async function fixture(running = true) {
   const at = '2026-09-11T10:00:00Z'
   const unspecified = { id: 1, name: 'unspecified', created_at: at, updated_at: at }
@@ -16,6 +33,27 @@ async function fixture(running = true) {
   await repository.refresh()
   return { repository, snapshot }
 }
+it('retries incomplete legacy conversion after preference storage recovers', async () => {
+  const raw = JSON.stringify({ entryAt: '2026-09-11T10:00:00Z', lastConfirmedAt: '2026-09-11T10:00:00Z', lastObservedAt: '2026-09-11T10:00:00Z', activeActualId: 7 })
+  localStorage.setItem('timebox.work-mode.v2', raw)
+  const { repository } = await fixture()
+  const original = Storage.prototype.setItem
+  const failure = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+    if (key === 'timebox.focus.v1:/api') throw new Error('disk full')
+    original.call(this, key, value)
+  })
+  const controller = new FocusController(localStorage)
+  controller.reconcile(repository)
+  expect(localStorage.getItem('timebox.focus.v1:/api:legacy-recovery')).toBe(raw)
+  expect(localStorage.getItem('timebox.focus.v1:/api:legacy-recovery:complete')).toBeNull()
+  failure.mockRestore()
+  const restarted = new FocusController(localStorage)
+  restarted.reconcile(repository)
+  expect(restarted.state.active).toBe(true)
+  expect(localStorage.getItem('timebox.focus.v1:/api:legacy-recovery:complete')).toBe('1')
+  restarted.exit(); restarted.reconcile(repository)
+  expect(restarted.state.active).toBe(false)
+})
 it('retains current identity, persists local Focus without expiry, exits on remote stop and never restarts', async () => {
   const { repository, snapshot } = await fixture()
   const controller = new FocusController(localStorage)

@@ -60,6 +60,9 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       <span role="status">{state.offline ? 'Offline' : state.pending ? 'Unsynced' : state.snapshot ? 'Synced' : 'Connection required'}{state.offline && state.pending ? ' · Unsynced' : ''}</span>
     </div>
     {!focus && focusState.planning && <p className="text-right">Finish or cancel planning to enter Focus.</p>}
+    {!focus && focusState.error && <p role="status">{focusState.error}</p>}
+    {!focus && focusState.recovery && <details><summary>Review old Work Mode data</summary><p>These are saved device observations, not recorded time. Use Day add/edit for any correction.</p><pre className="whitespace-pre-wrap break-all">{focusState.recovery}</pre></details>}
+    {!focus && repository.recoveryData() && <details><summary>Review rejected changes</summary><p>These changes were not replayed. Use Day add/edit to correct the saved timeline.</p><pre className="whitespace-pre-wrap break-all">{repository.recoveryData()}</pre></details>}
     {focus && current && !current.name && current.task_type.name === 'unspecified' && <UnknownActivity key={current.id} repository={repository} />}
     {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {plan.name || availableTypes.find(t => t.id === plan.task_type_id)?.name} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
     {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000)}m recorded</p> : null}

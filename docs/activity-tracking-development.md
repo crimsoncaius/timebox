@@ -15,6 +15,10 @@ containing legacy Actual Blocks. The database then retains an enabled marker:
 turning the environment flag off does not reopen legacy Actual writers.
 Production defaults keep `/activity` disabled and legacy behavior intact.
 
+The explicit [restored-copy cutover rehearsal](activity-tracking-cutover.md)
+provides an opt-in import path for legacy Actuals; ordinary bootstrap still
+refuses them. This does not authorize a production cutover.
+
 Registered local review ports: API `12004`, web `12005`, PostgreSQL `12006`.
 The review database is `activity_review`; tests use `activity_test` separately.
 The local PostgreSQL cluster is under `artifacts/activity-147-postgres`, listens

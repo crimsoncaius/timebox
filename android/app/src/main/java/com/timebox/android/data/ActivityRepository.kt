@@ -49,11 +49,23 @@ data class ActivityUiState(
     val busy: Boolean = false, val error: String? = null, val offline: Boolean = false,
     val feedback: String? = null,
     val checkInPreferences: CheckInPreferences = CheckInPreferences(),
+    val legacyRecovery: String? = null,
+    val rejectedRecovery: String? = null,
 )
 /** Confirmed history plus durable local intent. Acknowledgements never restamp intent. */
 class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage,
                          private val wallTime: () -> Long = System::currentTimeMillis,
                          private val monotonicTime: () -> Long = System::nanoTime) {
+    var bootstrappedThisRun = false
+        private set
+    private var legacyRecovery: String? = null
+    suspend fun setLegacyRecovery(value: String?) = mutex.withLock {
+        if (legacyRecovery != value) { legacyRecovery = value; publish() }
+    }
+    suspend fun showLegacyRecoveryNotice() = mutex.withLock {
+        feedback = "Work Mode was upgraded. Old local state is retained on this device. Use Day add/edit to correct unsaved time; it will not replay automatically."
+        publish()
+    }
     private val mutex = Mutex()
     private var journal = ActivityJournal()
     private val mutableState = MutableStateFlow(ActivityUiState())
@@ -137,7 +149,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         return snapshot.copy(records = records, current = records.find { it.endAt == null }, provenance = provenance)
     }
     private fun publish(error: String? = null, busy: Boolean = false) {
-        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback, journal.checkInPreferences)
+        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback, journal.checkInPreferences, legacyRecovery,
+            journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) })
     }
     private fun save(value: ActivityJournal) {
         try { storage.save(ApiFactory.json.encodeToString(value)) }
@@ -169,7 +182,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (error is retrofit2.HttpException && error.code() == 422) {
-                    save(journal.copy(rejectedOutbox = journal.outbox, outbox = emptyList()))
+                    save(journal.copy(rejectedOutbox = journal.rejectedOutbox + journal.outbox, outbox = emptyList()))
                 } else offline = true
                 throw error
             }
@@ -179,7 +192,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             noteReconciliation(response)
             save(journal.copy(snapshot = if (newer(response)) response else journal.snapshot,
                 outbox = if (applied) journal.outbox.drop(1) else emptyList(),
-                rejectedOutbox = if (applied) journal.rejectedOutbox else journal.outbox))
+                rejectedOutbox = if (applied) journal.rejectedOutbox else journal.rejectedOutbox + journal.outbox))
             offline = false
             check(applied) { "Activity changed on another device. Pending changes were retained for review." }
         }
@@ -237,6 +250,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 serverAnchor = server
                 monotonicAnchor = monotonicTime()
             }
+            bootstrappedThisRun = true
             publish()
         } catch (cancelled: CancellationException) { publish(); throw cancelled }
         catch (error: Exception) { publish(error.message ?: "Could not refresh activity") }

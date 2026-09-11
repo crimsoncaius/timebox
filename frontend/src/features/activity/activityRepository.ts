@@ -50,6 +50,7 @@ const browserExclusive: Exclusive = (work) => {
   return navigator.locks.request(storageKey, work)
 }
 export class ActivityRepository {
+  bootstrappedThisRun = false
   private startListeners = new Set<() => void>()
   subscribeTrackingStart = (listener: () => void) => { this.startListeners.add(listener); return () => { this.startListeners.delete(listener) } }
   private listeners = new Set<() => void>()
@@ -69,6 +70,11 @@ export class ActivityRepository {
   }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   getSnapshot = () => this.state
+  recoveryData = () => this.journal.rejected ? JSON.stringify(this.journal.rejected, null, 2) : ''
+  private retainRejected(commands: Command[]) {
+    const previous = this.journal.rejected
+    return [...(Array.isArray(previous) ? previous : previous ? [previous] : []), ...commands]
+  }
   now = () => this.anchor ? this.anchor.server + performance.now() - this.anchor.monotonic : Date.now() + (this.journal.calibration?.offset_ms ?? 0)
   private project(): ActivitySnapshot | null {
     if (!this.journal.snapshot) return null
@@ -177,7 +183,7 @@ export class ActivityRepository {
       try { response = await fetchJson<ActivitySnapshot>('/activity/commands', { method: 'POST', body: JSON.stringify(command) }) }
       catch (error) {
         if (error instanceof ApiHttpError && error.status === 422) {
-          this.save({ ...this.journal, rejected: this.journal.outbox, outbox: [] })
+            this.save({ ...this.journal, rejected: this.retainRejected(this.journal.outbox), outbox: [] })
         } else this.offline = true
         throw error
       }
@@ -186,7 +192,7 @@ export class ActivityRepository {
       this.noteReconciliation(response)
       // Receipt removal and canonical state advance are one durable write.
       this.save({ ...this.journal, snapshot: this.newer(response) ? response : this.journal.snapshot,
-        outbox: applied ? this.journal.outbox.slice(1) : [], rejected: applied ? this.journal.rejected : this.journal.outbox })
+        outbox: applied ? this.journal.outbox.slice(1) : [], rejected: applied ? this.journal.rejected : this.retainRejected(this.journal.outbox) })
       this.offline = false
       if (!applied) throw new Error('Activity changed on another device. Pending changes were retained for review.')
     }
@@ -213,6 +219,7 @@ export class ActivityRepository {
           this.save({ ...this.journal, snapshot, calibration: { server_at: snapshot.server_at, offset_ms: server - Date.now() } })
           this.anchor = { server, monotonic: performance.now() }
         }
+        this.bootstrappedThisRun = true
         this.publish()
       })
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not refresh activity') }

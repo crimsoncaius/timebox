@@ -39,6 +39,8 @@ fun ActivityTracking(
     val scope = rememberCoroutineScope()
     val changed by rememberUpdatedState(onChanged)
     var switching by remember { mutableStateOf(false) }
+    var reviewingLegacy by remember { mutableStateOf(false) }
+    var reviewingRejected by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
     var targetId by remember { mutableStateOf<Int?>(null) }
     var timing by remember { mutableStateOf<ActivityTimeValue?>(null) }
@@ -117,6 +119,20 @@ fun ActivityTracking(
         }
         if (state.busy) Text("Saving…", color = colors.onVariant)
         state.feedback?.let { Text(it, color = colors.onVariant) }
+        if (!focus && state.rejectedRecovery != null) {
+            TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }
+            if (reviewingRejected) {
+                Text("These changes were not replayed. Use Day add/edit to correct the saved timeline.")
+                Text(state.rejectedRecovery!!)
+            }
+        }
+        if (!focus && state.legacyRecovery != null) {
+            TextButton(onClick = { reviewingLegacy = !reviewingLegacy }) { Text("Review old Work Mode data") }
+            if (reviewingLegacy) {
+                Text("Saved device observations, not recorded time. Use Day add/edit for corrections.")
+                Text(state.legacyRecovery!!)
+            }
+        }
         Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else if (state.snapshot != null) "Synced" else "Connection required", color = colors.onVariant)
         if (state.error != null || state.pending) {
             Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
