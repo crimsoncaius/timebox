@@ -59,6 +59,8 @@ fun SettingsScreen(
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onOpenThemePreview: () -> Unit = {},
+    onReportingZoneChange: (String) -> Unit = {},
+    onSaveReportingZone: () -> Unit = {},
     onRetry: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -70,6 +72,11 @@ fun SettingsScreen(
             .padding(horizontal = TimeboxDimens.screenPadding)
             .padding(bottom = TimeboxDimens.bottomInset),
     ) {
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) SectionCard {
+            SectionHeader(title = "Reporting Time Zone", description = "Shared by all devices. Changes recalculate daily shares without changing recorded times or elapsed duration. Travel does not change it.")
+            OutlinedTextField(value = state.reportingZoneInput, onValueChange = onReportingZoneChange, label = { Text("Reporting Time Zone") }, modifier = Modifier.fillMaxWidth())
+            TextButton(onClick = onSaveReportingZone, enabled = !state.saving && state.reportingZoneInput.isNotBlank() && state.reportingZoneInput != state.timezone) { Text("Save time zone") }
+        }
         val window = state.window
         when {
             state.loading && window == null -> {

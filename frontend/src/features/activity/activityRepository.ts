@@ -9,6 +9,7 @@ export interface ActivitySelection { task_id?: number | null; planned_block_id?:
 export interface ActivitySnapshot {
   protocol: 'activity-online-v1'; cursor: number; server_at: string; reporting_timezone: string
   current: ActualBlock | null; records: ActualBlock[]; task_types?: TaskType[]
+  reporting_timezone_initialized?: boolean
   plans?: ActivityPlan[]
   offline_ready?: boolean
   operation_outcomes?: Record<string, { device_id: string; outcome: string }>
@@ -174,7 +175,10 @@ export class ActivityRepository {
         await this.drain()
       })
       let snapshot: ActivitySnapshot
-      try { snapshot = await fetchJson<ActivitySnapshot>('/activity') } catch (error) { this.offline = true; throw error }
+      try {
+        snapshot = await fetchJson<ActivitySnapshot>('/activity')
+        if (snapshot.reporting_timezone_initialized === false) snapshot = await fetchJson<ActivitySnapshot>('/activity/reporting-timezone/initialize', { method: 'POST', body: JSON.stringify({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) })
+      } catch (error) { this.offline = true; throw error }
       await this.exclusive(async () => {
         this.journal = this.readJournal()
         this.offline = false
@@ -187,6 +191,17 @@ export class ActivityRepository {
         this.publish()
       })
     } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not refresh activity') }
+  }
+  async setReportingTimezone(timezone: string) {
+    try {
+      await this.exclusive(async () => {
+        this.journal = this.readJournal()
+        const snapshot = await fetchJson<ActivitySnapshot>('/activity/reporting-timezone', { method: 'PUT', body: JSON.stringify({ timezone }) })
+        if (this.newer(snapshot)) this.save({ ...this.journal, snapshot })
+        this.publish()
+      })
+      return true
+    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save time zone'); return false }
   }
   async command(kind: Command['kind'], taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection) {
     if (retryOnly) { await this.refresh(); return !this.state.pending && !this.state.error }

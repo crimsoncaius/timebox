@@ -151,7 +151,7 @@ class ActualBlockDayProjectionRead(BaseModel):
     date: date
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
-    duration_minutes: int = Field(..., ge=0, le=1440)
+    duration_minutes: int = Field(..., ge=0)
 
 
 class ActualBlockDayRead(BaseModel):
@@ -192,3 +192,4 @@ class TimeBlockPatch(BaseModel):
         if not isinstance(value, str):
             return value
         return value.strip() or None
+

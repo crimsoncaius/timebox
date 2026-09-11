@@ -98,7 +98,12 @@ class TimeboxRepository private constructor(
         preferences?.setWorkMode(snapshot)
     }
 
-    suspend fun getActivity() = api().getActivity()
+    suspend fun getActivity(): com.timebox.android.data.remote.ActivitySnapshotDto {
+        val response = api().getActivity()
+        return if (response.reportingTimezoneInitialized == false) api().initializeReportingTimezone(
+            com.timebox.android.data.remote.ReportingTimezoneDto(java.time.ZoneId.systemDefault().id)) else response
+    }
+    suspend fun setReportingTimezone(zone: String) = api().setReportingTimezone(com.timebox.android.data.remote.ReportingTimezoneDto(zone))
     suspend fun activityCommand(body: com.timebox.android.data.remote.ActivityCommandDto) = api().activityCommand(body)
     suspend fun activityEndpoint(): String = preferences?.settings?.first()?.baseUrl ?: "test"
 

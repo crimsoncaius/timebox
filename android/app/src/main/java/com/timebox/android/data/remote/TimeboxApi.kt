@@ -11,6 +11,12 @@ import retrofit2.http.Query
 
 interface TimeboxApi {
 
+    @POST("activity/reporting-timezone/initialize")
+    suspend fun initializeReportingTimezone(@Body body: ReportingTimezoneDto): ActivitySnapshotDto
+
+    @retrofit2.http.PUT("activity/reporting-timezone")
+    suspend fun setReportingTimezone(@Body body: ReportingTimezoneDto): ActivitySnapshotDto
+
     @GET("activity")
     suspend fun getActivity(): ActivitySnapshotDto
 

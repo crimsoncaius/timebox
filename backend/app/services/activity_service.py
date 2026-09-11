@@ -35,13 +35,14 @@ def _lock(db: Session) -> ActivityState:
 
 
 def _snapshot(db, state, timezone, acknowledgement=None):
+    timezone = state.reporting_timezone or timezone
     records = [ActualBlockRead.model_validate(row) for row in db.scalars(
         select(TimeBlock).where(TimeBlock.lane == BlockLane.actual, TimeBlock.start_at.is_not(None))
         .order_by(TimeBlock.start_at, TimeBlock.id)
     )]
     return ActivitySnapshot(
         cursor=state.cursor, server_at=dt.datetime.now(dt.timezone.utc),
-        reporting_timezone=timezone, records=records,
+        reporting_timezone=timezone, reporting_timezone_initialized=state.reporting_timezone is not None, records=records,
         plans=activity_selection.plans(db, timezone),
         task_types=list(db.scalars(select(TaskType))),
         current=next((row for row in records if row.end_at is None), None),
@@ -63,6 +64,7 @@ def read(db: Session, timezone: str) -> ActivitySnapshot:
 
 def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapshot:
     state = _lock(db)
+    timezone = state.reporting_timezone or timezone
     envelope = body.model_dump(mode="json")
     previous = db.get(ActivityOperation, str(body.operation_id))
     if previous:
@@ -147,3 +149,26 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
     ))
     db.commit()
     return result
+
+
+def set_reporting_timezone(db: Session, timezone: str, fallback: str, *, initialize: bool):
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError("Choose a valid IANA time zone")
+    state = _lock(db)
+    if not initialize or state.reporting_timezone is None:
+        if state.reporting_timezone != timezone:
+            state.reporting_timezone = timezone
+            state.cursor += 1
+    result = _snapshot(db, state, fallback)
+    db.commit()
+    return result
+
+
+def reporting_settings(db: Session, settings):
+    state = db.get(ActivityState, 1)
+    if state and state.reporting_timezone:
+        return settings.model_copy(update={"app_timezone": state.reporting_timezone})
+    return settings

@@ -23,6 +23,12 @@ import {
 } from './time'
 
 describe('time helpers', () => {
+  it('requires an explicit choice for repeated local times', () => {
+    expect(() => zonedLocalDateTimeToIso('2025-11-02T01:30', 'America/New_York')).toThrow(/occurs twice/i)
+    expect(zonedLocalDateTimeToIso('2025-11-02T01:30', 'America/New_York', 'earlier')).toBe('2025-11-02T05:30:00.000Z')
+    expect(zonedLocalDateTimeToIso('2025-11-02T01:30', 'America/New_York', 'later')).toBe('2025-11-02T06:30:00.000Z')
+  })
+
   it('converts minute-accurate wall-clock values in the configured timezone', () => {
     expect(zonedLocalDateTimeToIso('2026-08-30T09:17', 'Asia/Singapore')).toBe('2026-08-30T01:17:00.000Z')
     expect(zonedLocalDateTimeToIso('2026-08-31T00:20', 'Asia/Singapore')).toBe('2026-08-30T16:20:00.000Z')

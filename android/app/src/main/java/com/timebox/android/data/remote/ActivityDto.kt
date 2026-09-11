@@ -45,6 +45,7 @@ import kotlinx.serialization.Serializable
     val protocol: String = "activity-online-v1",
     val cursor: Int,
     @SerialName("server_at") val serverAt: String,
+    @SerialName("reporting_timezone_initialized") val reportingTimezoneInitialized: Boolean? = null,
     @SerialName("reporting_timezone") val reportingTimezone: String,
     val current: ActualBlockDto?,
     val records: List<ActualBlockDto>,
@@ -73,3 +74,6 @@ import kotlinx.serialization.Serializable
     @SerialName("start_at") val startAt: String,
     @SerialName("end_at") val endAt: String,
 )
+
+@kotlinx.serialization.Serializable
+data class ReportingTimezoneDto(val timezone: String)

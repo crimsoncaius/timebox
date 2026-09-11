@@ -1,3 +1,5 @@
+import { ReportingTimezoneSettings } from '../activity/ReportingTimezoneSettings'
+import { activityDevelopmentEnabled } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Layout } from '../../components/Layout'
 import { api, type SettingsRead } from '../../lib/api'
@@ -132,6 +134,7 @@ export function SettingsPage() {
 
   return (
     <Layout>
+      {activityDevelopmentEnabled && <ReportingTimezoneSettings />}
       <section className="mb-10 flex flex-col gap-4 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">

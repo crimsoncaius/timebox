@@ -33,3 +33,28 @@ def command(body: ActivityCommand, db: Session = Depends(get_db), settings: Sett
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Activity conflicts with recorded time"
         raise HTTPException(422, detail) from exc
+
+
+from pydantic import BaseModel, Field
+
+
+class ReportingTimezone(BaseModel):
+    timezone: str = Field(min_length=1, max_length=100)
+
+
+def save_zone(body, db, settings, initialize):
+    try:
+        return activity_service.set_reporting_timezone(db, body.timezone, settings.app_timezone, initialize=initialize)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/reporting-timezone/initialize", response_model=ActivitySnapshot)
+def initialize_timezone(body: ReportingTimezone, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    return save_zone(body, db, settings, True)
+
+
+@router.put("/reporting-timezone", response_model=ActivitySnapshot)
+def update_timezone(body: ReportingTimezone, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    return save_zone(body, db, settings, False)

@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -374,8 +375,11 @@ private fun DayPage(
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
             ) {
+                val elapsedDay = com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && day.actualBlocks.any { it.durationMinutes != it.endMinute - it.startMinute }
+                Column {
+                if (elapsedDay) ReportingDayActuals(day, onSelectBlock)
                 DayTimeline(
-                    day = day,
+                    day = if (elapsedDay) day.copy(blocks = day.blocks.filter { it.lane != com.timebox.android.data.Lane.Actual }) else day,
                     selectedBlockId = selectedBlockId,
                     draft = draft,
                     onTapSlot = onTapSlot,
@@ -383,6 +387,7 @@ private fun DayPage(
                     onCommitMove = onCommitMove,
                     onSavedPlannedBlockDragPointer = { savedBlockDragPointerY = it },
                 )
+                }
                 SavedPlannedBlockDragEdgeScroll(
                     pointerY = savedBlockDragPointerY,
                     viewportBounds = viewportBounds,

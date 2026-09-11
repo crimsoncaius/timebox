@@ -1,3 +1,4 @@
+import { needsElapsedDayView, ReportingDayActuals } from '../activity/ReportingDayActuals'
 import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -888,10 +889,11 @@ export function TodayPage() {
           {activityDevelopmentEnabled ? <ActivityTracking taskTypes={taskTypes} onChanged={() => {
             void api.getDay(date).then(setDay).catch(() => {})
           }} /> : null}
+          {activityDevelopmentEnabled && needsElapsedDayView(day) && <ReportingDayActuals day={day} onSelect={id => onBlockClick(id, 'actual')} />}
           <section className="overflow-x-auto pb-24">
             <DayTimeline
               ref={timelineRef}
-              day={day}
+              day={activityDevelopmentEnabled && needsElapsedDayView(day) ? { ...day, actual_blocks: [] } : day}
               readOnly={false}
               draft={draft}
               selectedBlockId={selectedBlockId}

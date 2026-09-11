@@ -52,6 +52,7 @@ class ActivitySnapshot(BaseModel):
     offline_ready: bool = True
     cursor: int
     server_at: AwareDatetime
+    reporting_timezone_initialized: bool = False
     reporting_timezone: str
     full_snapshot: bool = True
     current: ActualBlockRead | None

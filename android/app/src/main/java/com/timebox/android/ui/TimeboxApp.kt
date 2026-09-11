@@ -621,6 +621,8 @@ fun TimeboxApp(
                             onDailyReminderChange = settingsViewModel::updateDailyReminder,
                             onBaseUrlChange = settingsViewModel::onBaseUrlChange,
                             onApiKeyChange = settingsViewModel::onApiKeyChange,
+                            onReportingZoneChange = settingsViewModel::changeReportingZone,
+                            onSaveReportingZone = { settingsViewModel.saveReportingZone { dayViewModel.load(showSpinner = true) } },
                             onSaveConnection = {
                                 settingsViewModel.saveConnection()
                                 dayViewModel.load(showSpinner = true)

@@ -527,7 +527,7 @@ class DayViewModel(
                 val endAt = resolveActualMinute(date, end, zone)
                 if (startAt == null || endAt == null) {
                     _state.update {
-                        it.copy(saving = false, message = "That local time does not exist in $timezone.")
+                        it.copy(saving = false, message = "That local time does not exist or occurs twice in $timezone. Choose an unambiguous time.")
                     }
                     return@launch
                 }
@@ -684,7 +684,7 @@ class DayViewModel(
             val startAt = resolveActualMinute(current.date, startMinute, zone)
             val endAt = resolveActualMinute(current.date, endMinute, zone)
             if (startAt == null || endAt == null) {
-                _state.update { it.copy(message = "That local time does not exist in ${day.timezone}.") }
+                _state.update { it.copy(message = "That local time does not exist or occurs twice in ${day.timezone}. Choose an unambiguous time.") }
                 return
             }
             Triple(actualBlockId, startAt, endAt)
@@ -1023,7 +1023,7 @@ internal fun parseActualInput(value: String, zone: ZoneId): Instant? = runCatchi
 
 internal fun resolveActualMinute(date: LocalDate, minute: Int, zone: ZoneId): Instant? {
     val local = date.atStartOfDay().plusMinutes(minute.toLong())
-    return local.atZone(zone).takeIf { it.toLocalDateTime() == local }?.toInstant()
+    return runCatching { com.timebox.android.data.ReportingTime.resolve(local, zone) }.getOrNull()
 }
 
 private fun minuteOfDay(instant: Instant, timezone: String): Int {
