@@ -10,7 +10,7 @@ python android/prototypes/serve-focus-160.py
 
 Open http://127.0.0.1:12008/prototypes/focus-160.html?variant=A. Use the floating arrows or keyboard left/right to compare A (editorial canvas), B (quiet clock), C (task companion). The HTML can also be opened directly in a browser. Fonts use the existing bundled Android resources.
 
-Platform confirmed by user: Android only. Final direction: awaiting user review. A is the initial recommendation for continuity with legacy Work Mode, not an accepted decision.
+Platform confirmed by user: Android only. Accepted visual direction: A (editorial canvas). User selected A and requested removal of the redundant Activity Tracking on indicator: tracking is always on while Focus is visible. Keep actionable Check-in waiting feedback and the always-available exit. Native Android implementation remains pending.
 
 All state is temporary; elapsed time is a frozen sample. Task completion, checkboxes, activity changes, and leaving/re-entering Focus are simulated. The state inspector exposes tracking separately from Focus visibility. Scenario selection covers unnamed activity, check-in, plan mismatch, offline, and long content. Light and dark palettes are available for every composition.
 
