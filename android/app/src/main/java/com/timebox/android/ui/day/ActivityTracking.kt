@@ -159,7 +159,26 @@ fun ActivityTracking(
             Text("Recording continues while you decide.")
         }
     }
-    if (switching || stopping) ModalBottomSheet(onDismissRequest = { switching = false; stopping = false }) {
+    if (switching && !stopping) SwitchActivitySheet(
+        currentActivity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
+        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it },
+        name = name, onNameChange = { name = it }, timing = timing,
+        onTimingChange = { timing = it; timingError = null }, now = now,
+        zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
+        enabled = enabled, busy = state.busy, error = timingError,
+        onDismiss = { switching = false },
+        onConfirm = {
+            scope.launch {
+                try {
+                    val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
+                    if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId) }) {
+                        switching = false; selectedType = null; name = ""
+                    } else timingError = repository.state.value.error
+                } catch (error: Exception) { timingError = error.message }
+            }
+        },
+    )
+    if (stopping) ModalBottomSheet(onDismissRequest = { switching = false; stopping = false }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (stopping) "Stop tracking" else "Switch activity", style = MaterialTheme.typography.titleLarge)
             if (!stopping) {

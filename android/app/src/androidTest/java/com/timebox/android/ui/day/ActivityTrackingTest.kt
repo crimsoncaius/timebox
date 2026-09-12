@@ -120,6 +120,7 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Chapter").assertIsDisplayed()
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Switch activity").performClick()
+        compose.onNodeWithText("Task Type").performScrollTo().performClick()
         compose.onNodeWithText("Writing").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
@@ -164,6 +165,7 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Switch activity").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).assertIsNotEnabled()
+        compose.onNodeWithText("Task Type").performScrollTo().performClick()
         compose.onNodeWithText("reading").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
