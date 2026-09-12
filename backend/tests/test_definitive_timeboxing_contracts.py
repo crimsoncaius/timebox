@@ -44,6 +44,32 @@ def _actual(
     )
 
 
+@pytest.mark.parametrize("in_project", [False, True])
+def test_subtask_creation_inherits_parent_project_and_persists(client, in_project):
+    project_id = (
+        client.post("/projects", json={"name": "Subtask project"}).json()["id"]
+        if in_project else None
+    )
+    parent = client.post(
+        "/tasks", json={"title": "Parent", "project_id": project_id}
+    ).json()
+    if in_project:
+        rejected = client.post(
+            "/tasks",
+            json={"title": "Checkpoint", "parent_id": parent["id"], "project_id": project_id},
+        )
+        assert rejected.status_code == 422
+    created = client.post(
+        "/tasks", json={"title": "Checkpoint", "parent_id": parent["id"]}
+    )
+    assert created.status_code == 201, created.text
+    with Session(get_engine()) as db:
+        stored = db.get(Task, created.json()["id"])
+        assert stored.project_id == project_id
+    reopened = next(item for item in client.get("/tasks").json()["items"] if item["id"] == parent["id"])
+    assert [item["title"] for item in reopened["subtasks"]] == ["Checkpoint"]
+
+
 def test_parent_completion_preserves_explicit_subtask_checks_and_exposes_resolution(client):
     parent = client.post("/tasks", json={"title": "Parent"}).json()
     unchecked = client.post(

@@ -84,6 +84,16 @@ data class TaskComposerDraft(
     val dirty: Boolean = false,
 )
 
+internal fun TaskComposerDraft.hasMeaningfulChangesFrom(initial: TaskComposerDraft): Boolean =
+    comparableComposerDraft() != initial.comparableComposerDraft()
+
+private fun TaskComposerDraft.comparableComposerDraft(): TaskComposerDraft = copy(
+    title = title.takeUnless(String::isBlank) ?: "",
+    description = description.takeUnless(String::isBlank) ?: "",
+    moreOpen = false,
+    dirty = false,
+)
+
 data class CreatedTaskNotice(val taskId: Int, val message: String)
 
 enum class TrashUndoPhase { Ready, Restoring, Failed, Expiring }
@@ -129,6 +139,7 @@ data class BattlePlanUiState(
     val message: String? = null,
     val showComposer: Boolean = false,
     val composerDraft: TaskComposerDraft = TaskComposerDraft(),
+    val composerInitialDraft: TaskComposerDraft = TaskComposerDraft(),
     val composerSubmitted: Boolean = false,
     val composerError: String? = null,
     val createdTaskNotice: CreatedTaskNotice? = null,
@@ -203,6 +214,7 @@ class BattlePlanViewModel internal constructor(
         BattlePlanUiState(
             showComposer = savedStateHandle[COMPOSER_VISIBLE] ?: false,
             composerDraft = restoreComposerDraft(savedStateHandle),
+            composerInitialDraft = restoreComposerInitialDraft(savedStateHandle),
         ),
     )
     val state: StateFlow<BattlePlanUiState> = _state.asStateFlow()
@@ -389,9 +401,11 @@ class BattlePlanViewModel internal constructor(
         }
         _state.update { current ->
             if (current.showComposer) current else {
+                val initialDraft = initialComposerDraft(current.selectedScope, current.selectedStatus)
                 current.copy(
                     showComposer = true,
-                    composerDraft = initialComposerDraft(current.selectedScope, current.selectedStatus),
+                    composerDraft = initialDraft,
+                    composerInitialDraft = initialDraft,
                     composerSubmitted = false,
                     composerError = null,
                 )
@@ -401,7 +415,12 @@ class BattlePlanViewModel internal constructor(
     }
 
     fun updateComposerDraft(draft: TaskComposerDraft) {
-        _state.update { it.copy(composerDraft = draft.copy(dirty = true), composerError = null) }
+        _state.update { current ->
+            current.copy(
+                composerDraft = draft.copy(dirty = draft.hasMeaningfulChangesFrom(current.composerInitialDraft)),
+                composerError = null,
+            )
+        }
         persistComposer()
     }
 
@@ -435,6 +454,7 @@ class BattlePlanViewModel internal constructor(
             it.copy(
                 showComposer = false,
                 composerDraft = TaskComposerDraft(),
+                composerInitialDraft = TaskComposerDraft(),
                 composerSubmitted = false,
                 composerError = null,
             )
@@ -534,6 +554,7 @@ class BattlePlanViewModel internal constructor(
                             saving = false,
                             showComposer = false,
                             composerDraft = TaskComposerDraft(),
+                            composerInitialDraft = TaskComposerDraft(),
                             composerSubmitted = false,
                             composerError = null,
                             createdTaskNotice = CreatedTaskNotice(task.id, message),
@@ -551,7 +572,7 @@ class BattlePlanViewModel internal constructor(
 
     fun createSubtask(parent: BattleTask, title: String) {
         if (title.isBlank() || parent.status == TaskStatus.Completed) return
-        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id, projectId = parent.projectId)) }
+        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id)) }
     }
 
     fun moveProject(task: BattleTask, projectId: Int?) {
@@ -793,6 +814,7 @@ class BattlePlanViewModel internal constructor(
     private fun persistComposer() {
         val state = _state.value
         val draft = state.composerDraft
+        val initialDraft = state.composerInitialDraft
         savedStateHandle[COMPOSER_VISIBLE] = state.showComposer
         savedStateHandle[COMPOSER_TITLE] = draft.title
         savedStateHandle[COMPOSER_DESCRIPTION] = draft.description
@@ -810,6 +832,8 @@ class BattlePlanViewModel internal constructor(
         savedStateHandle[COMPOSER_READY] = draft.readyToPlan
         savedStateHandle[COMPOSER_MORE_OPEN] = draft.moreOpen
         savedStateHandle[COMPOSER_DIRTY] = draft.dirty
+        savedStateHandle[COMPOSER_INITIAL_STATUS] = initialDraft.status.name
+        savedStateHandle[COMPOSER_INITIAL_PROJECT_ID] = initialDraft.projectId
     }
 
     private fun clearSavedComposer() {
@@ -835,12 +859,15 @@ class BattlePlanViewModel internal constructor(
         private const val COMPOSER_READY = "battlePlan.composer.ready"
         private const val COMPOSER_MORE_OPEN = "battlePlan.composer.moreOpen"
         private const val COMPOSER_DIRTY = "battlePlan.composer.dirty"
+        private const val COMPOSER_INITIAL_STATUS = "battlePlan.composer.initialStatus"
+        private const val COMPOSER_INITIAL_PROJECT_ID = "battlePlan.composer.initialProjectId"
         private val COMPOSER_KEYS = listOf(
             COMPOSER_VISIBLE, COMPOSER_TITLE, COMPOSER_DESCRIPTION, COMPOSER_STATUS,
             COMPOSER_PROJECT_ID, COMPOSER_TASK_TYPE_ID, COMPOSER_URGENCY, COMPOSER_IMPORTANCE,
             COMPOSER_DEADLINE_MODE, COMPOSER_DEADLINE_DATE, COMPOSER_DEADLINE_TIME,
             COMPOSER_REMINDER_ENABLED, COMPOSER_REMINDER_DATE, COMPOSER_REMINDER_TIME,
             COMPOSER_READY, COMPOSER_MORE_OPEN, COMPOSER_DIRTY,
+            COMPOSER_INITIAL_STATUS, COMPOSER_INITIAL_PROJECT_ID,
         )
         private const val TRASH_UNDO_BASE_TIMEOUT_MILLIS = 10_000L
     }
@@ -910,6 +937,12 @@ internal fun restoreComposerDraft(handle: SavedStateHandle): TaskComposerDraft =
     readyToPlan = handle["battlePlan.composer.ready"] ?: false,
     moreOpen = handle["battlePlan.composer.moreOpen"] ?: false,
     dirty = handle["battlePlan.composer.dirty"] ?: false,
+)
+
+internal fun restoreComposerInitialDraft(handle: SavedStateHandle): TaskComposerDraft = TaskComposerDraft(
+    status = handle.get<String>("battlePlan.composer.initialStatus")?.let { runCatching { TaskStatus.valueOf(it) }.getOrNull() }
+        ?.takeIf { it == TaskStatus.Open || it == TaskStatus.InProgress } ?: TaskStatus.Open,
+    projectId = handle["battlePlan.composer.initialProjectId"],
 )
 
 internal fun statusMovePlacements(tasks: List<BattleTask>, moving: BattleTask, target: TaskStatus): List<TaskPlacement> {

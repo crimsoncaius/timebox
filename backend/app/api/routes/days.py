@@ -15,16 +15,20 @@ from app.schemas.day import (
     PlanningCommitRead,
 )
 from app.schemas.time_block import PlannedBlockCreate, TimeBlockPatch
-from app.services import day_service
+from app.services import day_service, activity_service
 
 router = APIRouter(prefix="/days", tags=["days"])
+
+
+def get_reporting_settings(db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    return activity_service.reporting_settings(db, settings)
 
 
 @router.post("/plan", response_model=PlanningCommitRead)
 def commit_plan(
     body: PlanningCommitCreate,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> PlanningCommitRead:
     try:
         days = day_service.commit_planning_session(db, body.placements)
@@ -38,7 +42,7 @@ def commit_plan(
 def list_days(
     limit: int = Query(60, ge=1, le=500),
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> list[DayListItem]:
     rows = day_service.list_recent_days(db, limit=limit)
     return [day_service.to_day_list_item(db, d, count, settings) for d, count in rows]
@@ -48,7 +52,7 @@ def list_days(
 def get_day(
     date: str,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
     try:
         d = parse_iso_date(date)
@@ -62,7 +66,7 @@ def get_day(
 def get_day_preview(
     date: str,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> DayPreviewRead:
     try:
         d = parse_iso_date(date)
@@ -76,7 +80,7 @@ def get_day_preview(
 def get_day_summary(
     date: str,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> DaySummaryRead:
     try:
         d = parse_iso_date(date)
@@ -91,7 +95,7 @@ def create_block(
     date: str,
     body: PlannedBlockCreate,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
     try:
         d = parse_iso_date(date)
@@ -112,7 +116,7 @@ def patch_block(
     block_id: int,
     body: TimeBlockPatch,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
     try:
         d = parse_iso_date(date)
@@ -131,7 +135,7 @@ def delete_block(
     date: str,
     block_id: int,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
     try:
         d = parse_iso_date(date)

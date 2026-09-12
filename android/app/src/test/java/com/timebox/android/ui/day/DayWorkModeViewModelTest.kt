@@ -445,7 +445,8 @@ private class FakeWorkModeApi(
     )
     private fun preview(date: String) = DayPreviewDto(
         date = date, startHour = 8, endHour = 20, showFullDay = false,
-        timeBlocks = emptyList(), meta = meta(date),
+        // Browsing adjacent days does not change the server's present date.
+        timeBlocks = emptyList(), meta = meta("2026-08-30"),
     )
 }
 

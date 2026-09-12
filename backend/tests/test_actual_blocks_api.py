@@ -461,6 +461,8 @@ def test_retrospective_actual_correction_preserves_planned_data_and_corresponden
     assert day["planned_blocks"][0] == {
         **planned,
         "actual_block_id": actual["id"],
+        "actual_block_ids": [actual["id"]],
+        "actual_duration_minutes": 76,
     }
 
 

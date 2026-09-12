@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -86,6 +88,7 @@ fun DayScreen(
     onRetryReadyTasks: () -> Unit,
     onNavigateToday: (LocalDate) -> Unit = {},
     onOpenWorkMode: () -> Unit = {},
+    onEnterFocus: () -> Unit = {},
 ) {
     var displayedDate by remember(state.date) { mutableStateOf(state.date) }
 
@@ -107,6 +110,12 @@ fun DayScreen(
             onNavigateToday = onNavigateToday,
         )
 
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
+            ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
+            Spacer(Modifier.height(8.dp))
+        }
         Box(Modifier.weight(1f)) {
             if (state.isPlanningMode) {
                 PlanningDayPage(
@@ -371,8 +380,11 @@ private fun DayPage(
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
             ) {
+                val elapsedDay = com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && day.actualBlocks.any { it.dayLengthMinutes != 1440 }
+                Column {
+                if (elapsedDay) ReportingDayActuals(day, onSelectBlock)
                 DayTimeline(
-                    day = day,
+                    day = if (elapsedDay) day.copy(blocks = day.blocks.filter { it.lane != com.timebox.android.data.Lane.Actual }) else day,
                     selectedBlockId = selectedBlockId,
                     draft = draft,
                     onTapSlot = onTapSlot,
@@ -380,6 +392,7 @@ private fun DayPage(
                     onCommitMove = onCommitMove,
                     onSavedPlannedBlockDragPointer = { savedBlockDragPointerY = it },
                 )
+                }
                 SavedPlannedBlockDragEdgeScroll(
                     pointerY = savedBlockDragPointerY,
                     viewportBounds = viewportBounds,

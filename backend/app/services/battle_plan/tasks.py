@@ -267,14 +267,14 @@ def list_tasks(
         selectinload(Task.occurrence),
         selectinload(Task.time_blocks).selectinload(TimeBlock.day),
         selectinload(Task.time_blocks)
-        .selectinload(TimeBlock.completion_actual),
+        .selectinload(TimeBlock.completion_actuals),
         selectinload(Task.subtasks).selectinload(Task.task_type),
         selectinload(Task.subtasks).selectinload(Task.recurring_template),
         selectinload(Task.subtasks).selectinload(Task.occurrence),
         selectinload(Task.subtasks).selectinload(Task.time_blocks).selectinload(TimeBlock.day),
         selectinload(Task.subtasks)
         .selectinload(Task.time_blocks)
-        .selectinload(TimeBlock.completion_actual),
+        .selectinload(TimeBlock.completion_actuals),
     )
     if state == "active":
         stmt = select(Task).options(*options).where(

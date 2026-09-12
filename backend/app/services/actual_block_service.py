@@ -284,6 +284,40 @@ def start_actual_block(
     return _read(_load_actual(db, row.id))
 
 
+def transition_unplanned_activity(
+    db: Session, *, kind: str, task_type_id: int | None, name: str | None,
+    effective_at: dt.datetime | None = None,
+) -> dt.datetime:
+    """Mutate Actual intervals inside an admitted activity command transaction.
+
+    The caller owns serialization and receipts; this service owns validation
+    and interval mutation. Never commit the intermediate stopped state.
+    """
+    if kind == "switch" and task_type_id is None:
+        raise ValueError("Task Type is required when switching")
+    if kind == "stop" and (task_type_id is not None or name is not None):
+        raise ValueError("Stop cannot change Task Type or Block Name")
+    if kind != "stop":
+        if task_type_id is None:
+            task_type_id = _get_or_create_unspecified_task_type(db).id
+        _validate_item(db, task_type_id, None)
+    current = get_active_actual_block(db)
+    # The caller has already acquired the protocol lock.
+    effective_at = effective_at or dt.datetime.now(dt.timezone.utc)
+    if current:
+        if effective_at <= _as_utc(current.start_at):
+            raise ValueError("Server clock is behind the current activity; retry later")
+        row = _load_actual(db, current.id)
+        row.end_at = effective_at
+        invalidate_record_actual_undo(db, row.id)
+        db.flush()
+    if kind != "stop":
+        db.add(TimeBlock(lane=BlockLane.actual, task_type_id=task_type_id,
+                         name=(name or "").strip() or None, start_at=effective_at))
+        db.flush()
+    return effective_at
+
+
 def finish_actual_block(
     db: Session, actual_block_id: int, captured_at: dt.datetime
 ) -> ActualBlockRead:
@@ -517,7 +551,7 @@ def record_actual_as_planned(
     )
     planned = _planned_row(db, planned_block_id, for_update=True)
     if db.execute(
-        select(TimeBlock.id).where(TimeBlock.planned_block_id == planned.id)
+        select(TimeBlock.id).where(TimeBlock.planned_block_id == planned.id).limit(1)
     ).scalar_one_or_none() is not None:
         raise ValueError("Planned Block already has corresponding Actual")
     assert planned.day is not None
@@ -707,6 +741,7 @@ def project_actual_blocks_for_day(
                 start_minute=start_minute,
                 end_minute=end_minute,
                 duration_minutes=duration,
+                day_length_minutes=int((day_end - day_start).total_seconds() // 60),
             )
         )
 

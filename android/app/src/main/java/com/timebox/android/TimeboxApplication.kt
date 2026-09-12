@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
@@ -22,9 +23,32 @@ class TimeboxApplication : Application() {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var preferences: AppPreferences
+    val focusController by lazy { com.timebox.android.ui.focus.FocusController(com.timebox.android.ui.focus.AndroidFocusStorage(this)) }
+    val checkIns by lazy { com.timebox.android.checkin.AndroidCheckIns(this, activityRepository) }
+    val activityRepository by lazy {
+        com.timebox.android.data.ActivityRepository(
+            com.timebox.android.data.RepositoryActivityTransport(repository),
+            com.timebox.android.data.AndroidActivityStorage(this),
+        )
+    }
 
     lateinit var repository: TimeboxRepository
         private set
+
+    suspend fun recoverLegacyWorkMode(planning: Boolean) {
+        if (!activityRepository.bootstrappedThisRun) return
+        if (preferences.legacyWorkModeRecovered()) {
+            activityRepository.setLegacyRecovery(preferences.legacyWorkModeRecovery())
+            return
+        }
+        val saved = preferences.workMode.first()
+        preferences.archiveLegacyWorkMode()
+        if (saved == null || focusController.restoreLegacy(saved, activityRepository, planning)) {
+            preferences.markLegacyWorkModeRecovered()
+            activityRepository.setLegacyRecovery(preferences.legacyWorkModeRecovery())
+            if (saved != null) activityRepository.showLegacyRecoveryNotice()
+        }
+    }
     lateinit var taskCompletion: TaskCompletion
         private set
     lateinit var readinessCoordinator: ReadyToPlanCoordinator
@@ -52,5 +76,9 @@ class TimeboxApplication : Application() {
         repository.onActiveTasksLoaded = { tasks -> reminderScheduler.replaceSchedules(tasks.items) }
         repository.onConnectionChanged = reminderScheduler::enqueueImmediateSync
         reminderScheduler.start()
+        com.timebox.android.checkin.CheckInWorker.schedule(this)
+        if (BuildConfig.ACTIVITY_TRACKING_DEV) applicationScope.launch {
+            activityRepository.state.collect { checkIns.reconcileNotification(it.snapshot?.checkIn?.question?.id) }
+        }
     }
 }

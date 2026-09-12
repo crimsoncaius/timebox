@@ -1,4 +1,5 @@
 from app.models.app_settings import AppSettings
+from app.models.activity import ActivityOperation, ActivityState
 from app.models.battle_plan import (
     PriorityLevel, Project, RecurrenceFrequency, RecurrenceMode, RecurrenceOccurrence,
     RecurrenceStatus, RecurringChecklistItem, RecurringPlannedBlockRealization,

@@ -12,7 +12,6 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
-    UniqueConstraint,
     event,
     func,
     text,
@@ -30,9 +29,8 @@ class BlockLane(str, enum.Enum):
 class TimeBlock(Base):
     __tablename__ = "time_blocks"
     __table_args__ = (
-        UniqueConstraint(
-            "planned_block_id", name="uq_time_blocks_planned_actual_correspondence"
-        ),
+        Index("uq_time_blocks_legacy_correspondence", "planned_block_id", unique=True,
+              postgresql_where=text("activity_source IS NULL"), sqlite_where=text("activity_source IS NULL")),
         CheckConstraint(
             "planned_block_id IS NULL OR lane = 'actual'",
             name="ck_time_blocks_correspondence_from_actual",
@@ -82,6 +80,7 @@ class TimeBlock(Base):
     )
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    activity_source: Mapped[str | None] = mapped_column(Text, nullable=True)
     # When set on an Actual block, points to the Planned block this row completes (as planned).
     planned_block_id: Mapped[int | None] = mapped_column(
         ForeignKey("time_blocks.id", ondelete="SET NULL"),
@@ -112,20 +111,32 @@ class TimeBlock(Base):
         "TimeBlock",
         remote_side=[id],
         foreign_keys=[planned_block_id],
-        back_populates="completion_actual",
+        back_populates="completion_actuals",
     )
-    completion_actual: Mapped["TimeBlock | None"] = relationship(
+    completion_actuals: Mapped[list["TimeBlock"]] = relationship(
         "TimeBlock",
         foreign_keys=[planned_block_id],
         back_populates="planned_block",
-        uselist=False,
+        order_by="TimeBlock.start_at, TimeBlock.id",
     )
 
     @property
     def actual_block_id(self) -> int | None:
         """The explicit corresponding Actual Block, never an inferred match."""
 
-        return self.completion_actual.id if self.completion_actual is not None else None
+        return self.completion_actuals[0].id if self.completion_actuals else None
+
+    @property
+    def actual_duration_minutes(self) -> float:
+        now = dt.datetime.now(dt.timezone.utc)
+        def utc(value):
+            return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value
+        return sum(max(0, (utc(row.end_at) if row.end_at else now).timestamp() - utc(row.start_at).timestamp()) / 60
+                   if row.start_at else row.end_minute - row.start_minute for row in self.completion_actuals)
+
+    @property
+    def actual_block_ids(self) -> list[int]:
+        return [row.id for row in self.completion_actuals]
 
 
 class ActualBlockRecordOperation(Base):

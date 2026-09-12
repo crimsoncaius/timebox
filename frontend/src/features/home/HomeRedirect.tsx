@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { calendarIsoDateInTimeZone } from '../../lib/time'
 import { Layout } from '../../components/Layout'
+import { ActivityTracking } from '../activity/ActivityTracking'
+import { activityDevelopmentEnabled, getActivityRepository } from '../activity/activityRepository'
 
 export function HomeRedirect() {
   const [target, setTarget] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    void api
-      .health()
+    const initialize = activityDevelopmentEnabled ? getActivityRepository().refresh() : Promise.resolve()
+    void initialize.then(() => {
+      const repository = activityDevelopmentEnabled ? getActivityRepository() : null
+      const snapshot = repository?.getSnapshot().snapshot
+      return snapshot && repository
+        ? { today: calendarIsoDateInTimeZone(new Date(repository.now()), snapshot.reporting_timezone) }
+        : api.health()
+    })
       .then((h) => setTarget(h.today))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not reach API'))
   }, [])
@@ -17,6 +26,7 @@ export function HomeRedirect() {
   if (error) {
     return (
       <Layout>
+        {activityDevelopmentEnabled ? <ActivityTracking taskTypes={[]} onChanged={() => {}} /> : null}
         <div className="rounded-xl bg-error-container/20 px-4 py-3 text-on-error-container outline-1 outline-error/20 dark:bg-error-container/15 dark:outline-error/30">
           <p className="font-medium">Cannot load today from server.</p>
           <p className="mt-1 text-sm">{error}</p>

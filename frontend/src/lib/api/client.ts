@@ -2,6 +2,10 @@ function apiPrefix(): string {
   return import.meta.env.VITE_API_BASE_URL ?? '/api'
 }
 
+function protocolHeaders(): Record<string, string> {
+  return { 'X-Timebox-Protocol': 'activity-online-v1' }
+}
+
 /** Avoid hung "Loading today…" when the API is down or the dev proxy cannot connect. */
 const DEFAULT_FETCH_TIMEOUT_MS = 12_000
 
@@ -89,6 +93,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
       signal: mergeSignals(init?.signal, timeout),
       headers: {
         'Content-Type': 'application/json',
+        ...protocolHeaders(),
         ...init?.headers,
       },
     })
@@ -116,6 +121,7 @@ export async function fetchVoid(path: string, init?: RequestInit): Promise<void>
       signal: mergeSignals(init?.signal, timeout),
       headers: {
         'Content-Type': 'application/json',
+        ...protocolHeaders(),
         ...init?.headers,
       },
     })
@@ -132,4 +138,3 @@ export async function fetchVoid(path: string, init?: RequestInit): Promise<void>
     throw new ApiHttpError(res.status, parseApiErrorBody(text || res.statusText))
   }
 }
-

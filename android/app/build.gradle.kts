@@ -17,6 +17,8 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Activity Tracking and Focus are the standard experience in every build.
+        buildConfigField("boolean", "ACTIVITY_TRACKING_DEV", "true")
     }
 
     buildTypes {

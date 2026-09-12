@@ -5,7 +5,15 @@ export const TIMELINE_SLOT_HEIGHT_PX = 46
 export const MINUTES_PER_DAY = 24 * 60
 
 /** Convert an IANA-zone wall-clock minute to an authoritative UTC instant. */
-export function zonedLocalDateTimeToIso(local: string, timezone: string): string {
+export function zonedLocalDateTimeToIso(local: string, timezone: string, occurrence?: 'earlier' | 'later'): string {
+  const candidates = zonedLocalDateTimeCandidates(local, timezone)
+  if (!candidates.length) throw new Error('That local time does not exist in the configured timezone')
+  if (candidates.length > 1 && !occurrence) throw new Error('That local time occurs twice; choose the earlier or later occurrence')
+  return occurrence === 'later' ? candidates[candidates.length - 1] : candidates[0]
+}
+
+/** All valid instants, ordered chronologically; usable offline by date/time editors. */
+export function zonedLocalDateTimeCandidates(local: string, timezone: string): string[] {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local)
   if (!match) throw new Error('Use a complete date and minute')
   const desired = match.slice(1).map(Number)
@@ -19,7 +27,6 @@ export function zonedLocalDateTimeToIso(local: string, timezone: string): string
     || normalized.getUTCMinutes() !== desired[4]
   ) throw new Error('Use a valid local date and minute')
 
-  let instant = wanted
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -28,15 +35,15 @@ export function zonedLocalDateTimeToIso(local: string, timezone: string): string
     const values = Object.fromEntries(formatter.formatToParts(new Date(value)).map((part) => [part.type, part.value]))
     return [Number(values.year), Number(values.month), Number(values.day), Number(values.hour), Number(values.minute)]
   }
-  for (let pass = 0; pass < 4; pass += 1) {
-    const observedParts = partsAt(instant)
-    const observed = Date.UTC(observedParts[0], observedParts[1] - 1, observedParts[2], observedParts[3], observedParts[4])
-    instant += wanted - observed
+  const offsets = new Set<number>()
+  for (let hour = -36; hour <= 36; hour += 1) {
+    const probe = wanted + hour * 3600000
+    const p = partsAt(probe)
+    offsets.add(Date.UTC(p[0], p[1] - 1, p[2], p[3], p[4]) - probe)
   }
-  if (partsAt(instant).some((value, index) => value !== desired[index])) {
-    throw new Error('That local time does not exist in the configured timezone')
-  }
-  return new Date(instant).toISOString()
+  return [...offsets].map(offset => wanted - offset)
+    .filter(instant => partsAt(instant).every((value, index) => value === desired[index]))
+    .sort((a, b) => a - b).map(instant => new Date(instant).toISOString())
 }
 
 /**

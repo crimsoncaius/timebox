@@ -899,7 +899,9 @@ private fun BlockCard(
             ) {
                 Text(
                     text = buildString {
-                        append(block.primaryIdentity())
+                        append(if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && block.lane == Lane.Actual)
+                            block.name?.takeIf { it.isNotBlank() } ?: block.taskTypeName
+                        else block.primaryIdentity())
                         block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
                     },
                     style = if (selected) {

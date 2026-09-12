@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { activityDevelopmentEnabled, getActivityRepository } from "../features/activity/activityRepository";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
@@ -33,16 +34,22 @@ export function Layout({
         setWorkModeAvailable(readStoredWorkMode() != null || active != null);
       })
       .catch(() => setToday(null));
+    const unsubscribe = activityDevelopmentEnabled ? getActivityRepository().subscribe(() => {
+      const snapshot = getActivityRepository().getSnapshot().snapshot
+      if (snapshot) setToday(new Intl.DateTimeFormat('en-CA', { timeZone: snapshot.reporting_timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(getActivityRepository().now())))
+    }) : () => {}
     const refresh = () => setWorkModeAvailable(readStoredWorkMode() != null)
     window.addEventListener(WORK_MODE_CHANGED_EVENT, refresh)
     window.addEventListener('storage', refresh)
     return () => {
+      unsubscribe()
       window.removeEventListener(WORK_MODE_CHANGED_EVENT, refresh)
       window.removeEventListener('storage', refresh)
     }
   }, []);
 
   useEffect(() => {
+    if (activityDevelopmentEnabled) return;
     const touch = () => {
       const stored = readStoredWorkMode()
       if (!stored) return
@@ -149,7 +156,7 @@ export function Layout({
             </h2>
           </div>
           <div className="flex items-center gap-3 text-on-surface dark:text-dark-on-surface">
-            {planningActive ? (
+            {activityDevelopmentEnabled ? null : planningActive ? (
               <div data-work-mode-action className="text-right">
                 <button type="button" disabled aria-describedby="work-mode-disabled-reason" className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary opacity-40">
                   {workModeAvailable ? "Work Mode" : "Start Work Mode"}

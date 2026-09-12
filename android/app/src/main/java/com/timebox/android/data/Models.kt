@@ -55,6 +55,8 @@ data class TimeBlock(
     val startMinute: Int,
     val endMinute: Int,
     val name: String? = null,
+    val actualBlockIds: List<Int> = emptyList(),
+    val actualDurationMinutes: Double = 0.0,
 ) {
     val durationMinutes: Int get() = endMinute - startMinute
 }
@@ -116,6 +118,7 @@ data class ActualBlockDayProjection(
     val startMinute: Int,
     val endMinute: Int,
     val durationMinutes: Int,
+    val dayLengthMinutes: Int = 1440,
 )
 
 data class LinkedTask(
@@ -235,6 +238,8 @@ fun TimeBlockDto.toModel() = TimeBlock(
     note = note,
     plannedBlockId = plannedBlockId,
     actualBlockId = actualBlockId,
+    actualBlockIds = actualBlockIds,
+    actualDurationMinutes = actualDurationMinutes,
     startMinute = startMinute,
     endMinute = endMinute,
     name = name,
@@ -268,6 +273,7 @@ fun ActualBlockDayProjectionDto.toModel() = ActualBlockDayProjection(
     startMinute = startMinute,
     endMinute = endMinute,
     durationMinutes = durationMinutes,
+    dayLengthMinutes = dayLengthMinutes,
 )
 
 private fun ActualBlockDayProjectionDto.toTimelineBlock() = TimeBlock(

@@ -34,6 +34,8 @@ class TimeBlockRead(BaseModel):
     note: str | None = None
     planned_block_id: int | None = None
     actual_block_id: int | None = None
+    actual_block_ids: list[int] = []
+    actual_duration_minutes: float = 0
     start_minute: int | None = Field(None, ge=0, le=1440)
     end_minute: int | None = Field(None, ge=0, le=1440)
     start_at: datetime | None = None
@@ -54,6 +56,8 @@ class PlannedBlockRead(BaseModel):
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
     actual_block_id: int | None = None
+    actual_block_ids: list[int] = []
+    actual_duration_minutes: float = 0
     created_at: datetime
     updated_at: datetime
 
@@ -147,7 +151,8 @@ class ActualBlockDayProjectionRead(BaseModel):
     date: date
     start_minute: int = Field(..., ge=0, le=1440)
     end_minute: int = Field(..., ge=0, le=1440)
-    duration_minutes: int = Field(..., ge=0, le=1440)
+    duration_minutes: int = Field(..., ge=0)
+    day_length_minutes: int = 1440
 
 
 class ActualBlockDayRead(BaseModel):
@@ -188,3 +193,4 @@ class TimeBlockPatch(BaseModel):
         if not isinstance(value, str):
             return value
         return value.strip() or None
+

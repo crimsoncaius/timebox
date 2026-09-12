@@ -29,7 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Snackbar
+import com.timebox.android.ui.components.TransientFeedback
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -331,9 +331,7 @@ internal fun PlanningWorkspace(
         }
         val message = if (noSpace) "No available space in this time range" else dropFailure
         if (message != null) {
-            Snackbar(Modifier.align(Alignment.BottomCenter).padding(8.dp)) {
-                Text(message)
-            }
+            TransientFeedback(message, Modifier.align(Alignment.BottomCenter).padding(8.dp), isError = true)
         }
     }
 }

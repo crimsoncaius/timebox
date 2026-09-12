@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val window: DayWindowSettings? = null,
     val timezone: String? = null,
+    val reportingZoneInput: String = "",
     val baseUrlInput: String = "",
     val apiKeyInput: String = "",
     val connectionDirty: Boolean = false,
@@ -48,6 +49,10 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
                     it.copy(baseUrlInput = stored.baseUrl, apiKeyInput = stored.apiKey, dailyReminders = reminders)
                 }
             }
+            if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) runCatching { repository.getActivity() }.fold(
+                onSuccess = { snapshot -> _state.update { it.copy(timezone = snapshot.reportingTimezone, reportingZoneInput = snapshot.reportingTimezone) } },
+                onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
+            )
             repository.getWindowSettings().fold(
                 onSuccess = { window ->
                     _state.update { it.copy(window = window, loading = false, error = null) }
@@ -55,6 +60,22 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
                 onFailure = { e ->
                     _state.update { it.copy(loading = false, error = e.apiError.message) }
                 },
+            )
+        }
+    }
+
+    fun changeReportingZone(value: String) = _state.update { it.copy(reportingZoneInput = value) }
+
+    fun saveReportingZone(onSaved: () -> Unit) {
+        val zone = _state.value.reportingZoneInput.trim()
+        _state.update { it.copy(saving = true) }
+        viewModelScope.launch {
+            runCatching { repository.setReportingTimezone(zone) }.fold(
+                onSuccess = { snapshot ->
+                    _state.update { it.copy(saving = false, timezone = snapshot.reportingTimezone, reportingZoneInput = snapshot.reportingTimezone, message = "Reporting Time Zone saved") }
+                    onSaved()
+                },
+                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
             )
         }
     }

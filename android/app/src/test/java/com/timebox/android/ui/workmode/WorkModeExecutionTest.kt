@@ -24,6 +24,31 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkModeExecutionTest {
     @Test
+    fun `activity cutover rejects every legacy entry and preserves recovery snapshot`() = runTest {
+        org.junit.Assume.assumeTrue(com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV)
+        val clock = FakeClock("2026-08-30T01:17:00Z")
+        val transport = MemoryTransport(day(block(31, 540, 600)))
+        val saved = WorkModeSnapshot("2026-08-30T01:00:00Z", "2026-08-30T01:10:00Z", "2026-08-30T01:15:00Z")
+        val store = MemoryPersistence(saved)
+        val execution = WorkModeExecution(transport, store, backgroundScope, clock::now)
+
+        execution.restore(transport.day)
+        execution.begin(transport.day, force = true)
+        execution.continueEntry(transport.day)
+        execution.resume(transport.day, actual(31, Instant.parse(saved.entryAt)))
+        clock.advance(3600)
+        advanceTimeBy(3600_001)
+        runCurrent()
+
+        assertNull(execution.state.value.session)
+        assertFalse(execution.state.value.visible)
+        assertEquals(saved, store.snapshot)
+        assertTrue(transport.started.isEmpty())
+        assertTrue(transport.created.isEmpty())
+        assertTrue(transport.ended.isEmpty())
+    }
+
+    @Test
     fun `resuming an active Actual without its Planned origin preserves snapshotted name`() = runTest {
         val clock = FakeClock("2026-08-30T01:17:00Z")
         val transport = MemoryTransport(day()).also {

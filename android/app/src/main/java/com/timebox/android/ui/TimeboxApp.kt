@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.Snackbar
+import com.timebox.android.ui.components.TransientFeedback
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -32,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -92,8 +95,9 @@ fun TimeboxApp(
     readinessCoordinator: ReadyToPlanCoordinator,
     imeVisibleOverride: Boolean? = null,
 ) {
-    val factory = remember(repository, taskCompletion, readinessCoordinator) {
-        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator)
+    val activityRepository = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository else null
+    val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository) {
+        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository)
     }
     val navController = rememberNavController()
 
@@ -106,6 +110,26 @@ fun TimeboxApp(
     val recurringViewModel: RecurringViewModel = viewModel(factory = factory)
     val recurringEditorViewModel: RecurringEditorViewModel = viewModel(factory = factory)
     val dayState by dayViewModel.state.collectAsState()
+    val focusController = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).focusController else null
+    val focusState = focusController?.state?.collectAsState()?.value
+    val currentActivity = activityRepository?.state?.collectAsState()?.value
+    val focused = focusState?.active == true && currentActivity?.snapshot?.current != null && !dayState.focusPlanningBlocked
+    val checkIns = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).checkIns else null
+    val requestedCheckIn = checkIns?.openQuestion?.collectAsState()?.value
+    LaunchedEffect(requestedCheckIn) {
+        if (requestedCheckIn != null && !focused && activityRepository != null) {
+            val zone = java.time.ZoneId.of(activityRepository.state.value.snapshot?.reportingTimezone ?: "UTC")
+            navController.navigate(AppRoutes.day(activityRepository.now().atZone(zone).toLocalDate())) { launchSingleTop = true }
+        }
+    }
+    val activityApplication = LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
+    LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) {
+        if (activityRepository != null) {
+            activityApplication.recoverLegacyWorkMode(dayViewModel.state.value.focusPlanningBlocked)
+            focusController?.reconcile(activityRepository, dayViewModel.state.value.focusPlanningBlocked)
+        }
+    }
+
     val chronicleState by chronicleViewModel.state.collectAsState()
     val typesState by typesViewModel.state.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
@@ -271,6 +295,7 @@ fun TimeboxApp(
         containsText = true,
         containsControls = true,
     ) ?: 10_000L
+    val trackingScope = rememberCoroutineScope()
     val context = LocalContext.current
     val reducedMotion = Settings.Global.getFloat(
         context.contentResolver,
@@ -288,7 +313,7 @@ fun TimeboxApp(
 
     CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
-        Column(
+        if (!focused) Column(
             modifier = Modifier.fillMaxSize().imePadding().then(
                 if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
@@ -352,6 +377,7 @@ fun TimeboxApp(
                             onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,
                             onRetryReadyTasks = dayViewModel::refreshReadyToPlan,
                             onOpenWorkMode = dayViewModel::startWorkMode,
+                            onEnterFocus = { trackingScope.launch { if (activityRepository != null) focusController?.enter(activityRepository) { dayViewModel.state.value.focusPlanningBlocked } } },
                         )
                     }
                     composable(AppRoutes.Chronicle) {
@@ -424,6 +450,14 @@ fun TimeboxApp(
                         val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@composable
                         TaskDetailScreen(
                             state = taskDetailState,
+                            onTrackTask = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && taskDetailState.task?.let { it.status != com.timebox.android.data.TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
+                                trackingScope.launch {
+                                    val activity = (context.applicationContext as com.timebox.android.TimeboxApplication).activityRepository
+                                    val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activity.trackTask(taskDetailState.task!!) }
+                                    if (saved) navController.navigate(AppRoutes.day(LocalDate.now()))
+                                    else snackbarHostState.showSnackbar(activity.state.value.error ?: "Could not start tracking")
+                                }
+                            }) else null,
                             onBack = { navController.popBackStack() },
                             onRetry = { taskDetailViewModel.load(taskId) },
                             onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
@@ -592,6 +626,10 @@ fun TimeboxApp(
                             onConfirmMigrate = typesViewModel::confirmMigrateDelete,
                             onDismissCascade = typesViewModel::dismissCascadePrompt,
                             onRetry = typesViewModel::load,
+                            onRename = typesViewModel::beginRename,
+                            onRenameChange = typesViewModel::changeRename,
+                            onSaveRename = typesViewModel::saveRename,
+                            onCancelRename = typesViewModel::cancelRename,
                         )
                     }
                     composable(AppRoutes.Settings) {
@@ -605,6 +643,8 @@ fun TimeboxApp(
                             onDailyReminderChange = settingsViewModel::updateDailyReminder,
                             onBaseUrlChange = settingsViewModel::onBaseUrlChange,
                             onApiKeyChange = settingsViewModel::onApiKeyChange,
+                            onReportingZoneChange = settingsViewModel::changeReportingZone,
+                            onSaveReportingZone = { settingsViewModel.saveReportingZone { dayViewModel.load(showSpinner = true) } },
                             onSaveConnection = {
                                 settingsViewModel.saveConnection()
                                 dayViewModel.load(showSpinner = true)
@@ -639,22 +679,19 @@ fun TimeboxApp(
             }
         }
 
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp)) { data ->
-            if (data.visuals.actionLabel != null) {
-                Snackbar(
-                    snackbarData = data,
-                    shape = RoundedCornerShape(12.dp),
-                    containerColor = colors.on,
-                    contentColor = colors.bg,
-                    actionColor = colors.bg,
+        // Keep the queued snackbar available while task-scoped Trash recovery owns the slot.
+        if (!withinBattlePlan || battlePlanState.trashUndo == null) {
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp)) { data ->
+                TransientFeedback(
+                    message = data.visuals.message,
+                    modifier = Modifier.semantics {
+                        paneTitle = "Feedback"
+                        dismiss { data.dismiss(); true }
+                    },
+                    actionLabel = data.visuals.actionLabel,
+                    onAction = data::performAction,
+                    onDismiss = if (data.visuals.withDismissAction) data::dismiss else null,
                 )
-            } else {
-                Box(
-                    Modifier.padding(horizontal = 16.dp).background(colors.on, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                ) {
-                    Text(data.visuals.message, style = TimeboxTheme.type.bodySmall, color = colors.bg)
-                }
             }
         }
 
@@ -671,6 +708,7 @@ fun TimeboxApp(
             }
         }
 
+        if (focused) com.timebox.android.ui.focus.FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
         dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
             WorkModeScreen(
                 state = workMode,

@@ -11,6 +11,18 @@ import retrofit2.http.Query
 
 interface TimeboxApi {
 
+    @POST("activity/reporting-timezone/initialize")
+    suspend fun initializeReportingTimezone(@Body body: ReportingTimezoneDto): ActivitySnapshotDto
+
+    @retrofit2.http.PUT("activity/reporting-timezone")
+    suspend fun setReportingTimezone(@Body body: ReportingTimezoneDto): ActivitySnapshotDto
+
+    @GET("activity")
+    suspend fun getActivity(): ActivitySnapshotDto
+
+    @POST("activity/commands")
+    suspend fun activityCommand(@Body body: ActivityCommandDto): ActivitySnapshotDto
+
     @POST("days/plan")
     suspend fun commitPlan(@Body body: PlanningCommitDto): PlanningCommitResponseDto
 
@@ -80,6 +92,9 @@ interface TimeboxApi {
 
     @POST("task-types")
     suspend fun createTaskType(@Body body: TaskTypeCreateDto): TaskTypeDto
+
+    @PATCH("task-types/{id}")
+    suspend fun renameTaskType(@Path("id") id: Int, @Body body: TaskTypeCreateDto): TaskTypeDto
 
     @DELETE("task-types/{id}")
     suspend fun deleteTaskType(

@@ -1,6 +1,6 @@
 # Timebox
 
-Timebox plans intended work, records actual work, and tracks the tasks that those periods of work may advance.
+Timebox plans intended activities, records time spent on work and non-work activities, and tracks the tasks that those activities may advance.
 
 ## Language
 
@@ -29,19 +29,51 @@ A non-exhaustive, first-level execution checkpoint within a Parent Task. It is n
 _Avoid_: Child task, nested task
 
 **Task Type**:
-The reusable category of work represented by a Planned Block or Actual Block. Every Block has one; `unspecified` is the neutral category when the user does not care to classify it.
+The reusable category of work represented by a Planned Block or Actual Block. Every Block has one; `unspecified` is the fixed, non-renamable and undeletable neutral category when the user does not care to classify it.
 _Avoid_: Task, tag, Block Name
+
+**Task Type Rename**:
+A change to an existing Task Type's name that preserves its identity and associated work, including historical Planned Blocks and Actual Blocks, which display the new name. Renaming a hierarchical path also renames its descendants and may move the branch under another parent.
+_Avoid_: Reclassification, Task Type replacement
 
 **Block Name**:
 An optional user-defined identity for one Planned Block or Actual Block, distinct from its reusable Task Type and supporting Note. It remains the Block's own identity regardless of Battle Plan Task linkage.
 _Avoid_: Label, title, tag, Task Type
 
+**Transient Feedback**:
+A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app task reminders; it excludes validation, persistent errors, loading states, and native OS notifications.
+_Avoid_: Toast, notification, banner
+
+**Transient Feedback Variant**:
+The semantic form of Transient Feedback: general feedback, destructive undo, recoverable failure, or navigational feedback. Variants share a visual family while retaining their own actions, urgency, lifetime, and dismissal behavior.
+_Avoid_: One-size-fits-all toast
+
 **Work Mode**:
-A full-screen, present-tense execution surface that follows the current time and surfaces the active or next Planned Block for today. It opens independently of any Battle Plan Task entry point.
+The legacy execution surface that combines plan-following time recording with an immersive view. Its successor separates Activity Tracking from Focus Mode.
 _Avoid_: Task detail, Task status, timer mode
 
+**Activity Tracking**:
+Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
+_Avoid_: Work Mode, Focus session
+
+**Current Activity**:
+The work or non-work activity represented by the running Actual Block, using its Block Name, Task Type, and optional Battle Plan Task linkage. It may be unnamed and unclassified.
+_Avoid_: Current Task, Activity catalog
+
+**Reporting Time Zone**:
+The shared time zone used to divide recorded activity between calendar days on all devices. Changing it changes daily attribution without changing elapsed time.
+_Avoid_: Device time zone
+
+**Inactivity Prompt**:
+A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting. It is distinct from the Focus Mode question used to name an unknown activity.
+_Avoid_: Periodic check-in, Transient Feedback
+
+**Focus Mode**:
+An optional device-local immersive surface for the shared Current Activity, intended to stay visible while the user works with minimal interaction. It is separate from Activity Tracking and has a deliberate, always-available exit that leaves tracking running.
+_Avoid_: Work Mode, Tracking mode
+
 **Day Planning**:
-The daily activity of allocating Planned Blocks to intended work. It is performed on the Day surface and is distinct from Work Mode.
+The daily activity of allocating Planned Blocks to intended activities. It is performed on the Day surface and can coexist with Activity Tracking.
 _Avoid_: Plan Mode, scheduling reminder
 
 **Day Review**:

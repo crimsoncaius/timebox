@@ -77,6 +77,9 @@ def delete_task_type(
         )
     try:
         from app.services import recurrence_service
+        row = task_type_service.get_task_type(db, task_type_id)
+        if row is not None and row.name == "unspecified":
+            raise ValueError("The unspecified task type cannot be deleted")
         task_count = battle_plan_service.task_type_counts(db).get(task_type_id, 0)
         template_count = recurrence_service.template_type_counts(db).get(task_type_id, 0)
         if (task_count or template_count) and not clear_task_references:

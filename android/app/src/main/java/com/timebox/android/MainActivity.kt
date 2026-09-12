@@ -46,6 +46,14 @@ class MainActivity : ComponentActivity() {
         notificationsAllowed = canDisplayNotifications()
 
         lifecycleScope.launch {
+            if (BuildConfig.ACTIVITY_TRACKING_DEV) repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { (application as TimeboxApplication).checkIns.tick() }
+                    delay(30_000)
+                }
+            }
+        }
+        lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 val app = application as TimeboxApplication
                 while (true) {
@@ -90,6 +98,21 @@ class MainActivity : ComponentActivity() {
                     readinessCoordinator = application.readinessCoordinator,
                 )
             }
+        }
+        openCheckIn(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openCheckIn(intent)
+    }
+
+    private fun openCheckIn(intent: Intent?) {
+        if (!BuildConfig.ACTIVITY_TRACKING_DEV) return
+        intent?.getStringExtra(com.timebox.android.checkin.CheckInNotifier.QUESTION)?.let { id ->
+            lifecycleScope.launch { (application as TimeboxApplication).checkIns.open(id) }
+            intent.removeExtra(com.timebox.android.checkin.CheckInNotifier.QUESTION)
         }
     }
 

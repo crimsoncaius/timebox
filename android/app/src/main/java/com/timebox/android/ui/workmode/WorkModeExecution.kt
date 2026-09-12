@@ -107,6 +107,7 @@ class WorkModeExecution(
         private set
 
     suspend fun begin(day: Day, force: Boolean = false) {
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) return
         if (_state.value.session != null) {
             _state.update { it.copy(visible = true) }
             return
@@ -134,6 +135,10 @@ class WorkModeExecution(
     }
 
     suspend fun restore(day: Day) {
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
+            restorationComplete = true
+            return
+        }
         if (restoreChecked) return
         restoreChecked = true
         val snapshot = persistence.load()
@@ -258,6 +263,9 @@ class WorkModeExecution(
     }
 
     private suspend fun enter(day: Day, entryAt: Instant, active: ActualBlock? = null) {
+        // All legacy entry paths, including resume and continue-entry, stop here
+        // after cutover. Focus owns restoration without changing saved recovery data.
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) return
         val now = clock()
         val (clockCurrent, clockNext) = selection(day, now)
         val current = active?.let { activeBlock(day, it, now) } ?: clockCurrent

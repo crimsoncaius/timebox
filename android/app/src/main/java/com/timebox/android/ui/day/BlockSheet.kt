@@ -68,6 +68,10 @@ fun BlockSheet(
     onOpenLinkedTask: (Int) -> Unit,
     allowComplete: Boolean = true,
 ) {
+    if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
+        ActivityActualEditor(state, onDismiss)
+        return
+    }
     val colors = TimeboxTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val isDraft = state.draft != null
@@ -171,6 +175,9 @@ fun BlockSheet(
             )
 
             Spacer(Modifier.height(18.dp))
+            state.selectedBlock?.takeIf { it.lane == Lane.Planned && it.actualBlockIds.isNotEmpty() }?.let {
+                Text("${it.actualBlockIds.size} linked Actual Blocks · ${it.actualDurationMinutes.toInt()}m recorded", color = colors.onVariant)
+            }
             val linkedTask = state.selectedBlock?.task
             val linkedTaskId = linkedTask?.id
             if (linkedTaskId != null) {

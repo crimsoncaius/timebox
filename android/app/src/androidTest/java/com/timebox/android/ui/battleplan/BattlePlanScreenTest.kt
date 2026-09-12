@@ -244,6 +244,49 @@ class BattlePlanScreenTest {
     }
 
     @Test
+    fun composerCloseSkipsConfirmationForEmptyDraft() {
+        var dismisses = 0
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskComposerOverlay(
+                    state = BattlePlanUiState(showComposer = true, composerDraft = TaskComposerDraft()),
+                    notificationsAllowed = true,
+                    onRequestNotificationPermission = {},
+                    onDraftChange = {},
+                    onReminderEnabledChange = {},
+                    onDismiss = { dismisses++ },
+                    onCreate = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Close new task composer").performClick()
+        compose.runOnIdle { check(dismisses == 1) }
+    }
+
+    @Test
+    fun composerCloseConfirmsMeaningfulChanges() {
+        var dismisses = 0
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskComposerOverlay(
+                    state = BattlePlanUiState(showComposer = true, composerDraft = TaskComposerDraft(title = "Prepare launch notes", dirty = true)),
+                    notificationsAllowed = true,
+                    onRequestNotificationPermission = {},
+                    onDraftChange = {},
+                    onReminderEnabledChange = {},
+                    onDismiss = { dismisses++ },
+                    onCreate = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Close new task composer").performClick()
+        compose.onNodeWithText("Discard new task?").fetchSemanticsNode()
+        compose.runOnIdle { check(dismisses == 0) }
+    }
+
+    @Test
     fun pendingReadyToPlanControlAnnouncesSavingAndStillAllowsReversal() {
         val toggled = mutableListOf<Int>()
         compose.setContent {
@@ -1115,7 +1158,7 @@ class BattlePlanScreenTest {
 
         compose.onNodeWithText("Draft launch brief moved to Trash").fetchSemanticsNode()
         compose.onNodeWithText("Undo").assertIsEnabled()
-        compose.onNodeWithText("Dismiss").assertIsEnabled()
+        compose.onNodeWithContentDescription("Dismiss").assertIsEnabled()
     }
 
     @Test
@@ -1137,9 +1180,10 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Could not restore Draft launch brief. Restore unavailable").fetchSemanticsNode()
+        compose.onNodeWithText("Could not restore Draft launch brief").fetchSemanticsNode()
+        compose.onNodeWithText("Restore unavailable").fetchSemanticsNode()
         compose.onNodeWithText("Retry").assertIsEnabled()
-        compose.onNodeWithText("Dismiss").assertIsEnabled()
+        compose.onNodeWithContentDescription("Dismiss").assertIsEnabled()
     }
 
     @Test
@@ -1157,7 +1201,7 @@ class BattlePlanScreenTest {
 
         compose.onNodeWithText("Restoring Draft launch brief").fetchSemanticsNode()
         compose.onNodeWithText("Restoring…").assertIsNotEnabled()
-        compose.onNodeWithText("Dismiss").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Dismiss").assertIsNotEnabled()
     }
 
     @Test

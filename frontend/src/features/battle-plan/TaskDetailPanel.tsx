@@ -1,3 +1,4 @@
+import { activityDevelopmentEnabled, getActivityRepository } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -90,6 +91,7 @@ export function TaskDetailPanel({
   const [draft, setDraft] = useState<TaskDraft>(initialDraft)
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
+  const [trackingError, setTrackingError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [showAllPlannedDates, setShowAllPlannedDates] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
@@ -280,6 +282,11 @@ export function TaskDetailPanel({
 
         <div className="grid min-[720px]:grid-cols-[minmax(0,1fr)_22rem]">
           <main className="flex min-w-0 flex-col gap-6 px-5 py-7 min-[480px]:px-9 min-[720px]:px-9 min-[720px]:py-8">
+            {activityDevelopmentEnabled && task.recurrence_kind !== 'quota_parent' ? <button type="button" disabled={isDirty || isSaving} onClick={async () => {
+              if (await getActivityRepository().trackTask(task)) requestClose()
+              else setTrackingError(getActivityRepository().state.error ?? 'Could not start tracking')
+            }}>Track Task</button> : null}
+            {trackingError ? <p role="alert">{trackingError}</p> : null}
             {error ? <div role="alert" className="rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
             <div>
               <p className="mb-2.5 font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Task details</p>

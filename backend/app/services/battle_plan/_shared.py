@@ -74,13 +74,13 @@ def _task_select(task_id: int, *, for_update: bool = False):
             selectinload(Task.subtasks).selectinload(Task.time_blocks).selectinload(TimeBlock.day),
             selectinload(Task.subtasks)
             .selectinload(Task.time_blocks)
-            .selectinload(TimeBlock.completion_actual),
+            .selectinload(TimeBlock.completion_actuals),
             selectinload(Task.project),
             selectinload(Task.occurrence),
             selectinload(Task.task_type),
             selectinload(Task.time_blocks).selectinload(TimeBlock.day),
             selectinload(Task.time_blocks)
-            .selectinload(TimeBlock.completion_actual),
+            .selectinload(TimeBlock.completion_actuals),
         )
         .where(Task.id == task_id)
     )

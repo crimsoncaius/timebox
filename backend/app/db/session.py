@@ -91,8 +91,6 @@ def _session_factory():
 
 
 def get_db() -> Generator[Session, None, None]:
-    db = _session_factory()()
-    try:
+    from app.db.activity_admission import admission
+    with admission(get_engine()) as connection, Session(bind=connection, autoflush=False) as db:
         yield db
-    finally:
-        db.close()
