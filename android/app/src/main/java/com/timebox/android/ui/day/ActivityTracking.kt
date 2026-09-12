@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 fun ActivityTracking(
     taskTypes: List<TaskType>, onChanged: () -> Unit,
     repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
-    focus: Boolean = false, planning: Boolean = false, onEnterFocus: () -> Unit = {},
+    focus: Boolean = false, focusTask: @Composable (@Composable () -> Unit) -> Unit = { elapsed -> elapsed() }, planning: Boolean = false, onEnterFocus: () -> Unit = {},
 ) {
     val state by repository.state.collectAsState()
     val owner = LocalLifecycleOwner.current
@@ -79,77 +79,94 @@ fun ActivityTracking(
     var expanded by remember(current?.id) { mutableStateOf(false) }
     BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
     val colors = TimeboxTheme.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-        if (focus && current != null) {
-            Text(current.name ?: current.taskType.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.on)
-            Text("${Duration.between(parseActivityInstant(current.startAt), now).toMinutes().coerceAtLeast(0)}m", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.onVariant)
-        }
-        if (!focus) {
-            CurrentActivityControl(
-                activity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
-                elapsed = current?.let { "${Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)}m" }.orEmpty(),
-                running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
-                onToggle = { expanded = !expanded },
-                onStart = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } },
-                onSwitch = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
-                onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
-                onFocus = { expanded = false; onEnterFocus() },
-            )
-        } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                if (current == null) {
-                    TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } }) { Text("Start tracking") }
-                } else {
-                    TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch") }
+    val content: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth().padding(horizontal = if (focus) 0.dp else 20.dp)) {
+            if (focus && current != null) {
+                Spacer(Modifier.height(36.dp))
+                if (current.taskType.name != "unspecified") Text(current.taskType.name.uppercase(), style = TimeboxTheme.type.kicker, color = colors.actual)
+                Spacer(Modifier.height(16.dp))
+                Text(current.name?.takeIf { it.isNotBlank() } ?: current.taskType.name.takeUnless { it == "unspecified" } ?: "What are you doing?",
+                    style = TimeboxTheme.type.display, color = colors.on)
+                val elapsed: @Composable () -> Unit = {
+                    Spacer(Modifier.height(28.dp))
+                    HorizontalDivider(color = colors.hairline)
+                    Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val seconds = Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0)
+                        Text("%d:%02d".format(seconds / 60, seconds % 60), style = TimeboxTheme.type.display, color = colors.on)
+                        Text("elapsed", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(bottom = 5.dp))
+                    }
+                }
+                focusTask(elapsed)
+            }
+            if (!focus) {
+                CurrentActivityControl(
+                    activity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
+                    elapsed = current?.let { "${Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)}m" }.orEmpty(),
+                    running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
+                    onToggle = { expanded = !expanded },
+                    onStart = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } },
+                    onSwitch = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
+                    onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
+                    onFocus = { expanded = false; onEnterFocus() },
+                )
+            }
+            if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
+            if (focus && current != null && state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
+                Text("Optional screen-off detection needs usage access. Recording continues without it.")
+                TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(android.net.Uri.parse("package:${context.packageName}"))) }) { Text("Enable screen-off detection") }
+            }
+            if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
+            if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
+                Text("Recording continues while you decide.")
+                availableTypes.forEach { type -> TextButton(onClick = { selectedType = type }) { Text((if (selectedType?.id == type.id) "Selected: " else "") + type.name) } }
+                Text("Apply from the original start (${current.startAt}) describes all this activity. Start now keeps preceding unspecified time.")
+                Button(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Describe, selectedType!!.id, observedTargetId = id) } }) { Text("Apply from original start") }
+                TextButton(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, observedTargetId = id) } }) { Text("Start now") }
+            }
+            if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
+                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {
+                    Text("Planned now: ${plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name} · Switch")
                 }
             }
-        }
-        if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
-        if (focus && current != null && state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
-            Text("Optional screen-off detection needs usage access. Recording continues without it.")
-            TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(android.net.Uri.parse("package:${context.packageName}"))) }) { Text("Enable screen-off detection") }
-        }
-        if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
-        if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
-            Text("What are you doing right now?", style = MaterialTheme.typography.headlineSmall)
-            Text("Recording continues while you decide.")
-            availableTypes.forEach { type -> TextButton(onClick = { selectedType = type }) { Text((if (selectedType?.id == type.id) "Selected: " else "") + type.name) } }
-            Text("Apply from the original start (${current.startAt}) describes all this activity. Start now keeps preceding unspecified time.")
-            Button(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Describe, selectedType!!.id, observedTargetId = id) } }) { Text("Apply from original start") }
-            TextButton(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, observedTargetId = id) } }) { Text("Start now") }
-        }
-        if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
-            TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {
-                Text("Planned now: ${plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name} · Switch")
+            if (focus || expanded) current?.plannedBlockId?.let { id ->
+                val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
+                val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
+                Text("${linked.size} linked Actual Blocks · ${minutes}m recorded", color = colors.onVariant)
             }
-        }
-        if (focus || expanded) current?.plannedBlockId?.let { id ->
-            val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
-            val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
-            Text("${linked.size} linked Actual Blocks · ${minutes}m recorded", color = colors.onVariant)
-        }
-        if (state.busy) Text("Saving…", color = colors.onVariant)
-        state.feedback?.let { Text(it, color = colors.onVariant) }
-        if (!focus && state.rejectedRecovery != null) {
-            TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }
-            if (reviewingRejected) {
-                Text("These changes were not replayed. Use Day add/edit to correct the saved timeline.")
-                Text(state.rejectedRecovery!!)
+            if (state.busy) Text("Saving…", color = colors.onVariant)
+            state.feedback?.let { Text(it, color = colors.onVariant) }
+            if (!focus && state.rejectedRecovery != null) {
+                TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }
+                if (reviewingRejected) {
+                    Text("These changes were not replayed. Use Day add/edit to correct the saved timeline.")
+                    Text(state.rejectedRecovery!!)
+                }
             }
-        }
-        if (!focus && state.legacyRecovery != null) {
-            TextButton(onClick = { reviewingLegacy = !reviewingLegacy }) { Text("Review old Work Mode data") }
-            if (reviewingLegacy) {
-                Text("Saved device observations, not recorded time. Use Day add/edit for corrections.")
-                Text(state.legacyRecovery!!)
+            if (!focus && state.legacyRecovery != null) {
+                TextButton(onClick = { reviewingLegacy = !reviewingLegacy }) { Text("Review old Work Mode data") }
+                if (reviewingLegacy) {
+                    Text("Saved device observations, not recorded time. Use Day add/edit for corrections.")
+                    Text(state.legacyRecovery!!)
+                }
             }
-        }
-        if (state.offline || state.pending || state.snapshot == null) Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else "Connection required", color = colors.onVariant)
-        if (state.error != null || state.pending) {
-            Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
-            TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }
+            if (state.offline || state.pending || state.snapshot == null) Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else "Connection required", color = colors.onVariant)
+            if (state.error != null || state.pending) {
+                Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
+                TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }
+            }
         }
     }
+    if (focus) {
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { content() }
+            FilledTonalButton(
+                enabled = enabled && current != null,
+                onClick = { current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp).heightIn(min = 48.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.low, contentColor = colors.on),
+            ) { Text("Switch activity", style = TimeboxTheme.type.button) }
+        }
+    } else content()
     if (question != null && current != null && checkInOpen) ModalBottomSheet(onDismissRequest = { dismissCheckIn() }) {
         Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Text("Still doing this?", style = MaterialTheme.typography.headlineLarge)

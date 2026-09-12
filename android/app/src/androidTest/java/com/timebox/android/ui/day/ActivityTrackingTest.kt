@@ -41,9 +41,9 @@ class ActivityTrackingTest {
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = true) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithText("Stop").assertDoesNotExist()
-        compose.onNodeWithText("What are you doing right now?").assertIsDisplayed()
+        compose.onNodeWithText("What are you doing?").assertIsDisplayed()
         compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
-        compose.onNodeWithText("Switch").performClick()
+        compose.onNodeWithText("Switch activity").performClick()
         compose.onNodeWithText("Block Name (optional)").assertIsDisplayed()
         androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()

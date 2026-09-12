@@ -73,4 +73,24 @@ class ActivityCorrectionTest {
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         assertEquals("2026-09-11T12:00:00Z", repository.state.value.snapshot!!.records.single().endAt)
     }
+    @Test fun focusKeepsSwitchAccessibleWithLongTaskAndPreservesRecordingOnCancel() {
+        val current = row.copy(startAt = "2026-09-11T12:00:00Z", endAt = null)
+        val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = "2026-09-11T12:15:00Z", reportingTimezone = "UTC", current = current, records = listOf(current), taskTypes = listOf(type))
+        val repository = repository(snapshot)
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                ActivityTracking(emptyList(), {}, repository, focus = true, focusTask = {
+                    repeat(30) { Text("Long Subtask $it") }
+                })
+            }
+        }
+        compose.onNodeWithText("Activity Tracking on").assertDoesNotExist()
+        compose.onNodeWithText("Stop").assertDoesNotExist()
+        compose.onNodeWithText("Switch activity").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Switch activity").assertIsDisplayed()
+        assertEquals(current, repository.state.value.snapshot!!.current)
+        assertFalse(repository.state.value.pending)
+    }
+
 }
