@@ -150,3 +150,17 @@ webfont; the glyph names map one-to-one.
   the background and acknowledges notifications after successful delivery.
 - **Overlaps are rejected by the server.** Dragging a block onto another in the same
   lane returns 422 and the timeline snaps back with a message.
+
+## Logging past time
+
+Tap unused time in the Actual lane to open **Log time**. The sheet shows start/end
+clock and date pickers, the elapsed duration in the Reporting Time Zone, and the
+same search-or-create Task Type picker used by Planned Blocks. Block Name and Note
+are under optional details. Selecting a type updates the draft; **Log** saves the
+Actual Block. Creating a new Task Type saves that reusable type immediately, as in
+the Planned Block picker. Recording time does not complete a Battle Plan Task.
+
+The accepted creation design is variant A with typed Task Type suggestions. Its
+throwaway source is preserved on `codex/log-time-prototype` at `bec3f15`; only the
+native implementation is included here. This implements the creation portion of
+issue #163; the existing recorded-block detail flow remains separate.

@@ -1,6 +1,8 @@
 package com.timebox.android.ui.day
 
 import com.timebox.android.data.parseActivityInstant
+import com.timebox.android.data.TaskType
+import com.timebox.android.data.toModel
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +44,29 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
     var saving by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val typeRepository = (LocalContext.current.applicationContext as TimeboxApplication).repository
+    var createdTypes by remember { mutableStateOf(emptyList<TaskType>()) }
+    var typeQuery by remember { mutableStateOf("") }
+    val taskTypes = (snapshot.snapshot?.taskTypes.orEmpty().map { it.toModel() } + createdTypes).distinctBy { it.id }
+    val createType: (String) -> Unit = { path ->
+        if (!saving) scope.launch {
+            saving = true
+            error = null
+            try {
+                val created = typeRepository.createTaskType(path).getOrThrow()
+                createdTypes = createdTypes + created
+                type = created.id
+                typeQuery = created.name
+                repository.refresh()
+            } catch (cause: kotlinx.coroutines.CancellationException) {
+                throw cause
+            } catch (cause: Exception) {
+                error = cause.message ?: "Could not create Task Type."
+            } finally {
+                saving = false
+            }
+        }
+    }
     val colors = TimeboxTheme.colors
     val save: () -> Unit = {
         scope.launch {
@@ -50,6 +75,7 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
             try {
                 val a = start.resolve(zone)
                 val b = end.resolve(zone)
+                require(b > a) { "End must be after start." }
                 val saved = withContext(Dispatchers.IO) {
                     repository.correct(if (actual == null) ActivityKind.Add else ActivityKind.Edit,
                         actual?.id, a.toString(), b.toString(), type, name.trim().ifBlank { null },
@@ -69,7 +95,7 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
     ModalBottomSheet(
         onDismissRequest = { if (!saving) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = if (actual != null) colors.bg else MaterialTheme.colorScheme.surface,
+        containerColor = colors.bg,
         contentColor = colors.on,
         shape = TimeboxShapes.sheet,
     ) {
@@ -136,28 +162,25 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                     Button(enabled = !saving, onClick = save, modifier = Modifier.weight(1f)) { Text(if (saving) "Saving…" else "Save changes") }
                 }
             }
+        } else if (actual == null) {
+            LogTimeForm(
+                start = start, end = end, zone = zone, taskTypes = taskTypes, selectedTypeId = type,
+                query = typeQuery, name = name, note = note, saving = saving, error = error,
+                onStart = { start = it }, onEnd = { end = it },
+                onQuery = { if (!saving) typeQuery = it },
+                onChooseType = { if (!saving) { type = it.id; typeQuery = it.name } },
+                onCreateType = createType, onName = { name = it.take(500) }, onNote = { note = it },
+                onSave = save, onDismiss = onDismiss,
+            )
         } else {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (actual == null) "New Actual Block" else "Actual Block", style = MaterialTheme.typography.titleLarge)
-                Text("Reporting Time Zone: $zone")
-                if (actual != null && actual.endAt == null) Text("Use Switch or Stop above the Day timeline to correct the Current Activity.") else {
-                    ActivityTimeField("Start", start, zone) { start = it }
-                    ActivityTimeField("End", end, zone) { end = it }
-                    Text("Task Type")
-                    snapshot.snapshot?.taskTypes.orEmpty().forEach { item ->
-                        Row { RadioButton(type == item.id, { type = item.id }); TextButton(onClick = { type = item.id }) { Text(item.name) } }
-                    }
-                    OutlinedTextField(name, { name = it.take(500) }, label = { Text("Block Name (optional)") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(note, { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth())
-                    actual?.task?.let { Text("Task: ${it.title} · Task Completion stays independent.") }
-                    error?.let { Text(it) }
-                    Button(enabled = !saving, onClick = save, modifier = Modifier.fillMaxWidth()) { Text(if (actual == null) "Create block" else "Save changes") }
-                    if (actual != null) TextButton(enabled = !saving, onClick = { deleting = true }) { Text("Delete") }
-                }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Current Activity", style = TimeboxTheme.type.screenTitle)
+                Text("Use Switch or Stop above the Day timeline to correct the Current Activity.")
+                TextButton(onClick = onDismiss) { Text("Close") }
             }
         }
     }
+
     if (deleting) AlertDialog(onDismissRequest = { if (!saving) deleting = false }, title = { Text("Delete Actual Block?") }, text = { Text("This time will be unrecorded. Adjacent activities stay unchanged.") },
         dismissButton = { TextButton(enabled = !saving, onClick = { deleting = false }) { Text("Cancel") } }, confirmButton = {
             TextButton(enabled = !saving, onClick = { scope.launch {

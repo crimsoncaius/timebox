@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.timebox.android.ui.theme.TimeboxTheme
+import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalContext
 import com.timebox.android.data.ReportingTime
 import java.time.Instant
@@ -26,28 +30,40 @@ data class ActivityTimeValue(val local: String, val occurrence: ReportingTime.Oc
 }
 
 @Composable
-fun ActivityTimeField(label: String, value: ActivityTimeValue, zone: ZoneId, onChange: (ActivityTimeValue) -> Unit) {
+fun ActivityTimeField(label: String, value: ActivityTimeValue, zone: ZoneId, compact: Boolean = false, enabled: Boolean = true, onChange: (ActivityTimeValue) -> Unit) {
     val context = LocalContext.current
     val local = runCatching { LocalDateTime.parse(value.local) }.getOrNull()
     val candidates = local?.let { ReportingTime.candidates(it, zone) }.orEmpty()
     Column {
-        OutlinedTextField(value.local, { onChange(ActivityTimeValue(it)) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Row {
-            TextButton(onClick = {
-                val selected = local ?: LocalDateTime.now(zone)
-                DatePickerDialog(context, { _, year, month, day -> onChange(ActivityTimeValue(java.time.LocalDate.of(year, month + 1, day).atTime(selected.toLocalTime()).toString())) }, selected.year, selected.monthValue - 1, selected.dayOfMonth).show()
-            }) { Text("$label date") }
-            TextButton(onClick = {
-                val selected = local ?: LocalDateTime.now(zone)
-                TimePickerDialog(context, { _, hour, minute -> onChange(ActivityTimeValue(selected.withHour(hour).withMinute(minute).withSecond(0).withNano(0).toString())) }, selected.hour, selected.minute, true).show()
-            }) { Text("$label time") }
+        val chooseDate = {
+            val selected = local ?: LocalDateTime.now(zone)
+            DatePickerDialog(context, { _, year, month, day -> onChange(ActivityTimeValue(java.time.LocalDate.of(year, month + 1, day).atTime(selected.toLocalTime()).toString())) }, selected.year, selected.monthValue - 1, selected.dayOfMonth).show()
+        }
+        val chooseTime = {
+            val selected = local ?: LocalDateTime.now(zone)
+            TimePickerDialog(context, { _, hour, minute -> onChange(ActivityTimeValue(selected.withHour(hour).withMinute(minute).withSecond(0).withNano(0).toString())) }, selected.hour, selected.minute, true).show()
+        }
+        if (compact) {
+            Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+            TextButton(enabled = enabled, onClick = { chooseTime() }, modifier = Modifier.semantics { contentDescription = "$label time" }) {
+                Text(local?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Choose time", style = TimeboxTheme.type.screenTitle)
+            }
+            TextButton(enabled = enabled, onClick = { chooseDate() }, modifier = Modifier.semantics { contentDescription = "$label date" }) {
+                Text(local?.format(DateTimeFormatter.ofPattern("d MMM yyyy")) ?: "Choose date", style = TimeboxTheme.type.bodySmall)
+            }
+        } else {
+            OutlinedTextField(value.local, { onChange(ActivityTimeValue(it)) }, enabled = enabled, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Row {
+                TextButton(enabled = enabled, onClick = { chooseDate() }) { Text("$label date") }
+                TextButton(enabled = enabled, onClick = { chooseTime() }) { Text("$label time") }
+            }
         }
         if (candidates.size > 1) {
             Text("This time occurs twice. Choose an occurrence.")
             ReportingTime.Occurrence.entries.forEach { occurrence ->
                 Row {
-                    RadioButton(value.occurrence == occurrence, { onChange(value.copy(occurrence = occurrence, original = null)) })
-                    TextButton(onClick = { onChange(value.copy(occurrence = occurrence, original = null)) }) { Text("${occurrence.name} · ${if (occurrence == ReportingTime.Occurrence.Earlier) candidates.first() else candidates.last()}") }
+                    RadioButton(value.occurrence == occurrence, enabled = enabled, onClick = { onChange(value.copy(occurrence = occurrence, original = null)) })
+                    TextButton(enabled = enabled, onClick = { onChange(value.copy(occurrence = occurrence, original = null)) }) { Text("${occurrence.name} · ${if (occurrence == ReportingTime.Occurrence.Earlier) candidates.first() else candidates.last()}") }
                 }
             }
         } else if (local != null && candidates.isEmpty()) Text("That local time does not exist in $zone.")
