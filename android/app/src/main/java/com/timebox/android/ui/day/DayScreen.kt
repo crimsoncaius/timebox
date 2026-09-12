@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -111,6 +112,9 @@ fun DayScreen(
 
         if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
             ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
+            Spacer(Modifier.height(8.dp))
         }
         Box(Modifier.weight(1f)) {
             if (state.isPlanningMode) {
