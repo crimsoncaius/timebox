@@ -42,6 +42,7 @@ fun ActivityTracking(
     var reviewingLegacy by remember { mutableStateOf(false) }
     var reviewingRejected by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
+    var stopSaving by remember { mutableStateOf(false) }
     var targetId by remember { mutableStateOf<Int?>(null) }
     var timing by remember { mutableStateOf<ActivityTimeValue?>(null) }
     var timingError by remember { mutableStateOf<String?>(null) }
@@ -242,42 +243,32 @@ fun ActivityTracking(
             }
         },
     )
-    if (stopping) ModalBottomSheet(onDismissRequest = { switching = false; stopping = false }) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (stopping) "Stop tracking" else "Switch activity", style = MaterialTheme.typography.titleLarge)
-            if (!stopping) {
-            Text("Task Type", style = MaterialTheme.typography.labelLarge)
-            availableTypes.forEach { type ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = selectedType?.id == type.id, onClick = { selectedType = type })
-                    TextButton(onClick = { selectedType = type }) { Text(type.name) }
-                }
-            }
-            OutlinedTextField(value = name, onValueChange = { if (it.length <= 500) name = it }, label = { Text("Block Name (optional)") }, modifier = Modifier.fillMaxWidth())
-            }
-            val zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC")
-            Text("When did this ${if (stopping) "stop" else "change"} happen?")
-            Row {
-                TextButton(onClick = { timing = null }) { Text("Now") }
-                TextButton(onClick = { timing = ActivityTimeValue.from(now.minusSeconds(900), zone) }) { Text("15 min ago") }
-                TextButton(onClick = { timing = ActivityTimeValue.from(now, zone) }) { Text("Choose time") }
-            }
-            timing?.let { ActivityTimeField("Change", it, zone) { next -> timing = next } } ?: Text("Now")
-            Text("After this change", style = MaterialTheme.typography.titleMedium)
-            Text("${current?.name ?: current?.taskType?.name} ends ${timing?.local ?: "now"}.")
-            Text(if (stopping) "Time after this is unrecorded." else "${name.ifBlank { selectedType?.name ?: "Next activity" }} starts at the same time and continues.")
-            timingError?.let { Text(it) }
-            Button(enabled = enabled && (stopping || selectedType != null), onClick = {
+    val stopTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
+    if (stopping && stopTarget != null) StopTrackingSheet(
+        activity = stopTarget.name?.takeIf { it.isNotBlank() } ?: stopTarget.taskType.name,
+        start = parseActivityInstant(stopTarget.startAt), timing = timing,
+        onTimingChange = { timing = it; timingError = null }, now = now,
+        zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
+        enabled = enabled, busy = stopSaving || state.busy, error = timingError,
+        onDismiss = { stopping = false },
+        onConfirm = {
+            if (!stopSaving) {
+                stopSaving = true
                 scope.launch {
                     try {
-                        val at = timing?.resolve(zone)
-                        if (withContext(Dispatchers.IO) { repository.command(if (stopping) ActivityKind.Stop else ActivityKind.Switch, if (stopping) null else selectedType!!.id, if (stopping) null else name, effectiveAt = at, observedTargetId = targetId) }) {
-                            switching = false; stopping = false; selectedType = null; name = ""
+                        val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
+                        if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Stop, effectiveAt = at, observedTargetId = targetId) }) {
+                            stopping = false
                         } else timingError = repository.state.value.error
-                    } catch (error: Exception) { timingError = error.message }
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        timingError = error.message
+                    } finally {
+                        stopSaving = false
+                    }
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text(if (stopping) "Stop tracking" else "Switch activity") }
-            TextButton(onClick = { switching = false; stopping = false }) { Text("Cancel") }
-        }
-    }
+            }
+        },
+    )
 }
