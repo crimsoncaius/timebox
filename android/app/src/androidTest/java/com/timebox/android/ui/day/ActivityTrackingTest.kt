@@ -183,8 +183,8 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
-        compose.onNodeWithText("After this change").assertExists()
-        compose.onNode(hasText("Stop tracking") and hasClickAction()).performScrollTo().performClick()
+        compose.onNodeWithText("Time after this will be unrecorded.").assertExists()
+        compose.onNode(hasText("Stop tracking") and hasClickAction()).assertIsDisplayed().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         compose.onNodeWithText("Start tracking").assertIsDisplayed()
         assertEquals(listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop), commands.map { it.kind })

@@ -61,15 +61,18 @@ class ActivityCorrectionTest {
         val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = "2026-09-11T12:15:00Z", reportingTimezone = "UTC", current = current, records = listOf(current), taskTypes = listOf(type))
         val repository = repository(snapshot)
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
+        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithText("15 min ago").performClick()
-        compose.onNodeWithText("After this change").assertExists()
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("10:00 – 12:00").assertExists()
+        compose.onNodeWithText("120 min").assertExists()
+        compose.onNodeWithText("Cancel").performClick()
         assertFalse(repository.state.value.pending)
         assertEquals(current, repository.state.value.snapshot!!.current)
+        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithText("15 min ago").performClick()
-        compose.onNode(hasText("Stop tracking") and hasClickAction()).performScrollTo().performClick()
+        compose.onNode(hasText("Stop at 12:00") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         assertEquals("2026-09-11T12:00:00Z", repository.state.value.snapshot!!.records.single().endAt)
     }
