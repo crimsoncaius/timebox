@@ -31,7 +31,10 @@ class ActivityTrackingTest {
         assertEquals(row, repository.state.value.snapshot!!.current)
     }
 
-    @Test fun focusUnknownPromptIsTypeOnlyAndBackDismissesSwitchSheet() {
+    @Test fun focusUnknownPromptIsTypeOnlyAndBackDismissesSwitchSheet() = verifyUnknownActivity(false)
+    @Test fun focusDescribeFromNowPreservesEarlierUnspecifiedTime() = verifyUnknownActivity(true)
+
+    private fun verifyUnknownActivity(fromNow: Boolean) {
         val at = "2026-09-11T10:00:00Z"
         val type = TaskTypeDto(1, "unspecified")
         val row = ActualBlockDto(7, 1, type, startAt = at, createdAt = at, updatedAt = at)
@@ -41,17 +44,26 @@ class ActivityTrackingTest {
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = true) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithText("Stop").assertDoesNotExist()
-        compose.onNodeWithText("What are you doing right now?").assertIsDisplayed()
+        compose.onNodeWithText("What are you doing?").assertIsDisplayed()
         compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
-        compose.onNodeWithText("Switch").performClick()
+        compose.onNodeWithText("Switch activity").performClick()
         compose.onNodeWithText("Block Name (optional)").assertIsDisplayed()
         androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
         assertEquals(7, repository.state.value.snapshot!!.current!!.id)
+        compose.onNodeWithText("Reading").assertDoesNotExist()
+        compose.onNodeWithText("From the start").assertDoesNotExist()
+        compose.onNodeWithText("Choose activity").performClick()
         compose.onNodeWithText("Reading").performClick()
-        compose.onNodeWithText("Apply from original start").performClick()
+        if (fromNow) compose.onNodeWithText("From now").performScrollTo().performClick()
+        compose.onNodeWithText("Apply activity").performScrollTo().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskType?.name == "Reading" }
-        assertEquals(at, repository.state.value.snapshot!!.current!!.startAt)
+        if (fromNow) {
+            val earlier = repository.state.value.snapshot!!.records.single { it.id == 7 }
+            assertEquals("unspecified", earlier.taskType.name)
+            assertNotNull(earlier.endAt)
+            assertEquals(earlier.endAt, repository.state.value.snapshot!!.current!!.startAt)
+        } else assertEquals(at, repository.state.value.snapshot!!.current!!.startAt)
     }
 
     @get:Rule val compose = createComposeRule()
