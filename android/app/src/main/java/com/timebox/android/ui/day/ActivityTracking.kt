@@ -61,6 +61,10 @@ fun ActivityTracking(
         if (state.feedback != null) { delay(6000); repository.dismissFeedback() }
     }
     val current = state.snapshot?.current
+    val unknown = current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified"
+    var describing by remember(current?.id) { mutableStateOf(false) }
+    var describeFromNow by remember(current?.id) { mutableStateOf(false) }
+    var focusOptions by remember { mutableStateOf(false) }
     val question = state.snapshot?.checkIn?.question
     var checkInOpen by remember(question?.id) { mutableStateOf(question != null && !repository.checkInDismissed(question.id)) }
     val checkIns = (LocalContext.current.applicationContext as? TimeboxApplication)?.checkIns
@@ -87,6 +91,7 @@ fun ActivityTracking(
                 Spacer(Modifier.height(16.dp))
                 Text(current.name?.takeIf { it.isNotBlank() } ?: current.taskType.name.takeUnless { it == "unspecified" } ?: "What are you doing?",
                     style = TimeboxTheme.type.display, color = colors.on)
+                if (unknown) Text("Choose an activity whenever you’re ready.", style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 12.dp))
                 val elapsed: @Composable () -> Unit = {
                     Spacer(Modifier.height(28.dp))
                     HorizontalDivider(color = colors.hairline)
@@ -111,17 +116,11 @@ fun ActivityTracking(
                 )
             }
             if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
-            if (focus && current != null && state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
-                Text("Optional screen-off detection needs usage access. Recording continues without it.")
-                TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(android.net.Uri.parse("package:${context.packageName}"))) }) { Text("Enable screen-off detection") }
-            }
             if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
-            if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
-                Text("Recording continues while you decide.")
-                availableTypes.forEach { type -> TextButton(onClick = { selectedType = type }) { Text((if (selectedType?.id == type.id) "Selected: " else "") + type.name) } }
-                Text("Apply from the original start (${current.startAt}) describes all this activity. Start now keeps preceding unspecified time.")
-                Button(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Describe, selectedType!!.id, observedTargetId = id) } }) { Text("Apply from original start") }
-                TextButton(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, observedTargetId = id) } }) { Text("Start now") }
+            if (focus && unknown) {
+                OutlinedButton(enabled = enabled, onClick = { describing = true }, modifier = Modifier.padding(top = 12.dp).heightIn(min = 48.dp)) {
+                    Text("Choose activity", style = TimeboxTheme.type.button, color = colors.on)
+                }
             }
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
                 TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {
@@ -165,8 +164,56 @@ fun ActivityTracking(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp).heightIn(min = 48.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.low, contentColor = colors.on),
             ) { Text("Switch activity", style = TimeboxTheme.type.button) }
+            TextButton(onClick = { focusOptions = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Focus options", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            }
         }
     } else content()
+    if (describing && unknown) ModalBottomSheet(onDismissRequest = { describing = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Describe this activity", style = TimeboxTheme.type.screenTitle, color = colors.on)
+            Text("What have you been doing?", style = TimeboxTheme.type.body, color = colors.onVariant)
+            availableTypes.filter { it.name != "unspecified" }.forEach { type ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = selectedType?.id == type.id, onClick = { selectedType = type }, enabled = enabled)
+                    TextButton(onClick = { selectedType = type }, enabled = enabled) { Text(type.name, style = TimeboxTheme.type.body, color = colors.on) }
+                }
+            }
+            if (availableTypes.none { it.name != "unspecified" }) Text("Add a Task Type in Types to describe this activity.", style = TimeboxTheme.type.body, color = colors.onVariant)
+            HorizontalDivider(color = colors.hairline)
+            Text("Apply to", style = TimeboxTheme.type.sectionTitle, color = colors.on)
+            val started = java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm").withZone(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC")).format(parseActivityInstant(current.startAt))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = !describeFromNow, onClick = { describeFromNow = false }, enabled = enabled)
+                Column { TextButton(onClick = { describeFromNow = false }, enabled = enabled) { Text("From the start", color = colors.on) }; Text("All this time, since $started", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = describeFromNow, onClick = { describeFromNow = true }, enabled = enabled)
+                Column { TextButton(onClick = { describeFromNow = true }, enabled = enabled) { Text("From now", color = colors.on) }; Text("Keep earlier time unspecified", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
+            }
+            state.error?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error) }
+            Button(enabled = enabled && selectedType != null, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = {
+                val id = current.id
+                val typeId = selectedType!!.id
+                val kind = if (describeFromNow) ActivityKind.Switch else ActivityKind.Describe
+                scope.launch { if (withContext(Dispatchers.IO) { repository.command(kind, typeId, observedTargetId = id) }) describing = false }
+            }) { Text("Apply activity") }
+            TextButton(onClick = { describing = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Cancel") }
+        }
+    }
+    if (focusOptions) ModalBottomSheet(onDismissRequest = { focusOptions = false }) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Focus options", style = TimeboxTheme.type.screenTitle, color = colors.on)
+            com.timebox.android.ui.focus.FocusWakeSettings()
+            if (state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
+                HorizontalDivider(color = colors.hairline)
+                Text("Screen-off detection", style = TimeboxTheme.type.sectionTitle, color = colors.on)
+                Text("Allow usage access for optional inactivity check-ins. Recording works without it.", style = TimeboxTheme.type.body, color = colors.onVariant)
+                OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(android.net.Uri.parse("package:${context.packageName}"))) }) { Text("Enable screen-off detection") }
+            }
+            TextButton(onClick = { focusOptions = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Done") }
+        }
+    }
     if (question != null && current != null && checkInOpen) ModalBottomSheet(onDismissRequest = { dismissCheckIn() }) {
         Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Text("Still doing this?", style = MaterialTheme.typography.headlineLarge)
