@@ -72,12 +72,22 @@ fun SettingsScreen(
             .padding(horizontal = TimeboxDimens.screenPadding)
             .padding(bottom = TimeboxDimens.bottomInset),
     ) {
-        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) SectionCard {
+        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
             com.timebox.android.ui.focus.FocusWakeSettings()
+            Spacer(Modifier.height(12.dp))
             com.timebox.android.ui.day.CheckInSettings()
-            SectionHeader(title = "Reporting Time Zone", description = "Shared by all devices. Changes recalculate daily shares without changing recorded times or elapsed duration. Travel does not change it.")
-            OutlinedTextField(value = state.reportingZoneInput, onValueChange = onReportingZoneChange, label = { Text("Reporting Time Zone") }, modifier = Modifier.fillMaxWidth())
-            TextButton(onClick = onSaveReportingZone, enabled = !state.saving && state.reportingZoneInput.isNotBlank() && state.reportingZoneInput != state.timezone) { Text("Save time zone") }
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                SectionHeader(title = "Reporting Time Zone", description = "Shared by all devices. Travel does not change it. Recorded times and elapsed duration stay the same.")
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    ConnectionField(value = state.reportingZoneInput, onValueChange = onReportingZoneChange, label = "Reporting Time Zone", placeholder = "Asia/Singapore")
+                    PrimaryButton(text = "Save time zone", onClick = onSaveReportingZone, enabled = !state.saving && state.reportingZoneInput.isNotBlank() && state.reportingZoneInput != state.timezone, modifier = Modifier.fillMaxWidth())
+                }
+            }
+            Spacer(Modifier.height(12.dp))
         }
         val window = state.window
         when {
