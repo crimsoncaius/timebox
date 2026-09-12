@@ -2,6 +2,7 @@ package com.timebox.android.ui.day
 
 import com.timebox.android.data.parseActivityInstant
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -76,29 +76,40 @@ fun ActivityTracking(
     val plan = repository.currentPlan()
     val enabled = !state.busy && state.snapshot != null
     val availableTypes = state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes
+    var expanded by remember(current?.id) { mutableStateOf(false) }
+    BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         if (focus && current != null) {
             Text(current.name ?: current.taskType.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.on)
             Text("${Duration.between(parseActivityInstant(current.startAt), now).toMinutes().coerceAtLeast(0)}m", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.align(Alignment.CenterHorizontally), color = colors.onVariant)
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            if (current == null) {
-                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } }) { Text("Start tracking") }
-            } else {
-                if (!focus) Text(current.name ?: current.taskType.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.on)
-                if (!focus) Text("${Duration.between(parseActivityInstant(current.startAt), now).toMinutes().coerceAtLeast(0)}m", color = colors.onVariant)
-                TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch") }
-                if (!focus) TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; stopping = true }) { Text("Stop") }
+        if (!focus) {
+            CurrentActivityControl(
+                activity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
+                elapsed = current?.let { "${Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)}m" }.orEmpty(),
+                running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
+                onToggle = { expanded = !expanded },
+                onStart = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } },
+                onSwitch = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
+                onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
+                onFocus = { expanded = false; onEnterFocus() },
+            )
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                if (current == null) {
+                    TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } }) { Text("Start tracking") }
+                } else {
+                    TextButton(enabled = enabled, onClick = { targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch") }
+                }
             }
-            if (!focus) TextButton(enabled = enabled && !planning, onClick = onEnterFocus) { Text("Focus") }
         }
-        if (question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
-        if (current != null && state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
+        if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
+        if (focus && current != null && state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
             Text("Optional screen-off detection needs usage access. Recording continues without it.")
             TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(android.net.Uri.parse("package:${context.packageName}"))) }) { Text("Enable screen-off detection") }
         }
-        if (!focus && planning) Text("Finish or cancel planning to enter Focus.")
+        if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
         if (focus && current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified") {
             Text("What are you doing right now?", style = MaterialTheme.typography.headlineSmall)
             Text("Recording continues while you decide.")
@@ -107,12 +118,12 @@ fun ActivityTracking(
             Button(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Describe, selectedType!!.id, observedTargetId = id) } }) { Text("Apply from original start") }
             TextButton(enabled = selectedType != null, onClick = { val id = current.id; scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, observedTargetId = id) } }) { Text("Start now") }
         }
-        if (current != null && plan != null && current.plannedBlockId != plan.id) {
+        if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
             TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {
                 Text("Planned now: ${plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name} · Switch")
             }
         }
-        current?.plannedBlockId?.let { id ->
+        if (focus || expanded) current?.plannedBlockId?.let { id ->
             val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
             val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
             Text("${linked.size} linked Actual Blocks · ${minutes}m recorded", color = colors.onVariant)
@@ -133,7 +144,7 @@ fun ActivityTracking(
                 Text(state.legacyRecovery!!)
             }
         }
-        Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else if (state.snapshot != null) "Synced" else "Connection required", color = colors.onVariant)
+        if (state.offline || state.pending || state.snapshot == null) Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else "Connection required", color = colors.onVariant)
         if (state.error != null || state.pending) {
             Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
             TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }

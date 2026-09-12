@@ -82,6 +82,9 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.feedback != null }
         compose.onNodeWithText("Reading").assertIsDisplayed()
         compose.onNodeWithText("A newer change on another device updated this time.").assertIsDisplayed()
+        compose.onNodeWithText("Stop").assertDoesNotExist()
+        compose.onNodeWithText("Synced").assertDoesNotExist()
+        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").assertIsEnabled()
         assertFalse(repository.state.value.pending)
         assertNull(repository.state.value.error)
@@ -115,12 +118,15 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Start tracking").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == 4 }
         compose.onNodeWithText("Chapter").assertIsDisplayed()
-        compose.onNodeWithText("Switch").performClick()
+        compose.onNodeWithText("Current activity").performClick()
+        compose.onNodeWithText("Switch activity").performClick()
         compose.onNodeWithText("Writing").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
+        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Planned now: Chapter · Switch").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
+        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("2 linked Actual Blocks", substring = true).assertIsDisplayed()
         assertEquals(7, repository.state.value.snapshot?.current?.taskId)
     }
@@ -155,11 +161,13 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Start tracking").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
         compose.onNodeWithText("unspecified").assertIsDisplayed()
-        compose.onNodeWithText("Switch").performClick()
+        compose.onNodeWithText("Current activity").performClick()
+        compose.onNodeWithText("Switch activity").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).assertIsNotEnabled()
         compose.onNodeWithText("reading").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
+        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithText("After this change").assertExists()
         compose.onNode(hasText("Stop tracking") and hasClickAction()).performScrollTo().performClick()
