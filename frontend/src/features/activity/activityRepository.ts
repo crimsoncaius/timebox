@@ -1,7 +1,7 @@
 import { ApiHttpError, fetchJson } from '../../lib/api/client'
 import type { ActualBlock, TaskType } from '../../lib/api'
 
-export const activityDevelopmentEnabled = (import.meta.env.DEV || import.meta.env.MODE === 'activity-review') && import.meta.env.VITE_ACTIVITY_TRACKING_DEV === '1'
+export const activityDevelopmentEnabled = true
 export interface ActivityPlan {
   id: number; task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string
 }

@@ -4,16 +4,18 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
+from app.models.activity import ActivityState
 from app.schemas.activity import ActivityCommand, ActivitySnapshot
 from app.services import activity_service
 
 
-def require_development(settings: Settings = Depends(get_settings)):
-    if not settings.activity_tracking_dev:
-        raise HTTPException(404, "Activity development protocol is disabled")
+def require_activity(db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    state = db.get(ActivityState, 1)
+    if not settings.activity_tracking_dev and not (state and state.enabled):
+        raise HTTPException(404, "Activity Tracking requires database upgrade")
 
 
-router = APIRouter(prefix="/activity", tags=["activity"], dependencies=[Depends(require_development)])
+router = APIRouter(prefix="/activity", tags=["activity"], dependencies=[Depends(require_activity)])
 
 
 @router.get("", response_model=ActivitySnapshot)

@@ -92,7 +92,7 @@ if ($readyResponse.StatusCode -ne 200 -or $readyBody.status -ne "ready") {
     throw "API readiness check failed."
 }
 $today = (Invoke-RestMethod -Uri "http://127.0.0.1:8001/health" -TimeoutSec 5).today
-Invoke-RestMethod -Uri "http://127.0.0.1:8001/days/$today" -TimeoutSec 10 | Out-Null
+Invoke-RestMethod -Uri "http://127.0.0.1:8001/days/$today" -Headers @{ 'X-Timebox-Protocol' = 'activity-online-v1' } -TimeoutSec 10 | Out-Null
 Invoke-TimeboxPortObservation -Project $repositoryRoot -Purpose "API" -State "verified-running" -Detail "Repository launcher verified this workspace API on TCP 8001; /ready and /days/$today succeeded."
 
 $frontendProcess = Assert-TimeboxListenerIdentity -Purpose frontend -Port 5176 -RepositoryRoot $repositoryRoot
@@ -107,7 +107,7 @@ if (-not $frontendProcess) {
 }
 $frontendResponse = Wait-TimeboxHttp -Uri "http://127.0.0.1:5176/" -TimeoutSeconds 30
 if ($frontendResponse.StatusCode -ne 200) { throw "Frontend root did not return HTTP 200." }
-Invoke-RestMethod -Uri "http://127.0.0.1:5176/api/days/$today" -TimeoutSec 10 | Out-Null
+Invoke-RestMethod -Uri "http://127.0.0.1:5176/api/days/$today" -Headers @{ 'X-Timebox-Protocol' = 'activity-online-v1' } -TimeoutSec 10 | Out-Null
 Invoke-TimeboxPortObservation -Project $frontendRoot -Purpose "dev" -State "verified-running" -Detail "Repository launcher verified this workspace Vite process on TCP 5176 and /api/days/$today through the API proxy."
 
 $androidStatus = "skipped"

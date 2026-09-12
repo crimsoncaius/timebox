@@ -3,8 +3,7 @@ function apiPrefix(): string {
 }
 
 function protocolHeaders(): Record<string, string> {
-  return (import.meta.env.DEV || import.meta.env.MODE === 'activity-review') && import.meta.env.VITE_ACTIVITY_TRACKING_DEV === '1'
-    ? { 'X-Timebox-Protocol': 'activity-online-v1' } : {}
+  return { 'X-Timebox-Protocol': 'activity-online-v1' }
 }
 
 /** Avoid hung "Loading today…" when the API is down or the dev proxy cannot connect. */

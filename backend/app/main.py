@@ -81,8 +81,7 @@ app.include_router(activity.router, dependencies=_protected)
 
 @app.get("/health")
 def health(db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict[str, str]:
-    if settings.activity_tracking_dev:
-        settings = reporting_settings(db, settings)
+    settings = reporting_settings(db, settings)
     return {
         "status": "ok",
         "today": today_in_tz(settings.app_timezone).isoformat(),

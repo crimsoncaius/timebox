@@ -11,6 +11,18 @@ from app.services import activity_cutover
 from test_activity_api import tracking, command
 
 
+def test_cutover_enables_tracking_without_development_flag(client):
+    activity_cutover.apply(get_engine(), "Asia/Singapore")
+    snapshot = client.get("/activity")
+    assert snapshot.status_code == 200
+    assert snapshot.json()["reporting_timezone"] == "Asia/Singapore"
+    started = client.post("/activity/commands", json=command(snapshot.json(), "start"))
+    assert started.status_code == 200
+    assert started.json()["current"] is not None
+    assert client.get("/health").json()["timezone"] == "Asia/Singapore"
+    assert client.post("/actual-blocks/start", json={}).status_code == 426
+
+
 def test_import_preserves_grid_history_running_identity_and_reporting_zone(tracking):
     with Session(get_engine()) as db:
         type_ = TaskType(name="writing")

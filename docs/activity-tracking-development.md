@@ -1,5 +1,21 @@
 # Activity Tracking: online development slice
 
+## Current application behavior
+
+Activity Tracking and Focus are now the default Android and web experience.
+Normal Android debug builds install as `com.timebox.android`, use API port
+`8001`, and show **Start tracking** and **Focus** above the Day timeline.
+Release builds include the same controls. No build property is required.
+The retained Android build constant and web export are always true; their
+development names are compatibility names for existing call sites.
+
+An upgraded database's persistent enabled marker admits the Activity API
+without `ACTIVITY_TRACKING_DEV`. Existing databases still require explicit,
+backed-up conversion through `activity_cutover.apply`; startup never silently
+converts legacy history. The regular local database was backed up and converted
+on 2026-09-12, preserving its three Actual records and Asia/Singapore reporting
+zone. The instructions below describe the earlier isolated development setup.
+
 The durable offline/restart extension and current review-bundle launch are in
 [Activity Tracking offline development](activity-tracking-offline.md).
 
