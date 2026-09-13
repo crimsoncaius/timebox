@@ -129,7 +129,7 @@ fun DayTimeline(
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
-    val slotHeight = TimeboxDimens.slotHeight
+    val slotHeight = LocalTimelineExperiment.current ?: TimeboxDimens.slotHeight
     val slots = day.slotCount
     val totalHeight = slotHeight * slots
 
@@ -321,6 +321,7 @@ private fun LaneColumn(
     onReturnPlanningDraft: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val experiment = LocalTimelineExperiment.current != null
     val colors = TimeboxTheme.colors
     val surface = if (lane == Lane.Planned) colors.plannedSurface else colors.actualSurface
     val borderColor = if (lane == Lane.Planned) colors.plannedBorder else colors.actualBorder
@@ -344,7 +345,7 @@ private fun LaneColumn(
                     Modifier
                 }
             )
-            .pointerInput(day.visibleStart, day.visibleEnd, lane) {
+            .pointerInput(day.visibleStart, day.visibleEnd, lane, slotHeight) {
                 detectTapGestures { offset ->
                     val rawMinute = day.visibleStart + offset.y / slotPx * SLOT_MINUTES
                     val minute = snapToBlockInteractionStep(rawMinute)
@@ -384,14 +385,14 @@ private fun LaneColumn(
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
-                moveEnabled = blockGesturesEnabled,
-                resizeEnabled = blockGesturesEnabled,
+                moveEnabled = blockGesturesEnabled && !(experiment && block.id == 999),
+                resizeEnabled = blockGesturesEnabled && !(experiment && block.id == 999),
                 onTap = { onSelectBlock(block.id) },
                 // Both callbacks recompute from the block's committed times and the raw
                 // gesture delta. Reading the drag state here instead would capture the
                 // value from when the gesture started — always null — and never commit.
                 onDrag = { mode, deltaPx ->
-                    resolveSavedBlockDrag(mode, deltaPx, slotPx, block, day).also(onDragChange)
+                    resolveSavedBlockDrag(mode, deltaPx, slotPx, block, day, experiment).also(onDragChange)
                 },
                 onDragEnd = { resolved ->
                     onDragChange(null)
@@ -502,6 +503,7 @@ private fun resolveDrag(
     slotPx: Float,
     block: TimeBlock,
     day: Day,
+    experiment: Boolean = false,
 ): Pair<Int, Int> = applyDrag(
     mode = mode,
     deltaMinutes = snapBlockDeltaMinutes(deltaPx, slotPx),
@@ -509,7 +511,7 @@ private fun resolveDrag(
     originalEnd = block.endMinute,
     visibleStart = day.visibleStart,
     visibleEnd = day.visibleEnd,
-    minimumDuration = if (block.lane == Lane.Planned) {
+    minimumDuration = if (experiment) 1 else if (block.lane == Lane.Planned) {
         MIN_PLANNED_BLOCK_MINUTES
     } else {
         MIN_ACTUAL_BLOCK_MINUTES
@@ -523,8 +525,9 @@ private fun resolveSavedBlockDrag(
     slotPx: Float,
     block: TimeBlock,
     day: Day,
+    experiment: Boolean = false,
 ): DragState? {
-    val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
+    val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day, experiment)
     val previewStart = if (mode == DragMode.Move && block.lane == Lane.Planned) {
         nearestSavedPlannedBlockDragStart(day, block.id, start, end - start)
     } else {
@@ -799,8 +802,11 @@ private fun BlockCard(
     val haptics = LocalHapticFeedback.current
     val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
     val slotsTall = (endMinute - startMinute).toFloat() / SLOT_MINUTES
-    val height = max(slotHeight.value * slotsTall, slotHeight.value).dp
-    val innerHeight = height - TimeboxDimens.grooveHeight * 2
+    val experiment = LocalTimelineExperiment.current != null
+    val height = if (experiment) max(slotHeight.value * slotsTall, 1f).dp
+        else max(slotHeight.value * slotsTall, slotHeight.value).dp
+    val grooves = !experiment || height >= 64.dp || dragging
+    val innerHeight = height - if (grooves) TimeboxDimens.grooveHeight * 2 else 0.dp
     val elevation = when {
         dragging -> 16.dp
         selected -> 8.dp
@@ -822,6 +828,8 @@ private fun BlockCard(
             .clip(TimeboxShapes.block)
             .background(
                 when {
+                    experiment && height < 22.dp ->
+                        (if (block.lane == Lane.Planned) colors.planned else colors.actual).copy(alpha = 0.65f)
                     dragging || selected -> colors.paperRaised
                     else -> colors.paper
                 }
@@ -844,7 +852,7 @@ private fun BlockCard(
             // handler owns all of them. Edge presses resize immediately; a body press
             // still arms movement with a long press. Movement before body arming remains
             // available to the surrounding timeline scroll and day pager.
-            .pointerInput(block.id, block.startMinute, block.endMinute, moveEnabled, resizeEnabled) {
+            .pointerInput(block.id, block.startMinute, block.endMinute, moveEnabled, resizeEnabled, slotHeight) {
                 var mode = DragMode.Move
                 var total = 0f
                 detectLongPressArmedDragGestures(
@@ -853,19 +861,19 @@ private fun BlockCard(
                     },
                     onTap = { onTap() },
                     gestureEnabled = { down ->
-                        when (dragModeForPress(down.y)) {
+                        when (if (grooves) dragModeForPress(down.y) else DragMode.Move) {
                             DragMode.Move -> moveEnabled
                             DragMode.ResizeStart, DragMode.ResizeEnd -> resizeEnabled
                         }
                     },
                     armImmediately = { down ->
-                        resizeEnabled && dragModeForPress(down.y) != DragMode.Move
+                        resizeEnabled && grooves && dragModeForPress(down.y) != DragMode.Move
                     },
                     onDragStart = { down ->
                         // The drawn groove is only 8dp, so the grab zone is given a
                         // little more reach than the paint — but never more than a third
                         // of the card, or a one-slot block would have no move surface.
-                        mode = dragModeForPress(down.y)
+                        mode = if (grooves) dragModeForPress(down.y) else DragMode.Move
                         total = 0f
                         resolvedDrag = null
                         if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot + down.y)
@@ -889,7 +897,7 @@ private fun BlockCard(
             },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Groove()
+            if (grooves) Groove()
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -897,7 +905,7 @@ private fun BlockCard(
                     .padding(horizontal = 8.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(
+                if (!experiment || innerHeight >= 22.dp) Text(
                     text = buildString {
                         append(if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && block.lane == Lane.Actual)
                             block.name?.takeIf { it.isNotBlank() } ?: block.taskTypeName
@@ -946,7 +954,7 @@ private fun BlockCard(
                     )
                 }
             }
-            Groove()
+            if (grooves) Groove()
         }
     }
 }
