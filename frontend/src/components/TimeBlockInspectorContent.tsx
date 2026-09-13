@@ -1,3 +1,4 @@
+import { formatDuration } from '../lib/duration'
 import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
 import { activityDevelopmentEnabled, type ActivityCorrection } from '../features/activity/activityRepository'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -283,7 +284,7 @@ function LegacyTimeBlockInspectorContent({
 
   return (
     <div className={formClassName}>
-      {block?.lane === 'planned' && !!block.actual_block_ids?.length ? <p>{block.actual_block_ids.length} linked Actual Blocks · {Math.floor(block.actual_duration_minutes ?? 0)}m recorded</p> : null}
+      {block?.lane === 'planned' && !!block.actual_block_ids?.length ? <p>{block.actual_block_ids.length} linked Actual Blocks · {formatDuration(Math.floor(block.actual_duration_minutes ?? 0))} recorded</p> : null}
       {/* Header: lane pill + duration pill + close */}
       <div className="flex shrink-0 items-center gap-2">
         <h2

@@ -65,7 +65,7 @@ class ActivityCorrectionTest {
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithText("15 min ago").performClick()
         compose.onNodeWithText("10:00 – 12:00").assertExists()
-        compose.onNodeWithText("120 min").assertExists()
+        compose.onNodeWithText("2 hours").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         assertFalse(repository.state.value.pending)
         assertEquals(current, repository.state.value.snapshot!!.current)

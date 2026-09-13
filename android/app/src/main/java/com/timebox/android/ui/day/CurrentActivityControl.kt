@@ -48,10 +48,10 @@ internal fun CurrentActivityControl(
                 }
                 Text(if (running) activity else "Start tracking", color = colors.on, fontSize = 14.sp, lineHeight = 20.sp,
                     fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (running) Text(elapsed, color = colors.onVariant, fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                    modifier = Modifier.padding(top = 2.dp))
             }
-            if (running) Text(elapsed, color = colors.onVariant, fontSize = 13.sp,
-                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                modifier = Modifier.padding(end = 14.dp))
             Icon(if (running) Icons.Rounded.ExpandMore else Icons.Rounded.PlayArrow, contentDescription = null,
                 tint = colors.onVariant, modifier = Modifier.size(18.dp).rotate(if (running) rotation else 0f))
         }

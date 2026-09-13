@@ -162,10 +162,10 @@ class WorkModeScreenTest {
         }
 
         compose.onNodeWithText("CURRENT").fetchSemanticsNode()
-        compose.onNodeWithText("42:37").fetchSemanticsNode()
-        compose.onNodeWithText("MIN:SEC LEFT").fetchSemanticsNode()
-        compose.onNodeWithText("17:23 elapsed").fetchSemanticsNode()
-        compose.onNodeWithText("60:00 planned").fetchSemanticsNode()
+        compose.onNodeWithText("42 mins 37 secs").fetchSemanticsNode()
+        compose.onNodeWithText("TIME LEFT").fetchSemanticsNode()
+        compose.onNodeWithText("17 mins 23 secs elapsed").fetchSemanticsNode()
+        compose.onNodeWithText("1 hour planned").fetchSemanticsNode()
     }
 
     @Test
@@ -176,7 +176,7 @@ class WorkModeScreenTest {
             }
         }
         compose.onNodeWithText("UP NEXT").fetchSemanticsNode()
-        compose.onNodeWithText("in 09:37", substring = true).fetchSemanticsNode()
+        compose.onNodeWithText("in 9 mins 37 secs", substring = true).fetchSemanticsNode()
     }
 
     @Test

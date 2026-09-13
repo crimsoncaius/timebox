@@ -1,3 +1,4 @@
+import { formatDuration } from '../../lib/duration'
 import type { BattleTask, TimeBlock } from '../../lib/api'
 import { blockPrimaryIdentity, blockSecondaryIdentity } from '../../lib/blockIdentity'
 
@@ -62,7 +63,7 @@ export function WorkMode({ current, next, task, nowMinute, confirming, recording
               <p className="font-label text-xs font-semibold uppercase tracking-[0.18em] text-primary">Up next</p>
               <h1 className="mt-3 font-headline text-4xl font-extralight">{blockTitle(next)}</h1>
               {blockSecondaryIdentity(next) ? <p className="mt-2 text-sm font-medium text-on-surface-variant">{blockSecondaryIdentity(next)}</p> : null}
-              <p className="mt-3 text-on-surface-variant">{formatMinute(next.start_minute)} · {countdown === 0 ? 'starting now' : `in ${countdown} ${countdown === 1 ? 'minute' : 'minutes'}`}</p>
+              <p className="mt-3 text-on-surface-variant">{formatMinute(next.start_minute)} · {countdown === 0 ? 'starting now' : `in ${formatDuration(countdown ?? 0)}`}</p>
             </section>
           ) : (
             <section className="w-full text-center">

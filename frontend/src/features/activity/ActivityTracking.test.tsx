@@ -386,3 +386,18 @@ it('retains a qualified offline candidate and its original question identity acr
   expect(new ActivityRepository(localStorage, work => work()).state.snapshot?.check_in?.question).toBeNull()
   expect(restored.state.snapshot?.current).toEqual(row)
 })
+
+it.each([false, true])('shows three-hour activity without total-minute conversion (focus=%s)', async (focus) => {
+  const at = '2026-09-11T10:00:00Z'
+  const now = '2026-09-11T13:00:07Z'
+  const current = { id: 1, name: 'Writing', task_type_id: 1, task_type: { id: 1, name: 'writing' }, start_at: at, end_at: null }
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+    protocol: 'activity-online-v1', offline_ready: true, cursor: 1, server_at: now, current, records: [current],
+  }))))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  vi.spyOn(repository, 'now').mockReturnValue(Date.parse(now))
+  const view = render(<ActivityTracking focus={focus} repository={repository} taskTypes={[]} onChanged={() => {}} />)
+  expect(screen.getByLabelText('Elapsed time')).toHaveTextContent('3 hours')
+  view.unmount()
+})

@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.elapsedDuration
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -176,7 +178,7 @@ fun BlockSheet(
 
             Spacer(Modifier.height(18.dp))
             state.selectedBlock?.takeIf { it.lane == Lane.Planned && it.actualBlockIds.isNotEmpty() }?.let {
-                Text("${it.actualBlockIds.size} linked Actual Blocks · ${it.actualDurationMinutes.toInt()}m recorded", color = colors.onVariant)
+                Text("${it.actualBlockIds.size} linked Actual Blocks · ${elapsedDuration(it.actualDurationMinutes.toLong())} recorded", color = colors.onVariant)
             }
             val linkedTask = state.selectedBlock?.task
             val linkedTaskId = linkedTask?.id

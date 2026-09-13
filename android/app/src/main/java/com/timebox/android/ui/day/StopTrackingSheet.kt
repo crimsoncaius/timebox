@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.elapsedDuration
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -84,7 +86,7 @@ internal fun StopTrackingSheet(
                             Text("ACTUAL", style = type.laneLabel, color = colors.actual)
                         }
                         Spacer(Modifier.weight(1f))
-                        Text(value?.let { "${it.minutes} min" } ?: "—", style = type.mono, color = colors.onVariant)
+                        Text(value?.let { elapsedDuration(it.minutes) } ?: "—", style = type.mono, color = colors.onVariant)
                     }
                     Text(value?.range ?: "—", style = type.display)
                     value?.dateContext?.let { Text(it, style = type.bodySmall, color = colors.onVariant) }

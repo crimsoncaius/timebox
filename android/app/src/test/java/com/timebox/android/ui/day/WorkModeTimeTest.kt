@@ -5,9 +5,9 @@ import org.junit.Test
 
 class WorkModeTimeTest {
     @Test
-    fun `duration includes zero-padded seconds`() {
-        assertEquals("00:00", formatDurationSeconds(0))
-        assertEquals("09:07", formatDurationSeconds(9 * 60 + 7))
-        assertEquals("60:00", formatDurationSeconds(60 * 60))
+    fun `duration rolls into hours and keeps seconds`() {
+        assertEquals("0 secs", formatDurationSeconds(0))
+        assertEquals("9 mins 7 secs", formatDurationSeconds(9 * 60 + 7))
+        assertEquals("1 hour", formatDurationSeconds(60 * 60))
     }
 }

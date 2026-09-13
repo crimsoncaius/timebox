@@ -19,7 +19,7 @@ class ReportingDayActualsTest {
         val day = Day(date, 0, 24, true, listOf(block), listOf(ActualBlockDayProjection(actual, date, 110, 70, 20, 1500)), "America/New_York", date, null)
         var selected = 0
         compose.setContent { TimeboxTheme(darkTheme = false) { ReportingDayActuals(day) { selected = it } } }
-        compose.onNodeWithText("20m on this day", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("20 mins on this day", substring = true).assertIsDisplayed()
         compose.onNodeWithText("-04:00", substring = true).assertIsDisplayed()
         compose.onNodeWithText("-05:00", substring = true).performClick()
         compose.runOnIdle { assertEquals(-42, selected) }

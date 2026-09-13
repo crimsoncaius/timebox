@@ -1,3 +1,4 @@
+import { formatDuration } from '../../lib/duration'
 import { getFocusController } from './focusController'
 import { ActivityTimeField } from './ActivityTimeField'
 import { activityTimeValue, resolveActivityTime, type ActivityTimeValue } from './activityTime'
@@ -51,7 +52,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     <div className={focus ? "mt-8 flex flex-col items-center gap-4 text-center" : "flex flex-wrap items-center justify-end gap-x-4 gap-y-1"}>
       {current ? <>
         <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>
-        <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{elapsed}m</span>
+        <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{formatDuration(elapsed)}</span>
         <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
         {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
       </> : <button className="py-2" disabled={disabled} onClick={() => void repository.command('start')}>Start tracking</button>}
@@ -65,7 +66,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {!focus && repository.recoveryData() && <details><summary>Review rejected changes</summary><p>These changes were not replayed. Use Day add/edit to correct the saved timeline.</p><pre className="whitespace-pre-wrap break-all">{repository.recoveryData()}</pre></details>}
     {focus && current && !current.name && current.task_type.name === 'unspecified' && <UnknownActivity key={current.id} repository={repository} />}
     {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {plan.name || availableTypes.find(t => t.id === plan.task_type_id)?.name} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
-    {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000)}m recorded</p> : null}
+    {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</p> : null}
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
     {state.error || state.pending ? <p role="alert" className="text-right">
       {state.error || 'Change not confirmed.'} <button disabled={state.busy} className="underline" onClick={() => void (state.pending ? repository.retry() : repository.refresh())}>Retry</button>

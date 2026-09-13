@@ -84,7 +84,7 @@ describe('WorkMode', () => {
   it('presents Up next with time and countdown', () => {
     render(<WorkMode {...baseProps} current={null} next={{ ...block, start_minute: 630 }} task={null} recording={false} nowMinute={620} />)
     expect(screen.getByText('Up next')).toBeVisible()
-    expect(screen.getByText(/in 10 minutes/)).toBeVisible()
+    expect(screen.getByText(/in 10 mins/)).toBeVisible()
   })
 
   it('keeps Work Mode open in today’s empty state', () => {

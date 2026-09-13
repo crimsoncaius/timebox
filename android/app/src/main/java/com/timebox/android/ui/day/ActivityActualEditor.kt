@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.elapsedDuration
+
 import com.timebox.android.data.parseActivityInstant
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.toModel
@@ -121,7 +123,7 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
                         Text("${format.format(localStart)} – ${format.format(localEnd)}", Modifier.weight(1f),
                             style = TimeboxTheme.type.display)
-                        Text("${Duration.between(startAt, endAt).toMinutes()} min", style = TimeboxTheme.type.label, color = colors.actual)
+                        Text(elapsedDuration(Duration.between(startAt, endAt).toMinutes()), style = TimeboxTheme.type.label, color = colors.actual)
                     }
                     OutlinedTextField(name, { name = it.take(500) }, enabled = !saving,
                         label = { Text("Block Name (optional)") }, singleLine = true,

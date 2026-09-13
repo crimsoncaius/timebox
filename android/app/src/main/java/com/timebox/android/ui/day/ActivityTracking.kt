@@ -1,5 +1,8 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.elapsedDuration
+import com.timebox.android.ui.elapsedDurationSeconds
+
 import com.timebox.android.data.parseActivityInstant
 
 import androidx.activity.compose.BackHandler
@@ -96,9 +99,9 @@ fun ActivityTracking(
                 val elapsed: @Composable () -> Unit = {
                     Spacer(Modifier.height(28.dp))
                     HorizontalDivider(color = colors.hairline)
-                    Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         val seconds = Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0)
-                        Text("%d:%02d".format(seconds / 60, seconds % 60), style = TimeboxTheme.type.display, color = colors.on)
+                        Text(elapsedDurationSeconds(seconds), style = TimeboxTheme.type.display, color = colors.on)
                         Text("elapsed", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(bottom = 5.dp))
                     }
                 }
@@ -107,7 +110,7 @@ fun ActivityTracking(
             if (!focus) {
                 CurrentActivityControl(
                     activity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
-                    elapsed = current?.let { "${Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)}m" }.orEmpty(),
+                    elapsed = current?.let { elapsedDuration(Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)) }.orEmpty(),
                     running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
                     onToggle = { expanded = !expanded },
                     onStart = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } },
@@ -131,7 +134,7 @@ fun ActivityTracking(
             if (focus || expanded) current?.plannedBlockId?.let { id ->
                 val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
                 val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
-                Text("${linked.size} linked Actual Blocks · ${minutes}m recorded", color = colors.onVariant)
+                Text("${linked.size} linked Actual Blocks · ${elapsedDuration(minutes)} recorded", color = colors.onVariant)
             }
             if (state.busy) Text("Saving…", color = colors.onVariant)
             state.feedback?.let { Text(it, color = colors.onVariant) }

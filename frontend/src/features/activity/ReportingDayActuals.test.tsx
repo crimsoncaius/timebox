@@ -11,7 +11,7 @@ it('shows the API elapsed share and both repeated-hour offsets, opening the orig
   const select = vi.fn()
   render(<ReportingDayActuals day={day} onSelect={select} />)
   const row = screen.getByRole('button', { name: /Reading/ })
-  expect(row).toHaveTextContent('20m on this day')
+  expect(row).toHaveTextContent('20 mins on this day')
   expect(row).toHaveTextContent('GMT-4')
   expect(row).toHaveTextContent('GMT-5')
   fireEvent.click(row)

@@ -108,8 +108,8 @@ private fun CurrentWork(
                 .weight(0.43f)
                 .padding(horizontal = 24.dp, vertical = 24.dp),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column {
                     Text(
                         if (openEnded) "Started ${minuteLabel(block.startMinute)}"
                         else "${minuteLabel(block.startMinute)}–${minuteLabel(block.endMinute)}",
@@ -119,14 +119,14 @@ private fun CurrentWork(
                     Spacer(Modifier.height(7.dp))
                     Text(workModeStatus(state), style = TimeboxTheme.type.body, color = colors.on)
                 }
-                Column(horizontalAlignment = Alignment.End) {
+                Column {
                     Text(
                         formatDurationSeconds(if (openEnded) elapsedSeconds else remainingSeconds),
                         style = TimeboxTheme.type.display.copy(fontSize = 44.sp),
                         color = colors.on,
                     )
                     Text(
-                        if (openEnded) "MIN:SEC IN" else "MIN:SEC LEFT",
+                        if (openEnded) "TIME ELAPSED" else "TIME LEFT",
                         style = TimeboxTheme.type.kicker,
                         color = colors.actual,
                     )
@@ -207,14 +207,14 @@ private fun UpNextWork(block: TimeBlock, state: WorkModeUiState, onExit: () -> U
                 .weight(0.43f)
                 .padding(horizontal = 24.dp, vertical = 24.dp),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column {
                     Text(minuteLabel(block.startMinute), style = TimeboxTheme.type.display.copy(fontSize = 40.sp), color = colors.on)
                     Text("START TIME", style = TimeboxTheme.type.kicker, color = colors.planned)
                 }
-                Column(horizontalAlignment = Alignment.End) {
+                Column {
                     Text(countdown, style = TimeboxTheme.type.display.copy(fontSize = 44.sp), color = colors.on)
-                    Text("MIN:SEC TO START", style = TimeboxTheme.type.kicker, color = colors.planned)
+                    Text("TIME TO START", style = TimeboxTheme.type.kicker, color = colors.planned)
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -314,9 +314,8 @@ private fun SessionProgress(progress: Float, leftLabel: String, rightLabel: Stri
             )
         }
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(leftLabel, style = TimeboxTheme.type.monoSmall, color = colors.onVariant)
-            Spacer(Modifier.weight(1f))
             Text(rightLabel, style = TimeboxTheme.type.monoSmall, color = colors.onVariant)
         }
     }
@@ -371,7 +370,7 @@ fun WorkModeRestoreDialog(onDecline: () -> Unit, onConfirm: () -> Unit) {
 private fun blockTitle(block: TimeBlock): String = block.primaryIdentity()
 private fun minuteLabel(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)
 internal fun formatDurationSeconds(totalSeconds: Int): String =
-    "%02d:%02d".format(totalSeconds.coerceAtLeast(0) / 60, totalSeconds.coerceAtLeast(0) % 60)
+    com.timebox.android.ui.elapsedDurationSeconds(totalSeconds.coerceAtLeast(0).toLong())
 
 private fun countdownSeconds(block: TimeBlock, state: WorkModeUiState): Int =
     (block.startMinute * 60 - observedSecond(state)).coerceAtLeast(0)
