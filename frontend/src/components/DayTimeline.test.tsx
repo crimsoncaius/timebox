@@ -151,7 +151,7 @@ describe('DayTimeline Actual Block movement', () => {
 
     expect(onPatchBlock).toHaveBeenCalledWith(
       40,
-      { start_minute: 570, end_minute: 599 },
+      { start_minute: 586, end_minute: 615 },
       'actual',
     )
   })

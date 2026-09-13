@@ -88,7 +88,6 @@ class MainActivity : ComponentActivity() {
 
             TimeboxTheme(darkTheme = isDark) {
                 TimeboxApp(
-                    timelinePrototype = BuildConfig.DEBUG && intent.getBooleanExtra("timelinePrototype", false),
                     isDark = isDark,
                     onToggleDark = { scope.launch { repository.setDarkTheme(!isDark) } },
                     notificationsAllowed = notificationsAllowed,

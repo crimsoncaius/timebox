@@ -32,7 +32,7 @@ from app.schemas.day import (
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
 
-MIN_PLANNED_BLOCK_MINUTES = 30
+MIN_PLANNED_BLOCK_MINUTES = 1
 DAY_END = 24 * 60  # 1440
 UNSPECIFIED_TASK_TYPE = "unspecified"
 

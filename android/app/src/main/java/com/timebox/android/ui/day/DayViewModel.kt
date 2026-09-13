@@ -11,7 +11,7 @@ import com.timebox.android.data.ActualBlock
 import com.timebox.android.data.Day
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
-import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
+import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.Subtask
@@ -438,14 +438,14 @@ class DayViewModel(
         val day = _state.value.day ?: return
         val start = startMinute.coerceIn(
             day.visibleStart,
-            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
+            day.visibleEnd - SLOT_MINUTES,
         )
         _state.update { state ->
             state.copy(
                 draft = Draft(
                     lane = lane,
                     startMinute = start,
-                    endMinute = start + MIN_PLANNED_BLOCK_MINUTES,
+                    endMinute = start + SLOT_MINUTES,
                 ),
                 selectedBlockId = null,
                 nameInput = "",
@@ -907,7 +907,7 @@ class DayViewModel(
         val start = snapToBlockInteractionStep(nowMinute.toFloat())
         val boundedStart = start.coerceIn(
             day.visibleStart,
-            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
+            day.visibleEnd - SLOT_MINUTES,
         )
         planThenWork = true
         _state.update {
@@ -916,7 +916,7 @@ class DayViewModel(
                 draft = Draft(
                     Lane.Planned,
                     boundedStart,
-                    boundedStart + MIN_PLANNED_BLOCK_MINUTES,
+                    boundedStart + SLOT_MINUTES,
                 ),
                 selectedBlockId = null,
             )

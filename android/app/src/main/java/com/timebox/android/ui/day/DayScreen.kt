@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -96,52 +98,62 @@ fun DayScreen(
         if (!state.saving && !state.planning.saving) onCancelPlanningMode()
     }
 
-    Column(Modifier.fillMaxSize()) {
-        DayCalendarHeader(
-            selectedDate = displayedDate,
-            today = state.today,
-            isPlanningMode = state.isPlanningMode,
-            planningActionEnabled = !state.saving && !state.planning.saving && state.workModeRestored && state.workMode == null,
-            onOpenWorkMode = onOpenWorkMode,
-            onSetPlanningMode = { enabled ->
-                if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()
-            },
-            onSelectDate = onDateSettled,
-            onNavigateToday = onNavigateToday,
-        )
+    val zoom = rememberSaveable(saver = TimelineZoom.Saver) { TimelineZoom() }
+    CompositionLocalProvider(LocalTimelineZoom provides zoom) {
+        Column(Modifier.fillMaxSize()) {
+            DayCalendarHeader(
+                selectedDate = displayedDate,
+                today = state.today,
+                isPlanningMode = state.isPlanningMode,
+                planningActionEnabled = !state.saving && !state.planning.saving && state.workModeRestored && state.workMode == null,
+                onOpenWorkMode = onOpenWorkMode,
+                onSetPlanningMode = { enabled ->
+                    if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()
+                },
+                onSelectDate = onDateSettled,
+                onNavigateToday = onNavigateToday,
+            )
 
-        if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-            ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
-            Spacer(Modifier.height(6.dp))
-            androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
-            Spacer(Modifier.height(8.dp))
-        }
-        Box(Modifier.weight(1f)) {
-            if (state.isPlanningMode) {
-                PlanningDayPage(
-                    state = state,
-                    onRetry = onRetry,
-                    onSelectBlock = onSelectBlock,
-                    onCommitMove = onCommitMove,
-                    onPlanTask = onPlanTask,
-                    onDropPlanningTask = onDropPlanningTask,
-                    onUpdatePlanningDraft = onUpdatePlanningDraft,
-                    onReturnPlanningDraft = onReturnPlanningDraft,
-                    onArmAccessibleTask = onArmAccessibleTask,
-                    onRetryReadyTasks = onRetryReadyTasks,
-                )
-            } else {
-                InteractiveDayPager(
-                    state = state,
-                    onDateSettled = onDateSettled,
-                    onDisplayedDateChange = { displayedDate = it },
-                    onRetry = onRetry,
-                    onTapSlot = onTapSlot,
-                    onSelectBlock = onSelectBlock,
-                    onCommitMove = onCommitMove,
-                )
+            if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
+                ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+                Spacer(Modifier.height(6.dp))
+                androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
+                Spacer(Modifier.height(8.dp))
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                androidx.compose.material3.Text("Zoom ${"%.1f".format(zoom.scale)}×", style = TimeboxTheme.type.label)
+                androidx.compose.material3.TextButton(onClick = { zoom.set(1f) }) { androidx.compose.material3.Text("Reset") }
+            }
+            Box(Modifier.weight(1f)) {
+                if (state.isPlanningMode) {
+                    PlanningDayPage(
+                        state = state,
+                        onRetry = onRetry,
+                        onSelectBlock = onSelectBlock,
+                        onCommitMove = onCommitMove,
+                        onPlanTask = onPlanTask,
+                        onDropPlanningTask = onDropPlanningTask,
+                        onUpdatePlanningDraft = onUpdatePlanningDraft,
+                        onReturnPlanningDraft = onReturnPlanningDraft,
+                        onArmAccessibleTask = onArmAccessibleTask,
+                        onRetryReadyTasks = onRetryReadyTasks,
+                    )
+                } else {
+                    InteractiveDayPager(
+                        state = state,
+                        onDateSettled = onDateSettled,
+                        onDisplayedDateChange = { displayedDate = it },
+                        onRetry = onRetry,
+                        onTapSlot = onTapSlot,
+                        onSelectBlock = onSelectBlock,
+                        onCommitMove = onCommitMove,
+                    )
+                }
             }
         }
+
     }
 
     if (state.sheetOpen) {
@@ -159,6 +171,7 @@ fun DayScreen(
             onReopenTask = onReopenSelectedTask,
             onOpenLinkedTask = onOpenLinkedTask,
             allowComplete = !state.isPlanningMode,
+            onChangeTimes = onCommitMove,
         )
     }
 }
@@ -376,6 +389,7 @@ private fun DayPage(
                     .weight(1f)
                     .onSizeChanged { viewportHeightPx = it.height }
                     .onGloballyPositioned { viewportBounds = it.boundsInRoot() }
+                    .timelinePinch(scrollState)
                     .verticalScroll(scrollState)
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
@@ -441,7 +455,8 @@ internal fun AutoScrollTimelineToNowOnce(
     viewportHeightPx: Int,
 ) {
     var completed by remember(day.date) { mutableStateOf(false) }
-    val slotHeightPx = with(LocalDensity.current) { TimeboxDimens.slotHeight.toPx() }
+    val slotHeight = timelineSlotHeight()
+    val slotHeightPx = with(LocalDensity.current) { slotHeight.toPx() }
     val maxScroll = scrollState.maxValue
 
     androidx.compose.runtime.LaunchedEffect(

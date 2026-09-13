@@ -66,7 +66,6 @@ import androidx.compose.ui.unit.dp
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
-import com.timebox.android.data.MIN_PLANNED_BLOCK_MINUTES
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.planning.PlanningDraftPlacement
@@ -128,7 +127,8 @@ internal fun PlanningWorkspace(
 ) {
     val colors = TimeboxTheme.colors
     val density = LocalDensity.current
-    val slotPx = with(density) { TimeboxDimens.slotHeight.toPx() }
+    val slotHeight = timelineSlotHeight()
+    val slotPx = with(density) { slotHeight.toPx() }
     val edgeZonePx = with(density) { 48.dp.toPx() }
     val scrollStepPx = with(density) { 12.dp.toPx() }
     val timelineScroll = rememberScrollState()
@@ -142,7 +142,7 @@ internal fun PlanningWorkspace(
     val planningDrafts = state.planningDrafts(day.date)
     val showTaskRail = state.hasPlanningRailContent(day.date)
     val dragDuration = drag?.draft?.let { it.endMinute - it.startMinute }
-        ?: MIN_PLANNED_BLOCK_MINUTES
+        ?: SLOT_MINUTES
 
     val candidateStart = drag?.let {
         planningDropStart(
@@ -257,6 +257,7 @@ internal fun PlanningWorkspace(
                     .weight(1f)
                     .fillMaxHeight()
                     .onGloballyPositioned { viewportBounds = it.boundsInRoot() }
+                    .timelinePinch(timelineScroll)
                     .verticalScroll(timelineScroll)
                     .padding(bottom = TimeboxDimens.bottomInset),
             ) {
@@ -302,7 +303,7 @@ internal fun PlanningWorkspace(
                 onArmAccessibleTask = onArmAccessibleTask,
                 onDragStart = { task, pointer ->
                     dropFailure = null
-                    drag = TaskDragState(task, pointer, grabOffsetPx = slotPx * MIN_PLANNED_BLOCK_MINUTES / SLOT_MINUTES / 2f)
+                    drag = TaskDragState(task, pointer, grabOffsetPx = slotPx * SLOT_MINUTES / SLOT_MINUTES / 2f)
                 },
                 onDrag = { pointer -> drag = drag?.copy(pointerRoot = pointer) },
                 onDragEnd = { _, pointer -> finishDrag(pointer) },
@@ -313,7 +314,7 @@ internal fun PlanningWorkspace(
 
         drag?.let { active ->
             val blockWidth = with(density) { laneBounds.width.toDp() } - 6.dp
-            val blockHeight = TimeboxDimens.slotHeight * (dragDuration.toFloat() / SLOT_MINUTES)
+            val blockHeight = slotHeight * (dragDuration.toFloat() / SLOT_MINUTES)
             DragGhost(
                 task = active.task,
                 width = blockWidth.coerceAtLeast(1.dp),
@@ -636,7 +637,7 @@ internal fun planningDropStart(
     visibleStart: Int,
     visibleEnd: Int,
     slotPx: Float,
-    durationMinutes: Int = MIN_PLANNED_BLOCK_MINUTES,
+    durationMinutes: Int = SLOT_MINUTES,
     grabOffsetPx: Float = 0f,
     originalStartMinute: Int? = null,
 ): Int? {
@@ -658,7 +659,7 @@ internal fun planningDropStart(
 internal fun isPlanningDropAvailable(
     day: Day,
     startMinute: Int,
-    endMinute: Int = startMinute + MIN_PLANNED_BLOCK_MINUTES,
+    endMinute: Int = startMinute + SLOT_MINUTES,
     drafts: List<PlanningDraftPlacement> = emptyList(),
     excludeTaskId: Int? = null,
 ): Boolean {

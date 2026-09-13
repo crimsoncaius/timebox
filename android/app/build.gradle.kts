@@ -23,9 +23,12 @@ android {
 
     buildTypes {
         debug {
+            // Optional isolated review install; ordinary debug builds keep their identity.
+            applicationIdSuffix = providers.gradleProperty("reviewApplicationIdSuffix").orNull
             // 10.0.2.2 is the host machine from inside the emulator.
             // Port 8001 is the registered Timebox API allocation on this workspace.
-            buildConfigField("String", "DEFAULT_BASE_URL", "\"http://10.0.2.2:8001/\"")
+            val apiUrl = providers.gradleProperty("reviewApiBaseUrl").getOrElse("http://10.0.2.2:8001/")
+            buildConfigField("String", "DEFAULT_BASE_URL", "\"${apiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         }
         release {
             isMinifyEnabled = true

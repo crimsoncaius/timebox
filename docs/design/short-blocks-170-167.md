@@ -1,3 +1,33 @@
+# Accepted implementation — issues #170 and #167
+
+The approved prototype is preserved at commit `4e6af5a` on
+`codex/issues-170-167-prototype-reference`. The production implementation replaces
+its debug route with the real Android and web Day timelines.
+
+- Blocks use their actual duration, including one-minute Planned Blocks.
+- Planned strips are blue; Actual strips are green. Text appears at 22dp and
+  resize grooves at 64dp on Android (equivalent CSS pixels on web).
+- Both lanes share anchored pinch zoom, bounded at 0.5–12×. The toolbar shows
+  Zoom and Reset without plus/minus buttons. Reset changes only zoom.
+- Tapping opens details without zooming. Exact start/end fields support blocks
+  too small to resize directly. New blocks still default to 30 minutes.
+- Active resizing continues below the groove threshold. Running Actual Blocks
+  grow with elapsed time and retain their dedicated editing flow.
+
+Validation: 51 focused web tests and the production web build pass; 34 focused
+backend tests pass; targeted Android unit tests and the two-finger device test
+pass. Fifteen failures in the broader web selection reproduce unchanged at
+baseline `452fa67`; the full suite is not claimed to pass.
+
+Review runs against isolated sample data at API port 12012 and web port 12013.
+Android uses the separate debug package `com.timebox.android.shortblocksreview`
+on emulator-5584. The normal app's data is preserved.
+
+The original experiment record below is historical; its open questions and
+prototype-only launch instructions are superseded by this implementation.
+
+---
+
 # Short blocks and timeline zoom — first experiment
 
 Issues: #170 (presentation and interaction), #167 (zoom).

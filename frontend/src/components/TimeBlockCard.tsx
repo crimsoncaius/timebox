@@ -8,7 +8,6 @@ import {
 } from '../lib/time'
 import type { TimeBlockLike } from '../lib/time'
 import { blockPrimaryIdentity, blockSecondaryIdentity } from '../lib/blockIdentity'
-import { activityDevelopmentEnabled } from '../features/activity/activityRepository'
 
 /** Ignore tiny jitter before moving a block. */
 const SWIPE_AXIS_DEAD_ZONE_PX = 8
@@ -92,7 +91,7 @@ export function TimeBlockCard({
   const displayEnd = drag ? drag.end : pendingLayout ? pendingLayout.end : block.end_minute
   const displayTop = ((displayStart - visibleStartMin) / SLOT_MINUTES) * slotHeightPx
   const displayHeight = ((displayEnd - displayStart) / SLOT_MINUTES) * slotHeightPx
-  const heightPx = Math.max(displayHeight, slotHeightPx)
+  const heightPx = Math.max(displayHeight, 1)
 
   const endDrag = useCallback(() => {
     const d = dragRef.current
@@ -102,10 +101,6 @@ export function TimeBlockCard({
     try {
       const { start, end } = d
       if (end <= start) return
-      if (
-        lane === 'planned'
-        && (end - start < SLOT_MINUTES || start % SLOT_MINUTES !== 0 || end % SLOT_MINUTES !== 0)
-      ) return
       if (start === block.start_minute && end === block.end_minute) return
       setPendingLayout({
         start,
@@ -151,13 +146,13 @@ export function TimeBlockCard({
           const m = getMinuteFromClientY(ev.clientY)
           let next: DragState
           if (d.edge === 'start') {
-            const ns = Math.min(m, d.end - SLOT_MINUTES)
+            const ns = Math.min(m, d.end - 1)
             next = {
               ...d,
               start: Math.max(resizeMinStartMinute, Math.max(0, ns)),
             }
           } else {
-            const ne = Math.max(m, d.start + SLOT_MINUTES)
+            const ne = Math.max(m, d.start + 1)
             next = { ...d, end: Math.min(resizeMaxEndMinute, Math.min(24 * 60, ne)) }
           }
           dragRef.current = next
@@ -212,7 +207,7 @@ export function TimeBlockCard({
     (e: React.PointerEvent<HTMLButtonElement>) => {
       if (e.button !== 0) return
       e.stopPropagation()
-      if (onBlockClick) {
+      if (onBlockClick && e.pointerType !== 'touch') {
         if (onBlockClick() === false) return
         suppressNextClickSelectRef.current = true
       }
@@ -270,6 +265,7 @@ export function TimeBlockCard({
           candidateRaw,
           prevBlockRef.current,
           MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
+          1,
         )
         blockStart = Math.min(Math.max(blockStart, visibleStartMin), maxStartInWindow)
         prevBlockRef.current = blockStart
@@ -300,6 +296,7 @@ export function TimeBlockCard({
       const onPointerCancel = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return
         cleanupWindow()
+        suppressClickRef.current = true
         if (bodyGesture !== 'none') {
           suppressClickRef.current = true
           cancelDrag()
@@ -336,13 +333,12 @@ export function TimeBlockCard({
     ],
   )
 
-  const displayLabel = activityDevelopmentEnabled && lane === 'actual'
-    ? block.name?.trim() || block.task_type.name
-    : blockPrimaryIdentity(block)
+  const displayLabel = blockPrimaryIdentity(block)
   const secondaryLabel = blockSecondaryIdentity(block)
   const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
-  const durationMin = displayEnd - displayStart
-  const compactContent = durationMin <= SLOT_MINUTES
+  const compactContent = heightPx < 64
+  const showText = heightPx >= 22
+  const showGrooves = heightPx >= 64 || drag?.kind === 'resize'
 
   const isDragging = drag != null
   const dragKind =
@@ -379,9 +375,10 @@ export function TimeBlockCard({
       style={{
         top: displayTop,
         height: heightPx,
+        backgroundColor: showText ? undefined : `var(--color-${lane})`,
       }}
     >
-      {!readOnly && !timeEditingDisabled && dragKind !== 'move' && (
+      {!readOnly && !timeEditingDisabled && showGrooves && dragKind !== 'move' && (
         <button
           type="button"
           aria-label="Resize block start"
@@ -401,7 +398,7 @@ export function TimeBlockCard({
       )}
       {readOnly ? (
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden text-left">
-          <CardContent
+          {showText && <CardContent
             compact={compactContent}
             displayLabel={displayLabel}
             timeRangeLabel={timeRangeLabel}
@@ -409,12 +406,13 @@ export function TimeBlockCard({
             secondaryLabel={secondaryLabel}
             laneStripeColor={laneStripeColor}
             isSelected={isSelected}
-          />
+          />}
         </div>
       ) : (
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
+          aria-description={`${displayLabel}, ${timeRangeLabel}`}
           className={`relative flex min-h-0 min-w-0 flex-1 touch-none overflow-hidden border-0 bg-transparent text-left select-none ${
             drag?.kind === 'move' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
@@ -435,7 +433,7 @@ export function TimeBlockCard({
             onBlockClick?.()
           }}
         >
-          <CardContent
+          {showText && <CardContent
             compact={compactContent}
             displayLabel={displayLabel}
             timeRangeLabel={timeRangeLabel}
@@ -443,10 +441,10 @@ export function TimeBlockCard({
             secondaryLabel={secondaryLabel}
             laneStripeColor={laneStripeColor}
             isSelected={isSelected}
-          />
+          />}
         </button>
       )}
-      {!readOnly && !timeEditingDisabled && dragKind !== 'move' && (
+      {!readOnly && !timeEditingDisabled && showGrooves && dragKind !== 'move' && (
         <button
           type="button"
           aria-label="Resize block end"

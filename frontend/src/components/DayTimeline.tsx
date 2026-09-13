@@ -71,13 +71,80 @@ export const DayTimeline = forwardRef<
 ) {
   const { start: visibleStartMin, end: visibleEndMin } = visibleMinuteRange(day)
   const slotCount = (visibleEndMin - visibleStartMin) / SLOT_MINUTES
-  const totalHeight = slotCount * TIMELINE_SLOT_HEIGHT_PX
+  const [zoom, setZoom] = useState(1)
+  const slotHeightPx = TIMELINE_SLOT_HEIGHT_PX * zoom
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef(zoom)
+  const totalHeight = slotCount * slotHeightPx
 
   const plannedRef = useRef<HTMLDivElement>(null)
   const actualRef = useRef<HTMLDivElement>(null)
   const nowLineRef = useRef<HTMLDivElement>(null)
   const autoScrollDateRef = useRef<string | null>(null)
   const autoScrollCompletedRef = useRef(false)
+
+  useEffect(() => {
+    const node = timelineRef.current
+    if (!node) return
+    let distance: number | null = null
+    const touchPointers = new Set<number>()
+    const pointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return
+      touchPointers.add(event.pointerId)
+      if (touchPointers.size < 2) return
+      for (const pointerId of touchPointers) {
+        window.dispatchEvent(new PointerEvent('pointercancel', { pointerId }))
+      }
+      event.stopPropagation()
+    }
+    const pointerEnd = (event: PointerEvent) => { touchPointers.delete(event.pointerId) }
+    const changeZoom = (factor: number, clientY: number) => {
+      const old = zoomRef.current
+      const next = Math.min(12, Math.max(0.5, old * factor))
+      const laneTop = plannedRef.current?.getBoundingClientRect().top ?? node.getBoundingClientRect().top
+      const anchor = clientY - laneTop
+      zoomRef.current = next
+      setZoom(next)
+      requestAnimationFrame(() => window.scrollBy(0, anchor * (next / old - 1)))
+    }
+    const touchStart = (event: TouchEvent) => {
+      if (event.touches.length === 2) {
+        distance = Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY)
+        event.preventDefault()
+      }
+    }
+    const touchMove = (event: TouchEvent) => {
+      if (event.touches.length !== 2 || distance === null) return
+      event.preventDefault()
+      const next = Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY)
+      if (distance > 0) changeZoom(next / distance, (event.touches[0].clientY + event.touches[1].clientY) / 2)
+      distance = next
+    }
+    const touchEnd = () => { distance = null }
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return
+      event.preventDefault()
+      changeZoom(Math.exp(-event.deltaY * 0.01), event.clientY)
+    }
+    node.addEventListener('pointerdown', pointerDown, true)
+    window.addEventListener('pointerup', pointerEnd)
+    node.addEventListener('pointercancel', pointerEnd)
+    node.addEventListener('touchstart', touchStart, { passive: false })
+    node.addEventListener('touchmove', touchMove, { passive: false })
+    node.addEventListener('touchend', touchEnd)
+    node.addEventListener('touchcancel', touchEnd)
+    node.addEventListener('wheel', wheel, { passive: false })
+    return () => {
+      node.removeEventListener('pointerdown', pointerDown, true)
+      window.removeEventListener('pointerup', pointerEnd)
+      node.removeEventListener('pointercancel', pointerEnd)
+      node.removeEventListener('touchstart', touchStart)
+      node.removeEventListener('touchmove', touchMove)
+      node.removeEventListener('touchend', touchEnd)
+      node.removeEventListener('touchcancel', touchEnd)
+      node.removeEventListener('wheel', wheel)
+    }
+  }, [])
 
   const [, setNowTick] = useState(0)
   const isTodayInTz = calendarIsoDateInTimeZone(new Date(), day.meta.timezone) === day.date
@@ -100,7 +167,7 @@ export const DayTimeline = forwardRef<
       y,
       visibleStartMin,
       visibleEndMin,
-      TIMELINE_SLOT_HEIGHT_PX,
+      slotHeightPx,
     )
     if (start >= visibleEndMin) return
     const end = Math.min(start + SLOT_MINUTES, visibleEndMin)
@@ -120,7 +187,7 @@ export const DayTimeline = forwardRef<
       note: actual.note,
       planned_block_id: actual.planned_block_id,
       start_minute,
-      end_minute,
+      end_minute: actual.end_at == null && isTodayInTz ? Math.max(start_minute, Math.min(visibleEndMin, nowMinuteOfDay)) : end_minute,
       start_at: actual.start_at,
       end_at: actual.end_at,
       created_at: actual.created_at,
@@ -152,10 +219,26 @@ export const DayTimeline = forwardRef<
 
   return (
     <div
-      ref={ref}
+      ref={(node) => {
+        timelineRef.current = node
+        if (typeof ref === 'function') ref(node)
+        else if (ref) ref.current = node
+      }}
       className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-x-1 gap-y-1.5 sm:gap-x-2"
       data-testid="day-timeline"
     >
+      <div className="col-span-3 flex items-center justify-between">
+        <span tabIndex={0} aria-label={`Timeline zoom ${zoom.toFixed(1)} times. Use arrow keys to adjust.`}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault()
+              const next = Math.min(12, Math.max(0.5, zoom * (e.key === 'ArrowUp' ? 1.2 : 1 / 1.2)))
+              zoomRef.current = next
+              setZoom(next)
+            }
+          }}>Zoom {zoom.toFixed(1)}×</span>
+        <button type="button" onClick={() => { zoomRef.current = 1; setZoom(1) }}>Reset</button>
+      </div>
       <div className="w-12 shrink-0 sm:w-14" aria-hidden />
       <h3 className={laneHeaderPlanned}>Planned</h3>
       <h3 className={laneHeaderActual}>Actual</h3>
@@ -173,7 +256,7 @@ export const DayTimeline = forwardRef<
                     ? 'absolute w-full border-t border-timeline-grid-strong pt-0.5 dark:border-dark-outline-variant'
                     : 'absolute w-full border-t border-timeline-grid-soft dark:border-dark-surface-container'
                 }
-                style={{ top: i * TIMELINE_SLOT_HEIGHT_PX, height: TIMELINE_SLOT_HEIGHT_PX }}
+                style={{ top: i * slotHeightPx, height: slotHeightPx }}
               >
                 {showLabel ? formatHourLabelGcal12(m) : ''}
               </div>
@@ -185,7 +268,7 @@ export const DayTimeline = forwardRef<
       <Lane
         laneRef={plannedRef}
         lane="planned"
-        slotHeightPx={TIMELINE_SLOT_HEIGHT_PX}
+        slotHeightPx={slotHeightPx}
         totalHeight={totalHeight}
         slotCount={slotCount}
         visibleStartMin={visibleStartMin}
@@ -203,7 +286,8 @@ export const DayTimeline = forwardRef<
       <Lane
         laneRef={actualRef}
         lane="actual"
-        slotHeightPx={TIMELINE_SLOT_HEIGHT_PX}
+        runningBlockIds={day.actual_blocks.filter(p => p.actual_block.end_at == null).map(p => p.actual_block.id)}
+        slotHeightPx={slotHeightPx}
         totalHeight={totalHeight}
         slotCount={slotCount}
         visibleStartMin={visibleStartMin}
@@ -221,7 +305,7 @@ export const DayTimeline = forwardRef<
 
       {showNowLine && (
         <div
-          className="pointer-events-none relative z-18 col-start-2 col-span-2 row-start-2"
+          className="pointer-events-none relative z-18 col-start-2 col-span-2 row-start-3"
           style={{ height: totalHeight }}
           data-testid="day-now-line"
           aria-hidden
@@ -285,7 +369,7 @@ function DraftBlockOverlay({
       if (!el) return visibleStartMin
       const top = el.getBoundingClientRect().top
       const y = cy - top
-      return minuteFromPointerYInVisibleLane(y, visibleStartMin, visibleEndMin, slotHeightPx)
+      return Math.min(visibleEndMin, Math.max(visibleStartMin, visibleStartMin + Math.round(y / slotHeightPx * SLOT_MINUTES)))
     },
     [laneRef, visibleStartMin, visibleEndMin, slotHeightPx],
   )
@@ -441,6 +525,7 @@ function DraftBlockOverlay({
 function Lane({
   laneRef,
   lane,
+  runningBlockIds = [],
   slotHeightPx,
   totalHeight,
   slotCount,
@@ -458,6 +543,7 @@ function Lane({
 }: {
   laneRef: React.RefObject<HTMLDivElement | null>
   lane: BlockLane
+  runningBlockIds?: number[]
   slotHeightPx: number
   totalHeight: number
   slotCount: number
@@ -495,14 +581,15 @@ function Lane({
   )
   /**
    * Explicit grid placement so the `[data-testid="day-now-line"]` overlay's
-   * `col-start-2 col-span-2 row-start-2` (definite position) cannot evict the
+   * `col-start-2 col-span-2 row-start-3` (definite position) cannot evict the
    * auto-placed lanes into an implicit row.
    */
-  const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-2' : 'col-start-3 row-start-2'
+  const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-3' : 'col-start-3 row-start-3'
   return (
     <div
       ref={setLaneRef}
       data-day-lane={lane}
+      data-slot-height={slotHeightPx}
       role="presentation"
       className={`relative min-w-0 border ${gridPlacement} ${laneSurfaceClass(lane)} ${readOnly ? '' : 'cursor-crosshair'} ${isDropTarget ? 'z-10 ring-2 ring-inset ring-primary/45' : ''}`}
       style={{ height: totalHeight }}
@@ -533,6 +620,7 @@ function Lane({
             visibleEndMin={visibleEndMin}
             slotHeightPx={slotHeightPx}
             readOnly={readOnly}
+            timeEditingDisabled={runningBlockIds.includes(b.id)}
             sameLaneBlocks={blocks}
             resizeMinStartMinute={minStartMinute}
             resizeMaxEndMinute={maxEndMinute}
@@ -541,7 +629,7 @@ function Lane({
               if (!el) return visibleStartMin
               const top = el.getBoundingClientRect().top
               const y = cy - top
-              return minuteFromPointerYInVisibleLane(y, visibleStartMin, visibleEndMin, slotHeightPx)
+              return Math.min(visibleEndMin, Math.max(visibleStartMin, visibleStartMin + Math.round(y / slotHeightPx * SLOT_MINUTES)))
             }}
             onPatch={(patch) => onPatchBlock(b.id, patch, lane)}
             onBlockClick={

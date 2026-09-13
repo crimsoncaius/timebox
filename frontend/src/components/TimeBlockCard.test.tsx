@@ -19,6 +19,7 @@ const block: TimeBlock = {
 }
 
 function renderCard(overrides?: {
+  slotHeightPx?: number
   isSelected?: boolean
   onPatch?: (patch: { start_minute?: number; end_minute?: number }) => Promise<void>
   onBlockClick?: () => boolean | void
@@ -34,7 +35,7 @@ function renderCard(overrides?: {
         lane="planned"
         visibleStartMin={480}
         visibleEndMin={600}
-        slotHeightPx={20}
+        slotHeightPx={overrides?.slotHeightPx ?? 20}
         readOnly={false}
         sameLaneBlocks={[block]}
         resizeMinStartMinute={0}
@@ -184,7 +185,7 @@ describe('TimeBlockCard', () => {
   it('cancels a resize without persisting and remains resizable after pointer capture is lost', () => {
     const onPatch = vi.fn(() => Promise.resolve())
     const onDragSessionChange = vi.fn()
-    const { shell } = renderCard({ onPatch, onDragSessionChange })
+    const { shell } = renderCard({ onPatch, onDragSessionChange, slotHeightPx: 80 })
     const resizeEnd = screen.getByRole('button', { name: 'Resize block end' })
 
     fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 2, clientY: 510 })
@@ -194,7 +195,7 @@ describe('TimeBlockCard', () => {
     fireEvent.lostPointerCapture(resizeEnd, { pointerId: 2 })
 
     expect(shell).not.toHaveAttribute('data-dragging')
-    expect(shell.style.height).toBe('20px')
+    expect(shell.style.height).toBe('80px')
     expect(onPatch).not.toHaveBeenCalled()
     expect(onDragSessionChange).toHaveBeenNthCalledWith(1, true)
     expect(onDragSessionChange).toHaveBeenNthCalledWith(2, false)
@@ -238,7 +239,7 @@ describe('TimeBlockCard', () => {
           lane="planned"
           visibleStartMin={480}
           visibleEndMin={600}
-          slotHeightPx={20}
+          slotHeightPx={46}
           readOnly={false}
           sameLaneBlocks={[block]}
           resizeMinStartMinute={0}
@@ -308,7 +309,8 @@ describe('TimeBlockCard', () => {
     expect(compactTime.className).toBe(expandedTime.className)
     expect(compact.querySelector('[data-block-content]')).toHaveClass('flex-row')
     expect(expanded.querySelector('[data-block-content]')).toHaveClass('flex-col')
-    expect(compact.querySelector('[aria-label="Resize block start"]')).toHaveClass('absolute')
+    expect(compact.querySelector('[aria-label="Resize block start"]')).toBeNull()
+    expect(expanded.querySelector('[aria-label="Resize block start"]')).toHaveClass('absolute')
   })
 
   it('uses the resting paper surface for a compact block', () => {

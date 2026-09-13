@@ -69,6 +69,7 @@ fun BlockSheet(
     onReopenTask: () -> Unit,
     onOpenLinkedTask: (Int) -> Unit,
     allowComplete: Boolean = true,
+    onChangeTimes: (Int, Int, Int) -> Unit = { _, _, _ -> },
 ) {
     if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
         ActivityActualEditor(state, onDismiss, onOpenLinkedTask = onOpenLinkedTask)
@@ -161,6 +162,9 @@ fun BlockSheet(
                 style = TimeboxTheme.type.display,
                 color = colors.on,
             )
+            state.selectedBlock?.let { block ->
+                BlockTimeFields(block, state.day, state.saving) { start, end -> onChangeTimes(block.id, start, end) }
+            }
             Spacer(Modifier.height(6.dp))
             Text(
                 text = if (isDraft) {

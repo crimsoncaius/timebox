@@ -438,7 +438,7 @@ export function TodayPage() {
         pointerY,
         visibleStart,
         visibleEnd,
-        TIMELINE_SLOT_HEIGHT_PX,
+        Number(laneElement.getAttribute('data-slot-height')) || TIMELINE_SLOT_HEIGHT_PX,
       )
       void planReadyTaskAt(taskId, start)
     },

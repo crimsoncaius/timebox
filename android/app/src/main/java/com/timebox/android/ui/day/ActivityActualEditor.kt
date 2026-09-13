@@ -132,6 +132,10 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                             style = TimeboxTheme.type.display)
                         Text(elapsedDuration(Duration.between(startAt, endAt).toMinutes()), style = TimeboxTheme.type.label, color = colors.actual)
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { ActivityTimeField("Start", start, zone, compact = true, enabled = !saving, onChange = { start = it }) }
+                        Box(Modifier.weight(1f)) { ActivityTimeField("End", end, zone, compact = true, enabled = !saving, onChange = { end = it }) }
+                    }
                     OutlinedTextField(name, { name = it.take(500) }, enabled = !saving,
                         label = { Text("Block Name (optional)") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)

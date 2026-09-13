@@ -94,7 +94,6 @@ fun TimeboxApp(
     taskCompletion: TaskCompletion = rememberTaskCompletion(),
     readinessCoordinator: ReadyToPlanCoordinator,
     imeVisibleOverride: Boolean? = null,
-    timelinePrototype: Boolean = false,
 ) {
     val activityRepository = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository else null
     val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository) {
@@ -343,7 +342,7 @@ fun TimeboxApp(
                             defaultValue = -1
                         }),
                     ) {
-                        if (timelinePrototype) com.timebox.android.ui.day.TimelinePrototype() else DayScreen(
+                        DayScreen(
                             state = dayState,
                             // Date changes are state within the mounted Day destination. Replacing
                             // the route here recreated the header and also re-ran Day initialization,

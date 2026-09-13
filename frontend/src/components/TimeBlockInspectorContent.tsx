@@ -1,3 +1,4 @@
+import { BlockTimeFields } from './BlockTimeFields'
 import { formatDuration } from '../lib/duration'
 import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
 import { activityDevelopmentEnabled, type ActivityCorrection } from '../features/activity/activityRepository'
@@ -43,7 +44,7 @@ function LegacyTimeBlockInspectorContent({
   taskTypes: TaskType[]
   variant: TimeBlockInspectorVariant
   onClose: () => void
-  onSave: (patch: ActivityCorrection) => Promise<void>
+  onSave: (patch: ActivityCorrection & { start_minute?: number; end_minute?: number }) => Promise<void>
   onCreateFromDraft?: (payload: ActivityCorrection & { name: string | null; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
@@ -317,6 +318,8 @@ function LegacyTimeBlockInspectorContent({
         <span className="text-outline-variant"> – </span>
         <span>{endLabel}</span>
       </p>
+
+      {block && <BlockTimeFields key={`${block.lane}-${block.id}-${block.start_minute}-${block.end_minute}`} block={block} onSave={onSave} />}
 
       {/* Helper text */}
       <p className="max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">

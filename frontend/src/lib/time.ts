@@ -336,7 +336,7 @@ function isValidMoveStart(
   durationMinutes: number,
   obstaclesSorted: TimeBlockLike[],
 ): boolean {
-  if (start < 0 || start % SLOT_MINUTES !== 0) return false
+  if (start < 0 || !Number.isInteger(start)) return false
   const end = start + durationMinutes
   if (end > MINUTES_PER_DAY) return false
   for (const o of obstaclesSorted) {
@@ -413,9 +413,10 @@ export function resolveSameLaneMoveStart(
   durationMinutes: number,
   candidateStart: number,
   previousResolvedStart: number,
+  stepMinutes = SLOT_MINUTES,
 ): number {
-  const c = floorToSlotMinute(candidateStart)
-  const prev = floorToSlotMinute(previousResolvedStart)
+  const c = Math.floor(candidateStart / stepMinutes) * stepMinutes
+  const prev = Math.floor(previousResolvedStart / stepMinutes) * stepMinutes
   const obstacles = obstaclesExcluding(sameLaneBlocks, movingBlockId)
   const ranges = validStartMinuteRangesForDuration(obstacles, durationMinutes)
 
@@ -459,13 +460,14 @@ export function resolveSameLaneMovePreviewStart(
   candidateStartMinutes: number,
   committedPreviewStart: number,
   hysteresisMinutes: number = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
+  stepMinutes = SLOT_MINUTES,
 ): number {
-  const committed = floorToSlotMinute(committedPreviewStart)
+  const committed = Math.floor(committedPreviewStart / stepMinutes) * stepMinutes
   const obstacles = obstaclesExcluding(sameLaneBlocks, movingBlockId)
   const maxStart = MINUTES_PER_DAY - durationMinutes
 
   /** Slot floor for instant-resolve; raw minute drives hysteresis edges. */
-  const cSlot = floorToSlotMinute(candidateStartMinutes)
+  const cSlot = Math.floor(candidateStartMinutes / stepMinutes) * stepMinutes
 
   const naive = resolveSameLaneMoveStart(
     sameLaneBlocks,
@@ -473,6 +475,7 @@ export function resolveSameLaneMovePreviewStart(
     durationMinutes,
     cSlot,
     committed,
+    stepMinutes,
   )
 
   if (naive === committed) {

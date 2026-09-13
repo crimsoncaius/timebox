@@ -130,7 +130,7 @@ webfont; the glyph names map one-to-one.
   resize grooves drag immediately.
   Existing Block movement and resizing apply five-minute deltas without normalizing
   saved times. New Block placement uses the nearest five-minute mark, while the
-  timeline grid and minimum Planned Block duration remain 30 minutes.
+  new blocks default to 30 minutes; saved blocks support one-minute durations. Pinch zoom spans 0.5–12×; short blocks hide text below 22dp and resize grooves below 64dp. Exact times remain editable in block details.
   Movement before the haptic remains available to timeline scrolling and day
   swiping; mouse dragging remains immediate.
 - **Notes save on dismiss.** Choosing a task type and dragging save immediately; the

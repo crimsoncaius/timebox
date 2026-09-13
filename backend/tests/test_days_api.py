@@ -287,7 +287,7 @@ def test_create_planned_block_accepts_any_whole_minute(client):
     assert (block["start_minute"], block["end_minute"]) == (547, 577)
 
 
-def test_create_planned_block_requires_thirty_minutes(client):
+def test_create_planned_block_accepts_less_than_thirty_minutes(client):
     tid = _tid(client, "too-short")
 
     response = client.post(
@@ -300,8 +300,8 @@ def test_create_planned_block_requires_thirty_minutes(client):
         },
     )
 
-    assert response.status_code == 422
-    assert response.json()["detail"] == "Planned Blocks must be at least 30 minutes"
+    assert response.status_code == 200
+    assert response.json()["time_blocks"][0]["end_minute"] == 576
 
 
 def test_reject_overlap_same_lane(client):
