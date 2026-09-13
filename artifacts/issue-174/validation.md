@@ -10,3 +10,4 @@ Validation so far:
 - Activity API/reconciliation/check-in/planning/reporting: 50 passed, 5 PostgreSQL-specific skips using an isolated SQLite test database.
 - Android ActivityRepository tests passed, including durable offline running correction and restart.
 - Native interaction verification recorded separately after emulator run.
+- Native RunningActualSheetTest passed on Pixel_9a after restarting an unresponsive emulator. Verified summary, editable name, save, preserved note, and open end. Latest native build and all 10 repository tests passed.
