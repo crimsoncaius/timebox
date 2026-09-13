@@ -151,6 +151,8 @@ class DayViewModel(
     private var todayResolved = false
     private val pageRequestVersions = mutableMapOf<LocalDate, Int>()
     private var planThenWork = false
+    // Keep pending manual moves visible while the activity journal catches up.
+    private val pendingActualMoves = mutableMapOf<Pair<LocalDate, Int>, Pair<Int, Int>>()
 
     init {
         if (activityRepository != null) workModeBridgeScope.launch {
@@ -163,7 +165,11 @@ class DayViewModel(
                     val dates = ui.pages.keys + ui.date
                     val pages = dates.associateWith { date ->
                         val old = ui.page(date)
-                        old.copy(day = snapshot.projectDay(date, old.day), loading = if (old.day == null) false else old.loading)
+                        var projected = snapshot.projectDay(date, old.day)
+                        pendingActualMoves.filterKeys { it.first == date }.forEach { (key, range) ->
+                            projected = projected.withBlockTimes(key.second, range.first, range.second)
+                        }
+                        old.copy(day = projected, loading = if (old.day == null) false else old.loading)
                     }
                     if (pages != ui.pages) _state.update { it.copy(pages = pages, taskTypes = snapshot.taskTypes.map { t -> TaskType(t.id, t.name, 0) }) }
                 }
@@ -436,10 +442,17 @@ class DayViewModel(
         if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
         planThenWork = false
         val day = _state.value.day ?: return
-        val start = startMinute.coerceIn(
-            day.visibleStart,
-            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
-        )
+        val start = if (lane == Lane.Planned) {
+            nearestPlanningDragStart(day, _state.value.planningDrafts(day.date), null,
+                startMinute, MIN_PLANNED_BLOCK_MINUTES) ?: run {
+                _state.update { it.copy(message = NO_NEARBY_BLOCK_SPACE) }
+                return
+            }
+        } else nearestSavedBlockDragStart(day, Int.MIN_VALUE, startMinute,
+            MIN_PLANNED_BLOCK_MINUTES, lane = Lane.Actual) ?: run {
+            _state.update { it.copy(message = NO_NEARBY_BLOCK_SPACE) }
+            return
+        }
         _state.update { state ->
             state.copy(
                 draft = Draft(
@@ -645,7 +658,7 @@ class DayViewModel(
     }
 
     fun updatePlanningDraft(taskId: Int, startMinute: Int, endMinute: Int) {
-        when (val result = planningSession.update(taskId, startMinute, endMinute)) {
+        when (val result = planningSession.update(taskId, startMinute, endMinute, _state.value.day)) {
             PlanningEditResult.Accepted -> Unit
             is PlanningEditResult.Rejected -> _state.update { it.copy(message = result.reason) }
         }
@@ -698,8 +711,8 @@ class DayViewModel(
         val day = current.day ?: return
         val block = day.blocks.firstOrNull { it.id == blockId } ?: return
         if (block.startMinute == startMinute && block.endMinute == endMinute) return
-        if (block.lane == Lane.Planned && !savedPlannedBlockRangeAvailable(
-                day, block.id, startMinute, endMinute,
+        if (!savedBlockRangeAvailable(
+                day, block.id, startMinute, endMinute, lane = block.lane,
             )
         ) {
             _state.update { it.copy(message = "That time is no longer available") }
@@ -721,6 +734,7 @@ class DayViewModel(
             null
         }
 
+        if (actualPatch != null) pendingActualMoves[current.date to blockId] = startMinute to endMinute
         _state.update { state ->
             state.copy(saving = true).withPage(current.date) { page ->
                 page.copy(day = page.day?.withBlockTimes(blockId, startMinute, endMinute))
@@ -737,9 +751,11 @@ class DayViewModel(
                     endAt = actualPatch.third,
                 )).fold(
                     onSuccess = {
+                        pendingActualMoves.remove(current.date to blockId)
                         _state.update { state -> state.copy(saving = false) }
                     },
                     onFailure = { e ->
+                        pendingActualMoves.remove(current.date to blockId)
                         _state.update { state ->
                             state.copy(
                                 saving = false,

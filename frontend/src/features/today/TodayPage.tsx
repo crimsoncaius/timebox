@@ -1,7 +1,7 @@
 import { getFocusController } from '../activity/focusController'
 import { activityDay } from '../activity/activityDay'
 import { needsElapsedDayView, ReportingDayActuals } from '../activity/ReportingDayActuals'
-import { DragDropProvider, PointerSensor, useDraggable, type DragEndEvent } from '@dnd-kit/react'
+import { DragDropProvider, PointerSensor, useDraggable, type DragMoveEvent, type DragOverEvent, type DragEndEvent } from '@dnd-kit/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DayCalendarPopover } from '../../components/DayCalendarPopover'
@@ -13,6 +13,7 @@ import {
 import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType, type TimeBlock } from '../../lib/api'
+import { actualPlacementEnd, nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../../lib/blockPlacement'
 import { WorkMode } from './WorkMode'
 import { ActivityTracking } from '../activity/ActivityTracking'
 import { getActivityRepository, type ActivityCorrection, activityDevelopmentEnabled } from '../activity/activityRepository'
@@ -23,6 +24,7 @@ import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 import { TransientFeedback } from '../../components/TransientFeedback'
 import {
   addDaysIso,
+  formatTimeRangeGcal12,
   minuteFromPointerYInVisibleLane,
   SLOT_MINUTES,
   TIMELINE_SLOT_HEIGHT_PX,
@@ -117,6 +119,18 @@ export function TodayPage() {
   const workModeRequestRef = useRef<string | null>(null)
   const [planningTaskBusyId, setPlanningTaskBusyId] = useState<number | null>(null)
   const [readyTaskDragging, setReadyTaskDragging] = useState(false)
+  const [readyDropCandidate, setReadyDropCandidate] = useState<{ taskId: number; start: number } | null>(null)
+  const readyDropPreview = useMemo(() => {
+    if (!day || !readyDropCandidate) return null
+    const range = visibleMinuteRange(day)
+    const occupied = day.time_blocks.filter(b => b.lane === 'planned')
+    const start = nearestBlockStart(draft?.lane === 'planned' ? [...occupied, draft] : occupied,
+      readyDropCandidate.start, SLOT_MINUTES, range.start, range.end)
+    return { taskId: readyDropCandidate.taskId, start }
+  }, [day, draft, readyDropCandidate])
+  const readyDropPreviewRef = useRef(readyDropPreview)
+  useLayoutEffect(() => { readyDropPreviewRef.current = readyDropPreview }, [readyDropPreview])
+
   const [planningSaves, setPlanningSaves] = useState(0)
   const [pendingWorkEntry, setPendingWorkEntry] = useState<string | null>(null)
   const planningActive = allBattleTasks.some((task) => task.id === planningTaskId && task.ready_to_plan)
@@ -341,21 +355,22 @@ export function TodayPage() {
   }, [tryDiscardIfNeeded])
 
   const planReadyTaskAt = useCallback(
-    async (taskId: number, startMinute: number) => {
+    async (taskId: number, startMinute: number, previewed = false) => {
       if (workModeExecution.state.session) return
       if (!date || !day || planningTaskInFlightRef.current) return
       const task = allBattleTasks.find((item) => item.id === taskId && item.ready_to_plan && readiness.isSchedulable(item.id))
       if (!task) return
 
       const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
-      const start = Math.max(visibleStart, Math.min(startMinute, visibleEnd - SLOT_MINUTES))
+      const saved = day.time_blocks.filter(block => block.lane === 'planned')
+      const occupied = draft?.lane === 'planned' ? [...saved, draft] : saved
+      const start = previewed ? startMinute
+        : nearestBlockStart(occupied, startMinute, SLOT_MINUTES, visibleStart, visibleEnd)
+      if (start === null) { setError(NO_NEARBY_BLOCK_SPACE); return }
       const end = start + SLOT_MINUTES
-      const overlaps = day.time_blocks.some(
-        (block) =>
-          block.lane === 'planned' && start < block.end_minute && end > block.start_minute,
-      )
-      if (overlaps) {
-        setError('That time is already planned.')
+      if (!blockRangeAvailable(occupied, start, end, visibleStart, visibleEnd)) {
+        setError('That time is no longer available')
+        void api.getDay(date).then(setDay).catch(() => {})
         return
       }
 
@@ -370,6 +385,12 @@ export function TodayPage() {
           end_minute: end,
         })
         setDay(next)
+        if (!previewed) {
+          const created = next.time_blocks.find(b => b.lane === 'planned' && b.task_id === task.id && b.start_minute === start)
+          requestAnimationFrame(() => {
+            if (created) document.querySelector<HTMLElement>(`[data-block-id="${created.id}"]`)?.scrollIntoView({ block: 'nearest' })
+          })
+        }
         readiness.observeTasks([{ ...task, ready_to_plan: false }])
         setPlanningTaskId(null)
         setDraft(null)
@@ -390,12 +411,13 @@ export function TodayPage() {
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to plan task')
+        void api.getDay(date).then(setDay).catch(() => {})
       } finally {
         planningTaskInFlightRef.current = false
         setPlanningTaskBusyId(null)
       }
     },
-    [allBattleTasks, date, day, ingestBattleTasks, readiness, workModeExecution],
+    [allBattleTasks, date, day, draft, ingestBattleTasks, readiness, workModeExecution],
   )
 
   const onLaneSlotClick = useCallback(
@@ -406,6 +428,16 @@ export function TodayPage() {
         void planReadyTaskAt(planningTask.id, startMin)
         return
       }
+      if (day) {
+        const range = visibleMinuteRange(day)
+        const occupied = lane === 'planned' ? day.time_blocks.filter(b => b.lane === 'planned') : day.actual_blocks
+        const resolved = nearestBlockStart(occupied,
+          startMin, SLOT_MINUTES, range.start, lane === 'actual' ? actualPlacementEnd(day) : range.end)
+        if (resolved === null) { setError(NO_NEARBY_BLOCK_SPACE); return }
+        startMin = resolved
+        endMin = resolved + SLOT_MINUTES
+      }
+      setError(null)
       setDraft({
         lane,
         start_minute: startMin,
@@ -414,36 +446,41 @@ export function TodayPage() {
         task_type_id: lane === 'planned' ? planningTask?.task_type_id ?? null : null,
       })
       setSelectedBlockRef(null)
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-draft-block]')?.scrollIntoView({ block: 'nearest' }))
     },
-    [allBattleTasks, planReadyTaskAt, planningTaskId, tryDiscardIfNeeded],
+    [day, allBattleTasks, planReadyTaskAt, planningTaskId, tryDiscardIfNeeded],
   )
 
-  const onReadyTaskDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      setReadyTaskDragging(false)
-      const { source, target, position } = event.operation
-      if (
-        event.canceled ||
-        source?.type !== READY_TASK_DRAG_TYPE ||
-        target?.id !== PLANNED_LANE_DROP_ID
-      ) {
-        return
-      }
-      const taskId = Number(source.data.taskId)
-      const laneElement = target.element
-      if (!Number.isFinite(taskId) || !laneElement || !day) return
-      const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
-      const pointerY = position.current.y - laneElement.getBoundingClientRect().top
-      const start = minuteFromPointerYInVisibleLane(
-        pointerY,
-        visibleStart,
-        visibleEnd,
-        TIMELINE_SLOT_HEIGHT_PX,
-      )
-      void planReadyTaskAt(taskId, start)
-    },
-    [day, planReadyTaskAt],
-  )
+  const onReadyTaskDragPosition = useCallback((event: DragMoveEvent | DragOverEvent) => {
+    const { source, position } = event.operation
+    if (source?.type !== READY_TASK_DRAG_TYPE || !day) return
+    const lane = timelineRef.current?.querySelector<HTMLElement>('[data-day-lane="planned"]')
+    if (!lane) return
+    const rect = lane.getBoundingClientRect()
+    const pointer = position.current
+    if (pointer.x < rect.left || pointer.x > rect.right || pointer.y < rect.top || pointer.y > rect.bottom) {
+      setReadyDropCandidate(null)
+      return
+    }
+    const range = visibleMinuteRange(day)
+    setReadyDropCandidate({ taskId: Number(source.data.taskId), start: minuteFromPointerYInVisibleLane(
+      pointer.y - rect.top, range.start, range.end, TIMELINE_SLOT_HEIGHT_PX,
+    ) })
+  }, [day])
+
+  const onReadyTaskDragEnd = useCallback((event: DragEndEvent) => {
+    setReadyTaskDragging(false)
+    setReadyDropCandidate(null)
+    const { source, target, position } = event.operation
+    if (event.canceled || source?.type !== READY_TASK_DRAG_TYPE || target?.id !== PLANNED_LANE_DROP_ID) return
+    const preview = readyDropPreviewRef.current
+    const rect = target.element?.getBoundingClientRect()
+    if (!rect || position.current.x < rect.left || position.current.x > rect.right
+      || position.current.y < rect.top || position.current.y > rect.bottom) return
+    if (!preview || preview.taskId !== Number(source.data.taskId)) return
+    if (preview.start === null) { setError(NO_NEARBY_BLOCK_SPACE); return }
+    void planReadyTaskAt(preview.taskId, preview.start, true)
+  }, [planReadyTaskAt])
 
   const onDraftTimeChange = useCallback((startMin: number, endMin: number) => {
     setDraft((d) => (d ? { ...d, start_minute: startMin, end_minute: endMin } : null))
@@ -616,6 +653,7 @@ export function TodayPage() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to update block'
         setError(msg)
+        void api.getDay(date).then(setDay).catch(() => {})
         throw e
       } finally {
         if (lane === 'planned') setPlanningSaves((count) => count - 1)
@@ -805,7 +843,7 @@ export function TodayPage() {
 
   return (
     <Layout planningActive={planningActive} workModeActive={workMode != null || workModeGuard} mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
-      <DragDropProvider onDragStart={(event) => { if (event.operation.source?.type === READY_TASK_DRAG_TYPE) setReadyTaskDragging(true) }} onDragEnd={onReadyTaskDragEnd}>
+      <DragDropProvider onDragStart={(event) => { if (event.operation.source?.type === READY_TASK_DRAG_TYPE) setReadyTaskDragging(true) }} onDragMove={onReadyTaskDragPosition} onDragOver={onReadyTaskDragPosition} onDragEnd={onReadyTaskDragEnd}>
       <div inert={workMode != null || workModeGuard} className="flex flex-col gap-8 xl:flex-row xl:gap-0 xl:items-stretch">
         <div className="min-w-0 min-h-0 flex-1 xl:pr-4">
           <span data-testid="day-date" className="sr-only">
@@ -909,10 +947,16 @@ export function TodayPage() {
 
           {planningTask ? (
             <p className="mb-3 rounded-xl bg-primary/8 px-4 py-2.5 text-sm text-on-surface">
-              <strong>{planningTask.title}</strong> is selected. Choose an open slot in the <strong>Planned</strong> lane.
+              <strong>{planningTask.title}</strong> is selected. Choose a time in the <strong>Planned</strong> lane.
             </p>
           ) : null}
 
+          {readyTaskDragging && readyDropPreview && (
+            <div role="status" className="fixed bottom-4 left-1/2 z-80 -translate-x-1/2 rounded-lg bg-surface p-3 shadow-lg">
+              {readyDropPreview.start === null ? NO_NEARBY_BLOCK_SPACE
+                : formatTimeRangeGcal12(readyDropPreview.start, readyDropPreview.start + SLOT_MINUTES)}
+            </div>
+          )}
           {activityDevelopmentEnabled ? <ActivityTracking taskTypes={taskTypes} onChanged={() => {
             void api.getDay(date).then(setDay).catch(() => {})
           }} /> : null}
@@ -923,6 +967,9 @@ export function TodayPage() {
               day={activityDevelopmentEnabled && needsElapsedDayView(day) ? { ...day, actual_blocks: [] } : day}
               readOnly={false}
               draft={draft}
+              placementSelected={planningTaskId != null && !readyTaskDragging}
+              placementPreview={readyDropPreview?.start != null ? { start: readyDropPreview.start, end: readyDropPreview.start + SLOT_MINUTES } : null}
+              onPlacementError={setError}
               selectedBlockId={selectedBlockId}
               onLaneSlotClick={onLaneSlotClick}
               onDraftTimeChange={onDraftTimeChange}

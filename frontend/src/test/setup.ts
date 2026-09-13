@@ -5,6 +5,7 @@ import { vi } from 'vitest'
 // jsdom exposes scrollBy but reports it as unimplemented. Keep tests deterministic;
 // focused scrolling tests can spy on this shared mock.
 window.scrollBy = vi.fn()
+HTMLElement.prototype.scrollIntoView = vi.fn()
 import { afterEach } from 'vitest'
 
 class TestResizeObserver {

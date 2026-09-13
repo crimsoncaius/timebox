@@ -54,6 +54,7 @@ import com.timebox.android.ui.planning.PlanningEditResult
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
+import com.timebox.android.ui.components.TransientFeedback
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -238,8 +239,8 @@ private fun InteractiveDayPager(
     val isSettling = rememberUpdatedState(settling)
     val settleDate = rememberUpdatedState(onDateSettled)
     val scope = rememberCoroutineScope()
-    // The incoming timeline mirrors the current vertical position. If its height differs,
-    // ScrollState clamps to the legal range for the page being measured.
+    // Only the visible page owns this state. Offscreen pages mirror its position
+    // using independent states, so their measurements cannot clamp the visible page.
     val timelineScroll = rememberScrollState()
     val density = LocalDensity.current
 
@@ -296,6 +297,10 @@ private fun InteractiveDayPager(
                 val date = state.date.plusDays(pagePosition.toLong())
                 val interactive = pagePosition == 0 && !settling
                 key(date) {
+                    val previewScroll = rememberScrollState(timelineScroll.value)
+                    androidx.compose.runtime.LaunchedEffect(pagePosition, timelineScroll.value, previewScroll.maxValue) {
+                        if (pagePosition != 0) previewScroll.scrollTo(timelineScroll.value)
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -309,7 +314,7 @@ private fun InteractiveDayPager(
                         DayPage(
                             date = date,
                             page = state.page(date),
-                            scrollState = timelineScroll,
+                            scrollState = if (pagePosition == 0) timelineScroll else previewScroll,
                             autoScrollToNow = pagePosition == 0 && date == state.today,
                             selectedBlockId = if (interactive) state.selectedBlockId else null,
                             draft = if (interactive) state.draft else null,
@@ -349,6 +354,10 @@ private fun DayPage(
     var viewportHeightPx by remember(date) { mutableIntStateOf(0) }
     var viewportBounds by remember(date) { mutableStateOf(Rect.Zero) }
     var savedBlockDragPointerY by remember(date) { mutableStateOf<Float?>(null) }
+    var placementFailure by remember(date) { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(placementFailure) {
+        if (placementFailure != null) { delay(4_000); placementFailure = null }
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -391,6 +400,7 @@ private fun DayPage(
                     onSelectBlock = onSelectBlock,
                     onCommitMove = onCommitMove,
                     onSavedPlannedBlockDragPointer = { savedBlockDragPointerY = it },
+                    onPlacementError = { placementFailure = it },
                 )
                 }
                 SavedPlannedBlockDragEdgeScroll(
@@ -405,6 +415,9 @@ private fun DayPage(
                     viewportHeightPx = viewportHeightPx,
                 )
             }
+        }
+        placementFailure?.let { message ->
+            TransientFeedback(message, Modifier.padding(8.dp), isError = true)
         }
     }
 }

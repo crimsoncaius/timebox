@@ -216,7 +216,7 @@ internal fun PlanningWorkspace(
             }
             !insideTimeline -> Unit
             resolvedStart == null -> {
-                if (noSpace) dropFailure = "No available space in this time range"
+                if (noSpace) dropFailure = NO_NEARBY_BLOCK_SPACE
             }
             onDropPlanningTask != null -> {
                 val placement = PlanningDraftPlacement(day.date, active.task, resolvedStart, resolvedStart + dragDuration)
@@ -229,6 +229,17 @@ internal fun PlanningWorkspace(
             else -> onPlanTask(active.task.id, resolvedStart)
         }
     })
+
+    var pendingTapTask by remember(day.date) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(planningDrafts, pendingTapTask) {
+        val placement = planningDrafts.firstOrNull { it.taskId == pendingTapTask } ?: return@LaunchedEffect
+        val top = (placement.startMinute - day.visibleStart) / SLOT_MINUTES.toFloat() * slotPx
+        val bottom = (placement.endMinute - day.visibleStart) / SLOT_MINUTES.toFloat() * slotPx
+        if (top < timelineScroll.value || bottom > timelineScroll.value + viewportBounds.height) {
+            timelineScroll.animateScrollTo((top - viewportBounds.height / 3).roundToInt().coerceAtLeast(0))
+        }
+        pendingTapTask = null
+    }
 
     AutoScrollTimelineToNowOnce(
         day = day,
@@ -267,6 +278,7 @@ internal fun PlanningWorkspace(
                     onTapSlot = { lane, minute ->
                         val accessibleTask = state.accessibilityPlanningTaskId
                         if (lane == Lane.Planned && accessibleTask != null) {
+                            pendingTapTask = accessibleTask
                             onPlanTask(accessibleTask, minute)
                         }
                     },
@@ -274,6 +286,8 @@ internal fun PlanningWorkspace(
                     onCommitMove = onCommitMove,
                     showActual = false,
                     planningPreview = activePreview,
+                    placementSelected = state.accessibilityPlanningTaskId != null,
+                    onPlacementError = { dropFailure = it },
                     onPlannedLaneBoundsChanged = { laneBounds = it },
                     blockGesturesEnabled = false,
                     planningDrafts = planningDrafts,
@@ -329,7 +343,7 @@ internal fun PlanningWorkspace(
                 },
             )
         }
-        val message = if (noSpace) "No available space in this time range" else dropFailure
+        val message = if (noSpace) NO_NEARBY_BLOCK_SPACE else dropFailure
         if (message != null) {
             TransientFeedback(message, Modifier.align(Alignment.BottomCenter).padding(8.dp), isError = true)
         }
@@ -640,7 +654,9 @@ internal fun planningDropStart(
     grabOffsetPx: Float = 0f,
     originalStartMinute: Int? = null,
 ): Int? {
-    if (slotPx <= 0f || laneBounds == Rect.Zero || viewportBounds == Rect.Zero) return null
+    if (slotPx <= 0f || laneBounds == Rect.Zero || viewportBounds == Rect.Zero ||
+        visibleEnd <= visibleStart || durationMinutes <= 0
+    ) return null
     if (pointerRoot.x < laneBounds.left || pointerRoot.x > laneBounds.right) return null
     if (pointerRoot.y < viewportBounds.top || pointerRoot.y > viewportBounds.bottom) return null
     val rawStart = visibleStart +
@@ -651,8 +667,8 @@ internal fun planningDropStart(
         originalStartMinute + snapToBlockInteractionStep(rawStart - originalStartMinute)
     }
 
-    // A too-long draft still has an in-lane candidate so the UI can explain no space.
-    return start.coerceIn(visibleStart, maxOf(visibleStart, visibleEnd - durationMinutes))
+    // Keep the intended start so the resolver measures the full correction at day boundaries.
+    return start
 }
 
 internal fun isPlanningDropAvailable(
