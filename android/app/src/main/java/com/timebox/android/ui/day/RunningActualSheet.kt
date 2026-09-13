@@ -18,6 +18,7 @@ import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
+import com.timebox.android.ui.elapsedDuration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -107,7 +108,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
                 val started = parseActivityInstant(actual.startAt).atZone(zone)
                 val clock = DateTimeFormatter.ofPattern(if (started.toLocalDate() == now.atZone(zone).toLocalDate()) "HH:mm" else "d MMM, HH:mm")
                 val category = actual.taskType.name.takeUnless { it == "unspecified" }?.let { "$it · " }.orEmpty()
-                Text("$category${clock.format(started)} → Now · ${Duration.between(started.toInstant(), now).toMinutes().coerceAtLeast(0)} min",
+                Text("$category${clock.format(started)} → Now · ${elapsedDuration(Duration.between(started.toInstant(), now).toMinutes().coerceAtLeast(0))}",
                     color = colors.actual, style = TimeboxTheme.type.body)
                 if (!editing) {
                     actual.note?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.body) }
