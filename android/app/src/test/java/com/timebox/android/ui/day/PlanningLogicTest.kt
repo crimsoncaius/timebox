@@ -18,7 +18,7 @@ import java.time.Instant
 
 class PlanningLogicTest {
     @Test
-    fun `drop position snaps and clamps to the visible day`() {
+    fun `drop position retains the intended start for bounded resolution`() {
         val lane = Rect(40f, 100f, 240f, 820f)
         val viewport = Rect(0f, 80f, 300f, 500f)
 
@@ -27,7 +27,7 @@ class PlanningLogicTest {
             planningDropStart(Offset(100f, 204f), lane, viewport, 8 * 60, 20 * 60, 48f),
         )
         assertEquals(
-            8 * 60,
+            8 * 60 - 10,
             planningDropStart(Offset(100f, 82f), lane, viewport, 8 * 60, 20 * 60, 48f),
         )
         assertNull(planningDropStart(Offset(260f, 196f), lane, viewport, 8 * 60, 20 * 60, 48f))

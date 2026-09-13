@@ -20,7 +20,13 @@ const block: TimeBlock = {
 
 function renderCard(overrides?: {
   slotHeightPx?: number
+  lane?: 'planned' | 'actual'
+  timeEditingDisabled?: boolean
   isSelected?: boolean
+  sameLaneBlocks?: TimeBlock[]
+  resizeMaxEndMinute?: number
+  resizeMinStartMinute?: number
+  onPlacementError?: (message: string) => void
   onPatch?: (patch: { start_minute?: number; end_minute?: number }) => Promise<void>
   onBlockClick?: () => boolean | void
   onDragSessionChange?: (active: boolean) => void
@@ -31,15 +37,17 @@ function renderCard(overrides?: {
   const view = render(
     <div style={{ position: 'relative', height: 400 }}>
       <TimeBlockCard
-        block={block}
-        lane="planned"
+        block={{ ...block, lane: overrides?.lane ?? 'planned' }}
+        lane={overrides?.lane ?? 'planned'}
+        timeEditingDisabled={overrides?.timeEditingDisabled}
         visibleStartMin={480}
         visibleEndMin={600}
         slotHeightPx={overrides?.slotHeightPx ?? 20}
         readOnly={false}
-        sameLaneBlocks={[block]}
-        resizeMinStartMinute={0}
-        resizeMaxEndMinute={1440}
+        sameLaneBlocks={overrides?.sameLaneBlocks ?? [block]}
+        resizeMinStartMinute={overrides?.resizeMinStartMinute ?? 0}
+        resizeMaxEndMinute={overrides?.resizeMaxEndMinute ?? 1440}
+        onPlacementError={overrides?.onPlacementError}
         getMinuteFromClientY={(clientY) => clientY}
         onPatch={onPatch}
         onBlockClick={onBlockClick}
@@ -49,7 +57,7 @@ function renderCard(overrides?: {
     </div>,
   )
 
-  const body = screen.getByRole('button', { name: 'Edit planned block' })
+  const body = screen.getByRole('button', { name: `Edit ${overrides?.lane ?? 'planned'} block` })
   const shell = view.container.querySelector('[data-block-id="10"]') as HTMLDivElement
 
   return { ...view, body, shell, onPatch, onBlockClick }
@@ -92,6 +100,84 @@ describe('TimeBlockCard', () => {
   afterEach(() => {
     HTMLElement.prototype.setPointerCapture = originalSetPointerCapture
     HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
+  })
+
+  it('moves Actual Blocks to the nearest gap including a distant original slot', () => {
+    const onPlacementError = vi.fn()
+    const neighbor = { ...block, id: 11, lane: 'actual' as const, start_minute: 540, end_minute: 600 }
+    const view = renderCard({ lane: 'actual', sameLaneBlocks: [block, neighbor], onPlacementError })
+    dragBlock(view.body)
+    expect(view.onPatch).toHaveBeenCalledWith({ start_minute: 510, end_minute: 540 })
+    view.unmount()
+    const rejected = renderCard({ lane: 'actual', sameLaneBlocks: [block, { ...neighbor, start_minute: 510 }], onPlacementError })
+    dragBlock(rejected.body)
+    expect(rejected.onPatch).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+  })
+
+  it('clamps Actual resize at exact neighbor boundaries', () => {
+    const neighbor = { ...block, id: 11, start_minute: 547, end_minute: 600 }
+    const { onPatch } = renderCard({ slotHeightPx: 80, lane: 'actual', sameLaneBlocks: [block, neighbor], resizeMaxEndMinute: 547 })
+    const edge = screen.getByRole('button', { name: 'Resize block end' })
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientY: 510 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientY: 600 })
+    fireEvent.pointerUp(window, { pointerId: 1, clientY: 600 })
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 480, end_minute: 547 })
+  })
+
+  it('keeps running Actual time fixed while allowing selection', () => {
+    const { body, onPatch, onBlockClick } = renderCard({ lane: 'actual', timeEditingDisabled: true })
+    dragBlock(body)
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(onBlockClick).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Resize block end' })).not.toBeInTheDocument()
+  })
+
+  it('commits an end resize at an exact off-grid neighbor boundary', () => {
+    const neighbor = { ...block, id: 11, start_minute: 547, end_minute: 600 }
+    const { onPatch } = renderCard({ slotHeightPx: 80, sameLaneBlocks: [block, neighbor], resizeMaxEndMinute: 547 })
+    const edge = screen.getByRole('button', { name: 'Resize block end' })
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientY: 510 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientY: 600 })
+    fireEvent.pointerUp(window, { pointerId: 1, clientY: 600 })
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 480, end_minute: 547 })
+  })
+
+  it('keeps the original slot when it is the closest available space', () => {
+    const onPlacementError = vi.fn()
+    const neighbor = { ...block, id: 11, start_minute: 510, end_minute: 600 }
+    const { body, onPatch, shell } = renderCard({ sameLaneBlocks: [block, neighbor], onPlacementError })
+    dragBlock(body) // intended start 540; the only available start is 480 (60 minutes away)
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+    expect(shell.style.top).toBe('0px')
+  })
+
+  it('ignores movement direction and saves the closest start shown in the preview', () => {
+    const neighbor = { ...block, id: 11, start_minute: 540, end_minute: 600 }
+    const { body, onPatch } = renderCard({ sameLaneBlocks: [block, neighbor] })
+    dragBlock(body) // 510 is closer than the later side at 600
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 510, end_minute: 540 })
+  })
+
+  it('rejects a preview occupied immediately before release without selecting another slot', () => {
+    const onPatch = vi.fn(() => Promise.resolve())
+    const onPlacementError = vi.fn()
+    const view = renderCard({ onPatch, onPlacementError })
+    fireEvent.pointerDown(view.body, { button: 0, pointerId: 1, clientX: 10, clientY: 100 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 180 })
+    expect(parseFloat(view.shell.style.top)).toBeCloseTo(80 / 30 * 20)
+    const neighbor = { ...block, id: 11, start_minute: 540, end_minute: 570 }
+    view.rerender(<div style={{ position: 'relative', height: 400 }}>
+      <TimeBlockCard block={block} lane="planned" visibleStartMin={480} visibleEndMin={600}
+        slotHeightPx={20} readOnly={false} sameLaneBlocks={[block, neighbor]}
+        resizeMinStartMinute={480} resizeMaxEndMinute={540}
+        getMinuteFromClientY={y => y} onPatch={onPatch} onPlacementError={onPlacementError} />
+    </div>)
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 10, clientY: 180 })
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(onPlacementError).toHaveBeenCalledWith('That time is no longer available')
+    expect(view.shell.style.top).toBe('0px')
   })
 
   it('shows linked Block Name as Day identity and the Battle Plan Task as context', () => {
@@ -143,8 +229,8 @@ describe('TimeBlockCard', () => {
 
     dragBlock(body)
 
-    expect(onPatch).toHaveBeenCalledWith({ start_minute: 540, end_minute: 570 })
-    expect(shell.style.top).toBe('40px')
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 560, end_minute: 590 })
+    expect(parseFloat(shell.style.top)).toBeCloseTo(80 / 30 * 20)
 
     patchControl.resolve?.()
   })
@@ -178,7 +264,7 @@ describe('TimeBlockCard', () => {
 
     dragBlock(body)
 
-    expect(onPatch).toHaveBeenCalledWith({ start_minute: 540, end_minute: 570 })
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 560, end_minute: 590 })
     expect(onPatch).toHaveBeenCalledTimes(1)
   })
 
@@ -378,11 +464,11 @@ describe('TimeBlockCard', () => {
 
     /**
      * clientY is absolute minute. Body pointer gesture ignores moves until 8px from pointer-down (dead zone).
-     * First move past dead zone anchors the vertical axis; then raw = originStart + (clientY - anchor).
+     * The pointer-down coordinate anchors the vertical axis; movement keeps minute precision.
      */
     fireEvent.pointerDown(body, { button: 0, pointerId: 1, clientX: 10, clientY: 480 })
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 489 })
-    /** anchor = 489; raw 510 → preview commits at 510 */
+    /** Raw 519 resolves to the nearest free start at 510. */
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 519 })
     expect(shell.style.top).toBe('20px')
 
@@ -392,12 +478,12 @@ describe('TimeBlockCard', () => {
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 530 })
     expect(shell.style.top).toBe('20px')
 
-    /** raw ≥ 592 switches block to 600; use anchor 489 → clientY 489 + 112 = 601 */
+    /** Beyond the neighbor, the free position retains its exact minute. */
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 10, clientY: 601 })
-    expect(shell.style.top).toBe('80px')
+    expect(parseFloat(shell.style.top)).toBeCloseTo(121 / 30 * 20)
 
     fireEvent.pointerUp(window, { pointerId: 1, clientX: 10, clientY: 601 })
 
-    expect(onPatch).toHaveBeenCalledWith({ start_minute: 600, end_minute: 630 })
+    expect(onPatch).toHaveBeenCalledWith({ start_minute: 601, end_minute: 631 })
   })
 })

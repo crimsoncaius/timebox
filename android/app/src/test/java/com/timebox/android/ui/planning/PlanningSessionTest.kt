@@ -49,26 +49,33 @@ class PlanningSessionTest {
         session.refreshQueue()
         session.begin()
 
-        assertEquals(
-            PlanningEditResult.Rejected("That time is already planned"),
-            session.place(1, day, 10 * 60),
-        )
-        assertEquals(PlanningEditResult.Accepted, session.place(1, day, 11 * 60))
+        assertEquals(PlanningEditResult.Accepted, session.place(1, day, 10 * 60))
+        assertEquals(570, session.state.value.drafts.getValue(1).startMinute)
         assertNull(session.state.value.selectedTaskId)
+        assertEquals(PlanningEditResult.Accepted, session.place(2, day, 10 * 60 + 30))
+        assertEquals(660, session.state.value.drafts.getValue(2).startMinute)
         assertEquals(
             PlanningEditResult.Rejected("That time is already planned"),
-            session.place(2, day, 11 * 60),
+            session.update(2, 10 * 60, 11 * 60),
         )
-        assertEquals(PlanningEditResult.Accepted, session.place(2, day, 12 * 60))
-        assertEquals(
-            PlanningEditResult.Rejected("That time is already planned"),
-            session.update(2, 11 * 60, 12 * 60),
-        )
-
         session.returnTask(1)
-
         assertEquals(setOf(2), session.state.value.drafts.keys)
-        assertEquals(PlanningEditResult.Accepted, session.update(2, 11 * 60, 12 * 60))
+        assertEquals(PlanningEditResult.Accepted, session.update(2, 9 * 60, 10 * 60))
+    }
+
+    @Test
+    fun `tap rejects a full day and preserves selection`() = runTest {
+        val session = PlanningSession(InMemoryPlanningSessionTransport(listOf(task(1, ready = true))))
+        session.refreshQueue()
+        session.begin()
+        session.toggleSelection(1)
+        val occupied = day(blocks = arrayOf(block(99, 480, 1200)))
+        assertEquals(PlanningEditResult.Rejected("No available space in this day"),
+            session.place(1, occupied, 600))
+        assertTrue(session.state.value.drafts.isEmpty())
+        assertEquals(1, session.state.value.selectedTaskId)
+        assertEquals(PlanningEditResult.Accepted, session.place(1, day(blocks = arrayOf(block(99, 480, 631))), 600))
+        assertEquals(631, session.state.value.drafts.getValue(1).startMinute)
     }
 
     @Test
@@ -134,6 +141,19 @@ class PlanningSessionTest {
         assertFalse(2 in session.state.value.drafts)
         assertEquals(PlanningEditResult.Accepted, session.drop(1, refreshedDay, 630, 660))
         assertEquals(630, session.state.value.drafts.getValue(1).startMinute)
+    }
+
+    @Test
+    fun `resize validates fresh saved blocks and preserves the original draft on conflict`() = runTest {
+        val session = PlanningSession(InMemoryPlanningSessionTransport(listOf(task(1, ready = true))))
+        session.refreshQueue()
+        session.begin()
+        session.place(1, day(), 540)
+        val refreshed = day(blocks = arrayOf(block(99, 587, 630)))
+        assertEquals(PlanningEditResult.Rejected("That time is already planned"),
+            session.update(1, 540, 600, refreshed))
+        assertEquals(570, session.state.value.drafts.getValue(1).endMinute)
+        assertEquals(PlanningEditResult.Accepted, session.update(1, 540, 587, refreshed))
     }
 
     @Test

@@ -335,7 +335,7 @@ describe('TodayPage inspector rail', () => {
     const taskButtons = await screen.findAllByRole('button', { name: /Write launch narrative/ })
     await user.click(taskButtons[0]!)
 
-    expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
+    expect(screen.getByText(/is selected\. Choose a time/)).toHaveTextContent('Write launch narrative')
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
     expect(screen.getByText('Finish planning to start Work Mode.')).toBeVisible()
@@ -344,6 +344,36 @@ describe('TodayPage inspector rail', () => {
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
     await user.click(taskButtons[0]!)
     expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
+  })
+
+  it('places a manual Actual draft beside occupied time and fits future clicks into elapsed time', async () => {
+    standaloneActual = {
+      id: 41, task_type_id: 1, task_type: taskTypes[0], task_id: null, task: null,
+      name: 'Recorded activity', note: null, planned_block_id: null,
+      start_at: '2026-06-01T08:30:00Z', end_at: '2026-06-01T09:00:00Z', created_at: '', updated_at: '',
+    }
+    const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByText('Recorded activity')
+    const lane = view.container.querySelector('[data-day-lane="actual"]')!
+    fireEvent.click(lane, { clientY: 461 }) // 13:00, more than 30 minutes from an elapsed slot
+    expect(screen.getByTestId('draft-block').style.top).toBe('322px')
+    fireEvent.click(lane, { clientY: 47 }) // 08:30, nearest full slot ties and goes later to 09:00
+    expect(screen.getByTestId('draft-block').style.top).toBe('92px')
+  })
+
+  it('places a selected task over an occupied card at the closest available time', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    const taskButtons = await screen.findAllByRole('button', { name: /Write launch narrative/ })
+    await user.click(taskButtons[0]!)
+    // Overlay covers the saved card at 08:00; its ordinary editor must not open.
+    fireEvent.click(screen.getByTestId('planned-placement-target'), { clientY: 1 })
+    await waitFor(() => {
+      const request = vi.mocked(globalThis.fetch).mock.calls.find(([input, init]) =>
+        String(input).includes('/days/2026-06-01/blocks') && init?.method === 'POST')
+      expect(request).toBeDefined()
+      expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({ start_minute: 510, end_minute: 540, task_id: 77 })
+    })
   })
 
   it('places a nested quota Session Task as an ordinary Planned Task', async () => {
@@ -468,11 +498,11 @@ describe('TodayPage inspector rail', () => {
     expect(screen.getByRole('button', { name: 'Write launch narrative' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('heading', { name: 'New block' })).toBeInTheDocument()
     expect(screen.getByText('Selected from Ready to Plan')).toBeInTheDocument()
-    expect(screen.getByText(/is selected\. Choose an open slot/)).toHaveTextContent('Write launch narrative')
+    expect(screen.getByText(/is selected\. Choose a time/)).toHaveTextContent('Write launch narrative')
     if (clearSelectionFirst) {
       fireEvent.click(screen.getByRole('button', { name: 'Write launch narrative' }))
       expect(screen.getByRole('button', { name: 'Write launch narrative' })).toHaveAttribute('aria-pressed', 'false')
-      expect(screen.queryByText(/is selected\. Choose an open slot/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/is selected\. Choose a time/)).not.toBeInTheDocument()
       expect(screen.getByText('Selected from Ready to Plan')).toBeInTheDocument()
     }
 
@@ -492,7 +522,7 @@ describe('TodayPage inspector rail', () => {
     })
 
     await waitFor(() => {
-      expect(screen.queryByText(/is selected\. Choose an open slot/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/is selected\. Choose a time/)).not.toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: 'New block' })).not.toBeInTheDocument()
       expect(screen.queryByText('Selected from Ready to Plan')).not.toBeInTheDocument()
     })

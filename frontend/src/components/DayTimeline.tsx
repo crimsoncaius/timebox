@@ -4,6 +4,7 @@ import type { BlockDraftPlacement, BlockLane, DayRead, TimeBlock } from '../lib/
 import {
   calendarIsoDateInTimeZone,
   formatHourLabelGcal12,
+  formatTimeRangeGcal12,
   gapBoundsForDraft,
   MINUTES_PER_DAY,
   minuteFromPointerYInVisibleLane,
@@ -13,6 +14,7 @@ import {
   TIMELINE_SLOT_HEIGHT_PX,
   visibleMinuteRange,
 } from '../lib/time'
+import { actualPlacementEnd, nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../lib/blockPlacement'
 import { TimeBlockCard } from './TimeBlockCard'
 
 export const READY_TASK_DRAG_TYPE = 'ready-to-plan-task'
@@ -53,6 +55,9 @@ export const DayTimeline = forwardRef<
     onBlockDragSessionChange?: (active: boolean) => void
     /** Position today's now line once, leaving more room below it for upcoming work. */
     autoScrollToNow?: boolean
+    placementSelected?: boolean
+    placementPreview?: { start: number; end: number } | null
+    onPlacementError?: (message: string) => void
   }
 >(function DayTimeline(
   {
@@ -66,6 +71,9 @@ export const DayTimeline = forwardRef<
     onBlockClick,
     onBlockDragSessionChange,
     autoScrollToNow = false,
+    placementSelected = false,
+    placementPreview = null,
+    onPlacementError,
   },
   ref,
 ) {
@@ -158,8 +166,7 @@ export const DayTimeline = forwardRef<
 
   const onLaneClick = (lane: BlockLane, e: React.MouseEvent<HTMLDivElement>) => {
     if (readOnly) return
-    if ((e.target as HTMLElement).closest('[data-block]')) return
-    if ((e.target as HTMLElement).closest('[data-draft-block]')) return
+    if (!(lane === 'planned' && placementSelected) && (e.target as HTMLElement).closest('[data-block], [data-draft-block]')) return
     const el = e.currentTarget
     const top = el.getBoundingClientRect().top
     const y = e.clientY - top
@@ -274,6 +281,9 @@ export const DayTimeline = forwardRef<
       <Lane
         laneRef={plannedRef}
         lane="planned"
+        placementSelected={placementSelected}
+        placementPreview={placementPreview}
+        onPlacementError={onPlacementError}
         slotHeightPx={slotHeightPx}
         totalHeight={totalHeight}
         slotCount={slotCount}
@@ -298,7 +308,9 @@ export const DayTimeline = forwardRef<
         slotCount={slotCount}
         visibleStartMin={visibleStartMin}
         visibleEndMin={visibleEndMin}
+        placementEndMin={actualPlacementEnd(day)}
         blocks={blocksFor('actual')}
+        onPlacementError={onPlacementError}
         draft={draft?.lane === 'actual' ? draft : null}
         readOnly={readOnly}
         onLaneClick={(e) => onLaneClick('actual', e)}
@@ -343,6 +355,7 @@ function DraftBlockOverlay({
   lane,
   readOnly,
   onDraftTimeChange,
+  onPlacementError,
 }: {
   draft: BlockDraftPlacement
   blocks: TimeBlock[]
@@ -353,14 +366,18 @@ function DraftBlockOverlay({
   lane: BlockLane
   readOnly: boolean
   onDraftTimeChange?: (startMin: number, endMin: number) => void
+  onPlacementError?: (message: string) => void
 }) {
   const [drag, setDrag] = useState<{
-    kind: 'resize'
-    edge: 'start' | 'end'
+    kind: 'resize' | 'move'
+    edge: 'start' | 'end' | 'move'
+    invalid?: boolean
     start: number
     end: number
   } | null>(null)
   const dragRef = useRef(drag)
+  const latestDraft = useRef({ blocks })
+  useEffect(() => { latestDraft.current = { blocks } }, [blocks])
 
   useEffect(() => {
     dragRef.current = drag
@@ -384,13 +401,16 @@ function DraftBlockOverlay({
     const d = dragRef.current
     dragRef.current = null
     setDrag(null)
-    if (!d || d.kind !== 'resize') return
+    if (!d) return
     const { start, end } = d
     if (end - start < SLOT_MINUTES) return
-    if (start % SLOT_MINUTES !== 0 || end % SLOT_MINUTES !== 0) return
+    if (d.invalid) { onPlacementError?.(NO_NEARBY_BLOCK_SPACE); return }
+    if (!blockRangeAvailable(latestDraft.current.blocks, start, end, visibleStartMin, visibleEndMin)) {
+      onPlacementError?.('That time is no longer available'); return
+    }
     if (start === draft.start_minute && end === draft.end_minute) return
     onDraftTimeChange?.(start, end)
-  }, [draft.end_minute, draft.start_minute, onDraftTimeChange])
+  }, [draft.end_minute, draft.start_minute, onDraftTimeChange, onPlacementError, visibleStartMin, visibleEndMin])
 
   const cancelDrag = useCallback(() => {
     dragRef.current = null
@@ -399,16 +419,17 @@ function DraftBlockOverlay({
 
   const resizeBoundsRef = useRef({ minStartMinute: 0, maxEndMinute: MINUTES_PER_DAY })
 
-  const startResize = useCallback(
-    (edge: 'start' | 'end', e: React.PointerEvent) => {
+  const startDraftDrag = useCallback(
+    (edge: 'start' | 'end' | 'move', e: React.PointerEvent) => {
       if (readOnly || !onDraftTimeChange) return
       e.stopPropagation()
       e.preventDefault()
       const el = e.currentTarget as HTMLElement
       const pointerId = e.pointerId
+      const anchor = getMinuteFromClientY(e.clientY)
       resizeBoundsRef.current = gapBoundsForDraft(blocks, draft.start_minute, draft.end_minute)
       const initial = {
-        kind: 'resize' as const,
+        kind: edge === 'move' ? 'move' as const : 'resize' as const,
         edge,
         start: draft.start_minute,
         end: draft.end_minute,
@@ -419,19 +440,24 @@ function DraftBlockOverlay({
       const onMove = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return
         setDrag((cur) => {
-          if (!cur || cur.kind !== 'resize') return cur
+          if (!cur) return cur
           const { minStartMinute, maxEndMinute } = resizeBoundsRef.current
           const m = getMinuteFromClientY(ev.clientY)
           let next: typeof cur
-          if (cur.edge === 'start') {
+          if (cur.kind === 'move') {
+            const duration = draft.end_minute - draft.start_minute
+            const candidate = draft.start_minute + m - anchor
+            const start = nearestBlockStart(latestDraft.current.blocks, candidate, duration, visibleStartMin, visibleEndMin)
+            next = { ...cur, start: start ?? candidate, end: (start ?? candidate) + duration, invalid: start === null }
+          } else if (cur.edge === 'start') {
             const ns = Math.min(m, cur.end - SLOT_MINUTES)
             next = {
               ...cur,
-              start: Math.max(minStartMinute, Math.max(0, ns)),
+              start: Math.max(minStartMinute, Math.max(visibleStartMin, ns)),
             }
           } else {
             const ne = Math.max(m, cur.start + SLOT_MINUTES)
-            next = { ...cur, end: Math.min(maxEndMinute, Math.min(24 * 60, ne)) }
+            next = { ...cur, end: Math.min(maxEndMinute, Math.min(visibleEndMin, ne)) }
           }
           dragRef.current = next
           return next
@@ -478,6 +504,8 @@ function DraftBlockOverlay({
       getMinuteFromClientY,
       onDraftTimeChange,
       readOnly,
+      visibleStartMin,
+      visibleEndMin,
     ],
   )
 
@@ -497,7 +525,7 @@ function DraftBlockOverlay({
       data-draft-block
       data-testid="draft-block"
       data-dragging={isDragging ? 'true' : undefined}
-      data-drag-kind={isDragging ? 'resize' : undefined}
+      data-drag-kind={drag?.kind}
       className={`absolute left-1 right-1 flex flex-col overflow-hidden rounded-md border border-dashed border-primary/40 transition-[box-shadow,background-color] duration-150 dark:border-dark-outline dark:bg-primary-container/10 ${
         isDragging
           ? 'z-30 bg-primary-container/35 shadow-[0_0_40px_rgba(45,52,53,0.1)] ring-1 ring-inset ring-primary/25 dark:bg-dark-surface-container-high/45 dark:shadow-[0_0_40px_rgba(0,0,0,0.3)]'
@@ -512,16 +540,20 @@ function DraftBlockOverlay({
           type="button"
           aria-label={`Resize draft block start (${laneLabel})`}
           className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-dark-on-surface/10 dark:hover:bg-dark-on-surface/20"
-          onPointerDown={(e) => startResize('start', e)}
+          onPointerDown={(e) => startDraftDrag('start', e)}
         />
       )}
-      <div className="min-h-0 flex-1" aria-hidden />
+      {<button type="button" className="min-h-0 flex-1 text-xs touch-none"
+        aria-label={`Move draft ${lane} block`} disabled={readOnly}
+        onPointerDown={e => startDraftDrag('move', e)}>
+        {drag?.invalid ? NO_NEARBY_BLOCK_SPACE : formatTimeRangeGcal12(displayStart, displayEnd)}
+      </button>}
       {!readOnly && onDraftTimeChange && (
         <button
           type="button"
           aria-label={`Resize draft block end (${laneLabel})`}
           className="h-2 w-full shrink-0 cursor-ns-resize border-0 bg-on-surface/10 hover:bg-on-surface/20 dark:bg-dark-on-surface/10 dark:hover:bg-dark-on-surface/20"
-          onPointerDown={(e) => startResize('end', e)}
+          onPointerDown={(e) => startDraftDrag('end', e)}
         />
       )}
     </div>
@@ -546,6 +578,10 @@ function Lane({
   onDraftTimeChange,
   selectedBlockId,
   onBlockDragSessionChange,
+  placementSelected = false,
+  placementPreview = null,
+  placementEndMin = visibleEndMin,
+  onPlacementError,
 }: {
   laneRef: React.RefObject<HTMLDivElement | null>
   lane: BlockLane
@@ -555,7 +591,7 @@ function Lane({
   slotCount: number
   visibleStartMin: number
   visibleEndMin: number
-  blocks: TimeBlock[]
+  blocks: (TimeBlock & { end_at?: string | null })[]
   draft: BlockDraftPlacement | null
   readOnly: boolean
   onLaneClick: (e: React.MouseEvent<HTMLDivElement>) => void
@@ -570,8 +606,12 @@ function Lane({
   ) => Promise<void>
   onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
   onDraftTimeChange?: (startMin: number, endMin: number) => void
+  onPlacementError?: (message: string) => void
   selectedBlockId: number | null
   onBlockDragSessionChange?: (active: boolean) => void
+  placementSelected?: boolean
+  placementPreview?: { start: number; end: number } | null
+  placementEndMin?: number
 }) {
   const { ref: dropRef, isDropTarget } = useDroppable({
     id: lane === 'planned' ? PLANNED_LANE_DROP_ID : 'day-actual-lane',
@@ -591,6 +631,7 @@ function Lane({
    * auto-placed lanes into an implicit row.
    */
   const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-3' : 'col-start-3 row-start-3'
+  const collisionBlocks = draft ? [...blocks, { id: -1, ...draft }] : blocks
   return (
     <div
       ref={setLaneRef}
@@ -616,18 +657,19 @@ function Lane({
         )
       })}
       {blocks.map((b) => {
-        const { minStartMinute, maxEndMinute } = sameLaneResizeBounds(blocks, b.id)
+        const { minStartMinute, maxEndMinute } = sameLaneResizeBounds(collisionBlocks, b.id)
         return (
           <TimeBlockCard
             key={b.id}
             block={b}
             lane={lane}
             visibleStartMin={visibleStartMin}
-            visibleEndMin={visibleEndMin}
+            visibleEndMin={placementEndMin}
             slotHeightPx={slotHeightPx}
             readOnly={readOnly}
             timeEditingDisabled={runningBlockIds.includes(b.id)}
-            sameLaneBlocks={blocks}
+            sameLaneBlocks={collisionBlocks}
+            onPlacementError={onPlacementError}
             resizeMinStartMinute={minStartMinute}
             resizeMaxEndMinute={maxEndMinute}
             getMinuteFromClientY={(cy) => {
@@ -655,13 +697,24 @@ function Lane({
           draft={draft}
           blocks={blocks}
           visibleStartMin={visibleStartMin}
-          visibleEndMin={visibleEndMin}
+          visibleEndMin={placementEndMin}
           slotHeightPx={slotHeightPx}
           laneRef={laneRef}
           lane={lane}
           readOnly={readOnly}
           onDraftTimeChange={onDraftTimeChange}
+          onPlacementError={onPlacementError}
         />
+      )}
+      {placementPreview && (
+        <div data-testid="planned-placement-preview" className="pointer-events-none absolute inset-x-1 z-40 border border-planned bg-planned-surface/80 p-1 text-xs"
+          style={{ top: (placementPreview.start - visibleStartMin) / SLOT_MINUTES * slotHeightPx,
+            height: (placementPreview.end - placementPreview.start) / SLOT_MINUTES * slotHeightPx }}>
+          {formatTimeRangeGcal12(placementPreview.start, placementPreview.end)}
+        </div>
+      )}
+      {placementSelected && (
+        <div data-testid="planned-placement-target" className="absolute inset-0 z-50 cursor-crosshair" />
       )}
     </div>
   )

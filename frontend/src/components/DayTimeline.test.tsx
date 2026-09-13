@@ -20,11 +20,11 @@ const day: DayRead = {
   meta: { timezone: 'UTC', today: '2026-06-01', server_now_iso: '2026-06-01T12:00:00Z' },
 }
 
-function renderTimeline(onDraftTimeChange: (startMin: number, endMin: number) => void) {
+function renderTimeline(onDraftTimeChange: (startMin: number, endMin: number) => void, dayValue = day) {
   const view = render(
     <DragDropProvider>
       <DayTimeline
-        day={day}
+        day={dayValue}
         readOnly={false}
         draft={{ lane: 'planned', start_minute: 480, end_minute: 510 }}
         selectedBlockId={null}
@@ -64,6 +64,45 @@ describe('DayTimeline draft resize', () => {
   afterEach(() => {
     HTMLElement.prototype.setPointerCapture = originalSetPointerCapture
     HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
+  })
+
+  it('moves an Actual draft and clamps its resize at the current-time boundary', () => {
+    const changed = vi.fn()
+    render(<DragDropProvider><DayTimeline day={day} readOnly={false}
+      draft={{ lane: 'actual', start_minute: 660, end_minute: 690 }} selectedBlockId={null}
+      onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} onDraftTimeChange={changed} />
+    </DragDropProvider>)
+    const edge = screen.getByRole('button', { name: 'Resize draft block end (Actual)' })
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientY: 322 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientY: 460 })
+    fireEvent.pointerUp(window, { pointerId: 1, clientY: 460 })
+    expect(changed).toHaveBeenCalledWith(660, 720)
+    expect(screen.getByRole('button', { name: 'Move draft actual block' })).toBeInTheDocument()
+  })
+
+  it('resizes a draft exactly to a neighboring off-grid boundary', () => {
+    const changed = vi.fn()
+    const neighbor = { id: 1, lane: 'planned' as const, start_minute: 547, end_minute: 600,
+      task_type_id: 1, task_type: { id: 1, name: 'work', created_at: '', updated_at: '' },
+      note: null, created_at: '', updated_at: '' }
+    const { resizeEnd } = renderTimeline(changed, { ...day, time_blocks: [neighbor] })
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 4, clientY: 46 })
+    fireEvent.pointerMove(window, { pointerId: 4, clientY: 184 })
+    fireEvent.pointerUp(window, { pointerId: 4, clientY: 184 })
+    expect(changed).toHaveBeenCalledWith(480, 547)
+  })
+
+  it('moves a draft into the closest fitting gap without shortening it', () => {
+    const changed = vi.fn()
+    const neighbor = { id: 1, lane: 'planned' as const, start_minute: 540, end_minute: 600,
+      task_type_id: 1, task_type: { id: 1, name: 'work', created_at: '', updated_at: '' },
+      note: null, created_at: '', updated_at: '' }
+    renderTimeline(changed, { ...day, time_blocks: [neighbor] })
+    const body = screen.getByRole('button', { name: 'Move draft planned block' })
+    fireEvent.pointerDown(body, { button: 0, pointerId: 4, clientY: 20 })
+    fireEvent.pointerMove(window, { pointerId: 4, clientY: 112 })
+    fireEvent.pointerUp(window, { pointerId: 4, clientY: 112 })
+    expect(changed).toHaveBeenCalledWith(510, 540)
   })
 
   it('cancels without changing the draft and remains resizable after cancellation or capture loss', () => {
@@ -107,7 +146,7 @@ describe('DayTimeline Actual Block movement', () => {
     HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
   })
 
-  it('moves an Actual Block through the lane-aware patch callback', () => {
+  it('moves an Actual Block preserving its off-grid start and duration through the lane-aware patch callback', () => {
     const onPatchBlock = vi.fn(() => Promise.resolve())
     render(
       <DragDropProvider>
@@ -151,7 +190,7 @@ describe('DayTimeline Actual Block movement', () => {
 
     expect(onPatchBlock).toHaveBeenCalledWith(
       40,
-      { start_minute: 586, end_minute: 615 },
+      { start_minute: 593, end_minute: 622 },
       'actual',
     )
   })

@@ -57,6 +57,43 @@ class PlanModeScreenTest {
     @Test fun queueDropLaterInDayUsesVisibleTime() = queueDropUsesVisibleTime(7)
 
     @Test
+    fun selectedTaskTapOverOccupiedCardCreatesNearestDraft() {
+        val date = LocalDate.of(2026, 8, 20)
+        val ready = task(42, "Tap into occupied time")
+        val day = emptyDay(date).copy(blocks = listOf(plannedBlock(480, 570)))
+        val session = PlanningSession(object : PlanningSessionTransport {
+            override suspend fun loadScopedTasks(planningDate: LocalDate?) = Result.success(listOf(ready))
+            override suspend fun commit(placements: List<PlanningCommitPlacement>): Result<List<Day>> = error("Not saving")
+        })
+        runBlocking { session.refreshQueue() }
+        session.begin()
+        session.toggleSelection(ready.id)
+        var state by mutableStateOf(DayUiState(date = date,
+            pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
+            planning = session.state.value))
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                PlanningWorkspace(state = state, day = day,
+                    onSelectBlock = { error("Placement must take priority over opening the card") },
+                    onCommitMove = { _, _, _ -> },
+                    onPlanTask = { id, minute -> session.place(id, day, minute); state = state.copy(planning = session.state.value) },
+                    onUpdatePlanningDraft = { _, _, _ -> }, onReturnPlanningDraft = {},
+                    onArmAccessibleTask = {}, onRetryReadyTasks = {}, modifier = Modifier.height(400.dp))
+            }
+        }
+        val slotPx = with(compose.density) { TimeboxDimens.slotHeight.toPx() }
+        compose.onNodeWithTag("planned-placement-target").performTouchInput {
+            down(Offset(center.x, slotPx * 2f))
+            up()
+        }
+        compose.runOnIdle {
+            val draft = session.state.value.drafts.getValue(ready.id)
+            check(draft.startMinute == 570 && draft.endMinute == 600) { "$draft" }
+        }
+        compose.onNodeWithContentDescription("Planning draft Tap into occupied time").fetchSemanticsNode()
+    }
+
+    @Test
     fun pendingReadyToPlanAdditionIsShownAsSavingAndUnavailable() {
         val date = LocalDate.of(2026, 8, 20)
         val day = emptyDay(date)
@@ -417,7 +454,7 @@ class PlanModeScreenTest {
                     note = null,
                     plannedBlockId = null,
                     startMinute = 8 * 60,
-                    endMinute = 12 * 60,
+                    endMinute = 9 * 60 + 30,
                 ),
             ),
         )
@@ -455,10 +492,10 @@ class PlanModeScreenTest {
             advanceEventTime(1_000)
             moveTo(Offset(lane.center.x, lane.top + 2.5f * slotPx))
         }
-        compose.onNodeWithText("12:00–12:30").fetchSemanticsNode()
+        compose.onNodeWithText("09:30–10:00").fetchSemanticsNode()
         saveDragScreenshot("nearest-placement")
         compose.onRoot().performTouchInput { up() }
-        compose.runOnIdle { check(placement == 42 to 720) }
+        compose.runOnIdle { check(placement == 42 to 570) }
     }
 
     @Test
@@ -504,7 +541,7 @@ class PlanModeScreenTest {
         )
         setPlanningContent(state, RecordingHaptics(), onPlanTask = { id, start -> placement = id to start })
         dragQueueTaskToMorning("No room")
-        compose.onNodeWithText("No available space in this time range").fetchSemanticsNode()
+        compose.onNodeWithText(NO_NEARBY_BLOCK_SPACE).fetchSemanticsNode()
         compose.onNodeWithTag("planning-drop-outline").assertDoesNotExist()
         compose.onRoot().performTouchInput { up() }
         compose.runOnIdle { check(placement == null) }
@@ -512,7 +549,7 @@ class PlanModeScreenTest {
     }
 
     @Test
-    fun offscreenSnapShowsTimeWithoutJumpingAndEdgeHoldStillScrolls() {
+    fun distantGapIsPreviewedWithoutJumpingAndEdgeHoldStillScrolls() {
         val date = LocalDate.of(2026, 8, 20)
         val day = emptyDay(date).copy(blocks = listOf(plannedBlock(480, 960)))
         val state = DayUiState(
@@ -532,7 +569,7 @@ class PlanModeScreenTest {
         val timeline = compose.onNode(hasScrollAction() and hasAnyDescendant(hasTestTag("day-lane-planned")))
         val initialScroll = timeline.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         dragQueueTaskToMorning("Later today")
-        compose.onNodeWithText("16:00–16:30").fetchSemanticsNode()
+        compose.onNodeWithTag("planning-drop-outline").fetchSemanticsNode()
         check(timeline.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value() == initialScroll)
         val viewport = timeline.fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false

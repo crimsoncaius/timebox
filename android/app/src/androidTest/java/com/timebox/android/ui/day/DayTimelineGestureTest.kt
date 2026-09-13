@@ -29,6 +29,150 @@ class DayTimelineGestureTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
+    fun droppingBlockCannotJumpViewportDuringBackgroundRefresh() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date, startMinute = 1320, endMinute = 1350, endHour = 24, serverNowMinute = 1380)
+        val moving = base.day!!.blocks.single()
+        val loaded = base.copy(pages = base.pages + (date to base.page(date).copy(
+            day = base.day!!.copy(blocks = listOf(moving, moving.copy(id = 8, startMinute = 1350, endMinute = 1380))))))
+        val state = androidx.compose.runtime.mutableStateOf(loaded)
+        var committed = false
+        setDayContent(loaded, RecordingHaptics(), stateProvider = { state.value }, onCommitMove = { id, start, end ->
+            committed = true
+            state.value = loaded.copy(saving = true, pages = loaded.pages +
+                (date to loaded.page(date).copy(day = loaded.day!!.copy(blocks = loaded.day!!.blocks.map {
+                    if (it.id == id) it.copy(startMinute = start, endMinute = end) else it
+                }))) + (date.plusDays(1) to DayPageState(
+                    day = base.day!!.copy(date = date.plusDays(1), endHour = 20), loading = false)))
+        })
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, height * 1.5f))
+        }
+        val before = compose.onNodeWithTag("day-now-line").fetchSemanticsNode().boundsInRoot.top
+        compose.mainClock.autoAdvance = false
+        compose.onRoot().performTouchInput { up() }
+        val positions = mutableListOf<Float>()
+        repeat(12) {
+            compose.mainClock.advanceTimeByFrame()
+            positions += compose.onNodeWithTag("day-now-line").fetchSemanticsNode().boundsInRoot.top
+        }
+        compose.runOnUiThread { state.value = state.value.copy(saving = false) }
+        repeat(12) {
+            compose.mainClock.advanceTimeByFrame()
+            positions += compose.onNodeWithTag("day-now-line").fetchSemanticsNode().boundsInRoot.top
+        }
+        compose.mainClock.autoAdvance = true
+        check(committed)
+        check(positions.all { kotlin.math.abs(it - before) < 2f }) { "Viewport jumped: before=$before frames=$positions" }
+    }
+
+    @Test
+    fun droppingIntoOccupiedTimeKeepsTimelineStable() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date, serverNowMinute = 600)
+        val moving = base.day!!.blocks.single()
+        val blocker = moving.copy(id = 8, startMinute = 600, endMinute = 660)
+        val state = androidx.compose.runtime.mutableStateOf(base.copy(pages = base.pages +
+            (date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(moving, blocker))))))
+        setDayContent(base, RecordingHaptics(), stateProvider = { state.value }, onCommitMove = { id, start, end ->
+            val current = state.value
+            state.value = current.copy(saving = true, pages = current.pages + (date to current.page(date).copy(
+                day = current.day!!.copy(blocks = current.day!!.blocks.map {
+                    if (it.id == id) it.copy(startMinute = start, endMinute = end) else it
+                }))))
+        })
+        val laneTop = compose.onNodeWithTag("day-lane-planned").fetchSemanticsNode().boundsInRoot.top
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, height * 1.5f))
+        }
+        val destination = compose.onNodeWithTag("saved-planned-move-preview").fetchSemanticsNode().boundsInRoot.top
+        compose.onRoot().performTouchInput { up() }
+        val released = compose.onNodeWithTag("day-block-7").fetchSemanticsNode().boundsInRoot.top
+        check(kotlin.math.abs(released - destination) < 2f) { "Drop jumped from preview $destination to $released" }
+        check(kotlin.math.abs(compose.onNodeWithTag("day-lane-planned").fetchSemanticsNode().boundsInRoot.top - laneTop) < 2f) { "Timeline jumped on release" }
+        compose.runOnIdle { state.value = state.value.copy(saving = false) }
+        check(kotlin.math.abs(compose.onNodeWithTag("day-block-7").fetchSemanticsNode().boundsInRoot.top - released) < 2f) { "Block jumped after save" }
+    }
+
+    @Test
+    fun savedActualBlockDragCommitsNearestAvailableRange() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date, lane = Lane.Actual, serverNowMinute = 1200)
+        val moving = base.day!!.blocks.single()
+        val blocker = moving.copy(id = 8, startMinute = 10 * 60, endMinute = 11 * 60)
+        var committedMove: Triple<Int, Int, Int>? = null
+        setDayContent(
+            state = base.copy(
+                pages = base.pages + (date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(moving, blocker)))),
+            ),
+            haptics = RecordingHaptics(),
+            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
+        )
+
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, height * 1.5f))
+        }
+        compose.onNodeWithTag("saved-actual-move-preview").assertIsDisplayed()
+        compose.onNodeWithText("11:00 – 12:00").assertIsDisplayed()
+        compose.onRoot().performTouchInput { up() }
+
+        compose.runOnIdle {
+            check(committedMove == Triple(7, 11 * 60, 12 * 60)) { "Committed $committedMove" }
+        }
+    }
+
+    @Test
+    fun savedActualBlockAcceptsDistantGap() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date, lane = Lane.Actual, serverNowMinute = 1200)
+        val moving = base.day!!.blocks.single()
+        val blocker = moving.copy(id = 8, startMinute = 600, endMinute = 660)
+        var committed: Triple<Int, Int, Int>? = null
+        setDayContent(base.copy(pages = base.pages + (date to base.page(date).copy(
+            day = base.day!!.copy(blocks = listOf(moving, blocker))))), RecordingHaptics(),
+            onCommitMove = { id, start, end -> committed = Triple(id, start, end) })
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, height.toFloat()))
+        }
+        compose.onNodeWithTag("saved-actual-move-preview").assertIsDisplayed()
+        compose.onRoot().performTouchInput { up() }
+        compose.runOnIdle { check(committed == Triple(7, 660, 720)) }
+    }
+
+    @Test
+    fun actualResizeStopsAtExactNeighborBoundaries() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date, lane = Lane.Actual, serverNowMinute = 1200)
+        val moving = base.day!!.blocks.single()
+        val before = moving.copy(id = 8, startMinute = 480, endMinute = 527)
+        val after = moving.copy(id = 9, startMinute = 613, endMinute = 660)
+        var committed: Triple<Int, Int, Int>? = null
+        setDayContent(base.copy(pages = base.pages + (date to base.page(date).copy(
+            day = base.day!!.copy(blocks = listOf(before, moving, after))))), RecordingHaptics(),
+            onCommitMove = { id, start, end -> committed = Triple(id, start, end) })
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(Offset(center.x, 2f))
+            moveTo(Offset(center.x, -height.toFloat()))
+            up()
+        }
+        compose.runOnIdle { check(committed == Triple(7, 527, 600)) { "$committed" } }
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(Offset(center.x, height - 2f))
+            moveTo(Offset(center.x, height * 2f))
+            up()
+        }
+        compose.runOnIdle { check(committed == Triple(7, 540, 613)) { "$committed" } }
+    }
+
+    @Test
     fun derivedActualAndRevisedPlanPresentTheirIndependentNames() {
         val date = LocalDate.of(2026, 8, 20)
         val base = stateWithBlock(date)
@@ -148,7 +292,7 @@ class DayTimelineGestureTest {
         compose.onNodeWithTag("day-block-7").performTouchInput {
             down(center)
             advanceEventTime(1_000)
-            moveTo(center + Offset(0f, height / 1f))
+            moveTo(center + Offset(0f, height * 1.5f))
         }
         compose.onNodeWithTag("saved-planned-move-preview").assertIsDisplayed()
         compose.onNodeWithText("11:00 – 12:00").assertIsDisplayed()
@@ -157,6 +301,51 @@ class DayTimelineGestureTest {
         compose.runOnIdle {
             check(committedMove == Triple(7, 11 * 60, 12 * 60)) { "Committed $committedMove" }
         }
+    }
+
+    @Test
+    fun savedPlannedBlockAcceptsDistantGap() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date)
+        val moving = base.day!!.blocks.single()
+        val blocker = moving.copy(id = 8, startMinute = 600, endMinute = 660)
+        var committed: Triple<Int, Int, Int>? = null
+        setDayContent(base.copy(pages = base.pages + (date to base.page(date).copy(
+            day = base.day!!.copy(blocks = listOf(moving, blocker))))), RecordingHaptics(),
+            onCommitMove = { id, start, end -> committed = Triple(id, start, end) })
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(center)
+            advanceEventTime(1_000)
+            moveTo(center + Offset(0f, height.toFloat()))
+        }
+        compose.onNodeWithTag("saved-planned-move-preview").assertIsDisplayed()
+        compose.onRoot().performTouchInput { up() }
+        compose.runOnIdle { check(committed == Triple(7, 660, 720)) }
+    }
+
+    @Test
+    fun plannedResizeStopsAtExactNeighborBoundaries() {
+        val date = LocalDate.of(2026, 8, 20)
+        val base = stateWithBlock(date)
+        val moving = base.day!!.blocks.single()
+        val before = moving.copy(id = 8, startMinute = 480, endMinute = 527)
+        val after = moving.copy(id = 9, startMinute = 613, endMinute = 660)
+        var committed: Triple<Int, Int, Int>? = null
+        setDayContent(base.copy(pages = base.pages + (date to base.page(date).copy(
+            day = base.day!!.copy(blocks = listOf(before, moving, after))))), RecordingHaptics(),
+            onCommitMove = { id, start, end -> committed = Triple(id, start, end) })
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(Offset(center.x, 2f))
+            moveTo(Offset(center.x, -height.toFloat()))
+            up()
+        }
+        compose.runOnIdle { check(committed == Triple(7, 527, 600)) { "$committed" } }
+        compose.onNodeWithTag("day-block-7").performTouchInput {
+            down(Offset(center.x, height - 2f))
+            moveTo(Offset(center.x, height * 2f))
+            up()
+        }
+        compose.runOnIdle { check(committed == Triple(7, 540, 613)) { "$committed" } }
     }
 
     @Test
@@ -528,12 +717,13 @@ class DayTimelineGestureTest {
         onTapSlot: (Lane, Int) -> Unit = { _, _ -> },
         onSelectBlock: (Int) -> Unit = {},
         onCommitMove: (Int, Int, Int) -> Unit = { _, _, _ -> },
+        stateProvider: () -> DayUiState = { state },
     ) {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 CompositionLocalProvider(LocalHapticFeedback provides haptics) {
                     DayScreen(
-                        state = state,
+                        state = stateProvider(),
                         onDateSettled = onDateSettled, onRetry = {}, onTapSlot = onTapSlot,
                         onSelectBlock = onSelectBlock, onCommitMove = onCommitMove,
                         onDismissSheet = {}, onChooseType = {}, onTypeQueryChange = {},
