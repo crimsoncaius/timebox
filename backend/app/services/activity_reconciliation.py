@@ -115,12 +115,13 @@ def prepare(db, state, body, operations, timezone="UTC"):
         target = next((p for p in known if p["data"] and p["data"]["source"] == body.target_source and instant(p["start"]) == body.target_start_at), None)
     historical = body.kind in {"add", "edit", "delete"}
     if historical:
-        if body.effective.mode != "range" or body.effective.end is None or body.effective.end <= start:
+        running_edit = body.kind == "edit" and target is not None and target["end"] is None and body.effective.end is None
+        if body.effective.mode != "range" or (not running_edit and (body.effective.end is None or body.effective.end <= start)):
             raise ValueError("Historical commands require an explicit positive range")
-        end = instant(body.effective.end)
-        if end > dt.datetime.now(dt.timezone.utc):
+        end = INF if running_edit else instant(body.effective.end)
+        if not running_edit and end > dt.datetime.now(dt.timezone.utc):
             raise ValueError("Historical time cannot end in the future")
-        if body.kind in {"edit", "delete"} and (target is None or target["end"] is None):
+        if body.kind in {"edit", "delete"} and not running_edit and (target is None or target["end"] is None):
             raise ValueError("Historical commands require a known ended Actual Block")
         if body.kind == "delete" and (start != instant(target["start"]) or end != instant(target["end"])):
             raise ValueError("Delete must name the complete observed target range")

@@ -6,6 +6,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ActivityRepositoryTest {
+    @Test fun runningCorrectionSurvivesRestartWithoutEndingTracking() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val type = TaskTypeDto(1, "Design")
+        val row = ActualBlockDto(1, 1, type, name = "Draft", startAt = at, endAt = null, createdAt = at, updatedAt = at)
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = "2026-09-11T14:00:00Z", reportingTimezone = "UTC", offlineReady = true,
+            current = row, records = listOf(row), taskTypes = listOf(type))
+        var durable: String? = null
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        assertFalse(repository.correct(ActivityKind.Edit, 1, startAt = "2026-09-11T15:00:00Z", runningOnly = true))
+        assertTrue(repository.correct(ActivityKind.Edit, 1, startAt = "2026-09-11T09:00:00Z", name = "Revised", note = "Note", runningOnly = true))
+        val restored = ActivityRepository(transport, store)
+        val current = restored.state.value.snapshot!!.current!!
+        assertEquals("Revised", current.name)
+        assertEquals("Note", current.note)
+        assertEquals("2026-09-11T09:00:00Z", current.startAt)
+        assertNull(current.endAt)
+        assertEquals(1, restored.state.value.snapshot!!.records.size)
+    }
     @Test fun checkInConfirmationAndDismissalAreDurableOfflineWithoutChangingActivity() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, endAt = null, createdAt = at, updatedAt = at)

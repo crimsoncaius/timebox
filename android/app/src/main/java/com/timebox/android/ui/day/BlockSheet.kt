@@ -71,7 +71,7 @@ fun BlockSheet(
     allowComplete: Boolean = true,
 ) {
     if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
-        ActivityActualEditor(state, onDismiss)
+        ActivityActualEditor(state, onDismiss, onOpenLinkedTask = onOpenLinkedTask)
         return
     }
     val colors = TimeboxTheme.colors

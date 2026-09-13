@@ -300,7 +300,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     suspend fun correct(kind: ActivityKind, targetId: Int? = null, startAt: String? = null, endAt: String? = null,
                         taskTypeId: Int? = null, name: String? = null, note: String? = null, taskId: Int? = null,
-                        clearName: Boolean = false, clearNote: Boolean = false): Boolean {
+                        clearName: Boolean = false, clearNote: Boolean = false, runningOnly: Boolean = false): Boolean {
         val saved = mutex.withLock {
             try {
                 checkEndpoint()
@@ -308,11 +308,13 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 check(snapshot.offlineReady && journal.calibration != null) { "Connect once to initialize Activity Tracking." }
                 check(kind in listOf(ActivityKind.Add, ActivityKind.Edit, ActivityKind.Delete))
                 val target = snapshot.records.find { it.id == targetId }
-                check(kind == ActivityKind.Add || target?.endAt != null) { "Select an ended Actual Block. Use Switch or Stop for the Current Activity." }
+                val runningEdit = runningOnly && kind == ActivityKind.Edit && target != null && target.endAt == null && snapshot.current?.id == targetId && endAt == null
+                check(!runningOnly || runningEdit) { "The activity has changed. Close this sheet and review the current activity." }
+                check(runningEdit || kind == ActivityKind.Add || target?.endAt != null) { "Select an ended Actual Block. Use Switch or Stop for the Current Activity." }
                 val start = checkNotNull(if (kind == ActivityKind.Delete) target?.startAt else startAt ?: target?.startAt)
-                val end = checkNotNull(if (kind == ActivityKind.Delete) target?.endAt else endAt ?: target?.endAt)
-                val a = parseActivityInstant(start); val b = parseActivityInstant(end)
-                check(a < b && b <= now()) { "Choose a positive time range ending no later than now." }
+                val end = if (runningEdit) null else checkNotNull(if (kind == ActivityKind.Delete) target?.endAt else endAt ?: target?.endAt)
+                val a = parseActivityInstant(start); val b = end?.let(::parseActivityInstant) ?: Instant.MAX
+                check(if (runningEdit) a <= now() else a < b && b <= now()) { "Choose a time no later than now and a positive time range." }
                 check(kind == ActivityKind.Delete || snapshot.records.none { it.id != targetId && a < (it.endAt?.let(::parseActivityInstant) ?: Instant.MAX) && parseActivityInstant(it.startAt) < b }) { "Activity overlaps recorded time. Adjust the other record first." }
                 val action = maxOf(now().toEpochMilli(), journal.lastAction + 1)
                 val source = journal.outbox.lastOrNull { it.kind == ActivityKind.Edit && it.targetId == targetId }?.targetSource

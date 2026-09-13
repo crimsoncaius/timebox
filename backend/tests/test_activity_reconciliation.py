@@ -39,6 +39,37 @@ def ranges(snapshot):
     return [(r['name'], r['start_at'], r['end_at']) for r in snapshot['records']]
 
 
+def test_running_edit_preserves_open_end_and_rejects_overlap(tracking):
+    initial = tracking.get('/activity').json()
+    base = send(tracking, make(initial, 'start', 10, name='Writing'))
+    edited = send(tracking, make(base, 'edit', 9, sequence=2, action_at=at(11),
+        effective={'mode': 'range', 'at': at(9), 'end': None},
+        target_id=base['current']['id'], name='Draft', note='Keep recording'))
+    assert edited['current']['name'] == 'Draft'
+    assert edited['current']['note'] == 'Keep recording'
+    assert edited['current']['start_at'] == '2026-09-10T09:00:00Z'
+    assert edited['current']['end_at'] is None
+    assert len(edited['records']) == 1
+    earlier = send(tracking, correction(edited, 'add', 7, 8, 12, sequence=3, target_id=None, name='Earlier'))
+    invalid = make(earlier, 'edit', 7, sequence=4, action_at=at(13),
+        effective={'mode': 'range', 'at': at(7), 'end': None}, target_id=earlier['current']['id'])
+    assert tracking.post('/activity/commands', json=invalid).status_code == 422
+    assert tracking.get('/activity').json()['records'] == earlier['records']
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_running_edit_does_not_revive_time_after_later_stop(tracking, reverse):
+    base = send(tracking, make(tracking.get('/activity').json(), 'start', 10))
+    edit = make(base, 'edit', 10, sequence=2, action_at=at(11),
+        effective={'mode': 'range', 'at': at(10), 'end': None}, target_id=base['current']['id'], name='Named')
+    stop = make(base, 'stop', 12, device='android')
+    for operation in ([stop, edit] if reverse else [edit, stop]):
+        send(tracking, operation)
+    final = tracking.get('/activity').json()
+    assert final['current'] is None
+    assert ranges(final) == [('Named', '2026-09-10T10:00:00Z', '2026-09-10T12:00:00Z')]
+
+
 @pytest.mark.parametrize('delivery', list(itertools.permutations(range(3))))
 def test_lunch_reading_stop_converge_for_all_deliveries(tracking, delivery):
     initial = tracking.get('/activity').json()

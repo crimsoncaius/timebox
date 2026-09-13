@@ -32,9 +32,16 @@ import java.time.ZoneId
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
-                         repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository) {
+                         repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
+                         onOpenLinkedTask: (Int) -> Unit = {}) {
     val snapshot by repository.state.collectAsState()
     val actual = snapshot.snapshot?.records?.find { it.id == state.selectedBlockId }
+    val openedRunning = remember(state.selectedBlockId) { actual != null && actual.endAt == null }
+    if (openedRunning) {
+        if (actual != null) RunningActualSheet(actual, repository, onDismiss, onOpenLinkedTask)
+        else LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
     val zone = ZoneId.of(snapshot.snapshot?.reportingTimezone ?: state.day?.timezone ?: "UTC")
     val initialStart = actual?.let { ActivityTimeValue.from(parseActivityInstant(it.startAt), zone) }
         ?: ActivityTimeValue(state.date.atStartOfDay().plusMinutes(state.sheetStart.toLong()).toString())
