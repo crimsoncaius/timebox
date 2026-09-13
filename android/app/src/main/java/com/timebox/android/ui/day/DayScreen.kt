@@ -120,11 +120,32 @@ fun DayScreen(
                 androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
                 Spacer(Modifier.height(8.dp))
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                androidx.compose.material3.Text("Zoom ${"%.1f".format(zoom.scale)}×", style = TimeboxTheme.type.label)
-                androidx.compose.material3.TextButton(onClick = { zoom.set(1f) }) { androidx.compose.material3.Text("Reset") }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding, vertical = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                androidx.compose.material3.Surface(
+                    shape = com.timebox.android.ui.theme.TimeboxShapes.chip,
+                    color = TimeboxTheme.colors.low,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, TimeboxTheme.colors.hairline),
+                ) {
+                    Row(
+                        Modifier.padding(start = 16.dp, end = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Text("Zoom", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                        Spacer(Modifier.width(8.dp))
+                        androidx.compose.material3.Text("${"%.1f".format(zoom.scale)}×", style = TimeboxTheme.type.monoSmall, color = TimeboxTheme.colors.on)
+                        Spacer(Modifier.width(12.dp))
+                        androidx.compose.material3.VerticalDivider(Modifier.height(16.dp), color = TimeboxTheme.colors.hairline)
+                        androidx.compose.material3.TextButton(
+                            onClick = { zoom.set(1f) },
+                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = TimeboxTheme.colors.planned),
+                        ) {
+                            androidx.compose.material3.Text("Reset", style = TimeboxTheme.type.bodySmall)
+                        }
+                    }
+                }
             }
             Box(Modifier.weight(1f)) {
                 if (state.isPlanningMode) {

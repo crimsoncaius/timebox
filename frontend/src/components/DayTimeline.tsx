@@ -227,8 +227,9 @@ export const DayTimeline = forwardRef<
       className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-x-1 gap-y-1.5 sm:gap-x-2"
       data-testid="day-timeline"
     >
-      <div className="col-span-3 flex items-center justify-between">
-        <span tabIndex={0} aria-label={`Timeline zoom ${zoom.toFixed(1)} times. Use arrow keys to adjust.`}
+      <div className="col-span-3 flex justify-end pb-1">
+        <div className="inline-flex min-h-11 items-center rounded-full border border-outline-variant/40 bg-surface-container-low/60 pl-4 pr-1 text-xs text-on-surface-variant dark:border-dark-outline-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant">
+        <span className="inline-flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary" tabIndex={0} aria-label={`Timeline zoom ${zoom.toFixed(1)} times. Use arrow keys to adjust.`}
           onKeyDown={(e) => {
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
               e.preventDefault()
@@ -236,8 +237,13 @@ export const DayTimeline = forwardRef<
               zoomRef.current = next
               setZoom(next)
             }
-          }}>Zoom {zoom.toFixed(1)}×</span>
-        <button type="button" onClick={() => { zoomRef.current = 1; setZoom(1) }}>Reset</button>
+          }}>Zoom <span className="min-w-[3.5ch] font-mono font-medium tabular-nums text-on-surface dark:text-dark-on-surface">{zoom.toFixed(1)}×</span></span>
+        <span aria-hidden className="mx-3 h-4 w-px bg-outline-variant/50 dark:bg-dark-outline-variant" />
+        <button type="button" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-medium text-planned transition-colors hover:bg-planned/10 focus-visible:outline-2 focus-visible:outline-planned" onClick={() => { zoomRef.current = 1; setZoom(1) }}>
+          <span className="material-symbols-outlined text-[16px]" aria-hidden>restart_alt</span>
+          Reset
+        </button>
+        </div>
       </div>
       <div className="w-12 shrink-0 sm:w-14" aria-hidden />
       <h3 className={laneHeaderPlanned}>Planned</h3>
