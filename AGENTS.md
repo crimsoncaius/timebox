@@ -16,6 +16,10 @@ This repo uses the single-context domain-doc layout. See `docs/agents/domain.md`
 
 After fixing an issue, launch or relaunch the affected application from the updated working tree and leave it running in a reviewable state. The fix is not complete until the launched instance reflects the change.
 
+### Android emulator ownership
+
+Before installing, launching, testing, capturing, or interacting with an Android emulator, read `docs/agents/android-emulators.md` and acquire an exclusive reservation through `scripts/android-emulator.py`. Use the helper for device commands. Release temporary devices automatically; retain devices explicitly for user review. Existing unregistered emulators and physical devices require explicit user assignment.
+
 ### Worktree lifecycle
 
 After a worktree branch is merged into the repository's primary branch (`master` here), remove the clean merged worktree and prune stale worktree metadata. The merge is not complete until the removed worktree no longer appears in `git worktree list`; preserve any dirty or unmerged worktree.

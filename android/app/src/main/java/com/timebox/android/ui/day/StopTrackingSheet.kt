@@ -19,7 +19,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.timebox.android.ui.components.TimeboxChip
+import com.timebox.android.data.TaskType
+import com.timebox.android.data.remote.ActualBlockDto
+import com.timebox.android.data.remote.ActivityPlanDto
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
@@ -31,6 +33,10 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun StopTrackingSheet(
+    currentId: Int,
+    records: List<ActualBlockDto>,
+    plans: List<ActivityPlanDto>,
+    taskTypes: List<TaskType>,
     activity: String,
     start: Instant,
     timing: ActivityTimeValue?,
@@ -42,10 +48,11 @@ internal fun StopTrackingSheet(
     error: String?,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
+    loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { emptyMap() },
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
-    var choice by remember { mutableIntStateOf(if (timing == null) 0 else 2) }
+    val selected = runCatching { timing?.resolve(zone) }.getOrNull() ?: now
     val preview = runCatching { stopTrackingPreview(start, timing, now, zone) }
     val value = preview.getOrNull()
     val validation = preview.exceptionOrNull()?.message
@@ -70,6 +77,14 @@ internal fun StopTrackingSheet(
             ) {
                 Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
                 Text("Stop tracking", style = type.screenTitle.copy(fontSize = 28.sp))
+                Text("When did you stop?", style = type.label)
+                Text("Drag the line or tap a time. Nearby block boundaries snap into place.", style = type.bodySmall, color = colors.onVariant)
+                SwitchActivityTimeline(
+                    currentId = currentId, start = start, records = records, plans = plans, taskTypes = taskTypes,
+                    nextActivity = null, selected = selected, now = now, zone = zone,
+                    enabled = enabled && !busy, loadPlanTitles = loadPlanTitles,
+                    onSelect = { onTimingChange(it?.let { at -> ActivityTimeValue.from(at, zone) }) },
+                )
                 Column(
                     Modifier.fillMaxWidth().clip(TimeboxShapes.group).background(colors.low).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -92,21 +107,8 @@ internal fun StopTrackingSheet(
                     value?.dateContext?.let { Text(it, style = type.bodySmall, color = colors.onVariant) }
                     Text(activity, style = type.label)
                 }
-                Text("When did you stop?", style = type.label)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Now", "15 min ago", "Choose time").forEachIndexed { index, label ->
-                        TimeboxChip(label, choice == index, {
-                            choice = index
-                            onTimingChange(if (index == 0) null else ActivityTimeValue.from(if (index == 1) now.minusSeconds(900) else now, zone))
-                        }, enabled = !busy)
-                    }
-                }
-                // Keep date and DST-occurrence selection from the existing correction flow.
-                if (choice == 2 && timing != null) {
-                    ActivityTimeField("End", timing, zone, enabled = !busy) { onTimingChange(it) }
-                }
                 Text(zone.id, style = type.monoSmall, color = colors.onVariant)
-                Text("Time after this will be unrecorded.", style = type.bodySmall, color = colors.onVariant)
+                Text("Unrecorded after ${value?.endLabel ?: "—"}.", style = type.bodySmall, color = colors.onVariant)
                 (validation ?: error)?.let {
                     Text(it, style = type.bodySmall, color = colors.error,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })

@@ -20,6 +20,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
+import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -227,13 +228,22 @@ fun ActivityTracking(
             Text("Recording continues while you decide.")
         }
     }
+    val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(
-        currentActivity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
+        currentActivity = switchTarget?.name?.takeIf { it.isNotBlank() } ?: switchTarget?.taskType?.name.orEmpty(),
+        currentId = targetId ?: 0, start = switchTarget?.startAt?.let(::parseActivityInstant) ?: now,
+        loadPlanTitles = { date ->
+            (context.applicationContext as TimeboxApplication).repository.getDayPreview(date).getOrNull()
+                ?.blocks?.filter { it.lane == com.timebox.android.data.Lane.Planned }
+                ?.associate { it.id to it.primaryIdentity() }.orEmpty()
+        },
+        records = state.snapshot?.records.orEmpty(), plans = state.snapshot?.plans.orEmpty(),
         taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it },
         name = name, onNameChange = { name = it }, timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
-        enabled = enabled, busy = state.busy, error = timingError,
+        enabled = enabled && switchTarget != null && current?.id == targetId, busy = state.busy,
+        error = if (current?.id != targetId) "The current activity changed. Close this sheet and review it before switching." else timingError,
         onDismiss = { switching = false },
         onConfirm = {
             scope.launch {
@@ -248,6 +258,13 @@ fun ActivityTracking(
     )
     val stopTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (stopping && stopTarget != null) StopTrackingSheet(
+        currentId = stopTarget.id, records = state.snapshot?.records.orEmpty(),
+        plans = state.snapshot?.plans.orEmpty(), taskTypes = availableTypes,
+        loadPlanTitles = { date ->
+            (context.applicationContext as TimeboxApplication).repository.getDayPreview(date).getOrNull()
+                ?.blocks?.filter { it.lane == com.timebox.android.data.Lane.Planned }
+                ?.associate { it.id to it.primaryIdentity() }.orEmpty()
+        },
         activity = stopTarget.name?.takeIf { it.isNotBlank() } ?: stopTarget.taskType.name,
         start = parseActivityInstant(stopTarget.startAt), timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,

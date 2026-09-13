@@ -1,0 +1,10 @@
+{
+  "capacity": 2,
+  "first_port": 5580,
+  "lease_seconds": 1800,
+  "image": "system-images/android-36/google_apis_playstore/x86_64",
+  "width": 1080,
+  "height": 2424,
+  "density": 420,
+  "ram_mb": 4096
+}

@@ -5,6 +5,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import com.timebox.android.TimeboxApplication
+import com.timebox.android.data.primaryIdentity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,12 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
     val state by repository.state.collectAsState()
     LaunchedEffect(state.snapshot?.current?.id, actual.endAt) {
         if (state.snapshot?.current?.id != actual.id || actual.endAt != null) onDismiss()
+    }
+    val context = LocalContext.current
+    val loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { date ->
+        (context.applicationContext as TimeboxApplication).repository.getDayPreview(date).getOrNull()
+            ?.blocks?.filter { it.lane == com.timebox.android.data.Lane.Planned }
+            ?.associate { it.id to it.primaryIdentity() }.orEmpty()
     }
     val colors = TimeboxTheme.colors
     val zone = ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC")
@@ -79,19 +88,20 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
         }
     }
     if (action == "switch") {
-        SwitchActivitySheet(title, types, types.find { it.id == nextTypeId }, { nextTypeId = it.id },
+        SwitchActivitySheet(title, actual.id, parseActivityInstant(actual.startAt),
+            state.snapshot?.records.orEmpty(), state.snapshot?.plans.orEmpty(), types, types.find { it.id == nextTypeId }, { nextTypeId = it.id },
             nextName, { nextName = it }, timing, { timing = it; error = null }, now, zone,
             enabled, busy || state.busy, error, { if (!busy) { action = null; error = null } }, {
                 nextTypeId?.let { id -> submit({ repository.command(ActivityKind.Switch, id, nextName,
                     effectiveAt = timing?.resolve(zone), observedTargetId = actual.id) }, onDismiss) }
-            })
+            }, loadPlanTitles = loadPlanTitles)
         return
     }
     if (action == "stop") {
-        StopTrackingSheet(title, parseActivityInstant(actual.startAt), timing, { timing = it; error = null },
+        StopTrackingSheet(actual.id, state.snapshot?.records.orEmpty(), state.snapshot?.plans.orEmpty(), types, title, parseActivityInstant(actual.startAt), timing, { timing = it; error = null },
             now, zone, enabled, busy || state.busy, error, { if (!busy) { action = null; error = null } }, {
                 submit({ repository.command(ActivityKind.Stop, effectiveAt = timing?.resolve(zone), observedTargetId = actual.id) }, onDismiss)
-            })
+            }, loadPlanTitles = loadPlanTitles)
         return
     }
     ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() },
