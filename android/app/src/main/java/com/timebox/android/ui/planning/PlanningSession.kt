@@ -9,6 +9,8 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.data.flattenBattleTasks
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.day.nearestPlanningDragStart
+import com.timebox.android.ui.day.NO_NEARBY_BLOCK_SPACE
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -172,10 +174,9 @@ class PlanningSession internal constructor(
         if (!current.active || current.saving || taskId in current.drafts) {
             return reject("That Task cannot be planned right now")
         }
-        val start = startMinute.coerceIn(
-            day.visibleStart,
-            day.visibleEnd - MIN_PLANNED_BLOCK_MINUTES,
-        )
+        val start = nearestPlanningDragStart(
+            day, current.drafts.values.toList(), taskId, startMinute, MIN_PLANNED_BLOCK_MINUTES,
+        ) ?: return reject(NO_NEARBY_BLOCK_SPACE)
         val end = start + MIN_PLANNED_BLOCK_MINUTES
         if (!planningRangeAvailable(day, current.drafts.values, taskId, start, end)) {
             return reject("That time is already planned")
@@ -207,10 +208,11 @@ class PlanningSession internal constructor(
         }
     }
 
-    fun update(taskId: Int, startMinute: Int, endMinute: Int): PlanningEditResult {
+    fun update(taskId: Int, startMinute: Int, endMinute: Int, currentDay: Day? = null): PlanningEditResult {
         val current = _state.value
         val draft = current.drafts[taskId] ?: return reject("That planning draft no longer exists")
-        val day = calendar[draft.date] ?: return reject("That day is not available yet")
+        val day = currentDay?.takeIf { it.date == draft.date } ?: calendar[draft.date]
+            ?: return reject("That day is not available yet")
         if (!current.active || current.saving ||
             !planningRangeAvailable(day, current.drafts.values, taskId, startMinute, endMinute)
         ) {

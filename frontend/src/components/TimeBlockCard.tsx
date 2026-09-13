@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockLane, TimeBlock } from '../lib/api'
 import {
   formatTimeRangeGcal12,
-  MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
-  resolveSameLaneMovePreviewStart,
   SLOT_MINUTES,
 } from '../lib/time'
+import { nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../lib/blockPlacement'
 import type { TimeBlockLike } from '../lib/time'
 import { blockPrimaryIdentity, blockSecondaryIdentity } from '../lib/blockIdentity'
 import { activityDevelopmentEnabled } from '../features/activity/activityRepository'
@@ -15,7 +14,7 @@ const SWIPE_AXIS_DEAD_ZONE_PX = 8
 
 type DragState =
   | { kind: 'resize'; edge: 'start' | 'end'; start: number; end: number }
-  | { kind: 'move'; start: number; end: number }
+  | { kind: 'move'; start: number; end: number; invalid?: boolean }
 
 export function TimeBlockCard({
   block,
@@ -33,6 +32,7 @@ export function TimeBlockCard({
   onBlockClick,
   onDragSessionChange,
   isSelected = false,
+  onPlacementError,
 }: {
   block: TimeBlock
   lane: BlockLane
@@ -57,6 +57,7 @@ export function TimeBlockCard({
   onBlockClick?: () => boolean | void
   /** Fires when a move or resize drag session begins/ends (for global UI such as disabling inspector hit-testing). */
   onDragSessionChange?: (active: boolean) => void
+  onPlacementError?: (message: string) => void
   /** True when this block is the active editor target (matches `selectedBlockId` on the day). */
   isSelected?: boolean
 }) {
@@ -67,9 +68,10 @@ export function TimeBlockCard({
     sourceStart: number
     sourceEnd: number
   } | null>(null)
+  const latest = useRef({ sameLaneBlocks, visibleStartMin, visibleEndMin, onPatch, onPlacementError })
+  useEffect(() => { latest.current = { sameLaneBlocks, visibleStartMin, visibleEndMin, onPatch, onPlacementError } },
+    [sameLaneBlocks, visibleStartMin, visibleEndMin, onPatch, onPlacementError])
   const dragRef = useRef<DragState | null>(drag)
-  /** Committed move preview (hysteresis at slot boundaries). */
-  const prevBlockRef = useRef(block.start_minute)
   const suppressClickRef = useRef(false)
   /** After a successful pointer-down select, skip the redundant click event. */
   const suppressNextClickSelectRef = useRef(false)
@@ -101,11 +103,18 @@ export function TimeBlockCard({
     if (!d) return
     try {
       const { start, end } = d
+      if (d.kind === 'move' && d.invalid) {
+        latest.current.onPlacementError?.(NO_NEARBY_BLOCK_SPACE)
+        return
+      }
       if (end <= start) return
       if (
-        lane === 'planned'
-        && (end - start < SLOT_MINUTES || start % SLOT_MINUTES !== 0 || end % SLOT_MINUTES !== 0)
-      ) return
+        !blockRangeAvailable(latest.current.sameLaneBlocks.filter(b => b.id !== block.id), start, end,
+          latest.current.visibleStartMin, latest.current.visibleEndMin, lane === 'actual' ? 1 : SLOT_MINUTES)
+      ) {
+        latest.current.onPlacementError?.('That time is no longer available')
+        return
+      }
       if (start === block.start_minute && end === block.end_minute) return
       setPendingLayout({
         start,
@@ -113,13 +122,13 @@ export function TimeBlockCard({
         sourceStart: block.start_minute,
         sourceEnd: block.end_minute,
       })
-      void onPatch({ start_minute: start, end_minute: end }).catch(() => {
+      void latest.current.onPatch({ start_minute: start, end_minute: end }).catch(() => {
         setPendingLayout(null)
       })
     } finally {
       onDragSessionChange?.(false)
     }
-  }, [block.end_minute, block.start_minute, lane, onDragSessionChange, onPatch])
+  }, [block.end_minute, block.id, block.start_minute, lane, onDragSessionChange])
 
   const cancelDrag = useCallback(() => {
     const wasDragging = dragRef.current != null
@@ -151,14 +160,14 @@ export function TimeBlockCard({
           const m = getMinuteFromClientY(ev.clientY)
           let next: DragState
           if (d.edge === 'start') {
-            const ns = Math.min(m, d.end - SLOT_MINUTES)
+            const ns = Math.min(m, d.end - (lane === 'actual' ? 1 : SLOT_MINUTES))
             next = {
               ...d,
-              start: Math.max(resizeMinStartMinute, Math.max(0, ns)),
+              start: Math.max(resizeMinStartMinute, Math.max(visibleStartMin, ns)),
             }
           } else {
-            const ne = Math.max(m, d.start + SLOT_MINUTES)
-            next = { ...d, end: Math.min(resizeMaxEndMinute, Math.min(24 * 60, ne)) }
+            const ne = Math.max(m, d.start + (lane === 'actual' ? 1 : SLOT_MINUTES))
+            next = { ...d, end: Math.min(resizeMaxEndMinute, Math.min(visibleEndMin, ne)) }
           }
           dragRef.current = next
           return next
@@ -205,6 +214,9 @@ export function TimeBlockCard({
       onDragSessionChange,
       resizeMaxEndMinute,
       resizeMinStartMinute,
+      lane,
+      visibleStartMin,
+      visibleEndMin,
     ],
   )
 
@@ -242,8 +254,7 @@ export function TimeBlockCard({
         if (bodyGesture === 'none') {
           if (Math.abs(dx) < SWIPE_AXIS_DEAD_ZONE_PX && Math.abs(dy) < SWIPE_AXIS_DEAD_ZONE_PX) return
           bodyGesture = 'move'
-          anchorMinute = getMinuteFromClientY(ev.clientY)
-          prevBlockRef.current = originStart
+          anchorMinute = getMinuteFromClientY(pointerDownY)
           const initialMove: DragState = {
             kind: 'move',
             start: originStart,
@@ -260,24 +271,14 @@ export function TimeBlockCard({
         }
 
         const deltaMin = getMinuteFromClientY(ev.clientY) - anchorMinute
-        const candidateRaw = originStart + deltaMin
-        const maxStartInWindow = Math.max(visibleStartMin, visibleEndMin - duration)
-
-        let blockStart = resolveSameLaneMovePreviewStart(
-          sameLaneBlocks,
-          block.id,
-          duration,
-          candidateRaw,
-          prevBlockRef.current,
-          MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
-        )
-        blockStart = Math.min(Math.max(blockStart, visibleStartMin), maxStartInWindow)
-        prevBlockRef.current = blockStart
-
+        const candidateRaw = originStart + Math.trunc(deltaMin / SLOT_MINUTES) * SLOT_MINUTES
+        const current = latest.current
+        const obstacles = current.sameLaneBlocks.filter(b => b.id !== block.id)
+        const resolved = nearestBlockStart(obstacles, candidateRaw, duration,
+          current.visibleStartMin, current.visibleEndMin, lane === 'actual' ? 1 : SLOT_MINUTES)
+        const blockStart = resolved ?? candidateRaw
         const next: DragState = {
-          kind: 'move',
-          start: blockStart,
-          end: blockStart + duration,
+          kind: 'move', start: blockStart, end: blockStart + duration, invalid: resolved === null,
         }
         dragRef.current = next
         setDrag(next)
@@ -328,11 +329,9 @@ export function TimeBlockCard({
       endDrag,
       getMinuteFromClientY,
       onBlockClick,
-      sameLaneBlocks,
-      visibleEndMin,
-      visibleStartMin,
       onDragSessionChange,
       timeEditingDisabled,
+      lane,
     ],
   )
 
@@ -340,7 +339,7 @@ export function TimeBlockCard({
     ? block.name?.trim() || block.task_type.name
     : blockPrimaryIdentity(block)
   const secondaryLabel = blockSecondaryIdentity(block)
-  const timeRangeLabel = formatTimeRangeGcal12(displayStart, displayEnd)
+  const timeRangeLabel = drag?.kind === 'move' && drag.invalid ? NO_NEARBY_BLOCK_SPACE : formatTimeRangeGcal12(displayStart, displayEnd)
   const durationMin = displayEnd - displayStart
   const compactContent = durationMin <= SLOT_MINUTES
 
@@ -371,6 +370,7 @@ export function TimeBlockCard({
     <div
       data-block
       data-block-id={block.id}
+      data-invalid={drag?.kind === 'move' && drag.invalid ? 'true' : undefined}
       data-selected={isSelected ? 'true' : undefined}
       data-dragging={isDragging ? 'true' : undefined}
       data-drag-kind={dragKind}

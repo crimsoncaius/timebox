@@ -25,6 +25,8 @@ import java.lang.reflect.Proxy
 import java.time.Instant
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceTimeBy
@@ -41,6 +43,54 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DayWorkModeViewModelTest {
+    @Test
+    fun `Actual drop does not revert while activity correction is pending`() = runTest {
+        val at = "2026-08-30T00:00:00Z"
+        val type = TaskTypeDto(3, "coding")
+        val row = ActualBlockDto(44, 3, type, startAt = at, endAt = "2026-08-30T01:00:00Z", createdAt = at, updatedAt = at)
+        val snapshot = com.timebox.android.data.remote.ActivitySnapshotDto(cursor = 1,
+            serverAt = "2026-08-30T04:00:00Z", reportingTimezone = "Asia/Singapore", offlineReady = true,
+            current = null, records = listOf(row), taskTypes = listOf(type))
+        val gate = CompletableDeferred<Unit>()
+        val activity = com.timebox.android.data.ActivityRepository(object : com.timebox.android.data.ActivityTransport {
+            override suspend fun read() = snapshot
+            override suspend fun execute(command: com.timebox.android.data.remote.ActivityCommandDto): com.timebox.android.data.remote.ActivitySnapshotDto {
+                gate.await()
+                return snapshot.copy(cursor = 2,
+                    records = listOf(row.copy(startAt = command.effective.at!!, endAt = command.effective.end)),
+                    acknowledgement = com.timebox.android.data.remote.ActivityAcknowledgementDto(command.operationId,
+                        com.timebox.android.data.remote.ActivityOutcome.Applied))
+            }
+        }, object : com.timebox.android.data.ActivityStorage {
+            override fun load(): String? = null
+            override fun save(value: String) {}
+        })
+        activity.refresh()
+        val repo = TimeboxRepository(FakeWorkModeApi(emptyList()).proxy())
+        val readiness = createReadyToPlanCoordinator(repo, backgroundScope)
+        val vm = DayViewModel(repo, TaskCompletion(RepositoryTaskCompletionTransport(repo)),
+            PlanningSession(RepositoryPlanningSessionTransport(repo, readiness)), injectedScope = backgroundScope,
+            readinessCoordinator = readiness, activityRepository = activity,
+            workModePersistence = FakeWorkModePersistence())
+        vm.load(java.time.LocalDate.parse("2026-08-30"))
+        runCurrent()
+        val observed = mutableListOf<Int>()
+        val collecting = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+            vm.state.collect { state -> state.day?.blocks?.find { it.actualBlockId == 44 }?.let { observed += it.startMinute } }
+        }
+        observed.clear()
+        vm.moveBlock(44, 495, 555)
+        runCurrent()
+        val whilePending = observed.toList()
+        gate.complete(Unit)
+        runCurrent()
+        collecting.cancel()
+        val bridge = DayViewModel::class.java.getDeclaredField("workModeBridgeScope").apply { isAccessible = true }
+        (bridge.get(vm) as kotlinx.coroutines.CoroutineScope).cancel()
+        assertTrue("Observed $observed", whilePending.isNotEmpty())
+        assertTrue("Actual jumped during save: $observed", observed.all { it == 495 })
+    }
+
     @Test
     fun `initial Work Mode restoration resolves before planning can begin`() = runTest {
         val gate = CompletableDeferred<WorkModeSnapshot?>()

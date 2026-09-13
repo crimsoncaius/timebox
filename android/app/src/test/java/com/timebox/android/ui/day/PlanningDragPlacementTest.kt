@@ -14,6 +14,27 @@ import java.time.LocalDate
 
 class PlanningDragPlacementTest {
     @Test
+    fun `Actual placement uses only Actual obstacles and accepts short records`() {
+        val day = day(block(1, 600, 630).copy(lane = Lane.Actual), block(2, 630, 1200))
+            .let { it.copy(today = it.date.plusDays(1)) }
+        assertEquals(630, nearestSavedBlockDragStart(day, -1, 600, 30, Lane.Actual))
+        assertEquals(630, nearestSavedBlockDragStart(day, -1, 629, 1, Lane.Actual))
+        assertEquals(630, nearestSavedBlockDragStart(day, -1, 580, 90, Lane.Actual))
+        assertEquals(480 to 600, blockResizeBounds(day, 540, 570, lane = Lane.Actual))
+        assertFalse(savedBlockRangeAvailable(day, -1, 610, 640, Lane.Actual))
+        assertTrue(savedBlockRangeAvailable(day, -1, 630, 631, Lane.Actual))
+    }
+
+    @Test
+    fun `Actual placement never extends beyond the server clock or into future days`() {
+        val day = day().copy(serverNowMinute = 615, capturedAtMillis = System.currentTimeMillis())
+        assertEquals(585, nearestSavedBlockDragStart(day, -1, 600, 30, Lane.Actual))
+        assertEquals(585, nearestSavedBlockDragStart(day, -1, 630, 30, Lane.Actual))
+        assertFalse(savedBlockRangeAvailable(day, -1, 600, 630, Lane.Actual))
+        assertNull(nearestSavedBlockDragStart(day.copy(today = day.date.minusDays(1)), -1, 600, 30, Lane.Actual))
+    }
+
+    @Test
     fun `occupied destination chooses closest fitting start with later ties`() {
         val day = day(block(1, 600, 630))
 
@@ -36,7 +57,7 @@ class PlanningDragPlacementTest {
     }
 
     @Test
-    fun `search includes distant times but excludes hidden hours and other days`() {
+    fun `search accepts distant gaps but excludes hidden hours and other days`() {
         val day = day(block(1, 480, 1150))
         assertEquals(1150, nearestPlanningDragStart(day, emptyList(), null, 600, 30))
         assertNull(nearestPlanningDragStart(day, emptyList(), null, 600, 60))
@@ -66,10 +87,19 @@ class PlanningDragPlacementTest {
     fun `saved Planned Block movement excludes itself and resolves around other Planned Blocks`() {
         val day = day(block(7, 540, 600), block(8, 600, 660))
 
-        assertEquals(540, nearestSavedPlannedBlockDragStart(day, 7, 540, 60))
-        assertEquals(660, nearestSavedPlannedBlockDragStart(day, 7, 600, 60))
-        assertTrue(savedPlannedBlockRangeAvailable(day, 7, 540, 600))
-        assertFalse(savedPlannedBlockRangeAvailable(day, 7, 600, 660))
+        assertEquals(540, nearestSavedBlockDragStart(day, 7, 540, 60))
+        assertEquals(660, nearestSavedBlockDragStart(day, 7, 600, 60))
+        assertTrue(savedBlockRangeAvailable(day, 7, 540, 600))
+        assertFalse(savedBlockRangeAvailable(day, 7, 600, 660))
+    }
+
+    @Test
+    fun `placements farther than thirty minutes remain available`() {
+        val occupied = day(block(1, 480, 630))
+        assertEquals(630, nearestPlanningDragStart(occupied, emptyList(), null, 600, 30))
+        assertEquals(630, nearestPlanningDragStart(occupied, emptyList(), null, 599, 30))
+        assertEquals(630, nearestSavedBlockDragStart(occupied, 99, 600, 60))
+        assertEquals(630, nearestSavedBlockDragStart(occupied, 99, 599, 60))
     }
 
     private fun day(vararg blocks: TimeBlock) = Day(

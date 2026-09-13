@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +80,7 @@ private data class DragState(
     val endMinute: Int,
     val previewStartMinute: Int = startMinute,
     val previewEndMinute: Int = endMinute,
+    val valid: Boolean = true,
 )
 
 private enum class DragMode { Move, ResizeStart, ResizeEnd }
@@ -115,6 +117,8 @@ fun DayTimeline(
     onSavedPlannedBlockDragPointer: (Float?) -> Unit = {},
     showActual: Boolean = true,
     planningPreview: PlanningDropPreview? = null,
+    placementSelected: Boolean = false,
+    onPlacementError: (String) -> Unit = {},
     onPlannedLaneBoundsChanged: (Rect) -> Unit = {},
     blockGesturesEnabled: Boolean = true,
     planningDrafts: List<PlanningDraftPlacement> = emptyList(),
@@ -160,6 +164,8 @@ fun DayTimeline(
                 onCommitMove = onCommitMove,
                 onSavedPlannedBlockDragPointer = onSavedPlannedBlockDragPointer,
                 planningPreview = planningPreview,
+                placementSelected = placementSelected,
+                onPlacementError = onPlacementError,
                 onBoundsChanged = onPlannedLaneBoundsChanged,
                 blockGesturesEnabled = blockGesturesEnabled,
                 planningDrafts = planningDrafts,
@@ -177,6 +183,7 @@ fun DayTimeline(
                 LaneColumn(
                     day = day,
                     lane = Lane.Actual,
+                    onPlacementError = onPlacementError,
                     slotHeight = slotHeight,
                     selectedBlockId = selectedBlockId,
                     draft = draft,
@@ -308,6 +315,8 @@ private fun LaneColumn(
     onCommitMove: (Int, Int, Int) -> Unit,
     onSavedPlannedBlockDragPointer: (Float?) -> Unit = {},
     planningPreview: PlanningDropPreview? = null,
+    placementSelected: Boolean = false,
+    onPlacementError: (String) -> Unit = {},
     onBoundsChanged: ((Rect) -> Unit)? = null,
     blockGesturesEnabled: Boolean = true,
     planningDrafts: List<PlanningDraftPlacement> = emptyList(),
@@ -369,6 +378,8 @@ private fun LaneColumn(
         }
 
         day.lane(lane).forEach { block ->
+            val timeEditable = blockGesturesEnabled && !(block.lane == Lane.Actual &&
+                day.actualBlocks.any { it.actualBlock.id == block.actualBlockId && it.actualBlock.endAt == null })
             val live = if (drag != null && drag.id == block.id) drag else null
             val start = live?.startMinute ?: block.startMinute
             val end = live?.endMinute ?: block.endMinute
@@ -384,8 +395,9 @@ private fun LaneColumn(
                 slotHeight = slotHeight,
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
-                moveEnabled = blockGesturesEnabled,
-                resizeEnabled = blockGesturesEnabled,
+                invalid = live?.valid == false,
+                moveEnabled = timeEditable,
+                resizeEnabled = timeEditable,
                 onTap = { onSelectBlock(block.id) },
                 // Both callbacks recompute from the block's committed times and the raw
                 // gesture delta. Reading the drag state here instead would capture the
@@ -396,19 +408,22 @@ private fun LaneColumn(
                 onDragEnd = { resolved ->
                     onDragChange(null)
                     resolved?.let {
-                        onCommitMove(block.id, resolved.previewStartMinute, resolved.previewEndMinute)
+                        if (resolved.valid) onCommitMove(block.id, resolved.previewStartMinute, resolved.previewEndMinute)
+                        else onPlacementError(NO_NEARBY_BLOCK_SPACE)
                     }
                 },
                 onDragCancel = { onDragChange(null) },
-                onAccessibleMove = if (block.lane == Lane.Planned && blockGesturesEnabled) {
+                onAccessibleMove = if (timeEditable) {
                     { deltaMinutes ->
                         val duration = block.endMinute - block.startMinute
-                        nearestSavedPlannedBlockDragStart(
+                        nearestSavedBlockDragStart(
                             day = day,
                             movingBlockId = block.id,
                             intendedStart = block.startMinute + deltaMinutes,
                             durationMinutes = duration,
+                            lane = block.lane,
                         )?.let { start -> onCommitMove(block.id, start, start + duration) }
+                            ?: run { onPlacementError(NO_NEARBY_BLOCK_SPACE) }
                     }
                 } else {
                     null
@@ -417,8 +432,9 @@ private fun LaneColumn(
             )
         }
 
-        if (lane == Lane.Planned && drag != null && day.lane(Lane.Planned).any { it.id == drag.id }) {
-            SavedPlannedMovePreview(
+        if (drag != null && drag.valid && day.lane(lane).any { it.id == drag.id }) {
+            SavedBlockMovePreview(
+                lane = lane,
                 startMinute = drag.previewStartMinute,
                 endMinute = drag.previewEndMinute,
                 visibleStart = day.visibleStart,
@@ -443,6 +459,15 @@ private fun LaneColumn(
                     slotHeight = slotHeight,
                     dragging = placement.taskId == draggingPlanningTaskId,
                     gesturesEnabled = planningDraftGesturesEnabled,
+                    resizeBounds = blockResizeBounds(day, placement.startMinute, placement.endMinute,
+                        drafts = planningDrafts, movingTaskId = placement.taskId),
+                    onAccessibleMove = { delta ->
+                        val duration = placement.endMinute - placement.startMinute
+                        val start = nearestPlanningDragStart(day, planningDrafts, placement.taskId,
+                            placement.startMinute + delta, duration)
+                        if (start == null) onPlacementError(NO_NEARBY_BLOCK_SPACE)
+                        else onPlanningDraftResize(placement.taskId, start, start + duration)
+                    },
                     onDragStart = { pointer, grabOffset ->
                         onPlanningDraftDragStart(placement, pointer, grabOffset)
                     },
@@ -467,6 +492,15 @@ private fun LaneColumn(
                     .border(1.5.dp, colors.outline, TimeboxShapes.block)
                     .background(Color(0x14808080), TimeboxShapes.block),
             )
+        }
+        if (lane == Lane.Planned && placementSelected) {
+            Box(Modifier.matchParentSize().testTag("planned-placement-target")
+                .pointerInput(day.visibleStart, day.visibleEnd, onTapSlot) {
+                    detectTapGestures { offset ->
+                        val minute = snapToBlockInteractionStep(day.visibleStart + offset.y / slotPx * SLOT_MINUTES)
+                        onTapSlot(Lane.Planned, minute)
+                    }
+                })
         }
     }
 }
@@ -524,18 +558,25 @@ private fun resolveSavedBlockDrag(
     block: TimeBlock,
     day: Day,
 ): DragState? {
-    val (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
-    val previewStart = if (mode == DragMode.Move && block.lane == Lane.Planned) {
-        nearestSavedPlannedBlockDragStart(day, block.id, start, end - start)
+    var (start, end) = resolveDrag(mode, deltaPx, slotPx, block, day)
+    if (mode != DragMode.Move) {
+        val (lower, upper) = blockResizeBounds(day, block.startMinute, block.endMinute, movingBlockId = block.id, lane = block.lane)
+        if (mode == DragMode.ResizeStart) start = maxOf(start, lower)
+        else end = minOf(end, upper)
+    }
+    val previewStart = if (mode == DragMode.Move) {
+        nearestSavedBlockDragStart(day, block.id,
+            block.startMinute + snapBlockDeltaMinutes(deltaPx, slotPx), block.endMinute - block.startMinute, lane = block.lane)
     } else {
         start
-    } ?: return null
+    }
     return DragState(
         id = block.id,
         startMinute = start,
         endMinute = end,
-        previewStartMinute = previewStart,
-        previewEndMinute = previewStart + (end - start),
+        previewStartMinute = previewStart ?: start,
+        previewEndMinute = (previewStart ?: start) + (end - start),
+        valid = previewStart != null,
     )
 }
 
@@ -545,7 +586,8 @@ private fun snapBlockDeltaMinutes(deltaPx: Float, slotPx: Float): Int {
 }
 
 @Composable
-private fun SavedPlannedMovePreview(
+private fun SavedBlockMovePreview(
+    lane: Lane,
     startMinute: Int,
     endMinute: Int,
     visibleStart: Int,
@@ -559,8 +601,8 @@ private fun SavedPlannedMovePreview(
             .padding(horizontal = 3.dp)
             .fillMaxWidth()
             .height(height)
-            .border(1.dp, TimeboxTheme.colors.planned.copy(alpha = 0.65f), TimeboxShapes.block)
-            .testTag("saved-planned-move-preview"),
+            .border(1.dp, (if (lane == Lane.Planned) TimeboxTheme.colors.planned else TimeboxTheme.colors.actual).copy(alpha = 0.65f), TimeboxShapes.block)
+            .testTag("saved-${lane.wire}-move-preview"),
     )
 }
 
@@ -611,6 +653,8 @@ private fun PlanningDraftCard(
     slotHeight: Dp,
     dragging: Boolean,
     gesturesEnabled: Boolean,
+    resizeBounds: Pair<Int, Int>,
+    onAccessibleMove: (Int) -> Unit,
     onDragStart: (Offset, Float) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: (Offset) -> Unit,
@@ -621,6 +665,7 @@ private fun PlanningDraftCard(
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
     var cardRoot by remember(placement.taskId) { mutableStateOf(Offset.Zero) }
+    val currentResizeBounds by rememberUpdatedState(resizeBounds)
     var resizePreview by remember(placement.taskId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val startMinute = resizePreview?.first ?: placement.startMinute
     val endMinute = resizePreview?.second ?: placement.endMinute
@@ -659,17 +704,11 @@ private fun PlanningDraftCard(
                 contentDescription = "Planning draft ${placement.taskTitle}"
                 customActions = if (gesturesEnabled) listOf(
                     CustomAccessibilityAction("Move 5 minutes earlier") {
-                        onResize(
-                            placement.startMinute - BLOCK_INTERACTION_STEP_MINUTES,
-                            placement.endMinute - BLOCK_INTERACTION_STEP_MINUTES,
-                        )
+                        onAccessibleMove(-BLOCK_INTERACTION_STEP_MINUTES)
                         true
                     },
                     CustomAccessibilityAction("Move 5 minutes later") {
-                        onResize(
-                            placement.startMinute + BLOCK_INTERACTION_STEP_MINUTES,
-                            placement.endMinute + BLOCK_INTERACTION_STEP_MINUTES,
-                        )
+                        onAccessibleMove(BLOCK_INTERACTION_STEP_MINUTES)
                         true
                     },
                     CustomAccessibilityAction("Return to Tasks to Plan") {
@@ -716,7 +755,7 @@ private fun PlanningDraftCard(
                                 DragMode.ResizeStart -> Pair(
                                     (placement.startMinute + minuteDelta)
                                         .coerceIn(
-                                            visibleStart,
+                                            currentResizeBounds.first,
                                             placement.endMinute - MIN_PLANNED_BLOCK_MINUTES,
                                         ),
                                     placement.endMinute,
@@ -726,7 +765,7 @@ private fun PlanningDraftCard(
                                     (placement.endMinute + minuteDelta)
                                         .coerceIn(
                                             placement.startMinute + MIN_PLANNED_BLOCK_MINUTES,
-                                            visibleEnd,
+                                            currentResizeBounds.second,
                                         ),
                                 )
                                 DragMode.Move -> null
@@ -786,6 +825,7 @@ private fun BlockCard(
     slotHeight: Dp,
     selected: Boolean,
     dragging: Boolean,
+    invalid: Boolean = false,
     moveEnabled: Boolean,
     resizeEnabled: Boolean,
     onTap: () -> Unit,
@@ -808,6 +848,8 @@ private fun BlockCard(
     }
     var cardTopInRoot by remember(block.id) { mutableFloatStateOf(0f) }
     var resolvedDrag by remember(block.id) { mutableStateOf<DragState?>(null) }
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentTap by rememberUpdatedState(onTap)
 
     Box(
         modifier = Modifier
@@ -851,7 +893,7 @@ private fun BlockCard(
                     onLongPress = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
-                    onTap = { onTap() },
+                    onTap = { currentTap() },
                     gestureEnabled = { down ->
                         when (dragModeForPress(down.y)) {
                             DragMode.Move -> moveEnabled
@@ -873,7 +915,7 @@ private fun BlockCard(
                     onDrag = { change, moved ->
                         total += moved.y
                         if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot + change.position.y)
-                        resolvedDrag = onDrag(mode, total)
+                        resolvedDrag = currentDrag(mode, total)
                     },
                     onDragEnd = {
                         onDragPointer?.invoke(null)
@@ -913,7 +955,9 @@ private fun BlockCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val secondary = if (dragging) {
+                val secondary = if (invalid) {
+                    NO_NEARBY_BLOCK_SPACE
+                } else if (dragging) {
                     "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}"
                 } else {
                     block.secondaryIdentity()
