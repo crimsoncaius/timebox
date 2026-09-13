@@ -193,7 +193,7 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun compactCardsKeepBlockedSignalAndOverflowWhileMovingPlanningToDetails() {
+    fun compactCardsShowMetadataAndKeepPlanningBesideOverflow() {
         val readyToggles = mutableListOf<Int>()
         val blockedChanges = mutableListOf<Pair<Int, Boolean>>()
         val plannedDate = LocalDate.parse("2099-01-01")
@@ -205,6 +205,9 @@ class BattlePlanScreenTest {
                         tasks = listOf(
                             battleTask(1).copy(
                                 title = "Blocked task",
+                                taskType = TaskType(7, "Design", 0),
+                                project = Project(3, "Website redesign", Instant.EPOCH, Instant.EPOCH),
+                                deadlineDate = LocalDate.parse("2099-01-01"),
                                 urgency = PriorityLevel.High,
                                 importance = PriorityLevel.High,
                                 isBlocked = true,
@@ -232,8 +235,16 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("BLOCKED").fetchSemanticsNode()
-        check(compose.onAllNodesWithText("URGENT").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("Blocked").fetchSemanticsNode()
+        compose.onNodeWithText("Urgent").fetchSemanticsNode()
+        compose.onNodeWithText("Important").fetchSemanticsNode()
+        compose.onNodeWithText("Design").fetchSemanticsNode()
+        compose.onNodeWithText("Website redesign").fetchSemanticsNode()
+        compose.onNodeWithText("Due 1 Jan 2099").fetchSemanticsNode()
+        val planning = compose.onNodeWithContentDescription("Add Blocked task to Ready to Plan").fetchSemanticsNode().boundsInRoot
+        val overflow = compose.onNodeWithContentDescription("Actions for Blocked task").fetchSemanticsNode().boundsInRoot
+        check(kotlin.math.abs(planning.center.y - overflow.center.y) < 2f)
+        check(planning.right <= overflow.left)
         check(compose.onAllNodesWithText("Blocker: Waiting for approval").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithContentDescription("Actions for Blocked task").performClick()
         compose.onNodeWithText("Unblock task").performClick()

@@ -1224,14 +1224,14 @@ private fun MobileKanbanCard(
                 .background(mobileTaskCardSurface(colors))
                 .border(1.dp, colors.hairline, TimeboxShapes.card)
                 .clickable { onOpen(task.id) }
-                .padding(horizontal = 4.dp, vertical = 6.dp),
+                .padding(4.dp),
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 val completion = LocalCardCompletion.current
                 IconButton(
                     onClick = { completion.move(task, if (task.status == TaskStatus.Completed) TaskStatus.Open else TaskStatus.Completed) },
                     enabled = !completion.saving && task.recurrenceKind != "quota_parent",
-                    modifier = Modifier.size(48.dp).testTag("battle-plan-complete-${task.id}"),
+                    modifier = Modifier.size(44.dp).testTag("battle-plan-complete-${task.id}"),
                 ) {
                     Icon(
                         if (task.status == TaskStatus.Completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
@@ -1243,7 +1243,13 @@ private fun MobileKanbanCard(
                         Modifier.size(21.dp), tint = colors.onVariant,
                     )
                 }
-                CompactTaskSummary(task, serverNow, timezone, Modifier.weight(1f).padding(top = 11.dp, bottom = 8.dp))
+                CompactTaskTitle(task, Modifier.weight(1f).padding(top = 11.dp, end = 4.dp, bottom = 9.dp))
+                MobilePlanningControl(
+                    task = task,
+                    plannedSummary = null,
+                    onToggleReady = onToggleReady,
+                    modifier = Modifier.widthIn(max = 116.dp),
+                )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box {
                         IconButton(
@@ -1279,12 +1285,7 @@ private fun MobileKanbanCard(
                     }
                 }
             }
-            MobilePlanningControl(
-                task = task,
-                plannedSummary = null,
-                onToggleReady = onToggleReady,
-                modifier = Modifier.align(Alignment.End).padding(horizontal = 8.dp),
-            )
+            CompactTaskMetadata(task, serverNow, timezone, Modifier.padding(start = 44.dp, end = 8.dp, bottom = 6.dp))
             ReadyToPlanFailureNotice(task, Modifier.padding(horizontal = 8.dp))
         }
     }
@@ -1300,40 +1301,61 @@ private fun MobileKanbanCard(
     }
 }
 
-/** The resting card and lifted preview deliberately share the same information hierarchy. */
+/** Shared by the resting card and lifted preview. */
+@Composable
+private fun CompactTaskTitle(task: BattleTask, modifier: Modifier = Modifier) {
+    val completed = task.status == TaskStatus.Completed
+    Text(task.title, modifier = modifier, fontSize = 15.sp, lineHeight = 21.sp,
+        fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        textDecoration = if (completed) TextDecoration.LineThrough else null,
+        color = if (completed) TimeboxTheme.colors.onVariant else TimeboxTheme.colors.on)
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CompactTaskSummary(task: BattleTask, serverNow: java.time.Instant, timezone: String, modifier: Modifier = Modifier) {
+private fun CompactTaskMetadata(task: BattleTask, serverNow: java.time.Instant, timezone: String, modifier: Modifier = Modifier) {
     val colors = TimeboxTheme.colors
     val completed = task.status == TaskStatus.Completed
     val today = serverNow.atZone(java.time.ZoneId.of(timezone)).toLocalDate()
-    Column(modifier) {
-        Text(task.title, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium,
-            maxLines = 2, overflow = TextOverflow.Ellipsis,
-            textDecoration = if (completed) TextDecoration.LineThrough else null,
-            color = if (completed) colors.onVariant else colors.on)
-        if ((!completed && task.isBlocked) || task.deadlineDate != null || task.subtasks.isNotEmpty()) {
-            FlowRow(Modifier.padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!completed && task.isBlocked) MobileBlockedPill(task)
-                if (task.subtasks.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Checklist, "Subtask progress", Modifier.size(14.dp), tint = colors.onVariant)
-                    Text(" ${task.subtasks.count { it.checked }}/${task.subtasks.size}", fontSize = 11.sp, color = colors.onVariant)
-                }
-                task.deadlineDate?.let { raw ->
-                    val date = raw
-                    val overdue = !completed && date < today
-                    val tint = if (overdue) colors.error else colors.onVariant
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.CalendarToday, "Deadline", Modifier.size(12.dp), tint = tint)
-                        Text(" " + date.format(java.time.format.DateTimeFormatter.ofPattern(if (date.year == today.year) "d MMM" else "d MMM yyyy")) + if (overdue) " · overdue" else "",
-                            fontSize = 11.sp, color = tint)
-                    }
-                }
+    val hasContext = task.taskType != null || task.project != null || task.deadlineDate != null
+    val hasSignals = (!completed && (task.isBlocked || task.urgency == PriorityLevel.High || task.importance == PriorityLevel.High)) || task.subtasks.isNotEmpty()
+    if (!hasContext && !hasSignals) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (hasContext) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            task.project?.let { CompactTaskContext(Icons.Outlined.Folder, it.name, "Project", colors.project) }
+            task.taskType?.let { CompactTaskContext(Icons.AutoMirrored.Outlined.Label, it.name, "Task type") }
+            task.deadlineDate?.let { date ->
+                val overdue = !completed && date < today
+                CompactTaskContext(Icons.Outlined.CalendarToday,
+                    "Due " + date.format(java.time.format.DateTimeFormatter.ofPattern(if (date.year == today.year) "d MMM" else "d MMM yyyy")) + if (overdue) " · overdue" else "",
+                    "Deadline", if (overdue) colors.error else colors.onVariant)
             }
+        }
+        if (hasSignals) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (!completed && task.urgency == PriorityLevel.High) CompactTaskSignal("Urgent", true)
+            if (!completed && task.importance == PriorityLevel.High) CompactTaskSignal("Important")
+            if (!completed && task.isBlocked) CompactTaskSignal("Blocked", true)
+            if (task.subtasks.isNotEmpty()) CompactTaskSignal("${task.subtasks.count { it.checked }}/${task.subtasks.size} subtasks")
         }
     }
 }
 
+@Composable
+private fun CompactTaskContext(icon: ImageVector, label: String, description: String, tint: Color = TimeboxTheme.colors.onVariant) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, description, Modifier.size(12.dp), tint = tint)
+        Text(label, fontSize = 11.sp, lineHeight = 16.sp, color = TimeboxTheme.colors.onVariant)
+    }
+}
+
+@Composable
+private fun CompactTaskSignal(label: String, attention: Boolean = false) {
+    val colors = TimeboxTheme.colors
+    Text(label, modifier = Modifier.clip(TimeboxShapes.chip)
+        .background(if (attention) colors.error.copy(alpha = 0.08f) else colors.surf)
+        .padding(horizontal = 6.dp, vertical = 2.dp),
+        fontSize = 11.sp, lineHeight = 16.sp, color = if (attention) colors.error else colors.onVariant)
+}
 @Composable
 private fun MobileTaskActionMenu(
     task: BattleTask,
@@ -1637,20 +1659,22 @@ private fun MobileTaskDragPreview(
             .clip(TimeboxShapes.card)
             .background(previewSurface)
             .border(1.dp, colors.hairline, TimeboxShapes.card)
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(4.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 Icon(if (drag.task.status == TaskStatus.Completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
                     null, Modifier.size(21.dp), tint = colors.onVariant)
             }
-            CompactTaskSummary(drag.task, serverNow, timezone, Modifier.weight(1f).padding(top = 11.dp, bottom = 8.dp))
+            CompactTaskTitle(drag.task, Modifier.weight(1f).padding(top = 11.dp, end = 4.dp, bottom = 9.dp))
+            MobilePlanningControl(drag.task, null, {}, Modifier.widthIn(max = 116.dp), allowInteraction = false)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(TimeboxDimens.touchTarget), contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.MoreVert, null, tint = colors.onVariant)
                 }
             }
         }
+        CompactTaskMetadata(drag.task, serverNow, timezone, Modifier.padding(start = 44.dp, end = 8.dp, bottom = 6.dp))
     }
 }
 
@@ -2502,7 +2526,8 @@ private fun MobilePlanningControl(
 ) {
     val colors = TimeboxTheme.colors
     val completed = task.status == TaskStatus.Completed
-    val interactive = allowInteraction && !completed && plannedSummary == null
+    val actionable = !completed && plannedSummary == null
+    val interactive = allowInteraction && actionable
     val label = when {
         completed -> "Completed"
         plannedSummary != null -> plannedSummary.label
@@ -2514,7 +2539,7 @@ private fun MobilePlanningControl(
     val accented = !completed && (plannedSummary != null || task.readyToPlan)
     val interactiveModifier = if (interactive) Modifier.clickable { onToggleReady(task) } else Modifier
     Box(
-        modifier.heightIn(min = 48.dp).then(interactiveModifier).semantics {
+        modifier.heightIn(min = 44.dp).then(interactiveModifier).semantics {
             contentDescription = when {
                 completed -> "Completed Task"
                 plannedSummary != null -> plannedSummary.label
@@ -2528,7 +2553,7 @@ private fun MobilePlanningControl(
             Modifier.clip(TimeboxShapes.chip)
                 .background(if (accented) colors.plannedSurface else Color.Transparent)
                 .border(1.dp, if (accented) colors.plannedBorder else colors.hairline, TimeboxShapes.chip)
-                .padding(horizontal = 12.dp, vertical = 5.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -2538,7 +2563,7 @@ private fun MobilePlanningControl(
                 color = if (accented) colors.planned else colors.onVariant,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            if (interactive) Text(
+            if (actionable) Text(
                 if (task.readyToPlan) "→" else "+",
                 style = TimeboxTheme.type.bodySmall,
                 color = if (accented) colors.planned else colors.onVariant,
