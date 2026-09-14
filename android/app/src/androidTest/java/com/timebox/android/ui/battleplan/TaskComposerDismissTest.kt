@@ -10,8 +10,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
@@ -46,24 +48,46 @@ class TaskComposerDismissTest {
             }
         }
 
-        compose.onNodeWithText("Title").performTextInput("Prepare launch notes")
+        compose.onNodeWithContentDescription("Task title").performTextInput("Prepare launch notes")
         repeat(2) {
             swipeComposerDown()
             compose.onNodeWithText("Discard new task?").assertIsDisplayed()
             compose.onNodeWithText("Keep editing").performClick()
             compose.onNodeWithText("Prepare launch notes").assertIsDisplayed()
         }
-        compose.onNodeWithText("Title").performTouchInput { click() }
-        compose.onNodeWithText("Title").performTextInput(" updated")
-        compose.onNodeWithText("Create task").performTouchInput { click() }
+        compose.onNodeWithContentDescription("Task title").performTouchInput { click() }
+        compose.onNodeWithContentDescription("Task title").performTextReplacement("Prepare launch notes updated")
+        compose.onNodeWithText("Add task").performTouchInput { click() }
         compose.runOnIdle {
             check(createdDraft?.title == "Prepare launch notes updated")
         }
         swipeComposerDown()
         compose.onNodeWithText("Discard").performClick()
-        compose.onNodeWithText("New task").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Task title").assertDoesNotExist()
         compose.onNodeWithText("Battle Plan action").performTouchInput { click() }
         compose.runOnIdle { check(backgroundTapped) }
+    }
+
+    @Test
+    fun keepEditingAfterSystemBackLeavesDraftVisibleAndUsable() {
+        var created = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskComposerOverlay(
+                    state = BattlePlanUiState(loading = false, showComposer = true,
+                        composerDraft = TaskComposerDraft(title = "Keep this draft", dirty = true)),
+                    notificationsAllowed = true, onRequestNotificationPermission = {},
+                    onDraftChange = {}, onReminderEnabledChange = {}, onDismiss = {},
+                    onCreate = { created = true },
+                )
+            }
+        }
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("Discard new task?").assertIsDisplayed()
+        compose.onNodeWithText("Keep editing").performClick()
+        compose.onNodeWithText("Keep this draft").assertIsDisplayed()
+        compose.onNodeWithText("Add task").performClick()
+        compose.runOnIdle { check(created) }
     }
 
     @Test
@@ -88,13 +112,13 @@ class TaskComposerDismissTest {
         }
         swipeComposerDown()
         compose.onNodeWithText("Discard new task?").assertDoesNotExist()
-        compose.onNodeWithText("New task").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Task title").assertDoesNotExist()
         compose.onNodeWithText("Battle Plan action").performTouchInput { click() }
         compose.runOnIdle { check(backgroundTapped) }
     }
 
     private fun swipeComposerDown() {
-        compose.onNodeWithText("New task").performTouchInput {
+        compose.onNodeWithContentDescription("Close task").performTouchInput {
             swipe(center, center + Offset(0f, 1400f), durationMillis = 400)
         }
     }

@@ -1,6 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <application>
         <activity
             android:name=".ui.day.prototype.DayHeaderPrototypeActivity"
@@ -9,16 +7,18 @@
             android:theme="@style/Theme.Timebox">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:host="prototype"
-                    android:pathPrefix="/day-header"
-                    android:scheme="timebox" />
+                <data android:host="prototype" android:pathPrefix="/day-header" android:scheme="timebox" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="timebox" android:host="prototype" android:path="/task-sheet" />
             </intent-filter>
         </activity>
     </application>
-
 </manifest>

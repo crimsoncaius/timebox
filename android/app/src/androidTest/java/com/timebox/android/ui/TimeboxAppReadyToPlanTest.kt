@@ -168,7 +168,7 @@ class TimeboxAppReadyToPlanTest {
             transport.failReadiness()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").assertDoesNotExist()
-        compose.onNodeWithText("Completed").performClick()
+        compose.onNodeWithText("Completed  1").performClick()
         compose.onNodeWithText("App projection Task").assertExists()
         compose.onNodeWithContentDescription("App projection Task readiness error").assertDoesNotExist()
         compose.onNodeWithText("Retry").assertDoesNotExist()
@@ -275,41 +275,28 @@ class TimeboxAppReadyToPlanTest {
     }
 
     @Test
-    fun TaskDetailKeepsReadinessInDraftUntilSaveThenUsesCoordinator() {
+    fun TaskDetailSavesFieldsInPlaceAndReadinessUsesCoordinatorImmediately() {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
-
         compose.onNodeWithText("Battle Plan").performClick()
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
-                .fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithTag("battle-plan-task-10").performTouchInput {
-            click(center.copy(y = center.y / 3f))
-        }
-        compose.waitUntil(5_000) {
-            compose.onAllNodesWithText("Edit details").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("Edit details").performClick()
-        compose.onNodeWithTag("task-detail-description").performTextReplacement("Draft notes")
-        compose.onNodeWithText("Ready to Plan").performClick()
-
-        compose.runOnIdle { assertEquals(emptyList<JsonObject>(), transport.patchBodies) }
-
-        compose.onNodeWithText("Save changes").performClick()
-        compose.waitUntil(5_000) { transport.patchBodies.size == 1 }
+        compose.onNodeWithTag("battle-plan-task-10").performTouchInput { click(center.copy(y = center.y / 3f)) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Close task").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Description").performClick()
+        compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextReplacement("Saved notes")
+        compose.onNodeWithText("Save description").performClick()
         awaitNonReadinessPatchRequest(transport)
         compose.runOnIdle {
-            assertTrue("description" in transport.patchBodies.single())
-            assertFalse("ready_to_plan" in transport.patchBodies.single())
-            assertEquals(emptyList<Boolean>(), transport.readinessCalls)
+            assertEquals(setOf("description"), transport.patchBodies.single().keys)
             transport.completePatch(ready = false, version = 2)
         }
-        compose.waitUntil(5_000) { transport.readinessCalls == listOf(true) }
-        compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
-            .assertExists()
-
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Save description").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithContentDescription("Ready to Plan").performClick()
         awaitReadinessRequest(transport)
+        compose.runOnIdle { assertEquals(listOf(true), transport.readinessCalls) }
+        compose.onNodeWithContentDescription("Ready to Plan").assertIsEnabled()
         compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
     }
 

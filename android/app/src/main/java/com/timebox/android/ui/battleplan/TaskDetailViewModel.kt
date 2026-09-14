@@ -52,7 +52,7 @@ data class TaskDetailDraft(
     val reminderDate: String,
     val reminderTime: String,
     val readyToPlan: Boolean,
-)
+) : java.io.Serializable
 
 data class TaskDetailRecoveryConflict(
     val draft: TaskDetailDraft,
@@ -143,8 +143,8 @@ class TaskDetailViewModel(
         }
     }
 
-    fun load(taskId: Int) {
-        _state.value = TaskDetailUiState(taskId = taskId)
+    fun load(taskId: Int, showSpinner: Boolean = true) {
+        if (showSpinner || _state.value.taskId != taskId) _state.value = TaskDetailUiState(taskId = taskId)
         viewModelScope.launch {
             val tasksDeferred = async { repository.listBattleTasks() }
             val projectsDeferred = async { repository.listProjects() }
@@ -160,7 +160,11 @@ class TaskDetailViewModel(
                 ?.findTask(taskId)
             val parent: BattleTask? = null
             if (failure != null || task == null) {
-                _state.update { it.copy(loading = false, error = failure?.apiError?.message ?: "Task not found.") }
+                _state.update {
+                    val message = failure?.apiError?.message ?: "Task not found."
+                    if (!showSpinner && it.task != null) it.copy(saving = false, saveError = message)
+                    else it.copy(loading = false, error = message)
+                }
                 return@launch
             }
             val resolvedList = tasksResult.getOrThrow()
@@ -184,6 +188,7 @@ class TaskDetailViewModel(
                 serverNow = resolvedList.serverNow,
                 baselineDraft = baseline,
                 editing = matchingRecovery != null,
+                dirty = visibleDraft.normalized() != baseline.normalized(),
                 recoveryConflict = recoveryConflict,
             ).withDraft(visibleDraft)
             anchorClock(resolvedList.serverNow, resolvedList.timezone)
@@ -279,9 +284,9 @@ class TaskDetailViewModel(
         _state.update { it.copy(saving = true, operation = TaskDetailOperation.Reopening, message = null) }
         viewModelScope.launch {
             taskCompletion.transition(task.id, task.status, TaskStatus.Open).fold(
-                onSuccess = {
+                onSuccess = { saved ->
                     clearPersistedDraft()
-                    load(task.id)
+                    acceptSaved(saved)
                 },
                 onFailure = {
                     _state.update { it.copy(saving = false, operation = null) }
@@ -297,9 +302,9 @@ class TaskDetailViewModel(
         _state.update { it.copy(saving = true, operation = TaskDetailOperation.Completing, message = null) }
         viewModelScope.launch {
             taskCompletion.transition(task.id, task.status, TaskStatus.Completed).fold(
-                onSuccess = {
+                onSuccess = { saved ->
                     clearPersistedDraft()
-                    load(task.id)
+                    acceptSaved(saved)
                 },
                 onFailure = {
                     _state.update { it.copy(saving = false, operation = null) }
@@ -312,18 +317,31 @@ class TaskDetailViewModel(
     fun addSubtask(title: String) {
         val parent = _state.value.task?.takeIf { it.parentId == null && it.status != TaskStatus.Completed } ?: return
         if (title.isBlank() || _state.value.saving) return
-        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id)) }
+        _state.update { it.copy(saving = true, saveError = null) }
+        viewModelScope.launch {
+            repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id)).fold(
+                onSuccess = { child ->
+                    val current = _state.value.task?.takeIf { it.id == parent.id } ?: return@fold
+                    val subtask = Subtask(child.id, parent.id, child.title, false, false, child.position, child.createdAt, child.updatedAt)
+                    acceptSaved(current.copy(subtasks = current.subtasks + subtask))
+                },
+                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
+            )
+        }
     }
 
     fun toggleSubtask(task: Subtask) {
         if (_state.value.saving || _state.value.task?.status == TaskStatus.Completed) return
         val parentTaskId = _state.value.taskId ?: return
-        _state.update { it.copy(saving = true, message = null) }
+        _state.update { it.copy(saving = true, message = null, saveError = null) }
         viewModelScope.launch {
             val result = if (task.checked) repository.uncheckSubtask(task.id) else repository.checkSubtask(task.id)
             result.fold(
-                onSuccess = { load(parentTaskId) },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onSuccess = { saved ->
+                    val current = _state.value.task?.takeIf { it.id == parentTaskId } ?: return@fold
+                    acceptSaved(current.copy(subtasks = current.subtasks.map { if (it.id == saved.id) saved else it }))
+                },
+                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
             )
         }
     }
@@ -341,12 +359,13 @@ class TaskDetailViewModel(
         viewModelScope.launch {
             repository.trashBattleTask(task.id).fold(
                 onSuccess = {
-                    load(taskId)
+                    val current = _state.value.task?.takeIf { it.id == taskId } ?: return@fold
+                    acceptSaved(current.copy(subtasks = current.subtasks.filterNot { it.id == task.id }))
                     _state.update {
                         it.copy(trashUndoTarget = TrashUndoTarget(task.id, task.title, leaveTaskDetail = false))
                     }
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
             )
         }
     }
@@ -365,9 +384,41 @@ class TaskDetailViewModel(
                         )
                     }
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
             )
         }
+    }
+
+    fun saveField(draft: TaskDetailDraft) {
+        val current = _state.value
+        if (current.saving || current.task?.status == TaskStatus.Completed || current.recoveryConflict != null) return
+        _state.value = current.withDraft(draft).copy(
+            editing = true,
+            dirty = draft.normalized() != current.baselineDraft?.normalized(),
+            saveError = null,
+            validationError = null,
+        )
+        persistCurrentDraft()
+        if (_state.value.dirty) save() else discardChanges()
+    }
+
+    fun setReadyImmediately(ready: Boolean) {
+        val current = _state.value
+        val task = current.task ?: return
+        if (current.saving || current.dirty || task.status == TaskStatus.Completed) return
+        if (readinessCoordinator != null) readinessCoordinator.setReady(task, ready)
+        else saveField(current.toTaskDetailDraft().copy(readyToPlan = ready))
+    }
+
+    private fun acceptSaved(task: BattleTask) {
+        readinessCoordinator?.mergeServerTasks(listOf(task))
+        val projected = readinessCoordinator?.projectedTask(task.id) ?: task
+        val current = _state.value
+        if (current.taskId != task.id) return
+        val zone = runCatching { ZoneId.of(current.timezone) }.getOrDefault(ZoneId.of("UTC"))
+        val baseline = projected.toTaskDetailDraft(zone)
+        _state.value = current.withDraft(baseline).copy(task = projected, baselineDraft = baseline,
+            saving = false, editing = false, dirty = false, operation = null, saveError = null, validationError = null)
     }
 
     fun save() {
@@ -435,24 +486,12 @@ class TaskDetailViewModel(
                 )
             }
             clearPersistedDraft()
-            load(original.id)
+            acceptSaved(saved)
         }
     }
 
     fun refreshAfterTaskCompletion(taskId: Int) {
-        if (_state.value.taskId == taskId) load(taskId)
-    }
-
-    private fun mutate(message: String, operation: suspend () -> Result<*>) {
-        if (_state.value.saving) return
-        val taskId = _state.value.taskId ?: return
-        _state.update { it.copy(saving = true, message = null) }
-        viewModelScope.launch {
-            operation().fold(
-                onSuccess = { _state.update { it.copy(saving = false, message = message) }; load(taskId) },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
-            )
-        }
+        if (_state.value.taskId == taskId) load(taskId, showSpinner = false)
     }
 
     private fun edit(block: TaskDetailUiState.() -> TaskDetailUiState) {
@@ -645,6 +684,7 @@ sealed interface TaskDraftValidation {
 
 internal fun validateTaskDraft(state: TaskDetailUiState): TaskDraftValidation {
     if (state.title.isBlank()) return TaskDraftValidation.Invalid(TaskDraftField.Title, "Task title is required.")
+    if (state.title.length > 500) return TaskDraftValidation.Invalid(TaskDraftField.Title, "Task title must be 500 characters or fewer.")
     val zone = runCatching { ZoneId.of(state.timezone) }
         .getOrElse { return TaskDraftValidation.Invalid(null, "Unknown app timezone.") }
     val date = if (state.deadlineMode != TaskDeadlineMode.None) runCatching { LocalDate.parse(state.deadlineDate) }.getOrNull() else null

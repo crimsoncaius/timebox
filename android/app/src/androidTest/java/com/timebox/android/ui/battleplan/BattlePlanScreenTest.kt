@@ -369,7 +369,7 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun taskDetailsEditModeRevealsFieldsAndForwardsDashboardChanges() {
+    fun taskDetailsFieldsAreEditableWithoutWholePageEditMode() {
         var readyToPlan: Boolean? = null
         var importance: PriorityLevel? = null
         val task = battleTask(1)
@@ -386,7 +386,7 @@ class BattlePlanScreenTest {
                     ),
                     onBack = {}, onRetry = {}, onOpenTask = {}, onTitleChange = {},
                     onDescriptionChange = {}, onStatusChange = {}, onProjectChange = {},
-                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = { importance = it },
+                    onTaskTypeChange = {}, onUrgencyChange = {}, onImportanceChange = {}, onSaveField = { importance = it.importance },
                     onDeadlineModeChange = {}, onDeadlineDateChange = {}, onDeadlineTimeChange = {},
                     onReminderEnabledChange = {}, notificationsAllowed = true,
                     onReminderDateChange = {}, onReminderTimeChange = {}, onReadyChange = { readyToPlan = it },
@@ -399,10 +399,9 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Save changes").assertIsNotEnabled()
-        compose.onNodeWithText("Tap a block or chip below to change that detail.").fetchSemanticsNode()
-        compose.onNodeWithText("Ready to Plan").performClick()
-        compose.onNodeWithContentDescription("Change importance").performClick()
+        compose.onNodeWithText("Save changes").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Ready to Plan").performClick()
+        compose.onNodeWithText("Importance").performClick()
         compose.onNodeWithText("High").performClick()
 
         compose.runOnIdle {
@@ -412,7 +411,7 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun taskDetailsUseOneSaveActionAndKeepCompletionOutsideEditing() {
+    fun taskDetailsCompletionAndTitleEditorAreSeparateActions() {
         var startedEditing = 0
         var completed = 0
         val task = battleTask(1)
@@ -442,18 +441,19 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Complete task").performClick()
-        compose.onNodeWithText("Edit details").performClick()
+        compose.onNodeWithContentDescription("Complete task").performClick()
+        compose.onNodeWithText(task.title).performClick()
+        compose.onNodeWithText("Save title").assertExists()
         check(compose.onAllNodesWithText("Save task").fetchSemanticsNodes().isEmpty())
         check(compose.onAllNodesWithText("Done").fetchSemanticsNodes().isEmpty())
         compose.runOnIdle {
             check(completed == 1)
-            check(startedEditing == 1)
+            check(startedEditing == 0)
         }
     }
 
     @Test
-    fun dirtyTaskEditingOffersSaveAndConfirmsDiscardWithoutCompletionChoice() {
+    fun failedFieldSaveOffersRetryAndConfirmsDiscardWithoutAllowingCompletion() {
         var saves = 0
         var discards = 0
         val task = battleTask(1)
@@ -485,14 +485,11 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Save changes").assertIsEnabled().performClick()
-        check(compose.onAllNodesWithText("Complete task").fetchSemanticsNodes().isEmpty())
-        check(compose.onAllNodesWithText("Save task").fetchSemanticsNodes().isEmpty())
-        compose.onNodeWithText("Open").performClick()
-        check(compose.onAllNodesWithText("Completed").fetchSemanticsNodes().isEmpty())
-        compose.onNodeWithContentDescription("Cancel editing").performClick()
-        compose.onNodeWithText("Discard unsaved changes?").fetchSemanticsNode()
-        compose.onNodeWithText("Discard changes").performClick()
+        compose.onNodeWithText("Retry save").assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("Complete task").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Close task").performClick()
+        compose.onNodeWithText("Discard this field edit?").fetchSemanticsNode()
+        compose.onNodeWithText("Discard").performClick()
         compose.runOnIdle {
             check(saves == 1)
             check(discards == 1)

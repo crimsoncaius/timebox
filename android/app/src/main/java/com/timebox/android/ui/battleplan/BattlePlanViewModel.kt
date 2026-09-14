@@ -80,6 +80,7 @@ data class TaskComposerDraft(
     val reminderDate: String = "",
     val reminderTime: String = "",
     val readyToPlan: Boolean = false,
+    val subtasks: List<String> = emptyList(),
     val moreOpen: Boolean = false,
     val dirty: Boolean = false,
 )
@@ -140,6 +141,8 @@ data class BattlePlanUiState(
     val showComposer: Boolean = false,
     val composerDraft: TaskComposerDraft = TaskComposerDraft(),
     val composerInitialDraft: TaskComposerDraft = TaskComposerDraft(),
+    val composerCreatedTaskId: Int? = null,
+    val composerNextSubtask: Int = 0,
     val composerSubmitted: Boolean = false,
     val composerError: String? = null,
     val createdTaskNotice: CreatedTaskNotice? = null,
@@ -214,6 +217,8 @@ class BattlePlanViewModel internal constructor(
         BattlePlanUiState(
             showComposer = savedStateHandle[COMPOSER_VISIBLE] ?: false,
             composerDraft = restoreComposerDraft(savedStateHandle),
+            composerCreatedTaskId = savedStateHandle["battlePlan.composer.createdTaskId"],
+            composerNextSubtask = savedStateHandle["battlePlan.composer.nextSubtask"] ?: 0,
             composerInitialDraft = restoreComposerInitialDraft(savedStateHandle),
         ),
     )
@@ -415,6 +420,7 @@ class BattlePlanViewModel internal constructor(
     }
 
     fun updateComposerDraft(draft: TaskComposerDraft) {
+        if (_state.value.saving || _state.value.composerCreatedTaskId != null) return
         _state.update { current ->
             current.copy(
                 composerDraft = draft.copy(dirty = draft.hasMeaningfulChangesFrom(current.composerInitialDraft)),
@@ -450,16 +456,20 @@ class BattlePlanViewModel internal constructor(
     }
 
     fun discardComposer() {
+        if (_state.value.saving) return
+        val partiallyCreated = _state.value.composerCreatedTaskId != null
         _state.update {
             it.copy(
                 showComposer = false,
                 composerDraft = TaskComposerDraft(),
                 composerInitialDraft = TaskComposerDraft(),
                 composerSubmitted = false,
+                composerCreatedTaskId = null, composerNextSubtask = 0,
                 composerError = null,
             )
         }
         clearSavedComposer()
+        if (partiallyCreated) load(false)
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
@@ -546,27 +556,29 @@ class BattlePlanViewModel internal constructor(
         if (current.saving) return
         _state.update { it.copy(saving = true, composerSubmitted = true, composerError = null) }
         viewModelScope.launch {
-            repository.createBattleTask(validation.request).fold(
-                onSuccess = { task ->
-                    val message = if (current.selectedStatus == TaskStatus.Completed) "Task created in Open" else "Task created"
-                    _state.update {
-                        it.copy(
-                            saving = false,
-                            showComposer = false,
-                            composerDraft = TaskComposerDraft(),
-                            composerInitialDraft = TaskComposerDraft(),
-                            composerSubmitted = false,
-                            composerError = null,
-                            createdTaskNotice = CreatedTaskNotice(task.id, message),
-                        )
-                    }
-                    clearSavedComposer()
-                    load(false)
-                },
-                onFailure = { error ->
-                    _state.update { it.copy(saving = false, composerError = error.apiError.message) }
-                },
-            )
+            val taskId = current.composerCreatedTaskId ?: repository.createBattleTask(validation.request).getOrElse { error ->
+                _state.update { it.copy(saving = false, composerError = error.apiError.message) }
+                return@launch
+            }.id.also { id ->
+                _state.update { it.copy(composerCreatedTaskId = id) }
+                persistComposer()
+            }
+            for (index in current.composerNextSubtask until current.composerDraft.subtasks.size) {
+                repository.createBattleTask(BattleTaskCreate(current.composerDraft.subtasks[index], parentId = taskId)).getOrElse { error ->
+                    _state.update { it.copy(saving = false, composerError = "Task created. ${current.composerDraft.subtasks.size - index} subtasks remain. ${error.apiError.message}") }
+                    return@launch
+                }
+                _state.update { it.copy(composerNextSubtask = index + 1) }
+                persistComposer()
+            }
+            val message = if (current.selectedStatus == TaskStatus.Completed) "Task created in Open" else "Task created"
+            _state.update {
+                it.copy(saving = false, showComposer = false, composerDraft = TaskComposerDraft(),
+                    composerInitialDraft = TaskComposerDraft(), composerSubmitted = false, composerError = null,
+                    composerCreatedTaskId = null, composerNextSubtask = 0, createdTaskNotice = CreatedTaskNotice(taskId, message))
+            }
+            clearSavedComposer()
+            load(false)
         }
     }
 
@@ -816,6 +828,9 @@ class BattlePlanViewModel internal constructor(
         val draft = state.composerDraft
         val initialDraft = state.composerInitialDraft
         savedStateHandle[COMPOSER_VISIBLE] = state.showComposer
+        savedStateHandle["battlePlan.composer.subtasks"] = ArrayList(draft.subtasks)
+        savedStateHandle["battlePlan.composer.createdTaskId"] = state.composerCreatedTaskId
+        savedStateHandle["battlePlan.composer.nextSubtask"] = state.composerNextSubtask
         savedStateHandle[COMPOSER_TITLE] = draft.title
         savedStateHandle[COMPOSER_DESCRIPTION] = draft.description
         savedStateHandle[COMPOSER_STATUS] = draft.status.name
@@ -837,6 +852,7 @@ class BattlePlanViewModel internal constructor(
     }
 
     private fun clearSavedComposer() {
+        listOf("battlePlan.composer.subtasks", "battlePlan.composer.createdTaskId", "battlePlan.composer.nextSubtask").forEach { savedStateHandle.remove<Any?>(it) }
         COMPOSER_KEYS.forEach { key -> savedStateHandle.remove<Any?>(key) }
     }
 
@@ -879,6 +895,7 @@ sealed interface TaskComposerValidation {
 }
 
 internal fun validateTaskComposer(draft: TaskComposerDraft, timezone: String): TaskComposerValidation {
+    if (draft.subtasks.any { it.isBlank() || it.length > 500 }) return TaskComposerValidation.Invalid("Subtask names must contain 1 to 500 characters.")
     if (draft.title.isBlank()) return TaskComposerValidation.Invalid("Task title is required.")
     if (draft.title.length > 500) return TaskComposerValidation.Invalid("Task title must be 500 characters or fewer.")
     val taskValidation = validateTaskDraft(
@@ -919,6 +936,7 @@ internal fun initialComposerDraft(scope: BattlePlanScope, selectedStatus: TaskSt
     )
 
 internal fun restoreComposerDraft(handle: SavedStateHandle): TaskComposerDraft = TaskComposerDraft(
+    subtasks = handle.get<ArrayList<String>>("battlePlan.composer.subtasks")?.toList().orEmpty(),
     title = handle["battlePlan.composer.title"] ?: "",
     description = handle["battlePlan.composer.description"] ?: "",
     status = handle.get<String>("battlePlan.composer.status")?.let { runCatching { TaskStatus.valueOf(it) }.getOrNull() }
