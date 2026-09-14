@@ -11,6 +11,24 @@ from app.services import activity_cutover
 from test_activity_api import tracking, command
 
 
+def test_rollback_preserves_all_original_actual_values(client):
+    with Session(get_engine()) as db:
+        type_ = TaskType(name="reading")
+        db.add(type_)
+        db.flush()
+        row = TimeBlock(lane=BlockLane.actual, task_type_id=type_.id,
+                        start_at=dt.datetime(2026, 9, 10, tzinfo=dt.timezone.utc),
+                        end_at=dt.datetime(2026, 9, 10, 1, tzinfo=dt.timezone.utc),
+                        updated_at=dt.datetime(2026, 9, 10, 2, tzinfo=dt.timezone.utc))
+        db.add(row)
+        db.commit()
+        original = activity_cutover.record_values(row)
+    activity_cutover.apply(get_engine(), "Asia/Singapore")
+    activity_cutover.rollback(get_engine())
+    with Session(get_engine()) as db:
+        assert activity_cutover.record_values(db.get(TimeBlock, original["id"])) == original
+
+
 def test_cutover_enables_tracking_without_development_flag(client):
     activity_cutover.apply(get_engine(), "Asia/Singapore")
     snapshot = client.get("/activity")

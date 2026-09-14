@@ -20,8 +20,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
-import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.TaskType
+import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
@@ -154,7 +154,7 @@ fun ActivityTracking(
                     Text(state.legacyRecovery!!)
                 }
             }
-            if (state.offline || state.pending || state.snapshot == null) Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else "Connection required", color = colors.onVariant)
+            if (state.offline || state.pending || state.snapshot == null) Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else if (state.error != null) "Activity unavailable" else "Connection required", color = colors.onVariant)
             if (state.error != null || state.pending) {
                 Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
                 TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }

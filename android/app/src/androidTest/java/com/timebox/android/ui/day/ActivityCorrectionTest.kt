@@ -90,7 +90,7 @@ class ActivityCorrectionTest {
         compose.onNodeWithText("Activity Tracking on").assertDoesNotExist()
         compose.onNodeWithText("Stop").assertDoesNotExist()
         compose.onNodeWithText("Switch activity").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").assertIsDisplayed().performClick()
         compose.onNodeWithText("Switch activity").assertIsDisplayed()
         assertEquals(current, repository.state.value.snapshot!!.current)
         assertFalse(repository.state.value.pending)

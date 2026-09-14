@@ -11,6 +11,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 @Serializable data class CheckInPreferences(val enabled: Boolean = true, val thresholdMinutes: Int = 60)
 data class CheckInSubmission(val saved: Boolean, val operationId: String? = null, val deviceId: String? = null, val acknowledged: Boolean = false)
@@ -74,6 +77,14 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private var monotonicAnchor = 0L
     private var storageError: String? = null
     private var offline = false
+    private fun errorDetail(error: Exception): String? {
+        if (error !is retrofit2.HttpException) return error.message
+        return runCatching {
+            error.response()?.errorBody()?.string()?.let {
+                ApiFactory.json.parseToJsonElement(it).jsonObject["detail"]?.jsonPrimitive?.contentOrNull
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Server request failed (HTTP ${error.code()})"
+    }
     private var feedback: String? = null
     init {
         try {
@@ -183,7 +194,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             catch (error: Exception) {
                 if (error is retrofit2.HttpException && error.code() == 422) {
                     save(journal.copy(rejectedOutbox = journal.rejectedOutbox + journal.outbox, outbox = emptyList()))
-                } else offline = true
+                }
+                offline = error is java.io.IOException
                 throw error
             }
             val ack = checkNotNull(response.acknowledgement) { "Activity acknowledgement missing" }
@@ -202,12 +214,12 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         try {
             require(preferences.thresholdMinutes in 15..480) { "Choose 15 to 480 minutes." }
             save(journal.copy(checkInPreferences = preferences)); publish()
-        } catch (error: Exception) { publish(error.message) }
+        } catch (error: Exception) { publish(errorDetail(error)) }
     }
     fun checkInDismissed(id: String) = id in journal.dismissedQuestions
     suspend fun dismissCheckIn(id: String) = mutex.withLock {
         try { save(journal.copy(dismissedQuestions = journal.dismissedQuestions + id)); publish() }
-        catch (error: Exception) { publish(error.message) }
+        catch (error: Exception) { publish(errorDetail(error)) }
     }
     suspend fun checkIn(event: CheckInEventDto): Boolean = submitCheckIn(event).saved
     suspend fun submitCheckIn(event: CheckInEventDto): CheckInSubmission = mutex.withLock {
@@ -229,7 +241,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             saved = true; publish(); drain(); publish()
             acknowledged = !offline && journal.outbox.none { it.operationId == operationId }
         } catch (cancelled: CancellationException) { publish(); throw cancelled }
-        catch (error: Exception) { publish(error.message) }
+        catch (error: Exception) { publish(errorDetail(error)) }
         CheckInSubmission(saved, operationId, journal.device, acknowledged)
     }
     suspend fun reopenCheckIn(id: String) = mutex.withLock {
@@ -241,7 +253,9 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         try {
             checkEndpoint()
             drain()
-            val snapshot = try { transport.read() } catch (error: Exception) { offline = true; throw error }
+            val snapshot = try { transport.read() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { offline = error is java.io.IOException; throw error }
             offline = false
             if (newer(snapshot)) {
                 noteReconciliation(snapshot)
@@ -253,7 +267,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             bootstrappedThisRun = true
             publish()
         } catch (cancelled: CancellationException) { publish(); throw cancelled }
-        catch (error: Exception) { publish(error.message ?: "Could not refresh activity") }
+        catch (error: Exception) { publish(errorDetail(error) ?: "Could not refresh activity") }
     }
     fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (monotonicTime() - monotonicAnchor) / 1_000_000) }
         ?: Instant.ofEpochMilli(wallTime() + (journal.calibration?.offsetMs ?: 0))
@@ -292,7 +306,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command))
                 publish()
                 true
-            } catch (error: Exception) { publish(error.message ?: "Could not save activity"); false }
+            } catch (error: Exception) { publish(errorDetail(error) ?: "Could not save activity"); false }
         }
         // The durable projection is already observable while transport is pending.
         if (saved) { onPersisted(); refresh() }
@@ -326,7 +340,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                     note = if (clearNote) null else note ?: target?.note, targetSource = if (target != null) source else null,
                     targetStartAt = target?.startAt, clear_fields = listOfNotNull(if (clearName) "name" else null, if (clearNote) "note" else null))
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command)); publish(); true
-            } catch (error: Exception) { publish(error.message ?: "Could not save correction"); false }
+            } catch (error: Exception) { publish(errorDetail(error) ?: "Could not save correction"); false }
         }
         if (saved) refresh()
         return saved

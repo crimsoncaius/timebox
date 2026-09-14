@@ -4,6 +4,7 @@ import com.timebox.android.data.remote.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 class ActivityRepositoryTest {
     @Test fun runningCorrectionSurvivesRestartWithoutEndingTracking() = runTest {
@@ -27,6 +28,49 @@ class ActivityRepositoryTest {
         assertNull(current.endAt)
         assertEquals(1, restored.state.value.snapshot!!.records.size)
     }
+    @Test fun upgradeResponsePreservesDetailWithoutClaimingOffline() = runTest {
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto = throw retrofit2.HttpException(
+                retrofit2.Response.error<ActivitySnapshotDto>(404,
+                    """{"detail":"Activity Tracking requires database upgrade"}""".toResponseBody()))
+            override suspend fun execute(command: ActivityCommandDto) = read()
+        }
+        val store = object : ActivityStorage {
+            override fun load(): String? = null
+            override fun save(value: String) {}
+        }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        assertFalse("A reachable server is not offline", repository.state.value.offline)
+        assertEquals("Activity Tracking requires database upgrade", repository.state.value.error)
+    }
+
+    @Test fun networkFailureThenServerFailureThenRecoveryUpdatesConnectionState() = runTest {
+        var failure: Exception? = java.io.IOException("Connection lost")
+        val initial = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-12T05:00:00Z",
+            reportingTimezone = "Asia/Singapore", current = null, records = emptyList())
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto { failure?.let { throw it }; return initial }
+            override suspend fun execute(command: ActivityCommandDto) = read()
+        }
+        val store = object : ActivityStorage {
+            override fun load(): String? = null
+            override fun save(value: String) {}
+        }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        assertTrue(repository.state.value.offline)
+        failure = retrofit2.HttpException(retrofit2.Response.error<ActivitySnapshotDto>(503, "unavailable".toResponseBody()))
+        repository.refresh()
+        assertFalse(repository.state.value.offline)
+        assertEquals("Server request failed (HTTP 503)", repository.state.value.error)
+        failure = null
+        repository.refresh()
+        assertFalse(repository.state.value.offline)
+        assertNull(repository.state.value.error)
+        assertEquals(initial, repository.state.value.snapshot)
+    }
+
     @Test fun checkInConfirmationAndDismissalAreDurableOfflineWithoutChangingActivity() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, endAt = null, createdAt = at, updatedAt = at)

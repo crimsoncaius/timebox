@@ -1,5 +1,9 @@
 # Activity Tracking integrated review candidate (#158)
 
+This document records the September 11 rehearsal. For the September 12 production
+conversion and required release readiness check, see
+[Production Activity Tracking conversion](activity-tracking-production.md).
+
 This is a local, development-gated review candidate for [#144](https://github.com/crimsoncaius/timebox/issues/144), not a production deployment or cutover approval. Normal web production builds and Android release builds still disable Activity Tracking. Keep compatible clients available before any separately approved production cutover.
 
 ## Retirement boundary

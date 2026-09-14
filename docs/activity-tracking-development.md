@@ -2,6 +2,9 @@
 
 ## Current application behavior
 
+Railway production was explicitly backed up and converted on September 12; see
+[production conversion and release checks](activity-tracking-production.md).
+
 Activity Tracking and Focus are now the default Android and web experience.
 Normal Android debug builds install as `com.timebox.android`, use API port
 `8001`, and show **Start tracking** and **Focus** above the Day timeline.

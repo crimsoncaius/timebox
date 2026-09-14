@@ -49,7 +49,7 @@ On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `./gradlew assembleDebug` 
 
 ## Dark-theme visual regression screenshots
 
-With an emulator connected, regenerate the deterministic Task Details, menu,
+Using the managed emulator pool, regenerate the deterministic Task Details, menu,
 dialog, Day calendar, and Chronicle dark-theme screenshots from the repository
 root:
 
@@ -57,10 +57,11 @@ root:
 .\scripts\android-dark-theme-screenshots.ps1
 ```
 
-The script runs only `DarkThemeScreenshotTest` and pulls its PNGs into
+The script reserves a clean emulator, runs only `DarkThemeScreenshotTest`, pulls its PNGs into
 `artifacts/android-dark-theme/` for side-by-side review. The deterministic set also
 covers grouped editors, collapsed empty Plan Mode, and both themes of the component
-gallery.
+gallery. It releases the emulator afterward; see
+[emulator ownership](../docs/agents/android-emulators.md) for pool setup and review holds.
 
 ## Pointing the app at your API
 
@@ -123,6 +124,12 @@ webfont; the glyph names map one-to-one.
 
 ## Known behaviours worth knowing
 
+- **Switch activity shows the surrounding day.** Its timeline puts Planned Blocks
+  on the left and recorded Actual Blocks on the right. Tap or drag to choose the
+  switch point, use nearby plan boundaries, or browse earlier/later context.
+  Selections stay between the Current Activity's start and now; the preview does
+  not change recorded time until Switch activity is confirmed. The accepted design
+  was prototype A, preserved on `codex/switch-context-prototype` at `8c0d86a`.
 - **Most timeline movement is armed by a long press.** Touch and stylus users hold a
   movable Planned Block or Planning Draft until the haptic, then drag to move it.
   Ready to Plan cards drag into the timeline immediately without a haptic; early

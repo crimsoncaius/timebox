@@ -95,6 +95,15 @@ Android unit tests and builds are available after Android Studio has generated t
 .\scripts\android-gradle.ps1 testDebugUnitTest assembleDebug
 ```
 
+Android device tests use the shared emulator reservation helper:
+
+```powershell
+python scripts/android-emulator.py test --owner "your-task-id"
+```
+
+It selects an isolated emulator and releases it after testing. For interactive
+work, review holds, and recovery, see [Android emulator ownership](docs/agents/android-emulators.md).
+
 On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `cd android && ./gradlew testDebugUnitTest assembleDebug`.
 
 ## Design and behavior references

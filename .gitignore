@@ -49,3 +49,6 @@ playwright/.cache/
 
 # Android local tooling
 android/.kotlin/
+
+# Repo-local emulator dashboard
+/.emulator-dashboard/

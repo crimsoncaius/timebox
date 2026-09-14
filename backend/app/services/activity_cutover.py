@@ -120,6 +120,9 @@ def rollback(engine):
                 if key in {"start_at", "end_at", "created_at", "updated_at"} and value:
                     value = dt.datetime.fromisoformat(value)
                 setattr(row, key, value)
+            # Include the archived timestamp in UPDATE even when it equals the
+            # imported value; otherwise SQLAlchemy applies the onupdate clock.
+            flag_modified(row, "updated_at")
         state.enabled = False
         state.reconciliation = state.reporting_timezone = state.check_in = state.cutover = None
         db.commit()

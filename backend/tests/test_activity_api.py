@@ -81,7 +81,9 @@ def test_failed_switch_changes_nothing_and_command_id_cannot_be_reused(tracking)
 
 
 def test_default_server_does_not_expose_activity_protocol(client):
-    assert client.get("/activity").status_code == 404
+    response = client.get("/activity")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity Tracking requires database upgrade"}
 
 
 def test_development_gate_blocks_legacy_writers_even_after_flag_is_disabled(tracking):
