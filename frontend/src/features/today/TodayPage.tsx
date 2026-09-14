@@ -1,3 +1,5 @@
+import { DayViewOptions } from './DayViewOptions'
+import { useDayViewPreferences } from './dayViewPreferences'
 import { getFocusController } from '../activity/focusController'
 import { RecordingPreview } from './RecordingPreview'
 import type { PlannedRecordingResult } from '../../lib/api'
@@ -61,6 +63,8 @@ function localDateTimeAtMinute(date: string, minute: number): string {
 }
 
 export function TodayPage() {
+  const { preferences: dayView, change: changeDayView, storageError } = useDayViewPreferences()
+  const [viewOpen, setViewOpen] = useState(false)
   const readiness = useReadinessCoordinator()
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
@@ -818,7 +822,7 @@ export function TodayPage() {
   if (!day) {
     return (
       <Layout>
-        {activityDevelopmentEnabled ? <ActivityTracking taskTypes={taskTypes} onChanged={() => {}} /> : null}
+        {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={dayView.tracking} taskTypes={taskTypes} onChanged={() => {}} /> : null}
         <p className="text-error">{error ?? 'Failed to load day.'}</p>
       </Layout>
     )
@@ -855,18 +859,18 @@ export function TodayPage() {
   const planningTask = readyTasks.find((task) => task.id === planningTaskId) ?? null
 
   return (
-    <Layout planningActive={planningActive} workModeActive={workMode != null || workModeGuard} mainClassName="w-full max-w-none bg-transparent px-6 py-12 lg:px-8 xl:px-10 dark:bg-dark-surface">
+    <Layout planningActive={planningActive} workModeActive={workMode != null || workModeGuard} mainClassName="w-full max-w-none bg-transparent px-6 py-6 lg:px-8 xl:px-10 dark:bg-dark-surface">
       <DragDropProvider onDragStart={(event) => { if (event.operation.source?.type === READY_TASK_DRAG_TYPE) setReadyTaskDragging(true) }} onDragMove={onReadyTaskDragPosition} onDragOver={onReadyTaskDragPosition} onDragEnd={onReadyTaskDragEnd}>
       <div inert={workMode != null || workModeGuard} className="flex flex-col gap-8 xl:flex-row xl:gap-0 xl:items-stretch">
         <div className="min-w-0 min-h-0 flex-1 xl:pr-4">
           <span data-testid="day-date" className="sr-only">
             {day.date}
           </span>
-          <section className="mb-16">
+          <section className="mb-6">
             <div className="flex flex-wrap items-end justify-between gap-6">
               <div>
-                <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
-                  {formatDisplayDate(day.date)}
+                <h1 className="mb-2 font-headline text-3xl sm:text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
+                  <time dateTime={day.date} title={formatDisplayDate(day.date)} aria-label={formatDisplayDate(day.date)}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}</time>
                 </h1>
                 <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
                   Timezone {day.meta.timezone}.
@@ -884,11 +888,12 @@ export function TodayPage() {
                 >
                   ← Prev
                 </button>
-                <DayCalendarPopover
+                {dayView.calendar && <DayCalendarPopover
                   value={day.date}
                   todayIso={day.meta.today}
                   onSelect={(iso) => navigate(`/day/${iso}`)}
-                />
+                />}
+                <button type="button" className="min-h-11 rounded-full px-3 text-sm" onClick={() => navigate(`/day/${day.meta.today}`)}>Today</button>
                 <button
                   type="button"
                   className="rounded-full border border-outline-variant/15 px-3 py-1.5 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
@@ -897,9 +902,14 @@ export function TodayPage() {
                 >
                   Next →
                 </button>
+            {!dayView.tracking && activityDevelopmentEnabled && <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => changeDayView('tracking', true)}>{activityState.snapshot?.current ? '● Tracking' : 'Tracking'}</button>}
+            <button type="button" className="min-h-11 rounded-full border border-outline-variant/40 px-4 text-sm dark:border-dark-outline-variant" onClick={() => setViewOpen(true)}>View</button>
+
               </div>
             </div>
           </section>
+
+          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} onClose={() => setViewOpen(false)} storageError={storageError} />}
 
           {taskTypes.length === 0 && (
             <div className="mb-6 rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 text-sm text-on-surface-variant">
@@ -981,12 +991,13 @@ export function TodayPage() {
                 : formatTimeRangeGcal12(readyDropPreview.start, readyDropPreview.start + SLOT_MINUTES)}
             </div>
           )}
-          {activityDevelopmentEnabled ? <ActivityTracking taskTypes={taskTypes} onChanged={() => {
+          {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={dayView.tracking} taskTypes={taskTypes} onChanged={() => {
             void api.getDay(date).then(setDay).catch(() => {})
           }} /> : null}
           {activityDevelopmentEnabled && needsElapsedDayView(day) && <ReportingDayActuals day={day} onSelect={id => onBlockClick(id, 'actual')} />}
           <section className="overflow-x-auto pb-24">
             <DayTimeline
+              showZoomControls={dayView.zoom}
               ref={timelineRef}
               day={activityDevelopmentEnabled && needsElapsedDayView(day) ? { ...day, actual_blocks: [] } : day}
               readOnly={false}

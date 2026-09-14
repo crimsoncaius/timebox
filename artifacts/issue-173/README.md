@@ -25,7 +25,7 @@ See [the design record](../../docs/design/record-actual-173/README.md). The befo
 
 Follow-up validation: seven focused Android tests pass; 46 focused web tests pass, with six preview tests rerun after keyboard handling. Type-check, build and changed-file lint pass. Native recording/repeat/Undo and web spanning replacement/Undo were verified against the API. Desktop, narrow web, dark mode and keyboard checks passed. Updated screenshots use `accepted-android-preview.png` and `accepted-web-*.png`.
 
-The user explicitly requested an additional emulator because the standard pool was full. The helper now supports explicit `acquire --additional` while preserving ordinary capacity and existing reservations. A unit test verifies unique allocation, retained ownership, and compatibility with another helper instance. The additional device was acquired, installed, launched, inspected, and retained through the helper.
+The user explicitly requested an additional emulator because the standard pool was full. The helper now supports explicit `acquire --extra` while preserving ordinary capacity and existing reservations. A unit test verifies unique allocation, retained ownership, and compatibility with another helper instance. The additional device was acquired, installed, launched, inspected, and retained through the helper.
 
 Screenshots: [web](web-review.png), [Android](android-preview.png). Port configuration is in [review-config.json](review-config.json). The review seed script targets only this isolated API.
 

@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -44,6 +45,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
@@ -96,6 +99,32 @@ fun DayScreen(
     onCancelRecording: () -> Unit = {},
     onUndoRecording: () -> Unit = {},
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val preferences = remember(context) { com.timebox.android.data.AppPreferences(context) }
+    val visibility by preferences.dayViewPreferences.collectAsState(initial = com.timebox.android.data.DayViewPreferences())
+    val preferenceScope = rememberCoroutineScope()
+    fun setVisible(section: com.timebox.android.data.DayViewSection, value: Boolean) {
+        preferenceScope.launch { preferences.setDaySectionVisible(section, value) }
+    }
+    val calendarVisible = visibility.calendar
+    val trackingVisible = visibility.tracking
+    val zoomVisible = visibility.zoom
+    var viewOpen by remember { mutableStateOf(false) }
+    val activityRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository
+    val activityState by activityRepository.state.collectAsState()
+    val trackingAttention = when {
+        activityState.pending -> "Change not confirmed"
+        activityState.error != null -> "Activity needs attention"
+        activityState.offline -> "Offline"
+        activityState.snapshot?.checkIn?.question != null -> "Check-in waiting"
+        activityState.rejectedRecovery != null || activityState.legacyRecovery != null -> "Recovery available"
+        else -> null
+    }
+    if (viewOpen) DayViewOptionsDialog(
+        calendar = calendarVisible, tracking = trackingVisible, zoom = zoomVisible,
+        onCalendar = { setVisible(com.timebox.android.data.DayViewSection.Calendar, it) }, onTracking = { setVisible(com.timebox.android.data.DayViewSection.Tracking, it) },
+        onZoom = { setVisible(com.timebox.android.data.DayViewSection.Zoom, it) }, onDismiss = { viewOpen = false },
+    )
     var displayedDate by remember(state.date) { mutableStateOf(state.date) }
 
     BackHandler(enabled = state.isPlanningMode) {
@@ -106,6 +135,16 @@ fun DayScreen(
     CompositionLocalProvider(LocalTimelineZoom provides zoom) {
         Column(Modifier.fillMaxSize()) {
             DayCalendarHeader(
+                showCalendar = calendarVisible,
+                compactDate = true,
+                viewAction = {
+                    androidx.compose.material3.TextButton(onClick = { viewOpen = true }) { androidx.compose.material3.Text("View") }
+                },
+                hiddenTrackingAction = {
+                    if (!trackingVisible) androidx.compose.material3.TextButton(modifier = Modifier.semantics { stateDescription = trackingAttention ?: if (activityState.snapshot?.current != null) "Recording" else "Tracking stopped" }, onClick = { setVisible(com.timebox.android.data.DayViewSection.Tracking, true) }) {
+                        androidx.compose.material3.Text((if (activityState.snapshot?.current != null) "● Tracking" else "Tracking") + (if (trackingAttention != null) " !" else ""), color = TimeboxTheme.colors.actual)
+                    }
+                },
                 selectedDate = displayedDate,
                 today = state.today,
                 isPlanningMode = state.isPlanningMode,
@@ -119,12 +158,14 @@ fun DayScreen(
             )
 
             if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-                ActivityTracking(taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+                ActivityTracking(controlsVisible = trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+                if (trackingVisible) {
                 Spacer(Modifier.height(6.dp))
                 androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
                 Spacer(Modifier.height(8.dp))
+                }
             }
-            Row(
+            if (zoomVisible) Row(
                 Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding, vertical = 4.dp),
                 horizontalArrangement = Arrangement.End,
             ) {
@@ -177,6 +218,7 @@ fun DayScreen(
                     )
                 }
             }
+
         }
 
     }

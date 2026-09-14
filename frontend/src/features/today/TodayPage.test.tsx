@@ -678,7 +678,7 @@ describe('TodayPage inspector rail', () => {
     await screen.findByLabelText('Task type', { exact: true })
     expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
 
-    await user.click(screen.getByText(/^Monday,/))
+    await user.click(screen.getByRole('heading', { name: 'Timebox', level: 2 }))
 
     await waitFor(() => {
       expect(within(rail).queryByLabelText('Task type', { exact: true })).not.toBeInTheDocument()
@@ -705,7 +705,7 @@ describe('TodayPage inspector rail', () => {
     await user.clear(note)
     await user.type(note, 'draft note')
 
-    await user.click(screen.getByText(/^Monday,/))
+    await user.click(screen.getByRole('heading', { name: 'Timebox', level: 2 }))
 
     expect(confirmSpy).toHaveBeenCalled()
     expect(screen.getByLabelText('Task type', { exact: true })).toHaveValue('alpha')

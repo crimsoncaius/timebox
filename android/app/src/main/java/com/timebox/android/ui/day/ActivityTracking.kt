@@ -37,6 +37,7 @@ fun ActivityTracking(
     taskTypes: List<TaskType>, onChanged: () -> Unit,
     repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
     focus: Boolean = false, focusTask: @Composable (@Composable () -> Unit) -> Unit = { elapsed -> elapsed() }, planning: Boolean = false, onEnterFocus: () -> Unit = {},
+    controlsVisible: Boolean = true,
 ) {
     val state by repository.state.collectAsState()
     val owner = LocalLifecycleOwner.current
@@ -173,7 +174,7 @@ fun ActivityTracking(
                 Text("Focus options", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
         }
-    } else content()
+    } else if (controlsVisible) content()
     if (describing && unknown) ModalBottomSheet(onDismissRequest = { describing = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Describe this activity", style = TimeboxTheme.type.screenTitle, color = colors.on)

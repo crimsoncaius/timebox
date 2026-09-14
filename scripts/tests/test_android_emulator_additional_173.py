@@ -16,7 +16,7 @@ class AdditionalDeviceTest(unittest.TestCase):
                 existing = [pool.claim(f'owner-{i}') for i in range(pool.config['capacity'])]
                 with self.assertRaisesRegex(RuntimeError, 'Pool full'):
                     pool.claim('ordinary')
-                extra = pool.claim('user-requested review', additional=True)
+                extra = pool.claim('user-requested review', extra=True)
                 self.assertEqual(extra['id'], pool.config['capacity'] + 1)
                 self.assertEqual([pool.get(row['token']) for row in existing], existing)
                 with self.assertRaisesRegex(RuntimeError, 'Pool full'):
@@ -24,7 +24,7 @@ class AdditionalDeviceTest(unittest.TestCase):
                 second = module.Pool(directory)
                 try:
                     self.assertEqual(second.get(extra['token']), extra)
-                    another = second.claim('another explicit request', additional=True)
+                    another = second.claim('another explicit request', extra=True)
                     self.assertNotEqual(another['id'], extra['id'])
                 finally:
                     second.db.close()

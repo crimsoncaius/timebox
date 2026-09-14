@@ -74,6 +74,7 @@ class TimeboxApplication : Application() {
             preferences.dailyReminders.collectLatest { dailyReminderScheduler.replace(it) }
         }
         repository.onActiveTasksLoaded = { tasks -> reminderScheduler.replaceSchedules(tasks.items) }
+        repository.onTaskChanged = reminderScheduler::enqueueImmediateSync
         repository.onConnectionChanged = reminderScheduler::enqueueImmediateSync
         reminderScheduler.start()
         com.timebox.android.checkin.CheckInWorker.schedule(this)

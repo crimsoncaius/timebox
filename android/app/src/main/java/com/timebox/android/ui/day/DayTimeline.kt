@@ -356,8 +356,7 @@ private fun LaneColumn(
             .pointerInput(day.visibleStart, day.visibleEnd, lane, slotHeight) {
                 detectTapGestures { offset ->
                     val rawMinute = day.visibleStart + offset.y / slotPx * SLOT_MINUTES
-                    val minute = snapToBlockInteractionStep(rawMinute)
-                        .coerceIn(day.visibleStart, day.visibleEnd - SLOT_MINUTES)
+                    val minute = initialBlockStart(rawMinute, day.visibleStart, day.visibleEnd)
                     onTapSlot(lane, minute)
                 }
             },
@@ -502,7 +501,10 @@ private fun LaneColumn(
             Box(Modifier.matchParentSize().testTag("planned-placement-target")
                 .pointerInput(day.visibleStart, day.visibleEnd, onTapSlot) {
                     detectTapGestures { offset ->
-                        val minute = snapToBlockInteractionStep(day.visibleStart + offset.y / slotPx * SLOT_MINUTES)
+                        val minute = initialBlockStart(
+                            day.visibleStart + offset.y / slotPx * SLOT_MINUTES,
+                            day.visibleStart, day.visibleEnd,
+                        )
                         onTapSlot(Lane.Planned, minute)
                     }
                 })

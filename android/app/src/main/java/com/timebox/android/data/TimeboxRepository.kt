@@ -78,6 +78,8 @@ class TimeboxRepository private constructor(
 
     /** Production hooks keep device-local reminder work synchronized without caching task data. */
     var onActiveTasksLoaded: (BattleTaskList) -> Unit = {}
+    /** Refresh device reminders after a mutation without reloading the visible task. */
+    var onTaskChanged: () -> Unit = {}
     var onConnectionChanged: () -> Unit = {}
 
     constructor(preferences: AppPreferences) : this(preferences, null)
@@ -277,7 +279,7 @@ class TimeboxRepository private constructor(
     }
 
     suspend fun patchBattleTask(taskId: Int, patch: BattleTaskPatch): Result<BattleTask> =
-        call { api().patchBattleTask(taskId, patch.toJson()).toModel() }
+        call { api().patchBattleTask(taskId, patch.toJson()).toModel() }.onSuccess { onTaskChanged() }
 
     suspend fun completeBattleTask(taskId: Int): Result<TaskCompletionResult> =
         call {
@@ -288,7 +290,7 @@ class TimeboxRepository private constructor(
                     response.removedPlannedBlockIds,
                 )
             }
-        }
+        }.onSuccess { onTaskChanged() }
 
     suspend fun checkSubtask(subtaskId: Int): Result<Subtask> =
         call { api().checkSubtask(subtaskId).toModel() }
@@ -297,10 +299,10 @@ class TimeboxRepository private constructor(
         call { api().uncheckSubtask(subtaskId).toModel() }
 
     suspend fun reopenBattleTask(taskId: Int): Result<BattleTask> =
-        call { api().reopenBattleTask(taskId).toModel() }
+        call { api().reopenBattleTask(taskId).toModel() }.onSuccess { onTaskChanged() }
 
     suspend fun undoBattleTaskCompletion(taskId: Int, undoToken: String): Result<BattleTask> =
-        call { api().undoBattleTaskCompletion(taskId, TaskCompletionUndoDto(undoToken)).toModel() }
+        call { api().undoBattleTaskCompletion(taskId, TaskCompletionUndoDto(undoToken)).toModel() }.onSuccess { onTaskChanged() }
 
     suspend fun reorderBattleTasks(placements: List<TaskPlacement>): Result<Unit> = call {
         api().reorderBattleTasks(

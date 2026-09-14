@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.dialog
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -154,6 +155,7 @@ fun TimeboxApp(
     val routeDate = backStackEntry?.arguments?.getString(AppRoutes.DateArg)?.let {
         runCatching { LocalDate.parse(it) }.getOrNull()
     }
+    val surfaceRoute = if (route == AppRoutes.TaskDetailPattern) navController.previousBackStackEntry?.destination?.route ?: AppRoutes.BattlePlan else route
     val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
     val routeBlockId = backStackEntry?.arguments?.getInt(AppRoutes.BlockIdArg)?.takeIf { it >= 0 }
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
@@ -318,11 +320,11 @@ fun TimeboxApp(
                 if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
         ) {
-            if (route != AppRoutes.DayPattern && route != AppRoutes.RecurringNew) {
+            if (surfaceRoute != AppRoutes.DayPattern && surfaceRoute != AppRoutes.RecurringNew && surfaceRoute?.startsWith("prototype/task-sheet") != true) {
                 TimeboxTopBar(
-                    kicker = routeKicker(route),
+                    kicker = routeKicker(surfaceRoute),
                     title = routeTitle(
-                        route,
+                        surfaceRoute,
                         formatFullDate(dayState.date),
                         formatMonthTitle(chronicleState.monthStart),
                     ),
@@ -331,6 +333,15 @@ fun TimeboxApp(
 
             Box(modifier = Modifier.weight(1f)) {
                 NavHost(navController, startDestination = AppRoutes.DayPattern) {
+                    if (com.timebox.android.BuildConfig.DEBUG) {
+                        composable(
+                            "prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}",
+                            deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}" }),
+                            arguments = listOf(navArgument("mode") { defaultValue = "details" }, navArgument("layout") { defaultValue = "full" }, navArgument("sample") { defaultValue = "normal" }),
+                        ) { entry ->
+                            com.timebox.android.ui.battleplan.TaskSheetPrototype(entry.arguments?.getString("mode") == "create", entry.arguments?.getString("layout") ?: "full", entry.arguments?.getString("sample") ?: "normal")
+                        }
+                    }
                     composable(
                         AppRoutes.DayPattern,
                         deepLinks = listOf(navDeepLink { uriPattern = AppRoutes.DayDeepLinkPattern }),
@@ -445,12 +456,13 @@ fun TimeboxApp(
                             onConfirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
                         )
                     }
-                    composable(
+                    dialog(
                         AppRoutes.TaskDetailPattern,
+                        dialogProperties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false),
                         arguments = listOf(navArgument(AppRoutes.TaskIdArg) { type = NavType.IntType }),
                         deepLinks = listOf(navDeepLink { uriPattern = AppRoutes.TaskDeepLinkPattern }),
                     ) {
-                        val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@composable
+                        val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@dialog
                         TaskDetailScreen(
                             state = taskDetailState,
                             onTrackTask = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && taskDetailState.task?.let { it.status != com.timebox.android.data.TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
@@ -481,7 +493,7 @@ fun TimeboxApp(
                             notificationsAllowed = notificationsAllowed,
                             onReminderDateChange = taskDetailViewModel::setReminderDate,
                             onReminderTimeChange = taskDetailViewModel::setReminderTime,
-                            onReadyChange = taskDetailViewModel::setReady,
+                            onReadyChange = taskDetailViewModel::setReadyImmediately,
                             onOpenDay = { date, blockId -> navController.navigate(AppRoutes.day(date, blockId)) },
                             onAddSubtask = taskDetailViewModel::addSubtask,
                             onToggleSubtask = taskDetailViewModel::toggleSubtask,
@@ -500,6 +512,27 @@ fun TimeboxApp(
                             onComplete = taskDetailViewModel::completeTask,
                             onReopen = taskDetailViewModel::reopenTask,
                             onSave = taskDetailViewModel::save,
+                            onSaveField = taskDetailViewModel::saveField,
+                            onRequestNotificationPermission = onRequestNotificationPermission,
+                            feedback = {
+                                val notice = battlePlanState.trashUndo
+                                if (notice != null) BattlePlanTrashUndoNotice(
+                                    notice = notice,
+                                    onUndo = { battlePlanViewModel.undoTrash(notice.noticeId) },
+                                    onDismiss = { battlePlanViewModel.dismissUndo(notice.noticeId) },
+                                    onExpiryFinished = { battlePlanViewModel.finishUndoExpiry(notice.noticeId) },
+                                    reducedMotion = reducedMotion,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                ) else SnackbarHost(snackbarHostState, Modifier.padding(horizontal = 16.dp)) { data ->
+                                    TransientFeedback(
+                                        message = data.visuals.message,
+                                        modifier = Modifier.semantics { paneTitle = "Feedback"; dismiss { data.dismiss(); true } },
+                                        actionLabel = data.visuals.actionLabel,
+                                        onAction = data::performAction,
+                                        onDismiss = if (data.visuals.withDismissAction) data::dismiss else null,
+                                    )
+                                }
+                            },
                         )
                     }
                     composable(AppRoutes.Recurring) {
@@ -683,7 +716,7 @@ fun TimeboxApp(
         }
 
         // Keep the queued snackbar available while task-scoped Trash recovery owns the slot.
-        if (!withinBattlePlan || battlePlanState.trashUndo == null) {
+        if (route != AppRoutes.TaskDetailPattern && (!withinBattlePlan || battlePlanState.trashUndo == null)) {
             SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp)) { data ->
                 TransientFeedback(
                     message = data.visuals.message,
@@ -698,7 +731,7 @@ fun TimeboxApp(
             }
         }
 
-        if (withinBattlePlan) {
+        if (withinBattlePlan && route != AppRoutes.TaskDetailPattern) {
             battlePlanState.trashUndo?.let { notice ->
                 BattlePlanTrashUndoNotice(
                     notice = notice,

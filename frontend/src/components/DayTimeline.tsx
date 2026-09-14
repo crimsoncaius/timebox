@@ -35,6 +35,7 @@ export const DayTimeline = forwardRef<
   HTMLDivElement,
   {
     day: DayRead
+    showZoomControls?: boolean
     readOnly: boolean
     draft: BlockDraftPlacement | null
     /** When set, the matching block shows selected affordance on the timeline. */
@@ -62,6 +63,7 @@ export const DayTimeline = forwardRef<
 >(function DayTimeline(
   {
     day,
+    showZoomControls = true,
     readOnly,
     draft,
     selectedBlockId,
@@ -225,16 +227,8 @@ export const DayTimeline = forwardRef<
   }, [autoScrollToNow, day.date, showNowLine])
 
   return (
-    <div
-      ref={(node) => {
-        timelineRef.current = node
-        if (typeof ref === 'function') ref(node)
-        else if (ref) ref.current = node
-      }}
-      className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-x-1 gap-y-1.5 sm:gap-x-2"
-      data-testid="day-timeline"
-    >
-      <div className="col-span-3 flex justify-end pb-1">
+    <>
+    {showZoomControls && (<div className="flex justify-end pb-1">
         <div className="inline-flex min-h-11 items-center rounded-full border border-outline-variant/40 bg-surface-container-low/60 pl-4 pr-1 text-xs text-on-surface-variant dark:border-dark-outline-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant">
         <span className="inline-flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary" tabIndex={0} aria-label={`Timeline zoom ${zoom.toFixed(1)} times. Use arrow keys to adjust.`}
           onKeyDown={(e) => {
@@ -251,7 +245,16 @@ export const DayTimeline = forwardRef<
           Reset
         </button>
         </div>
-      </div>
+      </div>)}
+    <div
+      ref={(node) => {
+        timelineRef.current = node
+        if (typeof ref === 'function') ref(node)
+        else if (ref) ref.current = node
+      }}
+      className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-x-1 gap-y-1.5 sm:gap-x-2"
+      data-testid="day-timeline"
+    >
       <div className="w-12 shrink-0 sm:w-14" aria-hidden />
       <h3 className={laneHeaderPlanned}>Planned</h3>
       <h3 className={laneHeaderActual}>Actual</h3>
@@ -323,7 +326,7 @@ export const DayTimeline = forwardRef<
 
       {showNowLine && (
         <div
-          className="pointer-events-none relative z-18 col-start-2 col-span-2 row-start-3"
+          className="pointer-events-none relative z-18 col-start-2 col-span-2 row-start-2"
           style={{ height: totalHeight }}
           data-testid="day-now-line"
           aria-hidden
@@ -336,6 +339,7 @@ export const DayTimeline = forwardRef<
         </div>
       )}
     </div>
+    </>
   )
 })
 
@@ -627,10 +631,10 @@ function Lane({
   )
   /**
    * Explicit grid placement so the `[data-testid="day-now-line"]` overlay's
-   * `col-start-2 col-span-2 row-start-3` (definite position) cannot evict the
+   * `col-start-2 col-span-2 row-start-2` (definite position) cannot evict the
    * auto-placed lanes into an implicit row.
    */
-  const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-3' : 'col-start-3 row-start-3'
+  const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-2' : 'col-start-3 row-start-2'
   const collisionBlocks = draft ? [...blocks, { id: -1, ...draft }] : blocks
   return (
     <div
