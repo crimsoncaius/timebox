@@ -79,6 +79,10 @@ internal fun DayCalendarHeader(
     today: LocalDate?,
     isPlanningMode: Boolean,
     planningActionEnabled: Boolean = true,
+    showCalendar: Boolean = true,
+    compactDate: Boolean = false,
+    viewAction: @Composable () -> Unit = {},
+    hiddenTrackingAction: @Composable () -> Unit = {},
     onOpenWorkMode: () -> Unit,
     onSetPlanningMode: (Boolean) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
@@ -115,7 +119,7 @@ internal fun DayCalendarHeader(
                     color = colors.onVariant,
                 )
                 Text(
-                    text = formatCalendarHeaderDate(selectedDate),
+                    text = if (compactDate) selectedDate.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.ENGLISH)) else formatCalendarHeaderDate(selectedDate),
                     style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
                     color = colors.on,
                     modifier = Modifier.semantics {
@@ -134,6 +138,7 @@ internal fun DayCalendarHeader(
                 if (!com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
                     WorkModeAction(enabled = !isPlanningMode, onClick = onOpenWorkMode)
                 }
+                viewAction()
                 PlanningModeAction(
                     isPlanningMode = isPlanningMode,
                     enabled = planningActionEnabled,
@@ -167,7 +172,12 @@ internal fun DayCalendarHeader(
                 onClick = { today?.let(onNavigateToday) },
             )
             Spacer(Modifier.weight(1f))
-            CalendarModeControl(
+            hiddenTrackingAction()
+            if (!showCalendar) {
+                androidx.compose.material3.TextButton(onClick = { onSelectDate(selectedDate.minusDays(1)) }) { Text("‹", modifier = Modifier.semantics { contentDescription = "Previous day" }) }
+                androidx.compose.material3.TextButton(onClick = { onSelectDate(selectedDate.plusDays(1)) }) { Text("›", modifier = Modifier.semantics { contentDescription = "Next day" }) }
+            }
+            if (showCalendar) CalendarModeControl(
                 monthSelected = monthMode,
                 onWeek = { monthMode = false },
                 onMonth = {
@@ -179,6 +189,7 @@ internal fun DayCalendarHeader(
 
         Spacer(Modifier.height(8.dp))
 
+        if (showCalendar) {
         if (monthMode) {
             MonthPager(
                 displayedMonth = displayedMonth,
@@ -198,6 +209,7 @@ internal fun DayCalendarHeader(
             )
         }
         Spacer(Modifier.height(24.dp))
+        }
         Hairline(Modifier.testTag("day-header-divider"))
     }
 }
