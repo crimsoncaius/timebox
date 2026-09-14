@@ -68,6 +68,7 @@ class PlanModeScreenTest {
         runBlocking { session.refreshQueue() }
         session.begin()
         session.toggleSelection(ready.id)
+        var requestedMinute: Int? = null
         var state by mutableStateOf(DayUiState(date = date,
             pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
             planning = session.state.value))
@@ -76,17 +77,18 @@ class PlanModeScreenTest {
                 PlanningWorkspace(state = state, day = day,
                     onSelectBlock = { error("Placement must take priority over opening the card") },
                     onCommitMove = { _, _, _ -> },
-                    onPlanTask = { id, minute -> session.place(id, day, minute); state = state.copy(planning = session.state.value) },
+                    onPlanTask = { id, minute -> requestedMinute = minute; session.place(id, day, minute); state = state.copy(planning = session.state.value) },
                     onUpdatePlanningDraft = { _, _, _ -> }, onReturnPlanningDraft = {},
                     onArmAccessibleTask = {}, onRetryReadyTasks = {}, modifier = Modifier.height(400.dp))
             }
         }
         val slotPx = with(compose.density) { TimeboxDimens.slotHeight.toPx() }
         compose.onNodeWithTag("planned-placement-target").performTouchInput {
-            down(Offset(center.x, slotPx * 2f))
+            down(Offset(center.x, slotPx * (80f / 30f)))
             up()
         }
         compose.runOnIdle {
+            check(requestedMinute == 540) { "Requested $requestedMinute instead of the containing half-hour" }
             val draft = session.state.value.drafts.getValue(ready.id)
             check(draft.startMinute == 570 && draft.endMinute == 600) { "$draft" }
         }

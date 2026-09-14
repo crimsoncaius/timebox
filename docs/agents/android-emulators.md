@@ -15,6 +15,13 @@ Gradle arguments can follow the owner. A full pool reports its owners and pendin
 reviews through `status`; continue independent work and retry later. Never take
 another reservation to bypass the capacity limit.
 
+If the user explicitly requests an additional emulator, use
+`acquire --extra --owner "task-id: user-requested additional emulator"`.
+This reserves a separate managed slot beyond the ordinary capacity without
+changing shared configuration or existing reservations. The extra device uses
+the same token, command, release, and review lifecycle. Use this option only
+for an explicit user request, not as an automatic response to a full pool.
+
 For interactive work, capture the token printed by `acquire`:
 
 ```powershell
@@ -100,6 +107,6 @@ explicitly coordinate its data ownership. A retained review may also depend on
 keeping its backend and worktree available.
 
 For changes to the reservation helper, run
-`python -m unittest discover -s scripts/tests -p test_android_emulator.py`.
+`python -m unittest discover -s scripts/tests -p 'test_android_emulator*.py'`.
 Then exercise a managed emulator's acquire, targeted command, and release flow;
 the unit tests cannot verify SDK startup or shutdown behavior.
