@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.timebox.android.ui.day.configureRecordingStudy(intent)
         enableEdgeToEdge()
         notificationsAllowed = canDisplayNotifications()
 
@@ -105,6 +106,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        com.timebox.android.ui.day.configureRecordingStudy(intent)
         openCheckIn(intent)
     }
 

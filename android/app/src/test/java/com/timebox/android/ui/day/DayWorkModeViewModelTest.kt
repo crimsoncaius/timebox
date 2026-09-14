@@ -44,6 +44,42 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DayWorkModeViewModelTest {
     @Test
+    fun `recording saves text then confirms the frozen preview and undoes`() = runTest {
+        val api = FakeWorkModeApi(listOf(block(31, 540, 600)))
+        val viewModel = loadedViewModel(api, FakeClock("2026-08-30T01:30:00Z"), FakeWorkModePersistence())
+        viewModel.selectBlock(31)
+        viewModel.onNameChange("Edited name")
+        viewModel.onNoteChange("Edited note")
+        viewModel.recordPlanned()
+        viewModel.state.first { it.recordingPreview != null && !it.saving }
+        assertTrue(api.calls.indexOf("patchBlock") < api.calls.indexOf("recordPlanned"))
+        assertNull(api.recordRequests[0].fingerprint)
+        val preview = viewModel.state.value.recordingPreview!!.second
+        viewModel.recordPlanned()
+        viewModel.state.first { it.recordingUndo != null && !it.saving }
+        assertEquals("Actual recorded", viewModel.state.value.recordingNotice?.second)
+        assertEquals(preview.endAt, api.recordRequests[1].until)
+        assertEquals(preview.fingerprint, api.recordRequests[1].fingerprint)
+        assertNull(viewModel.state.value.recordingPreview)
+        viewModel.undoRecording()
+        viewModel.state.first { it.recordingUndo == null && !it.saving }
+        assertEquals("Recording undone", viewModel.state.value.recordingNotice?.second)
+        assertTrue("undoRecordPlanned" in api.calls)
+    }
+
+    @Test
+    fun `recording cancel discards the preview without sending replacement`() = runTest {
+        val api = FakeWorkModeApi(listOf(block(31, 540, 600)))
+        val viewModel = loadedViewModel(api, FakeClock("2026-08-30T01:30:00Z"), FakeWorkModePersistence())
+        viewModel.selectBlock(31)
+        viewModel.recordPlanned()
+        viewModel.state.first { it.recordingPreview != null && !it.saving }
+        viewModel.cancelRecordingPreview()
+        assertNull(viewModel.state.value.recordingPreview)
+        assertEquals(1, api.recordRequests.size)
+        assertNull(viewModel.state.value.recordingUndo)
+    }
+    @Test
     fun `Actual drop does not revert while activity correction is pending`() = runTest {
         val at = "2026-08-30T00:00:00Z"
         val type = TaskTypeDto(3, "coding")
@@ -433,6 +469,7 @@ private class FakeWorkModeApi(
     val createdBodies = mutableListOf<ActualBlockCreateDto>()
     val patchedActualIds = mutableListOf<Int>()
     val patchedActualBodies = mutableListOf<ActualBlockPatchDto>()
+    val recordRequests = mutableListOf<com.timebox.android.data.remote.PlannedRecordingRequest>()
     private val taskType = TaskTypeDto(3, "coding")
     private val linkedTask = LinkedTaskDto(10, "Ship Android", "open", 3)
     private val task = BattleTaskDto(
@@ -448,6 +485,17 @@ private class FakeWorkModeApi(
             val result = runCatching<Any?> {
                 when (method.name) {
                     "getDay" -> day(date)
+                    "patchBlock" -> day(date)
+                    "recordPlanned" -> {
+                        val body = args!![1] as com.timebox.android.data.remote.PlannedRecordingRequest
+                        recordRequests += body
+                        com.timebox.android.data.remote.PlannedRecordingDto(
+                            status = if (body.fingerprint == null) "confirmation_required" else "recorded",
+                            startAt = "2026-08-30T01:00:00Z", endAt = "2026-08-30T01:30:00Z", fingerprint = "observed",
+                            replacement = com.timebox.android.data.remote.RecordingReplacement("Edited name", "Edited note"),
+                            undoToken = if (body.fingerprint == null) null else "undo-token",
+                        )
+                    }
                     "getDayPreview" -> preview(date)
                     "listTaskTypes" -> listOf(taskType)
                     "listBattleTasks" -> BattleTaskListDto(listOf(task), "Asia/Singapore", "2026-08-30T09:17:00+08:00")

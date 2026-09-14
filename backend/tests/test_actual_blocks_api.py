@@ -152,6 +152,7 @@ def test_every_planned_to_actual_creation_flow_snapshots_the_planned_name(
             },
         )
     else:
+        captured_instants.append(dt.datetime(2026, 8, 30, 11, tzinfo=UTC))
         response = client.post(
             f"/planned-blocks/{planned['id']}/record-actual-as-planned"
         )
@@ -618,8 +619,8 @@ def test_record_actual_as_planned_has_one_shot_exact_undo(client):
     repeated = client.post(
         f"/planned-blocks/{planned['id']}/record-actual-as-planned"
     )
-    assert repeated.status_code == 422
-    assert repeated.json()["detail"] == "Planned Block already has corresponding Actual"
+    assert repeated.status_code == 201
+    assert repeated.json()["status"] == "already_recorded"
 
     revised_plan = client.patch(
         f"/days/2026-08-30/blocks/{planned['id']}",
@@ -650,7 +651,7 @@ def test_record_actual_as_planned_has_one_shot_exact_undo(client):
         json={"undo_token": result["undo_token"]},
     )
     assert repeated_undo.status_code == 422
-    assert repeated_undo.json()["detail"] == "Record Actual Undo has already been used"
+    assert "Undo is no longer available" in repeated_undo.json()["detail"]
 
 
 def test_deleted_record_operation_references_cannot_attach_to_reused_sqlite_block_ids(client):
@@ -886,9 +887,7 @@ def test_record_actual_undo_is_invalidated_by_newer_actual_intent(client, mutati
     )
 
     assert undo.status_code == 422, undo.text
-    assert undo.json()["detail"] == (
-        "Actual Block changed; Record Actual Undo is no longer available"
-    )
+    assert "Undo is no longer available" in undo.json()["detail"]
     assert client.get(f"/actual-blocks/{actual['id']}").status_code == 200
 
 

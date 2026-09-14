@@ -29,3 +29,10 @@ class ActivityOperation(Base):
     outcome: Mapped[str] = mapped_column(String(30))
     effective_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     intent: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class PlannedRecordingUndo(Base):
+    """Undo snapshots survive journal replay without becoming domain records."""
+    __tablename__ = "planned_recording_undo"
+    token: Mapped[str] = mapped_column(String(36), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSON)

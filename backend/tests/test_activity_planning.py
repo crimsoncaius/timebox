@@ -31,7 +31,7 @@ def test_empty_start_interruption_resume_and_durable_correspondence(tracking):
     assert planned['actual_duration_minutes'] == 60
     assert day['time_blocks'][0]['actual_block_ids'] == planned['actual_block_ids']
     assert tracking.get("/tasks").json()["items"][0]["status"] == task['status']
-    assert tracking.post(f"/planned-blocks/{plan['id']}/record-actual-as-planned").status_code == 409
+    assert tracking.post(f"/planned-blocks/{plan['id']}/record-actual-as-planned").json()['status'] == 'confirmation_required'
     assert tracking.get('/activity').json()['records'] == final['records']
 
 

@@ -461,6 +461,14 @@ class TimeboxRepository private constructor(
     suspend fun deleteActualBlock(actualBlockId: Int): Result<Unit> =
         call { api().deleteActualBlock(actualBlockId) }
 
+    suspend fun recordPlanned(id: Int, preview: com.timebox.android.data.remote.PlannedRecordingDto? = null) = call {
+        api().recordPlanned(id, com.timebox.android.data.remote.PlannedRecordingRequest(preview?.endAt, preview?.fingerprint))
+    }
+
+    suspend fun undoRecordPlanned(id: Int, token: String): Result<Unit> = call {
+        api().undoRecordPlanned(id, com.timebox.android.data.remote.RecordingUndoRequest(token))
+    }
+
     suspend fun getWindowSettings(): Result<DayWindowSettings> =
         call { api().getSettings().toModel() }
 

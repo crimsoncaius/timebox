@@ -4,7 +4,7 @@ import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
 import { activityDevelopmentEnabled, type ActivityCorrection } from '../features/activity/activityRepository'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BlockDraftPlacement, DayRead, TaskType, TimeBlock } from '../lib/api'
-import { formatMinuteLabel24 } from '../lib/time'
+import { formatMinuteLabel24, zonedLocalDateTimeToIso } from '../lib/time'
 import { TaskTypePathCombobox } from './TaskTypePathCombobox'
 import { Link } from 'react-router-dom'
 
@@ -27,6 +27,7 @@ export function TimeBlockInspectorContent(props: Parameters<typeof LegacyTimeBlo
 }
 function LegacyTimeBlockInspectorContent({
   block,
+  day,
   draft,
   taskTypes,
   variant,
@@ -35,6 +36,7 @@ function LegacyTimeBlockInspectorContent({
   onCreateFromDraft,
   onDelete,
   onRecordActualAsPlanned,
+  onOpenActual,
   onCreateTaskTypePath,
   onDirtyChange,
 }: {
@@ -48,6 +50,7 @@ function LegacyTimeBlockInspectorContent({
   onCreateFromDraft?: (payload: ActivityCorrection & { name: string | null; note: string | null }) => Promise<void>
   onDelete: () => Promise<void>
   onRecordActualAsPlanned?: () => Promise<void>
+  onOpenActual?: (id: number) => void
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
 }) {
@@ -55,6 +58,19 @@ function LegacyTimeBlockInspectorContent({
   const [name, setName] = useState(() => block?.name ?? '')
   const [note, setNote] = useState(() => block?.note ?? '')
   const [saving, setSaving] = useState(false)
+  const [clock, setClock] = useState(Date.now)
+  useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [])
+  const recordingTiming = useMemo(() => {
+    if (!block || block.lane !== 'planned') return { available: false, underway: false }
+    try {
+      const base = new Date(`${day.date}T00:00:00Z`)
+      const instant = (minute: number) => {
+        const local = new Date(base.getTime() + minute * 60000).toISOString().slice(0, 16)
+        return Date.parse(zonedLocalDateTimeToIso(local, day.meta.timezone, 'earlier'))
+      }
+      return { available: clock > instant(block.start_minute), underway: clock < instant(block.end_minute) }
+    } catch { return { available: false, underway: false } }
+  }, [block, day.date, day.meta.timezone, clock])
 
   const isCreateMode = draft != null && block == null
   const lane = block?.lane ?? draft?.lane
@@ -285,7 +301,9 @@ function LegacyTimeBlockInspectorContent({
 
   return (
     <div className={formClassName}>
-      {block?.lane === 'planned' && !!block.actual_block_ids?.length ? <p>{block.actual_block_ids.length} linked Actual Blocks · {formatDuration(Math.floor(block.actual_duration_minutes ?? 0))} recorded</p> : null}
+      {block?.lane === 'planned' && !!block.actual_block_ids?.length ? <div><p>Actual recorded · {block.actual_block_ids.length} linked Actual Blocks · {formatDuration(Math.floor(block.actual_duration_minutes ?? 0))} recorded</p>
+        {block.actual_block_ids.map((id, index) => <button key={id} className="mr-3 underline" type="button" onClick={() => onOpenActual?.(id)}>Open Actual{block.actual_block_ids!.length > 1 ? ` ${index + 1}` : ''}</button>)}
+      </div> : null}
       {/* Header: lane pill + duration pill + close */}
       <div className="flex shrink-0 items-center gap-2">
         <h2
@@ -395,7 +413,8 @@ function LegacyTimeBlockInspectorContent({
 
       {!isCreateMode && block?.lane === 'planned' ? (
         <section aria-label="Actual time actions" className="grid gap-2 rounded-xl border border-outline-variant/25 bg-surface-container-low p-3 dark:border-dark-outline-variant">
-          {onRecordActualAsPlanned ? <button type="button" disabled={saving} onClick={() => void handleActualAction(onRecordActualAsPlanned)} className="rounded-xl border border-outline-variant/40 px-4 py-3 text-sm font-medium disabled:opacity-40">Record Actual as planned</button> : null}
+          {onRecordActualAsPlanned ? <button type="button" disabled={saving || !recordingTiming.available} onClick={() => void handleActualAction(onRecordActualAsPlanned)} className="rounded-xl border border-outline-variant/40 px-4 py-3 text-sm font-medium disabled:opacity-40">{recordingTiming.underway ? 'Record Actual until now' : 'Record Actual as planned'}</button> : null}
+          {!recordingTiming.available && <p className="text-sm">Available after this block starts.</p>}
         </section>
       ) : null}
 

@@ -4,6 +4,7 @@ import type {
   BattleTaskList,
   BattleTaskWrite,
   ActualBlock,
+  PlannedRecordingResult,
   DayListItem,
   DayRead,
   DueReminder,
@@ -96,9 +97,10 @@ export const api = {
       method: 'DELETE',
     }),
 
-  recordActualAsPlanned: (plannedBlockId: number) =>
-    fetchJson<{ actual_block: ActualBlock; undo_token: string }>(`/planned-blocks/${plannedBlockId}/record-actual-as-planned`, {
+  recordActualAsPlanned: (plannedBlockId: number, body?: { until: string; fingerprint: string }) =>
+    fetchJson<PlannedRecordingResult>(`/planned-blocks/${plannedBlockId}/record-actual-as-planned`, {
       method: 'POST',
+      ...(body ? { body: JSON.stringify(body) } : {}),
     }),
 
   undoRecordActualAsPlanned: (plannedBlockId: number, undoToken: string) =>

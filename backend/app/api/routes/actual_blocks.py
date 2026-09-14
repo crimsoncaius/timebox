@@ -4,6 +4,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
@@ -13,10 +14,11 @@ from app.schemas.time_block import (
     ActualBlockRead,
     ActualBlockRelink,
     ActualBlockStart,
-    RecordActualAsPlannedRead,
     RecordActualAsPlannedUndo,
+    RecordPlannedRequest,
 )
 from app.services import actual_block_service
+from app.services import planned_recording
 
 router = APIRouter(prefix="/actual-blocks", tags=["actual-blocks"])
 planned_router = APIRouter(prefix="/planned-blocks", tags=["planned-blocks"])
@@ -124,21 +126,22 @@ def relink_actual_block(
 
 @planned_router.post(
     "/{planned_block_id}/record-actual-as-planned",
-    response_model=RecordActualAsPlannedRead,
     status_code=201,
 )
 def record_actual_as_planned(
     planned_block_id: int,
+    body: RecordPlannedRequest = RecordPlannedRequest(),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> RecordActualAsPlannedRead:
+    captured_at: dt.datetime = Depends(capture_utc_now),
+) -> dict:
     try:
-        actual, token = actual_block_service.record_actual_as_planned(
-            db, planned_block_id, settings
-        )
-        return RecordActualAsPlannedRead(actual_block=actual, undo_token=token)
+        return planned_recording.record(db, planned_block_id, settings, captured_at, body)
     except ValueError as exc:
         raise _unprocessable(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Recorded activity changed. Review the recording again.") from exc
 
 
 @planned_router.post(
@@ -151,12 +154,14 @@ def undo_record_actual_as_planned(
     db: Session = Depends(get_db),
 ) -> Response:
     try:
-        actual_block_service.undo_record_actual_as_planned(
-            db, planned_block_id, body.undo_token
-        )
+        if not planned_recording.undo(db, planned_block_id, body.undo_token, capture_utc_now()):
+            actual_block_service.undo_record_actual_as_planned(db, planned_block_id, body.undo_token)
         return Response(status_code=204)
     except ValueError as exc:
         raise _unprocessable(exc) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Recorded activity changed; Undo is no longer available.") from exc
 
 
 @router.get("/active", response_model=ActualBlockRead | None)

@@ -21,7 +21,9 @@ async def guard_legacy_actual_writes(
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
     path = request.url.path
-    legacy = path.startswith(("/actual-blocks", "/planned-blocks"))
+    # Planned recording now participates in the canonical journal and preview /
+    # replacement protocol; it is no longer a legacy Actual mutation.
+    legacy = path.startswith("/actual-blocks")
     if path.startswith("/task-types/") and request.method == "DELETE":
         # These legacy options rewrite/delete Actuals as a side effect. Reject
         # before inspecting usage so a concurrent switch cannot race the check.

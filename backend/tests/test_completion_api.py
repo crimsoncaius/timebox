@@ -102,7 +102,8 @@ def test_subtask_check_and_uncheck_are_explicit_and_never_complete_parent(client
     assert rejected.json()["detail"] == "Subtasks use check and uncheck actions"
 
 
-def test_actual_correspondence_is_independent_and_detach_preserves_actual_work(client):
+def test_actual_correspondence_is_independent_and_detach_preserves_actual_work(client, actual_instants):
+    actual_instants.append(dt.datetime(2099, 1, 4, 12, tzinfo=UTC))
     task_type = _task_type(client)
     task = _task(client, status="in_progress", task_type_id=task_type["id"])
     planned = _planned_block(client, "2099-01-04", task, task_type)
@@ -135,7 +136,8 @@ def test_actual_correspondence_is_independent_and_detach_preserves_actual_work(c
     assert deleted.json()["actual_blocks"][0]["actual_block"]["id"] == actual["id"]
 
 
-def test_deleting_paired_actual_leaves_planned_and_record_overlap_is_atomic(client):
+def test_deleting_paired_actual_leaves_planned_and_record_overlap_is_atomic(client, actual_instants):
+    actual_instants.extend([dt.datetime(2099, 3, 1, 12, tzinfo=UTC)] * 2)
     task_type = _task_type(client)
     task = _task(client, task_type_id=task_type["id"])
     planned = _planned_block(client, "2099-03-01", task, task_type)
@@ -163,8 +165,8 @@ def test_deleting_paired_actual_leaves_planned_and_record_overlap_is_atomic(clie
     rejected = client.post(
         f"/planned-blocks/{planned['id']}/record-actual-as-planned"
     )
-    assert rejected.status_code == 422
-    assert "overlap" in rejected.json()["detail"].lower()
+    assert rejected.status_code == 201
+    assert rejected.json()["status"] == "confirmation_required"
     assert client.get("/days/2099-03-01").json()["actual_blocks"] == before["actual_blocks"]
 
 

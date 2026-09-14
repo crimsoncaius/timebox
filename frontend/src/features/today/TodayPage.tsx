@@ -1,4 +1,6 @@
 import { getFocusController } from '../activity/focusController'
+import { RecordingPreview } from './RecordingPreview'
+import type { PlannedRecordingResult } from '../../lib/api'
 import { activityDay } from '../activity/activityDay'
 import { needsElapsedDayView, ReportingDayActuals } from '../activity/ReportingDayActuals'
 import { DragDropProvider, PointerSensor, useDraggable, type DragMoveEvent, type DragOverEvent, type DragEndEvent } from '@dnd-kit/react'
@@ -80,6 +82,7 @@ export function TodayPage() {
   const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const [dayNotice, setDayNotice] = useState<string | null>(null)
   const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
+  const [recordPreview, setRecordPreview] = useState<{ blockId: number; result: PlannedRecordingResult } | null>(null)
   const [workModeExecution] = useState(() => new WorkModeExecution(apiWorkModeTransport, activityDevelopmentEnabled ? { load: () => null, save: () => {} } : browserWorkModeStore))
   const [workModeState, setWorkModeState] = useState(workModeExecution.state)
   useEffect(() => workModeExecution.subscribe(() => setWorkModeState({ ...workModeExecution.state })), [workModeExecution])
@@ -715,12 +718,21 @@ export function TodayPage() {
   )
 
   const recordActualAsPlanned = useCallback(
-    async (blockId: number) => {
+    async (blockId: number, confirmation?: PlannedRecordingResult) => {
       if (!date) return
       setError(null)
       try {
-        const result = await api.recordActualAsPlanned(blockId)
-        setRecordActualUndo({ plannedBlockId: blockId, token: result.undo_token })
+        if (activityDevelopmentEnabled) {
+          const repo = getActivityRepository()
+          await repo.refresh()
+          if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before recording this plan.')
+        }
+        const result = await api.recordActualAsPlanned(blockId, confirmation ? { until: confirmation.end_at, fingerprint: confirmation.fingerprint } : undefined)
+        if (result.status === 'confirmation_required') { setRecordPreview({ blockId, result }); return }
+        setRecordPreview(null)
+        if (result.undo_token) { setRecordActualUndo({ plannedBlockId: blockId, token: result.undo_token }); setDayNotice(null) }
+        else setDayNotice('Already recorded')
+        if (activityDevelopmentEnabled) await getActivityRepository().refresh()
         setDay(await api.getDay(date))
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to record Actual as planned'
@@ -813,6 +825,7 @@ export function TodayPage() {
   }
 
   const inspectorSharedProps = {
+    onOpenActual: (id: number) => { setSelectedBlockRef({ id, lane: 'actual' }); setInspectorDirty(false) },
     day,
     taskTypes,
     onClose: tryClosePanel,
@@ -923,17 +936,28 @@ export function TodayPage() {
           ) : null}
           {dayNotice && !completionUndo && !recordActualUndo ? <TransientFeedback floating title={dayNotice} /> : null}
           {recordActualUndo ? (
-            <TransientFeedback floating title="Actual recorded as planned." action={
+            <TransientFeedback floating title={dayNotice === 'Already recorded' ? dayNotice : 'Actual recorded.'} action={
               <button type="button" onClick={async () => {
                 setError(null)
                 try {
+                  if (activityDevelopmentEnabled) {
+                    const repo = getActivityRepository()
+                    await repo.refresh()
+                    if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before Undo.')
+                  }
                   await api.undoRecordActualAsPlanned(recordActualUndo.plannedBlockId, recordActualUndo.token)
                   setRecordActualUndo(null)
+                  if (activityDevelopmentEnabled) await getActivityRepository().refresh()
                   setDay(await api.getDay(date))
                 } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo recorded Actual') }
               }}>Undo</button>
             } />
           ) : null}
+
+          {recordPreview && <RecordingPreview preview={recordPreview.result} timezone={day?.meta.timezone ?? 'UTC'} error={error}
+            onCancel={() => setRecordPreview(null)} onConfirm={async () => {
+              try { await recordActualAsPlanned(recordPreview.blockId, recordPreview.result) } catch { /* Error is shown by the page. */ }
+            }} />}
 
           <div className="mb-6 xl:hidden">
             <ReadyToPlanDrawer

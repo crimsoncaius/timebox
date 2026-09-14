@@ -1,0 +1,7 @@
+{
+  "apiPort": 12018,
+  "webPort": 12019,
+  "database": "backend/issue173-review.sqlite",
+  "timezone": "Asia/Singapore",
+  "androidApplicationId": "com.timebox.android.issue173"
+}

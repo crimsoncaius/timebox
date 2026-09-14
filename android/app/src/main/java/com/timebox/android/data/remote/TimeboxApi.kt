@@ -10,6 +10,11 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TimeboxApi {
+    @POST("planned-blocks/{id}/record-actual-as-planned")
+    suspend fun recordPlanned(@Path("id") id: Int, @Body body: PlannedRecordingRequest): PlannedRecordingDto
+
+    @POST("planned-blocks/{id}/undo-record-actual-as-planned")
+    suspend fun undoRecordPlanned(@Path("id") id: Int, @Body body: RecordingUndoRequest)
 
     @POST("activity/reporting-timezone/initialize")
     suspend fun initializeReportingTimezone(@Body body: ReportingTimezoneDto): ActivitySnapshotDto

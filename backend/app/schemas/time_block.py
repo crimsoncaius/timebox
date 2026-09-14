@@ -140,6 +140,11 @@ class RecordActualAsPlannedRead(BaseModel):
     undo_token: str
 
 
+class RecordPlannedRequest(BaseModel):
+    until: AwareDatetime | None = None
+    fingerprint: str | None = None
+
+
 class RecordActualAsPlannedUndo(BaseModel):
     undo_token: str = Field(..., min_length=1)
 

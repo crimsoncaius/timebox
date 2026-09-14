@@ -6,6 +6,9 @@ import type { DayRead, TaskType, TimeBlock } from '../lib/api'
 import { TimeBlockModal } from './TimeBlockModal'
 import { TimeBlockInspectorContent } from './TimeBlockInspectorContent'
 
+// This suite covers the legacy form; ActivityActualEditor is tested separately.
+vi.mock('../features/activity/activityRepository', async original => ({ ...await original<object>(), activityDevelopmentEnabled: false }))
+
 const taskTypes: TaskType[] = [
   { id: 1, name: 'work', created_at: '', updated_at: '' },
   { id: 2, name: 'break', created_at: '', updated_at: '' },

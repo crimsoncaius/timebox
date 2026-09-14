@@ -70,6 +70,9 @@ fun BlockSheet(
     onOpenLinkedTask: (Int) -> Unit,
     allowComplete: Boolean = true,
     onChangeTimes: (Int, Int, Int) -> Unit = { _, _, _ -> },
+    onRecordPlanned: () -> Unit = {},
+    onOpenActual: (Int) -> Unit = {},
+    onUndoRecording: () -> Unit = {},
 ) {
     if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
         ActivityActualEditor(state, onDismiss, onOpenLinkedTask = onOpenLinkedTask)
@@ -182,8 +185,28 @@ fun BlockSheet(
 
             Spacer(Modifier.height(18.dp))
             state.selectedBlock?.takeIf { it.lane == Lane.Planned && it.actualBlockIds.isNotEmpty() }?.let {
-                Text("${it.actualBlockIds.size} linked Actual Blocks · ${elapsedDuration(it.actualDurationMinutes.toLong())} recorded", color = colors.onVariant)
+                Text("Actual recorded · ${it.actualBlockIds.size} linked Actual Blocks · ${elapsedDuration(it.actualDurationMinutes.toLong())} recorded", color = colors.onVariant)
+                it.actualBlockIds.forEachIndexed { index, id -> TextButton(onClick = { onOpenActual(id) }) { Text(if (it.actualBlockIds.size == 1) "Open Actual" else "Open Actual ${index + 1}") } }
             }
+            state.selectedBlock?.takeIf { it.lane == Lane.Planned }?.let { block ->
+                val now = androidx.compose.runtime.produceState(java.time.Instant.now()) {
+                    while (true) { kotlinx.coroutines.delay(1000); value = java.time.Instant.now() }
+                }.value
+                val zone = java.time.ZoneId.of(state.day?.timezone ?: "UTC")
+                val start = state.date.atStartOfDay().plusMinutes(block.startMinute.toLong()).atZone(zone).toInstant()
+                val end = state.date.atStartOfDay().plusMinutes(block.endMinute.toLong()).atZone(zone).toInstant()
+                TextButton(onClick = onRecordPlanned, enabled = !state.saving && now > start) {
+                    Text(if (now < end) "Record Actual until now" else "Record Actual as planned")
+                }
+                if (now <= start) Text("Available after this block starts.")
+            }
+            val recordingNotice = state.recordingNotice?.takeIf { it.first == state.selectedBlockId }?.second
+            if (state.recordingUndo != null) {
+                com.timebox.android.ui.components.TransientFeedback(recordingNotice ?: "Actual recorded", actionLabel = "Undo", onAction = onUndoRecording, actionsEnabled = !state.saving)
+            } else if (recordingNotice != null) {
+                com.timebox.android.ui.components.TransientFeedback(recordingNotice)
+            }
+            state.recordingError?.let { Text(it, color = colors.error) }
             val linkedTask = state.selectedBlock?.task
             val linkedTaskId = linkedTask?.id
             if (linkedTaskId != null) {

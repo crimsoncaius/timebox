@@ -19,10 +19,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Activity Tracking and Focus are the standard experience in every build.
         buildConfigField("boolean", "ACTIVITY_TRACKING_DEV", "true")
+        buildConfigField("boolean", "RECORDING_PROTOTYPE", "false")
     }
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "RECORDING_PROTOTYPE", providers.gradleProperty("recordingPrototype").getOrElse("false"))
             // Optional isolated review install; ordinary debug builds keep their identity.
             applicationIdSuffix = providers.gradleProperty("reviewApplicationIdSuffix").orNull
             // 10.0.2.2 is the host machine from inside the emulator.

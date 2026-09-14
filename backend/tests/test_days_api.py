@@ -588,7 +588,7 @@ def test_create_block_unknown_task_type(client):
     assert r.status_code == 422
 
 
-def test_record_actual_as_planned_is_one_shot(client):
+def test_record_actual_as_planned_exact_repeat_is_idempotent(client):
     tid = _tid(client, "planned-complete")
     client.get("/days/2026-04-21")
     r = client.post(
@@ -613,7 +613,8 @@ def test_record_actual_as_planned_is_one_shot(client):
     assert actual["note"] == "do it"
 
     r3 = client.post(f"/planned-blocks/{planned_id}/record-actual-as-planned")
-    assert r3.status_code == 422
+    assert r3.status_code == 201
+    assert r3.json()["status"] == "already_recorded"
     day3 = client.get("/days/2026-04-21").json()
     assert len(day3["planned_blocks"]) == 1
     assert len(day3["actual_blocks"]) == 1

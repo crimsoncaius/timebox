@@ -361,6 +361,9 @@ fun TimeboxApp(
                             onNoteChange = dayViewModel::onNoteChange,
                             onCreateDraft = dayViewModel::createTasklessPlannedDraft,
                             onDeleteSelected = dayViewModel::deleteSelected,
+                            onRecordPlanned = dayViewModel::recordPlanned,
+                            onCancelRecording = dayViewModel::cancelRecordingPreview,
+                            onUndoRecording = dayViewModel::undoRecording,
                             onConfirmSelectedTaskCompletion = dayViewModel::completeSelectedTask,
                             onReopenSelectedTask = dayViewModel::reopenSelectedTask,
                             onOpenLinkedTask = { taskId ->

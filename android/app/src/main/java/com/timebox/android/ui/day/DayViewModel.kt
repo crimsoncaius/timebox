@@ -75,6 +75,10 @@ data class DayUiState(
     val taskTypes: List<TaskType> = emptyList(),
     val saving: Boolean = false,
     val message: String? = null,
+    val recordingPreview: Pair<Int, com.timebox.android.data.remote.PlannedRecordingDto>? = null,
+    val recordingUndo: Pair<Int, String>? = null,
+    val recordingError: String? = null,
+    val recordingNotice: Pair<Int, String>? = null,
     val selectedBlockId: Int? = null,
     val draft: Draft? = null,
     val nameInput: String = "",
@@ -1015,6 +1019,57 @@ class DayViewModel(
                 },
                 onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
             )
+        }
+    }
+
+    fun cancelRecordingPreview() { _state.update { it.copy(recordingPreview = null, recordingError = null) } }
+
+    fun recordPlanned() {
+        val input = _state.value
+        val preview = _state.value.recordingPreview
+        val id = preview?.first ?: _state.value.selectedBlockId ?: return
+        if (_state.value.saving) return
+        launchScope.launch {
+            _state.update { it.copy(saving = true, recordingError = null, recordingNotice = null) }
+            try {
+                if (preview == null && input.selectedBlock != null &&
+                    (input.nameInput != input.selectedBlock!!.name.orEmpty() || input.noteInput != input.selectedBlock!!.note.orEmpty())) {
+                    repository.patchBlock(input.date, id, name = input.nameInput, note = input.noteInput).getOrThrow()
+                    refreshCurrentDay()
+                }
+                activityRepository?.refresh()
+                check(activityRepository?.state?.value?.pending != true && activityRepository?.state?.value?.error == null) {
+                    "Sync pending activity before recording this plan."
+                }
+                val result = repository.recordPlanned(id, preview?.second).getOrThrow()
+                if (result.status == "confirmation_required") {
+                    _state.update { it.copy(recordingPreview = id to result) }
+                } else {
+                    _state.update { it.copy(recordingPreview = null, recordingUndo = result.undoToken?.let { token -> id to token } ?: it.recordingUndo,
+                        recordingNotice = id to if (result.status == "already_recorded") "Already recorded" else "Actual recorded",
+                        message = if (result.status == "already_recorded") "Already recorded" else "Actual recorded") }
+                    activityRepository?.refresh()
+                    refreshCurrentDay()
+                }
+            } catch (error: Exception) { _state.update { it.copy(recordingError = error.message ?: "Could not record Actual", message = error.message ?: "Could not record Actual") } }
+            finally { _state.update { it.copy(saving = false) } }
+        }
+    }
+
+    fun undoRecording() {
+        val undo = _state.value.recordingUndo ?: return
+        if (_state.value.saving) return
+        launchScope.launch {
+            _state.update { it.copy(saving = true, recordingError = null) }
+            try {
+                activityRepository?.refresh()
+                check(activityRepository?.state?.value?.pending != true && activityRepository?.state?.value?.error == null) { "Sync pending activity before Undo." }
+                repository.undoRecordPlanned(undo.first, undo.second).getOrThrow()
+                _state.update { it.copy(recordingUndo = null, recordingNotice = undo.first to "Recording undone", message = "Recording undone") }
+                activityRepository?.refresh()
+                refreshCurrentDay()
+            } catch (error: Exception) { _state.update { it.copy(recordingError = error.message ?: "Undo unavailable", message = error.message ?: "Undo unavailable") } }
+            finally { _state.update { it.copy(saving = false) } }
         }
     }
 

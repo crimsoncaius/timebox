@@ -6,6 +6,10 @@ import { TodayPage } from './TodayPage'
 import { ReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessProvider } from '../readiness/ReadinessProvider'
 
+// These legacy inspector / Work Mode scenarios explicitly exercise that surface.
+// Canonical tracking and corrections have their own Activity tests.
+vi.mock('../activity/activityRepository', async original => ({ ...await original<object>(), activityDevelopmentEnabled: false }))
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -66,17 +70,20 @@ describe('TodayPage inspector rail', () => {
   let rejectNextTaskUndo = false
   let standaloneActual: Record<string, unknown> | null = null
   let readySaveGate: Promise<void> | null = null
+  let recordingCalls = 0
 
   beforeEach(() => {
     localStorage.clear()
     rejectNextTaskUndo = false
     standaloneActual = null
     readySaveGate = null
+    recordingCalls = 0
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
       if (url.includes('/planned-blocks/10/record-actual-as-planned') && method === 'POST') {
-        return Promise.resolve(jsonResponse({ actual_block: { id: 12 }, undo_token: 'record-undo' }, 201))
+        if (recordingCalls++ > 0) return Promise.resolve(jsonResponse({ status: 'already_recorded', actual_block: { id: 12 }, undo_token: null }, 201))
+        return Promise.resolve(jsonResponse({ status: 'recorded', actual_block: { id: 12 }, undo_token: 'record-undo' }, 201))
       }
       if (url.includes('/actual-blocks/start') && method === 'POST') {
         return Promise.resolve(jsonResponse({
@@ -419,6 +426,9 @@ describe('TodayPage inspector rail', () => {
       )
     })
     expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    await user.click(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]!)
+    expect(await screen.findByText('Already recorded')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
 
   it('delegates untyped Ready to Plan fallback resolution to the backend', async () => {

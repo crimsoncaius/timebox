@@ -35,4 +35,4 @@ def test_offline_correction_fragments_keep_plan_links_after_zone_change(tracking
     assert day['planned_blocks'][0]['actual_duration_minutes'] == 120
     assert set(day['planned_blocks'][0]['actual_block_ids']) == set(linked)
     assert tracking.get('/tasks').json()['items'][0]['status'] == task['status']
-    assert tracking.post(f"/planned-blocks/{plan['id']}/record-actual-as-planned").status_code == 409
+    assert tracking.post(f"/planned-blocks/{plan['id']}/record-actual-as-planned").status_code == 201

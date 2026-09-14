@@ -327,3 +327,14 @@ export type RecurrencePreview = {
 
 /** Matches backend 409 detail when DELETE /task-types/:id has blocks (no cascade/migrate). */
 export const TASK_TYPE_STILL_IN_USE_DETAIL = 'Task type is still used by existing blocks'
+export interface PlannedRecordingResult {
+  status: 'recorded' | 'already_recorded' | 'confirmation_required'
+  start_at: string
+  end_at: string
+  fingerprint: string
+  stale: boolean
+  conflicts: ActualBlock[]
+  replacement: { name: string | null; note: string | null; task_type_id: number; task_id: number | null }
+  actual_block: ActualBlock | null
+  undo_token: string | null
+}

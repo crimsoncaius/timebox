@@ -92,6 +92,9 @@ fun DayScreen(
     onNavigateToday: (LocalDate) -> Unit = {},
     onOpenWorkMode: () -> Unit = {},
     onEnterFocus: () -> Unit = {},
+    onRecordPlanned: () -> Unit = {},
+    onCancelRecording: () -> Unit = {},
+    onUndoRecording: () -> Unit = {},
 ) {
     var displayedDate by remember(state.date) { mutableStateOf(state.date) }
 
@@ -194,7 +197,18 @@ fun DayScreen(
             onOpenLinkedTask = onOpenLinkedTask,
             allowComplete = !state.isPlanningMode,
             onChangeTimes = onCommitMove,
+            onRecordPlanned = onRecordPlanned,
+            onOpenActual = onSelectBlock,
+            onUndoRecording = onUndoRecording,
         )
+    }
+    state.recordingPreview?.let { (_, preview) ->
+        RecordingPreview(preview, state.day?.timezone ?: "UTC", state.saving, onRecordPlanned, onCancelRecording, state.recordingError)
+    }
+    if (state.recordingUndo != null && !state.sheetOpen) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) {
+            TransientFeedback("Actual recorded", Modifier.padding(16.dp), actionLabel = "Undo", onAction = onUndoRecording, actionsEnabled = !state.saving)
+        }
     }
 }
 
