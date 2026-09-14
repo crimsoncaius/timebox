@@ -58,7 +58,24 @@ enum class BattlePlanSort(val wire: String) {
     }
 }
 
+data class DayViewPreferences(val calendar: Boolean = true, val tracking: Boolean = false, val zoom: Boolean = false)
+enum class DayViewSection { Calendar, Tracking, Zoom }
+
 class AppPreferences(private val context: Context) {
+    private fun dayVisibilityKey(section: DayViewSection) = booleanPreferencesKey("day_show_${section.name.lowercase()}")
+
+    val dayViewPreferences: Flow<DayViewPreferences> = context.dataStore.data.map { prefs ->
+        DayViewPreferences(
+            calendar = prefs[dayVisibilityKey(DayViewSection.Calendar)] ?: true,
+            tracking = prefs[dayVisibilityKey(DayViewSection.Tracking)] ?: false,
+            zoom = prefs[dayVisibilityKey(DayViewSection.Zoom)] ?: false,
+        )
+    }
+
+    suspend fun setDaySectionVisible(section: DayViewSection, visible: Boolean) {
+        context.dataStore.edit { it[dayVisibilityKey(section)] = visible }
+    }
+
 
     private object Keys {
         val baseUrl = stringPreferencesKey("base_url")
