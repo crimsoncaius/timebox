@@ -68,12 +68,17 @@ class Pool:
     def rows(self):
         return [dict(r) for r in self.db.execute("SELECT * FROM slots ORDER BY id")]
 
-    def claim(self, owner):
+    def claim(self, owner, extra=False):
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             if self.db.execute("SELECT config FROM settings WHERE id=1").fetchone()[0] != json.dumps(self.config, sort_keys=True):
                 raise RuntimeError("Pool configuration changed; restart the helper.")
-            for slot in range(1, self.config["capacity"] + 1):
+            slots = range(1, self.config["capacity"] + 1)
+            if extra:
+                # Explicit user-requested device; do not change shared pool configuration.
+                highest = self.db.execute("SELECT COALESCE(MAX(id), 0) FROM slots").fetchone()[0]
+                slots = range(self.config["capacity"] + 1, max(highest, self.config["capacity"]) + 2)
+            for slot in slots:
                 row = self.db.execute("SELECT * FROM slots WHERE id=?", (slot,)).fetchone()
                 if row is None or row["state"] == "free":
                     token = uuid.uuid4().hex
@@ -188,8 +193,8 @@ class Pool:
             time.sleep(2)
         raise RuntimeError("Emulator boot timed out; reservation retained for recovery.")
 
-    def acquire(self, owner):
-        row = self.claim(owner)
+    def acquire(self, owner, extra=False):
+        row = self.claim(owner, extra=extra)
         with self.lock(row):
             self.boot(row)
         return row
@@ -282,6 +287,8 @@ def main():
     for action in ("acquire", "test"):
         p = subs.add_parser(action)
         p.add_argument("--owner", required=True, help="Task id or descriptive unique session name")
+        if action == "acquire":
+            p.add_argument("--extra", action="store_true", help="Reserve an additional device only when explicitly requested by the user")
         if action == "test":
             p.add_argument("args", nargs=argparse.REMAINDER)
     for action in ("adb", "gradle", "renew", "review", "resume", "release", "recover"):
@@ -300,7 +307,7 @@ def main():
             row["expired"] = row["state"] == "active" and time.time() - row["touched"] >= pool.config["lease_seconds"]
         print(json.dumps(rows, indent=2))
     elif args.action in ("acquire", "test"):
-        row = pool.acquire(args.owner)
+        row = pool.acquire(args.owner, extra=getattr(args, "extra", False))
         print(json.dumps(dict(row, serial=pool.serial(row))), flush=True)
         if args.action == "test":
             try:

@@ -55,6 +55,26 @@ function timeline(dayValue: DayRead, autoScrollToNow = false) {
   )
 }
 
+describe('DayTimeline half-hour creation requests', () => {
+  it.each([false, true])('floors clicks in both lanes with task selection %s', (placementSelected) => {
+    const clicked = vi.fn()
+    const view = render(<DragDropProvider>
+      <DayTimeline day={day} readOnly={false} draft={null} selectedBlockId={null}
+        placementSelected={placementSelected} onLaneSlotClick={clicked} onPatchBlock={vi.fn()} />
+    </DragDropProvider>)
+    for (const lane of ['planned', 'actual']) {
+      const node = view.container.querySelector<HTMLElement>(`[data-day-lane="${lane}"]`)!
+      const slotHeight = Number(node.dataset.slotHeight)
+      const target = lane === 'planned' && placementSelected
+        ? screen.getByTestId('planned-placement-target') : node
+      for (const [minute, expected] of [[980, 960], [990, 990], [1199, 1170]]) {
+        fireEvent.click(target, { clientY: (minute - 480) / 30 * slotHeight })
+        expect(clicked).toHaveBeenLastCalledWith(lane, expected, expected + 30)
+      }
+    }
+  })
+})
+
 describe('DayTimeline draft resize', () => {
   beforeEach(() => {
     HTMLElement.prototype.setPointerCapture = vi.fn()

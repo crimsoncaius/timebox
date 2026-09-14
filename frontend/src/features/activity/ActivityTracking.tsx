@@ -6,8 +6,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TaskType } from '../../lib/api'
 import { ActivityRepository, getActivityRepository } from './activityRepository'
 
-export function ActivityTracking({ taskTypes, onChanged, repository = getActivityRepository(), focus = false }: {
-  taskTypes: TaskType[]; onChanged: () => void; repository?: ActivityRepository; focus?: boolean
+export function ActivityTracking({ taskTypes, onChanged, repository = getActivityRepository(), focus = false, controlsVisible = true }: {
+  taskTypes: TaskType[]; onChanged: () => void; repository?: ActivityRepository; focus?: boolean; controlsVisible?: boolean
 }) {
   const focusController = getFocusController()
   const focusState = useSyncExternalStore(focusController.subscribe, focusController.getSnapshot)
@@ -42,13 +42,14 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const disabled = state.busy || !state.snapshot
   const availableTypes = state.snapshot?.task_types ?? taskTypes
   const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
-  return <div className="mb-3 text-sm text-on-surface-variant dark:text-dark-on-surface-variant" aria-label="Activity tracking">
+  return <div className={`${controlsVisible ? "mb-3 " : ""}text-sm text-on-surface-variant dark:text-dark-on-surface-variant`} aria-label="Activity tracking">
     {current && state.snapshot?.check_in?.question && <section aria-label="Inactivity check-in" className="my-4 rounded-2xl bg-surface-container-low p-6 dark:bg-dark-surface-container">
       <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{current.name || current.task_type.name}</p>
       <div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 text-on-primary" onClick={() => void repository.checkIn({ action: 'confirm', question_id: state.snapshot!.check_in!.question!.id })}>Yes, still doing this</button>
       <button className="rounded-xl border px-5 py-3" onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch activity</button></div>
       <p className="mt-3 text-sm">Recording continues while you decide.</p>
     </section>}
+    <div hidden={!controlsVisible && !focus}>
     <div className={focus ? "mt-8 flex flex-col items-center gap-4 text-center" : "flex flex-wrap items-center justify-end gap-x-4 gap-y-1"}>
       {current ? <>
         <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>
@@ -67,6 +68,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {focus && current && !current.name && current.task_type.name === 'unspecified' && <UnknownActivity key={current.id} repository={repository} />}
     {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {plan.name || availableTypes.find(t => t.id === plan.task_type_id)?.name} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
     {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</p> : null}
+    </div>
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
     {state.error || state.pending ? <p role="alert" className="text-right">
       {state.error || 'Change not confirmed.'} <button disabled={state.busy} className="underline" onClick={() => void (state.pending ? repository.retry() : repository.refresh())}>Retry</button>

@@ -374,7 +374,7 @@ class DayTimelineGestureTest {
     }
 
     @Test
-    fun tappingTimelineCreatesAtNearestFiveMinuteMark() {
+    fun tappingEitherLaneCreatesAtContainingHalfHour() {
         val date = LocalDate.of(2026, 8, 20)
         var tapped: Pair<Lane, Int>? = null
 
@@ -384,14 +384,15 @@ class DayTimelineGestureTest {
             onTapSlot = { lane, minute -> tapped = lane to minute },
         )
 
-        compose.onNodeWithTag("day-lane-planned").performTouchInput {
-            val minuteOffset = 67f
-            val visibleMinutes = 2 * 60f
-            click(Offset(center.x, height * minuteOffset / visibleMinutes))
-        }
-
-        compose.runOnIdle {
-            check(tapped == Lane.Planned to (9 * 60 + 5)) { "Tapped $tapped" }
+        for ((tag, lane) in listOf("planned" to Lane.Planned, "actual" to Lane.Actual)) {
+            for ((offset, expected) in listOf(80f to 540, 90f to 570, 119f to 570)) {
+                compose.onNodeWithTag("day-lane-$tag").performTouchInput {
+                    click(Offset(center.x, height * offset / 120f))
+                }
+                compose.runOnIdle {
+                    check(tapped == lane to expected) { "Tapped $tapped; expected $lane at $expected" }
+                }
+            }
         }
     }
 
@@ -641,7 +642,7 @@ class DayTimelineGestureTest {
         var committedMove: Triple<Int, Int, Int>? = null
         val haptics = RecordingHaptics()
         setDayContent(
-            state = stateWithBlock(date, Lane.Actual),
+            state = stateWithBlock(date, Lane.Actual, serverNowMinute = 12 * 60),
             haptics = haptics,
             onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
         )
