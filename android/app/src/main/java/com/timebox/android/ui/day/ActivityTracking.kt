@@ -35,9 +35,9 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ActivityTracking(
     taskTypes: List<TaskType>, onChanged: () -> Unit,
-    controlsVisible: Boolean = true,
     repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
     focus: Boolean = false, focusTask: @Composable (@Composable () -> Unit) -> Unit = { elapsed -> elapsed() }, planning: Boolean = false, onEnterFocus: () -> Unit = {},
+    controlsVisible: Boolean = true,
 ) {
     val state by repository.state.collectAsState()
     val owner = LocalLifecycleOwner.current

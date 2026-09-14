@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.timebox.android.ui.theme.TimeboxTheme
 
-/** Issue 172 visual exploration; visibility remains owned by the Day screen. */
+/** Device-local Day controls; changes take effect immediately. */
 @Composable
 internal fun DayViewOptionsDialog(
     calendar: Boolean,

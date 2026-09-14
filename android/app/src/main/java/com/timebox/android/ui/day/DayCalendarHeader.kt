@@ -126,8 +126,8 @@ internal fun DayCalendarHeader(
                         contentDescription =
                             "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
                     },
-                    maxLines = 1,
-                    softWrap = false,
+                    maxLines = if (compactDate) 2 else 1,
+                    softWrap = compactDate,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

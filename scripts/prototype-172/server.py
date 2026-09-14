@@ -11,7 +11,7 @@ cursor = 1
 settings = dict(start_hour=7, end_hour=23, show_full_day=False)
 
 def snapshot(ack=None):
-    return dict(cursor=cursor, server_at=now().isoformat(), reporting_timezone='Asia/Singapore', reporting_timezone_initialized=True, current=current, records=[current] if current else [], task_types=types, plans=[], acknowledgement=ack)
+    return dict(protocol='activity-online-v1', cursor=cursor, server_at=now().isoformat(), reporting_timezone='Asia/Singapore', reporting_timezone_initialized=True, current=current, records=[current] if current else [], task_types=types, plans=[], acknowledgement=ack)
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args): pass

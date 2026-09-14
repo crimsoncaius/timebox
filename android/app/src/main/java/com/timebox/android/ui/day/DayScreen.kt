@@ -45,6 +45,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
@@ -94,19 +96,31 @@ fun DayScreen(
     onOpenWorkMode: () -> Unit = {},
     onEnterFocus: () -> Unit = {},
 ) {
-    // Issue 172 experiment; local visibility state, not production preferences.
-    val launchLayout = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("issue172Layout")
-    var prototype by rememberSaveable { mutableStateOf(com.timebox.android.BuildConfig.DEBUG && launchLayout != "current") }
-    var calendarVisible by rememberSaveable { mutableStateOf(true) }
-    var trackingVisible by rememberSaveable { mutableStateOf(true) }
-    var zoomVisible by rememberSaveable { mutableStateOf(true) }
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val preferences = remember(context) { com.timebox.android.data.AppPreferences(context) }
+    val visibility by preferences.dayViewPreferences.collectAsState(initial = com.timebox.android.data.DayViewPreferences())
+    val preferenceScope = rememberCoroutineScope()
+    fun setVisible(section: com.timebox.android.data.DayViewSection, value: Boolean) {
+        preferenceScope.launch { preferences.setDaySectionVisible(section, value) }
+    }
+    val calendarVisible = visibility.calendar
+    val trackingVisible = visibility.tracking
+    val zoomVisible = visibility.zoom
     var viewOpen by remember { mutableStateOf(false) }
     val activityRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository
     val activityState by activityRepository.state.collectAsState()
+    val trackingAttention = when {
+        activityState.pending -> "Change not confirmed"
+        activityState.error != null -> "Activity needs attention"
+        activityState.offline -> "Offline"
+        activityState.snapshot?.checkIn?.question != null -> "Check-in waiting"
+        activityState.rejectedRecovery != null || activityState.legacyRecovery != null -> "Recovery available"
+        else -> null
+    }
     if (viewOpen) DayViewOptionsDialog(
         calendar = calendarVisible, tracking = trackingVisible, zoom = zoomVisible,
-        onCalendar = { calendarVisible = it }, onTracking = { trackingVisible = it },
-        onZoom = { zoomVisible = it }, onDismiss = { viewOpen = false },
+        onCalendar = { setVisible(com.timebox.android.data.DayViewSection.Calendar, it) }, onTracking = { setVisible(com.timebox.android.data.DayViewSection.Tracking, it) },
+        onZoom = { setVisible(com.timebox.android.data.DayViewSection.Zoom, it) }, onDismiss = { viewOpen = false },
     )
     var displayedDate by remember(state.date) { mutableStateOf(state.date) }
 
@@ -118,14 +132,14 @@ fun DayScreen(
     CompositionLocalProvider(LocalTimelineZoom provides zoom) {
         Column(Modifier.fillMaxSize()) {
             DayCalendarHeader(
-                showCalendar = !prototype || calendarVisible,
-                compactDate = prototype,
+                showCalendar = calendarVisible,
+                compactDate = true,
                 viewAction = {
-                    if (prototype) androidx.compose.material3.TextButton(onClick = { viewOpen = true }) { androidx.compose.material3.Text("View") }
+                    androidx.compose.material3.TextButton(onClick = { viewOpen = true }) { androidx.compose.material3.Text("View") }
                 },
                 hiddenTrackingAction = {
-                    if (prototype && !trackingVisible) androidx.compose.material3.TextButton(onClick = { trackingVisible = true }) {
-                        androidx.compose.material3.Text(if (activityState.snapshot?.current != null) "● Tracking" else "Tracking", color = TimeboxTheme.colors.actual)
+                    if (!trackingVisible) androidx.compose.material3.TextButton(modifier = Modifier.semantics { stateDescription = trackingAttention ?: if (activityState.snapshot?.current != null) "Recording" else "Tracking stopped" }, onClick = { setVisible(com.timebox.android.data.DayViewSection.Tracking, true) }) {
+                        androidx.compose.material3.Text((if (activityState.snapshot?.current != null) "● Tracking" else "Tracking") + (if (trackingAttention != null) " !" else ""), color = TimeboxTheme.colors.actual)
                     }
                 },
                 selectedDate = displayedDate,
@@ -141,14 +155,14 @@ fun DayScreen(
             )
 
             if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-                ActivityTracking(controlsVisible = !prototype || trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
-                if (!prototype || trackingVisible) {
+                ActivityTracking(controlsVisible = trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+                if (trackingVisible) {
                 Spacer(Modifier.height(6.dp))
                 androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
                 Spacer(Modifier.height(8.dp))
                 }
             }
-            if (!prototype || zoomVisible) Row(
+            if (zoomVisible) Row(
                 Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding, vertical = 4.dp),
                 horizontalArrangement = Arrangement.End,
             ) {
@@ -201,9 +215,7 @@ fun DayScreen(
                     )
                 }
             }
-            if (com.timebox.android.BuildConfig.DEBUG) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                androidx.compose.material3.TextButton(onClick = { prototype = !prototype }) { androidx.compose.material3.Text(if (prototype) "EXPERIMENT · Show current layout" else "EXPERIMENT · Show customizable layout", style = TimeboxTheme.type.bodySmall) }
-            }
+
         }
 
     }

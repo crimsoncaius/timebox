@@ -1,4 +1,21 @@
-# Day view visibility — round 1
+# Day view visibility — implementation
+
+## Current implementation status
+
+The user approved implementation after the design rounds below. This section supersedes historical pending decisions and launch state in those rounds. The approved prototype is preserved at commit `4fb4746` on `codex/issue-172-approved-prototype`; production work is on `codex/issue-172-implementation`.
+
+- Android and web provide independent Calendar, Activity Tracking, and Zoom switches in the approved Day view dialog. First-use defaults are Calendar shown, Tracking hidden, Zoom hidden.
+- Android DataStore and web localStorage retain choices locally across visits and restarts. No backend preference sync was added. Web storage failures retain the current visit's selection and explain that it could not be saved.
+- Hiding tracking keeps its lifecycle active. The compact Tracking shortcut restores controls; check-ins and recovery remain reachable. Hiding Zoom preserves its current scale. Calendar-free navigation retains previous, next, and Today.
+- Prototype comparison controls and launch extras were removed from the application.
+
+Validation: Android debug build and two instrumented tests pass (concurrent preference persistence and timeline pinch behavior). Focused web tests cover visibility, persistence, storage failures, and tracking continuity. Browser interaction checks cover independent toggles, retained zoom, reload persistence, Escape/focus return, and access to Stop without stopping. Native preferences also survived force-stop/relaunch. The broader TodayPage suites have 19 failures and 13 passes, reproduced identically on untouched baseline `ee24fb4`.
+
+Review uses sample data: API `127.0.0.1:12015`, Android emulator `emulator-5580`, web `http://127.0.0.1:12017/day/2026-09-14`. Start the web from `frontend` with `VITE_API_PROXY_TARGET=http://127.0.0.1:12015` and `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 12017 --strictPort`. The native build uses the existing debug API override described below. Sample mutations are limited; this is not a full backend environment.
+
+Final native evidence: [dialog](day-visibility-172/implemented-default-options.png), [Day view](day-visibility-172/implemented-defaults.png). Historical visual checks include small phones and light/dark themes. The retained native review instance uses the approved defaults.
+
+## Historical exploration
 
 Source: GitHub issue #172 (including acceptance criteria), plus the user's explicit inclusion of timeline Zoom. The user liked the first interaction prototype and requested visual refinement of the Day view dialog.
 

@@ -5,6 +5,24 @@ import { ActivityRepository } from './activityRepository'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear() })
 
+it('keeps the recording and refresh subscription alive while controls are hidden, then restores Stop', async () => {
+  const at = new Date().toISOString()
+  const row = { id: 172, name: 'Design', task_type_id: 1, task_type: { id: 1, name: 'Design' }, start_at: at, end_at: null }
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ protocol: 'activity-online-v1', cursor: 1, server_at: at, reporting_timezone: 'UTC', current: row, records: [row] }))))
+  const repository = new ActivityRepository(localStorage, work => work())
+  const command = vi.spyOn(repository, 'command')
+  const view = render(<ActivityTracking repository={repository} taskTypes={[]} controlsVisible={false} onChanged={() => {}} />)
+  await waitFor(() => expect(repository.state.snapshot?.current?.id).toBe(172))
+  expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument()
+  const refresh = vi.spyOn(repository, 'refresh')
+  fireEvent(window, new Event('focus'))
+  await waitFor(() => expect(refresh).toHaveBeenCalled())
+  view.rerender(<ActivityTracking repository={repository} taskTypes={[]} controlsVisible onChanged={() => {}} />)
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled()
+  expect(repository.state.snapshot?.current?.id).toBe(172)
+  expect(command).not.toHaveBeenCalled()
+})
+
 it('reconciles a superseded offline chain without clearing newer remote time, and shows brief feedback', async () => {
   const at = '2026-09-11T10:00:00Z'
   const row = { id: 1, name: 'Writing', task_type_id: 1, task_type: { id: 1, name: 'writing' }, start_at: at, end_at: null }
