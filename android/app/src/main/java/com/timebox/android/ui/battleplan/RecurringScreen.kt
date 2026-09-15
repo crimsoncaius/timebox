@@ -2,11 +2,14 @@ package com.timebox.android.ui.battleplan
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,27 +21,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,10 +52,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
@@ -64,7 +73,12 @@ import com.timebox.android.ui.components.SectionCard
 import com.timebox.android.ui.components.SectionHeader
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
+import com.timebox.android.ui.theme.TimeboxDimens
+import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun RecurringScreen(
@@ -73,6 +87,9 @@ fun RecurringScreen(
     onSelectStatus: (RecurrenceStatus) -> Unit,
     onNew: () -> Unit,
     onOpen: (Int) -> Unit,
+    onRequestDelete: (RecurringTemplate) -> Unit = {},
+    onDismissDelete: () -> Unit = {},
+    onConfirmDelete: () -> Unit = {},
     navigationState: BattlePlanUiState = BattlePlanUiState(),
     onSelectScope: (BattlePlanScope) -> Unit = {},
     onSelectCollection: (com.timebox.android.data.TaskCollection) -> Unit = {},
@@ -97,7 +114,7 @@ fun RecurringScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "${state.templates.size} template${if (state.templates.size == 1) "" else "s"}",
+                "${state.templates.size} series",
                 style = TimeboxTheme.type.bodySmall,
                 color = colors.onVariant,
                 modifier = Modifier.weight(1f),
@@ -125,11 +142,14 @@ fun RecurringScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.templates, key = { it.id }) { template ->
-                    RecurringTemplateRow(template, onOpen)
+                    RecurringTemplateRow(template, onOpen, onRequestDelete)
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
         }
+    }
+    state.pendingDelete?.let { template ->
+        RecurringDeleteDialog(template, onDismissDelete, onConfirmDelete)
     }
 }
 
@@ -148,39 +168,107 @@ private fun RecurringStatusTabs(selected: RecurrenceStatus, onSelect: (Recurrenc
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RecurringTemplateRow(template: RecurringTemplate, onOpen: (Int) -> Unit) {
+private fun RecurringTemplateRow(
+    template: RecurringTemplate,
+    onOpen: (Int) -> Unit,
+    onRequestDelete: (RecurringTemplate) -> Unit,
+) {
     val colors = TimeboxTheme.colors
+    var menu by remember(template.id) { mutableStateOf(false) }
+    val ended = template.status == RecurrenceStatus.Ended
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(colors.low)
-            .clickable { onOpen(template.id) }.padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        Modifier
+            .fillMaxWidth()
+            .clip(TimeboxShapes.card)
+            .background(mobileTaskCardSurface(colors))
+            .border(1.dp, colors.hairline, TimeboxShapes.card)
+            .clickable { onOpen(template.id) }
+            .padding(4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
             Text(
                 template.title,
-                style = TimeboxTheme.type.sectionTitle,
-                color = colors.on,
-                maxLines = 1,
+                Modifier.weight(1f).padding(start = 8.dp, top = 11.dp, end = 4.dp, bottom = 9.dp),
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                color = colors.on,
             )
-            Text(template.status.label, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            Box {
+                IconButton(
+                    onClick = { menu = true },
+                    modifier = Modifier.size(TimeboxDimens.touchTarget),
+                ) {
+                    Icon(Icons.Outlined.MoreVert, "Actions for ${template.title}", tint = colors.onVariant)
+                }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        onClick = {
+                            menu = false
+                            onRequestDelete(template)
+                        },
+                        enabled = ended,
+                    )
+                }
+            }
         }
-        Text(
-            template.taskType?.name ?: "",
-            style = TimeboxTheme.type.bodySmall,
-            color = colors.onVariant,
-        )
-        Row {
-            Text(template.cadence, style = TimeboxTheme.type.bodySmall, color = colors.on, modifier = Modifier.weight(1f))
-            Text(
-                template.nextOccurrence?.let { "Next $it" } ?: "No next occurrence",
-                style = TimeboxTheme.type.bodySmall,
-                color = colors.onVariant,
-            )
+        Column(
+            Modifier.padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                template.taskType?.let { RecurringListChip(Icons.AutoMirrored.Outlined.Label, it.name, "Task type") }
+                RecurringListChip(Icons.Outlined.Repeat, template.cadence, "Cadence")
+                RecurringListChip(
+                    Icons.Outlined.CalendarToday,
+                    recurringListTimingFact(template),
+                    if (template.mode == RecurrenceMode.Quota) "Quota period" else "Next Task Occurrence",
+                )
+            }
+            if (template.status != RecurrenceStatus.Active) {
+                Text(
+                    template.status.label,
+                    modifier = Modifier
+                        .clip(TimeboxShapes.chip)
+                        .background(if (ended) colors.surf else colors.error.copy(alpha = 0.08f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    fontSize = 11.sp,
+                    color = if (ended) colors.onVariant else colors.error,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun RecurringListChip(icon: ImageVector, label: String, description: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, description, Modifier.size(12.dp), tint = TimeboxTheme.colors.onVariant)
+        Text(label, fontSize = 11.sp, lineHeight = 16.sp, color = TimeboxTheme.colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun RecurringDeleteDialog(
+    template: RecurringTemplate,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Permanently delete ${template.title}?") },
+        text = { Text("Generated tasks are preserved and detached from this template. The template itself cannot be recovered.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete permanently", color = TimeboxTheme.colors.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -234,13 +322,7 @@ fun RecurringDetailScreen(
         )
     }
     state.pendingDelete?.let { template ->
-        AlertDialog(
-            onDismissRequest = onDismissDelete,
-            title = { Text("Permanently delete ${template.title}?") },
-            text = { Text("Generated tasks are preserved and detached from this template. The template itself cannot be recovered.") },
-            confirmButton = { TextButton(onClick = onConfirmDelete) { Text("Delete permanently", color = TimeboxTheme.colors.error) } },
-            dismissButton = { TextButton(onClick = onDismissDelete) { Text("Cancel") } },
-        )
+        RecurringDeleteDialog(template, onDismissDelete, onConfirmDelete)
     }
 }
 
@@ -628,6 +710,18 @@ internal fun <T> RecurrenceMenu(label: String, selected: String, values: List<Pa
         DropdownMenu(expanded, { expanded = false }) {
             values.forEach { (name, value) -> DropdownMenuItem({ Text(name) }, { expanded = false; onSelect(value) }) }
         }
+    }
+}
+
+internal fun recurringListDateLabel(date: LocalDate?): String? =
+    date?.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))
+
+internal fun recurringListTimingFact(template: RecurringTemplate): String {
+    val date = recurringListDateLabel(template.nextOccurrence)
+    return if (template.mode == RecurrenceMode.Quota) {
+        date?.let { "Period ends $it" } ?: "No current period"
+    } else {
+        date?.let { "Next $it" } ?: "No next occurrence"
     }
 }
 

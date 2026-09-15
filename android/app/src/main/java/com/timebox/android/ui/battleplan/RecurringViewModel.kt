@@ -62,10 +62,9 @@ class RecurringViewModel(private val repository: TimeboxRepository) : ViewModel(
     fun resume() = lifecycle("resumed") { repository.resumeRecurringTemplate(it) }
     fun end() = lifecycle("ended") { repository.endRecurringTemplate(it) }
 
-    fun requestDelete() {
-        _state.value.selectedTemplate?.let { template ->
-            _state.update { it.copy(pendingDelete = template) }
-        }
+    fun requestDelete(template: RecurringTemplate? = _state.value.selectedTemplate) {
+        template ?: return
+        _state.update { it.copy(pendingDelete = template) }
     }
 
     fun dismissDelete() = _state.update { it.copy(pendingDelete = null) }
