@@ -85,6 +85,10 @@ fun ActivityTracking(
     LaunchedEffect(current?.id) { selectedType = null }
     val plan = repository.currentPlan()
     val enabled = !state.busy && state.snapshot != null
+    val statusFlags = StatusFlags(
+        offline = state.offline, pending = state.pending, busy = state.busy,
+        hasSnapshot = state.snapshot != null, error = state.error,
+    )
     val availableTypes = state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes
     var expanded by remember(current?.id) { mutableStateOf(false) }
     BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
@@ -121,6 +125,12 @@ fun ActivityTracking(
                     onFocus = { expanded = false; onEnterFocus() },
                 )
             }
+            ActivityTrackingStatusChip(
+                flags = statusFlags,
+                retryDisabled = statusFlags.busy,
+                onRetry = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } },
+                modifier = Modifier.padding(top = if (focus) 12.dp else 4.dp, bottom = 4.dp),
+            )
             if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
             if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
             if (focus && unknown) {
@@ -138,7 +148,6 @@ fun ActivityTracking(
                 val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
                 Text("${linked.size} linked Actual Blocks · ${elapsedDuration(minutes)} recorded", color = colors.onVariant)
             }
-            if (state.busy) Text("Saving…", color = colors.onVariant)
             state.feedback?.let { Text(it, color = colors.onVariant) }
             if (!focus && state.rejectedRecovery != null) {
                 TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }
@@ -153,11 +162,6 @@ fun ActivityTracking(
                     Text("Saved device observations, not recorded time. Use Day add/edit for corrections.")
                     Text(state.legacyRecovery!!)
                 }
-            }
-            if (state.offline || state.pending || state.snapshot == null) Text(if (state.offline) "Offline" + (if (state.pending) " · Unsynced" else "") else if (state.pending) "Unsynced" else if (state.error != null) "Activity unavailable" else "Connection required", color = colors.onVariant)
-            if (state.error != null || state.pending) {
-                Text(state.error ?: "Change not confirmed.", color = colors.onVariant)
-                TextButton(enabled = !state.busy, onClick = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } }) { Text("Retry") }
             }
         }
     }
