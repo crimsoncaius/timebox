@@ -260,6 +260,24 @@ describe('DayTimeline Actual Block movement', () => {
   })
 })
 
+describe('DayTimeline hour gutter placement', () => {
+  it('locks the hour gutter to the same grid row as the lanes', () => {
+    const view = render(timeline({
+      ...day,
+      time_blocks: [{
+        id: 7, lane: 'planned', start_minute: 540, end_minute: 600,
+        task_type_id: 1, task_type: { id: 1, name: 'focus', created_at: '', updated_at: '' },
+        name: 'Morning', note: null, created_at: '', updated_at: '',
+      }],
+    }))
+    const gutter = view.container.querySelector('[data-hour="540"]')?.parentElement?.parentElement
+    expect(gutter?.className).toMatch(/col-start-1/)
+    expect(gutter?.className).toMatch(/row-start-2/)
+    const planned = view.container.querySelector('[data-day-lane="planned"]')
+    expect(planned?.className).toMatch(/row-start-2/)
+  })
+})
+
 describe('DayTimeline initial current-time positioning', () => {
   beforeEach(() => {
     vi.clearAllMocks()

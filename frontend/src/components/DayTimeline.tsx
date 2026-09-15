@@ -259,7 +259,7 @@ export const DayTimeline = forwardRef<
       <h3 className={laneHeaderPlanned}>Planned</h3>
       <h3 className={laneHeaderActual}>Actual</h3>
 
-      <div className="w-12 shrink-0 select-none border-r border-outline-variant/25 pr-1.5 text-right font-body text-[11px] text-timeline-label sm:w-14 dark:border-dark-outline-variant dark:text-dark-on-surface-variant">
+      <div className="col-start-1 row-start-2 w-12 shrink-0 select-none border-r border-outline-variant/25 pr-1.5 text-right font-body text-[11px] text-timeline-label sm:w-14 dark:border-dark-outline-variant dark:text-dark-on-surface-variant">
         <div style={{ height: totalHeight }} className="relative">
           {Array.from({ length: slotCount }, (_, i) => {
             const m = visibleStartMin + i * SLOT_MINUTES
@@ -267,6 +267,7 @@ export const DayTimeline = forwardRef<
             return (
               <div
                 key={m}
+                data-hour={m}
                 className={
                   m % 60 === 0
                     ? 'absolute w-full border-t border-timeline-grid-strong pt-0.5 dark:border-dark-outline-variant'
@@ -632,7 +633,7 @@ function Lane({
   /**
    * Explicit grid placement so the `[data-testid="day-now-line"]` overlay's
    * `col-start-2 col-span-2 row-start-2` (definite position) cannot evict the
-   * auto-placed lanes into an implicit row.
+   * auto-placed lanes — or the hour gutter — into an implicit row.
    */
   const gridPlacement = lane === 'planned' ? 'col-start-2 row-start-2' : 'col-start-3 row-start-2'
   const collisionBlocks = draft ? [...blocks, { id: -1, ...draft }] : blocks
