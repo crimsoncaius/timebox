@@ -64,6 +64,7 @@ function localDateTimeAtMinute(date: string, minute: number): string {
 
 export function TodayPage() {
   const { preferences: dayView, change: changeDayView, storageError } = useDayViewPreferences()
+  const trackingVisible = dayView.tracking
   const [viewOpen, setViewOpen] = useState(false)
   const readiness = useReadinessCoordinator()
   const { date } = useParams<{ date: string }>()
@@ -822,7 +823,7 @@ export function TodayPage() {
   if (!day) {
     return (
       <Layout>
-        {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={dayView.tracking} taskTypes={taskTypes} onChanged={() => {}} /> : null}
+        {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {}} /> : null}
         <p className="text-error">{error ?? 'Failed to load day.'}</p>
       </Layout>
     )
@@ -902,7 +903,7 @@ export function TodayPage() {
                 >
                   Next →
                 </button>
-            {!dayView.tracking && activityDevelopmentEnabled && <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => changeDayView('tracking', true)}>{activityState.snapshot?.current ? '● Tracking' : 'Tracking'}</button>}
+            {!trackingVisible && activityDevelopmentEnabled && <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => changeDayView('tracking', true)}>{activityState.snapshot?.current ? '● Tracking' : 'Tracking'}</button>}
             <button type="button" className="min-h-11 rounded-full border border-outline-variant/40 px-4 text-sm dark:border-dark-outline-variant" onClick={() => setViewOpen(true)}>View</button>
 
               </div>
@@ -991,7 +992,7 @@ export function TodayPage() {
                 : formatTimeRangeGcal12(readyDropPreview.start, readyDropPreview.start + SLOT_MINUTES)}
             </div>
           )}
-          {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={dayView.tracking} taskTypes={taskTypes} onChanged={() => {
+          {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {
             void api.getDay(date).then(setDay).catch(() => {})
           }} /> : null}
           {activityDevelopmentEnabled && needsElapsedDayView(day) && <ReportingDayActuals day={day} onSelect={id => onBlockClick(id, 'actual')} />}

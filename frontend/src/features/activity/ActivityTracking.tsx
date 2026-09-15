@@ -5,6 +5,7 @@ import { activityTimeValue, resolveActivityTime, type ActivityTimeValue } from '
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TaskType } from '../../lib/api'
 import { ActivityRepository, getActivityRepository } from './activityRepository'
+import { ActivityTrackingStatus } from './ActivityTrackingStatus'
 
 export function ActivityTracking({ taskTypes, onChanged, repository = getActivityRepository(), focus = false, controlsVisible = true }: {
   taskTypes: TaskType[]; onChanged: () => void; repository?: ActivityRepository; focus?: boolean; controlsVisible?: boolean
@@ -40,8 +41,25 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const current = state.snapshot?.current
   const plan = repository.currentPlan()
   const disabled = state.busy || !state.snapshot
+  const statusFlags = {
+    offline: state.offline, pending: state.pending, busy: state.busy, hasSnapshot: Boolean(state.snapshot), error: state.error,
+  }
   const availableTypes = state.snapshot?.task_types ?? taskTypes
   const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
+  const retryStatus = () => { void (state.pending ? repository.retry() : repository.refresh()) }
+  const statusMark = <ActivityTrackingStatus flags={statusFlags} retryDisabled={statusFlags.busy} onRetry={retryStatus} />
+  const controls = <>
+    {current ? <>
+      <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>
+      <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{formatDuration(elapsed)}</span>
+      <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
+      {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
+    </> : <button className="py-2" disabled={disabled} onClick={() => void repository.command('start')}>Start tracking</button>}
+    {!focus && <button disabled={disabled || focusState.planning || focusState.entering} onClick={() => void focusController.enter(repository)}>Focus</button>}
+  </>
+  const controlRow = focus
+    ? <div className="mt-8 flex flex-col items-center gap-4 text-center">{controls}{statusMark}</div>
+    : <div className="flex flex-wrap items-center gap-x-4 gap-y-1">{statusMark}<div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">{controls}</div></div>
   return <div className={`${controlsVisible ? "mb-3 " : ""}text-sm text-on-surface-variant dark:text-dark-on-surface-variant`} aria-label="Activity tracking">
     {current && state.snapshot?.check_in?.question && <section aria-label="Inactivity check-in" className="my-4 rounded-2xl bg-surface-container-low p-6 dark:bg-dark-surface-container">
       <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{current.name || current.task_type.name}</p>
@@ -50,17 +68,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       <p className="mt-3 text-sm">Recording continues while you decide.</p>
     </section>}
     <div hidden={!controlsVisible && !focus}>
-    <div className={focus ? "mt-8 flex flex-col items-center gap-4 text-center" : "flex flex-wrap items-center justify-end gap-x-4 gap-y-1"}>
-      {current ? <>
-        <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>
-        <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{formatDuration(elapsed)}</span>
-        <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
-        {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
-      </> : <button className="py-2" disabled={disabled} onClick={() => void repository.command('start')}>Start tracking</button>}
-      {!focus && <button disabled={disabled || focusState.planning || focusState.entering} onClick={() => void focusController.enter(repository)}>Focus</button>}
-      {state.busy ? <span role="status">Saving…</span> : null}
-      <span role="status">{state.offline ? 'Offline' : state.pending ? 'Unsynced' : state.snapshot ? 'Synced' : 'Connection required'}{state.offline && state.pending ? ' · Unsynced' : ''}</span>
-    </div>
+    {controlRow}
     {!focus && focusState.planning && <p className="text-right">Finish or cancel planning to enter Focus.</p>}
     {!focus && focusState.error && <p role="status">{focusState.error}</p>}
     {!focus && focusState.recovery && <details><summary>Review old Work Mode data</summary><p>These are saved device observations, not recorded time. Use Day add/edit for any correction.</p><pre className="whitespace-pre-wrap break-all">{focusState.recovery}</pre></details>}
@@ -70,9 +78,6 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</p> : null}
     </div>
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
-    {state.error || state.pending ? <p role="alert" className="text-right">
-      {state.error || 'Change not confirmed.'} <button disabled={state.busy} className="underline" onClick={() => void (state.pending ? repository.retry() : repository.refresh())}>Retry</button>
-    </p> : null}
     {switching || stopping ? <form aria-label={stopping ? "Stop tracking" : "Switch activity"} className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {
       event.preventDefault()
       try {
