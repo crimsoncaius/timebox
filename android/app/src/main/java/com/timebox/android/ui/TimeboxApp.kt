@@ -162,6 +162,7 @@ fun TimeboxApp(
     val snackbarHostState = remember { SnackbarHostState() }
     val taskCompletionScope = rememberCoroutineScope()
     val openedDayEntryIds = remember { mutableSetOf<String>() }
+    val openedBattlePlanEntryIds = remember { mutableSetOf<String>() }
 
     LaunchedEffect(route, routeDate, routeTaskId, routeTemplateId, backStackEntry?.id) {
         when (route) {
@@ -180,7 +181,10 @@ fun TimeboxApp(
             }
             AppRoutes.Types -> typesViewModel.load()
             AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)
-            AppRoutes.BattlePlan -> battlePlanViewModel.load()
+            AppRoutes.BattlePlan -> {
+                val entryId = backStackEntry?.id ?: return@LaunchedEffect
+                if (openedBattlePlanEntryIds.add(entryId)) battlePlanViewModel.load()
+            }
             AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
             AppRoutes.Recurring -> recurringViewModel.load()
             AppRoutes.RecurringNew -> recurringEditorViewModel.open(null)
@@ -228,7 +232,7 @@ fun TimeboxApp(
         taskDetailState.trashUndoTarget?.let { target ->
             taskDetailViewModel.consumeTrashUndoTarget()
             battlePlanViewModel.offerUndo(target.taskId, target.title)
-            battlePlanViewModel.load(showSpinner = false)
+            battlePlanViewModel.applyRemovedTask(target.taskId)
             if (target.leaveTaskDetail && route == AppRoutes.TaskDetailPattern) navController.popBackStack()
         }
     }

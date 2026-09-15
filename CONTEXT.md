@@ -56,6 +56,18 @@ _Avoid_: Task detail, Task status, timer mode
 Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
 _Avoid_: Work Mode, Focus session
 
+**Offline**:
+A condition in which Activity Tracking cannot reach the server. Local recording can continue.
+_Avoid_: disconnected, airplane mode
+
+**Unsynced**:
+A condition in which local Activity Tracking changes have not been confirmed by the server.
+_Avoid_: pending, dirty, Change not confirmed
+
+**Synced**:
+A condition in which Activity Tracking has a confirmed snapshot and no unconfirmed local changes.
+_Avoid_: All caught up, sync complete
+
 **Current Activity**:
 The work or non-work activity represented by the running Actual Block, using its Block Name, Task Type, and optional Battle Plan Task linkage. It may be unnamed and unclassified.
 _Avoid_: Current Task, Activity catalog

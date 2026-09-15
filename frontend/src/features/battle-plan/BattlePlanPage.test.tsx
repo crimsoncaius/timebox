@@ -85,6 +85,7 @@ describe('BattlePlanPage', () => {
   let failNextSubtaskCheck: boolean
   let restoreGate: Promise<void> | null
   let readyGate: Promise<void> | null
+  let activeListReads: number
 
   it.each([null, 7])('moves a task from project %s and persists the assignment after remount', async (source) => {
     activeTasks = [task({ project_id: source, project: source ? project : null })]
@@ -141,6 +142,7 @@ describe('BattlePlanPage', () => {
     failNextSubtaskCheck = false
     restoreGate = null
     readyGate = null
+    activeListReads = 0
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
@@ -148,6 +150,7 @@ describe('BattlePlanPage', () => {
       if (url.endsWith('/projects') && method === 'GET') return response([project])
       if (url.endsWith('/task-types') && method === 'GET') return response([taskType])
       if (url.includes('/tasks?state=active')) {
+        activeListReads += 1
         return response({ items: activeTasks, timezone: 'UTC', server_now_iso: '2026-08-15T12:00:00Z' })
       }
       if (url.includes('/tasks?state=trash')) {
@@ -350,6 +353,30 @@ describe('BattlePlanPage', () => {
     const column = screen.getByRole('region', { name: 'Blocked tasks' })
     expect(await within(column).findByRole('heading', { name: 'Waiting for review' })).toBeInTheDocument()
     expect(activeTasks.find((row) => row.title === 'Waiting for review')).toMatchObject({ status: 'open', is_blocked: true })
+  })
+
+  it('checks a Subtask without reloading Battle Plan', async () => {
+    activeTasks = [task({ subtasks: [subtask()] })]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const dialog = await screen.findByRole('dialog', { name: 'Task details' })
+    const listsAfterOpen = activeListReads
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Check subtask Check figures' }))
+    expect(await within(dialog).findByRole('checkbox', { name: 'Uncheck subtask Check figures' })).toBeChecked()
+    expect(activeListReads).toBe(listsAfterOpen)
+  })
+
+  it('trashes a Battle Plan Task without reloading Battle Plan', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const trash = await screen.findByRole('button', { name: 'Move to Trash' })
+    const listsAfterOpen = activeListReads
+    await user.click(trash)
+    expect(await screen.findByRole('status', { name: 'Trash undo' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Task details' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Draft launch brief' })).not.toBeInTheDocument()
+    expect(activeListReads).toBe(listsAfterOpen)
   })
 
   it('shows a failed subtask check inside the dialog and permits retry', async () => {
