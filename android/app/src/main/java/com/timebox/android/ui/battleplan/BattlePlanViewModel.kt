@@ -238,7 +238,15 @@ class BattlePlanViewModel internal constructor(
         viewModelScope.launch {
             readinessCoordinator.projections.collect {
                 _state.update { current ->
-                    current.copy(tasks = readinessCoordinator.projectTasks(current.tasks))
+                    current.copy(
+                        tasks = readinessCoordinator.projectTasks(
+                            current.tasks.map { task ->
+                                val stored = readinessCoordinator.projectedTask(task.id) ?: return@map task
+                                if (stored.subtasks == task.subtasks) task
+                                else task.copy(subtasks = stored.subtasks)
+                            },
+                        ),
+                    )
                 }
             }
         }
@@ -474,6 +482,32 @@ class BattlePlanViewModel internal constructor(
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
     fun consumeCreatedTaskNotice() = _state.update { it.copy(createdTaskNotice = null) }
+
+    fun applySubtask(saved: Subtask) {
+        patchTasks { tasks ->
+            tasks.map { task ->
+                if (task.id != saved.parentTaskId) task
+                else task.copy(subtasks = task.subtasks.map { if (it.id == saved.id) saved else it })
+            }
+        }
+    }
+
+    fun applyRemovedTask(taskId: Int) {
+        patchTasks { tasks ->
+            tasks.filterNot { it.id == taskId }.map { task ->
+                task.copy(subtasks = task.subtasks.filterNot { it.id == taskId })
+            }
+        }
+    }
+
+    private fun patchTasks(transform: (List<BattleTask>) -> List<BattleTask>) {
+        _state.update { current ->
+            val next = transform(current.tasks)
+            readinessCoordinator.mergeServerTasks(next)
+            current.copy(saving = false, refreshing = false, tasks = readinessCoordinator.projectTasks(next))
+        }
+    }
+
     fun offerUndo(taskId: Int, title: String) {
         pauseUndoExposure()
         undoEligibleExposureMillis = 0L
@@ -604,13 +638,13 @@ class BattlePlanViewModel internal constructor(
 
     fun toggleSubtaskComplete(subtask: Subtask) {
         if (_state.value.saving) return
-        _state.update { it.copy(saving = true, message = null) }
+        _state.update { it.copy(message = null) }
         viewModelScope.launch {
             val result = if (subtask.checked) repository.uncheckSubtask(subtask.id)
             else repository.checkSubtask(subtask.id)
             result.fold(
-                onSuccess = { load(showSpinner = false) },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onSuccess = { saved -> applySubtask(saved) },
+                onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
             )
         }
     }
@@ -735,11 +769,14 @@ class BattlePlanViewModel internal constructor(
     fun confirmTrash() {
         val task = _state.value.pendingTrashTask ?: return
         if (_state.value.saving) return
-        _state.update { it.copy(pendingTrashTask = null, saving = true, message = null) }
+        _state.update { it.copy(pendingTrashTask = null, message = null) }
         viewModelScope.launch {
             repository.trashBattleTask(task.id).fold(
-                onSuccess = { _state.update { it.copy(saving = false) }; offerUndo(task.id, task.title); load(false) },
-                onFailure = { error -> _state.update { it.copy(saving = false, message = error.apiError.message) } },
+                onSuccess = {
+                    offerUndo(task.id, task.title)
+                    applyRemovedTask(task.id)
+                },
+                onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
             )
         }
     }

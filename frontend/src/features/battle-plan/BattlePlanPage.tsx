@@ -20,6 +20,7 @@ import {
   type PriorityLevel,
   type Project,
   type ProjectWrite,
+  type Subtask,
   type TaskCollection,
   type TaskStatus,
   type TaskType,
@@ -85,6 +86,37 @@ function taskCount(tasks: BattleTask[], projectId: number) {
     (count, task) => count + (task.project_id === projectId ? 1 + task.subtasks.length : 0),
     0,
   )
+}
+
+function withSubtask(tasks: BattleTask[], saved: Subtask): BattleTask[] {
+  return tasks.map((task) => task.id !== saved.parent_task_id ? task : {
+    ...task,
+    subtasks: task.subtasks.map((item) => item.id === saved.id ? saved : item),
+  })
+}
+
+function withCreatedSubtask(tasks: BattleTask[], parentId: number, createdTask: BattleTask): BattleTask[] {
+  const created: Subtask = {
+    id: createdTask.id,
+    parent_task_id: parentId,
+    title: createdTask.title,
+    checked: false,
+    effectively_resolved: false,
+    position: createdTask.position,
+    created_at: createdTask.created_at,
+    updated_at: createdTask.updated_at,
+  }
+  return tasks.map((task) => task.id !== parentId ? task : {
+    ...task,
+    subtasks: [...task.subtasks, created],
+  })
+}
+
+function withoutTask(tasks: BattleTask[], id: number): BattleTask[] {
+  return tasks.filter((task) => task.id !== id).map((task) => ({
+    ...task,
+    subtasks: task.subtasks.filter((item) => item.id !== id),
+  }))
 }
 
 export function BattlePlanPage() {
@@ -220,8 +252,8 @@ export function BattlePlanPage() {
   const addSubtask = async (parentId: number, title: string) => {
     setError(null)
     try {
-      await api.createBattleTask({ parent_id: parentId, title })
-      await loadActive()
+      const created = await api.createBattleTask({ parent_id: parentId, title })
+      ingestTasks(withCreatedSubtask(storedTasks, parentId, created))
     } catch (cause) {
       setError(errorMessage(cause))
       throw cause
@@ -318,8 +350,8 @@ export function BattlePlanPage() {
   const setSubtaskChecked = async (id: number, checked: boolean) => {
     setError(null)
     try {
-      if (checked) await api.checkSubtask(id); else await api.uncheckSubtask(id)
-      await loadActive()
+      const saved = checked ? await api.checkSubtask(id) : await api.uncheckSubtask(id)
+      ingestTasks(withSubtask(storedTasks, saved))
     } catch (cause) {
       setError(errorMessage(cause))
     }
@@ -493,7 +525,7 @@ export function BattlePlanPage() {
             await api.trashBattleTask(id)
             setTrashUndo({ noticeId: nextTrashUndoId.current++, id, title })
             if (id === selectedTask.id) closeTask()
-            await loadActive()
+            ingestTasks(withoutTask(storedTasks, id))
           }}
         />
       ) : null}

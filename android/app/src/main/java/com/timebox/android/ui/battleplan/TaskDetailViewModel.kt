@@ -333,15 +333,12 @@ class TaskDetailViewModel(
     fun toggleSubtask(task: Subtask) {
         if (_state.value.saving || _state.value.task?.status == TaskStatus.Completed) return
         val parentTaskId = _state.value.taskId ?: return
-        _state.update { it.copy(saving = true, message = null, saveError = null) }
+        _state.update { it.copy(message = null, saveError = null) }
         viewModelScope.launch {
             val result = if (task.checked) repository.uncheckSubtask(task.id) else repository.checkSubtask(task.id)
             result.fold(
-                onSuccess = { saved ->
-                    val current = _state.value.task?.takeIf { it.id == parentTaskId } ?: return@fold
-                    acceptSaved(current.copy(subtasks = current.subtasks.map { if (it.id == saved.id) saved else it }))
-                },
-                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
+                onSuccess = { saved -> applySubtask(parentTaskId, saved) },
+                onFailure = { error -> _state.update { it.copy(saveError = error.apiError.message) } },
             )
         }
     }
@@ -355,36 +352,36 @@ class TaskDetailViewModel(
     fun confirmSubtaskTrash() {
         val task = _state.value.pendingSubtaskTrash ?: return
         val taskId = _state.value.taskId ?: return
-        _state.update { it.copy(pendingSubtaskTrash = null, saving = true) }
+        _state.update { it.copy(pendingSubtaskTrash = null, saveError = null) }
         viewModelScope.launch {
             repository.trashBattleTask(task.id).fold(
                 onSuccess = {
                     val current = _state.value.task?.takeIf { it.id == taskId } ?: return@fold
-                    acceptSaved(current.copy(subtasks = current.subtasks.filterNot { it.id == task.id }))
+                    applySubtasks(current.copy(subtasks = current.subtasks.filterNot { it.id == task.id }))
                     _state.update {
                         it.copy(trashUndoTarget = TrashUndoTarget(task.id, task.title, leaveTaskDetail = false))
                     }
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
+                onFailure = { error -> _state.update { it.copy(saveError = error.apiError.message) } },
             )
         }
     }
 
     fun confirmTrash() {
         val task = _state.value.task ?: return
-        _state.update { it.copy(confirmTrash = false, saving = true) }
+        if (_state.value.trashed) return
+        _state.update { it.copy(confirmTrash = false, saveError = null) }
         viewModelScope.launch {
             repository.trashBattleTask(task.id).fold(
                 onSuccess = {
                     _state.update {
                         it.copy(
-                            saving = false,
                             trashed = true,
                             trashUndoTarget = TrashUndoTarget(task.id, task.title, leaveTaskDetail = true),
                         )
                     }
                 },
-                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
+                onFailure = { error -> _state.update { it.copy(saveError = error.apiError.message) } },
             )
         }
     }
@@ -408,6 +405,18 @@ class TaskDetailViewModel(
         if (current.saving || current.dirty || task.status == TaskStatus.Completed) return
         if (readinessCoordinator != null) readinessCoordinator.setReady(task, ready)
         else saveField(current.toTaskDetailDraft().copy(readyToPlan = ready))
+    }
+
+    private fun applySubtask(parentTaskId: Int, saved: Subtask) {
+        val current = _state.value.task?.takeIf { it.id == parentTaskId } ?: return
+        applySubtasks(current.copy(subtasks = current.subtasks.map { if (it.id == saved.id) saved else it }))
+    }
+
+    private fun applySubtasks(task: BattleTask) {
+        readinessCoordinator?.mergeServerTasks(listOf(task))
+        _state.update { current ->
+            if (current.taskId != task.id) current else current.copy(task = task)
+        }
     }
 
     private fun acceptSaved(task: BattleTask) {
