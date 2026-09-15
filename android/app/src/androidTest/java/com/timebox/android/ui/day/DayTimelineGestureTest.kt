@@ -397,6 +397,49 @@ class DayTimelineGestureTest {
     }
 
     @Test
+    fun scrollingKeepsBlocksLockedToHourGutter() {
+        val date = LocalDate.of(2026, 8, 20)
+        val planned = stateWithBlock(date, endHour = 23, serverNowMinute = 8 * 60).day!!.blocks.single()
+        val state = stateWithBlock(date, endHour = 23, serverNowMinute = 8 * 60).let { base ->
+            base.copy(
+                today = date.minusDays(1),
+                pages = base.pages + (date to base.page(date).copy(
+                    day = base.day!!.copy(
+                        blocks = listOf(
+                            planned,
+                            planned.copy(id = 8, lane = Lane.Actual, taskTypeName = "Logged work"),
+                        ),
+                    ),
+                )),
+            )
+        }
+        setDayContent(state, RecordingHaptics())
+        compose.waitForIdle()
+
+        val hourBefore = compose.onNodeWithTag("day-hour-540").fetchSemanticsNode().boundsInRoot.top
+        val plannedBefore = compose.onNodeWithTag("day-block-7").fetchSemanticsNode().boundsInRoot.top
+        val actualBefore = compose.onNodeWithTag("day-block-8").fetchSemanticsNode().boundsInRoot.top
+        val plannedGap = plannedBefore - hourBefore
+        val actualGap = actualBefore - hourBefore
+
+        compose.onNodeWithTag("day-lane-planned").performTouchInput {
+            swipe(center, center - Offset(0f, 420f), durationMillis = 250)
+        }
+        compose.waitForIdle()
+
+        val hourAfter = compose.onNodeWithTag("day-hour-540").fetchSemanticsNode().boundsInRoot.top
+        val plannedAfter = compose.onNodeWithTag("day-block-7").fetchSemanticsNode().boundsInRoot.top
+        val actualAfter = compose.onNodeWithTag("day-block-8").fetchSemanticsNode().boundsInRoot.top
+        check(hourAfter < hourBefore - 80f) { "Hour gutter did not scroll: before=$hourBefore after=$hourAfter" }
+        check(kotlin.math.abs((plannedAfter - hourAfter) - plannedGap) < 2f) {
+            "Planned Block left the hour gutter: hour $hourBefore->$hourAfter block $plannedBefore->$plannedAfter"
+        }
+        check(kotlin.math.abs((actualAfter - hourAfter) - actualGap) < 2f) {
+            "Actual Block left the hour gutter: hour $hourBefore->$hourAfter block $actualBefore->$actualAfter"
+        }
+    }
+
+    @Test
     fun plannedBlockRequiresLongPressBeforeMove() {
         val date = LocalDate.of(2026, 8, 20)
         var committedMove: Triple<Int, Int, Int>? = null
