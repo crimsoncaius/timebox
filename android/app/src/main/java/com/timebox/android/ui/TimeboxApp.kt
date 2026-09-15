@@ -327,7 +327,7 @@ fun TimeboxApp(
                 if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
         ) {
-            if (surfaceRoute != AppRoutes.DayPattern && surfaceRoute != AppRoutes.RecurringNew && surfaceRoute?.startsWith("prototype/task-sheet") != true) {
+            if (surfaceRoute != AppRoutes.DayPattern && surfaceRoute != AppRoutes.RecurringNew && surfaceRoute?.startsWith("prototype/") != true) {
                 TimeboxTopBar(
                     kicker = routeKicker(surfaceRoute),
                     title = routeTitle(
@@ -347,6 +347,21 @@ fun TimeboxApp(
                             arguments = listOf(navArgument("mode") { defaultValue = "details" }, navArgument("layout") { defaultValue = "full" }, navArgument("sample") { defaultValue = "normal" }),
                         ) { entry ->
                             com.timebox.android.ui.battleplan.TaskSheetPrototype(entry.arguments?.getString("mode") == "create", entry.arguments?.getString("layout") ?: "full", entry.arguments?.getString("sample") ?: "normal")
+                        }
+                        composable(
+                            "prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}",
+                            deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}" }),
+                            arguments = listOf(
+                                navArgument("flow") { defaultValue = "details" },
+                                navArgument("layout") { defaultValue = "core" },
+                                navArgument("mode") { defaultValue = "scheduled" },
+                            ),
+                        ) { entry ->
+                            com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype(
+                                initialFlow = entry.arguments?.getString("flow") ?: "details",
+                                initialLayout = entry.arguments?.getString("layout") ?: "core",
+                                initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
+                            )
                         }
                     }
                     composable(

@@ -29,7 +29,7 @@ A non-exhaustive, first-level execution checkpoint within a Parent Task. It is n
 _Avoid_: Child task, nested task
 
 **Task Type**:
-The reusable category of work represented by a Planned Block or Actual Block. Every Block has one; `unspecified` is the fixed, non-renamable and undeletable neutral category when the user does not care to classify it.
+The reusable category of work represented by a Planned Block or Actual Block. Every Block has one; `unspecified` is the fixed, non-renamable and undeletable neutral category when the user does not care to classify it; `sleep` is the fixed, non-renamable and undeletable category of a Sleep Period and cannot be used by a Planned Block.
 _Avoid_: Task, tag, Block Name
 
 **Task Type Rename**:
@@ -139,6 +139,18 @@ _Avoid_: Planned timebox, Task, appointment
 **Actual Block**:
 A record of time that occurred. It may link to a Planned Block or stand alone and is authoritative for actual time.
 _Avoid_: Actual session, work session, completed block
+
+**Sleep Period**:
+A complete Actual Block whose Task Type is the reserved `sleep` category. It is not a Current Activity and has no Battle Plan Task linkage.
+_Avoid_: Sleep tracking, sleep session, sleep log
+
+**Night**:
+The overnight rest whose duration is the summed elapsed time of the Sleep Periods that belong to it. Distinct from a calendar day in the Reporting Time Zone.
+_Avoid_: Day, sleep day, calendar day
+
+**Nap**:
+A Sleep Period that does not belong to a Night.
+_Avoid_: daytime sleep, short Sleep Period
 
 **Task Completion**:
 An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks.

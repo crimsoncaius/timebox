@@ -136,7 +136,7 @@ function Wait-TimeboxHttp {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         try {
-            return Invoke-WebRequest -Uri $Uri -TimeoutSec 3
+            return Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 3
         } catch {
             Start-Sleep -Milliseconds 500
         }
@@ -189,8 +189,14 @@ function Invoke-TimeboxNative {
         [switch]$AllowFailure
     )
 
-    $output = & $FilePath @ArgumentList 2>&1 | ForEach-Object { $_.ToString() }
-    $exitCode = $LASTEXITCODE
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $FilePath @ArgumentList 2>&1 | ForEach-Object { $_.ToString() }
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
     if ($exitCode -ne 0 -and -not $AllowFailure) {
         throw "$FilePath failed with exit code $exitCode`: $($output -join [Environment]::NewLine)"
     }
