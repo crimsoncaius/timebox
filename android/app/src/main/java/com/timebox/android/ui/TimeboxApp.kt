@@ -268,11 +268,14 @@ fun TimeboxApp(
     }
     LaunchedEffect(recurringEditorState.savedTemplateId) {
         recurringEditorState.savedTemplateId?.let { templateId ->
+            val created = route == AppRoutes.RecurringNew
             recurringEditorViewModel.consumeSaved()
             recurringViewModel.load(showSpinner = false)
-            navController.navigate(AppRoutes.recurringDetail(templateId)) {
-                popUpTo(if (route == AppRoutes.RecurringNew) AppRoutes.RecurringNew else AppRoutes.RecurringEditPattern) {
-                    inclusive = true
+            if (created) {
+                navController.popBackStack(AppRoutes.Recurring, inclusive = false)
+            } else {
+                navController.navigate(AppRoutes.recurringDetail(templateId)) {
+                    popUpTo(AppRoutes.RecurringEditPattern) { inclusive = true }
                 }
             }
         }
@@ -556,6 +559,9 @@ fun TimeboxApp(
                             onSelectStatus = recurringViewModel::selectStatus,
                             onNew = { navController.navigate(AppRoutes.RecurringNew) },
                             onOpen = { navController.navigate(AppRoutes.recurringDetail(it)) },
+                            onRequestDelete = { recurringViewModel.requestDelete(it) },
+                            onDismissDelete = recurringViewModel::dismissDelete,
+                            onConfirmDelete = { recurringViewModel.confirmDelete() },
                         )
                     }
                     composable(AppRoutes.RecurringNew) {
@@ -606,7 +612,7 @@ fun TimeboxApp(
                             onPause = recurringViewModel::pause,
                             onResume = recurringViewModel::resume,
                             onEnd = recurringViewModel::end,
-                            onRequestDelete = recurringViewModel::requestDelete,
+                            onRequestDelete = { recurringViewModel.requestDelete() },
                             onDismissDelete = recurringViewModel::dismissDelete,
                             onConfirmDelete = {
                                 recurringViewModel.confirmDelete { navController.popBackStack() }
