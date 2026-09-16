@@ -98,6 +98,23 @@ private fun PointerInputScope.dragModeForPress(pressY: Float): DragMode {
 
 enum class PlanningPreviewState { Valid, Invalid, Pending }
 
+/**
+ * Running Actuals grow to now. A Planned Block that merely corresponds to a
+ * running Actual must not inherit that live height — the plan keeps its own times.
+ */
+internal fun isLiveActualBlock(block: TimeBlock, day: Day): Boolean =
+    block.lane == Lane.Actual &&
+        day.date == day.today &&
+        day.actualBlocks.any { it.actualBlock.id == block.actualBlockId && it.actualBlock.endAt == null }
+
+internal fun displayedBlockEndMinute(block: TimeBlock, day: Day, nowMinute: Int?): Int {
+    val running = isLiveActualBlock(block, day)
+    return if (running) (nowMinute ?: block.endMinute).coerceIn(
+        block.startMinute,
+        maxOf(block.startMinute, day.visibleEnd),
+    ) else block.endMinute
+}
+
 data class PlanningDropPreview(
     val title: String,
     val startMinute: Int,
@@ -378,14 +395,11 @@ private fun LaneColumn(
 
         val nowMinute = rememberNowMinute(day)
         day.lane(lane).forEach { block ->
-            val timeEditable = blockGesturesEnabled && !(block.lane == Lane.Actual &&
-                day.actualBlocks.any { it.actualBlock.id == block.actualBlockId && it.actualBlock.endAt == null })
+            val timeEditable = blockGesturesEnabled && !isLiveActualBlock(block, day)
             val live = if (drag != null && drag.id == block.id) drag else null
             val start = live?.startMinute ?: block.startMinute
-            val running = day.date == day.today && day.actualBlocks.any {
-                it.actualBlock.id == block.actualBlockId && it.actualBlock.endAt == null
-            }
-            val end = if (running) (nowMinute ?: block.endMinute).coerceIn(start, maxOf(start, day.visibleEnd))
+            val running = isLiveActualBlock(block, day)
+            val end = if (running) displayedBlockEndMinute(block, day, nowMinute)
                 else live?.endMinute ?: block.endMinute
             val previewStart = live?.previewStartMinute ?: start
             val previewEnd = live?.previewEndMinute ?: end
