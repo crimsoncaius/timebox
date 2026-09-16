@@ -48,6 +48,7 @@ fun ActivityTracking(
     var reviewingRejected by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
     var stopSaving by remember { mutableStateOf(false) }
+    var notesTargetId by remember { mutableStateOf<Int?>(null) }
     var targetId by remember { mutableStateOf<Int?>(null) }
     var timing by remember { mutableStateOf<ActivityTimeValue?>(null) }
     var timingError by remember { mutableStateOf<String?>(null) }
@@ -138,6 +139,7 @@ fun ActivityTracking(
                     running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
                     onToggle = { expanded = !expanded },
                     onStart = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } },
+                    onNotes = { current?.let { notesTargetId = it.id } },
                     onSwitch = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
                     onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
                     onFocus = { expanded = false; onEnterFocus() },
@@ -186,10 +188,16 @@ fun ActivityTracking(
     if (focus) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { content() }
+            OutlinedButton(
+                enabled = enabled && current != null,
+                onClick = { current?.let { notesTargetId = it.id } },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).heightIn(min = 48.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, colors.hairline),
+            ) { Text("Notes", style = TimeboxTheme.type.button, color = colors.on) }
             FilledTonalButton(
                 enabled = enabled && current != null,
                 onClick = { current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp).heightIn(min = 48.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp).heightIn(min = 48.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.low, contentColor = colors.on),
             ) { Text("Switch activity", style = TimeboxTheme.type.button) }
             TextButton(onClick = { focusOptions = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
@@ -252,6 +260,13 @@ fun ActivityTracking(
             Text("Recording continues while you decide.")
         }
     }
+    val notesTarget = state.snapshot?.records?.find { it.id == notesTargetId }
+        ?: current?.takeIf { it.id == notesTargetId }
+    if (notesTargetId != null && notesTarget != null) CurrentActivityNotesSheet(
+        actual = notesTarget,
+        activityRepository = repository,
+        onDismiss = { notesTargetId = null },
+    )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(
         currentActivity = switchTarget?.name?.takeIf { it.isNotBlank() } ?: switchTarget?.taskType?.name.orEmpty(),

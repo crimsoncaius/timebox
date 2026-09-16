@@ -87,7 +87,6 @@ import com.timebox.android.ui.theme.TimeboxTheme
         val colors = TimeboxTheme.colors
         val activityTitle = activity.snapshot?.current?.let { it.name?.takeIf(String::isNotBlank) ?: it.taskType.name }
         if (current.title != activityTitle) Text(current.title, style = TimeboxTheme.type.sectionTitle, color = colors.onVariant)
-        if (current.description.isNotBlank()) Text(current.description, style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
         elapsed()
         Spacer(Modifier.height(24.dp))
         if (current.subtasks.isNotEmpty()) Text("SUBTASKS · ${current.subtasks.count { it.checked }} / ${current.subtasks.size}", style = TimeboxTheme.type.kicker, color = colors.actual)

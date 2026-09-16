@@ -7,6 +7,56 @@ import org.junit.Test
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 class ActivityRepositoryTest {
+    @Test fun onlineCurrentNoteWriteIsAcknowledgedWithoutOfflineQueue() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Design"), startAt = at, createdAt = at, updatedAt = at)
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = "2026-09-11T14:00:00Z", reportingTimezone = "UTC",
+            offlineReady = true, current = row, records = listOf(row))
+        var executed: ActivityCommandDto? = null
+        var durable: String? = null
+        val transport = object : ActivityTransport {
+            override suspend fun read() = initial
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                executed = command
+                val updated = row.copy(note = command.note, updatedAt = command.actionAt)
+                return initial.copy(cursor = 2, serverAt = command.actionAt, current = updated, records = listOf(updated),
+                    acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+            }
+        }
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+
+        assertTrue(repository.updateCurrentNoteOnline(1, "Review this"))
+        assertEquals("Review this", executed!!.note)
+        assertEquals("range", executed!!.effective.mode)
+        assertEquals(at, executed!!.effective.at)
+        assertEquals("Review this", repository.state.value.snapshot!!.current!!.note)
+        assertFalse(repository.state.value.pending)
+        assertEquals("Review this", ActivityRepository(transport, store).state.value.snapshot!!.current!!.note)
+    }
+
+    @Test fun failedOnlineCurrentNoteWriteIsNotQueued() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Design"), note = "Original", startAt = at, createdAt = at, updatedAt = at)
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = "2026-09-11T14:00:00Z", reportingTimezone = "UTC",
+            offlineReady = true, current = row, records = listOf(row))
+        val transport = object : ActivityTransport {
+            override suspend fun read() = initial
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = throw java.io.IOException("Offline")
+        }
+        var durable: String? = null
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+
+        assertFalse(repository.updateCurrentNoteOnline(1, "Unsaved"))
+        assertEquals("Original", repository.state.value.snapshot!!.current!!.note)
+        assertFalse(repository.state.value.pending)
+        assertTrue(repository.state.value.offline)
+        assertEquals("Original", ActivityRepository(transport, store).state.value.snapshot!!.current!!.note)
+    }
+
     @Test fun runningCorrectionSurvivesRestartWithoutEndingTracking() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val type = TaskTypeDto(1, "Design")
