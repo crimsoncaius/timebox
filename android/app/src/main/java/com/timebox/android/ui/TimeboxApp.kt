@@ -352,14 +352,13 @@ fun TimeboxApp(
                             "prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}",
                             deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}" }),
                             arguments = listOf(
-                                navArgument("flow") { defaultValue = "details" },
-                                navArgument("layout") { defaultValue = "core" },
+                                navArgument("flow") { defaultValue = "edit" },
+                                navArgument("layout") { defaultValue = "rows" },
                                 navArgument("mode") { defaultValue = "scheduled" },
                             ),
                         ) { entry ->
                             com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype(
-                                initialFlow = entry.arguments?.getString("flow") ?: "details",
-                                initialLayout = entry.arguments?.getString("layout") ?: "core",
+                                initialFlow = entry.arguments?.getString("flow") ?: "edit",
                                 initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
                             )
                         }

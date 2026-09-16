@@ -79,4 +79,28 @@ class RecurringCreationScreenTest {
             .performClick()
         compose.runOnIdle { org.junit.Assert.assertEquals(1, removed) }
     }
+
+    @Test
+    fun creationShowsSubtasksWithoutOpeningNotes() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                RecurringCreationContent(
+                    state = RecurringEditorUiState(title = "Weekly review", startDate = "2026-09-08"),
+                    onBack = {}, onTitle = {}, onDescription = {}, onTaskType = {},
+                    onUrgency = {}, onImportance = {}, onMode = {}, onFrequency = {},
+                    onInterval = {}, onToggleWeekday = {}, onMonthDay = {},
+                    onQuotaCount = {}, onStartDate = {}, onEndMode = {}, onEndDate = {},
+                    onCycleLimit = {}, onChecklist = {}, onKeepUnfinishedOverdue = {},
+                    onPreplanningEnabled = {}, onAddPreplanningSlot = {}, onRemovePreplanningSlot = {},
+                    onPreplanningStart = { _, _ -> }, onPreplanningEnd = { _, _ -> },
+                    onPreplanningWeekday = { _, _ -> }, onRefreshPreview = {}, onSave = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Add subtask").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithContentDescription("Keep unfinished occurrences overdue").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithText("Notes · optional").assertDoesNotExist()
+        compose.onNodeWithText("Subtasks · one per line").assertDoesNotExist()
+    }
 }

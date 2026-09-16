@@ -1,6 +1,6 @@
 # Recurring Task Series create/edit hierarchy
 
-Progressive prototype for GitHub issues #189 and #191. Throwaway debug UI; does not save.
+Progressive prototype for GitHub issues #189, #191, and companion #188. Throwaway debug UI; does not save.
 
 ## Accepted
 
@@ -8,39 +8,23 @@ Progressive prototype for GitHub issues #189 and #191. Throwaway debug UI; does 
 - End date is not duplicated in extras.
 - Keep-unfinished-overdue lives with “when it runs” (a recurrence rule, not metadata).
 - Mode cannot change after creation and is visibly disabled on edit.
-- **Adaptive extras (round 1):** notes, subtasks, Task Type, and priorities stay collapsed while empty and open when any of them is already set.
+- **Adaptive extras (round 1, revised):** on Create/Edit, notes, Task Type, and priorities stay collapsed while empty and open when any of them is already set. Subtasks are not extras.
+- **Details is a view, not a third form (round 3 split):** current work first, then upcoming, then quieter series settings. Shared language with Create/Edit; not the same page structure.
+- **Own toggle for Recurring Pre-planning Schedule on Create/Edit (round 3):** collapsed until configured or opened. Details still shows a configured schedule as read-only series settings.
+- **Add rows for Subtasks on Create/Edit (round 4):** reuse Battle Plan `TaskSubtasks` the way task creation does — title rows, remove, and an Add subtask sheet. No one-per-line field. No checkboxes; these are series definition items, not occurrence completion.
+- **Subtasks always visible:** on Create/Edit they sit after “when it runs”, not behind Notes & more. Details lists them under Series settings, not mixed into notes extras. They are not first on the page.
 
-## Round 2 — Recurring Pre-planning Schedule
+## Combined
 
-**Question:** Where does Recurring Pre-planning Schedule sit once extras are Adaptive? On edit it currently lives in core and pushes notes off the screen.
+Create, Edit, and Details now use those accepted choices together. Switcher is only flow (Create/Edit/Details) and mode (Scheduled/Quota).
 
-**What varies:** placement of Recurring Pre-planning Schedule (scheduled only).
-**What stays stable:** Adaptive extras, shared field order, mode lock, pinned save.
+**Launch:** `timebox://prototype/recurring-details?flow=edit&mode=scheduled`
 
-| Variant | Label | Behavior |
-|---|---|---|
-| A | With rhythm | Pre-planning always sits with start/end. |
-| B | With extras | Pre-planning sits inside Adaptive extras with notes and subtasks. |
-| C | Own toggle | Pre-planning has its own Adaptive disclosure: collapsed until configured or opened. |
+### Open / deferred
 
-**Launch:** `timebox://prototype/recurring-details?flow=details&layout=core&mode=scheduled`
-
-Switcher: Create/Edit/**Details**, With rhythm / With extras / Own toggle, Scheduled/Quota, Reset.
-
-**Details** is Recurring Task Series details (#188): current work first, then upcoming, then the same pre-planning and Adaptive extras family as create/edit. Lifecycle and opening a Task Occurrence are stubbed.
-
-Quota has no Recurring Pre-planning Schedule in any variant.
-
-### Open
-
-- Round 2 pre-planning placement, now judged on create, edit, **and details**.
-- Subtask entry widget (#183) — still newline text here.
 - Date chrome, summary card, and preview fidelity.
-- Opening a Task Occurrence / Session Task from details.
-
-### Coverage this round
-
-Create (no slots), edit (one Monday slot), and details (current work first) × scheduled. Quota confirms pre-planning is absent and Session Tasks replace Task Occurrences. Adaptive extras remain in force.
+- Opening a Task Occurrence / Session Task from Details (stubbed; #188).
+- Production implementation of #189 / #191 / #188 visual hierarchy, including Battle Plan `TaskSubtasks` on Create/Edit. Full #183 CRUD/history remains out of this pass.
 
 ### Prototype
 
