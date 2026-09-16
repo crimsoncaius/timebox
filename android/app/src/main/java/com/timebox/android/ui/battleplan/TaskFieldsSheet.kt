@@ -47,6 +47,8 @@ internal enum class TaskSheetField(val label: String) {
     Importance("Importance"), Urgency("Urgency"), Deadline("Deadline"), Reminder("Reminder"), Status("Status"),
 }
 
+internal fun taskSheetHeightFraction(imeVisible: Boolean): Float = 0.94f
+
 /** Only the open field can change; other values may have advanced while it was open. */
 internal fun mergeTaskField(field: TaskSheetField, current: TaskDetailDraft, edited: TaskDetailDraft): TaskDetailDraft = when (field) {
     TaskSheetField.Title -> current.copy(title = edited.title)
@@ -98,16 +100,30 @@ internal fun TaskFieldsSheet(
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     var submitted by rememberSaveable { mutableStateOf(false) }
     var descriptionExpanded by rememberSaveable { mutableStateOf(false) }
+    var createTitle by rememberSaveable { mutableStateOf(draft.title) }
     val completed = draft.status == TaskStatus.Completed
     val editable = !fieldsLocked && !saving && !completed && (creating || !dirty)
-    val keyboard = WindowInsets.isImeVisible
+    val sheetDirty = dirty || (creating && createTitle.isNotBlank())
+    val sheetDirtyLatest by rememberUpdatedState(sheetDirty)
+    val savingLatest by rememberUpdatedState(saving)
+    val confirmSheetHide = remember {
+        { value: SheetValue ->
+            if (value == SheetValue.Hidden && (savingLatest || sheetDirtyLatest)) {
+                if (!savingLatest) confirmDiscard = true
+                false
+            } else true
+        }
+    }
+    fun publish(next: TaskDetailDraft) {
+        onChange(if (creating) next.copy(title = createTitle) else next)
+    }
     fun open(next: TaskSheetField) {
         focus.clearFocus(); edited = draft; fieldBaseline = draft; field = next
     }
     fun dismiss() {
         if (saving) return
         focus.clearFocus()
-        if (dirty) confirmDiscard = true else onDismiss()
+        if (sheetDirty) confirmDiscard = true else onDismiss()
     }
     fun dismissField() {
         if (saving) return
@@ -123,13 +139,11 @@ internal fun TaskFieldsSheet(
     ModalBottomSheet(
         onDismissRequest = ::dismiss,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = {
-            if (it == SheetValue.Hidden && (saving || dirty)) { if (!saving) confirmDiscard = true; false } else true
-        }),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = confirmSheetHide),
         containerColor = colors.sheet.copy(alpha = 1f), contentColor = colors.on,
     ) {
         TaskSheetBackHandler(saving, ::dismiss)
-        Column(Modifier.fillMaxWidth().imePadding().fillMaxHeight(if (keyboard) .94f else .78f)) {
+        Column(Modifier.fillMaxWidth().imePadding().fillMaxHeight(taskSheetHeightFraction(false))) {
             Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (contextLabel == null) Icons.Outlined.Folder else Icons.Outlined.Repeat, null, Modifier.size(20.dp), tint = colors.project)
                 TextButton(onClick = { open(TaskSheetField.Project) }, enabled = editable && !projectLocked, modifier = Modifier.weight(1f)) {
@@ -145,10 +159,10 @@ internal fun TaskFieldsSheet(
                         Icon(if (completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
                             if (completed) "Reopen task" else "Complete task", Modifier.size(28.dp), tint = if (completed) colors.project else colors.onVariant)
                     }
-                    if (creating) BasicTextField(draft.title, { onChange(draft.copy(title = it)) }, enabled = !saving && !fieldsLocked,
+                    if (creating) BasicTextField(createTitle, { createTitle = it }, enabled = !saving && !fieldsLocked,
                         textStyle = TextStyle(color = colors.on, fontSize = 25.sp, fontWeight = FontWeight.Medium),
                         cursorBrush = SolidColor(colors.on), modifier = Modifier.weight(1f).padding(top = 7.dp, bottom = 14.dp).semantics { contentDescription = "Task title" },
-                        decorationBox = { inner -> if (draft.title.isEmpty()) Text("What needs doing?", color = colors.onVariant, fontSize = 25.sp); inner() })
+                        decorationBox = { inner -> if (createTitle.isEmpty()) Text("What needs doing?", color = colors.onVariant, fontSize = 25.sp); inner() })
                     else Text(draft.title, color = colors.on, fontSize = 25.sp, fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f).clickable(enabled = editable) { open(TaskSheetField.Title) }.padding(top = 7.dp, bottom = 14.dp))
                 }
@@ -184,7 +198,7 @@ internal fun TaskFieldsSheet(
                 TextButton(onClick = onDiscard, enabled = !saving) { Text("Discard field edit") }
                 TextButton(onClick = onRetrySave, enabled = !saving) { Text("Retry save") }
             }
-            if (creating) Button(onClick = { focus.clearFocus(); onCreate() }, enabled = !saving && draft.title.isNotBlank(),
+            if (creating) Button(onClick = { focus.clearFocus(); publish(draft.copy(title = createTitle)); onCreate() }, enabled = !saving && createTitle.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().padding(20.dp, 12.dp).heightIn(min = 48.dp)) { Text(if (saving) "Adding…" else if (fieldsLocked) "Retry remaining subtasks" else "Add task") }
         }
     }
@@ -197,7 +211,7 @@ internal fun TaskFieldsSheet(
             val next = mergeTaskField(active, draft, value)
             edited = value
             if (!dirty && next.normalized() == draft.normalized()) { field = null; return }
-            onChange(next)
+            publish(next)
             if (creating) { if (close) field = null; fieldBaseline = value }
             else submitted = true
         }
