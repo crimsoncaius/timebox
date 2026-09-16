@@ -90,7 +90,7 @@ def record(db, planned_id, settings, now, body):
                   replacement=copied, stale=body.fingerprint is not None and body.fingerprint != fingerprint)
     if len(conflicts) == 1:
         row = conflicts[0]
-        if row.planned_block_id == plan.id and rec.instant(row.start_at) == start and row.end_at and rec.instant(row.end_at) == end and all(getattr(row, k) == v for k, v in copied.items()):
+        if row.planned_block_id == plan.id and rec.instant(row.start_at) == start and row.end_at and rec.instant(row.end_at) == end:
             db.commit()
             return {**result, "status": "already_recorded", "actual_block": facts(row)}
     if result["stale"] or (conflicts and body.fingerprint != fingerprint):
