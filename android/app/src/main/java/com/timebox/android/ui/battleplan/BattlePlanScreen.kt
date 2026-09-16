@@ -1245,13 +1245,19 @@ private fun MobileKanbanCard(
                         Modifier.size(21.dp), tint = colors.onVariant,
                     )
                 }
-                CompactTaskTitle(task, Modifier.weight(1f).padding(top = 11.dp, end = 4.dp, bottom = 9.dp))
-                MobilePlanningControl(
-                    task = task,
-                    plannedSummary = null,
-                    onToggleReady = onToggleReady,
-                    modifier = Modifier.widthIn(max = 116.dp),
-                )
+                CompactTaskTitle(task, Modifier.weight(1f).padding(top = 11.dp, end = 12.dp, bottom = 9.dp))
+                Box(
+                    Modifier
+                        .width(MobileTaskPlanningSlotWidth)
+                        .padding(start = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MobilePlanningControl(
+                        task = task,
+                        plannedSummary = null,
+                        onToggleReady = onToggleReady,
+                    )
+                }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box {
                         IconButton(
@@ -1302,6 +1308,8 @@ private fun MobileKanbanCard(
         )
     }
 }
+
+private val MobileTaskPlanningSlotWidth = 116.dp
 
 /** Shared by the resting card and lifted preview. */
 @Composable
@@ -1668,8 +1676,15 @@ private fun MobileTaskDragPreview(
                 Icon(if (drag.task.status == TaskStatus.Completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
                     null, Modifier.size(21.dp), tint = colors.onVariant)
             }
-            CompactTaskTitle(drag.task, Modifier.weight(1f).padding(top = 11.dp, end = 4.dp, bottom = 9.dp))
-            MobilePlanningControl(drag.task, null, {}, Modifier.widthIn(max = 116.dp), allowInteraction = false)
+            CompactTaskTitle(drag.task, Modifier.weight(1f).padding(top = 11.dp, end = 12.dp, bottom = 9.dp))
+            Box(
+                Modifier
+                    .width(MobileTaskPlanningSlotWidth)
+                    .padding(start = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                MobilePlanningControl(drag.task, null, {}, allowInteraction = false)
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(TimeboxDimens.touchTarget), contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.MoreVert, null, tint = colors.onVariant)
@@ -2254,13 +2269,12 @@ private fun MobilePlanningControl(
                 .border(1.dp, if (accented) colors.plannedBorder else colors.hairline, TimeboxShapes.chip)
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
             Text(
                 if (!completed && plannedSummary == null && !task.readinessPending && !task.readyToPlan) "Add to Plan" else label,
                 style = TimeboxTheme.type.bodySmall,
                 color = if (accented) colors.planned else colors.onVariant,
-                modifier = Modifier.weight(1f, fill = false),
             )
             if (actionable) Text(
                 if (task.readyToPlan) "→" else "+",
