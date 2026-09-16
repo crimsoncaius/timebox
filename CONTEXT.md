@@ -76,6 +76,14 @@ _Avoid_: Current Task, Activity catalog
 The shared time zone used to divide recorded activity between calendar days on all devices. Changing it changes daily attribution without changing elapsed time.
 _Avoid_: Device time zone
 
+**Today**:
+The calendar date in the Reporting Time Zone that contains the current instant.
+_Avoid_: Device today, local today
+
+**Now Line**:
+The Day surface marker for the current instant in the Reporting Time Zone. It appears only on Today, and only while that instant falls inside the hours shown that day.
+_Avoid_: Playhead, now indicator, current time line, Day view
+
 **Inactivity Prompt**:
 A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting. It is distinct from the Focus Mode question used to name an unknown activity.
 _Avoid_: Periodic check-in, Transient Feedback

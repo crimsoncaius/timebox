@@ -164,13 +164,16 @@ fun TimeboxApp(
     val openedDayEntryIds = remember { mutableSetOf<String>() }
     val openedBattlePlanEntryIds = remember { mutableSetOf<String>() }
 
-    LaunchedEffect(route, routeDate, routeTaskId, routeTemplateId, backStackEntry?.id) {
+    LaunchedEffect(route, routeDate, routeTaskId, routeTemplateId, routeBlockId, backStackEntry?.id) {
         when (route) {
             AppRoutes.DayPattern -> {
                 val entryId = backStackEntry?.id ?: return@LaunchedEffect
                 // A Day entry's argument seeds selection once. Returning from another tab
                 // must retain any newer date selected inside the mounted screen.
-                if (openedDayEntryIds.add(entryId)) routeDate?.let(dayViewModel::goToDate)
+                if (openedDayEntryIds.add(entryId)) {
+                    routeDate?.let(dayViewModel::goToDate)
+                    if (routeBlockId != null) dayViewModel.noteBlockLanding()
+                }
                 dayViewModel.start()
                 dayViewModel.refreshTaskTypes()
                 dayViewModel.refreshReadyToPlan()
@@ -380,8 +383,10 @@ fun TimeboxApp(
                             // Date changes are state within the mounted Day destination. Replacing
                             // the route here recreated the header and also re-ran Day initialization,
                             // including a duplicate day load and unrelated task refreshes.
-                            onNavigateToday = dayViewModel::goToDate,
-                            onDateSettled = dayViewModel::goToDate,
+                            onNavigateToday = { dayViewModel.goToDate(it, scrollToNow = true) },
+                            onDateSettled = { date ->
+                                dayViewModel.goToDate(date, scrollToNow = date == dayState.today)
+                            },
                             onRetry = dayViewModel::retryPage,
                             onTapSlot = { lane: Lane, minute: Int -> dayViewModel.startDraft(lane, minute) },
                             onSelectBlock = dayViewModel::selectBlock,

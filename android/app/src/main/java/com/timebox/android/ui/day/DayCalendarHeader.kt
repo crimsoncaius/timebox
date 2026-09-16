@@ -251,11 +251,11 @@ private fun TodayAction(state: TodayControlState, onClick: () -> Unit) {
     val colors = TimeboxTheme.colors
     val shape = RoundedCornerShape(percent = 50)
     val interaction = when (state) {
-        TodayControlState.Navigate -> Modifier
+        TodayControlState.Navigate, TodayControlState.Current -> Modifier
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Go to today" }
-        TodayControlState.Current -> Modifier
-            .semantics { contentDescription = "Viewing today" }
+            .semantics {
+                contentDescription = if (state == TodayControlState.Current) "Viewing today" else "Go to today"
+            }
         TodayControlState.Resolving -> Modifier
             .clickable(enabled = false, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Today unavailable" }

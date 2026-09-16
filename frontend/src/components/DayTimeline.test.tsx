@@ -1,8 +1,8 @@
 import { DragDropProvider } from '@dnd-kit/react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DayRead } from '../lib/api'
-import { DayTimeline } from './DayTimeline'
+import { DayTimeline, nowLineScrollDelta } from './DayTimeline'
 
 const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture
 const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture
@@ -39,7 +39,7 @@ function renderTimeline(onDraftTimeChange: (startMin: number, endMin: number) =>
   return { ...view, draft, resizeEnd }
 }
 
-function timeline(dayValue: DayRead, autoScrollToNow = false) {
+function timeline(dayValue: DayRead, autoScrollToNow = false, scrollToNowRequest = 0) {
   return (
     <DragDropProvider>
       <DayTimeline
@@ -50,9 +50,23 @@ function timeline(dayValue: DayRead, autoScrollToNow = false) {
         onLaneSlotClick={vi.fn()}
         onPatchBlock={vi.fn(() => Promise.resolve())}
         autoScrollToNow={autoScrollToNow}
+        scrollToNowRequest={scrollToNowRequest}
       />
     </DragDropProvider>
   )
+}
+
+function mockNowLineGeometry(lineTop: number, timelineTop: number, viewportHeight: number) {
+  const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined)
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: viewportHeight })
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const top = this.dataset.testid === 'day-timeline' ? timelineTop : lineTop
+    return {
+      x: 0, y: top, top, right: 300, bottom: top + 2, left: 0, width: 300, height: 2,
+      toJSON: () => ({}),
+    }
+  })
+  return scrollBy
 }
 
 describe('DayTimeline half-hour creation requests', () => {
@@ -278,6 +292,13 @@ describe('DayTimeline hour gutter placement', () => {
   })
 })
 
+describe('Now Line scroll target', () => {
+  it('places the Now Line one-third down the visible timeline', () => {
+    expect(nowLineScrollDelta(600, 0, 900)).toBe(300)
+    expect(nowLineScrollDelta(600, 300, 900)).toBe(100)
+  })
+})
+
 describe('DayTimeline initial current-time positioning', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -290,30 +311,45 @@ describe('DayTimeline initial current-time positioning', () => {
     vi.restoreAllMocks()
   })
 
-  it('places today\'s now line one-third down once and does not pull after rerender', () => {
-    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined)
-    const getBoundingClientRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 600, top: 600, right: 300, bottom: 602, left: 0, width: 300, height: 2,
-      toJSON: () => ({}),
-    })
-    const originalInnerHeight = window.innerHeight
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+  it('places today\'s Now Line one-third down the visible timeline once and does not pull after rerender', () => {
+    const scrollBy = mockNowLineGeometry(600, 0, 900)
 
     const view = render(timeline(day, true))
     expect(scrollBy).toHaveBeenCalledWith({ top: 300, behavior: 'auto' })
-    expect(getBoundingClientRect).toHaveBeenCalledTimes(1)
-    expect(getBoundingClientRect.mock.instances[0]).toBe(screen.getByTestId('day-now-line').firstElementChild)
 
     view.rerender(timeline({ ...day }, true))
     fireEvent.scroll(window)
     expect(scrollBy).toHaveBeenCalledTimes(1)
+  })
 
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+  it('accounts for chrome above the timeline', () => {
+    const scrollBy = mockNowLineGeometry(600, 300, 900)
+    render(timeline(day, true))
+    expect(scrollBy).toHaveBeenCalledWith({ top: 100, behavior: 'auto' })
+  })
+
+  it('re-scrolls when Today is requested again', () => {
+    const scrollBy = mockNowLineGeometry(600, 0, 900)
+    const view = render(timeline(day, true, 0))
+    expect(scrollBy).toHaveBeenCalledTimes(1)
+    view.rerender(timeline(day, true, 1))
+    expect(scrollBy).toHaveBeenCalledTimes(2)
   })
 
   it('does not scroll another date', () => {
-    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined)
+    const scrollBy = mockNowLineGeometry(600, 0, 900)
     render(timeline({ ...day, date: '2026-06-02' }, true))
+    expect(scrollBy).not.toHaveBeenCalled()
+  })
+
+  it('does not scroll when the Now Line is outside the hours shown, including after time later enters range', () => {
+    const scrollBy = mockNowLineGeometry(600, 0, 900)
+    vi.setSystemTime(new Date('2026-06-01T03:00:00Z'))
+    render(timeline(day, true))
+    expect(scrollBy).not.toHaveBeenCalled()
+
+    vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
+    act(() => { vi.advanceTimersByTime(30_000) })
     expect(scrollBy).not.toHaveBeenCalled()
   })
 })

@@ -121,6 +121,7 @@ export function TodayPage() {
   }, [])
   const [blockDragActive, setBlockDragActive] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const [scrollToNowRequest, setScrollToNowRequest] = useState(0)
   const draftCommitInFlightRef = useRef(false)
   const planningTaskInFlightRef = useRef(false)
   const clockAnchorRef = useRef<{ server: number; client: number } | null>(null)
@@ -336,10 +337,13 @@ export function TodayPage() {
   useEffect(() => {
     if (!day) return
     const requestedId = Number(searchParams.get('block'))
-    if (!Number.isInteger(requestedId) || !day.time_blocks.some((block) => block.id === requestedId)) return
+    if (!Number.isInteger(requestedId)) return
+    const planned = day.time_blocks.find((block) => block.id === requestedId)
+    const actual = day.actual_blocks.find((projection) => projection.actual_block.id === requestedId)
+    if (!planned && !actual) return
     setDraft(null)
-    const requested = day.time_blocks.find((block) => block.id === requestedId)
-    if (requested) setSelectedBlockRef({ id: requested.id, lane: requested.lane })
+    if (planned) setSelectedBlockRef({ id: planned.id, lane: planned.lane })
+    else if (actual) setSelectedBlockRef({ id: actual.actual_block.id, lane: 'actual' })
     requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-block-id="${requestedId}"]`)?.scrollIntoView({
         block: 'center',
@@ -829,6 +833,15 @@ export function TodayPage() {
     )
   }
 
+  const hasBlockLanding = searchParams.has('block')
+  const pickDay = (iso: string) => {
+    if (iso === day.date) {
+      if (iso === day.meta.today) setScrollToNowRequest((n) => n + 1)
+      return
+    }
+    navigate(`/day/${iso}`)
+  }
+
   const inspectorSharedProps = {
     onOpenActual: (id: number) => { setSelectedBlockRef({ id, lane: 'actual' }); setInspectorDirty(false) },
     day,
@@ -892,9 +905,9 @@ export function TodayPage() {
                 {dayView.calendar && <DayCalendarPopover
                   value={day.date}
                   todayIso={day.meta.today}
-                  onSelect={(iso) => navigate(`/day/${iso}`)}
+                  onSelect={pickDay}
                 />}
-                <button type="button" className="min-h-11 rounded-full px-3 text-sm" onClick={() => navigate(`/day/${day.meta.today}`)}>Today</button>
+                <button type="button" className="min-h-11 rounded-full px-3 text-sm" onClick={() => pickDay(day.meta.today)}>Today</button>
                 <button
                   type="button"
                   className="rounded-full border border-outline-variant/15 px-3 py-1.5 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
@@ -996,7 +1009,10 @@ export function TodayPage() {
             void api.getDay(date).then(setDay).catch(() => {})
           }} /> : null}
           {activityDevelopmentEnabled && needsElapsedDayView(day) && <ReportingDayActuals day={day} onSelect={id => onBlockClick(id, 'actual')} />}
-          <section className="overflow-x-auto pb-24">
+          <section
+            className="overflow-x-auto pb-24"
+            data-auto-scroll-to-now={String(!hasBlockLanding || scrollToNowRequest > 0)}
+          >
             <DayTimeline
               showZoomControls={dayView.zoom}
               ref={timelineRef}
@@ -1012,7 +1028,8 @@ export function TodayPage() {
               onPatchBlock={patchBlock}
               onBlockClick={onBlockClick}
               onBlockDragSessionChange={setBlockDragActive}
-              autoScrollToNow
+              autoScrollToNow={!hasBlockLanding || scrollToNowRequest > 0}
+              scrollToNowRequest={scrollToNowRequest}
             />
           </section>
         </div>

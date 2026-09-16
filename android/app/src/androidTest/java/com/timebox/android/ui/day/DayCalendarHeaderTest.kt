@@ -1,6 +1,6 @@
 package com.timebox.android.ui.day
 
-import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -165,14 +165,20 @@ class DayCalendarHeaderTest {
     }
 
     @Test
-    fun todayBecomesStatusWhenSelectedDateIsToday() {
+    fun todayRemainsActionableWhenSelectedDateIsToday() {
         val selected = LocalDate.of(2026, 8, 28)
+        var todayNavigation: LocalDate? = null
 
-        showDay(state = DayUiState(date = selected, today = selected))
+        showDay(
+            state = DayUiState(date = selected, today = selected),
+            onNavigateToday = { todayNavigation = it },
+        )
         compose.onNodeWithContentDescription("Viewing today")
             .assertIsDisplayed()
-            .assertHasNoClickAction()
+            .assertHasClickAction()
+            .performClick()
         compose.onNodeWithText("Today").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(selected, todayNavigation) }
     }
 
     @Test

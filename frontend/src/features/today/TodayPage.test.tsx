@@ -712,4 +712,50 @@ describe('TodayPage inspector rail', () => {
 
     confirmSpy.mockRestore()
   })
+
+  it('re-scrolls to the Now Line when Today is requested while already viewing Today', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
+    const user = userEvent.setup()
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined)
+    try {
+      render(
+        <MemoryRouter initialEntries={['/day/2026-06-01']}>
+          <Routes>
+            <Route path="/day/:date" element={<TodayPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      await screen.findByTestId('day-timeline')
+      expect(scrollBy).toHaveBeenCalled()
+      const afterLoad = scrollBy.mock.calls.length
+      await user.click(within(screen.getByTestId('day-nav')).getByRole('button', { name: 'Today' }))
+      expect(scrollBy.mock.calls.length).toBeGreaterThan(afterLoad)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('scrolls a Block deep link instead of the Now Line', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    try {
+      render(
+        <MemoryRouter initialEntries={['/day/2026-06-01?block=10']}>
+          <Routes>
+            <Route path="/day/:date" element={<TodayPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      await screen.findByTestId('day-timeline')
+      expect(screen.getByTestId('day-timeline').closest('[data-auto-scroll-to-now]')).toHaveAttribute('data-auto-scroll-to-now', 'false')
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+      vi.useRealTimers()
+    }
+  })
 })
