@@ -24,6 +24,7 @@ import type {
   TaskType,
 } from '../../lib/api'
 import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
+import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
 
@@ -71,6 +72,7 @@ export function TaskDetailPanel({
   onSetSubtaskChecked,
   onAddSubtask,
   onTrash,
+  onCreateTaskTypePath,
 }: {
   task: BattleTask
   readinessPending: boolean
@@ -85,6 +87,7 @@ export function TaskDetailPanel({
   onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onTrash: (id: number) => Promise<void>
+  onCreateTaskTypePath: (path: string) => Promise<TaskType>
 }) {
   const initialDraftRef = useRef<TaskDraft>(draftFromTask(task, timezone))
   const initialDraft = initialDraftRef.current
@@ -387,10 +390,16 @@ export function TaskDetailPanel({
                 <PriorityControl label="Importance" value={draft.importance} onChange={(value) => setDraftField('importance', value)} />
               </PropertyRow>
 
-              <PropertySelect label="Task type" value={draft.taskTypeId} unset={!draft.taskTypeId} onChange={(value) => setDraftField('taskTypeId', value)}>
-                <option value="">Unset</option>
-                {taskTypes.map((taskType) => <option key={taskType.id} value={taskType.id}>{taskType.name}</option>)}
-              </PropertySelect>
+              <div className="border-t border-[var(--task-detail-divider)] py-3">
+                <TaskTypePathCombobox
+                  label="Task type"
+                  allowUnset
+                  taskTypes={taskTypes}
+                  valueTaskTypeId={draft.taskTypeId ? Number(draft.taskTypeId) : null}
+                  onSelectTaskTypeId={(id) => setDraftField('taskTypeId', id == null ? '' : String(id))}
+                  onCreateTaskTypePath={onCreateTaskTypePath}
+                />
+              </div>
 
               <div>
                 <PropertySelect label="Deadline" value={draft.deadlineMode} unset={draft.deadlineMode === 'none'} divider={false} onChange={(value) => setDeadlineMode(value as DeadlineMode)}>

@@ -1,6 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { TaskType } from '../lib/api'
-import { buildTaskTypeSuggestions, formatTaskTypePathParts } from '../lib/taskTypePaths'
+import {
+  buildTaskTypeSuggestions,
+  createAncestorHint,
+  formatTaskTypePathParts,
+} from '../lib/taskTypePaths'
+
+const UNSPECIFIED = 'unspecified'
 
 export function TaskTypePathCombobox({
   label,
@@ -8,16 +14,24 @@ export function TaskTypePathCombobox({
   valueTaskTypeId,
   onSelectTaskTypeId,
   onCreateTaskTypePath,
+  allowUnset = false,
 }: {
   label: string
   taskTypes: TaskType[]
-  valueTaskTypeId: number
-  onSelectTaskTypeId: (taskTypeId: number) => void
+  valueTaskTypeId: number | null
+  onSelectTaskTypeId: (taskTypeId: number | null) => void
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
+  allowUnset?: boolean
 }) {
   const listId = useId()
+  const inputId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
-  const selected = taskTypes.find((row) => row.id === valueTaskTypeId) ?? null
+  const pickerTypes = useMemo(
+    () => (allowUnset ? taskTypes.filter((row) => row.name !== UNSPECIFIED) : taskTypes),
+    [allowUnset, taskTypes],
+  )
+  const selected = pickerTypes.find((row) => row.id === valueTaskTypeId) ?? null
+  const unsetSelected = allowUnset && (valueTaskTypeId == null || taskTypes.find((row) => row.id === valueTaskTypeId)?.name === UNSPECIFIED)
   const [query, setQuery] = useState(selected?.name ?? '')
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -26,23 +40,32 @@ export function TaskTypePathCombobox({
     setQuery(selected?.name ?? '')
   }, [selected?.id, selected?.name])
 
-  const suggestions = useMemo(() => buildTaskTypeSuggestions(taskTypes, query), [taskTypes, query])
+  const suggestions = useMemo(
+    () => buildTaskTypeSuggestions(pickerTypes, query, unsetSelected ? null : valueTaskTypeId),
+    [pickerTypes, query, unsetSelected, valueTaskTypeId],
+  )
+  const hint = useMemo(
+    () => (suggestions.createPath ? createAncestorHint(pickerTypes, suggestions.createPath) : null),
+    [pickerTypes, suggestions.createPath],
+  )
+  const showUnset = allowUnset && suggestions.createPath == null && query.trim() === ''
 
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (e: PointerEvent) => {
-      const el = rootRef.current
-      if (!el) return
-      if (e.target instanceof Node && !el.contains(e.target)) setOpen(false)
-    }
-    window.addEventListener('pointerdown', onPointerDown)
-    return () => window.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
-
-  const inputId = 'block-task-type'
+  const choose = (taskTypeId: number | null, name: string) => {
+    onSelectTaskTypeId(taskTypeId)
+    setQuery(name)
+    setOpen(false)
+  }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onBlur={(event) => {
+        const next = event.relatedTarget
+        if (next instanceof Node && rootRef.current?.contains(next)) return
+        setOpen(false)
+      }}
+    >
       <label htmlFor={inputId} className="mb-0.5 block font-body text-xs text-on-surface-variant">
         {label}
       </label>
@@ -57,6 +80,7 @@ export function TaskTypePathCombobox({
         aria-autocomplete="list"
         className="w-full rounded-xl border border-outline-variant/15 bg-surface px-3 py-2.5 font-body text-sm text-on-surface outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
         value={query}
+        placeholder={allowUnset ? 'Unset' : undefined}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value)
@@ -68,11 +92,15 @@ export function TaskTypePathCombobox({
       />
 
       {open && (
+        <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-dark-surface-container-lowest/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]">
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-dark-surface-container-lowest/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]"
+          className="max-h-64 overflow-auto"
         >
+          {showUnset && unsetSelected ? (
+            <UnsetOption onChoose={() => choose(null, '')} />
+          ) : null}
           {suggestions.rows.map((row) => {
             const parts = formatTaskTypePathParts(row.name)
             return (
@@ -82,11 +110,7 @@ export function TaskTypePathCombobox({
                   role="option"
                   className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface-container-high dark:hover:bg-dark-surface-container-high"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    onSelectTaskTypeId(row.id)
-                    setQuery(row.name)
-                    setOpen(false)
-                  }}
+                  onClick={() => choose(row.id, row.name)}
                 >
                   <span className="min-w-0">
                     {parts.ancestorsLabel ? (
@@ -98,6 +122,9 @@ export function TaskTypePathCombobox({
               </li>
             )
           })}
+          {showUnset && !unsetSelected ? (
+            <UnsetOption onChoose={() => choose(null, '')} />
+          ) : null}
 
           {suggestions.createPath ? (
             <li>
@@ -111,9 +138,7 @@ export function TaskTypePathCombobox({
                   setBusy(true)
                   try {
                     const created = await onCreateTaskTypePath(suggestions.createPath!)
-                    onSelectTaskTypeId(created.id)
-                    setQuery(created.name)
-                    setOpen(false)
+                    choose(created.id, created.name)
                   } finally {
                     setBusy(false)
                   }
@@ -124,7 +149,31 @@ export function TaskTypePathCombobox({
             </li>
           ) : null}
         </ul>
+        {hint ? (
+          <p className="border-t border-outline-variant/15 px-3 py-2 font-body text-[11px] leading-4 text-on-surface-variant">
+            {hint.lead}
+            <span className="font-mono">{hint.path}</span>
+            {hint.tail ?? '.'}
+          </p>
+        ) : null}
+        </div>
       )}
     </div>
+  )
+}
+
+function UnsetOption({ onChoose }: { onChoose: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        role="option"
+        className="flex w-full px-3 py-2 text-left text-sm text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-dark-surface-container-high"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onChoose}
+      >
+        Unset
+      </button>
+    </li>
   )
 }

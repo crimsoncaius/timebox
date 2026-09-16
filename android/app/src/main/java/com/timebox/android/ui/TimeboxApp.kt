@@ -459,6 +459,7 @@ fun TimeboxApp(
                             onShowComposer = battlePlanViewModel::setComposerVisible,
                             onComposerDraftChange = battlePlanViewModel::updateComposerDraft,
                             onComposerReminderEnabledChange = battlePlanViewModel::setComposerReminderEnabled,
+                            onCreateComposerTaskType = battlePlanViewModel::createComposerTaskType,
                             notificationsAllowed = notificationsAllowed,
                             onRequestNotificationPermission = onRequestNotificationPermission,
                             onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
@@ -540,6 +541,7 @@ fun TimeboxApp(
                             onReopen = taskDetailViewModel::reopenTask,
                             onSave = taskDetailViewModel::save,
                             onSaveField = taskDetailViewModel::saveField,
+                            onCreateTaskType = taskDetailViewModel::createTaskTypeAndChoose,
                             onRequestNotificationPermission = onRequestNotificationPermission,
                             feedback = {
                                 val notice = battlePlanState.trashUndo
@@ -596,6 +598,7 @@ fun TimeboxApp(
                             onTitle = recurringEditorViewModel::setTitle,
                             onDescription = recurringEditorViewModel::setDescription,
                             onTaskType = recurringEditorViewModel::setTaskType,
+                            onCreateTaskType = recurringEditorViewModel::createTaskTypeAndChoose,
                             onUrgency = recurringEditorViewModel::setUrgency,
                             onImportance = recurringEditorViewModel::setImportance,
                             onMode = recurringEditorViewModel::setMode,
@@ -655,6 +658,7 @@ fun TimeboxApp(
                             onTitle = recurringEditorViewModel::setTitle,
                             onDescription = recurringEditorViewModel::setDescription,
                             onTaskType = recurringEditorViewModel::setTaskType,
+                            onCreateTaskType = recurringEditorViewModel::createTaskTypeAndChoose,
                             onUrgency = recurringEditorViewModel::setUrgency,
                             onImportance = recurringEditorViewModel::setImportance,
                             onMode = recurringEditorViewModel::setMode,

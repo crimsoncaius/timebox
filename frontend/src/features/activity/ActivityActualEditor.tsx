@@ -4,13 +4,15 @@ import { addDaysIso } from '../../lib/time'
 import { ActivityTimeField } from './ActivityTimeField'
 import { activityTimeValue, resolveActivityTime } from './activityTime'
 import type { ActivityCorrection } from './activityRepository'
+import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 
 /** The Actual form inside the existing Day inspector rail / sheet. */
-export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, onCreate, onDelete, onClose, onDirtyChange }: {
+export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, onCreate, onDelete, onClose, onDirtyChange, onCreateTaskTypePath }: {
   actual?: ActualBlock; draft: BlockDraftPlacement | null; day: DayRead; taskTypes: TaskType[];
   onSave: (patch: ActivityCorrection) => Promise<void>;
   onCreate?: (patch: ActivityCorrection & { name: string | null; note: string | null }) => Promise<void>;
   onDelete: () => Promise<void>; onClose: () => void; onDirtyChange?: (dirty: boolean) => void;
+  onCreateTaskTypePath: (path: string) => Promise<TaskType>;
 }) {
   const zone = day.meta.timezone
   const draftLocal = (minute: number) => `${addDaysIso(day.date, Math.floor(minute / 1440))}T${String(Math.floor(minute % 1440 / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
@@ -35,7 +37,13 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
     {running ? <p>Use Switch or Stop above the Day timeline to correct the Current Activity.</p> : <>
       <ActivityTimeField label="Start" value={start} onChange={setStart} timezone={zone} />
       <ActivityTimeField label="End" value={end} onChange={setEnd} timezone={zone} />
-      <label className="block">Task Type<select className="block w-full rounded border p-2 dark:bg-dark-surface" value={type} onChange={e => setType(Number(e.target.value))}>{taskTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+      <TaskTypePathCombobox
+        label="Task Type"
+        taskTypes={taskTypes}
+        valueTaskTypeId={type || null}
+        onSelectTaskTypeId={(id) => { setType(id ?? 0); setDirty(true) }}
+        onCreateTaskTypePath={onCreateTaskTypePath}
+      />
       <label className="block">Block Name (optional)<input className="block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={e => setName(e.target.value)} /></label>
       <label className="block">Note<textarea className="block w-full rounded border p-2 dark:bg-dark-surface" value={note} onChange={e => setNote(e.target.value)} /></label>
       {actual?.task ? <p>Task: {actual.task.title} · Task Completion stays independent.</p> : null}

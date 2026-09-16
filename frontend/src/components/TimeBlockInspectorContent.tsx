@@ -22,7 +22,8 @@ export function TimeBlockInspectorContent(props: Parameters<typeof LegacyTimeBlo
   if (activityDevelopmentEnabled && (props.block?.lane ?? props.draft?.lane) === 'actual') return <ActivityActualEditor
     actual={props.day.actual_blocks.find(p => p.actual_block.id === props.block?.id)?.actual_block}
     draft={props.draft} day={props.day} taskTypes={props.taskTypes} onSave={props.onSave} onCreate={props.onCreateFromDraft}
-    onDelete={props.onDelete} onClose={props.onClose} onDirtyChange={props.onDirtyChange} />
+    onDelete={props.onDelete} onClose={props.onClose} onDirtyChange={props.onDirtyChange}
+    onCreateTaskTypePath={props.onCreateTaskTypePath} />
   return <LegacyTimeBlockInspectorContent {...props} />
 }
 function LegacyTimeBlockInspectorContent({

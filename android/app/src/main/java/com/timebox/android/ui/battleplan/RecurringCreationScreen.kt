@@ -27,6 +27,7 @@ internal fun RecurringCreationContent(
     onTitle: (String) -> Unit,
     onDescription: (String) -> Unit,
     onTaskType: (Int?) -> Unit,
+    onCreateTaskType: (String) -> Unit = {},
     onUrgency: (PriorityLevel?) -> Unit,
     onImportance: (PriorityLevel?) -> Unit,
     onMode: (RecurrenceMode) -> Unit,
@@ -112,7 +113,18 @@ internal fun RecurringCreationContent(
             if (details) {
                 OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Notes · optional") }, minLines = 2)
                 OutlinedTextField(state.checklistText, onChecklist, Modifier.fillMaxWidth(), label = { Text("Subtasks · one per line") }, minLines = 2)
-                RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "No task type", listOf("No task type" to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
+                var typeQuery by rememberSaveable { mutableStateOf("") }
+                Text("Task type", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                com.timebox.android.ui.day.TaskTypePicker(
+                    taskTypes = state.taskTypes,
+                    query = typeQuery,
+                    onQueryChange = { typeQuery = it },
+                    selectedTypeId = state.taskTypeId.takeUnless { id -> state.taskTypes.find { it.id == id }?.name == "unspecified" },
+                    onChoose = { onTaskType(it.id); typeQuery = it.name },
+                    onCreate = onCreateTaskType,
+                    allowUnset = true,
+                    onUnset = { onTaskType(null); typeQuery = "" },
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.weight(1f)) { RecurrenceMenu("Urgency", state.urgency?.label ?: "No urgency", listOf("No urgency" to null) + PriorityLevel.entries.map { it.label to it }, onUrgency) }
                     Box(Modifier.weight(1f)) { RecurrenceMenu("Importance", state.importance?.label ?: "No importance", listOf("No importance" to null) + PriorityLevel.entries.map { it.label to it }, onImportance) }

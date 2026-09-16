@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -354,7 +355,7 @@ private fun RecurringDetailContent(
         SectionCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
             DetailLine("Mode", template.mode.label)
             DetailLine("Cadence", template.cadence)
-            DetailLine("Task type", template.taskType?.name ?: "Not specified")
+            DetailLine("Task type", template.taskType?.name ?: "Unset")
             DetailLine("Starts", template.startDate.toString())
             DetailLine("Ends", template.endDate?.toString() ?: template.cycleLimit?.let { "$it cycles" } ?: "Never")
             DetailLine("Priorities", listOfNotNull(template.urgency?.label, template.importance?.label).joinToString(" · ").ifBlank { "Not specified" })
@@ -478,6 +479,7 @@ fun RecurringEditorScreen(
     onTitle: (String) -> Unit,
     onDescription: (String) -> Unit,
     onTaskType: (Int?) -> Unit,
+    onCreateTaskType: (String) -> Unit = {},
     onUrgency: (PriorityLevel?) -> Unit,
     onImportance: (PriorityLevel?) -> Unit,
     onMode: (RecurrenceMode) -> Unit,
@@ -515,6 +517,7 @@ fun RecurringEditorScreen(
                 onTitle = onTitle,
                 onDescription = onDescription,
                 onTaskType = onTaskType,
+                onCreateTaskType = onCreateTaskType,
                 onUrgency = onUrgency,
                 onImportance = onImportance,
                 onMode = onMode,
@@ -551,7 +554,18 @@ fun RecurringEditorScreen(
             RecurringEditorSection("Definition", "What this Recurring Task Series creates.") {
                 OutlinedTextField(state.title, onTitle, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Description") }, minLines = 3)
-                RecurrenceMenu("Task type", state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "No task type", listOf((if (state.taskTypeId == null) "No task type" else "Clear task type") to null) + state.taskTypes.map { it.name to it.id }, onTaskType)
+                var typeQuery by rememberSaveable { mutableStateOf("") }
+                Text("Task type", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+                com.timebox.android.ui.day.TaskTypePicker(
+                    taskTypes = state.taskTypes,
+                    query = typeQuery,
+                    onQueryChange = { typeQuery = it },
+                    selectedTypeId = state.taskTypeId.takeUnless { id -> state.taskTypes.find { it.id == id }?.name == "unspecified" },
+                    onChoose = { onTaskType(it.id); typeQuery = it.name },
+                    onCreate = onCreateTaskType,
+                    allowUnset = true,
+                    onUnset = { onTaskType(null); typeQuery = "" },
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.weight(1f)) { RecurrenceMenu("Urgency", state.urgency?.label ?: "No urgency", listOf((if (state.urgency == null) "No urgency" else "Clear urgency") to null) + PriorityLevel.entries.map { it.label to it }, onUrgency) }
                     Box(Modifier.weight(1f)) { RecurrenceMenu("Importance", state.importance?.label ?: "No importance", listOf((if (state.importance == null) "No importance" else "Clear importance") to null) + PriorityLevel.entries.map { it.label to it }, onImportance) }

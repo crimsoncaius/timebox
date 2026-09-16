@@ -45,11 +45,12 @@ internal fun SwitchActivitySheet(
     error: String?,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
+    onCreateType: (String) -> Unit = {},
     loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { emptyMap() },
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
-    var pickerOpen by remember { mutableStateOf(false) }
+    var typeQuery by remember { mutableStateOf(selectedType?.name.orEmpty()) }
 
     val nextActivity = name.trim().ifBlank { selectedType?.name ?: "Next activity" }
     val selected = timing?.resolve(zone) ?: now
@@ -78,21 +79,17 @@ internal fun SwitchActivitySheet(
                     modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field,
                     textStyle = type.body, singleLine = true, enabled = !busy,
                 )
-                ExposedDropdownMenuBox(expanded = pickerOpen, onExpandedChange = { if (!busy) pickerOpen = !pickerOpen }) {
-                    OutlinedTextField(
-                        value = selectedType?.name.orEmpty(), onValueChange = {}, readOnly = true,
-                        label = { Text("Task Type", style = type.bodySmall) },
-                        placeholder = { Text("Choose Task Type", style = type.bodySmall) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(pickerOpen) },
-                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = !busy).fillMaxWidth(),
-                        shape = TimeboxShapes.field, textStyle = type.body, enabled = !busy,
-                    )
-                    ExposedDropdownMenu(expanded = pickerOpen, onDismissRequest = { pickerOpen = false }) {
-                        taskTypes.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.name, style = type.body) }, onClick = { onTypeChange(option); pickerOpen = false })
-                        }
-                    }
-                }
+                TaskTypePicker(
+                    taskTypes = taskTypes,
+                    query = typeQuery,
+                    onQueryChange = { typeQuery = it },
+                    selectedTypeId = selectedType?.id,
+                    onChoose = { chosen ->
+                        onTypeChange(chosen)
+                        typeQuery = chosen.name
+                    },
+                    onCreate = onCreateType,
+                )
                 Text("When did this change happen?", style = type.label)
                 Text("Drag the line or tap a time. Nearby block boundaries snap into place.", style = type.bodySmall, color = colors.onVariant)
                 SwitchActivityTimeline(

@@ -93,18 +93,32 @@ fun TaskTypePicker(
     onCreate: (String) -> Unit,
     modifier: Modifier = Modifier,
     autoFocus: Boolean = false,
+    allowUnset: Boolean = false,
+    onUnset: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
 
+    val pickerTypes = remember(taskTypes, allowUnset) {
+        if (allowUnset) taskTypes.filter { it.name != UnspecifiedName } else taskTypes
+    }
+    val currentTypeId = remember(taskTypes, selectedTypeId, allowUnset) {
+        if (allowUnset && (selectedTypeId == null || taskTypes.find { it.id == selectedTypeId }?.name == UnspecifiedName)) {
+            null
+        } else {
+            selectedTypeId
+        }
+    }
     val canonical = remember(query) { canonicalizeTaskTypePath(query) }
-    val results = remember(taskTypes, query, selectedTypeId) {
-        rankTaskTypes(taskTypes, query, selectedTypeId)
+    val results = remember(pickerTypes, query, currentTypeId) {
+        rankTaskTypes(pickerTypes, query, currentTypeId)
     }
-    val showCreate = remember(taskTypes, query) { shouldOfferCreate(taskTypes, query) }
-    val hint = remember(taskTypes, canonical) {
-        canonical?.let { createAncestorHint(taskTypes, it) }
+    val showCreate = remember(pickerTypes, query) { shouldOfferCreate(pickerTypes, query) }
+    val hint = remember(pickerTypes, canonical) {
+        canonical?.let { createAncestorHint(pickerTypes, it) }
     }
+    val showUnset = allowUnset && canonical == null
+    val unsetSelected = allowUnset && currentTypeId == null
 
     // A light tick on commit, the same weight as a text-handle nudge — the app's first
     // haptic, so it sets the selection feel for everything that follows.
@@ -126,10 +140,10 @@ fun TaskTypePicker(
             query = query,
             onQueryChange = onQueryChange,
             // The example path doubles as the syntax lesson when there is nothing to search.
-            placeholder = if (taskTypes.isEmpty()) {
-                "Name this type, e.g. coding/ai"
-            } else {
-                "Search or create a type"
+            placeholder = when {
+                pickerTypes.isEmpty() && !allowUnset -> "Name this type, e.g. coding/ai"
+                allowUnset -> "Unset"
+                else -> "Search or create a type"
             },
             autoFocus = autoFocus,
             onSubmit = {
@@ -143,7 +157,7 @@ fun TaskTypePicker(
 
         Spacer(Modifier.height(8.dp))
 
-        if (taskTypes.isEmpty() && canonical == null) {
+        if (pickerTypes.isEmpty() && canonical == null && !allowUnset) {
             EmptyPanel()
         } else {
             Column(
@@ -155,7 +169,7 @@ fun TaskTypePicker(
                     .border(1.dp, colors.hairline, TimeboxShapes.field)
                     .verticalScroll(rememberScrollState()),
             ) {
-                if (results.isEmpty()) {
+                if (results.isEmpty() && !showUnset) {
                     Text(
                         text = "No type matches that path.",
                         style = TimeboxTheme.type.bodySmall.copy(fontSize = 12.5.sp),
@@ -163,13 +177,27 @@ fun TaskTypePicker(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
                     )
                 }
+                if (showUnset && unsetSelected) {
+                    UnsetRow(selected = true, onClick = {
+                        tick()
+                        onUnset()
+                    })
+                    if (results.isNotEmpty()) RowDivider()
+                }
                 results.forEachIndexed { index, type ->
                     if (index > 0) RowDivider()
                     ResultRow(
                         type = type,
-                        selected = type.id == selectedTypeId,
+                        selected = type.id == currentTypeId,
                         onClick = { choose(type) },
                     )
+                }
+                if (showUnset && !unsetSelected) {
+                    if (results.isNotEmpty()) RowDivider()
+                    UnsetRow(selected = false, onClick = {
+                        tick()
+                        onUnset()
+                    })
                 }
                 if (showCreate && canonical != null) {
                     if (results.isNotEmpty()) RowDivider()
@@ -197,6 +225,8 @@ fun TaskTypePicker(
 
 /** Four rows of results before the list starts scrolling inside itself. */
 private val ListMaxHeight = 176.dp
+
+private const val UnspecifiedName = "unspecified"
 
 /** Minimum comfortable tap height; rows pad out to it rather than shrinking their text. */
 private val RowMinHeight = 44.dp
@@ -339,6 +369,43 @@ private fun ResultRow(type: TaskType, selected: Boolean, onClick: () -> Unit) {
                 text = type.usageCount.toString(),
                 style = TimeboxTheme.type.mono,
                 color = colors.onVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UnsetRow(selected: Boolean, onClick: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val background = when {
+        selected && pressed -> colors.high
+        selected || pressed -> colors.surf
+        else -> Color.Transparent
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(background)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .heightIn(min = RowMinHeight)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = "Unset",
+            style = TimeboxTheme.type.body,
+            color = colors.onVariant,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = "Current type",
+                tint = colors.tertiary,
+                modifier = Modifier.size(18.dp),
             )
         }
     }

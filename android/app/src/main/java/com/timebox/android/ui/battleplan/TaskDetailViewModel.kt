@@ -215,6 +215,22 @@ class TaskDetailViewModel(
     }
     fun setProject(value: Int?) = edit { copy(projectId = value) }
     fun setTaskType(value: Int?) = edit { copy(taskTypeId = value) }
+    fun createTaskTypeAndChoose(path: String) {
+        val current = _state.value
+        if (current.saving || current.task?.status == TaskStatus.Completed) return
+        viewModelScope.launch {
+            repository.createTaskType(path).fold(
+                onSuccess = { created ->
+                    val types = repository.listTaskTypes().getOrElse { _state.value.taskTypes + created }
+                    _state.update { it.copy(taskTypes = types) }
+                    saveField(_state.value.toTaskDetailDraft().copy(taskTypeId = created.id))
+                },
+                onFailure = { cause ->
+                    _state.update { it.copy(saveError = cause.apiError.message) }
+                },
+            )
+        }
+    }
     fun setUrgency(value: PriorityLevel?) = edit { copy(urgency = value) }
     fun setImportance(value: PriorityLevel?) = edit { copy(importance = value) }
     fun setDeadlineMode(value: TaskDeadlineMode) = edit {

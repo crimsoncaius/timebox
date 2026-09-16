@@ -102,6 +102,20 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     fun setTitle(value: String) = edit { copy(title = value) }
     fun setDescription(value: String) = edit { copy(description = value) }
     fun setTaskType(value: Int?) = edit { copy(taskTypeId = value) }
+    fun createTaskTypeAndChoose(path: String) {
+        if (_state.value.saving) return
+        viewModelScope.launch {
+            repository.createTaskType(path).fold(
+                onSuccess = { created ->
+                    val types = repository.listTaskTypes().getOrElse { _state.value.taskTypes + created }
+                    edit { copy(taskTypes = types, taskTypeId = created.id) }
+                },
+                onFailure = { cause ->
+                    _state.update { it.copy(error = cause.apiError.message) }
+                },
+            )
+        }
+    }
     fun setUrgency(value: PriorityLevel?) = edit { copy(urgency = value) }
     fun setImportance(value: PriorityLevel?) = edit { copy(importance = value) }
     fun setMode(value: RecurrenceMode) {
