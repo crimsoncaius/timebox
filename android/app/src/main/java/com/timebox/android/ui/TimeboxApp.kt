@@ -728,7 +728,11 @@ fun TimeboxApp(
                 }
             }
 
-            if (shouldShowBottomNavigation(battlePlanState.showComposer, isImeVisible)) {
+            if (shouldShowBottomNavigation(
+                    battlePlanState.showComposer,
+                    isImeVisible,
+                    route == AppRoutes.TaskDetailPattern,
+                )) {
                 TimeboxBottomNav(selectedTab) { tab ->
                     val target = when (tab) {
                         TimeboxTab.Day -> AppRoutes.day(dayState.date)
@@ -801,7 +805,8 @@ fun TimeboxApp(
 internal fun shouldShowBottomNavigation(
     taskComposerVisible: Boolean,
     isImeVisible: Boolean,
-): Boolean = !taskComposerVisible && !isImeVisible
+    taskDetailVisible: Boolean = false,
+): Boolean = !taskComposerVisible && !taskDetailVisible && !isImeVisible
 
 /** Completion feedback must dismiss even when it offers Undo. */
 internal fun taskCompletionSnackbarDuration(): SnackbarDuration = SnackbarDuration.Short

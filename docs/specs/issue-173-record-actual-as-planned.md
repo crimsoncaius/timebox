@@ -32,7 +32,7 @@ A linked Actual does not disable the action. This supersedes the intermediate di
 
 For a 10:00–11:00 plan, recording at 10:30 creates 10:00–10:30. Invoking the action at 11:00 offers to replace that recording with 10:00–11:00 through the overlap confirmation below.
 
-If a linked Actual already matches the requested interval and all copied details, make no mutation. Show “Already recorded” and provide access to that Actual. Different times or copied details permit replacement.
+If a linked Actual already matches the requested interval, make no mutation. Show “Already recorded” and provide access to that Actual. Matching times do not copy the plan's current name or note onto that Actual. Different times permit replacement.
 
 Replacement copies the plan's current saved details; it does not merge notes from previous Actuals. The preview must highlight existing names or notes that would be lost, including user edits to a previous recording.
 
@@ -94,11 +94,11 @@ The original code had a web action and backend creation/Undo path, but no corres
 
 1. A finished, uncontested plan records immediately with all saved details, a retained plan, a link, and Undo; task completion is unchanged.
 2. An underway plan records only through invocation time; future and zero-duration recordings are unavailable.
-3. Repeating an earlier partial recording offers replacement through the later endpoint; an exact match produces no duplicate.
+3. Repeating an earlier partial recording offers replacement through the later endpoint; matching times produce no duplicate and do not overwrite an edited name or note.
 4. Replacement previews and correctly handles edge overlap, full containment, spanning overlap, and multiple conflicting Actuals without losing outside portions or their links.
 5. Replacement warns when previous Actual names or notes would be lost.
 6. Tracking continues unchanged when disjoint and preserves the Current Activity and outside time when overlapping.
 7. Delaying confirmation does not extend the requested interval. Concurrent edits require a refreshed preview and new confirmation.
 8. Undo restores the complete operation atomically; unsafe later changes prevent Undo, but ordinary ongoing elapsed time does not.
 9. Independent edits and deletion follow the lifecycle rules above, and linked-record feedback does not imply Task Completion or continued exact agreement.
-10. Web and Android expose equivalent behavior. Implementation verification includes launching the affected applications from the updated working tree for review.
+10. Web and Android expose equivalent recording behavior. Android Planned and Actual details use the #190 interval presentation; the web restyle is deferred. Implementation verification includes launching the affected applications from the updated working tree for review.
