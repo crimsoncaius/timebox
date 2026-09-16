@@ -15,6 +15,12 @@ class AppRoutesTest {
     }
 
     @Test
+    fun `task details own the bottom chrome while they are visible`() {
+        assertFalse(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = false, taskDetailVisible = true))
+        assertTrue(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = false, taskDetailVisible = false))
+    }
+
+    @Test
     fun `on-screen keyboard hides bottom navigation`() {
         assertFalse(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = true))
         assertFalse(shouldShowBottomNavigation(taskComposerVisible = true, isImeVisible = true))

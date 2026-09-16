@@ -284,6 +284,12 @@ class BattlePlanUiLogicTest {
         assertEquals(false, isUnchangedDrop(TaskStatus.Open, TaskStatus.Open, 1, 2))
         assertEquals(false, isUnchangedDrop(TaskStatus.Open, TaskStatus.Completed, 1, 1))
     }
+
+    @Test
+    fun taskSheetKeepsOneExpandedHeightWhetherTheKeyboardIsVisible() {
+        assertEquals(0.94f, taskSheetHeightFraction(true))
+        assertEquals(0.94f, taskSheetHeightFraction(false))
+    }
 }
 
 internal fun task(

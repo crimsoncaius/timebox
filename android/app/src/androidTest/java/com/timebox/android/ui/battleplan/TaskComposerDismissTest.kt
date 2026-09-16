@@ -2,6 +2,7 @@ package com.timebox.android.ui.battleplan
 
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +67,43 @@ class TaskComposerDismissTest {
         compose.onNodeWithContentDescription("Task title").assertDoesNotExist()
         compose.onNodeWithText("Battle Plan action").performTouchInput { click() }
         compose.runOnIdle { check(backgroundTapped) }
+    }
+
+    @Test
+    fun typingTitleLeavesSurroundingBattlePlanAndKeepsTheDraftForAdd() {
+        var createdDraft: TaskComposerDraft? = null
+        var surroundingTitlePasses = 0
+        compose.setContent {
+            var state by remember {
+                mutableStateOf(BattlePlanUiState(loading = false, showComposer = true))
+            }
+            DisposableEffect(state.composerDraft.title) {
+                surroundingTitlePasses += 1
+                onDispose { }
+            }
+            TimeboxTheme(darkTheme = false) {
+                TextButton(onClick = {}) { Text("Battle Plan action") }
+                if (state.showComposer) {
+                    TaskComposerOverlay(
+                        state = state,
+                        notificationsAllowed = true,
+                        onRequestNotificationPermission = {},
+                        onDraftChange = { state = state.copy(composerDraft = it.copy(dirty = true)) },
+                        onReminderEnabledChange = {},
+                        onDismiss = { state = state.copy(showComposer = false) },
+                        onCreate = { createdDraft = state.composerDraft },
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithContentDescription("Task title").performTextInput("Prepare launch notes")
+        compose.onNodeWithContentDescription("Task title").assertIsDisplayed()
+        compose.runOnIdle { check(surroundingTitlePasses == 1) }
+        compose.onNodeWithText("Add task").performClick()
+        compose.runOnIdle {
+            check(createdDraft?.title == "Prepare launch notes")
+        }
     }
 
     @Test

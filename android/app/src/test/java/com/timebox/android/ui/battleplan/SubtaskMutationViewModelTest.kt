@@ -102,6 +102,25 @@ class SubtaskMutationViewModelTest {
         model.viewModelScope.cancel()
     }
 
+    @Test fun `battle plan composer title keystrokes do not reload the board`() = runTest(dispatcher) {
+        val api = MutationApi()
+        val model = battlePlan(api)
+        model.load()
+        model.state.first { !it.loading }
+        model.setComposerVisible(true)
+        val readsAfterOpen = api.reads.get()
+
+        model.updateComposerDraft(model.state.value.composerDraft.copy(title = "P"))
+        model.updateComposerDraft(model.state.value.composerDraft.copy(title = "Pr"))
+        model.updateComposerDraft(model.state.value.composerDraft.copy(title = "Prepare review"))
+
+        assertEquals("Prepare review", model.state.value.composerDraft.title)
+        assertTrue(model.state.value.showComposer)
+        assertFalse(model.state.value.refreshing)
+        assertEquals(readsAfterOpen, api.reads.get())
+        model.viewModelScope.cancel()
+    }
+
     @Test fun `battle plan trashes a Battle Plan Task without reloading the board`() = runTest(dispatcher) {
         val api = MutationApi()
         val model = battlePlan(api)
