@@ -68,7 +68,10 @@ private val prototypePreview = RecurrencePreview(
 )
 
 private fun RecurringEditorUiState.hasOptionalDetails(): Boolean =
-    description.isNotBlank() || checklistText.isNotBlank() || taskTypeId != null || urgency != null || importance != null
+    description.isNotBlank() || taskTypeId != null || urgency != null || importance != null
+
+private fun RecurringEditorUiState.subtaskNames(): List<String> =
+    checklistText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
 
 private fun RecurringEditorUiState.hasPreplanning(): Boolean = preplanningSlots.isNotEmpty()
 
@@ -114,8 +117,7 @@ private fun prototypeSample(flow: String, scenario: String): RecurringEditorUiSt
 
 @Composable
 fun RecurringDetailsHierarchyPrototype(
-    initialFlow: String = "details",
-    initialLayout: String = "core",
+    initialFlow: String = "edit",
     initialScenario: String = "scheduled",
 ) {
     val colors = TimeboxTheme.colors
@@ -123,17 +125,8 @@ fun RecurringDetailsHierarchyPrototype(
         mutableStateOf(
             when (initialFlow) {
                 "create" -> "create"
-                "edit" -> "edit"
-                else -> "details"
-            },
-        )
-    }
-    var layout by rememberSaveable {
-        mutableStateOf(
-            when (initialLayout) {
-                "extras" -> "extras"
-                "own" -> "own"
-                else -> "core"
+                "details" -> "details"
+                else -> "edit"
             },
         )
     }
@@ -153,7 +146,7 @@ fun RecurringDetailsHierarchyPrototype(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "RECURRING DETAILS · ROUND 2",
+                    "RECURRING DETAILS · COMBINED",
                     fontSize = 10.sp,
                     color = colors.onVariant,
                     modifier = Modifier.weight(1f),
@@ -176,17 +169,6 @@ fun RecurringDetailsHierarchyPrototype(
                 }
             }
             PrototypeChipRow(
-                options = listOf(
-                    "core" to "With rhythm",
-                    "extras" to "With extras",
-                    "own" to "Own toggle",
-                ),
-                selected = layout,
-            ) {
-                layout = it
-                resetOverrides()
-            }
-            PrototypeChipRow(
                 options = listOf("scheduled" to "Scheduled", "quota" to "Quota"),
                 selected = scenario,
             ) {
@@ -198,11 +180,6 @@ fun RecurringDetailsHierarchyPrototype(
         if (flow == "details") {
             RecurringDetailsHierarchyView(
                 state = state,
-                layout = layout,
-                extrasOverride = extrasOverride,
-                onExtrasOverride = { extrasOverride = it },
-                preplanningOverride = preplanningOverride,
-                onPreplanningOverride = { preplanningOverride = it },
                 onEdit = {
                     extrasOverride = "default"
                     preplanningOverride = "default"
@@ -214,7 +191,6 @@ fun RecurringDetailsHierarchyPrototype(
         } else {
             RecurringDetailsHierarchyForm(
                 state = state,
-                layout = layout,
                 extrasOverride = extrasOverride,
                 onExtrasOverride = { extrasOverride = it },
                 preplanningOverride = preplanningOverride,
@@ -251,7 +227,6 @@ private fun PrototypeChipRow(
 @Composable
 private fun RecurringDetailsHierarchyForm(
     state: RecurringEditorUiState,
-    layout: String,
     extrasOverride: String,
     onExtrasOverride: (String) -> Unit,
     preplanningOverride: String,
@@ -267,7 +242,7 @@ private fun RecurringDetailsHierarchyForm(
     val start = runCatching { LocalDate.parse(state.startDate) }.getOrDefault(LocalDate.parse("2026-09-15"))
     val end = runCatching { LocalDate.parse(state.endDate) }.getOrNull()
     var dateTarget by rememberSaveable { mutableStateOf<String?>(null) }
-    val extrasFilled = state.hasOptionalDetails() || (layout == "extras" && state.hasPreplanning())
+    val extrasFilled = state.hasOptionalDetails()
     val showExtras = when (extrasOverride) {
         "open" -> true
         "closed" -> false
@@ -275,8 +250,6 @@ private fun RecurringDetailsHierarchyForm(
     }
     val showPreplanning = when {
         quota -> false
-        layout == "core" -> true
-        layout == "extras" -> showExtras
         else -> when (preplanningOverride) {
             "open" -> true
             "closed" -> false
@@ -293,8 +266,8 @@ private fun RecurringDetailsHierarchyForm(
         ) {
             Text(if (editing) "Edit this Recurring Task Series." else "A little more regular.", style = TimeboxTheme.type.screenTitle)
             Text(
-                if (editing) "Change the series and its rhythm. Optional details stay in the same place as when you added it."
-                else "Set the series and its rhythm. Leave the rest for later.",
+                if (editing) "Change the series and its rhythm. Notes and the rest stay behind Less detail."
+                else "Set the series and its rhythm. Leave notes and the rest for later.",
                 style = TimeboxTheme.type.body,
                 color = colors.onVariant,
             )
@@ -360,7 +333,8 @@ private fun RecurringDetailsHierarchyForm(
                     )
                 }
             }
-            if (layout == "own" && !quota) {
+            PrototypeSubtaskRows(state.checklistText) { edit { copy(checklistText = it) } }
+            if (!quota) {
                 val preplanningLabel = when {
                     showPreplanning -> "−  Hide pre-planning"
                     state.hasPreplanning() -> "+  Pre-plan Task Occurrences · already set"
@@ -368,19 +342,16 @@ private fun RecurringDetailsHierarchyForm(
                 }
                 TextButton({ onPreplanningOverride(if (showPreplanning) "closed" else "open") }) { Text(preplanningLabel) }
             }
-            if (showPreplanning && layout != "extras") {
+            if (showPreplanning) {
                 PrototypePreplanning(state, ::edit)
             }
             val extrasLabel = when {
                 showExtras -> "−  Less detail"
-                extrasFilled -> "+  Notes, subtasks & more · already set"
-                else -> "+  Notes, subtasks & more"
+                extrasFilled -> "+  Notes & more · already set"
+                else -> "+  Notes & more"
             }
             TextButton({ onExtrasOverride(if (showExtras) "closed" else "open") }) { Text(extrasLabel) }
-            if (showExtras) {
-                if (layout == "extras" && !quota) PrototypePreplanning(state, ::edit)
-                OptionalDetailsFields(state, ::edit)
-            }
+            if (showExtras) OptionalDetailsFields(state, ::edit)
             Surface(color = colors.primaryContainer, shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (quota) "YOUR QUOTA" else "YOUR SERIES", style = TimeboxTheme.type.kicker, color = colors.onPrimaryContainer)
@@ -440,11 +411,6 @@ private fun RecurringDetailsHierarchyForm(
 @Composable
 private fun RecurringDetailsHierarchyView(
     state: RecurringEditorUiState,
-    layout: String,
-    extrasOverride: String,
-    onExtrasOverride: (String) -> Unit,
-    preplanningOverride: String,
-    onPreplanningOverride: (String) -> Unit,
     onEdit: () -> Unit,
     onStub: () -> Unit,
     modifier: Modifier = Modifier,
@@ -453,22 +419,6 @@ private fun RecurringDetailsHierarchyView(
     val quota = state.mode == RecurrenceMode.Quota
     val formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
     val start = runCatching { LocalDate.parse(state.startDate) }.getOrDefault(LocalDate.parse("2026-09-15"))
-    val extrasFilled = state.hasOptionalDetails() || (layout == "extras" && state.hasPreplanning())
-    val showExtras = when (extrasOverride) {
-        "open" -> true
-        "closed" -> false
-        else -> extrasFilled
-    }
-    val showPreplanning = when {
-        quota -> false
-        layout == "core" -> true
-        layout == "extras" -> showExtras
-        else -> when (preplanningOverride) {
-            "open" -> true
-            "closed" -> false
-            else -> state.hasPreplanning()
-        }
-    }
     val period = when (state.frequency) {
         RecurrenceFrequency.Daily -> if (state.interval == "1") "day" else "days"
         RecurrenceFrequency.Weekly -> if (state.interval == "1") "week" else "weeks"
@@ -527,26 +477,26 @@ private fun RecurringDetailsHierarchyView(
                 Text(window.start.format(formatter), Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), style = TimeboxTheme.type.bodySmall)
             }
         }
-        if (layout == "own" && !quota) {
-            val preplanningLabel = when {
-                showPreplanning -> "−  Hide pre-planning"
-                state.hasPreplanning() -> "+  Pre-plan Task Occurrences · already set"
-                else -> "+  Pre-plan Task Occurrences"
+        Text("Series settings", style = TimeboxTheme.type.kicker, color = colors.onVariant)
+        SectionCard {
+            SectionHeader("Subtasks")
+            val names = state.subtaskNames()
+            if (names.isEmpty()) {
+                Text("No subtasks", Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            } else {
+                names.forEach { name ->
+                    Text(name, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), style = TimeboxTheme.type.body)
+                }
             }
-            TextButton({ onPreplanningOverride(if (showPreplanning) "closed" else "open") }) { Text(preplanningLabel) }
         }
-        if (showPreplanning && layout != "extras") {
-            PrototypePreplanningSummary(state)
-        }
-        val extrasLabel = when {
-            showExtras -> "−  Less detail"
-            extrasFilled -> "+  Notes, subtasks & more · already set"
-            else -> "+  Notes, subtasks & more"
-        }
-        TextButton({ onExtrasOverride(if (showExtras) "closed" else "open") }) { Text(extrasLabel) }
-        if (showExtras) {
-            if (layout == "extras" && !quota) PrototypePreplanningSummary(state)
-            PrototypeExtrasSummary(state)
+        if (!quota && state.hasPreplanning()) PrototypePreplanningSummary(state)
+        if (state.hasOptionalDetails()) {
+            SectionCard {
+                SectionHeader("Notes & more")
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PrototypeExtrasSummary(state)
+                }
+            }
         }
         PrimaryButton("Edit series", onEdit, Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -584,9 +534,6 @@ private fun PrototypeExtrasSummary(state: RecurringEditorUiState) {
     val type = state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "No task type"
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (state.description.isNotBlank()) Text(state.description, style = TimeboxTheme.type.body, color = colors.onVariant)
-        state.checklistText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.forEach { item ->
-            Text("• $item", style = TimeboxTheme.type.body, color = colors.on)
-        }
         Text(
             listOfNotNull(
                 type.takeIf { state.taskTypeId != null },
@@ -620,12 +567,29 @@ private fun PrototypePreplanning(
 }
 
 @Composable
+private fun PrototypeSubtaskRows(text: String, onChange: (String) -> Unit) {
+    val items = if (text.isBlank()) emptyList() else text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        TaskSubtasks(
+            subtasks = emptyList(),
+            enabled = true,
+            saving = false,
+            error = null,
+            onToggle = {},
+            onTrash = {},
+            onAdd = { title -> onChange((items + title).joinToString("\n")) },
+            draftNames = items,
+            onRemoveDraft = { index -> onChange(items.filterIndexed { i, _ -> i != index }.joinToString("\n")) },
+        )
+    }
+}
+
+@Composable
 private fun OptionalDetailsFields(
     state: RecurringEditorUiState,
     edit: (RecurringEditorUiState.() -> RecurringEditorUiState) -> Unit,
 ) {
     OutlinedTextField(state.description, { edit { copy(description = it) } }, Modifier.fillMaxWidth(), label = { Text("Notes · optional") }, minLines = 2)
-    OutlinedTextField(state.checklistText, { edit { copy(checklistText = it) } }, Modifier.fillMaxWidth(), label = { Text("Subtasks · one per line") }, minLines = 2)
     RecurrenceMenu(
         "Task type",
         state.taskTypes.firstOrNull { it.id == state.taskTypeId }?.name ?: "No task type",

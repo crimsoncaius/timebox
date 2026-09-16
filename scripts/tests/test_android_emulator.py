@@ -21,7 +21,7 @@ class PoolTests(unittest.TestCase):
         self.pool.db.close()
         self.temp.cleanup()
 
-    def test_concurrent_claims_are_exclusive_and_capacity_is_bounded(self):
+    def test_concurrent_claims_are_exclusive(self):
         def claim(number):
             pool = module.Pool(self.temp.name)
             try:
@@ -32,7 +32,11 @@ class PoolTests(unittest.TestCase):
                 pool.db.close()
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             result = list(executor.map(claim, range(8)))
-        self.assertEqual(sorted(r for r in result if r), [1, 2])
+        self.assertEqual(sorted(result), list(range(1, 9)))
+
+    def test_ordinary_claims_grow_beyond_configured_capacity(self):
+        claimed = [self.pool.claim(f"owner-{i}") for i in range(self.pool.config["capacity"] + 3)]
+        self.assertEqual([row["id"] for row in claimed], list(range(1, self.pool.config["capacity"] + 4)))
 
     def test_old_token_cannot_touch_reassigned_slot(self):
         old = self.pool.claim("first")

@@ -11,16 +11,14 @@ python scripts/android-emulator.py test --owner "task-id: UI tests"
 
 This reserves a device, boots a clean instance, runs `connectedDebugAndroidTest`
 against its serial, and stops/releases it after success or failure. Additional
-Gradle arguments can follow the owner. A full pool reports its owners and pending
-reviews through `status`; continue independent work and retry later. Never take
-another reservation to bypass the capacity limit.
+Gradle arguments can follow the owner. Acquire as many managed emulators as the
+work needs; the pool grows on demand. `status` still reports owners and pending
+reviews.
 
-If the user explicitly requests an additional emulator, use
-`acquire --extra --owner "task-id: user-requested additional emulator"`.
-This reserves a separate managed slot beyond the ordinary capacity without
-changing shared configuration or existing reservations. The extra device uses
-the same token, command, release, and review lifecycle. Use this option only
-for an explicit user request, not as an automatic response to a full pool.
+`acquire --extra --owner "task-id: additional emulator"` reserves a separate
+managed slot beyond the configured baseline without changing shared
+configuration or existing reservations. The extra device uses the same token,
+command, release, and review lifecycle.
 
 For interactive work, capture the token printed by `acquire`:
 
@@ -85,9 +83,11 @@ worktrees and clones using this helper. SQLite transactions allocate atomically;
 per-device kernel locks prevent release while a command is running. Treat this
 directory as local operational state, not version-controlled project content.
 
-`scripts/android-emulator.json` defines the capacity, port range, lease duration,
-installed system-image path, and display configuration. Change it only when all
-slots are free and all participating worktrees can use the same configuration.
+`scripts/android-emulator.json` defines the baseline slot count, port range,
+lease duration, installed system-image path, and display configuration. Ordinary
+`acquire` reuses free baseline slots first, then grows past that baseline.
+Change the JSON only when all slots are free and all participating worktrees
+can use the same configuration.
 The initial profile uses the installed Android 36 Google Play x86_64 image,
 1080×2424 display at density 420, 4 GB RAM, and font scale 1.0. The smaller
 2 GB profile caused startup ANRs under fresh Google Play setup load in local
@@ -98,8 +98,7 @@ An exact S26 match requires confirming the physical phone's display and OS setti
 Managed AVDs have separate storage and names `timebox-agent-01`, etc. Each new
 reservation wipes only its managed AVD and cold boots it; release stops it.
 Existing personal emulators are not adopted, reset, or stopped. A port occupied
-by an unrelated emulator fails safely. This pool's capacity does not include
-personal emulators; lower it if the machine is under memory pressure.
+by an unrelated emulator fails safely. Personal emulators are outside this pool.
 
 The pool isolates devices, not backend data. Debug apps default to port 8001;
 before a flow that writes data, configure an isolated test backend/database or

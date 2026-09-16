@@ -18,7 +18,7 @@ After fixing an issue, launch or relaunch the affected application from the upda
 
 ### Android emulator ownership
 
-Before installing, launching, testing, capturing, or interacting with an Android emulator, read `docs/agents/android-emulators.md` and acquire an exclusive reservation through `scripts/android-emulator.py`. Use the helper for device commands. Release temporary devices automatically; retain devices explicitly for user review. Existing unregistered emulators and physical devices require explicit user assignment.
+Before installing, launching, testing, capturing, or interacting with an Android emulator, read `docs/agents/android-emulators.md` and acquire an exclusive reservation through `scripts/android-emulator.py`. Use the helper for device commands. Acquire as many managed devices as the work needs. Release temporary devices automatically; retain devices explicitly for user review. Existing unregistered emulators and physical devices require explicit user assignment.
 
 ### Worktree lifecycle
 

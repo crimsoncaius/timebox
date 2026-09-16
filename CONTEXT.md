@@ -20,6 +20,10 @@ _Avoid_: Unassigning a Project, archiving a Project
 An independently meaningful unit of work that can be scheduled and completed in its own right. It may contain Subtasks and have zero or more Planned Blocks and Actual Blocks.
 _Avoid_: Time block, scheduled block
 
+**Task Description**:
+Optional freeform context attached to one Battle Plan Task or Session Task. It persists across every Planned Block and Actual Block linked to that Task.
+_Avoid_: Actual Block Note, journal entry
+
 **Parent Task**:
 A Battle Plan Task whose execution is decomposed into first-level Subtasks. Its completion remains explicit and resolves its Subtasks without changing their checked states.
 _Avoid_: Epic, subtask group
@@ -47,6 +51,10 @@ _Avoid_: Reclassification, Task Type replacement
 **Block Name**:
 An optional user-defined identity for one Planned Block or Actual Block, distinct from its reusable Task Type and supporting Note. It remains the Block's own identity regardless of Battle Plan Task linkage.
 _Avoid_: Label, title, tag, Task Type
+
+**Supporting Note**:
+Optional freeform context attached to one Planned Block or Actual Block. It does not become part of a linked Task's Description.
+_Avoid_: Task Description, journal entry
 
 **Transient Feedback**:
 A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app task reminders; it excludes validation, persistent errors, loading states, and native OS notifications.

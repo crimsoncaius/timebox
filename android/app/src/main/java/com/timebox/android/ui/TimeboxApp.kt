@@ -330,7 +330,11 @@ fun TimeboxApp(
                 if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
             )
         ) {
-            if (surfaceRoute != AppRoutes.DayPattern && surfaceRoute != AppRoutes.RecurringNew && surfaceRoute?.startsWith("prototype/") != true) {
+            if (surfaceRoute != AppRoutes.DayPattern &&
+                surfaceRoute != AppRoutes.RecurringNew &&
+                surfaceRoute != AppRoutes.RecurringEditPattern &&
+                surfaceRoute != AppRoutes.RecurringDetailPattern &&
+                surfaceRoute?.startsWith("prototype/") != true) {
                 TimeboxTopBar(
                     kicker = routeKicker(surfaceRoute),
                     title = routeTitle(
@@ -355,14 +359,13 @@ fun TimeboxApp(
                             "prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}",
                             deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}" }),
                             arguments = listOf(
-                                navArgument("flow") { defaultValue = "details" },
-                                navArgument("layout") { defaultValue = "core" },
+                                navArgument("flow") { defaultValue = "edit" },
+                                navArgument("layout") { defaultValue = "rows" },
                                 navArgument("mode") { defaultValue = "scheduled" },
                             ),
                         ) { entry ->
                             com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype(
-                                initialFlow = entry.arguments?.getString("flow") ?: "details",
-                                initialLayout = entry.arguments?.getString("layout") ?: "core",
+                                initialFlow = entry.arguments?.getString("flow") ?: "edit",
                                 initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
                             )
                         }

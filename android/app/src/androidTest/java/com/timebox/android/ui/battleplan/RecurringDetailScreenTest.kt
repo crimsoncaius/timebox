@@ -83,6 +83,28 @@ class RecurringDetailScreenTest {
             .fetchSemanticsNode()
     }
 
+    @Test
+    fun detailPutsCurrentWorkAboveSeriesSettings() {
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                RecurringDetailScreen(
+                    state = RecurringUiState(selectedTemplate = activeTemplate().copy(
+                        checklistItems = listOf(com.timebox.android.data.RecurringChecklistItem(1, "Scan the week", 0)),
+                    )),
+                    onBack = {}, onRetry = {}, onEdit = {}, onOpenTask = {},
+                    onPause = {}, onResume = {}, onEnd = {}, onRequestDelete = {},
+                    onDismissDelete = {}, onConfirmDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Current Task Occurrence").fetchSemanticsNode()
+        compose.onNodeWithText("Scan the week").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithText("Edit series").performScrollTo().fetchSemanticsNode()
+        compose.onNodeWithText("Checklist").assertDoesNotExist()
+        compose.onNodeWithText("Edit template").assertDoesNotExist()
+    }
+
     private fun activeTemplate() = RecurringTemplate(
         id = 7,
         title = "Daily review",

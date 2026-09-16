@@ -73,11 +73,13 @@ class Pool:
             self.db.execute("BEGIN IMMEDIATE")
             if self.db.execute("SELECT config FROM settings WHERE id=1").fetchone()[0] != json.dumps(self.config, sort_keys=True):
                 raise RuntimeError("Pool configuration changed; restart the helper.")
-            slots = range(1, self.config["capacity"] + 1)
+            capacity = self.config["capacity"]
+            highest = self.db.execute("SELECT COALESCE(MAX(id), 0) FROM slots").fetchone()[0]
             if extra:
-                # Explicit user-requested device; do not change shared pool configuration.
-                highest = self.db.execute("SELECT COALESCE(MAX(id), 0) FROM slots").fetchone()[0]
-                slots = range(self.config["capacity"] + 1, max(highest, self.config["capacity"]) + 2)
+                # Additional device beyond the baseline; do not change shared pool configuration.
+                slots = range(capacity + 1, max(highest, capacity) + 2)
+            else:
+                slots = range(1, max(highest, capacity) + 2)
             for slot in slots:
                 row = self.db.execute("SELECT * FROM slots WHERE id=?", (slot,)).fetchone()
                 if row is None or row["state"] == "free":
@@ -288,7 +290,7 @@ def main():
         p = subs.add_parser(action)
         p.add_argument("--owner", required=True, help="Task id or descriptive unique session name")
         if action == "acquire":
-            p.add_argument("--extra", action="store_true", help="Reserve an additional device only when explicitly requested by the user")
+            p.add_argument("--extra", action="store_true", help="Reserve an additional managed slot beyond the configured baseline")
         if action == "test":
             p.add_argument("args", nargs=argparse.REMAINDER)
     for action in ("adb", "gradle", "renew", "review", "resume", "release", "recover"):
