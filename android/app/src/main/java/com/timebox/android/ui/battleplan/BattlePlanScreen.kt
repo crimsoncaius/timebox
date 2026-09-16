@@ -190,6 +190,7 @@ fun BattlePlanScreen(
     onShowComposer: (Boolean) -> Unit,
     onComposerDraftChange: (TaskComposerDraft) -> Unit = {},
     onComposerReminderEnabledChange: (Boolean) -> Unit = {},
+    onCreateComposerTaskType: (String) -> Unit = {},
     notificationsAllowed: Boolean = true,
     onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
@@ -290,6 +291,7 @@ fun BattlePlanScreen(
                 onReminderEnabledChange = onComposerReminderEnabledChange,
                 onDismiss = { onShowComposer(false) },
                 onCreate = { onCreateTask("", "", null) },
+                onCreateTaskType = onCreateComposerTaskType,
             )
         }
 
@@ -2065,6 +2067,7 @@ fun TaskDetailScreen(
     onSave: () -> Unit,
     onTrackTask: (() -> Unit)? = null,
     onSaveField: (TaskDetailDraft) -> Unit = {},
+    onCreateTaskType: (String) -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     feedback: @Composable () -> Unit = {},
 ) {
@@ -2094,6 +2097,7 @@ fun TaskDetailScreen(
             onChange = onSaveField, onDismiss = onBack, onDiscard = onDiscardChanges,
             onRetrySave = onSave, onComplete = if (state.status == TaskStatus.Completed) onReopen else onComplete,
             onReady = onReadyChange,
+            onCreateTaskType = onCreateTaskType,
             projectLocked = state.isSubtask || state.task?.recurringTemplateId != null,
             contextLabel = state.task?.recurringTemplateTitle,
             completable = state.task?.recurrenceKind != "quota_parent",

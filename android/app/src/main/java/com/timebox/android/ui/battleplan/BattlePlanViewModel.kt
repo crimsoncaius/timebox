@@ -438,6 +438,29 @@ class BattlePlanViewModel internal constructor(
         persistComposer()
     }
 
+    fun createComposerTaskType(path: String) {
+        if (_state.value.saving || _state.value.composerCreatedTaskId != null) return
+        viewModelScope.launch {
+            repository.createTaskType(path).fold(
+                onSuccess = { created ->
+                    val types = repository.listTaskTypes().getOrElse { _state.value.taskTypes + created }
+                    _state.update { current ->
+                        val draft = current.composerDraft.copy(taskTypeId = created.id)
+                        current.copy(
+                            taskTypes = types,
+                            composerDraft = draft.copy(dirty = draft.hasMeaningfulChangesFrom(current.composerInitialDraft)),
+                            composerError = null,
+                        )
+                    }
+                    persistComposer()
+                },
+                onFailure = { cause ->
+                    _state.update { it.copy(composerError = cause.apiError.message) }
+                },
+            )
+        }
+    }
+
     fun setComposerReminderEnabled(enabled: Boolean) {
         val current = _state.value
         val draft = current.composerDraft

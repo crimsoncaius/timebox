@@ -68,9 +68,9 @@ fun rankTaskTypes(
 ): List<TaskType> {
     val canonical = canonicalizeTaskTypePath(query) ?: return rankEmptyQuery(taskTypes, currentTypeId)
     return taskTypes
-        .filter { pathMatchesQuery(it.name, canonical) }
+        .filter { pathMatchesQuery(canonicalName(it.name), canonical) }
         .sortedWith(
-            compareBy<TaskType> { pathMatchScore(it.name, canonical) }
+            compareBy<TaskType> { pathMatchScore(canonicalName(it.name), canonical) }
                 .thenBy { it.name },
         )
 }
@@ -84,6 +84,9 @@ private fun rankEmptyQuery(taskTypes: List<TaskType>, currentTypeId: Int?): List
         .sortedWith(compareByDescending<TaskType> { it.usageCount }.thenBy { it.name })
     return current + ranked + unspecified
 }
+
+private fun canonicalName(name: String): String =
+    canonicalizeTaskTypePath(name) ?: name.trim().lowercase()
 
 private fun segmentPrefixMatch(a: String, b: String): Boolean =
     a.startsWith(b) || b.startsWith(a)
@@ -136,7 +139,7 @@ private fun pathMatchScore(path: String, query: String): Int {
 /** True when the query names a path that does not exist yet, so creating is on offer. */
 fun shouldOfferCreate(taskTypes: List<TaskType>, query: String): Boolean {
     val canonical = canonicalizeTaskTypePath(query) ?: return false
-    return taskTypes.none { it.name == canonical }
+    return taskTypes.none { canonicalName(it.name) == canonical }
 }
 
 /** Split so the caller can set [path] in the monospace face the design asks for. */
@@ -149,7 +152,7 @@ data class CreateAncestorHint(val lead: String, val path: String, val tail: Stri
 fun createAncestorHint(taskTypes: List<TaskType>, canonicalPath: String): CreateAncestorHint? {
     val ancestors = taskTypePathPrefixes(canonicalPath).dropLast(1)
     if (ancestors.isEmpty()) return null
-    val existing = taskTypes.mapTo(mutableSetOf()) { it.name }
+    val existing = taskTypes.mapTo(mutableSetOf()) { canonicalName(it.name) }
     val missing = ancestors.filterNot { it in existing }
     return when {
         missing.isEmpty() -> CreateAncestorHint("Adds under existing ", ancestors.last())

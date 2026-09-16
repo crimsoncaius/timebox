@@ -3,9 +3,10 @@ import { getFocusController } from './focusController'
 import { ActivityTimeField } from './ActivityTimeField'
 import { activityTimeValue, resolveActivityTime, type ActivityTimeValue } from './activityTime'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { TaskType } from '../../lib/api'
+import { api, type TaskType } from '../../lib/api'
 import { ActivityRepository, getActivityRepository } from './activityRepository'
 import { ActivityTrackingStatus } from './ActivityTrackingStatus'
+import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 
 export function ActivityTracking({ taskTypes, onChanged, repository = getActivityRepository(), focus = false, controlsVisible = true }: {
   taskTypes: TaskType[]; onChanged: () => void; repository?: ActivityRepository; focus?: boolean; controlsVisible?: boolean
@@ -83,11 +84,20 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       try {
         const at = timing ? resolveActivityTime(timing, state.snapshot?.reporting_timezone ?? 'UTC') : undefined
         if (await repository.command(stopping ? 'stop' : 'switch', stopping ? undefined : Number(typeId), stopping ? undefined : name.trim(), false, undefined, { at, targetId: targetId! })) { setSwitching(false); setStopping(false); setTypeId(''); setName('') }
+        else setTimingError(repository.state.error)
       } catch (error) { setTimingError(String(error)) }
     }}>
-      {!stopping ? <><label className="block">Task Type<select className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" required value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-        <option value="">Choose Task Type</option>{availableTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
-      </select></label>
+      {!stopping ? <><TaskTypePathCombobox
+        label="Task Type"
+        taskTypes={availableTypes}
+        valueTaskTypeId={typeId ? Number(typeId) : null}
+        onSelectTaskTypeId={(id) => setTypeId(id == null ? '' : String(id))}
+        onCreateTaskTypePath={async (name) => {
+          const created = await api.createTaskType({ name })
+          await repository.refresh()
+          return created
+        }}
+      />
       <label className="block">Block Name (optional)<input className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={(e) => setName(e.target.value)} /></label></> : null}
       <p>When did this {stopping ? "stop" : "change"} happen?</p>
       <div className="flex gap-4"><button type="button" onClick={() => setTiming(null)}>Now</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now - 15 * 60000).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>15 min ago</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>Choose time</button></div>
@@ -106,7 +116,17 @@ function UnknownActivity({ repository }: { repository: ActivityRepository }) {
   const describe = (now: boolean) => repository.command(now ? 'switch' : 'describe', Number(type), name.trim(), false, undefined, { targetId: current.id })
   return <section aria-label="Unknown activity" className="my-8 rounded-xl bg-surface-container-low dark:bg-dark-surface-container p-6 space-y-4">
     <h2 className="text-xl font-semibold">What are you doing right now?</h2><p>Recording continues while you decide.</p>
-    <label className="block">Task Type<select aria-label="Describe Task Type" value={type} onChange={e => setType(e.target.value)} className="block w-full p-2 dark:bg-dark-surface"><option value="">Choose Task Type</option>{state.snapshot?.task_types?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+    <TaskTypePathCombobox
+      label="Describe Task Type"
+      taskTypes={state.snapshot?.task_types ?? []}
+      valueTaskTypeId={type ? Number(type) : null}
+      onSelectTaskTypeId={(id) => setType(id == null ? '' : String(id))}
+      onCreateTaskTypePath={async (name) => {
+        const created = await api.createTaskType({ name })
+        await repository.refresh()
+        return created
+      }}
+    />
     <label className="block">Block Name (optional)<input aria-label="Describe Block Name" value={name} maxLength={500} onChange={e => setName(e.target.value)} className="block w-full p-2 dark:bg-dark-surface" /></label>
     <p>Apply from the original start ({new Date(current.start_at).toLocaleTimeString()}) describes all this activity. Start now keeps preceding unspecified time.</p>
     <div className="flex gap-4"><button disabled={!type} onClick={() => void describe(false)}>Apply from original start</button><button disabled={!type} onClick={() => void describe(true)}>Start now</button></div>

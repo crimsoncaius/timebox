@@ -13,8 +13,9 @@ import type {
   TaskStatus,
   TaskType,
 } from '../../lib/api'
+import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 
-type Picker = 'due' | 'urgency' | 'impact' | 'type'
+type Picker = 'due' | 'urgency' | 'impact'
 
 const priorityIcons: Record<PriorityLevel, string> = {
   high: 'keyboard_double_arrow_up',
@@ -32,6 +33,7 @@ export function TaskComposer({
   timezone,
   serverNowIso,
   onCreate,
+  onCreateTaskTypePath,
 }: {
   status: TaskStatus
   projects: Project[]
@@ -40,6 +42,7 @@ export function TaskComposer({
   timezone: string
   serverNowIso: string
   onCreate: (task: BattleTaskWrite) => Promise<void>
+  onCreateTaskTypePath: (path: string) => Promise<TaskType>
 }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -62,7 +65,6 @@ export function TaskComposer({
   const projectName = effectiveProjectId
     ? projects.find((project) => project.id === Number(effectiveProjectId))?.name ?? 'Project'
     : 'Admin'
-  const selectedType = taskTypes.find((taskType) => taskType.id === Number(taskTypeId))
 
   useEffect(() => {
     if (!openPicker) return
@@ -256,22 +258,16 @@ export function TaskComposer({
         >
           <PriorityMenu label="Impact" value={importance} onSelect={(value) => { setImportance(value); setOpenPicker(null) }} />
         </AttributeChip>
-
-        <AttributeChip
-          label="Type"
-          icon="sell"
-          value={selectedType?.name ?? ''}
-          open={openPicker === 'type'}
-          onToggle={() => setOpenPicker((current) => current === 'type' ? null : 'type')}
-          onClear={() => setTaskTypeId('')}
-        >
-          <ChipMenu label="Type" options={taskTypes.map((taskType) => ({
-            label: taskType.name,
-            icon: taskTypeIcon(taskType.name),
-            active: taskType.id === Number(taskTypeId),
-            onSelect: () => { setTaskTypeId(String(taskType.id)); setOpenPicker(null) },
-          }))} />
-        </AttributeChip>
+      </div>
+      <div className="mt-3">
+        <TaskTypePathCombobox
+          label="Task type"
+          allowUnset
+          taskTypes={taskTypes}
+          valueTaskTypeId={taskTypeId ? Number(taskTypeId) : null}
+          onSelectTaskTypeId={(id) => setTaskTypeId(id == null ? '' : String(id))}
+          onCreateTaskTypePath={onCreateTaskTypePath}
+        />
       </div>
 
       <input
@@ -402,14 +398,6 @@ function capitalize(value: string) {
 
 function normalizeShortcut(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
-}
-
-function taskTypeIcon(name: string) {
-  const normalized = name.toLowerCase()
-  if (normalized.includes('deep')) return 'psychology'
-  if (normalized.includes('errand')) return 'directions_walk'
-  if (normalized.includes('admin')) return 'inbox'
-  return 'sell'
 }
 
 function dueLabel(value: string, today: string, tomorrow: string, nextWeek: string) {

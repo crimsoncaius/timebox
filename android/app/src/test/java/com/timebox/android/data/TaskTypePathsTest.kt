@@ -145,6 +145,13 @@ class TaskTypePathsTest {
     }
 
     @Test
+    fun `matching and create treat stored names case-insensitively`() {
+        val mixed = listOf(taskType(2, "Reading", 19))
+        assertEquals(listOf("Reading"), names(rankTaskTypes(mixed, "reading")))
+        assertFalse(shouldOfferCreate(mixed, "Reading"))
+    }
+
+    @Test
     fun `hint names the parent when every ancestor already exists`() {
         assertEquals(
             CreateAncestorHint("Adds under existing ", "coding/ai"),

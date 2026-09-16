@@ -21,6 +21,7 @@ import { BattlePlanSidebar } from './BattlePlanSidebar'
 import { persistBattlePlanScope, type BattlePlanScope } from './battlePlanState'
 import { ProjectEditor } from './ProjectEditor'
 import { PriorityControl } from './TaskDetailPanel'
+import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const buttonClass = 'rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
@@ -203,6 +204,11 @@ export function RecurringPage() {
           template={editing}
           applicationToday={formApplicationToday}
           taskTypes={taskTypes}
+          onCreateTaskTypePath={async (name) => {
+            const created = await api.createTaskType({ name })
+            setTaskTypes(await api.listTaskTypes())
+            return created
+          }}
           onClose={() => { setCreating(false); setEditing(null) }}
           onSaved={async (saved) => {
             setCreating(false)
@@ -391,13 +397,14 @@ function recurrenceSummary({
   return `${cadence}, starting ${start}, ${endingText}.`
 }
 
-function TemplateForm({ initialMode, template, applicationToday, taskTypes, onClose, onSaved }: {
+function TemplateForm({ initialMode, template, applicationToday, taskTypes, onClose, onSaved, onCreateTaskTypePath }: {
   initialMode: RecurrenceMode
   template: RecurringTemplate | null
   applicationToday: string
   taskTypes: TaskType[]
   onClose: () => void
   onSaved: (template: RecurringTemplate) => Promise<void>
+  onCreateTaskTypePath: (path: string) => Promise<TaskType>
 }) {
   const [mode, setMode] = useState<RecurrenceMode>(initialMode)
   const [title, setTitle] = useState(template?.title ?? '')
@@ -622,7 +629,14 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
           <input autoFocus required aria-label="Title" placeholder="Untitled recurring task" value={title} onChange={(event) => setTitle(event.target.value)} className="w-full border-0 bg-transparent p-0 font-headline text-2xl font-light tracking-[-0.02em] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-title-placeholder)]" />
           <textarea rows={2} aria-label="Description" placeholder="Notes and context" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-3.5 w-full resize-y border-0 border-l-2 border-l-[var(--color-paper-rule)] bg-transparent py-0.5 pr-0 pl-3.5 text-sm leading-[1.7] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-muted)]" />
           <div className="mt-[18px] grid gap-3.5 sm:grid-cols-2">
-            <Select label="Task type" value={taskTypeId} unset={!taskTypeId} onChange={setTaskTypeId}><option value="">Unset</option>{taskTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</Select>
+            <TaskTypePathCombobox
+              label="Task type"
+              allowUnset
+              taskTypes={taskTypes}
+              valueTaskTypeId={taskTypeId ? Number(taskTypeId) : null}
+              onSelectTaskTypeId={(id) => setTaskTypeId(id == null ? '' : String(id))}
+              onCreateTaskTypePath={onCreateTaskTypePath}
+            />
           </div>
         </section>
 

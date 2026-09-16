@@ -202,6 +202,12 @@ export function BattlePlanPage() {
     return () => { active = false }
   }, [collection, ingestTasks, preferences.scope, setPrefs])
 
+  const createTaskTypePath = useCallback(async (name: string) => {
+    const created = await api.createTaskType({ name })
+    setTaskTypes(await api.listTaskTypes())
+    return created
+  }, [])
+
   const switchCollection = (next: TaskCollection) => {
     setSearchParams(next === 'active' ? {} : { collection: next })
     setError(null)
@@ -477,6 +483,7 @@ export function BattlePlanPage() {
                         onMoveProject={setMovingTask}
                         onToggleReady={setReadyToPlan}
                         onSetTaskCompletion={setTaskCompletion}
+                        onCreateTaskTypePath={createTaskTypePath}
                       />
                     ))}
                   </div>
@@ -527,6 +534,7 @@ export function BattlePlanPage() {
             if (id === selectedTask.id) closeTask()
             ingestTasks(withoutTask(storedTasks, id))
           }}
+          onCreateTaskTypePath={createTaskTypePath}
         />
       ) : null}
 
@@ -572,7 +580,7 @@ export function BattlePlanPage() {
   )
 }
 
-function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion, onMoveProject }: {
+function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion, onMoveProject, onCreateTaskTypePath }: {
   status: TaskStatus
   tasks: BattleTask[]
   projects: Project[]
@@ -587,6 +595,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   onMoveProject: (task: BattleTask) => void
   onToggleReady: (id: number, ready: boolean) => Promise<void>
   onSetTaskCompletion: (id: number, completed: boolean) => Promise<void>
+  onCreateTaskTypePath: (path: string) => Promise<TaskType>
 }) {
   const readiness = useReadinessCoordinator()
   const { ref, isDropTarget } = useDroppable({ id: `column:${status}`, accept: 'battle-task' })
@@ -610,6 +619,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
         timezone={timezone}
         serverNowIso={serverNowIso}
         onCreate={onCreate}
+        onCreateTaskTypePath={onCreateTaskTypePath}
       />
       <div className="space-y-3">
         {tasks.map((task, index) => (

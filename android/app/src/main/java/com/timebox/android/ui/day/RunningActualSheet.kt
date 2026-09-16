@@ -59,6 +59,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
     var name by remember(actual.id) { mutableStateOf(actual.name.orEmpty()) }
     var note by remember(actual.id) { mutableStateOf(actual.note.orEmpty()) }
     var typeId by remember(actual.id) { mutableStateOf(actual.taskTypeId) }
+    var typeQuery by remember(actual.id) { mutableStateOf(actual.taskType.name.takeUnless { it == "unspecified" }.orEmpty()) }
     var start by remember(actual.id) { mutableStateOf(ActivityTimeValue.from(parseActivityInstant(actual.startAt), zone)) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -66,12 +67,36 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
     var timing by remember { mutableStateOf<ActivityTimeValue?>(null) }
     var nextName by remember { mutableStateOf("") }
     var nextTypeId by remember { mutableStateOf<Int?>(null) }
-    var choosingType by remember { mutableStateOf(false) }
-    val types = state.snapshot?.taskTypes.orEmpty().map { it.toModel() }
+    var createdTypes by remember { mutableStateOf(emptyList<com.timebox.android.data.TaskType>()) }
+    val typeRepository = (context.applicationContext as TimeboxApplication).repository
+    val types = (state.snapshot?.taskTypes.orEmpty().map { it.toModel() } + createdTypes).distinctBy { it.id }
     val enabled = !busy && !state.busy
     val title = actual.name?.takeIf { it.isNotBlank() } ?: actual.taskType.name.takeUnless { it == "unspecified" } ?: "Unnamed activity"
+    val createType: (String) -> Unit = { path ->
+        if (!busy) {
+            busy = true
+            error = null
+            scope.launch {
+                try {
+                    val created = typeRepository.createTaskType(path).getOrThrow()
+                    createdTypes = createdTypes + created
+                    typeId = created.id
+                    typeQuery = created.name
+                    nextTypeId = created.id
+                    repository.refresh()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (cause: Exception) {
+                    error = cause.message ?: "Could not create Task Type."
+                } finally {
+                    busy = false
+                }
+            }
+        }
+    }
     fun edit() {
         name = actual.name.orEmpty(); note = actual.note.orEmpty(); typeId = actual.taskTypeId
+        typeQuery = actual.taskType.name.takeUnless { it == "unspecified" }.orEmpty()
         start = ActivityTimeValue.from(parseActivityInstant(actual.startAt), zone)
         error = null; editing = true
     }
@@ -94,7 +119,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
             enabled, busy || state.busy, error, { if (!busy) { action = null; error = null } }, {
                 nextTypeId?.let { id -> submit({ repository.command(ActivityKind.Switch, id, nextName,
                     effectiveAt = timing?.resolve(zone), observedTargetId = actual.id) }, onDismiss) }
-            }, loadPlanTitles = loadPlanTitles)
+            }, onCreateType = createType, loadPlanTitles = loadPlanTitles)
         return
     }
     if (action == "stop") {
@@ -131,14 +156,14 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
                         label = { Text("Block Name (optional)") }, modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field)
                     ActivityTimeField("Started", start, zone, compact = true, enabled = enabled) { start = it }
                     Text("Reporting Time Zone: $zone", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
-                    Box {
-                        OutlinedButton(enabled = enabled, onClick = { choosingType = true }, modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field) {
-                            Text("Task Type: ${types.find { it.id == typeId }?.name ?: actual.taskType.name}", Modifier.weight(1f)); Text("⌄")
-                        }
-                        DropdownMenu(choosingType, { choosingType = false }) {
-                            types.forEach { item -> DropdownMenuItem(text = { Text(item.name) }, onClick = { typeId = item.id; choosingType = false }) }
-                        }
-                    }
+                    TaskTypePicker(
+                        taskTypes = types,
+                        query = typeQuery,
+                        onQueryChange = { if (enabled) typeQuery = it },
+                        selectedTypeId = typeId,
+                        onChoose = { if (enabled) { typeId = it.id; typeQuery = it.name } },
+                        onCreate = createType,
+                    )
                     OutlinedTextField(note, { note = it }, enabled = enabled, label = { Text("Note (optional)") },
                         modifier = Modifier.fillMaxWidth(), minLines = 2, shape = TimeboxShapes.field)
                 }

@@ -80,6 +80,7 @@ internal fun TaskFieldsSheet(
     onDiscard: () -> Unit,
     onRetrySave: () -> Unit,
     onCreate: () -> Unit = {},
+    onCreateTaskType: (String) -> Unit = {},
     onComplete: () -> Unit = {},
     onReady: (Boolean) -> Unit = { onChange(draft.copy(readyToPlan = it)) },
     fieldsLocked: Boolean = false,
@@ -172,7 +173,7 @@ internal fun TaskFieldsSheet(
                     TaskFieldChip(Icons.Outlined.Flag, "Importance${draft.importance?.let { ": ${it.name}" }.orEmpty()}", editable) { open(TaskSheetField.Importance) }
                     TaskFieldChip(Icons.Outlined.Schedule, "Urgency${draft.urgency?.let { ": ${it.name}" }.orEmpty()}", editable) { open(TaskSheetField.Urgency) }
                     TaskFieldChip(Icons.Outlined.NotificationsNone, if (draft.reminderEnabled) "Reminder: ${draft.reminderDate} ${draft.reminderTime}" else "Reminder", editable) { open(TaskSheetField.Reminder) }
-                    TaskFieldChip(Icons.AutoMirrored.Outlined.Label, taskTypes.firstOrNull { it.id == draft.taskTypeId }?.name ?: "Task type", editable) { open(TaskSheetField.TaskType) }
+                    TaskFieldChip(Icons.AutoMirrored.Outlined.Label, taskTypes.firstOrNull { it.id == draft.taskTypeId }?.takeUnless { it.name == "unspecified" }?.name ?: "Unset", editable) { open(TaskSheetField.TaskType) }
                     TaskFieldChip(Icons.Outlined.Circle, draft.status.label, editable && completable) { open(TaskSheetField.Status) }
                 }
                 content()
@@ -232,16 +233,15 @@ internal fun TaskFieldsSheet(
                             }
                         }
                     }
-                    TaskSheetField.Project, TaskSheetField.TaskType -> {
+                    TaskSheetField.Project -> {
                         OutlinedTextField(search, { search = it }, singleLine = true, placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp))
-                        val choices = if (active == TaskSheetField.Project) listOf("Admin" to null) + projects.map { it.name to it.id }
-                            else listOf("No task type" to null) + taskTypes.map { it.name to it.id }
+                        val choices = listOf("Admin" to null) + projects.map { it.name to it.id }
                         val matches = choices.filter { it.first.contains(search.trim(), true) }
                         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (matches.isEmpty()) Text("No matches. Try another search.")
                             matches.forEach { (label, id) ->
-                                val selected = id == if (active == TaskSheetField.Project) draft.projectId else draft.taskTypeId
-                                Surface(selected = selected, onClick = { commit(if (active == TaskSheetField.Project) edited.copy(projectId = id) else edited.copy(taskTypeId = id)) }, enabled = !saving,
+                                val selected = id == draft.projectId
+                                Surface(selected = selected, onClick = { commit(edited.copy(projectId = id)) }, enabled = !saving,
                                     shape = RoundedCornerShape(12.dp), color = if (selected) colors.selected else colors.low, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(16.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text(label, Modifier.weight(1f)); if (selected) Icon(Icons.Outlined.Check, "Selected")
@@ -249,6 +249,18 @@ internal fun TaskFieldsSheet(
                                 }
                             }
                         }
+                    }
+                    TaskSheetField.TaskType -> {
+                        com.timebox.android.ui.day.TaskTypePicker(
+                            taskTypes = taskTypes,
+                            query = search,
+                            onQueryChange = { search = it },
+                            selectedTypeId = draft.taskTypeId.takeUnless { id -> taskTypes.find { it.id == id }?.name == "unspecified" },
+                            onChoose = { commit(edited.copy(taskTypeId = it.id)) },
+                            onCreate = onCreateTaskType,
+                            allowUnset = true,
+                            onUnset = { commit(edited.copy(taskTypeId = null)) },
+                        )
                     }
                     TaskSheetField.Status -> listOf(TaskStatus.Open, TaskStatus.InProgress).forEach { status ->
                         TextButton(onClick = { commit(edited.copy(status = status)) }, enabled = !saving) { Text(status.label) }

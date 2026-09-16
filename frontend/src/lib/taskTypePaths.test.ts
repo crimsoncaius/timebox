@@ -85,6 +85,12 @@ describe('taskTypePaths', () => {
     expect(filterTaskTypesByQuery(deep, 'b/c').map((t) => t.name)).toEqual(['a/b/c'])
   })
 
+  it('matches stored names case-insensitively', () => {
+    const mixed: TaskType[] = [{ id: 2, name: 'Reading', created_at: '', updated_at: '' }]
+    expect(filterTaskTypesByQuery(mixed, 'reading').map((t) => t.name)).toEqual(['Reading'])
+    expect(buildTaskTypeSuggestions(mixed, 'Reading').createPath).toBeNull()
+  })
+
   it('filterTaskTypesByQuery matches a repaired double-slash query', () => {
     expect(filterTaskTypesByQuery(rows, 'coding//a').map((t) => t.name)).toEqual([
       'coding',

@@ -584,7 +584,7 @@ private fun PlanningTaskCard(
         ReadyToPlanFailureNotice(task, Modifier.padding(end = 7.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = task.taskType?.leaf ?: "Unspecified",
+                text = task.taskType?.leaf ?: "Unset",
                 style = TimeboxTheme.type.bodySmall,
                 color = colors.onVariant,
                 maxLines = 1,

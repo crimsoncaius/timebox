@@ -113,6 +113,10 @@ function pathMatchScore(path: string, query: string): number {
   return 4
 }
 
+function canonicalName(name: string): string {
+  return canonicalizeTaskTypePathInput(name) ?? name.trim().toLowerCase()
+}
+
 function usageCount(type: TaskType): number {
   return type.usage_count ?? 0
 }
@@ -143,9 +147,9 @@ export function rankTaskTypes(
   const canonicalQuery = canonicalizeTaskTypePathInput(query)
   if (!canonicalQuery) return rankEmptyQuery(taskTypes, currentTypeId)
   return taskTypes
-    .filter((row) => pathMatchesQuery(row.name, canonicalQuery))
+    .filter((row) => pathMatchesQuery(canonicalName(row.name), canonicalQuery))
     .sort((a, b) => {
-      const score = pathMatchScore(a.name, canonicalQuery) - pathMatchScore(b.name, canonicalQuery)
+      const score = pathMatchScore(canonicalName(a.name), canonicalQuery) - pathMatchScore(canonicalName(b.name), canonicalQuery)
       if (score !== 0) return score
       return a.name.localeCompare(b.name)
     })
@@ -173,7 +177,7 @@ export function buildTaskTypeSuggestions(
   const canonicalQuery = canonicalizeTaskTypePathInput(query)
   const rows = rankTaskTypes(taskTypes, query, currentTypeId)
   if (!canonicalQuery) return { rows, createPath: null }
-  const exact = taskTypes.some((row) => row.name === canonicalQuery)
+  const exact = taskTypes.some((row) => canonicalName(row.name) === canonicalQuery)
   return { rows, createPath: exact ? null : canonicalQuery }
 }
 
@@ -189,7 +193,7 @@ export function createAncestorHint(
 ): CreateAncestorHint | null {
   const ancestors = taskTypePathPrefixes(canonicalPath).slice(0, -1)
   if (ancestors.length === 0) return null
-  const existing = new Set(taskTypes.map((type) => type.name))
+  const existing = new Set(taskTypes.map((type) => canonicalName(type.name)))
   const missing = ancestors.filter((path) => !existing.has(path))
   if (missing.length === 0) {
     return { lead: 'Adds under existing ', path: ancestors[ancestors.length - 1]! }

@@ -76,20 +76,38 @@ fun ActivityTracking(
     val checkIns = (LocalContext.current.applicationContext as? TimeboxApplication)?.checkIns
     val detectionAccess = checkIns?.access?.collectAsState()?.value
     val context = LocalContext.current
+    val typeRepository = (context.applicationContext as TimeboxApplication).repository
+    var createdTypes by remember { mutableStateOf(emptyList<TaskType>()) }
+    var typeQuery by remember { mutableStateOf("") }
     val requestedQuestion = checkIns?.openQuestion?.collectAsState()?.value
     LaunchedEffect(requestedQuestion, question?.id) {
         if (requestedQuestion != null && requestedQuestion == question?.id) { checkInOpen = true; checkIns?.consumeOpen() }
     }
     fun dismissCheckIn() { checkInOpen = false; question?.let { scope.launch { repository.dismissCheckIn(it.id) } } }
 
-    LaunchedEffect(current?.id) { selectedType = null }
+    LaunchedEffect(current?.id) { selectedType = null; typeQuery = "" }
     val plan = repository.currentPlan()
     val enabled = !state.busy && state.snapshot != null
     val statusFlags = StatusFlags(
         offline = state.offline, pending = state.pending, busy = state.busy,
         hasSnapshot = state.snapshot != null, error = state.error,
     )
-    val availableTypes = state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes
+    val availableTypes = ((state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes) + createdTypes).distinctBy { it.id }
+    val createType: (String) -> Unit = { path ->
+        scope.launch {
+            try {
+                val created = typeRepository.createTaskType(path).getOrThrow()
+                createdTypes = createdTypes + created
+                selectedType = created
+                typeQuery = created.name
+                withContext(Dispatchers.IO) { repository.refresh() }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (cause: Exception) {
+                timingError = cause.message ?: "Could not create Task Type."
+            }
+        }
+    }
     var expanded by remember(current?.id) { mutableStateOf(false) }
     BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
     val colors = TimeboxTheme.colors
@@ -183,13 +201,14 @@ fun ActivityTracking(
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Describe this activity", style = TimeboxTheme.type.screenTitle, color = colors.on)
             Text("What have you been doing?", style = TimeboxTheme.type.body, color = colors.onVariant)
-            availableTypes.filter { it.name != "unspecified" }.forEach { type ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = selectedType?.id == type.id, onClick = { selectedType = type }, enabled = enabled)
-                    TextButton(onClick = { selectedType = type }, enabled = enabled) { Text(type.name, style = TimeboxTheme.type.body, color = colors.on) }
-                }
-            }
-            if (availableTypes.none { it.name != "unspecified" }) Text("Add a Task Type in Types to describe this activity.", style = TimeboxTheme.type.body, color = colors.onVariant)
+            TaskTypePicker(
+                taskTypes = availableTypes,
+                query = typeQuery,
+                onQueryChange = { if (enabled) typeQuery = it },
+                selectedTypeId = selectedType?.id,
+                onChoose = { if (enabled) { selectedType = it; typeQuery = it.name } },
+                onCreate = createType,
+            )
             HorizontalDivider(color = colors.hairline)
             Text("Apply to", style = TimeboxTheme.type.sectionTitle, color = colors.on)
             val started = java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm").withZone(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC")).format(parseActivityInstant(current.startAt))
@@ -243,7 +262,7 @@ fun ActivityTracking(
                 ?.associate { it.id to it.primaryIdentity() }.orEmpty()
         },
         records = state.snapshot?.records.orEmpty(), plans = state.snapshot?.plans.orEmpty(),
-        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it },
+        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name },
         name = name, onNameChange = { name = it }, timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
@@ -255,11 +274,12 @@ fun ActivityTracking(
                 try {
                     val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
                     if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId) }) {
-                        switching = false; selectedType = null; name = ""
+                        switching = false; selectedType = null; name = ""; typeQuery = ""
                     } else timingError = repository.state.value.error
                 } catch (error: Exception) { timingError = error.message }
             }
         },
+        onCreateType = createType,
     )
     val stopTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (stopping && stopTarget != null) StopTrackingSheet(

@@ -12,6 +12,7 @@ internal fun TaskComposerOverlay(
     onReminderEnabledChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onCreate: () -> Unit,
+    onCreateTaskType: (String) -> Unit = {},
 ) {
     val draft = state.composerDraft
     TaskFieldsSheet(
@@ -22,6 +23,7 @@ internal fun TaskComposerOverlay(
         onRequestNotificationPermission = onRequestNotificationPermission,
         onChange = { onDraftChange(draft.withDetailDraft(it)) },
         onDismiss = onDismiss, onDiscard = {}, onRetrySave = onCreate, onCreate = onCreate,
+        onCreateTaskType = onCreateTaskType,
         fieldsLocked = state.composerCreatedTaskId != null,
     ) {
         TaskSubtasks(emptyList(), state.composerCreatedTaskId == null, state.saving, null, {}, {},

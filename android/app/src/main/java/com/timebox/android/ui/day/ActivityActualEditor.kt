@@ -116,7 +116,6 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
             val clock = DateTimeFormatter.ofPattern("HH:mm")
             val dateTime = DateTimeFormatter.ofPattern("d MMM HH:mm")
             val format = if (localStart.toLocalDate() == localEnd.toLocalDate()) clock else dateTime
-            var choosingType by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxWidth().heightIn(max = 760.dp).imePadding()) {
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -139,21 +138,17 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                     OutlinedTextField(name, { name = it.take(500) }, enabled = !saving,
                         label = { Text("Block Name (optional)") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)
-                    Box {
-                        OutlinedButton(enabled = !saving, onClick = { choosingType = true },
-                            modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field) {
-                            Column(Modifier.weight(1f).padding(vertical = 3.dp)) {
-                                Text("TASK TYPE", style = TimeboxTheme.type.kicker)
-                                Text(snapshot.snapshot?.taskTypes?.find { it.id == type }?.name ?: actual.taskType.name,
-                                    style = TimeboxTheme.type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            }
-                            Text("⌄")
-                        }
-                        DropdownMenu(expanded = choosingType, onDismissRequest = { choosingType = false }) {
-                            snapshot.snapshot?.taskTypes.orEmpty().forEach { item ->
-                                DropdownMenuItem(text = { Text(item.name) }, onClick = { type = item.id; choosingType = false })
-                            }
-                        }
+                    Column {
+                        Text("TASK TYPE", style = TimeboxTheme.type.kicker, color = colors.onVariant)
+                        Spacer(Modifier.height(8.dp))
+                        TaskTypePicker(
+                            taskTypes = taskTypes,
+                            query = typeQuery,
+                            onQueryChange = { if (!saving) typeQuery = it },
+                            selectedTypeId = type,
+                            onChoose = { if (!saving) { type = it.id; typeQuery = it.name } },
+                            onCreate = createType,
+                        )
                     }
                     OutlinedTextField(note, { note = it }, enabled = !saving, label = { Text("Note (optional)") },
                         modifier = Modifier.fillMaxWidth(), minLines = 2, shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)

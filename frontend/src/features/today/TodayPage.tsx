@@ -1218,7 +1218,7 @@ function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, pending, 
       >
         <span className="block truncate text-sm font-medium text-on-surface">{displayTitle}</span>
         <span className="mt-1 block text-xs text-on-surface-variant">
-          {pending ? 'Saving · unavailable to plan' : task.task_type?.name ?? 'Unspecified'}
+          {pending ? 'Saving · unavailable to plan' : task.task_type?.name ?? 'Unset'}
         </span>
       </button>
       <ReadinessFailureNotice task={task} className="self-center px-2" />
