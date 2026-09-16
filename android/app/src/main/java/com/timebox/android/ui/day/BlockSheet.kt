@@ -1,7 +1,5 @@
 package com.timebox.android.ui.day
 
-import com.timebox.android.ui.elapsedDuration
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.Lane
-import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
@@ -75,7 +72,7 @@ fun BlockSheet(
     onUndoRecording: () -> Unit = {},
 ) {
     if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
-        ActivityActualEditor(state, onDismiss, onOpenLinkedTask = onOpenLinkedTask)
+        ActivityActualEditor(state, onDismiss, onOpenLinkedTask = onOpenLinkedTask, onOpenPlanned = onOpenActual)
         return
     }
     val colors = TimeboxTheme.colors
@@ -108,6 +105,7 @@ fun BlockSheet(
             )
         },
     ) {
+        val restyleTime = !isDraft && lane == Lane.Planned
         Column(
             modifier = Modifier
                 // Outside the scroll, so the keyboard shrinks the viewport instead of
@@ -148,25 +146,34 @@ fun BlockSheet(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = duration(state.sheetEnd - state.sheetStart),
-                    style = TimeboxTheme.type.mono,
-                    color = colors.onVariant,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colors.surf)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                )
+                if (!restyleTime) {
+                    Text(
+                        text = duration(state.sheetEnd - state.sheetStart),
+                        style = TimeboxTheme.type.mono,
+                        color = colors.onVariant,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.surf)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
             }
 
             Spacer(Modifier.height(14.dp))
-            Text(
-                text = "${hhmm(state.sheetStart)} – ${hhmm(state.sheetEnd)}",
-                style = TimeboxTheme.type.display,
-                color = colors.on,
-            )
-            state.selectedBlock?.let { block ->
-                BlockTimeFields(block, state.day, state.saving) { start, end -> onChangeTimes(block.id, start, end) }
+            if (restyleTime) {
+                PlannedTimeRangeHeader(state.sheetStart, state.sheetEnd)
+                state.selectedBlock?.let { block ->
+                    CompactBlockTimeFields(block, state.day, state.saving) { start, end -> onChangeTimes(block.id, start, end) }
+                }
+            } else {
+                Text(
+                    text = "${hhmm(state.sheetStart)} – ${hhmm(state.sheetEnd)}",
+                    style = TimeboxTheme.type.display,
+                    color = colors.on,
+                )
+                state.selectedBlock?.let { block ->
+                    BlockTimeFields(block, state.day, state.saving) { start, end -> onChangeTimes(block.id, start, end) }
+                }
             }
             Spacer(Modifier.height(6.dp))
             Text(
@@ -184,29 +191,27 @@ fun BlockSheet(
             )
 
             Spacer(Modifier.height(18.dp))
-            state.selectedBlock?.takeIf { it.lane == Lane.Planned && it.actualBlockIds.isNotEmpty() }?.let {
-                Text("Actual recorded · ${it.actualBlockIds.size} linked Actual Blocks · ${elapsedDuration(it.actualDurationMinutes.toLong())} recorded", color = colors.onVariant)
-                it.actualBlockIds.forEachIndexed { index, id -> TextButton(onClick = { onOpenActual(id) }) { Text(if (it.actualBlockIds.size == 1) "Open Actual" else "Open Actual ${index + 1}") } }
-            }
             state.selectedBlock?.takeIf { it.lane == Lane.Planned }?.let { block ->
                 val now = androidx.compose.runtime.produceState(java.time.Instant.now()) {
                     while (true) { kotlinx.coroutines.delay(1000); value = java.time.Instant.now() }
                 }.value
-                val zone = java.time.ZoneId.of(state.day?.timezone ?: "UTC")
-                val start = state.date.atStartOfDay().plusMinutes(block.startMinute.toLong()).atZone(zone).toInstant()
-                val end = state.date.atStartOfDay().plusMinutes(block.endMinute.toLong()).atZone(zone).toInstant()
-                TextButton(onClick = onRecordPlanned, enabled = !state.saving && now > start) {
-                    Text(if (now < end) "Record Actual until now" else "Record Actual as planned")
+                val recordingNotice = state.recordingNotice?.takeIf { it.first == state.selectedBlockId }?.second
+                if (restyleTime) {
+                    PlannedRecordingStudy(
+                        block = block,
+                        day = state.day,
+                        now = now,
+                        saving = state.saving,
+                        notice = recordingNotice,
+                        undoAvailable = state.recordingUndo != null,
+                        error = state.recordingError,
+                        onRecord = onRecordPlanned,
+                        onOpenActual = onOpenActual,
+                        onUndo = onUndoRecording,
+                    )
                 }
-                if (now <= start) Text("Available after this block starts.")
             }
-            val recordingNotice = state.recordingNotice?.takeIf { it.first == state.selectedBlockId }?.second
-            if (state.recordingUndo != null) {
-                com.timebox.android.ui.components.TransientFeedback(recordingNotice ?: "Actual recorded", actionLabel = "Undo", onAction = onUndoRecording, actionsEnabled = !state.saving)
-            } else if (recordingNotice != null) {
-                com.timebox.android.ui.components.TransientFeedback(recordingNotice)
-            }
-            state.recordingError?.let { Text(it, color = colors.error) }
+            Spacer(Modifier.height(if (restyleTime) 24.dp else 18.dp))
             val linkedTask = state.selectedBlock?.task
             val linkedTaskId = linkedTask?.id
             if (linkedTaskId != null) {
@@ -233,7 +238,7 @@ fun BlockSheet(
             }
             if (isNameEditable) {
                 SheetLabel("Name")
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = state.nameInput,
                     onValueChange = onNameChange,
