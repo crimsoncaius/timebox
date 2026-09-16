@@ -33,7 +33,8 @@ import java.time.ZoneId
 @Composable
 fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                          repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
-                         onOpenLinkedTask: (Int) -> Unit = {}) {
+                         onOpenLinkedTask: (Int) -> Unit = {},
+                         onOpenPlanned: (Int) -> Unit = {}) {
     val snapshot by repository.state.collectAsState()
     val actual = snapshot.snapshot?.records?.find { it.id == state.selectedBlockId }
     val openedRunning = remember(state.selectedBlockId) { actual != null && actual.endAt == null }
@@ -134,6 +135,19 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.weight(1f)) { ActivityTimeField("Start", start, zone, compact = true, enabled = !saving, onChange = { start = it }) }
                         Box(Modifier.weight(1f)) { ActivityTimeField("End", end, zone, compact = true, enabled = !saving, onChange = { end = it }) }
+                    }
+                    val plan = actual.plannedBlockId?.let { planId ->
+                        state.day?.blocks?.firstOrNull { it.lane == com.timebox.android.data.Lane.Planned && it.id == planId }
+                    }
+                    plan?.let {
+                        val startMinute = localStart.hour * 60 + localStart.minute
+                        val endMinute = localEnd.hour * 60 + localEnd.minute
+                        val timesMatch = startMinute == it.startMinute && endMinute == it.endMinute
+                        ActualPlanLink(
+                            it,
+                            caption = if (timesMatch) "From this plan · already recorded" else "From this plan · times differ",
+                            onOpen = { onOpenPlanned(it.id) },
+                        )
                     }
                     OutlinedTextField(name, { name = it.take(500) }, enabled = !saving,
                         label = { Text("Block Name (optional)") }, singleLine = true,

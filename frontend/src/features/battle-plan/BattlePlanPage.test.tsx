@@ -355,6 +355,39 @@ describe('BattlePlanPage', () => {
     expect(activeTasks.find((row) => row.title === 'Waiting for review')).toMatchObject({ status: 'open', is_blocked: true })
   })
 
+  it('types a new Battle Plan Task title without remounting or refetching Battle Plan', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const dialog = await screen.findByRole('dialog', { name: 'Task details' })
+    await user.click(screen.getByLabelText('Add Open task'))
+    const composer = screen.getByRole('form', { name: 'New task' })
+    const title = within(composer).getByLabelText('Task title')
+    const listsAfterOpen = activeListReads
+
+    await user.type(title, 'Prepare review')
+
+    expect(screen.getByRole('form', { name: 'New task' })).toBe(composer)
+    expect(screen.getByRole('dialog', { name: 'Task details' })).toBe(dialog)
+    expect(title).toHaveValue('Prepare review')
+    expect(title).toHaveFocus()
+    expect(activeListReads).toBe(listsAfterOpen)
+  })
+
+  it('types an existing Battle Plan Task title without remounting or refetching Battle Plan', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
+    const dialog = await screen.findByRole('dialog', { name: 'Task details' })
+    const title = within(dialog).getByLabelText('Title')
+    const listsAfterOpen = activeListReads
+
+    await user.type(title, ' extra')
+
+    expect(screen.getByRole('dialog', { name: 'Task details' })).toBe(dialog)
+    expect(title).toHaveValue('Draft launch brief extra')
+    expect(title).toHaveFocus()
+    expect(activeListReads).toBe(listsAfterOpen)
+  })
+
   it('checks a Subtask without reloading Battle Plan', async () => {
     activeTasks = [task({ subtasks: [subtask()] })]
     const user = userEvent.setup()

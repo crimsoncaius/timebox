@@ -405,7 +405,8 @@ private fun InteractiveDayPager(
                             date = date,
                             page = state.page(date),
                             scrollState = if (pagePosition == 0) timelineScroll else previewScroll,
-                            autoScrollToNow = pagePosition == 0 && date == state.today,
+                            autoScrollToNow = pagePosition == 0 && date == state.today && !state.skipScrollToNow,
+                            scrollToNowRequest = state.scrollToNowRequest,
                             selectedBlockId = if (interactive) state.selectedBlockId else null,
                             draft = if (interactive) state.draft else null,
                             onRetry = { onRetry(date) },
@@ -433,6 +434,7 @@ private fun DayPage(
     page: DayPageState,
     scrollState: ScrollState,
     autoScrollToNow: Boolean,
+    scrollToNowRequest: Int,
     selectedBlockId: Int?,
     draft: Draft?,
     onRetry: () -> Unit,
@@ -504,6 +506,7 @@ private fun DayPage(
                     enabled = autoScrollToNow,
                     scrollState = scrollState,
                     viewportHeightPx = viewportHeightPx,
+                    scrollToNowRequest = scrollToNowRequest,
                 )
             }
         }
@@ -543,8 +546,9 @@ internal fun AutoScrollTimelineToNowOnce(
     enabled: Boolean,
     scrollState: ScrollState,
     viewportHeightPx: Int,
+    scrollToNowRequest: Int = 0,
 ) {
-    var completed by remember(day.date) { mutableStateOf(false) }
+    var completed by remember(day.date, scrollToNowRequest) { mutableStateOf(false) }
     val slotHeight = timelineSlotHeight()
     val slotHeightPx = with(LocalDensity.current) { slotHeight.toPx() }
     val maxScroll = scrollState.maxValue
@@ -554,6 +558,7 @@ internal fun AutoScrollTimelineToNowOnce(
         day.date,
         viewportHeightPx,
         maxScroll,
+        scrollToNowRequest,
     ) {
         if (!enabled || completed || viewportHeightPx <= 0) return@LaunchedEffect
         val nowMinute = day.nowMinuteAt(System.currentTimeMillis())

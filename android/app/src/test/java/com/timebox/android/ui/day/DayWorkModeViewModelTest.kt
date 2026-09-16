@@ -44,6 +44,38 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DayWorkModeViewModelTest {
     @Test
+    fun `requesting Today again while already there asks the timeline to scroll to the Now Line`() = runTest {
+        val viewModel = loadedViewModel(
+            FakeWorkModeApi(listOf(block(31, 540, 600))),
+            FakeClock("2026-08-30T01:30:00Z"),
+            FakeWorkModePersistence(),
+        )
+        val today = java.time.LocalDate.parse("2026-08-30")
+        assertEquals(today, viewModel.state.value.date)
+        assertEquals(today, viewModel.state.value.today)
+        assertEquals(0, viewModel.state.value.scrollToNowRequest)
+        viewModel.goToDate(today)
+        assertEquals(0, viewModel.state.value.scrollToNowRequest)
+        viewModel.goToDate(today, scrollToNow = true)
+        assertEquals(1, viewModel.state.value.scrollToNowRequest)
+        assertFalse(viewModel.state.value.skipScrollToNow)
+    }
+
+    @Test
+    fun `a Block deep link suppresses scroll to the Now Line until Today is requested again`() = runTest {
+        val viewModel = loadedViewModel(
+            FakeWorkModeApi(listOf(block(31, 540, 600))),
+            FakeClock("2026-08-30T01:30:00Z"),
+            FakeWorkModePersistence(),
+        )
+        viewModel.noteBlockLanding()
+        assertTrue(viewModel.state.value.skipScrollToNow)
+        viewModel.goToDate(java.time.LocalDate.parse("2026-08-30"), scrollToNow = true)
+        assertFalse(viewModel.state.value.skipScrollToNow)
+        assertEquals(1, viewModel.state.value.scrollToNowRequest)
+    }
+
+    @Test
     fun `recording saves text then confirms the frozen preview and undoes`() = runTest {
         val api = FakeWorkModeApi(listOf(block(31, 540, 600)))
         val viewModel = loadedViewModel(api, FakeClock("2026-08-30T01:30:00Z"), FakeWorkModePersistence())

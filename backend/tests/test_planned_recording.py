@@ -49,6 +49,18 @@ def test_partial_repeat_exact_match_and_undo(client, recording):
     assert restored['end_at'] == first['actual_block']['end_at']
 
 
+def test_matching_times_with_edited_note_is_already_recorded(client, recording):
+    _, record, _, _, _ = recording
+    first = record()
+    actual_id = first['actual_block']['id']
+    edited = client.patch(f'/actual-blocks/{actual_id}', json={'note': 'Written after recording'})
+    assert edited.status_code == 200
+    again = record()
+    assert again['status'] == 'already_recorded'
+    assert again['actual_block']['id'] == actual_id
+    assert client.get(f'/actual-blocks/{actual_id}').json()['note'] == 'Written after recording'
+
+
 def test_spanning_record_split_and_atomic_restore(client, recording):
     now, record, undo, actual, _ = recording
     now[0] = now[0].replace(hour=12)

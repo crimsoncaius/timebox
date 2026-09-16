@@ -93,6 +93,8 @@ data class DayUiState(
     val workModeEntryWarning: Boolean = false,
     val workModeRestorePrompt: Boolean = false,
     val workModeRestored: Boolean = false,
+    val scrollToNowRequest: Int = 0,
+    val skipScrollToNow: Boolean = false,
 ) {
     fun page(date: LocalDate): DayPageState = pages[date] ?: DayPageState()
 
@@ -387,8 +389,18 @@ class DayViewModel(
         }
     }
 
-    fun goToDate(date: LocalDate) {
-        if (date == _state.value.date) return
+    fun goToDate(date: LocalDate, scrollToNow: Boolean = false) {
+        if (date == _state.value.date) {
+            if (scrollToNow && date == _state.value.today) {
+                _state.update {
+                    it.copy(
+                        scrollToNowRequest = it.scrollToNowRequest + 1,
+                        skipScrollToNow = false,
+                    )
+                }
+            }
+            return
+        }
         planningSession.toggleSelection(null)
         syncPlanningState()
         _state.update {
@@ -399,6 +411,7 @@ class DayViewModel(
                 nameInput = "",
                 noteInput = "",
                 typeQuery = "",
+                skipScrollToNow = false,
             )
         }
         if (_state.value.isPlanningMode) {
@@ -408,6 +421,10 @@ class DayViewModel(
             }
         }
         load(date)
+    }
+
+    fun noteBlockLanding() {
+        _state.update { it.copy(skipScrollToNow = true) }
     }
 
     fun shiftDay(days: Long) = goToDate(_state.value.date.plusDays(days))

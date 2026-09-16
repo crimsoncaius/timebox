@@ -54,8 +54,10 @@ export const DayTimeline = forwardRef<
     onBlockClick?: (blockId: number, lane: BlockLane) => boolean | void
     /** While a block move/resize drag is active, parent may disable inspector hit-testing. */
     onBlockDragSessionChange?: (active: boolean) => void
-    /** Position today's now line once, leaving more room below it for upcoming work. */
+    /** Position today's Now Line once, leaving more room below it for upcoming work. */
     autoScrollToNow?: boolean
+    /** Increment to re-scroll while already viewing Today. */
+    scrollToNowRequest?: number
     placementSelected?: boolean
     placementPreview?: { start: number; end: number } | null
     onPlacementError?: (message: string) => void
@@ -73,6 +75,7 @@ export const DayTimeline = forwardRef<
     onBlockClick,
     onBlockDragSessionChange,
     autoScrollToNow = false,
+    scrollToNowRequest = 0,
     placementSelected = false,
     placementPreview = null,
     onPlacementError,
@@ -91,6 +94,7 @@ export const DayTimeline = forwardRef<
   const actualRef = useRef<HTMLDivElement>(null)
   const nowLineRef = useRef<HTMLDivElement>(null)
   const autoScrollDateRef = useRef<string | null>(null)
+  const autoScrollRequestRef = useRef(0)
   const autoScrollCompletedRef = useRef(false)
 
   useEffect(() => {
@@ -215,16 +219,25 @@ export const DayTimeline = forwardRef<
     : 0
 
   useEffect(() => {
-    if (autoScrollDateRef.current !== day.date) {
+    if (
+      autoScrollDateRef.current !== day.date
+      || autoScrollRequestRef.current !== scrollToNowRequest
+    ) {
       autoScrollDateRef.current = day.date
+      autoScrollRequestRef.current = scrollToNowRequest
       autoScrollCompletedRef.current = false
     }
-    if (!autoScrollToNow || !showNowLine || autoScrollCompletedRef.current) return
+    if (!autoScrollToNow || autoScrollCompletedRef.current) return
+    if (!showNowLine) {
+      if (isTodayInTz) autoScrollCompletedRef.current = true
+      return
+    }
     const line = nowLineRef.current
-    if (!line) return
+    const timeline = timelineRef.current
+    if (!line || !timeline) return
     autoScrollCompletedRef.current = true
-    scrollCurrentTimeIntoView(line)
-  }, [autoScrollToNow, day.date, showNowLine])
+    scrollCurrentTimeIntoView(line, timeline)
+  }, [autoScrollToNow, day.date, isTodayInTz, scrollToNowRequest, showNowLine])
 
   return (
     <>
@@ -344,10 +357,19 @@ export const DayTimeline = forwardRef<
   )
 })
 
-/** Place the line one-third down the viewport, favoring context for upcoming work. */
-function scrollCurrentTimeIntoView(line: HTMLElement, viewportHeight = window.innerHeight) {
-  const targetTop = viewportHeight / 3
-  window.scrollBy({ top: line.getBoundingClientRect().top - targetTop, behavior: 'auto' })
+/** Place the Now Line one-third down the visible timeline, favoring upcoming work. */
+export function nowLineScrollDelta(lineTop: number, timelineTop: number, viewportHeight: number) {
+  const visibleTop = Math.max(0, timelineTop)
+  const visibleHeight = Math.max(0, viewportHeight - visibleTop)
+  if (visibleHeight <= 0) return 0
+  return lineTop - (visibleTop + visibleHeight / 3)
+}
+
+function scrollCurrentTimeIntoView(line: HTMLElement, timeline: HTMLElement, viewportHeight = window.innerHeight) {
+  window.scrollBy({
+    top: nowLineScrollDelta(line.getBoundingClientRect().top, timeline.getBoundingClientRect().top, viewportHeight),
+    behavior: 'auto',
+  })
 }
 
 function DraftBlockOverlay({
