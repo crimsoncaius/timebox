@@ -29,7 +29,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -222,7 +221,7 @@ fun DayTimeline(
                     modifier = Modifier
                         .offset(x = (-3).dp)
                         .requiredSize(7.dp)
-                        .clip(CircleShape)
+                        .clipInPlace(CircleShape)
                         .background(colors.now),
                 )
             }
@@ -284,7 +283,8 @@ private fun HourGutter(day: Day, slotHeight: Dp, modifier: Modifier = Modifier) 
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 2.dp, end = TimeboxDimens.gutterLabelGap),
+                            .padding(top = 2.dp, end = TimeboxDimens.gutterLabelGap)
+                            .testTag("day-hour-$minute"),
                     )
                 }
             }
@@ -338,7 +338,7 @@ private fun LaneColumn(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(3.dp))
+            .clipInPlace(RoundedCornerShape(3.dp))
             .background(surface)
             .border(1.dp, borderColor, RoundedCornerShape(3.dp))
             .testTag("day-lane-${lane.name.lowercase()}")
@@ -369,9 +369,9 @@ private fun LaneColumn(
                     .offset(y = slotHeight * index)
                     .fillMaxWidth()
                     .height(1.dp)
-                    .graphicsLayer { alpha = 0.55f }
                     .background(
-                        if (minute % 60 == 0) colors.gridStrong else colors.gridSoft
+                        (if (minute % 60 == 0) colors.gridStrong else colors.gridSoft)
+                            .copy(alpha = 0.55f)
                     ),
             )
         }
@@ -699,13 +699,14 @@ private fun PlanningDraftCard(
             .fillMaxWidth()
             .height(if (resizePreview != null) height else animatedHeight)
             .onGloballyPositioned { cardRoot = it.positionInRoot() }
-            .graphicsLayer {
-                alpha = if (dragging) 0f else 1f
-                scaleX = if (dragging) 0.98f else 1f
-                scaleY = if (dragging) 0.98f else 1f
-            }
-            .shadow(if (dragging) 12.dp else 3.dp, TimeboxShapes.block, clip = false)
-            .clip(TimeboxShapes.block)
+            .then(
+                if (dragging) Modifier.graphicsLayer {
+                    alpha = 0f
+                    scaleX = 0.98f
+                    scaleY = 0.98f
+                } else Modifier
+            )
+            .clipInPlace(TimeboxShapes.block)
             .background(colors.planned.copy(alpha = if (colors.isDark) 0.30f else 0.13f))
             .border(1.dp, colors.plannedBorder, TimeboxShapes.block)
             .semantics {
@@ -851,12 +852,7 @@ private fun BlockCard(
     val height = max(slotHeight.value * slotsTall, 1f).dp
     val grooves = resizeEnabled && (height >= 64.dp || dragging)
     val innerHeight = height - if (grooves) TimeboxDimens.grooveHeight * 2 else 0.dp
-    val elevation = when {
-        dragging -> 16.dp
-        selected -> 8.dp
-        else -> 0.dp
-    }
-    var cardTopInRoot by remember(block.id) { mutableFloatStateOf(0f) }
+    val cardTopInRoot = remember(block.id) { mutableFloatStateOf(0f) }
     var resolvedDrag by remember(block.id) { mutableStateOf<DragState?>(null) }
     val currentDrag by rememberUpdatedState(onDrag)
     val currentTap by rememberUpdatedState(onTap)
@@ -867,11 +863,10 @@ private fun BlockCard(
             .padding(horizontal = 3.dp)
             .fillMaxWidth()
             .height(height)
-            .onGloballyPositioned { cardTopInRoot = it.positionInRoot().y }
+            .onGloballyPositioned { cardTopInRoot.floatValue = it.positionInRoot().y }
             .testTag("day-block-${block.id}")
-            .graphicsLayer { if (dragging) rotationZ = -1f }
-            .shadow(elevation, TimeboxShapes.block, clip = false)
-            .clip(TimeboxShapes.block)
+            .then(if (dragging) Modifier.graphicsLayer { rotationZ = -1f }.shadow(16.dp, TimeboxShapes.block, clip = false) else Modifier)
+            .clipInPlace(TimeboxShapes.block)
             .background(
                 when {
                     height < 22.dp ->
@@ -923,11 +918,11 @@ private fun BlockCard(
                         mode = if (grooves) dragModeForPress(down.y) else DragMode.Move
                         total = 0f
                         resolvedDrag = null
-                        if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot + down.y)
+                        if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot.floatValue + down.y)
                     },
                     onDrag = { change, moved ->
                         total += moved.y
-                        if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot + change.position.y)
+                        if (mode == DragMode.Move) onDragPointer?.invoke(cardTopInRoot.floatValue + change.position.y)
                         resolvedDrag = currentDrag(mode, total)
                     },
                     onDragEnd = {

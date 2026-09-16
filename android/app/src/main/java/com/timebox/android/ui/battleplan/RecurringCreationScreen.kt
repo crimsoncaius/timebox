@@ -233,7 +233,7 @@ private fun weekdayLabel(weekday: Int?): String = listOf(
 ).getOrNull(weekday ?: -1) ?: "Choose weekday"
 
 @Composable
-private fun CreationMode(title: String, subtitle: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+internal fun CreationMode(title: String, subtitle: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val colors = TimeboxTheme.colors
     Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp), color = if (selected) colors.selected else colors.card, border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) colors.primary else colors.hairline)) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -247,7 +247,7 @@ private fun CreationMode(title: String, subtitle: String, selected: Boolean, ena
 }
 
 @Composable
-private fun CreationCount(label: String, value: Int, maximum: Int, onChange: (String) -> Unit) {
+internal fun CreationCount(label: String, value: Int, maximum: Int, onChange: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = TimeboxTheme.type.label)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -259,7 +259,7 @@ private fun CreationCount(label: String, value: Int, maximum: Int, onChange: (St
 }
 
 @Composable
-private fun CreationDateRow(label: String, value: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun CreationDateRow(label: String, value: String, enabled: Boolean, onClick: () -> Unit) {
     Surface(onClick = onClick, enabled = enabled, color = TimeboxTheme.colors.card, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
