@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,7 +29,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 @Composable
 internal fun CurrentActivityControl(
     activity: String, enabled: Boolean, focusEnabled: Boolean, elapsed: String, running: Boolean, expanded: Boolean,
-    onToggle: () -> Unit, onStart: () -> Unit, onSwitch: () -> Unit,
+    onToggle: () -> Unit, onStart: () -> Unit, onNotes: () -> Unit, onSwitch: () -> Unit,
     onFocus: () -> Unit, onStop: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -58,6 +59,11 @@ internal fun CurrentActivityControl(
         if (running && expanded) {
             HorizontalDivider(Modifier.padding(start = 6.dp, end = 10.dp, top = 2.dp), color = colors.hairline)
             Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(enabled = enabled, onClick = onNotes, contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    Icon(Icons.AutoMirrored.Rounded.Notes, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Notes", fontSize = 12.sp, fontWeight = FontWeight.Normal)
+                }
                 TextButton(enabled = enabled, onClick = onSwitch, contentPadding = PaddingValues(horizontal = 10.dp)) {
                     Icon(Icons.Rounded.SwapHoriz, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(5.dp))

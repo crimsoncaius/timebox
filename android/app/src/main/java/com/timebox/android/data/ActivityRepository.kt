@@ -345,6 +345,69 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         if (saved) refresh()
         return saved
     }
+    suspend fun updateCurrentNoteOnline(targetId: Int, note: String): Boolean = mutex.withLock {
+        try {
+            checkEndpoint()
+            check(journal.outbox.isEmpty()) { "Reconnect to confirm pending Activity Tracking changes first." }
+            val snapshot = checkNotNull(journal.snapshot) { "Connect before editing notes." }
+            val calibration = checkNotNull(journal.calibration) { "Connect before editing notes." }
+            val target = checkNotNull(snapshot.current?.takeIf { it.id == targetId }) {
+                "The current activity changed. Close this sheet and review it."
+            }
+            val action = maxOf(now().toEpochMilli(), journal.lastAction + 1)
+            val command = ActivityCommandDto(
+                operationId = UUID.randomUUID().toString(),
+                deviceId = journal.device,
+                sequence = journal.sequence + 1,
+                actionAt = Instant.ofEpochMilli(action).toString(),
+                calibration = calibration,
+                baseCursor = snapshot.cursor,
+                effective = ActivityEffectiveDto("range", target.startAt, null),
+                targetId = target.id,
+                kind = ActivityKind.Edit,
+                taskTypeId = target.taskTypeId,
+                name = target.name,
+                taskId = target.taskId,
+                note = note.takeUnless(String::isBlank),
+                targetSource = snapshot.provenance[target.id.toString()] ?: "baseline:${target.id}",
+                targetStartAt = target.startAt,
+                clear_fields = if (note.isBlank()) listOf("note") else emptyList(),
+            )
+            val response = try {
+                transport.execute(command)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                offline = error is java.io.IOException
+                throw error
+            }
+            val acknowledgement = checkNotNull(response.acknowledgement) { "Activity acknowledgement missing" }
+            check(acknowledgement.operationId == command.operationId) { "Activity acknowledgement does not match" }
+            val applied = acknowledgement.outcome in listOf(ActivityOutcome.Applied, ActivityOutcome.Superseded)
+            noteReconciliation(response)
+            val server = parseActivityInstant(response.serverAt).toEpochMilli()
+            save(
+                journal.copy(
+                    sequence = command.sequence,
+                    lastAction = action,
+                    snapshot = if (newer(response)) response else snapshot,
+                    calibration = ActivityCalibrationDto(response.serverAt, server - wallTime()),
+                )
+            )
+            serverAnchor = server
+            monotonicAnchor = monotonicTime()
+            offline = false
+            check(applied) { "Activity changed on another device. Review the current activity." }
+            publish()
+            true
+        } catch (cancelled: CancellationException) {
+            publish()
+            throw cancelled
+        } catch (error: Exception) {
+            publish(errorDetail(error) ?: "Could not save Supporting Note")
+            false
+        }
+    }
     fun currentPlan(): ActivityPlanDto? = state.value.snapshot?.plans?.find { parseActivityInstant(it.startAt) <= now() && now() < parseActivityInstant(it.endAt) }
     suspend fun trackTask(task: BattleTask): Boolean {
         if (task.recurrenceKind == "quota_parent" || task.status == TaskStatus.Completed) return false
