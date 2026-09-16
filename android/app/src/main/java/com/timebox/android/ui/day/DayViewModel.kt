@@ -13,6 +13,7 @@ import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Lane
 import com.timebox.android.data.SLOT_MINUTES
 import com.timebox.android.data.TaskType
+import com.timebox.android.data.toModel
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TimeBlock
@@ -175,7 +176,9 @@ class DayViewModel(
                         }
                         old.copy(day = projected, loading = if (old.day == null) false else old.loading)
                     }
-                    if (pages != ui.pages) _state.update { it.copy(pages = pages, taskTypes = snapshot.taskTypes.map { t -> TaskType(t.id, t.name, 0) }) }
+                    if (pages != ui.pages) _state.update {
+                        it.copy(pages = pages, taskTypes = snapshot.taskTypes.map { t -> t.toModel() })
+                    }
                 }
             }
         }

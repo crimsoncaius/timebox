@@ -26,7 +26,10 @@ export function TaskTypePathCombobox({
     setQuery(selected?.name ?? '')
   }, [selected?.id, selected?.name])
 
-  const suggestions = useMemo(() => buildTaskTypeSuggestions(taskTypes, query), [taskTypes, query])
+  const suggestions = useMemo(
+    () => buildTaskTypeSuggestions(taskTypes, query, valueTaskTypeId),
+    [taskTypes, query, valueTaskTypeId],
+  )
 
   useEffect(() => {
     if (!open) return

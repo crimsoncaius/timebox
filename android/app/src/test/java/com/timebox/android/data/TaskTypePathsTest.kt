@@ -8,7 +8,6 @@ import org.junit.Test
 
 class TaskTypePathsTest {
 
-    /** The type list the design handoff's worked example is drawn against. */
     private val types = listOf(
         taskType(1, "coding", 64),
         taskType(2, "coding/ai", 41),
@@ -19,6 +18,7 @@ class TaskTypePathsTest {
         taskType(7, "admin", 12),
         taskType(8, "admin/email", 5),
         taskType(9, "meeting", 28),
+        taskType(10, "unspecified", 400),
     )
 
     private fun taskType(id: Int, name: String, usageCount: Int) =
@@ -37,6 +37,7 @@ class TaskTypePathsTest {
     fun `canonicalize collapses repeated and trailing slashes`() {
         assertEquals("coding/ai", canonicalizeTaskTypePath("coding//ai/"))
         assertEquals("coding", canonicalizeTaskTypePath("/coding"))
+        assertEquals("coding", canonicalizeTaskTypePath("coding/"))
     }
 
     @Test
@@ -77,22 +78,14 @@ class TaskTypePathsTest {
 
     // ---- ranking ----------------------------------------------------------
 
-    /** The exact list the handoff's first frame shows for query "ai" with coding/ai selected. */
     @Test
-    fun `query ai ranks the design's example order`() {
-        val ranked = rankTaskTypes(types, "ai", currentTypeId = 2)
+    fun `query ai matches path-aware segments, not email substring`() {
+        val ranked = names(rankTaskTypes(types, "ai", currentTypeId = 2))
         assertEquals(
             listOf("coding/ai", "coding/ai/agents", "coding/ai/evals", "reading/ai-papers"),
-            names(ranked).take(4),
+            ranked,
         )
-    }
-
-    @Test
-    fun `substring matches rank below every prefix match`() {
-        // `email` contains "ai" but starts with "em", so it trails the prefix tier even
-        // though reading/ai-papers is used less often.
-        val ranked = names(rankTaskTypes(types, "ai", currentTypeId = 2))
-        assertTrue(ranked.indexOf("admin/email") > ranked.indexOf("reading/ai-papers"))
+        assertFalse(ranked.contains("admin/email"))
     }
 
     @Test
@@ -102,29 +95,41 @@ class TaskTypePathsTest {
     }
 
     @Test
-    fun `the current type floats to the top even on a weak match`() {
-        val ranked = rankTaskTypes(types, "ai", currentTypeId = 8)
-        assertEquals("admin/email", ranked.first().name)
+    fun `typed query does not pin the current type above a better path match`() {
+        val ranked = names(rankTaskTypes(types, "coding/ai", currentTypeId = 1))
+        assertEquals("coding/ai", ranked.first())
+        assertTrue(ranked.indexOf("coding") > ranked.indexOf("coding/ai/agents"))
     }
 
     @Test
-    fun `a slashed query matches whole paths, not segments`() {
+    fun `a slashed query keeps ancestors and descendants`() {
         assertEquals(
-            listOf("coding/ai", "coding/ai/agents", "coding/ai/evals"),
+            listOf("coding/ai", "coding/ai/agents", "coding/ai/evals", "coding"),
             names(rankTaskTypes(types, "coding/ai")),
         )
     }
 
     @Test
-    fun `a fully typed new path matches nothing`() {
-        assertTrue(rankTaskTypes(types, "coding/ai/tooling").isEmpty())
+    fun `a fully typed new path still shows nearby existing paths`() {
+        assertEquals(
+            listOf("coding", "coding/ai"),
+            names(rankTaskTypes(types, "coding/ai/tooling")),
+        )
     }
 
     @Test
-    fun `an empty query lists everything, busiest first`() {
-        val ranked = rankTaskTypes(types, "  ")
-        assertEquals(types.size, ranked.size)
-        assertEquals(listOf("coding", "coding/ai", "coding/ai/agents"), names(ranked).take(3))
+    fun `an empty query pins current, then usage, with unspecified last`() {
+        val ranked = names(rankTaskTypes(types, "  ", currentTypeId = 2))
+        assertEquals("coding/ai", ranked.first())
+        assertEquals("unspecified", ranked.last())
+        assertEquals(listOf("coding", "coding/ai/agents", "meeting"), ranked.drop(1).take(3))
+    }
+
+    @Test
+    fun `unspecified is not repeated when it is already current`() {
+        val ranked = names(rankTaskTypes(types, "", currentTypeId = 10))
+        assertEquals("unspecified", ranked.first())
+        assertEquals(1, ranked.count { it == "unspecified" })
     }
 
     // ---- create affordance ------------------------------------------------
@@ -133,6 +138,7 @@ class TaskTypePathsTest {
     fun `create is offered only for a path that does not exist`() {
         assertTrue(shouldOfferCreate(types, "coding/ai/tooling"))
         assertTrue(shouldOfferCreate(types, "Coding/AI/Tooling "))
+        assertTrue(shouldOfferCreate(types, "coding//ai/tooling/"))
         assertFalse(shouldOfferCreate(types, "coding/ai"))
         assertFalse(shouldOfferCreate(types, "  CODING / AI  "))
         assertFalse(shouldOfferCreate(types, ""))

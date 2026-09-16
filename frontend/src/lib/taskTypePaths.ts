@@ -1,11 +1,15 @@
 import type { TaskType } from './api'
 
+const UNSPECIFIED = 'unspecified'
+const WHITESPACE_RUN = /\s+/g
+
 export function canonicalizeTaskTypePathInput(input: string): string | null {
-  const raw = input.trim()
-  if (!raw) return null
-  const rawSegments = raw.split('/')
-  if (rawSegments.some((segment) => segment.trim().length === 0)) return null
-  return rawSegments.map((segment) => segment.trim().toLowerCase()).join('/')
+  const segments = input
+    .split('/')
+    .map((segment) => segment.trim().toLowerCase().replace(WHITESPACE_RUN, ' '))
+    .filter((segment) => segment.length > 0)
+  if (segments.length === 0) return null
+  return segments.join('/')
 }
 
 export function formatTaskTypePathParts(path: string): {
@@ -28,6 +32,11 @@ export function taskTypeRootSegment(path: string): string {
 /** 0 for a single segment, 1 for `a/b`, etc. */
 export function pathDepth(path: string): number {
   return Math.max(0, path.split('/').length - 1)
+}
+
+export function taskTypePathPrefixes(path: string): string[] {
+  const segments = path.split('/')
+  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 
 /**
@@ -104,39 +113,86 @@ function pathMatchScore(path: string, query: string): number {
   return 4
 }
 
+function usageCount(type: TaskType): number {
+  return type.usage_count ?? 0
+}
+
+function rankEmptyQuery(taskTypes: TaskType[], currentTypeId?: number | null): TaskType[] {
+  const current = currentTypeId == null ? [] : taskTypes.filter((type) => type.id === currentTypeId)
+  const rest = taskTypes.filter((type) => type.id !== currentTypeId)
+  const unspecified = rest.filter((type) => type.name === UNSPECIFIED)
+  const ranked = rest
+    .filter((type) => type.name !== UNSPECIFIED)
+    .sort((a, b) => {
+      const usage = usageCount(b) - usageCount(a)
+      if (usage !== 0) return usage
+      return a.name.localeCompare(b.name)
+    })
+  return [...current, ...ranked, ...unspecified]
+}
+
 /**
- * Returns task types that match the path-aware query, with the same ordering as combobox suggestions.
- * Empty or invalid query returns all types sorted by name.
+ * Picker ranking: empty query pins the current type, then Block usage, then name,
+ * with `unspecified` last. Typed queries use path-match score, then name.
  */
-export function filterTaskTypesByQuery(taskTypes: TaskType[], query: string): TaskType[] {
+export function rankTaskTypes(
+  taskTypes: TaskType[],
+  query: string,
+  currentTypeId?: number | null,
+): TaskType[] {
   const canonicalQuery = canonicalizeTaskTypePathInput(query)
-  const sorted = [...taskTypes].sort((a, b) => a.name.localeCompare(b.name))
-  if (!canonicalQuery) {
-    return sorted
-  }
-  return sorted
+  if (!canonicalQuery) return rankEmptyQuery(taskTypes, currentTypeId)
+  return taskTypes
     .filter((row) => pathMatchesQuery(row.name, canonicalQuery))
     .sort((a, b) => {
-      const da = pathMatchScore(a.name, canonicalQuery)
-      const db = pathMatchScore(b.name, canonicalQuery)
-      if (da !== db) return da - db
+      const score = pathMatchScore(a.name, canonicalQuery) - pathMatchScore(b.name, canonicalQuery)
+      if (score !== 0) return score
       return a.name.localeCompare(b.name)
     })
 }
 
-export function buildTaskTypeSuggestions(taskTypes: TaskType[], query: string): {
+/**
+ * Returns task types that match the path-aware query.
+ * Empty query returns all types sorted by name (Task Types page search).
+ */
+export function filterTaskTypesByQuery(taskTypes: TaskType[], query: string): TaskType[] {
+  const canonicalQuery = canonicalizeTaskTypePathInput(query)
+  const sorted = [...taskTypes].sort((a, b) => a.name.localeCompare(b.name))
+  if (!canonicalQuery) return sorted
+  return rankTaskTypes(taskTypes, query)
+}
+
+export function buildTaskTypeSuggestions(
+  taskTypes: TaskType[],
+  query: string,
+  currentTypeId?: number | null,
+): {
   rows: TaskType[]
   createPath: string | null
 } {
   const canonicalQuery = canonicalizeTaskTypePathInput(query)
-  const sorted = [...taskTypes].sort((a, b) => a.name.localeCompare(b.name))
-
-  if (!canonicalQuery) {
-    return { rows: sorted, createPath: null }
-  }
-
-  const exact = sorted.some((row) => row.name === canonicalQuery)
-  const rows = filterTaskTypesByQuery(taskTypes, query)
-
+  const rows = rankTaskTypes(taskTypes, query, currentTypeId)
+  if (!canonicalQuery) return { rows, createPath: null }
+  const exact = taskTypes.some((row) => row.name === canonicalQuery)
   return { rows, createPath: exact ? null : canonicalQuery }
+}
+
+export type CreateAncestorHint = {
+  lead: string
+  path: string
+  tail?: string
+}
+
+export function createAncestorHint(
+  taskTypes: TaskType[],
+  canonicalPath: string,
+): CreateAncestorHint | null {
+  const ancestors = taskTypePathPrefixes(canonicalPath).slice(0, -1)
+  if (ancestors.length === 0) return null
+  const existing = new Set(taskTypes.map((type) => type.name))
+  const missing = ancestors.filter((path) => !existing.has(path))
+  if (missing.length === 0) {
+    return { lead: 'Adds under existing ', path: ancestors[ancestors.length - 1]! }
+  }
+  return { lead: 'Also creates ', path: missing.join(', ') }
 }

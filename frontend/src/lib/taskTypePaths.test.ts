@@ -3,10 +3,12 @@ import type { TaskType } from './api'
 import {
   buildTaskTypeSuggestions,
   canonicalizeTaskTypePathInput,
+  createAncestorHint,
   filterTaskTypesByQuery,
   formatTaskTypePathParts,
   groupTaskTypesByRoot,
   pathDepth,
+  rankTaskTypes,
   taskTypeRootSegment,
 } from './taskTypePaths'
 
@@ -21,8 +23,20 @@ describe('taskTypePaths', () => {
     expect(canonicalizeTaskTypePathInput(' Coding / AI ')).toBe('coding/ai')
   })
 
-  it('returns null for empty segments', () => {
-    expect(canonicalizeTaskTypePathInput('coding//ai')).toBeNull()
+  it('drops empty segments and trailing slashes', () => {
+    expect(canonicalizeTaskTypePathInput('coding//ai')).toBe('coding/ai')
+    expect(canonicalizeTaskTypePathInput('coding/')).toBe('coding')
+    expect(canonicalizeTaskTypePathInput('coding//ai/')).toBe('coding/ai')
+  })
+
+  it('collapses inner whitespace in segments', () => {
+    expect(canonicalizeTaskTypePathInput('Deep   Work / Writing')).toBe('deep work/writing')
+  })
+
+  it('returns null when nothing survives', () => {
+    expect(canonicalizeTaskTypePathInput('')).toBeNull()
+    expect(canonicalizeTaskTypePathInput('   ')).toBeNull()
+    expect(canonicalizeTaskTypePathInput('///')).toBeNull()
   })
 
   it('splits display into ancestor and leaf parts', () => {
@@ -37,6 +51,10 @@ describe('taskTypePaths', () => {
     const suggestions = buildTaskTypeSuggestions(rows, 'coding/personal')
     expect(suggestions.createPath).toBe('coding/personal')
     expect(suggestions.rows.map((row) => row.name)).toContain('coding')
+  })
+
+  it('offers create for a repaired new path', () => {
+    expect(buildTaskTypeSuggestions(rows, 'coding//personal/').createPath).toBe('coding/personal')
   })
 
   it('filterTaskTypesByQuery returns all sorted rows for empty query', () => {
@@ -67,11 +85,10 @@ describe('taskTypePaths', () => {
     expect(filterTaskTypesByQuery(deep, 'b/c').map((t) => t.name)).toEqual(['a/b/c'])
   })
 
-  it('filterTaskTypesByQuery falls back to all rows for invalid path input', () => {
+  it('filterTaskTypesByQuery matches a repaired double-slash query', () => {
     expect(filterTaskTypesByQuery(rows, 'coding//a').map((t) => t.name)).toEqual([
       'coding',
       'coding/ai',
-      'exercise/cardio',
     ])
   })
 
@@ -92,5 +109,65 @@ describe('taskTypePaths', () => {
     expect(groups.map((g) => g.root)).toEqual(['coding', 'dev'])
     expect(groups[0]!.items.map((t) => t.name)).toEqual(['coding', 'coding/ai'])
     expect(groups[1]!.items.map((t) => t.name)).toEqual(['dev/x'])
+  })
+})
+
+describe('rankTaskTypes', () => {
+  const types: TaskType[] = [
+    { id: 1, name: 'coding', usage_count: 64, created_at: '', updated_at: '' },
+    { id: 2, name: 'coding/ai', usage_count: 41, created_at: '', updated_at: '' },
+    { id: 3, name: 'coding/ai/agents', usage_count: 32, created_at: '', updated_at: '' },
+    { id: 4, name: 'reading', usage_count: 19, created_at: '', updated_at: '' },
+    { id: 9, name: 'unspecified', usage_count: 400, created_at: '', updated_at: '' },
+  ]
+
+  it('empty query pins current, then usage, with unspecified last', () => {
+    expect(rankTaskTypes(types, '  ', 2).map((t) => t.name)).toEqual([
+      'coding/ai',
+      'coding',
+      'coding/ai/agents',
+      'reading',
+      'unspecified',
+    ])
+  })
+
+  it('does not repeat unspecified when it is already current', () => {
+    expect(rankTaskTypes(types, '', 9).map((t) => t.name)[0]).toBe('unspecified')
+    expect(rankTaskTypes(types, '', 9).filter((t) => t.name === 'unspecified')).toHaveLength(1)
+  })
+
+  it('typed query keeps nearby paths for a new slashed path', () => {
+    expect(rankTaskTypes(types, 'coding/ai/tooling').map((t) => t.name)).toEqual([
+      'coding',
+      'coding/ai',
+    ])
+  })
+
+  it('typed query sorts by path score then name, not usage or current', () => {
+    expect(rankTaskTypes(types, 'coding/ai', 1).map((t) => t.name)).toEqual([
+      'coding/ai',
+      'coding/ai/agents',
+      'coding',
+    ])
+  })
+})
+
+describe('createAncestorHint', () => {
+  it('names the parent when every ancestor already exists', () => {
+    expect(createAncestorHint(rows, 'coding/ai/tooling')).toEqual({
+      lead: 'Adds under existing ',
+      path: 'coding/ai',
+    })
+  })
+
+  it('lists only the ancestors that will be created', () => {
+    expect(createAncestorHint(rows, 'coding/tooling/scripts')).toEqual({
+      lead: 'Also creates ',
+      path: 'coding/tooling',
+    })
+  })
+
+  it('a top level path has nothing to explain', () => {
+    expect(createAncestorHint(rows, 'errands')).toBeNull()
   })
 })
