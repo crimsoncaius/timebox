@@ -120,8 +120,10 @@ fun DayScreen(
         activityState.rejectedRecovery != null || activityState.legacyRecovery != null -> "Recovery available"
         else -> null
     }
+    val zoom = rememberSaveable(saver = TimelineZoom.Saver) { TimelineZoom() }
     if (viewOpen) DayViewOptionsDialog(
         calendar = calendarVisible, tracking = trackingVisible, zoom = zoomVisible,
+        zoomScale = zoom.scale, onResetZoom = { zoom.set(1f) },
         onCalendar = { setVisible(com.timebox.android.data.DayViewSection.Calendar, it) }, onTracking = { setVisible(com.timebox.android.data.DayViewSection.Tracking, it) },
         onZoom = { setVisible(com.timebox.android.data.DayViewSection.Zoom, it) }, onDismiss = { viewOpen = false },
     )
@@ -131,7 +133,6 @@ fun DayScreen(
         if (!state.saving && !state.planning.saving) onCancelPlanningMode()
     }
 
-    val zoom = rememberSaveable(saver = TimelineZoom.Saver) { TimelineZoom() }
     CompositionLocalProvider(LocalTimelineZoom provides zoom) {
         Column(Modifier.fillMaxSize()) {
             DayCalendarHeader(

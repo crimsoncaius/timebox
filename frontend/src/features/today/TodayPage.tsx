@@ -66,6 +66,7 @@ export function TodayPage() {
   const { preferences: dayView, change: changeDayView, storageError } = useDayViewPreferences()
   const trackingVisible = dayView.tracking
   const [viewOpen, setViewOpen] = useState(false)
+  const [timelineZoom, setTimelineZoom] = useState(1)
   const readiness = useReadinessCoordinator()
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
@@ -923,7 +924,7 @@ export function TodayPage() {
             </div>
           </section>
 
-          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} onClose={() => setViewOpen(false)} storageError={storageError} />}
+          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} zoom={timelineZoom} onResetZoom={() => setTimelineZoom(1)} onClose={() => setViewOpen(false)} storageError={storageError} />}
 
           {taskTypes.length === 0 && (
             <div className="mb-6 rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 text-sm text-on-surface-variant">
@@ -1015,6 +1016,8 @@ export function TodayPage() {
           >
             <DayTimeline
               showZoomControls={dayView.zoom}
+              zoom={timelineZoom}
+              onZoomChange={setTimelineZoom}
               ref={timelineRef}
               day={activityDevelopmentEnabled && needsElapsedDayView(day) ? { ...day, actual_blocks: [] } : day}
               readOnly={false}

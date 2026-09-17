@@ -36,6 +36,9 @@ export const DayTimeline = forwardRef<
   {
     day: DayRead
     showZoomControls?: boolean
+    /** Controlled zoom, so menus outside the timeline can reset it; uncontrolled when omitted. */
+    zoom?: number
+    onZoomChange?: (zoom: number) => void
     readOnly: boolean
     draft: BlockDraftPlacement | null
     /** When set, the matching block shows selected affordance on the timeline. */
@@ -66,6 +69,8 @@ export const DayTimeline = forwardRef<
   {
     day,
     showZoomControls = true,
+    zoom: controlledZoom,
+    onZoomChange,
     readOnly,
     draft,
     selectedBlockId,
@@ -84,10 +89,21 @@ export const DayTimeline = forwardRef<
 ) {
   const { start: visibleStartMin, end: visibleEndMin } = visibleMinuteRange(day)
   const slotCount = (visibleEndMin - visibleStartMin) / SLOT_MINUTES
-  const [zoom, setZoom] = useState(1)
+  const [localZoom, setLocalZoom] = useState(1)
+  const zoom = controlledZoom ?? localZoom
   const slotHeightPx = TIMELINE_SLOT_HEIGHT_PX * zoom
   const timelineRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(zoom)
+  const onZoomChangeRef = useRef(onZoomChange)
+  useEffect(() => {
+    zoomRef.current = zoom
+    onZoomChangeRef.current = onZoomChange
+  })
+  const setZoom = (next: number) => {
+    zoomRef.current = next
+    setLocalZoom(next)
+    onZoomChangeRef.current?.(next)
+  }
   const totalHeight = slotCount * slotHeightPx
 
   const plannedRef = useRef<HTMLDivElement>(null)
@@ -117,7 +133,6 @@ export const DayTimeline = forwardRef<
       const next = Math.min(12, Math.max(0.5, old * factor))
       const laneTop = plannedRef.current?.getBoundingClientRect().top ?? node.getBoundingClientRect().top
       const anchor = clientY - laneTop
-      zoomRef.current = next
       setZoom(next)
       requestAnimationFrame(() => window.scrollBy(0, anchor * (next / old - 1)))
     }
@@ -248,12 +263,11 @@ export const DayTimeline = forwardRef<
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
               e.preventDefault()
               const next = Math.min(12, Math.max(0.5, zoom * (e.key === 'ArrowUp' ? 1.2 : 1 / 1.2)))
-              zoomRef.current = next
               setZoom(next)
             }
           }}>Zoom <span className="min-w-[3.5ch] font-mono font-medium tabular-nums text-on-surface dark:text-dark-on-surface">{zoom.toFixed(1)}×</span></span>
         <span aria-hidden className="mx-3 h-4 w-px bg-outline-variant/50 dark:bg-dark-outline-variant" />
-        <button type="button" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-medium text-planned transition-colors hover:bg-planned/10 focus-visible:outline-2 focus-visible:outline-planned" onClick={() => { zoomRef.current = 1; setZoom(1) }}>
+        <button type="button" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-medium text-planned transition-colors hover:bg-planned/10 focus-visible:outline-2 focus-visible:outline-planned" onClick={() => setZoom(1)}>
           <span className="material-symbols-outlined text-[16px]" aria-hidden>restart_alt</span>
           Reset
         </button>
