@@ -26,6 +26,7 @@ import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -159,9 +160,12 @@ fun ActivityTracking(
                 }
             }
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
-                TextButton(enabled = enabled, onClick = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } }) {
-                    Text("Planned now: ${plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name} · Switch")
-                }
+                PlannedBlockSuggestion(
+                    name = plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name ?: "Planned Block",
+                    timing = plannedSuggestionTiming(plan, now, runCatching { ZoneId.of(state.snapshot!!.reportingTimezone) }.getOrDefault(ZoneId.systemDefault())),
+                    enabled = enabled, focus = focus,
+                    onSwitch = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } },
+                )
             }
             if (!focus && expanded) current?.plannedBlockId?.let { id ->
                 val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
