@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -25,6 +27,8 @@ internal fun DayViewOptionsDialog(
     calendar: Boolean,
     tracking: Boolean,
     zoom: Boolean,
+    zoomScale: Float,
+    onResetZoom: () -> Unit,
     onCalendar: (Boolean) -> Unit,
     onTracking: (Boolean) -> Unit,
     onZoom: (Boolean) -> Unit,
@@ -48,6 +52,8 @@ internal fun DayViewOptionsDialog(
                     VisibilityRow("Activity Tracking", Icons.Outlined.PlayArrow, tracking, onTracking)
                     HorizontalDivider(color = colors.hairline)
                     VisibilityRow("Zoom", Icons.Outlined.ZoomIn, zoom, onZoom)
+                    HorizontalDivider(color = colors.hairline)
+                    ResetZoomRow(zoomScale, onResetZoom)
                     Spacer(Modifier.height(16.dp))
                     Text("Activity Tracking keeps running when hidden.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 }
@@ -86,5 +92,22 @@ private fun VisibilityRow(label: String, icon: ImageVector, checked: Boolean, on
                 uncheckedBorderColor = colors.outlineVariant,
             ),
         )
+    }
+}
+
+@Composable
+private fun ResetZoomRow(scale: Float, onReset: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    val enabled = scale != 1f
+    val content = if (enabled) colors.on else colors.onVariant.copy(alpha = 0.5f)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onReset),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(Icons.Outlined.RestartAlt, contentDescription = null, tint = if (enabled) colors.onVariant else content, modifier = Modifier.size(20.dp))
+        Text("Reset zoom", style = TimeboxTheme.type.label, color = content, modifier = Modifier.weight(1f))
+        Text("${"%.1f".format(scale)}×", style = TimeboxTheme.type.monoSmall, color = if (enabled) colors.onVariant else content)
     }
 }

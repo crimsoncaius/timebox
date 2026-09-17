@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import type { DayViewPreferences } from './dayViewPreferences'
 
-export function DayViewOptions({ preferences, onChange, onClose, storageError }: {
+export function DayViewOptions({ preferences, onChange, zoom, onResetZoom, onClose, storageError }: {
   preferences: DayViewPreferences
   onChange: (section: keyof DayViewPreferences, value: boolean) => void
+  zoom: number
+  onResetZoom: () => void
   onClose: () => void
   storageError: string | null
 }) {
@@ -33,6 +35,12 @@ export function DayViewOptions({ preferences, onChange, onClose, storageError }:
               <span className={`h-5 w-5 rounded-full ${preferences[key] ? 'bg-white dark:bg-dark-surface' : 'bg-on-surface-variant dark:bg-dark-on-surface-variant'}`} />
             </span>
           </button>)}
+        <button type="button" disabled={zoom === 1} onClick={onResetZoom}
+          className="flex min-h-14 w-full items-center gap-3 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-planned disabled:opacity-50">
+          <span aria-hidden className="material-symbols-outlined text-xl text-on-surface-variant dark:text-dark-on-surface-variant">restart_alt</span>
+          <span className="flex-1 text-sm font-medium">Reset zoom</span>
+          <span className="font-mono text-sm tabular-nums text-on-surface-variant dark:text-dark-on-surface-variant">{zoom.toFixed(1)}×</span>
+        </button>
       </div>
       <p className="mt-4 text-xs leading-5 text-on-surface-variant dark:text-dark-on-surface-variant">Activity Tracking keeps running when hidden.</p>
       {storageError && <p role="alert" className="mt-3 text-sm">{storageError}</p>}
