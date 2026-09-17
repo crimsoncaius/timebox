@@ -163,10 +163,10 @@ fun ActivityTracking(
                     Text("Planned now: ${plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name} · Switch")
                 }
             }
-            if (focus || expanded) current?.plannedBlockId?.let { id ->
+            if (!focus && expanded) current?.plannedBlockId?.let { id ->
                 val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
                 val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
-                Text("${linked.size} linked Actual Blocks · ${elapsedDuration(minutes)} recorded", color = colors.onVariant)
+                Text("${linked.size} session${if (linked.size == 1) "" else "s"} · ${elapsedDuration(minutes)} on this plan", color = colors.onVariant)
             }
             state.feedback?.let { Text(it, color = colors.onVariant) }
             if (!focus && state.rejectedRecovery != null) {
