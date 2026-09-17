@@ -137,7 +137,10 @@ class ActivityTrackingTest {
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
         compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("Planned now: Chapter · Switch").performClick()
+        compose.onNodeWithText("PLANNED NOW").assertIsDisplayed()
+        compose.onNodeWithText("Chapter").assertIsDisplayed()
+        compose.onNodeWithText("10:00 AM – 11:00 AM", substring = true).assertIsDisplayed()
+        compose.onNode(hasText("Switch") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("2 sessions ·", substring = true).assertIsDisplayed()
