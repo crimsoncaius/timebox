@@ -11,6 +11,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -59,7 +61,7 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun composerUsesEditorialSectionsAndPolishedDropdownMenus() {
+    fun composerSetsProjectTaskTypeAndStatusThroughFieldSheets() {
         var createdDraft: TaskComposerDraft? = null
         compose.setContent {
             var state by remember {
@@ -88,19 +90,15 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("ESSENTIALS").fetchSemanticsNode()
-        compose.onNodeWithText("ORGANIZATION").fetchSemanticsNode()
-        compose.onNodeWithText("PLANNING").performScrollTo().fetchSemanticsNode()
-        compose.onNodeWithText("MORE OPTIONS").performScrollTo().fetchSemanticsNode()
-
-        compose.onNodeWithText("Title").performScrollTo().performTextInput("Prepare launch notes")
-        compose.onNodeWithContentDescription("Location, Admin").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Task title").performTextInput("Prepare launch notes")
+        compose.onNodeWithText("Admin").performClick()
         compose.onNodeWithText("Timebox").performClick()
-        compose.onNodeWithContentDescription("Task Type, Add a task type").performScrollTo().performClick()
-        compose.onNodeWithText("Design").performClick()
-        compose.onNodeWithContentDescription("Status, Open").performScrollTo().performClick()
+        compose.onNodeWithText("Unset").performScrollTo().performClick()
+        compose.onNode(hasSetTextAction() and !hasContentDescription("Task title")).performTextInput("des")
+        compose.onNodeWithText("Design", useUnmergedTree = true).performScrollTo().performClick()
+        compose.onNodeWithText("Open").performScrollTo().performClick()
         compose.onNodeWithText("In Progress").performClick()
-        compose.onNodeWithText("Create task").performClick()
+        compose.onNodeWithText("Add task").performClick()
 
         compose.runOnIdle {
             check(createdDraft?.title == "Prepare launch notes")
@@ -271,7 +269,7 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithContentDescription("Close new task composer").performClick()
+        compose.onNodeWithContentDescription("Close task").performClick()
         compose.runOnIdle { check(dismisses == 1) }
     }
 
@@ -292,7 +290,7 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithContentDescription("Close new task composer").performClick()
+        compose.onNodeWithContentDescription("Close task").performClick()
         compose.onNodeWithText("Discard new task?").fetchSemanticsNode()
         compose.runOnIdle { check(dismisses == 0) }
     }

@@ -38,6 +38,44 @@ class PoolTests(unittest.TestCase):
         claimed = [self.pool.claim(f"owner-{i}") for i in range(self.pool.config["capacity"] + 3)]
         self.assertEqual([row["id"] for row in claimed], list(range(1, self.pool.config["capacity"] + 4)))
 
+    def test_extra_claim_preserves_review_and_reuses_released_slot(self):
+        pool = self.pool
+        existing = [pool.claim(f"owner-{n}") for n in range(pool.config["capacity"])]
+        pool.touch(existing[0]["token"], "review")
+        before = pool.rows()
+        extra = pool.claim("additional emulator", extra=True)
+        self.assertEqual(pool.config["capacity"] + 1, extra["id"])
+        self.assertEqual(before, pool.rows()[:len(before)])
+        ordinary = pool.claim("ordinary request")
+        self.assertEqual(extra["id"] + 1, ordinary["id"])
+        pool.touch(extra["token"], "free")
+        replacement = pool.claim("next extra", extra=True)
+        self.assertEqual(extra["id"], replacement["id"])
+        self.assertNotEqual(extra["token"], replacement["token"])
+        with self.assertRaisesRegex(RuntimeError, "Invalid or released"):
+            pool.get(extra["token"])
+        peer = module.Pool(self.temp.name)
+        try:
+            self.assertEqual("review", peer.get(existing[0]["token"])["state"])
+        finally:
+            peer.db.close()
+
+    def test_extra_claim_after_growth_is_visible_to_other_pool_instances(self):
+        pool = self.pool
+        existing = [pool.claim(f"owner-{i}") for i in range(pool.config["capacity"])]
+        grown = pool.claim("ordinary")
+        self.assertEqual(grown["id"], pool.config["capacity"] + 1)
+        extra = pool.claim("additional review", extra=True)
+        self.assertEqual(extra["id"], grown["id"] + 1)
+        self.assertEqual([pool.get(row["token"]) for row in existing], existing)
+        peer = module.Pool(self.temp.name)
+        try:
+            self.assertEqual(peer.get(extra["token"]), extra)
+            another = peer.claim("another extra request", extra=True)
+            self.assertNotEqual(another["id"], extra["id"])
+        finally:
+            peer.db.close()
+
     def test_old_token_cannot_touch_reassigned_slot(self):
         old = self.pool.claim("first")
         self.pool.release(old["token"])

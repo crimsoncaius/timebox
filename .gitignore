@@ -2,6 +2,8 @@
 node_modules/
 frontend/node_modules/
 backend/.venv/
+.venv/
+/.uv-cache/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -12,7 +14,15 @@ frontend/dist/
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
 *.local
+
+# Generated review artifacts and downloaded attachments
+/artifacts/
+/.codex-remote-attachments/
+/screenshots/
+/.gradle-agent/
 
 # Agent skill copies (CLI installs; canonical under %USERPROFILE%\.agents)
 .agents/*

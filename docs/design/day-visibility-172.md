@@ -44,14 +44,14 @@ Recommendation to review: retain an explicit running-activity shortcut rather th
 - Root checkout changes were preserved. Its ActivityTracking diff changes error wording and import order; it was not copied into this isolated branch.
 - No existing ADR conflicts were found. No domain terminology changed.
 
-## Launch
+## Historical launch
 
-Run `python scripts/prototype-172/server.py` (reserved API port 12015), then build with `./scripts/android-gradle.ps1 :app:assembleDebug '-PreviewApiBaseUrl=http://10.0.2.2:12015/'`.
+The one-off sample server and review scripts were removed from the current tree after implementation. To reproduce this historical experiment, use the preserved prototype commit `4fb4746`, which contains `scripts/prototype-172/server.py`. Its sample API used port 12015; the Android build used `./scripts/android-gradle.ps1 :app:assembleDebug '-PreviewApiBaseUrl=http://10.0.2.2:12015/'`.
 Acquire a device through `scripts/android-emulator.py`; install the built APK and launch `com.timebox.android/.MainActivity` using the returned token. Device ownership instructions in `docs/agents/android-emulators.md` apply.
 
 For a directly addressable starting layout, force-stop this review instance and launch MainActivity with `--es issue172Layout current` or `--es issue172Layout custom`. The in-app comparison button then preserves compatible visibility and zoom state across switches. Experimental UI is gated from release builds.
 
-Pending review: emulator-5580, token `02d7e60066f5431e84b0a3bb202fe8d8`, standard 1080×2424 at density 420 restored. The full app is left on the customizable layout with all three sections hidden and a running sample activity. The sample API remains on port 12015. Resume this reservation for user-requested changes; release it only after the user finishes reviewing.
+Historical review used emulator-5580 at standard 1080×2424 and density 420, with all three sections hidden and a running sample activity. These details describe that review session, not a current reservation; acquire a fresh reservation when reproducing it.
 
 ## Review task
 

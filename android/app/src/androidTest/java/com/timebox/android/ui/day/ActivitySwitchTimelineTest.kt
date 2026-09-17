@@ -45,8 +45,8 @@ class ActivitySwitchTimelineTest {
         assertEquals(current, repository.state.value.snapshot!!.current)
         assertFalse(repository.state.value.pending)
         open()
-        compose.onNodeWithText("Task Type").performClick()
-        compose.onNodeWithText("Meals").performClick()
+        compose.onAllNodes(hasSetTextAction()).onLast().performScrollTo().performTextInput("meal")
+        compose.onNodeWithText("Meals", useUnmergedTree = true).performScrollTo().performClick()
         compose.onNodeWithText("Dinner ends · 21:00").performScrollTo().performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }

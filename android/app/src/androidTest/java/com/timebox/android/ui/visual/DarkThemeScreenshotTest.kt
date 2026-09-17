@@ -55,8 +55,7 @@ import org.junit.Test
 /**
  * Regenerates the dark-theme evidence set used for visual review.
  *
- * Run `scripts/android-dark-theme-screenshots.ps1` from the repository root to
- * execute this class and pull the PNGs into `artifacts/android-dark-theme`.
+ * See android/README.md for the managed-emulator test command and image retrieval.
  */
 class DarkThemeScreenshotTest {
     @get:Rule val compose = createComposeRule()

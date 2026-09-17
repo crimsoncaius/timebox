@@ -56,7 +56,7 @@ Evidence scripts, command envelopes and logs are under `artifacts/issue165-*`.
 Run from the repository root before distributing an Activity Tracking client:
 
 ```powershell
-backend/.venv/Scripts/python scripts/verify-activity-release.py https://api-production-db7f.up.railway.app
+backend/.venv/Scripts/python scripts/verify-api-release.py https://api-production-db7f.up.railway.app
 ```
 
 Supply `API_KEY` through the environment when the target requires authentication.

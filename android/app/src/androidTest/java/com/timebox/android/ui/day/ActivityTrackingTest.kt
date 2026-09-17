@@ -68,6 +68,12 @@ class ActivityTrackingTest {
 
     @get:Rule val compose = createComposeRule()
 
+    /** Picks a type in the Switch sheet's picker; a partial query keeps the typed text from matching the row. */
+    private fun chooseTaskType(query: String, name: String) {
+        compose.onAllNodes(hasSetTextAction()).onLast().performScrollTo().performTextInput(query)
+        compose.onNodeWithText(name, useUnmergedTree = true).performScrollTo().performClick()
+    }
+
     @Test fun newerRemoteChangeShowsCanonicalActivityAndTransientFeedback() {
         var journal: String? = null
         val storage = object : ActivityStorage {
@@ -132,8 +138,7 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Chapter").assertIsDisplayed()
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Switch activity").performClick()
-        compose.onNodeWithText("Task Type").performScrollTo().performClick()
-        compose.onNodeWithText("Writing").performClick()
+        chooseTaskType("writ", "Writing")
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
         compose.onNodeWithText("Current activity").performClick()
@@ -204,13 +209,12 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Switch activity").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).assertIsNotEnabled()
-        compose.onNodeWithText("Task Type").performScrollTo().performClick()
-        compose.onNodeWithText("reading").performClick()
+        chooseTaskType("read", "reading")
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
-        compose.onNodeWithText("Time after this will be unrecorded.").assertExists()
+        compose.onNodeWithText("Unrecorded after ", substring = true).assertExists()
         compose.onNode(hasText("Stop tracking") and hasClickAction()).assertIsDisplayed().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         compose.onNodeWithText("Start tracking").assertIsDisplayed()

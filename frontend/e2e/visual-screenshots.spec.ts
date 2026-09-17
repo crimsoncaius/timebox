@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test'
  * if the API is down, "/" will show an error state instead of redirecting.
  *
  * Run from frontend: npm run screenshots
- * Or from repo root: node scripts/take-screenshots.mjs
+ * Or from repo root: npm --prefix frontend run screenshots
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

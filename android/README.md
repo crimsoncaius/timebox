@@ -54,13 +54,16 @@ dialog, Day calendar, and Chronicle dark-theme screenshots from the repository
 root:
 
 ```powershell
-.\scripts\android-dark-theme-screenshots.ps1
+python scripts/android-emulator.py test --owner "dark-theme tests" connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.class=com.timebox.android.ui.visual.DarkThemeScreenshotTest"
 ```
 
-The script reserves a clean emulator, runs only `DarkThemeScreenshotTest`, pulls its PNGs into
-`artifacts/android-dark-theme/` for side-by-side review. The deterministic set also
+This reserves a clean emulator, runs only `DarkThemeScreenshotTest`, and releases
+the emulator afterward. The deterministic set also
 covers grouped editors, collapsed empty Plan Mode, and both themes of the component
-gallery. It releases the emulator afterward; see
+gallery. To collect PNGs for review, acquire a reservation manually, run the same
+Gradle task through the helper's `gradle TOKEN` command, then use `adb TOKEN pull
+/sdcard/Android/data/com.timebox.android/files/visual-regression/. artifacts/android-dark-theme/`
+through the helper before releasing the reservation. See
 [emulator ownership](../docs/agents/android-emulators.md) for pool setup and review holds.
 
 ## Pointing the app at your API

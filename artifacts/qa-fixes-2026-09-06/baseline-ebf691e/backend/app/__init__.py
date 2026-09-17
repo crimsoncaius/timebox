@@ -1,1 +1,0 @@
-"""Timebox API application package."""

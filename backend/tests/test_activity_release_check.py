@@ -8,7 +8,7 @@ import urllib.request
 import pytest
 
 
-verify = runpy.run_path(str(Path(__file__).parents[2] / "scripts" / "verify-activity-release.py"))["verify"]
+verify = runpy.run_path(str(Path(__file__).parents[2] / "scripts" / "verify-api-release.py"))["verify"]
 
 
 @pytest.mark.parametrize("enabled", [False, True])
