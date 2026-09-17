@@ -389,7 +389,9 @@ function LegacyTimeBlockInspectorContent({
         label="Task type"
         taskTypes={taskTypes}
         valueTaskTypeId={taskTypeId}
-        onSelectTaskTypeId={selectTaskType}
+        onSelectTaskTypeId={(nextTaskTypeId) => {
+          if (nextTaskTypeId !== null) selectTaskType(nextTaskTypeId)
+        }}
         onCreateTaskTypePath={onCreateTaskTypePath}
       />
 
