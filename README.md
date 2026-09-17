@@ -108,7 +108,7 @@ On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `cd android && ./gradlew t
 
 ## Design and behavior references
 
-The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and behavior are documented in [android/README.md](android/README.md). The retained technical notes under `docs/superpowers/specs/` cover the Chronicle calendar limit, hierarchical task-type semantics, and time-block drag hysteresis.
+The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and behavior are documented in [android/README.md](android/README.md). Current domain vocabulary and decisions live in [CONTEXT.md](CONTEXT.md) and [docs/adr/](docs/adr/); implementation-specific design and verification notes are organized under [docs/design/](docs/design/), [docs/specs/](docs/specs/), and [docs/reports/](docs/reports/).
 
 ## Product surfaces
 
@@ -128,6 +128,6 @@ The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and b
 - **Day list:** `GET /days` rows carry `block_count`. Simply opening a date creates the day, so the archive is mostly empty rows; the count is how a calendar tells those from days with real entries.
 - **E2E / SQLite:** Setting `AUTO_CREATE_TABLES=1` lets the API create tables on startup (used by Playwright). Do **not** use this for production Postgres; use Alembic instead.
 - **Day window:** Configure the visible hours under **Settings** (`GET`/`PATCH /settings`); changes apply to all days.
-- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Every stored Block references a Task Type. Planned Block creation may omit `task_type_id`: the backend uses a linked Task's type when available or atomically materializes `unspecified`. Planned Blocks may also include an optional 500-character Block Name and a separate optional `note`. See the [hierarchical task-type design](docs/superpowers/specs/2026-04-15-hierarchical-task-type-paths-design.md).
+- **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Every stored Block references a Task Type. Planned Block creation may omit `task_type_id`: the backend uses a linked Task's type when available or atomically materializes `unspecified`. Planned Blocks may also include an optional 500-character Block Name and a separate optional `note`. See the [Task Type path decisions](docs/adr/0005-task-type-copied-then-independent.md), especially [path matching and canonicalization](docs/adr/0007-task-type-path-matching-and-canonicalization.md).
 - **Battle Plan:** `/projects`, `/tasks`, and `/reminders` provide project organization, nested tasks, lifecycle actions, Ready to Plan state, and reminder delivery.
 - **Recurring work:** `/recurring-templates` supports previews and the complete template lifecycle. Generated tasks retain their recurrence metadata and can enter Ready to Plan like ordinary tasks.
