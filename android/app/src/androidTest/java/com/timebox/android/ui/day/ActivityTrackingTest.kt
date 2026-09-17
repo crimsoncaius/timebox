@@ -140,8 +140,32 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Planned now: Chapter · Switch").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
         compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("2 linked Actual Blocks", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("2 sessions ·", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("on this plan", substring = true).assertIsDisplayed()
         assertEquals(7, repository.state.value.snapshot?.current?.taskId)
+    }
+
+    @Test fun focusOmitsPlanSessionSummary() = verifyPlanSessionSummary(focus = true)
+    @Test fun expandedControlShowsPlanSessionSummary() = verifyPlanSessionSummary(focus = false)
+
+    private fun verifyPlanSessionSummary(focus: Boolean) {
+        val at = "2026-09-11T10:00:00Z"
+        val earlier = ActualBlockDto(1, 1, TaskTypeDto(2, "Writing"), startAt = at, endAt = "2026-09-11T10:30:00Z", createdAt = at, updatedAt = at, plannedBlockId = 4)
+        val row = ActualBlockDto(2, 1, TaskTypeDto(2, "Writing"), startAt = "2026-09-11T10:40:00Z", createdAt = at, updatedAt = at, name = "Chapter", plannedBlockId = 4)
+        val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 2, serverAt = at, reportingTimezone = "UTC", current = row, records = listOf(earlier, row))
+        var journal: String? = null
+        val repository = ActivityRepository(object : ActivityTransport { override suspend fun read() = snapshot; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }, object : ActivityStorage { override fun load() = journal; override fun save(value: String) { journal = value } })
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = focus) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        if (focus) {
+            compose.onNodeWithText("elapsed").assertIsDisplayed()
+            compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
+        } else {
+            compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
+            compose.onNodeWithText("Current activity").performClick()
+            compose.onNodeWithText("2 sessions ·", substring = true).assertIsDisplayed()
+            compose.onNodeWithText("on this plan", substring = true).assertIsDisplayed()
+        }
     }
 
     @Test fun immediateStartTypeFirstSwitchAndStop() {
