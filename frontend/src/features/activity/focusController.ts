@@ -55,12 +55,13 @@ export class FocusController {
     }
     if (snapshot && !snapshot.current && this.state.active) this.exit()
   }
-  async enter(repository: ActivityRepository) {
+  /** Without a choice, starting takes its selection from the covering Planned Block. */
+  async enter(repository: ActivityRepository, choice?: { taskTypeId: number; name?: string }) {
     this.legacyCancelled = true
     if (this.state.planning || this.state.entering || !repository.state.snapshot) return false
     const token = ++this.generation
     this.update({ entering: true })
-    const started = !!repository.state.snapshot.current || await repository.command('start')
+    const started = !!repository.state.snapshot.current || await repository.command('start', choice?.taskTypeId, choice?.name)
     if (token !== this.generation || this.state.planning) return false
     this.update({ active: started && !!repository.state.snapshot?.current, entering: false })
     return this.state.active
