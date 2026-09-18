@@ -167,3 +167,29 @@ _Avoid_: Actual session, work session, completed block
 **Task Completion**:
 An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks.
 _Avoid_: Time completion, session completion
+
+### Surfaces
+
+**Day**:
+The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planning, Day Review and Work Mode start from it.
+_Avoid_: Today view, timeline page
+
+**Chronicle**:
+The retrospective surface: what already happened, whether recorded time or completed work. It has two views, Calendar (one past day at a time) and Trends.
+_Avoid_: History, Analytics tab
+
+**Trends**:
+The Chronicle view that summarizes past Blocks, Task Completions and Projects across many days.
+_Avoid_: Analytics, Insights, Reports
+
+**Battle Plan**:
+The surface for Battle Plan Tasks, Projects and Recurring Task Series, and the home of Task Types management.
+_Avoid_: Board, backlog
+
+**Task Types**:
+The management page for renaming, reparenting and deleting Task Types. It is reached from Battle Plan and is not a primary navigation destination.
+_Avoid_: Types, Task types page
+
+**Assistant**:
+The AI assistant's surface and the home of its conversations.
+_Avoid_: Chat, AI tab

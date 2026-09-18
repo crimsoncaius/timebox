@@ -71,6 +71,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -194,6 +195,7 @@ fun BattlePlanScreen(
     notificationsAllowed: Boolean = true,
     onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
+    onOpenTaskTypes: () -> Unit = {},
     onNewProject: () -> Unit,
     onProjectNameChange: (String) -> Unit = {},
     onSaveProject: () -> Unit = {},
@@ -254,6 +256,7 @@ fun BattlePlanScreen(
                             onRequestTrash = onRequestTrash,
                             onShowComposer = onShowComposer,
                             onOpenRecurring = onOpenRecurring,
+                            onOpenTaskTypes = onOpenTaskTypes,
                             onNewProject = onNewProject,
                             onReorderProjects = onReorderProjects,
                             onEditProject = onEditProject,
@@ -415,6 +418,7 @@ private fun MobileKanbanBoard(
     onRequestTrash: (BattleTask) -> Unit,
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
+    onOpenTaskTypes: () -> Unit = {},
     onNewProject: () -> Unit,
     onReorderProjects: (List<Int>) -> Unit,
     onEditProject: (Project) -> Unit,
@@ -571,7 +575,8 @@ private fun MobileKanbanBoard(
             TaskNavigationMenu(
                 state = state, modifier = Modifier.weight(1f),
                 onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
-                onOpenRecurring = onOpenRecurring, onReorderProjects = onReorderProjects,
+                onOpenRecurring = onOpenRecurring, onOpenTaskTypes = onOpenTaskTypes,
+                onReorderProjects = onReorderProjects,
                 onEditProject = onEditProject, onPrepareDeleteProject = onPrepareDeleteProject,
                 onNewProject = onNewProject,
             )
@@ -2334,6 +2339,7 @@ internal fun TaskNavigationMenu(
     onSelectScope: (BattlePlanScope) -> Unit = {},
     onSelectCollection: (TaskCollection) -> Unit = {},
     onOpenRecurring: () -> Unit = {},
+    onOpenTaskTypes: () -> Unit = {},
     onReorderProjects: (List<Int>) -> Unit = {},
     onEditProject: (Project) -> Unit = {},
     onPrepareDeleteProject: (Project) -> Unit = {},
@@ -2416,6 +2422,10 @@ internal fun TaskNavigationMenu(
                             ScopeMenuInsetDivider()
                             ScopeMenuItem("Recurring", Icons.Outlined.Repeat, selected = recurring) {
                                 closeScopeMenu { onOpenRecurring() }
+                            }
+                            ScopeMenuInsetDivider()
+                            ScopeMenuItem("Task Types", Icons.Outlined.Category) {
+                                closeScopeMenu { onOpenTaskTypes() }
                             }
                         }
 

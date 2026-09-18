@@ -201,7 +201,7 @@ export function TaskTypesPage() {
         <section className="min-w-0 shrink-0 lg:max-w-md lg:pt-4">
           <div className="space-y-5">
             <h1 className="font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
-              Task types
+              Task Types
             </h1>
             <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
               Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a{' '}

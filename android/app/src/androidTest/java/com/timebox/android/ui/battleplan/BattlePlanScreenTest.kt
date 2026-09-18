@@ -585,6 +585,35 @@ class BattlePlanScreenTest {
     }
 
     @Test
+    fun scopeMenuOpensTaskTypes() {
+        var taskTypesOpened = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(loading = false),
+                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
+                    onToggleUrgency = {}, onToggleImportance = {},
+                    onToggleTaskType = {}, onClearFilters = {}, onOpenTask = {},
+                    onToggleReady = {}, onMoveTask = { _, _ -> }, onReorderTask = { _, _ -> },
+                    onCreateSubtask = { _, _ -> }, onToggleSubtask = {},
+                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onOpenRecurring = {},
+                    onOpenTaskTypes = { taskTypesOpened = true },
+                    onPrepareDeleteProject = {}, onDismissDeleteProject = {},
+                    onConfirmDeleteProject = {}, onRestoreArchived = {},
+                    onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
+                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
+                    onConfirmPermanentDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("All Tasks", substring = true).performClick()
+        compose.onNodeWithText("Task Types").performClick()
+        compose.runOnIdle { check(taskTypesOpened) }
+    }
+
+    @Test
     fun compactFiltersUseSectionsWithoutUnsetAndForwardChipTaps() {
         var urgencyTapped: String? = null
         var taskTypeTapped: String? = null

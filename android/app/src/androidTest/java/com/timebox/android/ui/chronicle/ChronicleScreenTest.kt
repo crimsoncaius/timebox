@@ -2,6 +2,9 @@ package com.timebox.android.ui.chronicle
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -191,14 +194,38 @@ class ChronicleScreenTest {
         assertTrue(compose.onAllNodesWithText("Prepare launch").fetchSemanticsNodes().isEmpty())
     }
 
+    @Test
+    fun viewTabsSwitchBetweenCalendarAndTrends() {
+        val views = mutableListOf<ChronicleView>()
+        showChronicle(onPrevMonth = {}, onNextMonth = {}, onSelectView = { views += it })
+
+        compose.onNodeWithTag("chronicle-view-calendar").assertIsSelected()
+        compose.onNodeWithContentDescription("Chronicle month content").assertIsDisplayed()
+        compose.onNodeWithTag("chronicle-view-trends").performClick()
+        compose.runOnIdle { assertEquals(listOf(ChronicleView.Trends), views) }
+    }
+
+    @Test
+    fun trendsViewShowsItsPlaceholderInsteadOfTheCalendar() {
+        showChronicle(onPrevMonth = {}, onNextMonth = {}, view = ChronicleView.Trends)
+
+        compose.onNodeWithTag("chronicle-view-trends").assertIsSelected()
+        compose.onNodeWithText("Trends are on their way").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Chronicle month content").assertDoesNotExist()
+    }
+
     private fun showChronicle(
         onPrevMonth: () -> Unit,
         onNextMonth: () -> Unit,
+        view: ChronicleView = ChronicleView.Calendar,
+        onSelectView: (ChronicleView) -> Unit = {},
     ) {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 ChronicleScreen(
+                    onSelectView = onSelectView,
                     state = ChronicleUiState(
+                        view = view,
                         monthStart = LocalDate.of(2026, 8, 1),
                         today = LocalDate.of(2026, 8, 25),
                         loading = false,

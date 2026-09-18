@@ -47,6 +47,7 @@ export function BattlePlanSidebar({ open, collection, scope, recurring = false, 
           <button type="button" className={buttonClass(!recurring && collection === 'active' && scope === 'all')} onClick={() => onScope('all')}>All Tasks</button>
           <button type="button" className={buttonClass(!recurring && collection === 'active' && scope === 'admin')} onClick={() => onScope('admin')}>Admin</button>
           <Link to="/battle-plan?view=recurring" className={buttonClass(recurring)} onClick={onClose}>Recurring</Link>
+          <Link to="/task-types" className={buttonClass(false)} onClick={onClose}>Task Types</Link>
         </nav>
         <div className="mt-8 flex items-center justify-between px-3">
           <span className="font-label text-[10px] uppercase tracking-[0.16em] text-on-surface-variant">Projects</span>

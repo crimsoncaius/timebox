@@ -62,7 +62,7 @@ describe('TaskTypesPage', () => {
   it('renders editorial headings, composer, and empty saved types', async () => {
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Task types', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Task Types', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Task type' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Saved types' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Search or add (e.g. work)')).toBeInTheDocument()
@@ -138,7 +138,7 @@ describe('TaskTypesPage', () => {
 
     renderPage()
 
-    await screen.findByRole('heading', { name: 'Task types' })
+    await screen.findByRole('heading', { name: 'Task Types' })
 
     const composer = screen.getByRole('heading', { name: 'Task type' }).closest('section')
     expect(composer).toBeTruthy()

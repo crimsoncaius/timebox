@@ -98,6 +98,7 @@ fun RecurringScreen(
     onEditProject: (com.timebox.android.data.Project) -> Unit = {},
     onPrepareDeleteProject: (com.timebox.android.data.Project) -> Unit = {},
     onNewProject: () -> Unit = {},
+    onOpenTaskTypes: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize()) {
@@ -107,6 +108,7 @@ fun RecurringScreen(
                 onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
                 onReorderProjects = onReorderProjects, onEditProject = onEditProject,
                 onPrepareDeleteProject = onPrepareDeleteProject, onNewProject = onNewProject,
+                onOpenTaskTypes = onOpenTaskTypes,
             )
         }
         RecurringStatusTabs(state.selectedStatus, onSelectStatus)

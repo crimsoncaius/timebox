@@ -12,7 +12,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
+/** Chronicle's two views: one past day at a time, or Trends across many days. */
+enum class ChronicleView { Calendar, Trends }
+
 data class ChronicleUiState(
+    val view: ChronicleView = ChronicleView.Calendar,
     val monthStart: LocalDate = LocalDate.now().withDayOfMonth(1),
     val archived: Map<LocalDate, ArchivedDay> = emptyMap(),
     val today: LocalDate = LocalDate.now(),
@@ -51,6 +55,8 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     fun shiftMonth(months: Long) = _state.update {
         it.copy(monthStart = it.monthStart.plusMonths(months))
     }
+
+    fun selectView(view: ChronicleView) = _state.update { it.copy(view = view) }
 
     fun goToThisMonth() = _state.update {
         it.copy(monthStart = it.today.withDayOfMonth(1))
