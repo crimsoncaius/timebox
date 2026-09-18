@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ActivityRepository } from './activityRepository'
 import { ActivityTracking } from './ActivityTracking'
-import { FocusController } from './focusController'
+import { FocusController, getFocusController } from './focusController'
 import { observeFocusWake } from './focusWake'
 
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
@@ -79,20 +79,32 @@ it('rejects planning and cancels an in-flight entry without deferring or discard
   expect(await entry).toBe(false)
   expect(controller.state.active).toBe(false)
 })
-it('records an unknown description from original start offline and restores it, with no Stop in Focus', async () => {
+it('offers Switch rather than a naming question for an unnamed unspecified activity, with no Stop in Focus', async () => {
   const { repository } = await fixture()
   render(<ActivityTracking repository={repository} taskTypes={[]} onChanged={() => {}} focus />)
   expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
-  expect(screen.getByText('What are you doing right now?')).toBeInTheDocument()
-  fireEvent.focus(screen.getByLabelText('Describe Task Type'))
-  fireEvent.change(screen.getByLabelText('Describe Task Type'), { target: { value: 'Reading' } })
-  fireEvent.click(screen.getByRole('option', { name: 'Reading' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Apply from original start' }))
-  await waitFor(() => expect(repository.state.snapshot?.current?.task_type.name).toBe('Reading'))
-  const restored = new ActivityRepository(localStorage, work => work())
-  expect(restored.state.snapshot?.records).toHaveLength(1)
-  expect(restored.state.snapshot?.current).toMatchObject({ id: 7, start_at: '2026-09-11T10:00:00Z' })
+  expect(screen.queryByText('What are you doing right now?')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Switch' })).toBeEnabled()
   await act(async () => {})
+})
+it('asks for a Task Type before entering Focus with nothing running and no covering Planned Block', async () => {
+  const { repository } = await fixture(false)
+  const controller = getFocusController()
+  const view = render(<ActivityTracking repository={repository} taskTypes={[]} onChanged={() => {}} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Focus' }))
+  expect(screen.getByRole('button', { name: 'Focus' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(controller.state.active).toBe(false)
+  expect(repository.state.snapshot?.current).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Focus' }))
+  fireEvent.focus(screen.getByLabelText('Task Type'))
+  fireEvent.change(screen.getByLabelText('Task Type'), { target: { value: 'Reading' } })
+  fireEvent.click(screen.getByRole('option', { name: 'Reading' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+  await waitFor(() => expect(controller.state.active).toBe(true))
+  expect(repository.state.snapshot?.current?.task_type_id).toBe(2)
+  controller.exit()
+  view.unmount()
 })
 it('releases a stale pending wake request and reacquires only for visible Focus', async () => {
   let visible = 'visible'

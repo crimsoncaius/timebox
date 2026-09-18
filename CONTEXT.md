@@ -69,7 +69,7 @@ The legacy execution surface that combines plan-following time recording with an
 _Avoid_: Task detail, Task status, timer mode
 
 **Activity Tracking**:
-Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
+Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Starting takes its Task Type from the Planned Block covering the current instant, or otherwise from an explicit choice; it never defaults to `unspecified`. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
 _Avoid_: Work Mode, Focus session
 
 **Offline**:
@@ -101,7 +101,7 @@ The Day surface marker for the current instant in the Reporting Time Zone. It ap
 _Avoid_: Playhead, now indicator, current time line, Day view
 
 **Inactivity Prompt**:
-A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting. It is distinct from the Focus Mode question used to name an unknown activity.
+A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting.
 _Avoid_: Periodic check-in, Transient Feedback
 
 **Focus Mode**:

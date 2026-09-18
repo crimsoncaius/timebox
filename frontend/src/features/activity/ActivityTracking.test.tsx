@@ -5,6 +5,12 @@ import { ActivityRepository } from './activityRepository'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear() })
 
+function chooseTaskType(name: string) {
+  fireEvent.focus(screen.getByLabelText('Task Type'))
+  fireEvent.change(screen.getByLabelText('Task Type'), { target: { value: name } })
+  fireEvent.click(screen.getByRole('option', { name: new RegExp(name, 'i') }))
+}
+
 it('keeps the recording and refresh subscription alive while controls are hidden, then restores Stop', async () => {
   const at = new Date().toISOString()
   const row = { id: 172, name: 'Design', task_type_id: 1, task_type: { id: 1, name: 'Design' }, start_at: at, end_at: null }
@@ -76,7 +82,7 @@ it('reconciles a superseded offline chain without clearing newer remote time, an
   view.unmount()
 })
 
-it('starts without a dialog and retries a lost acknowledgement with the original command', async () => {
+it('starts an explicitly chosen unspecified Task Type and retries a lost acknowledgement with the original command', async () => {
   const initial = { protocol: 'activity-online-v1', offline_ready: true, cursor: 0, server_at: '2026-09-11T10:00:00Z', current: null, records: [] }
   let saved = initial
   const operations: unknown[] = []
@@ -92,11 +98,13 @@ it('starts without a dialog and retries a lost acknowledgement with the original
     return new Response(JSON.stringify(saved))
   }))
   const repository = new ActivityRepository(localStorage, (work) => work())
-  const view = render(<ActivityTracking repository={repository} taskTypes={[]} onChanged={() => {}} />)
+  const view = render(<ActivityTracking repository={repository} taskTypes={[{ id: 1, name: 'unspecified', created_at: '', updated_at: '' }]} onChanged={() => {}} />)
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start tracking' })).toBeEnabled())
   fireEvent.click(screen.getByRole('button', { name: 'Start tracking' }))
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  chooseTaskType('unspecified')
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }))
   await screen.findByText('Unsynced')
+  expect(operations[0]).toMatchObject({ kind: 'start', task_type_id: 1 })
   expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   expect(screen.queryByText(/Connection lost/)).not.toBeInTheDocument()
   view.unmount()
@@ -149,8 +157,10 @@ it('does not send a command when durable storage fails', async () => {
   const repository = new ActivityRepository(localStorage, (work) => work())
   await repository.refresh()
   const failure = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage full') })
-  render(<ActivityTracking repository={repository} taskTypes={[]} onChanged={() => {}} />)
+  render(<ActivityTracking repository={repository} taskTypes={[{ id: 2, name: 'reading', created_at: '', updated_at: '' }]} onChanged={() => {}} />)
   fireEvent.click(screen.getByRole('button', { name: 'Start tracking' }))
+  chooseTaskType('reading')
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }))
   await screen.findByText('Unsynced')
   expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   expect(screen.queryByText(/Activity storage failed/)).not.toBeInTheDocument()
@@ -423,5 +433,38 @@ it.each([false, true])('shows three-hour activity without total-minute conversio
   vi.spyOn(repository, 'now').mockReturnValue(Date.parse(now))
   const view = render(<ActivityTracking focus={focus} repository={repository} taskTypes={[]} onChanged={() => {}} />)
   expect(screen.getByLabelText('Elapsed time')).toHaveTextContent('3 hours')
+  await act(async () => {})
   view.unmount()
+})
+
+it('asks for a Task Type before starting without a covering Planned Block, and records nothing until confirmed', async () => {
+  const at = '2026-09-11T10:00:00Z'
+  const reading = { id: 2, name: 'reading', created_at: at, updated_at: at }
+  const initial = { protocol: 'activity-online-v1', offline_ready: true, cursor: 0, server_at: at, reporting_timezone: 'UTC', current: null, records: [], task_types: [reading],
+    plans: [{ id: 4, task_type_id: 2, task_id: null, name: 'Later', note: null, start_at: '2026-09-11T10:05:00Z', end_at: '2026-09-11T11:00:00Z' }] }
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+    if (init?.method) throw new Error('Offline')
+    return new Response(JSON.stringify(initial))
+  }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  const clock = vi.spyOn(repository, 'now').mockReturnValue(Date.parse(at))
+  render(<ActivityTracking repository={repository} taskTypes={[reading]} onChanged={() => {}} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Start tracking' }))
+  const form = screen.getByRole('form', { name: 'Start tracking' })
+  expect(screen.queryByText('When did this change happen?')).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'After this change' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Start tracking' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(form).not.toBeInTheDocument()
+  expect(repository.state.snapshot?.current).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Start tracking' }))
+  chooseTaskType('reading')
+  fireEvent.change(screen.getByLabelText('Block Name (optional)'), { target: { value: 'Paper' } })
+  clock.mockReturnValue(Date.parse('2026-09-11T10:02:00Z'))
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+  await waitFor(() => expect(repository.state.snapshot?.current).toMatchObject({ name: 'Paper', task_type_id: 2, planned_block_id: null }))
+  expect(repository.state.snapshot?.current?.start_at).toBe('2026-09-11T10:02:00.000Z')
+  expect(screen.queryByRole('form', { name: 'Start tracking' })).not.toBeInTheDocument()
 })
