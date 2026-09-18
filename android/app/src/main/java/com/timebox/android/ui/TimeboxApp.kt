@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
@@ -64,6 +65,7 @@ import com.timebox.android.ui.battleplan.RecurringEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringScreen
 import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.TaskDetailScreen
+import com.timebox.android.ui.battleplan.TaskNavigationMenu
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.components.TimeboxBottomNav
 import com.timebox.android.ui.components.TimeboxTab
@@ -589,7 +591,9 @@ fun TimeboxApp(
                             onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
                             onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
                             onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
-                            onOpenTaskTypes = { navController.navigate(AppRoutes.Types) },
+                            onOpenTaskTypes = {
+                                navController.navigate(AppRoutes.Types) { popUpTo(AppRoutes.BattlePlan) }
+                            },
                             onRetry = { recurringViewModel.load() },
                             onSelectStatus = recurringViewModel::selectStatus,
                             onNew = { navController.navigate(AppRoutes.RecurringNew) },
@@ -695,21 +699,49 @@ fun TimeboxApp(
                         )
                     }
                     composable(AppRoutes.Types) {
-                        TypesScreen(
-                            state = typesState,
-                            onInputChange = typesViewModel::onInputChange,
-                            onAdd = typesViewModel::addType,
-                            onDelete = typesViewModel::deleteType,
-                            onConfirmCascade = typesViewModel::confirmCascadeDelete,
-                            onMigrateTarget = typesViewModel::setMigrateBlocksTo,
-                            onConfirmMigrate = typesViewModel::confirmMigrateDelete,
-                            onDismissCascade = typesViewModel::dismissCascadePrompt,
-                            onRetry = typesViewModel::load,
-                            onRename = typesViewModel::beginRename,
-                            onRenameChange = typesViewModel::changeRename,
-                            onSaveRename = typesViewModel::saveRename,
-                            onCancelRename = typesViewModel::cancelRename,
-                        )
+                        fun returnToTasks() {
+                            if (!navController.popBackStack(AppRoutes.BattlePlan, inclusive = false)) {
+                                navController.navigate(AppRoutes.BattlePlan) { popUpTo(AppRoutes.Types) { inclusive = true } }
+                            }
+                        }
+                        Column(Modifier.fillMaxSize()) {
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                TaskNavigationMenu(
+                                    state = battlePlanState,
+                                    taskTypes = true,
+                                    onSelectScope = {
+                                        battlePlanViewModel.selectCollection(com.timebox.android.data.TaskCollection.Active)
+                                        battlePlanViewModel.selectScope(it)
+                                        returnToTasks()
+                                    },
+                                    onSelectCollection = { battlePlanViewModel.selectCollection(it); returnToTasks() },
+                                    onOpenRecurring = {
+                                        navController.navigate(AppRoutes.Recurring) { popUpTo(AppRoutes.BattlePlan) }
+                                    },
+                                    onReorderProjects = battlePlanViewModel::reorderProjects,
+                                    onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
+                                    onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
+                                    onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
+                                )
+                            }
+                            Box(Modifier.weight(1f)) {
+                                TypesScreen(
+                                    state = typesState,
+                                    onInputChange = typesViewModel::onInputChange,
+                                    onAdd = typesViewModel::addType,
+                                    onDelete = typesViewModel::deleteType,
+                                    onConfirmCascade = typesViewModel::confirmCascadeDelete,
+                                    onMigrateTarget = typesViewModel::setMigrateBlocksTo,
+                                    onConfirmMigrate = typesViewModel::confirmMigrateDelete,
+                                    onDismissCascade = typesViewModel::dismissCascadePrompt,
+                                    onRetry = typesViewModel::load,
+                                    onRename = typesViewModel::beginRename,
+                                    onRenameChange = typesViewModel::changeRename,
+                                    onSaveRename = typesViewModel::saveRename,
+                                    onCancelRename = typesViewModel::cancelRename,
+                                )
+                            }
+                        }
                     }
                     composable(AppRoutes.Assistant) {
                         AssistantScreen()

@@ -59,6 +59,15 @@ describe('TaskTypesPage', () => {
     )
   }
 
+  it('keeps the Battle Plan lists and projects beside Task Types', async () => {
+    renderPage()
+
+    const sidebar = await screen.findByRole('complementary', { name: 'Battle Plan lists and projects' })
+    expect(within(sidebar).getByRole('link', { name: 'Task Types' })).toHaveAttribute('aria-current', 'page')
+    expect(within(sidebar).getByRole('button', { name: 'All Tasks' })).toBeInTheDocument()
+    expect(within(sidebar).getByRole('link', { name: 'Recurring' })).toBeInTheDocument()
+  })
+
   it('renders editorial headings, composer, and empty saved types', async () => {
     renderPage()
 
@@ -400,6 +409,7 @@ describe('TaskTypesPage', () => {
       const url = String(input)
       if (url.includes('/task-types') && init?.method === 'PATCH') return Promise.resolve(jsonResponse({ detail: 'A task type with this path already exists' }, 422))
       if (url.includes('/task-types')) return Promise.resolve(jsonResponse(rows))
+      if (url.includes('/projects')) return Promise.resolve(jsonResponse([]))
       return Promise.resolve(jsonResponse({ today: '2026-04-13', timezone: 'UTC' }))
     }) as typeof fetch
     renderPage()

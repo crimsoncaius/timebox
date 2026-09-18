@@ -614,6 +614,26 @@ class BattlePlanScreenTest {
     }
 
     @Test
+    fun taskTypesKeepsTheBattlePlanMenuWithTaskTypesSelected() {
+        var recurringOpened = false
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                TaskNavigationMenu(
+                    state = BattlePlanUiState(loading = false),
+                    taskTypes = true,
+                    onOpenRecurring = { recurringOpened = true },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Task Types").performClick()
+        compose.onNodeWithTag("battle-plan-scope-menu").fetchSemanticsNode()
+        compose.onNodeWithContentDescription("Selected").fetchSemanticsNode()
+        compose.onNodeWithText("Recurring").performClick()
+        compose.runOnIdle { check(recurringOpened) }
+    }
+
+    @Test
     fun compactFiltersUseSectionsWithoutUnsetAndForwardChipTaps() {
         var urgencyTapped: String? = null
         var taskTypeTapped: String? = null
