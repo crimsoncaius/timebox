@@ -63,7 +63,7 @@ import kotlin.math.roundToInt
 
 private val WEEKDAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 private val CHRONICLE_SWIPE_THRESHOLD = 55.dp
-private val monthTitleFormatter = DateTimeFormatter.ofPattern("MMMM uuuu", Locale.ENGLISH)
+internal val monthTitleFormatter = DateTimeFormatter.ofPattern("MMMM uuuu", Locale.ENGLISH)
 
 @Composable
 fun ChronicleScreen(
@@ -87,55 +87,88 @@ fun ChronicleScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize(),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = TimeboxDimens.screenPadding)
-                .padding(top = 2.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            RoundIconButton(
-                icon = Icons.Outlined.ChevronLeft,
-                contentDescription = "Previous month",
-                onClick = onPrevMonth,
-                tint = colors.on,
-                diameter = 36.dp,
-                background = colors.low,
-                iconSize = 19.dp,
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(36.dp)
-                    .clip(TimeboxShapes.field)
-                    .background(colors.low)
-                    .clickable(onClick = onThisMonth),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("This month", style = TimeboxTheme.type.sectionTitle, color = colors.on)
-            }
-            RoundIconButton(
-                icon = Icons.Outlined.ChevronRight,
-                contentDescription = "Next month",
-                onClick = onNextMonth,
-                tint = colors.on,
-                diameter = 36.dp,
-                background = colors.low,
-                iconSize = 19.dp,
-            )
-        }
+    if (com.timebox.android.BuildConfig.CHRONICLE_PROTOTYPE) {
+        ChronicleTrendsPrototype(state, onPrevMonth, onNextMonth, onThisMonth, onOpenDay)
+        return
+    }
 
+    ChronicleCalendar(
+        state = state,
+        onPrevMonth = onPrevMonth,
+        onNextMonth = onNextMonth,
+        onThisMonth = onThisMonth,
+        onOpenDay = onOpenDay,
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/** Month navigation over the month pager: the Calendar view of Chronicle. */
+@Composable
+internal fun ChronicleCalendar(
+    state: ChronicleUiState,
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onThisMonth: () -> Unit,
+    onOpenDay: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+    highlighted: Set<LocalDate> = emptySet(),
+) {
+    Column(modifier = modifier) {
+        ChronicleMonthNav(onPrevMonth, onNextMonth, onThisMonth)
         ChronicleMonthPager(
             state = state,
             onPrevMonth = onPrevMonth,
             onNextMonth = onNextMonth,
             onOpenDay = onOpenDay,
+            highlighted = highlighted,
             modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+internal fun ChronicleMonthNav(
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onThisMonth: () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TimeboxDimens.screenPadding)
+            .padding(top = 2.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RoundIconButton(
+            icon = Icons.Outlined.ChevronLeft,
+            contentDescription = "Previous month",
+            onClick = onPrevMonth,
+            tint = colors.on,
+            diameter = 36.dp,
+            background = colors.low,
+            iconSize = 19.dp,
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(36.dp)
+                .clip(TimeboxShapes.field)
+                .background(colors.low)
+                .clickable(onClick = onThisMonth),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("This month", style = TimeboxTheme.type.sectionTitle, color = colors.on)
+        }
+        RoundIconButton(
+            icon = Icons.Outlined.ChevronRight,
+            contentDescription = "Next month",
+            onClick = onNextMonth,
+            tint = colors.on,
+            diameter = 36.dp,
+            background = colors.low,
+            iconSize = 19.dp,
         )
     }
 }
@@ -148,6 +181,7 @@ private fun ChronicleMonthPager(
     onNextMonth: () -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    highlighted: Set<LocalDate> = emptySet(),
 ) {
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf(false) }
@@ -224,6 +258,7 @@ private fun ChronicleMonthPager(
                         state = state,
                         interactive = interactive,
                         onOpenDay = onOpenDay,
+                        highlighted = highlighted,
                         modifier = Modifier.offset {
                             IntOffset(
                                 x = (pagePosition * pageWidthPx + dragOffsetPx).roundToInt(),
@@ -244,6 +279,7 @@ private fun ChronicleMonthPage(
     interactive: Boolean,
     onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    highlighted: Set<LocalDate> = emptySet(),
 ) {
     val colors = TimeboxTheme.colors
     Column(
@@ -283,6 +319,7 @@ private fun ChronicleMonthPage(
                         date = date,
                         inMonth = inMonth,
                         isToday = date == state.today,
+                        highlighted = date in highlighted,
                         archived = archived != null,
                         windowLabel = archived?.windowLabel,
                         actualIdentity = archived?.actualBlocks?.firstOrNull()?.primaryIdentity(),
@@ -308,6 +345,7 @@ private fun DayCell(
     date: LocalDate,
     inMonth: Boolean,
     isToday: Boolean,
+    highlighted: Boolean,
     archived: Boolean,
     /** Null for a day with nothing in it, so empty cells stay bare. */
     windowLabel: String?,
@@ -330,6 +368,8 @@ private fun DayCell(
             .then(
                 if (isToday && inMonth) {
                     Modifier.border(1.5.dp, colors.planned, TimeboxShapes.cell)
+                } else if (highlighted && inMonth) {
+                    Modifier.border(1.5.dp, colors.actual, TimeboxShapes.cell)
                 } else {
                     Modifier
                 }
