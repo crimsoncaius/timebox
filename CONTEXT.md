@@ -57,7 +57,7 @@ Optional freeform context attached to one Planned Block or Actual Block. It does
 _Avoid_: Task Description, journal entry
 
 **Transient Feedback**:
-A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app task reminders; it excludes validation, persistent errors, loading states, and native OS notifications.
+A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app Task Reminders; it excludes validation, persistent errors, loading states, and native OS notifications.
 _Avoid_: Toast, notification, banner
 
 **Transient Feedback Variant**:
@@ -118,7 +118,11 @@ _Avoid_: Day Review screen, report
 
 **Daily Reminder**:
 An optional, device-local notification scheduled for a chosen local time to prompt Day Planning or Day Review. It creates no task, recurrence, work record, or overdue state; a missed prompt is skipped.
-_Avoid_: Recurring Task Series, task reminder, notification task
+_Avoid_: Recurring Task Series, Task Reminder, notification task
+
+**Task Reminder**:
+An optional, one-time nudge at a user-chosen moment for an incomplete Battle Plan Task or Session Task. A Task has at most one. It is independent of the Task's deadline: deadline changes and overdue state neither move, re-arm, nor suppress it. Task Completion clears it.
+_Avoid_: Deadline reminder, notification, Daily Reminder
 
 **Recurring Task Series**:
 A recurrence rule and template that produces Task Occurrences. It represents an ongoing routine and does not belong to a Project.
