@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Planned Block Reminders</title>
+<style>
+  :root {
+    --bg: #fafaf9; --panel: #ffffff; --ink: #1c1917; --muted: #78716c; --line: #e7e5e4;
+    --accent: #2563eb; --accent-soft: #dbeafe; --good: #15803d; --warn: #b45309; --bad: #b91c1c; --fresh: #fef9c3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1917; --panel: #292524; --ink: #f5f5f4; --muted: #a8a29e; --line: #44403c;
+      --accent: #60a5fa; --accent-soft: #1e3a5f; --good: #4ade80; --warn: #fbbf24; --bad: #f87171; --fresh: #3f3a1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .banner { background: var(--fresh); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 16px; }
+  .intro { color: var(--muted); max-width: 820px; margin: 0 0 20px; }
+  .intro b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .clock { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin-top: 8px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); padding: 6px 6px; }
+  td { border-bottom: 1px solid var(--line); padding: 6px 6px; vertical-align: top; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); white-space: nowrap; }
+  .tag.good { color: var(--good); } .tag.warn { color: var(--warn); } .tag.bad { color: var(--bad); } .tag.acc { color: var(--accent); }
+  button { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .row label { color: var(--muted); font-size: 13px; }
+  select, input { font: inherit; font-size: 13px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  input[type=text] { width: 110px; }
+  .notif { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .notif .t { font-weight: 600; } .notif .m { color: var(--muted); font-size: 12px; }
+  .log { max-height: 320px; overflow: auto; font-size: 13px; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .log .fresh { background: var(--fresh); }
+  .log time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+  .tabs button.on { background: var(--accent-soft); border-color: var(--accent); }
+  .steps { list-style: none; padding: 0; margin: 10px 0 0; }
+  .steps li { margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  .steps li .n { color: var(--muted); width: 18px; text-align: right; }
+  .steps li.done button { text-decoration: line-through; }
+  .watch { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; margin-top: 10px; font-size: 13px; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner"><b>PROTOTYPE, throwaway.</b> Issue #209. Nothing here is production code or talks to the server; all state is in memory.</div>
+  <h1>Planned Block Reminders: when does the phone nudge you?</h1>
+  <p class="intro">
+    <b>Question:</b> do the agreed scheduling rules for Planned Block Reminders give the right result in awkward cases?
+    The rules: one global lead time; the phone only knows the Planned Blocks it has <b>synced</b> (on app open, when planning on the phone, and a background check every 15 min);
+    a block the phone learns about <b>after</b> its reminder time fires immediately if it hasn't started, and is skipped if it has;
+    each block is reminded at most once, keyed by <b>block + start time</b>, so moving a block re-arms it;
+    a reminder is skipped only if you're already tracking that block;
+    a delivered reminder is <b>silently removed</b> once you switch to that block (anywhere), when the block ends, or when a sync finds it moved or deleted;
+    without exact alarms, Android may deliver a few minutes late (simulated here as <b>6 min</b>).
+    Move the clock forward, plan blocks on the web or the phone, and watch what fires.
+  </p>
+
+  <div class="grid">
+    <div>
+      <section class="panel" id="state"></section>
+      <section class="panel"><h2>Notifications on the phone</h2><div id="tray"></div></section>
+      <section class="panel"><h2>What happened (newest first)</h2><div class="log" id="log"></div></section>
+    </div>
+    <div>
+      <section class="panel">
+        <h2>Guided walkthroughs</h2>
+        <div class="tabs" id="tabs"></div>
+        <div id="scenario"></div>
+      </section>
+      <section class="panel">
+        <h2>Free play</h2>
+        <div class="row"><label>Clock</label>
+          <button data-act='{"type":"advance","minutes":1}'>+1 min</button>
+          <button data-act='{"type":"advance","minutes":5}'>+5 min</button>
+          <button data-act='{"type":"advance","minutes":15}'>+15 min</button>
+          <button data-act='{"type":"advanceToNext"}'>Skip to next reminder</button>
+          <button data-act='{"type":"openApp"}'>Open the app (sync)</button>
+        </div>
+        <div class="row"><label>Settings</label>
+          <button id="toggleEnabled"></button>
+          <label>Lead time</label>
+          <select id="lead">
+            <option value="0">At start</option><option value="1">1 min</option><option value="5">5 min</option>
+            <option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option>
+          </select>
+          <button id="toggleExact"></button>
+        </div>
+        <div class="row"><label>Tracking</label>
+          <button data-act='{"type":"trackOther"}'>Track something unplanned</button>
+          <button data-act='{"type":"stopTracking"}'>Stop tracking</button>
+        </div>
+        <div class="row" style="margin-top:14px"><label>New Planned Block</label></div>
+        <div class="row">
+          <select id="nbStart"></select>
+          <select id="nbDur"><option>15</option><option selected>30</option><option>60</option><option>90</option></select><label>min</label>
+        </div>
+        <div class="row">
+          <input type="text" id="nbName" placeholder="Block Name">
+          <input type="text" id="nbTask" placeholder="Task title">
+          <input type="text" id="nbType" placeholder="Task Type">
+        </div>
+        <div class="row">
+          <button id="addWeb">Plan it on the web</button>
+          <button id="addPhone">Plan it on the phone</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ===================================================================
+ * Portable logic module: pure, no DOM. dispatch(state, action) => state.
+ * Times are minutes since midnight (Reporting Time Zone).
+ * =================================================================== */
+const PlannedBlockReminders = (() => {
+  const SYNC_EVERY = 15;      // background check cadence
+  const INEXACT_DELAY = 6;    // simulated Doze delay without exact alarms
+
+  const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const keyOf = (b) => `${b.id}@${b.start}`;
+  const titleOf = (b) => b.name || b.taskTitle || b.taskType || "Planned Block";
+
+  function textOf(b, now) {
+    const d = b.start - now;
+    const when = d > 0 ? `Starts in ${d} min` : d === 0 ? "Starting now" : `Started ${-d} min ago`;
+    return `${when} · ${hhmm(b.start)}–${hhmm(b.end)}`;
+  }
+
+  function initial() {
+    return {
+      now: 8 * 60 + 30,
+      settings: { enabled: true, lead: 5, exact: true },
+      server: [],            // Planned Blocks as the server has them
+      phone: [],             // the phone's last synced copy
+      lastSync: 8 * 60 + 30,
+      tracking: { on: false, plannedBlockId: null, label: null },
+      handled: {},           // key -> outcome; a key is reminded at most once
+      alarms: [],            // { key, blockId, fireAt, deliverAt, immediate }
+      tray: [],              // delivered notifications
+      log: [],
+      nextId: 1,
+      webSwitch: null,       // a switch made on the web, not yet synced to the phone
+      seq: 0,
+    };
+  }
+
+  const log = (s, text, tone = "") => s.log.push({ at: s.now, text, tone, seq: s.seq });
+
+  function replan(s, why) {
+    const before = new Map(s.alarms.map((a) => [a.key, a]));
+    if (!s.settings.enabled) {
+      if (s.alarms.length) log(s, `Reminders are off, so ${s.alarms.length} pending reminder(s) were cancelled.`);
+      s.alarms = [];
+      return;
+    }
+    const next = [];
+    for (const b of [...s.phone].sort((x, y) => x.start - y.start)) {
+      const key = keyOf(b);
+      if (s.handled[key]) continue;
+      if (b.start < s.now && !before.has(key)) {
+        s.handled[key] = "skipped";
+        log(s, `“${titleOf(b)}” (${hhmm(b.start)}) had already started when the phone learned of it (${why}), so it is skipped.`, "warn");
+        continue;
+      }
+      const ideal = b.start - s.settings.lead;
+      const immediate = ideal < s.now;
+      const fireAt = immediate ? s.now : ideal;
+      const kept = before.get(key);
+      const deliverAt = kept && kept.fireAt === fireAt ? kept.deliverAt : fireAt + (s.settings.exact ? 0 : INEXACT_DELAY);
+      next.push({ key, blockId: b.id, fireAt, deliverAt, immediate });
+      if (!kept || kept.deliverAt !== deliverAt) {
+        log(s, immediate
+          ? `“${titleOf(b)}” reminder time (${hhmm(ideal)}) already passed when the phone learned of it (${why}), but it hasn't started, so it fires now${s.settings.exact ? "" : " (+ inexact delay)"}.`
+          : `Reminder for “${titleOf(b)}” set for ${hhmm(deliverAt)}${s.settings.exact ? "" : ` (wanted ${hhmm(fireAt)}; no exact alarms)`}.`, "acc");
+      }
+    }
+    for (const [key, a] of before) {
+      if (!next.some((n) => n.key === key)) log(s, `Pending reminder for block #${a.blockId} (${hhmm(a.deliverAt)}) cancelled because it was moved, deleted, or reminders changed.`);
+    }
+    s.alarms = next;
+  }
+
+  // Removal is silent for the user; the log line is only for this demo.
+  function withdraw(s, keep, reason) {
+    const gone = s.tray.filter((n) => !keep(n));
+    s.tray = s.tray.filter(keep);
+    for (const n of gone) log(s, `Notification “${n.title}” removed from the shade: ${reason}.`, "acc");
+  }
+
+  function sync(s, why) {
+    s.phone = s.server.map((b) => ({ ...b }));
+    s.lastSync = s.now;
+    if (s.webSwitch != null) {
+      const b = s.phone.find((x) => x.id === s.webSwitch);
+      if (b) s.tracking = { on: true, plannedBlockId: b.id, label: titleOf(b) };
+      log(s, `Phone learned (${why}) that you switched to “${b ? titleOf(b) : "#" + s.webSwitch}” on the web.`);
+      s.webSwitch = null;
+    }
+    withdraw(s, (n) => s.phone.some((b) => keyOf(b) === n.key), "its block was moved or deleted");
+    if (s.tracking.on) withdraw(s, (n) => n.blockId !== s.tracking.plannedBlockId, "you're already on that block");
+    replan(s, why);
+  }
+
+  function fireDue(s) {
+    const due = s.alarms.filter((a) => a.deliverAt <= s.now);
+    s.alarms = s.alarms.filter((a) => a.deliverAt > s.now);
+    for (const a of due) {
+      const b = s.phone.find((x) => x.id === a.blockId);
+      if (!b || keyOf(b) !== a.key) continue;
+      if (s.tracking.on && s.tracking.plannedBlockId === b.id) {
+        s.handled[a.key] = "skipped";
+        log(s, `Reminder for “${titleOf(b)}” skipped because you're already tracking that block.`, "warn");
+      } else if (s.now >= b.end) {
+        s.handled[a.key] = "skipped";
+        log(s, `Reminder for “${titleOf(b)}” skipped because the block is already over.`, "warn");
+      } else {
+        s.handled[a.key] = "delivered";
+        s.tray.unshift({ key: a.key, blockId: b.id, title: titleOf(b), text: textOf(b, s.now), at: s.now });
+        log(s, `🔔 Notification: “${titleOf(b)}”: ${textOf(b, s.now)}${a.deliverAt > a.fireAt ? ` (${a.deliverAt - a.fireAt} min late)` : ""}.`, "good");
+      }
+    }
+  }
+
+  function tickMinute(s) {
+    s.now += 1;
+    withdraw(s, (n) => { const b = s.phone.find((x) => keyOf(x) === n.key); return !b || s.now < b.end; }, "its block has ended");
+    if (s.now % SYNC_EVERY === 0) sync(s, `background check at ${hhmm(s.now)}`);
+    fireDue(s);
+  }
+
+  function adopt(s, id, via) {
+    const b = s.phone.find((x) => x.id === id);
+    if (!b) return log(s, "That block isn't on the phone.", "bad");
+    if (via === "notification" && s.now >= b.end) {
+      s.tray = s.tray.filter((n) => n.blockId !== id);
+      return log(s, `Tapped Switch, but “${titleOf(b)}” is over, so Day opens instead.`, "warn");
+    }
+    const was = s.tracking.on;
+    s.tracking = { on: true, plannedBlockId: id, label: titleOf(b) };
+    if (via === "notification") s.tray = s.tray.filter((n) => n.blockId !== id);
+    else withdraw(s, (n) => n.blockId !== id, "you switched to that block in the app");
+    log(s, `${via === "notification" ? "Tapped Switch on the notification" : "Switched in the app"}: ${was ? "now tracking" : "tracking started on"} “${titleOf(b)}”.`, "good");
+    if (!s.server.some((x) => x.id === id)) {
+      log(s, `⚠ “${titleOf(b)}” was deleted on the web and the phone doesn't know yet. The switch is recorded against a plan that no longer exists. Agreed: sync keeps the Actual Block and drops its link to the deleted plan.`, "bad");
+    }
+  }
+
+  function dispatch(prev, action) {
+    const s = structuredClone(prev);
+    s.seq += 1;
+    switch (action.type) {
+      case "advance": for (let i = 0; i < action.minutes; i++) tickMinute(s); break;
+      case "advanceToNext": {
+        const limit = s.now + 24 * 60;
+        const start = s.tray.length + Object.keys(s.handled).length;
+        while (s.now < limit && s.tray.length + Object.keys(s.handled).length === start) {
+          const unknown = s.server.some((b) => b.start > s.now && !s.handled[keyOf(b)] && !s.alarms.some((a) => a.key === keyOf(b)));
+          if (!s.settings.enabled || (!s.alarms.length && !unknown)) break;
+          tickMinute(s);
+        }
+        if (s.tray.length + Object.keys(s.handled).length === start) log(s, "Nothing left to remind about.");
+        break;
+      }
+      case "openApp": log(s, "Opened the app."); sync(s, "app opened"); break;
+      case "addBlock": {
+        const b = { id: s.nextId++, start: action.start, end: action.start + action.duration, name: action.name || "", taskTitle: action.taskTitle || "", taskType: action.taskType || "" };
+        s.server.push(b);
+        log(s, `Planned “${titleOf(b)}” ${hhmm(b.start)}–${hhmm(b.end)} on the ${action.where}${action.where === "web" ? " (the phone doesn't know yet)" : ""}.`);
+        if (action.where === "phone") sync(s, "planned on the phone");
+        break;
+      }
+      case "moveBlock": {
+        const b = s.server.find((x) => x.id === action.id); if (!b) break;
+        const dur = b.end - b.start; b.start = action.start; b.end = action.start + dur;
+        log(s, `Moved “${titleOf(b)}” to ${hhmm(b.start)} on the ${action.where}.`);
+        if (action.where === "phone") sync(s, "edited on the phone");
+        break;
+      }
+      case "deleteBlock": {
+        const b = s.server.find((x) => x.id === action.id); if (!b) break;
+        s.server = s.server.filter((x) => x.id !== action.id);
+        log(s, `Deleted “${titleOf(b)}” on the ${action.where}.`);
+        if (action.where === "phone") sync(s, "edited on the phone");
+        break;
+      }
+      case "adopt": adopt(s, action.id, action.via); break;
+      case "adoptOnWeb": s.webSwitch = action.id; log(s, `Switched to block #${action.id} on the web (the phone finds out at its next sync).`); break;
+      case "dismiss": s.tray = s.tray.filter((n) => n.key !== action.key); log(s, "Dismissed a notification."); break;
+      case "trackOther": s.tracking = { on: true, plannedBlockId: null, label: "Something unplanned" }; log(s, "Tracking something unplanned."); break;
+      case "stopTracking": s.tracking = { on: false, plannedBlockId: null, label: null }; log(s, "Stopped tracking."); break;
+      case "setEnabled": s.settings.enabled = action.value; log(s, `Planned Block reminders turned ${action.value ? "on" : "off"}.`); replan(s, "reminders turned on"); break;
+      case "setLead": s.settings.lead = action.value; log(s, `Lead time set to ${action.value ? action.value + " min" : "At start"}.`); replan(s, "lead time changed"); break;
+      case "setExact": s.settings.exact = action.value; s.alarms = []; log(s, `Exact alarms ${action.value ? "allowed" : "NOT allowed (fallback: may be late)"}.`); replan(s, "alarm permission changed"); break;
+    }
+    fireDue(s); // an immediate reminder goes out in the same instant
+    return s;
+  }
+
+  return { initial, dispatch, hhmm, keyOf, titleOf };
+})();
+
+/* ===================================================================
+ * Throwaway page shell
+ * =================================================================== */
+const R = PlannedBlockReminders;
+const h = R.hhmm;
+let state = R.initial();
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function act(action) { state = R.dispatch(state, action); render(); }
+
+function blockStatus(b) {
+  const onPhone = state.phone.find((x) => x.id === b.id);
+  if (!onPhone) return `<span class="tag warn">phone doesn't know yet</span>`;
+  if (onPhone.start !== b.start) return `<span class="tag warn">phone thinks ${h(onPhone.start)}</span>`;
+  const k = R.keyOf(b);
+  if (state.handled[k] === "delivered") return `<span class="tag good">reminded</span>`;
+  if (state.handled[k] === "skipped") return `<span class="tag warn">skipped</span>`;
+  const a = state.alarms.find((x) => x.key === k);
+  if (a) return `<span class="tag acc">reminder at ${h(a.deliverAt)}</span>`;
+  return `<span class="tag">no reminder</span>`;
+}
+
+function render() {
+  const s = state;
+  const ghost = s.phone.filter((p) => !s.server.some((b) => b.id === p.id));
+  document.getElementById("state").innerHTML = `
+    <h2>Current state</h2>
+    <div class="clock">${h(s.now)}</div>
+    <dl class="facts">
+      <dt>Reminders</dt><dd>${s.settings.enabled ? `On · ${s.settings.lead ? s.settings.lead + " min before" : "At start"}` : "Off"}</dd>
+      <dt>Exact alarms</dt><dd>${s.settings.exact ? "Allowed" : "<span class='tag warn'>Not allowed: may arrive ~6 min late</span>"}</dd>
+      <dt>Tracking</dt><dd>${s.tracking.on ? esc(s.tracking.label) + (s.tracking.plannedBlockId ? ` <span class="tag">block #${s.tracking.plannedBlockId}</span>` : "") : "Off"}</dd>
+      <dt>Phone last synced</dt><dd>${h(s.lastSync)} · next background check ${h(Math.floor(s.now / 15) * 15 + 15)}</dd>
+    </dl>
+    <h2 style="margin-top:16px">Planned Blocks</h2>
+    ${s.server.length || ghost.length ? `<table><tr><th>#</th><th>Block</th><th>Time</th><th>Reminder</th><th></th></tr>
+      ${[...s.server].sort((a, b) => a.start - b.start).map((b) => `<tr>
+        <td>${b.id}</td><td>${esc(R.titleOf(b))}</td><td>${h(b.start)}–${h(b.end)}</td><td>${blockStatus(b)}</td>
+        <td><div class="row" style="margin:0">
+          <button data-act='${JSON.stringify({ type: "moveBlock", id: b.id, start: b.start + 60, where: "web" })}'>+1h web</button>
+          <button data-act='${JSON.stringify({ type: "moveBlock", id: b.id, start: b.start + 60, where: "phone" })}'>+1h phone</button>
+          <button data-act='${JSON.stringify({ type: "deleteBlock", id: b.id, where: "web" })}'>Delete web</button>
+          <button data-act='${JSON.stringify({ type: "deleteBlock", id: b.id, where: "phone" })}'>Delete phone</button>
+          <button data-act='${JSON.stringify({ type: "adoptOnWeb", id: b.id })}'>Switch on web</button>
+          <button data-act='${JSON.stringify({ type: "adopt", id: b.id, via: "app" })}' ${state.phone.some((p) => p.id === b.id) ? "" : "disabled"}>Switch in app</button>
+        </div></td></tr>`).join("")}
+      ${ghost.map((b) => `<tr><td>${b.id}</td><td><s>${esc(R.titleOf(b))}</s></td><td>${h(b.start)}–${h(b.end)}</td><td><span class="tag bad">deleted on web; phone still has it</span></td><td></td></tr>`).join("")}
+      </table>` : `<p class="empty">No Planned Blocks yet.</p>`}`;
+
+  document.getElementById("tray").innerHTML = s.tray.length ? s.tray.map((n) => `
+    <div class="notif"><div class="m">Planned Block reminders · ${h(n.at)}</div>
+      <div class="t">${esc(n.title)}</div><div>${esc(n.text)}</div>
+      <div class="row" style="margin:8px 0 0">
+        <button class="primary" data-act='${JSON.stringify({ type: "adopt", id: n.blockId, via: "notification" })}'>Switch</button>
+        <button data-act='${JSON.stringify({ type: "dismiss", key: n.key })}'>Dismiss</button>
+      </div></div>`).join("") : `<p class="empty">No notifications.</p>`;
+
+  document.getElementById("log").innerHTML = s.log.length ? [...s.log].reverse().map((l) =>
+    `<div class="${l.seq === s.seq ? "fresh" : ""}"><time>${h(l.at)}</time>${esc(l.text)}</div>`).join("") : `<p class="empty">Nothing yet.</p>`;
+
+  document.getElementById("toggleEnabled").textContent = s.settings.enabled ? "Turn reminders off" : "Turn reminders on";
+  document.getElementById("toggleExact").textContent = s.settings.exact ? "Revoke exact alarms" : "Allow exact alarms";
+  document.getElementById("lead").value = String(s.settings.lead);
+  renderScenario();
+}
+
+/* Guided walkthroughs */
+const add = (start, duration, where, name, taskTitle = "", taskType = "") => ({ type: "addBlock", start, duration, where, name, taskTitle, taskType });
+const T = (hh, mm) => hh * 60 + mm;
+const scenarios = [
+  { title: "Happy path", text: "You plan a block on the phone, the reminder fires 5 minutes before it starts, and you switch from the notification.",
+    watch: "One notification at 08:55 that says “Starts in 5 min”. Switch starts tracking on that block.",
+    steps: [["On the phone, plan “Deep work” 09:00–10:00", add(T(9, 0), 60, "phone", "Deep work")], ["Skip to the next reminder", { type: "advanceToNext" }], ["Tap Switch on the notification", { type: "adopt", id: 1, via: "notification" }]] },
+  { title: "Adopted early", text: "You start the block before its reminder. The reminder should be skipped. Then you stop tracking before the block starts.",
+    watch: "The 08:55 reminder is skipped. When you stop tracking at 08:57, nothing re-arms, so the block starts with no nudge. Is that OK?",
+    steps: [["On the phone, plan “Deep work” 09:00–10:00", add(T(9, 0), 60, "phone", "Deep work")], ["Wait 20 min (08:50)", { type: "advance", minutes: 20 }], ["Switch to it in the app", { type: "adopt", id: 1, via: "app" }], ["Wait 5 min (08:55)", { type: "advance", minutes: 5 }], ["Wait 2 min (08:57)", { type: "advance", minutes: 2 }], ["Stop tracking", { type: "stopTracking" }], ["Wait until 09:05", { type: "advance", minutes: 8 }]] },
+  { title: "Planned on the web, close to start", text: "At 08:47 you plan two blocks on the web. The phone is idle and only finds out at the 09:00 background check.",
+    watch: "At 09:00: “Standup” (08:56) has started and is skipped, with no nudge. “Review PR” (09:03) passed its 08:58 reminder time but hasn't started, so it fires immediately with “Starts in 3 min”.",
+    steps: [["Wait 17 min (08:47)", { type: "advance", minutes: 17 }], ["On the web, plan “Standup” 08:56–09:11", add(T(8, 56), 15, "web", "Standup")], ["On the web, plan “Review PR” 09:03–09:33", add(T(9, 3), 30, "web", "Review PR")], ["Wait until 09:00", { type: "advance", minutes: 13 }]] },
+  { title: "Block moved after it reminded", text: "The reminder fires, then you push the block back an hour on the phone.",
+    watch: "Because the key is block + start time, the moved block gets a second reminder at 09:55.",
+    steps: [["On the phone, plan “Deep work” 09:00–10:00", add(T(9, 0), 60, "phone", "Deep work")], ["Skip to the next reminder", { type: "advanceToNext" }], ["On the phone, move it to 10:00", { type: "moveBlock", id: 1, start: T(10, 0), where: "phone" }], ["Skip to the next reminder", { type: "advanceToNext" }]] },
+  { title: "No exact alarms + “At start”", text: "You set the lead time to At start and haven't allowed exact alarms, so Android delivers late.",
+    watch: "The reminder arrives at 09:06 and says “Started 6 min ago”. Is that copy right, and is this still worth sending?",
+    steps: [["Revoke exact alarms", { type: "setExact", value: false }], ["Set lead time to At start", { type: "setLead", value: 0 }], ["On the phone, plan “Deep work” 09:00–10:00", add(T(9, 0), 60, "phone", "Deep work")], ["Skip to the next reminder", { type: "advanceToNext" }]] },
+  { title: "Back-to-back, same Task", text: "Two consecutive blocks for the same Task, with no Block Names, so titles fall back to the Task title.",
+    watch: "Both notifications are titled “Write spec”. The second still fires at 09:55 even though you're already working on that Task, because you're tracking block #1, not #2.",
+    steps: [["On the phone, plan 09:00–10:00 for Task “Write spec”", add(T(9, 0), 60, "phone", "", "Write spec", "Writing")], ["On the phone, plan 10:00–11:00 for Task “Write spec”", add(T(10, 0), 60, "phone", "", "Write spec", "Writing")], ["Skip to the next reminder", { type: "advanceToNext" }], ["Tap Switch on the notification", { type: "adopt", id: 1, via: "notification" }], ["Skip to the next reminder", { type: "advanceToNext" }]] },
+  { title: "Deleted on the web, phone unaware", text: "You delete a block on the web at 08:50. The phone won't sync again until 09:00, so it still has a reminder queued for 08:55.",
+    watch: "A reminder fires for a block that no longer exists. Tapping Switch keeps the Actual Block, and sync drops its link to the deleted plan (agreed). Had you not tapped, the 09:00 sync would have removed the notification.",
+    steps: [["On the phone, plan “Deep work” 09:00–10:00", add(T(9, 0), 60, "phone", "Deep work")], ["Wait 20 min (08:50)", { type: "advance", minutes: 20 }], ["On the web, delete it", { type: "deleteBlock", id: 1, where: "web" }], ["Skip to the next reminder", { type: "advanceToNext" }], ["Tap Switch on the notification", { type: "adopt", id: 1, via: "notification" }]] },
+  { title: "Reminder cleared after switching", text: "The reminder fires at 08:55. You ignore it and switch in the app at 08:58. Then the second block's reminder fires at 09:25 and you switch to it on the web instead.",
+    watch: "Switching in the app removes the notification immediately. Switching on the web removes it at the phone's next sync (09:30). Nothing is shown to you about either removal.",
+    steps: [["On the phone, plan “Deep work” 09:00–09:30", add(T(9, 0), 30, "phone", "Deep work")], ["On the phone, plan “Email” 09:30–10:00", add(T(9, 30), 30, "phone", "Email")], ["Skip to the next reminder", { type: "advanceToNext" }], ["Wait 3 min (08:58)", { type: "advance", minutes: 3 }], ["Switch to “Deep work” in the app", { type: "adopt", id: 1, via: "app" }], ["Skip to the next reminder", { type: "advanceToNext" }], ["Wait 2 min (09:27)", { type: "advance", minutes: 2 }], ["Switch to “Email” on the web", { type: "adoptOnWeb", id: 2 }], ["Wait until 09:30", { type: "advance", minutes: 3 }]] },
+  { title: "Ignored reminder expires", text: "The reminder fires and you never act on it.",
+    watch: "The notification disappears on its own when the block ends at 09:30.",
+    steps: [["On the phone, plan “Deep work” 09:00–09:30", add(T(9, 0), 30, "phone", "Deep work")], ["Skip to the next reminder", { type: "advanceToNext" }], ["Wait until 09:30", { type: "advance", minutes: 35 }]] },
+  { title: "Turning reminders on late", text: "Reminders are off. At 08:57 you turn them on, with a block starting at 09:00.",
+    watch: "Turning reminders on counts as the phone “learning” of the block, so it fires immediately with “Starts in 3 min”. Is that surprising right after you toggled the setting?",
+    steps: [["Turn reminders off", { type: "setEnabled", value: false }], ["On the phone, plan “Deep work” 09:00–10:00", add(T(9, 0), 60, "phone", "Deep work")], ["Wait 27 min (08:57)", { type: "advance", minutes: 27 }], ["Turn reminders on", { type: "setEnabled", value: true }]] },
+];
+let current = 0, stepIndex = 0;
+
+function startScenario(i) { current = i; stepIndex = 0; state = R.initial(); render(); }
+function renderScenario() {
+  document.getElementById("tabs").innerHTML = scenarios.map((sc, i) => `<button class="${i === current ? "on" : ""}" data-tab="${i}">${esc(sc.title)}</button>`).join("");
+  const sc = scenarios[current];
+  document.getElementById("scenario").innerHTML = `
+    <p style="margin:0">${esc(sc.text)}</p>
+    <ol class="steps">${sc.steps.map(([label], i) => `<li class="${i < stepIndex ? "done" : ""}"><span class="n">${i + 1}</span>
+      <button class="${i === stepIndex ? "primary" : ""}" data-step="${i}" ${i === stepIndex ? "" : "disabled"}>${esc(label)}</button></li>`).join("")}</ol>
+    <div class="row" style="margin-top:8px"><button data-restart>Restart this walkthrough</button></div>
+    <div class="watch"><b>Watch for:</b> ${esc(sc.watch)}</div>`;
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button"); if (!t || t.disabled) return;
+  if (t.dataset.act) return act(JSON.parse(t.dataset.act));
+  if (t.dataset.tab) return startScenario(Number(t.dataset.tab));
+  if (t.dataset.step) { const step = scenarios[current].steps[Number(t.dataset.step)]; stepIndex += 1; return act(step[1]); }
+  if ("restart" in t.dataset) return startScenario(current);
+  if (t.id === "toggleEnabled") return act({ type: "setEnabled", value: !state.settings.enabled });
+  if (t.id === "toggleExact") return act({ type: "setExact", value: !state.settings.exact });
+  if (t.id === "addWeb" || t.id === "addPhone") {
+    return act(add(Number(document.getElementById("nbStart").value), Number(document.getElementById("nbDur").value), t.id === "addWeb" ? "web" : "phone",
+      document.getElementById("nbName").value.trim(), document.getElementById("nbTask").value.trim(), document.getElementById("nbType").value.trim()));
+  }
+});
+document.getElementById("lead").addEventListener("change", (e) => act({ type: "setLead", value: Number(e.target.value) }));
+document.getElementById("nbStart").innerHTML = Array.from({ length: 48 }, (_, i) => T(8, 30) + i * 5)
+  .map((m) => `<option value="${m}" ${m === T(9, 0) ? "selected" : ""}>${h(m)}</option>`).join("");
+startScenario(0);
+</script>
+</body>
+</html>
