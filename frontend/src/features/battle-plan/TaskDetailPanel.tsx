@@ -1,3 +1,4 @@
+import { SubtaskTitle } from './SubtaskTitle'
 import { activityDevelopmentEnabled, getActivityRepository } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -315,9 +316,7 @@ export function TaskDetailPanel({
                         onChange={(event) => void onSetSubtaskChecked(subtask.id, event.target.checked)}
                         className="size-4 accent-[var(--task-detail-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
                       />
-                      <span className={`min-w-0 flex-1 text-sm ${subtask.checked ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`}>
-                        {subtask.title}
-                      </span>
+                      <SubtaskTitle id={subtask.id} title={subtask.title} disabled={task.status === 'completed'} onRename={(id, title) => onPatch(id, { title })} className={`min-w-0 flex-1 text-sm ${subtask.checked ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`} />
                     </div>
                   ))}
                 </div>

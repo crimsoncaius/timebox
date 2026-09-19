@@ -1,3 +1,4 @@
+import { SubtaskTitle } from './SubtaskTitle'
 import { useState } from 'react'
 import { OptimisticSortingPlugin } from '@dnd-kit/dom/sortable'
 import { KeyboardSensor, PointerSensor } from '@dnd-kit/react'
@@ -31,6 +32,7 @@ export function BattlePlanCard({
   serverNowIso,
   onOpen,
   onAddSubtask,
+  onRenameSubtask,
   onSetSubtaskChecked,
   onToggleReady,
   onSetTaskCompletion,
@@ -44,6 +46,7 @@ export function BattlePlanCard({
   timezone: string
   serverNowIso: string
   onOpen: (id?: number) => void
+  onRenameSubtask: (id: number, title: string) => Promise<void>
   onAddSubtask: (parentId: number, title: string) => Promise<void>
   onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
   onToggleReady: (id: number, ready: boolean) => Promise<void>
@@ -222,9 +225,7 @@ export function BattlePlanCard({
                           }
                         }}
                       />
-                      <span className={`min-w-0 flex-1 text-left text-sm leading-snug ${isCompleted ? 'text-on-surface-variant line-through' : ''}`}>
-                        {subtask.title}
-                      </span>
+                      <SubtaskTitle id={subtask.id} title={subtask.title} disabled={task.status === 'completed'} onRename={onRenameSubtask} className={`min-w-0 flex-1 text-left text-sm leading-snug ${isCompleted ? 'text-on-surface-variant line-through' : ''}`} />
                     </div>
                   </div>
                 )

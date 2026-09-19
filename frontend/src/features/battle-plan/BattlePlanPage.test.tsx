@@ -131,6 +131,24 @@ describe('BattlePlanPage', () => {
     expect(activeTasks[0].project_id).toBeNull()
   })
 
+  it.each(['card', 'detail'])('renames a checked subtask from the %s without toggling it', async (surface) => {
+    activeTasks = [task({ subtasks: [subtask({ checked: true })] })]
+    const user = userEvent.setup()
+    render(<MemoryRouter><BattlePlanPage /></MemoryRouter>)
+    const card = await screen.findByRole('article', { name: 'Move Draft launch brief' })
+    if (surface === 'card') await user.click(within(card).getByRole('button', { name: /1 of 1 subtasks/ }))
+    else await user.click(card)
+    await user.click(screen.getByRole('button', { name: 'Rename subtask Check figures' }))
+    const input = screen.getByRole('textbox', { name: 'Subtask title' })
+    await user.clear(input)
+    await user.type(input, '  Verify totals  ')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Subtask title' })).not.toBeInTheDocument())
+    expect(activeTasks[0].subtasks[0]).toMatchObject({ title: 'Verify totals', checked: true })
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringMatching(/\/tasks\/21$/), expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ title: 'Verify totals' }) }))
+    expect(screen.getByRole('checkbox', { name: 'Uncheck subtask Verify totals' })).toBeChecked()
+  })
+
   beforeEach(() => {
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
     localStorage.clear()
@@ -227,6 +245,10 @@ describe('BattlePlanPage', () => {
             if ('project_id' in body) patched.project = body.project_id === project.id ? project : null
             if (body.status === 'blocked') patched = { ...patched, status: 'open', is_blocked: true }
             return patched
+          }
+          if (row.subtasks.some((item) => item.id === id)) {
+            patched = task({ id, parent_id: row.id, title: body.title })
+            return { ...row, subtasks: row.subtasks.map((item) => item.id === id ? { ...item, title: body.title! } : item) }
           }
           return row
         })

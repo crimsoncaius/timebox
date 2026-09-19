@@ -479,6 +479,7 @@ export function BattlePlanPage() {
                         onCreate={createTask}
                         onOpen={openTask}
                         onAddSubtask={addSubtask}
+                        onRenameSubtask={(id, title) => patchTask(id, { title })}
                         onSetSubtaskChecked={setSubtaskChecked}
                         onMoveProject={setMovingTask}
                         onToggleReady={setReadyToPlan}
@@ -580,7 +581,7 @@ export function BattlePlanPage() {
   )
 }
 
-function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion, onMoveProject, onCreateTaskTypePath }: {
+function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, serverNowIso, onCreate, onOpen, onAddSubtask, onRenameSubtask, onSetSubtaskChecked, onToggleReady, onSetTaskCompletion, onMoveProject, onCreateTaskTypePath }: {
   status: TaskStatus
   tasks: BattleTask[]
   projects: Project[]
@@ -591,6 +592,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   onCreate: (task: BattleTaskWrite) => Promise<void>
   onOpen: (id: number) => void
   onAddSubtask: (parentId: number, title: string) => Promise<void>
+  onRenameSubtask: (id: number, title: string) => Promise<void>
   onSetSubtaskChecked: (id: number, checked: boolean) => Promise<void>
   onMoveProject: (task: BattleTask) => void
   onToggleReady: (id: number, ready: boolean) => Promise<void>
@@ -633,6 +635,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
             serverNowIso={serverNowIso}
             onOpen={(id = task.id) => onOpen(id)}
             onAddSubtask={onAddSubtask}
+            onRenameSubtask={onRenameSubtask}
             onSetSubtaskChecked={onSetSubtaskChecked}
             onMoveProject={onMoveProject}
             onToggleReady={onToggleReady}
