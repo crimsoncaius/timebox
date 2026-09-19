@@ -48,6 +48,13 @@ is not guaranteed. Retry is always explicit.
 
 ## Local traces
 
+Production uses the authenticated [Railway Phoenix dashboard](https://phoenix-production-6691.up.railway.app).
+The backend exports over Railway private networking with `ASSISTANT_TRACE_ENDPOINT`
+and `ASSISTANT_TRACE_API_KEY`. The latter is optional locally and is scrubbed from
+exported content along with backend and provider keys. See
+[deployment instructions](DEPLOYMENT.md#phoenix-observability) for access, retention,
+key rotation, and disabling production export. Local traces are not migrated.
+
 Open [Phoenix](http://127.0.0.1:12022) and choose `timebox-assistant`.
 Root, graph, model and tool spans share a trace ID. SSE's `started` event includes
 that ID. Full message and tool content is captured; the exporter scrubs backend

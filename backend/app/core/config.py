@@ -20,8 +20,9 @@ class Settings(BaseSettings):
     # Opt in only on an isolated development database. Never a production cutover.
     activity_tracking_dev: bool = False
     openrouter_api_key: str | None = None
-    # Opt-in local telemetry; never send traces to a hosted collector implicitly.
+    # Explicit opt-in telemetry; credentials stay on the backend.
     assistant_trace_endpoint: str | None = None
+    assistant_trace_api_key: str | None = None
 
 
 @lru_cache

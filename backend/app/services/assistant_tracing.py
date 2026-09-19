@@ -1,4 +1,4 @@
-"""Local-only OpenInference tracing with credentials scrubbed at export."""
+"""Opt-in OpenInference tracing with credentials scrubbed at export."""
 import copy
 import re
 
@@ -48,8 +48,13 @@ def setup_tracing():
         return None
     provider = TracerProvider(resource=Resource.create({"openinference.project.name": "timebox-assistant"}))
     provider.add_span_processor(BatchSpanProcessor(RedactingExporter(
-        OTLPSpanExporter(endpoint=settings.assistant_trace_endpoint, timeout=3),
-        [settings.openrouter_api_key, settings.api_key],
+        OTLPSpanExporter(
+            endpoint=settings.assistant_trace_endpoint,
+            headers={"Authorization": f"Bearer {settings.assistant_trace_api_key}"}
+            if settings.assistant_trace_api_key else None,
+            timeout=3,
+        ),
+        [settings.openrouter_api_key, settings.api_key, settings.assistant_trace_api_key],
     )))
     trace.set_tracer_provider(provider)
     LangChainInstrumentor().instrument(tracer_provider=provider)
