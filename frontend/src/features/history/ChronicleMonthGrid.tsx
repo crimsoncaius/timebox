@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { DayListItem } from "../../lib/api";
 import { blockPrimaryIdentity } from "../../lib/blockIdentity";
 import { buildMonthGridUTC, formatMonthYearUTC } from "./historyCalendar";
+import { trendDuration } from './trends';
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -17,6 +18,8 @@ type ChronicleMonthGridProps = {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onThisMonth: () => void;
+  highlightedDays?: Record<string, number>;
+  highlightedType?: string;
 };
 
 export function ChronicleMonthGrid({
@@ -26,6 +29,8 @@ export function ChronicleMonthGrid({
   onPrevMonth,
   onNextMonth,
   onThisMonth,
+  highlightedDays,
+  highlightedType,
 }: ChronicleMonthGridProps) {
   const cells = buildMonthGridUTC(year, month);
   const title = formatMonthYearUTC(year, month);
@@ -93,6 +98,7 @@ export function ChronicleMonthGrid({
       >
         {cells.map((cell) => {
           const item = byDate.get(cell.iso);
+          const contribution = highlightedDays?.[cell.iso];
           const hasArchive = item != null;
           const actualIdentity = item?.actual_blocks?.[0]
             ? blockPrimaryIdentity(item.actual_blocks[0].actual_block)
@@ -114,9 +120,9 @@ export function ChronicleMonthGrid({
             <Link
               key={cell.iso}
               to={`/day/${cell.iso}`}
-              className={`group ${baseCell}`}
+              className={`group ${baseCell} ${contribution !== undefined ? 'ring-2 ring-on-surface-variant' : ''}`}
               data-testid={`chronicle-day-${cell.iso}`}
-              aria-label={label}
+              aria-label={contribution !== undefined ? `${label}, ${highlightedType}, ${trendDuration(contribution)}` : label}
             >
               <span
                 className={`font-headline text-lg font-light tabular-nums ${
@@ -125,7 +131,7 @@ export function ChronicleMonthGrid({
               >
                 {cell.dayOfMonth}
               </span>
-              {hasArchive && (
+              {contribution !== undefined ? <span className="mt-auto pt-2 text-xs">{highlightedType}<br />{trendDuration(contribution)}</span> : hasArchive && (
                 <span className="mt-auto min-w-0 pt-2 text-on-surface-variant/90">
                   {actualIdentity ? (
                     <span className="block truncate font-body text-[10px] leading-snug normal-case tracking-normal text-on-surface">

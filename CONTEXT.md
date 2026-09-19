@@ -187,7 +187,7 @@ The retrospective surface: what already happened, whether recorded time or compl
 _Avoid_: History, Analytics tab
 
 **Trends**:
-The Chronicle view that summarizes past Blocks, Task Completions and Projects across many days.
+The Chronicle view that presents activity by Task Type over a selected preset or custom time frame. It describes activity without judging it against goals.
 _Avoid_: Analytics, Insights, Reports
 
 **Battle Plan**:

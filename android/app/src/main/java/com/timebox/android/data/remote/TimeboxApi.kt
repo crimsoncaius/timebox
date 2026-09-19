@@ -10,6 +10,14 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TimeboxApi {
+    @GET("trends")
+    suspend fun trends(
+        @Query("period") period: String,
+        @Query("anchor") anchor: String?,
+        @Query("start") start: String?,
+        @Query("end") end: String?,
+    ): TrendsDto
+
     @POST("planned-blocks/{id}/record-actual-as-planned")
     suspend fun recordPlanned(@Path("id") id: Int, @Body body: PlannedRecordingRequest): PlannedRecordingDto
 
