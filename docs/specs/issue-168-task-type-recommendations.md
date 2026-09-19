@@ -31,6 +31,10 @@ Status: behavior and observability decisions agreed; Android presentation deferr
 
 - Android recommendation placement is explicitly deferred to a later prototype. The proposed placement after committing the name is not accepted and must not be treated as settled.
 
+## Placement prototypes
+
+The throwaway branch `codex/prototype-168-task-type-recommendations` contains both a browser comparison and a native Android comparison. The native entry is `android/app/src/debug/java/com/timebox/android/ui/battleplan/prototype/TaskTypeRecommendationPrototypeActivity.kt`; run `scripts/start-issue-168-prototype.ps1` for an isolated install on a managed emulator. Both compare A (inside the name editor), B (in details after saving), and C (combined name-and-type editor). Native versions use Compose sheets, Android keyboard input, and the existing Task Type picker. No winner has been selected; Jev and Phoenix remain simulated/unconnected in these placement prototypes.
+
 ## Implementation context
 
 The existing backend tracing infrastructure in `backend/app/services/assistant_tracing.py` provides asynchronous OTLP/HTTP export, optional collector authentication, credential scrubbing, and startup/shutdown integration. Reuse this mechanism for explicit Jev spans; direct HTTP calls are not covered by its existing LangChain instrumentation. Add the Jev key to the secrets scrubbed by the exporter.

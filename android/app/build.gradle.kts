@@ -24,9 +24,14 @@ android {
 
     buildTypes {
         debug {
+            // Throwaway issue-168 install uses no repository, workers, or application data.
+            val recommendationPrototype = providers.gradleProperty("recommendationPrototype").getOrElse("false").toBoolean()
+            manifestPlaceholders["debugApplicationClass"] = if (recommendationPrototype) "android.app.Application" else "com.timebox.android.TimeboxApplication"
+            manifestPlaceholders["normalLauncherEnabled"] = (!recommendationPrototype).toString()
+            manifestPlaceholders["recommendationPrototypeEnabled"] = recommendationPrototype.toString()
             buildConfigField("boolean", "RECORDING_PROTOTYPE", providers.gradleProperty("recordingPrototype").getOrElse("false"))
             // Optional isolated review install; ordinary debug builds keep their identity.
-            applicationIdSuffix = providers.gradleProperty("reviewApplicationIdSuffix").orNull
+            applicationIdSuffix = if (recommendationPrototype) ".prototype168" else providers.gradleProperty("reviewApplicationIdSuffix").orNull
             // 10.0.2.2 is the host machine from inside the emulator.
             // Port 8001 is the registered Timebox API allocation on this workspace.
             val apiUrl = providers.gradleProperty("reviewApiBaseUrl").getOrElse("http://10.0.2.2:8001/")

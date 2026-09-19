@@ -1,5 +1,23 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application android:name="${debugApplicationClass}" tools:replace="android:name">
+        <receiver android:name=".checkin.CheckInDismissReceiver" android:enabled="${normalLauncherEnabled}" />
+        <receiver android:name=".reminders.ReminderBootReceiver" android:enabled="${normalLauncherEnabled}" tools:replace="android:enabled" />
+        <receiver android:name=".reminders.PlannedBlockReminderReceiver" android:enabled="${normalLauncherEnabled}" />
+        <activity android:name=".ui.battleplan.prototype.TaskTypeRecommendationPrototypeActivity"
+            android:enabled="${recommendationPrototypeEnabled}" android:exported="true"
+            android:label="Task Type Lab" android:theme="@style/Theme.Timebox"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="timebox" android:host="prototype" android:path="/task-type-168" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ui.day.prototype.DayHeaderPrototypeActivity"
             android:exported="true"
@@ -12,7 +30,7 @@
                 <data android:host="prototype" android:pathPrefix="/day-header" android:scheme="timebox" />
             </intent-filter>
         </activity>
-        <activity android:name=".MainActivity">
+        <activity android:name=".MainActivity" android:enabled="${normalLauncherEnabled}">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
