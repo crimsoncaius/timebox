@@ -14,6 +14,7 @@ def plans(db, timezone):
     for row in db.scalars(select(TimeBlock).where(TimeBlock.lane == BlockLane.planned)):
         midnight = dt.datetime.combine(row.day.date, dt.time(), ZoneInfo(timezone))
         result.append(dict(id=row.id, task_type_id=row.task_type_id, task_id=row.task_id,
+                           task_title=row.task.title if row.task else None,
                            name=row.name, note=row.note,
                            start_at=(midnight + dt.timedelta(minutes=row.start_minute)).isoformat(),
                            end_at=(midnight + dt.timedelta(minutes=row.end_minute)).isoformat()))

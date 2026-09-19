@@ -84,6 +84,7 @@ import kotlinx.serialization.Serializable
     val name: String? = null, val note: String? = null,
     @SerialName("start_at") val startAt: String,
     @SerialName("end_at") val endAt: String,
+    @SerialName("task_title") val taskTitle: String? = null,
 )
 
 @kotlinx.serialization.Serializable

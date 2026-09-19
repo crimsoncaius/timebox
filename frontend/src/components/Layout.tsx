@@ -6,6 +6,11 @@ import { api } from "../lib/api";
 import { ThemeToggle } from "./ThemeToggle";
 import { readStoredWorkMode, writeStoredWorkMode, WORK_MODE_CHANGED_EVENT } from "../features/today/workModeState";
 
+/** Task Types lives under Battle Plan, so its page keeps Battle Plan selected. */
+function isBattlePlanPath(pathname: string) {
+  return pathname.startsWith("/battle-plan") || pathname === "/task-types";
+}
+
 function isTodayPath(pathname: string, today: string | null) {
   if (!today) return pathname === "/";
   return pathname === "/" || pathname === `/day/${today}`;
@@ -109,7 +114,7 @@ export function Layout({
           <NavLink
             to="/battle-plan"
             aria-label="Battle Plan"
-            className={() => navItem(location.pathname.startsWith("/battle-plan"))}
+            className={() => navItem(isBattlePlanPath(location.pathname))}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
               view_kanban
@@ -119,15 +124,15 @@ export function Layout({
             </span>
           </NavLink>
           <NavLink
-            to="/task-types"
-            aria-label="Task types"
-            className={() => navItem(location.pathname === "/task-types")}
+            to="/assistant"
+            aria-label="Assistant"
+            className={() => navItem(location.pathname === "/assistant")}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
-              category
+              auto_awesome
             </span>
             <span className="font-headline font-light tracking-tight">
-              Task types
+              Assistant
             </span>
           </NavLink>
         </nav>
@@ -201,8 +206,8 @@ export function Layout({
       <nav inert={workModeActive} className="fixed inset-x-0 bottom-0 z-70 grid grid-cols-4 border-t border-outline-variant/20 bg-surface/95 px-2 py-2 backdrop-blur-xl dark:border-dark-outline-variant dark:bg-dark-background/95 lg:hidden">
         <MobileNavLink to={todayHref} label="Day" icon="calendar_today" active={isTodayPath(location.pathname, today)} />
         <MobileNavLink to="/history" label="Chronicle" icon="history" active={location.pathname === "/history"} />
-        <MobileNavLink to="/battle-plan" label="Battle Plan" icon="view_kanban" active={location.pathname.startsWith("/battle-plan")} />
-        <MobileNavLink to="/task-types" label="Task types" icon="category" active={location.pathname === "/task-types"} />
+        <MobileNavLink to="/battle-plan" label="Battle Plan" icon="view_kanban" active={isBattlePlanPath(location.pathname)} />
+        <MobileNavLink to="/assistant" label="Assistant" icon="auto_awesome" active={location.pathname === "/assistant"} />
       </nav>
     </div>
   );

@@ -31,10 +31,7 @@ class ActivityTrackingTest {
         assertEquals(row, repository.state.value.snapshot!!.current)
     }
 
-    @Test fun focusUnknownPromptIsTypeOnlyAndBackDismissesSwitchSheet() = verifyUnknownActivity(false)
-    @Test fun focusDescribeFromNowPreservesEarlierUnspecifiedTime() = verifyUnknownActivity(true)
-
-    private fun verifyUnknownActivity(fromNow: Boolean) {
+    @Test fun focusOffersSwitchRatherThanANamingPromptForUnnamedUnspecifiedActivity() {
         val at = "2026-09-11T10:00:00Z"
         val type = TaskTypeDto(1, "unspecified")
         val row = ActualBlockDto(7, 1, type, startAt = at, createdAt = at, updatedAt = at)
@@ -44,26 +41,40 @@ class ActivityTrackingTest {
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = true) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithText("Stop").assertDoesNotExist()
-        compose.onNodeWithText("What are you doing?").assertIsDisplayed()
-        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
+        compose.onNodeWithText("What are you doing?").assertDoesNotExist()
+        compose.onNodeWithText("Choose activity").assertDoesNotExist()
         compose.onNodeWithText("Switch activity").performClick()
         compose.onNodeWithText("Block Name (optional)").assertIsDisplayed()
         androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
         assertEquals(7, repository.state.value.snapshot!!.current!!.id)
-        compose.onNodeWithText("Reading").assertDoesNotExist()
-        compose.onNodeWithText("From the start").assertDoesNotExist()
-        compose.onNodeWithText("Choose activity").performClick()
-        compose.onNodeWithText("Reading").performClick()
-        if (fromNow) compose.onNodeWithText("From now").performScrollTo().performClick()
-        compose.onNodeWithText("Apply activity").performScrollTo().performClick()
-        compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskType?.name == "Reading" }
-        if (fromNow) {
-            val earlier = repository.state.value.snapshot!!.records.single { it.id == 7 }
-            assertEquals("unspecified", earlier.taskType.name)
-            assertNotNull(earlier.endAt)
-            assertEquals(earlier.endAt, repository.state.value.snapshot!!.current!!.startAt)
-        } else assertEquals(at, repository.state.value.snapshot!!.current!!.startAt)
+    }
+
+    @Test fun startWithoutCoveringPlanAsksForTaskTypeAndCancelLeavesTrackingStopped() {
+        val at = "2026-09-11T10:00:00Z"
+        val later = ActivityPlanDto(4, 2, null, "Later", null, "2099-01-01T10:00:00Z", "2099-01-01T11:00:00Z")
+        val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = at, reportingTimezone = "UTC", current = null, records = emptyList(),
+            taskTypes = listOf(TaskTypeDto(1, "unspecified"), TaskTypeDto(2, "Reading")), plans = listOf(later))
+        val commands = mutableListOf<ActivityCommandDto>()
+        var journal: String? = null
+        val repository = ActivityRepository(object : ActivityTransport { override suspend fun read() = snapshot; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto { commands += command; error("Offline") } }, object : ActivityStorage { override fun load() = journal; override fun save(value: String) { journal = value } })
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Start tracking").performClick()
+        compose.onNodeWithText("When did this change happen?").assertDoesNotExist()
+        compose.onNode(hasText("Start") and hasClickAction()).assertIsNotEnabled()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
+        assertNull(repository.state.value.snapshot!!.current)
+        assertTrue(commands.isEmpty())
+        compose.onNodeWithText("Start tracking").performClick()
+        chooseTaskType("read", "Reading")
+        compose.onNodeWithText("Block Name (optional)").performTextInput("Paper")
+        compose.onNode(hasText("Start") and hasClickAction()).performClick()
+        compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
+        assertEquals(2, repository.state.value.snapshot!!.current!!.taskTypeId)
+        assertEquals("Paper", repository.state.value.snapshot!!.current!!.name)
+        assertNull(repository.state.value.snapshot!!.current!!.plannedBlockId)
     }
 
     @get:Rule val compose = createComposeRule()
@@ -94,9 +105,11 @@ class ActivityTrackingTest {
             }
         }
         val repository = ActivityRepository(transport, storage)
-        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(listOf(TaskType(2, "Reading", 0)), {}, repository) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithText("Start tracking").performClick()
+        chooseTaskType("read", "Reading")
+        compose.onNode(hasText("Start") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.feedback != null }
         compose.onNodeWithText("Reading").assertIsDisplayed()
         compose.onNodeWithText("A newer change on another device updated this time.").assertIsDisplayed()
@@ -176,7 +189,7 @@ class ActivityTrackingTest {
         }
     }
 
-    @Test fun immediateStartTypeFirstSwitchAndStop() {
+    @Test fun explicitUnspecifiedStartTypeFirstSwitchAndStop() {
         var journal: String? = null
         val storage = object : ActivityStorage {
             override fun load() = journal
@@ -200,10 +213,12 @@ class ActivityTrackingTest {
         }
         val repository = ActivityRepository(transport, storage)
         compose.setContent { TimeboxTheme(darkTheme = false) {
-            ActivityTracking(listOf(TaskType(2, "reading", 0)), {}, repository)
+            ActivityTracking(listOf(TaskType(1, "unspecified", 0), TaskType(2, "reading", 0)), {}, repository)
         } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithText("Start tracking").performClick()
+        chooseTaskType("unspec", "unspecified")
+        compose.onNode(hasText("Start") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
         compose.onNodeWithText("unspecified").assertIsDisplayed()
         compose.onNodeWithText("Current activity").performClick()
@@ -219,6 +234,7 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         compose.onNodeWithText("Start tracking").assertIsDisplayed()
         assertEquals(listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop), commands.map { it.kind })
+        assertEquals(1, commands[0].taskTypeId)
         assertNull(commands[1].name)
     }
 }

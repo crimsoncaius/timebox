@@ -71,6 +71,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -194,6 +195,7 @@ fun BattlePlanScreen(
     notificationsAllowed: Boolean = true,
     onRequestNotificationPermission: () -> Unit = {},
     onOpenRecurring: () -> Unit,
+    onOpenTaskTypes: () -> Unit = {},
     onNewProject: () -> Unit,
     onProjectNameChange: (String) -> Unit = {},
     onSaveProject: () -> Unit = {},
@@ -254,6 +256,7 @@ fun BattlePlanScreen(
                             onRequestTrash = onRequestTrash,
                             onShowComposer = onShowComposer,
                             onOpenRecurring = onOpenRecurring,
+                            onOpenTaskTypes = onOpenTaskTypes,
                             onNewProject = onNewProject,
                             onReorderProjects = onReorderProjects,
                             onEditProject = onEditProject,
@@ -415,6 +418,7 @@ private fun MobileKanbanBoard(
     onRequestTrash: (BattleTask) -> Unit,
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
+    onOpenTaskTypes: () -> Unit = {},
     onNewProject: () -> Unit,
     onReorderProjects: (List<Int>) -> Unit,
     onEditProject: (Project) -> Unit,
@@ -571,7 +575,8 @@ private fun MobileKanbanBoard(
             TaskNavigationMenu(
                 state = state, modifier = Modifier.weight(1f),
                 onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
-                onOpenRecurring = onOpenRecurring, onReorderProjects = onReorderProjects,
+                onOpenRecurring = onOpenRecurring, onOpenTaskTypes = onOpenTaskTypes,
+                onReorderProjects = onReorderProjects,
                 onEditProject = onEditProject, onPrepareDeleteProject = onPrepareDeleteProject,
                 onNewProject = onNewProject,
             )
@@ -2336,9 +2341,11 @@ internal fun TaskNavigationMenu(
     state: BattlePlanUiState,
     modifier: Modifier = Modifier,
     recurring: Boolean = false,
+    taskTypes: Boolean = false,
     onSelectScope: (BattlePlanScope) -> Unit = {},
     onSelectCollection: (TaskCollection) -> Unit = {},
     onOpenRecurring: () -> Unit = {},
+    onOpenTaskTypes: () -> Unit = {},
     onReorderProjects: (List<Int>) -> Unit = {},
     onEditProject: (Project) -> Unit = {},
     onPrepareDeleteProject: (Project) -> Unit = {},
@@ -2355,16 +2362,31 @@ internal fun TaskNavigationMenu(
         scopeMenu = false
         action()
     }
+    // Recurring and Task Types sit outside the task scopes, so no scope or Project reads as selected.
+    val outsideScopes = recurring || taskTypes
     Box(modifier) {
         TextButton(onClick = { scopeMenu = true }) {
             Icon(
-                imageVector = if (recurring) Icons.Outlined.Repeat else if (state.selectedScope.kind == BattlePlanScopeKind.Project) Icons.Outlined.Folder else Icons.AutoMirrored.Outlined.ListAlt,
+                imageVector = when {
+                    recurring -> Icons.Outlined.Repeat
+                    taskTypes -> Icons.Outlined.Category
+                    state.selectedScope.kind == BattlePlanScopeKind.Project -> Icons.Outlined.Folder
+                    else -> Icons.AutoMirrored.Outlined.ListAlt
+                },
                 contentDescription = null,
-                tint = if (!recurring && state.selectedScope.kind == BattlePlanScopeKind.Project) colors.project else colors.on,
+                tint = if (!outsideScopes && state.selectedScope.kind == BattlePlanScopeKind.Project) colors.project else colors.on,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(7.dp))
-            Text(if (recurring) "Recurring" else state.selectedScope.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                when {
+                    recurring -> "Recurring"
+                    taskTypes -> "Task Types"
+                    else -> state.selectedScope.label
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Spacer(Modifier.width(2.dp))
             Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
         }
@@ -2413,7 +2435,7 @@ internal fun TaskNavigationMenu(
                                         BattlePlanScopeKind.Admin -> Icons.Outlined.Inbox
                                         BattlePlanScopeKind.Project -> Icons.Outlined.Folder
                                     },
-                                    selected = !recurring && scope.preferenceKey == state.selectedScope.preferenceKey,
+                                    selected = !outsideScopes && scope.preferenceKey == state.selectedScope.preferenceKey,
                                     onClick = { closeScopeMenu { onSelectScope(scope) } },
                                 )
                                 if (index != taskScopes.lastIndex) ScopeMenuInsetDivider()
@@ -2421,6 +2443,10 @@ internal fun TaskNavigationMenu(
                             ScopeMenuInsetDivider()
                             ScopeMenuItem("Recurring", Icons.Outlined.Repeat, selected = recurring) {
                                 closeScopeMenu { onOpenRecurring() }
+                            }
+                            ScopeMenuInsetDivider()
+                            ScopeMenuItem("Task Types", Icons.Outlined.Category, selected = taskTypes) {
+                                closeScopeMenu { onOpenTaskTypes() }
                             }
                         }
 
@@ -2431,7 +2457,7 @@ internal fun TaskNavigationMenu(
                             ProjectNavigationList(
                                 maxHeight = 344.dp,
                                 projects = state.projects,
-                                selectedId = if (recurring) null else state.selectedScope.projectId,
+                                selectedId = if (outsideScopes) null else state.selectedScope.projectId,
                                 saving = state.projectOrderSaving,
                                 onSelect = { project -> closeScopeMenu { onSelectScope(BattlePlanScope.project(project)) } },
                                 onReorder = onReorderProjects,

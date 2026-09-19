@@ -12,6 +12,13 @@ function setup(onReorderProjects = vi.fn().mockResolvedValue(undefined)) {
   return { user: userEvent.setup(), onEditProject, onReorderProjects }
 }
 
+describe('Battle Plan navigation', () => {
+  it('links to Task Types beside Recurring', () => {
+    setup()
+    expect(screen.getByRole('link', { name: 'Task Types' })).toHaveAttribute('href', '/task-types')
+  })
+})
+
 describe('Project ordering', () => {
   it('supports menu moves, boundaries, and editing without moving fixed navigation', async () => {
     const { user, onReorderProjects, onEditProject } = setup()

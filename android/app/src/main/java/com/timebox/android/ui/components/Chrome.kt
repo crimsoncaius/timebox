@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Settings
@@ -87,7 +87,7 @@ enum class TimeboxTab(val label: String, val icon: ImageVector) {
     Day("Day", Icons.Outlined.CalendarToday),
     Chronicle("Chronicle", Icons.Outlined.History),
     BattlePlan("Battle Plan", Icons.Outlined.Checklist),
-    Types("Types", Icons.Outlined.Category),
+    Assistant("Assistant", Icons.Outlined.AutoAwesome),
     Settings("Settings", Icons.Outlined.Settings),
 }
 

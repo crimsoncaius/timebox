@@ -34,6 +34,25 @@ describe('HistoryPage', () => {
     vi.restoreAllMocks()
   })
 
+  it('switches between the Calendar and Trends views', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
+
+    expect(await screen.findByTestId('chronicle-month-heading')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Calendar' })).toHaveAttribute('aria-selected', 'true')
+    await user.click(screen.getByRole('tab', { name: 'Trends' }))
+    expect(screen.getByRole('heading', { level: 1, name: 'Trends' })).toBeInTheDocument()
+    expect(screen.getByText('Trends are on their way')).toBeInTheDocument()
+    expect(screen.queryByTestId('chronicle-month-heading')).not.toBeInTheDocument()
+  })
+
+  it('opens Trends directly from its URL', async () => {
+    render(<MemoryRouter initialEntries={['/history?view=trends']}><HistoryPage /></MemoryRouter>)
+
+    expect(await screen.findByRole('tab', { name: 'Trends' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Trends are on their way')).toBeInTheDocument()
+  })
+
   it('uses the application month when the Chronicle has no archived days', async () => {
     render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
 

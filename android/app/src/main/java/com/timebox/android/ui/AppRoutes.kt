@@ -18,11 +18,12 @@ object AppRoutes {
     const val RecurringDetailPattern = "battle-plan/recurring/{$TemplateIdArg}"
     const val RecurringEditPattern = "battle-plan/recurring/{$TemplateIdArg}/edit"
     const val Types = "types"
+    const val Assistant = "assistant"
     const val Settings = "settings"
     const val ThemePreview = "settings/theme-preview"
 
     const val TaskDeepLinkPattern = "timebox://battle-plan/task/{$TaskIdArg}"
-    const val DayDeepLinkPattern = "timebox://day/{$DateArg}"
+    const val DayDeepLinkPattern = "timebox://day/{$DateArg}?blockId={$BlockIdArg}"
 
     fun day(date: LocalDate, blockId: Int? = null): String =
         "day/$date" + (blockId?.let { "?blockId=$it" } ?: "")

@@ -5,11 +5,12 @@ import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import type { Project, TaskCollection } from '../../lib/api'
 import type { BattlePlanScope } from './battlePlanState'
 
-export function BattlePlanSidebar({ open, collection, scope, recurring = false, projects, onClose, onScope, onCollection, onNewProject, onEditProject, onReorderProjects }: {
+export function BattlePlanSidebar({ open, collection, scope, recurring = false, taskTypes = false, projects, onClose, onScope, onCollection, onNewProject, onEditProject, onReorderProjects }: {
   open: boolean
   collection: TaskCollection
   scope: BattlePlanScope
   recurring?: boolean
+  taskTypes?: boolean
   projects: Project[]
   onClose: () => void
   onScope: (scope: BattlePlanScope) => void
@@ -37,6 +38,8 @@ export function BattlePlanSidebar({ open, collection, scope, recurring = false, 
     const source = event.operation.source
     if (!event.canceled && isSortable(source)) void move(source.initialIndex, source.index)
   }
+  // Recurring and Task Types sit outside the task lists, so no list or Project reads as selected.
+  const inLists = !recurring && !taskTypes
   const buttonClass = (active: boolean) => `flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${active ? 'bg-surface-container-high text-on-surface dark:bg-dark-surface-container-high' : 'text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-dark-surface-container'}`
   return (
     <>
@@ -44,9 +47,10 @@ export function BattlePlanSidebar({ open, collection, scope, recurring = false, 
       <aside aria-label="Battle Plan lists and projects" className={`${open ? 'translate-x-0' : '-translate-x-full'} fixed bottom-0 left-0 top-0 z-70 w-72 overflow-y-auto bg-surface p-5 shadow-xl transition-transform dark:bg-dark-background lg:static lg:z-auto lg:w-56 lg:shrink-0 lg:translate-x-0 lg:bg-transparent lg:p-0 lg:shadow-none`}>
         <div className="mb-5 flex items-center justify-between lg:hidden"><span className="font-headline">Battle Plan</span><button type="button" aria-label="Close project sidebar" onClick={onClose}>×</button></div>
         <nav className="space-y-1">
-          <button type="button" className={buttonClass(!recurring && collection === 'active' && scope === 'all')} onClick={() => onScope('all')}>All Tasks</button>
-          <button type="button" className={buttonClass(!recurring && collection === 'active' && scope === 'admin')} onClick={() => onScope('admin')}>Admin</button>
+          <button type="button" className={buttonClass(inLists && collection === 'active' && scope === 'all')} onClick={() => onScope('all')}>All Tasks</button>
+          <button type="button" className={buttonClass(inLists && collection === 'active' && scope === 'admin')} onClick={() => onScope('admin')}>Admin</button>
           <Link to="/battle-plan?view=recurring" className={buttonClass(recurring)} onClick={onClose}>Recurring</Link>
+          <Link to="/task-types" className={buttonClass(taskTypes)} aria-current={taskTypes ? 'page' : undefined} onClick={onClose}>Task Types</Link>
         </nav>
         <div className="mt-8 flex items-center justify-between px-3">
           <span className="font-label text-[10px] uppercase tracking-[0.16em] text-on-surface-variant">Projects</span>
@@ -55,14 +59,14 @@ export function BattlePlanSidebar({ open, collection, scope, recurring = false, 
         <DragDropProvider onDragEnd={drop}>
           <ul aria-label="Projects" aria-busy={saving} className="mt-2 space-y-1">
             {projects.map((project, index) => <ProjectRow key={project.id} project={project} index={index} count={projects.length} saving={saving}
-              active={!recurring && collection === 'active' && scope === `project:${project.id}`}
+              active={inLists && collection === 'active' && scope === `project:${project.id}`}
               onSelect={() => onScope(`project:${project.id}`)} onEdit={() => onEditProject(project)} onMove={(to) => void move(index, to)} />)}
           </ul>
         </DragDropProvider>
         <p role="status" className="mt-2 px-3 text-xs text-on-surface-variant">{notice}</p>
         <nav className="mt-10 space-y-1 border-t border-outline-variant/15 pt-5 dark:border-dark-outline-variant/30">
-          <button type="button" className={buttonClass(!recurring && collection === 'archived')} onClick={() => onCollection('archived')}>Archive</button>
-          <button type="button" className={buttonClass(!recurring && collection === 'trash')} onClick={() => onCollection('trash')}>Trash</button>
+          <button type="button" className={buttonClass(inLists && collection === 'archived')} onClick={() => onCollection('archived')}>Archive</button>
+          <button type="button" className={buttonClass(inLists && collection === 'trash')} onClick={() => onCollection('trash')}>Trash</button>
         </nav>
       </aside>
     </>

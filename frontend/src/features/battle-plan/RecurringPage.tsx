@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import {
   api,
-  type BattleTask,
   type PriorityLevel,
   type Project,
   type ProjectWrite,
@@ -18,7 +17,7 @@ import {
 } from '../../lib/api'
 import { formatMinuteLabel24 } from '../../lib/time'
 import { BattlePlanSidebar } from './BattlePlanSidebar'
-import { persistBattlePlanScope, type BattlePlanScope } from './battlePlanState'
+import { persistBattlePlanScope, projectTaskCount, type BattlePlanScope } from './battlePlanState'
 import { ProjectEditor } from './ProjectEditor'
 import { PriorityControl } from './TaskDetailPanel'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
@@ -37,13 +36,6 @@ function displayWindow(start: string, end: string) {
   const endDate = new Date(`${end}T12:00:00Z`)
   const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
   return `${formatter.format(startDate)}–${formatter.format(endDate)}`
-}
-
-function projectTaskCount(tasks: BattleTask[], projectId: number) {
-  return tasks.reduce(
-    (count, task) => count + (task.project_id === projectId ? 1 + task.subtasks.length : 0),
-    0,
-  )
 }
 
 export function RecurringPage() {

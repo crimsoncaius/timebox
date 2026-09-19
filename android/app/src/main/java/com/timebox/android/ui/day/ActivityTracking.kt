@@ -48,6 +48,9 @@ fun ActivityTracking(
     var reviewingLegacy by remember { mutableStateOf(false) }
     var reviewingRejected by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
+    var starting by remember { mutableStateOf(false) }
+    var startSaving by remember { mutableStateOf(false) }
+    var startError by remember { mutableStateOf<String?>(null) }
     var stopSaving by remember { mutableStateOf(false) }
     var notesTargetId by remember { mutableStateOf<Int?>(null) }
     var targetId by remember { mutableStateOf<Int?>(null) }
@@ -69,9 +72,6 @@ fun ActivityTracking(
         if (state.feedback != null) { delay(6000); repository.dismissFeedback() }
     }
     val current = state.snapshot?.current
-    val unknown = current != null && current.name.isNullOrBlank() && current.taskType.name == "unspecified"
-    var describing by remember(current?.id) { mutableStateOf(false) }
-    var describeFromNow by remember(current?.id) { mutableStateOf(false) }
     var focusOptions by remember { mutableStateOf(false) }
     val question = state.snapshot?.checkIn?.question
     var checkInOpen by remember(question?.id) { mutableStateOf(question != null && !repository.checkInDismissed(question.id)) }
@@ -89,6 +89,11 @@ fun ActivityTracking(
 
     LaunchedEffect(current?.id) { selectedType = null; typeQuery = "" }
     val plan = repository.currentPlan()
+    // Without a covering Planned Block, starting waits for an explicit Task Type.
+    fun start() {
+        if (plan != null) scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) }
+        else { selectedType = null; name = ""; typeQuery = ""; startError = null; starting = true }
+    }
     val enabled = !state.busy && state.snapshot != null
     val statusFlags = StatusFlags(
         offline = state.offline, pending = state.pending, busy = state.busy,
@@ -119,9 +124,8 @@ fun ActivityTracking(
                 Spacer(Modifier.height(36.dp))
                 if (current.taskType.name != "unspecified") Text(current.taskType.name.uppercase(), style = TimeboxTheme.type.kicker, color = colors.actual)
                 Spacer(Modifier.height(16.dp))
-                Text(current.name?.takeIf { it.isNotBlank() } ?: current.taskType.name.takeUnless { it == "unspecified" } ?: "What are you doing?",
+                Text(current.name?.takeIf { it.isNotBlank() } ?: current.taskType.name,
                     style = TimeboxTheme.type.display, color = colors.on)
-                if (unknown) Text("Choose an activity whenever you’re ready.", style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 12.dp))
                 val elapsed: @Composable () -> Unit = {
                     Spacer(Modifier.height(28.dp))
                     HorizontalDivider(color = colors.hairline)
@@ -139,7 +143,7 @@ fun ActivityTracking(
                     elapsed = current?.let { elapsedDuration(Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)) }.orEmpty(),
                     running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
                     onToggle = { expanded = !expanded },
-                    onStart = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) } },
+                    onStart = ::start,
                     onNotes = { current?.let { notesTargetId = it.id } },
                     onSwitch = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
                     onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
@@ -154,11 +158,6 @@ fun ActivityTracking(
             )
             if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
             if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
-            if (focus && unknown) {
-                OutlinedButton(enabled = enabled, onClick = { describing = true }, modifier = Modifier.padding(top = 12.dp).heightIn(min = 48.dp)) {
-                    Text("Choose activity", style = TimeboxTheme.type.button, color = colors.on)
-                }
-            }
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
                 PlannedBlockSuggestion(
                     name = plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name ?: "Planned Block",
@@ -209,39 +208,6 @@ fun ActivityTracking(
             }
         }
     } else if (controlsVisible) content()
-    if (describing && unknown) ModalBottomSheet(onDismissRequest = { describing = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Describe this activity", style = TimeboxTheme.type.screenTitle, color = colors.on)
-            Text("What have you been doing?", style = TimeboxTheme.type.body, color = colors.onVariant)
-            TaskTypePicker(
-                taskTypes = availableTypes,
-                query = typeQuery,
-                onQueryChange = { if (enabled) typeQuery = it },
-                selectedTypeId = selectedType?.id,
-                onChoose = { if (enabled) { selectedType = it; typeQuery = it.name } },
-                onCreate = createType,
-            )
-            HorizontalDivider(color = colors.hairline)
-            Text("Apply to", style = TimeboxTheme.type.sectionTitle, color = colors.on)
-            val started = java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm").withZone(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC")).format(parseActivityInstant(current.startAt))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = !describeFromNow, onClick = { describeFromNow = false }, enabled = enabled)
-                Column { TextButton(onClick = { describeFromNow = false }, enabled = enabled) { Text("From the start", color = colors.on) }; Text("All this time, since $started", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = describeFromNow, onClick = { describeFromNow = true }, enabled = enabled)
-                Column { TextButton(onClick = { describeFromNow = true }, enabled = enabled) { Text("From now", color = colors.on) }; Text("Keep earlier time unspecified", style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
-            }
-            state.error?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error) }
-            Button(enabled = enabled && selectedType != null, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = {
-                val id = current.id
-                val typeId = selectedType!!.id
-                val kind = if (describeFromNow) ActivityKind.Switch else ActivityKind.Describe
-                scope.launch { if (withContext(Dispatchers.IO) { repository.command(kind, typeId, observedTargetId = id) }) describing = false }
-            }) { Text("Apply activity") }
-            TextButton(onClick = { describing = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Cancel") }
-        }
-    }
     if (focusOptions) ModalBottomSheet(onDismissRequest = { focusOptions = false }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Focus options", style = TimeboxTheme.type.screenTitle, color = colors.on)
@@ -270,6 +236,26 @@ fun ActivityTracking(
         actual = notesTarget,
         activityRepository = repository,
         onDismiss = { notesTargetId = null },
+    )
+    if (starting && current == null) StartTrackingSheet(
+        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name },
+        name = name, onNameChange = { name = it },
+        enabled = enabled, busy = startSaving || state.busy, error = startError,
+        onDismiss = { if (!startSaving) starting = false },
+        onConfirm = {
+            if (!startSaving) {
+                startSaving = true
+                val typeId = selectedType!!.id
+                scope.launch {
+                    try {
+                        if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Start, typeId, name.trim().ifBlank { null }) }) {
+                            starting = false; selectedType = null; name = ""; typeQuery = ""
+                        } else startError = "Could not start tracking."
+                    } finally { startSaving = false }
+                }
+            }
+        },
+        onCreateType = createType,
     )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(

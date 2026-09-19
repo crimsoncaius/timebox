@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
@@ -51,7 +52,9 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TimeboxRepository
+import com.timebox.android.ui.assistant.AssistantScreen
 import com.timebox.android.ui.chronicle.ChronicleScreen
+import com.timebox.android.ui.chronicle.ChronicleView
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.battleplan.BattlePlanScreen
 import com.timebox.android.ui.battleplan.BattlePlanTrashUndoNotice
@@ -62,6 +65,7 @@ import com.timebox.android.ui.battleplan.RecurringEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringScreen
 import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.TaskDetailScreen
+import com.timebox.android.ui.battleplan.TaskNavigationMenu
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.components.TimeboxBottomNav
 import com.timebox.android.ui.components.TimeboxTab
@@ -91,6 +95,8 @@ fun TimeboxApp(
     notificationsAllowed: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    exactAlarmsAllowed: Boolean = true,
+    onRequestExactAlarms: () -> Unit = {},
     repository: TimeboxRepository = rememberRepository(),
     taskCompletion: TaskCompletion = rememberTaskCompletion(),
     readinessCoordinator: ReadyToPlanCoordinator,
@@ -293,8 +299,9 @@ fun TimeboxApp(
         AppRoutes.Chronicle -> TimeboxTab.Chronicle
         AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
         AppRoutes.Recurring, AppRoutes.RecurringNew,
-        AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> TimeboxTab.BattlePlan
-        AppRoutes.Types -> TimeboxTab.Types
+        AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern,
+        AppRoutes.Types -> TimeboxTab.BattlePlan
+        AppRoutes.Assistant -> TimeboxTab.Assistant
         AppRoutes.Settings, AppRoutes.ThemePreview -> TimeboxTab.Settings
         else -> null
     }
@@ -340,7 +347,7 @@ fun TimeboxApp(
                     title = routeTitle(
                         surfaceRoute,
                         formatFullDate(dayState.date),
-                        formatMonthTitle(chronicleState.monthStart),
+                        if (chronicleState.view == ChronicleView.Trends) "Trends" else formatMonthTitle(chronicleState.monthStart),
                     ),
                 )
             }
@@ -430,6 +437,7 @@ fun TimeboxApp(
                             onPrevMonth = { chronicleViewModel.shiftMonth(-1) },
                             onNextMonth = { chronicleViewModel.shiftMonth(1) },
                             onThisMonth = chronicleViewModel::goToThisMonth,
+                            onSelectView = chronicleViewModel::selectView,
                             onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                             onRetry = chronicleViewModel::load,
                         )
@@ -466,6 +474,7 @@ fun TimeboxApp(
                             notificationsAllowed = notificationsAllowed,
                             onRequestNotificationPermission = onRequestNotificationPermission,
                             onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
+                            onOpenTaskTypes = { navController.navigate(AppRoutes.Types) },
                             onNewProject = battlePlanViewModel::startProjectCreation,
                             onProjectNameChange = battlePlanViewModel::setProjectName,
                             onSaveProject = battlePlanViewModel::saveProject,
@@ -587,6 +596,9 @@ fun TimeboxApp(
                             onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
                             onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
                             onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
+                            onOpenTaskTypes = {
+                                navController.navigate(AppRoutes.Types) { popUpTo(AppRoutes.BattlePlan) }
+                            },
                             onRetry = { recurringViewModel.load() },
                             onSelectStatus = recurringViewModel::selectStatus,
                             onNew = { navController.navigate(AppRoutes.RecurringNew) },
@@ -692,21 +704,52 @@ fun TimeboxApp(
                         )
                     }
                     composable(AppRoutes.Types) {
-                        TypesScreen(
-                            state = typesState,
-                            onInputChange = typesViewModel::onInputChange,
-                            onAdd = typesViewModel::addType,
-                            onDelete = typesViewModel::deleteType,
-                            onConfirmCascade = typesViewModel::confirmCascadeDelete,
-                            onMigrateTarget = typesViewModel::setMigrateBlocksTo,
-                            onConfirmMigrate = typesViewModel::confirmMigrateDelete,
-                            onDismissCascade = typesViewModel::dismissCascadePrompt,
-                            onRetry = typesViewModel::load,
-                            onRename = typesViewModel::beginRename,
-                            onRenameChange = typesViewModel::changeRename,
-                            onSaveRename = typesViewModel::saveRename,
-                            onCancelRename = typesViewModel::cancelRename,
-                        )
+                        fun returnToTasks() {
+                            if (!navController.popBackStack(AppRoutes.BattlePlan, inclusive = false)) {
+                                navController.navigate(AppRoutes.BattlePlan) { popUpTo(AppRoutes.Types) { inclusive = true } }
+                            }
+                        }
+                        Column(Modifier.fillMaxSize()) {
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                TaskNavigationMenu(
+                                    state = battlePlanState,
+                                    taskTypes = true,
+                                    onSelectScope = {
+                                        battlePlanViewModel.selectCollection(com.timebox.android.data.TaskCollection.Active)
+                                        battlePlanViewModel.selectScope(it)
+                                        returnToTasks()
+                                    },
+                                    onSelectCollection = { battlePlanViewModel.selectCollection(it); returnToTasks() },
+                                    onOpenRecurring = {
+                                        navController.navigate(AppRoutes.Recurring) { popUpTo(AppRoutes.BattlePlan) }
+                                    },
+                                    onReorderProjects = battlePlanViewModel::reorderProjects,
+                                    onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
+                                    onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
+                                    onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
+                                )
+                            }
+                            Box(Modifier.weight(1f)) {
+                                TypesScreen(
+                                    state = typesState,
+                                    onInputChange = typesViewModel::onInputChange,
+                                    onAdd = typesViewModel::addType,
+                                    onDelete = typesViewModel::deleteType,
+                                    onConfirmCascade = typesViewModel::confirmCascadeDelete,
+                                    onMigrateTarget = typesViewModel::setMigrateBlocksTo,
+                                    onConfirmMigrate = typesViewModel::confirmMigrateDelete,
+                                    onDismissCascade = typesViewModel::dismissCascadePrompt,
+                                    onRetry = typesViewModel::load,
+                                    onRename = typesViewModel::beginRename,
+                                    onRenameChange = typesViewModel::changeRename,
+                                    onSaveRename = typesViewModel::saveRename,
+                                    onCancelRename = typesViewModel::cancelRename,
+                                )
+                            }
+                        }
+                    }
+                    composable(AppRoutes.Assistant) {
+                        AssistantScreen()
                     }
                     composable(AppRoutes.Settings) {
                         SettingsScreen(
@@ -717,6 +760,12 @@ fun TimeboxApp(
                             onEndHourDelta = settingsViewModel::adjustEndHour,
                             onToggleFullDay = settingsViewModel::toggleFullDay,
                             onDailyReminderChange = settingsViewModel::updateDailyReminder,
+                            onPlannedBlockRemindersChange = { next ->
+                                if (next.enabled && !settingsState.plannedBlockReminders.enabled && !exactAlarmsAllowed) onRequestExactAlarms()
+                                settingsViewModel.updatePlannedBlockReminders(next)
+                            },
+                            exactAlarmsAllowed = exactAlarmsAllowed,
+                            onRequestExactAlarms = onRequestExactAlarms,
                             onBaseUrlChange = settingsViewModel::onBaseUrlChange,
                             onApiKeyChange = settingsViewModel::onApiKeyChange,
                             onReportingZoneChange = settingsViewModel::changeReportingZone,
@@ -748,7 +797,7 @@ fun TimeboxApp(
                         TimeboxTab.Day -> AppRoutes.day(dayState.date)
                         TimeboxTab.Chronicle -> AppRoutes.Chronicle
                         TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
-                        TimeboxTab.Types -> AppRoutes.Types
+                        TimeboxTab.Assistant -> AppRoutes.Assistant
                         TimeboxTab.Settings -> AppRoutes.Settings
                     }
                     navController.navigate(target) {
@@ -835,8 +884,9 @@ private fun routeKicker(route: String): String = when (route) {
     AppRoutes.Chronicle -> "Chronicle"
     AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
     AppRoutes.Recurring, AppRoutes.RecurringNew,
-    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Battle Plan"
-    AppRoutes.Types -> "Task types"
+    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern,
+    AppRoutes.Types -> "Battle Plan"
+    AppRoutes.Assistant -> "Assistant"
     AppRoutes.Settings, AppRoutes.ThemePreview -> "Settings"
     else -> "Timebox"
 }
@@ -851,7 +901,8 @@ internal fun routeTitle(route: String, day: String, chronicle: String): String =
         AppRoutes.RecurringNew -> "New recurrence"
         AppRoutes.RecurringDetailPattern -> "Template details"
         AppRoutes.RecurringEditPattern -> "Edit recurrence"
-        AppRoutes.Types -> "Paths"
+        AppRoutes.Types -> "Task Types"
+        AppRoutes.Assistant -> "Conversations"
         AppRoutes.Settings -> "Preferences"
         AppRoutes.ThemePreview -> "Theme preview"
         else -> "Timebox"

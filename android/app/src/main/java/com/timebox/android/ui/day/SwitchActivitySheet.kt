@@ -50,7 +50,6 @@ internal fun SwitchActivitySheet(
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
-    var typeQuery by remember { mutableStateOf(selectedType?.name.orEmpty()) }
 
     val nextActivity = name.trim().ifBlank { selectedType?.name ?: "Next activity" }
     val selected = timing?.resolve(zone) ?: now
@@ -73,23 +72,7 @@ internal fun SwitchActivitySheet(
             ) {
                 Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
                 Text("Switch activity", style = type.screenTitle.copy(fontSize = 28.sp))
-                OutlinedTextField(
-                    value = name, onValueChange = { if (it.length <= 500) onNameChange(it) },
-                    label = { Text("Block Name (optional)", style = type.bodySmall) },
-                    modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field,
-                    textStyle = type.body, singleLine = true, enabled = !busy,
-                )
-                TaskTypePicker(
-                    taskTypes = taskTypes,
-                    query = typeQuery,
-                    onQueryChange = { typeQuery = it },
-                    selectedTypeId = selectedType?.id,
-                    onChoose = { chosen ->
-                        onTypeChange(chosen)
-                        typeQuery = chosen.name
-                    },
-                    onCreate = onCreateType,
-                )
+                ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType)
                 Text("When did this change happen?", style = type.label)
                 Text("Drag the line or tap a time. Nearby block boundaries snap into place.", style = type.bodySmall, color = colors.onVariant)
                 SwitchActivityTimeline(

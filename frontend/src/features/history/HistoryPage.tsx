@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import { api, type DayListItem } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
@@ -11,7 +12,13 @@ function calendarMonthFromIso(value: string): CalendarMonth {
   return { y, m }
 }
 
+type ChronicleView = 'calendar' | 'trends'
+
 export function HistoryPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view: ChronicleView = searchParams.get('view') === 'trends' ? 'trends' : 'calendar'
+  const selectView = (next: ChronicleView) =>
+    setSearchParams(next === 'trends' ? { view: 'trends' } : {}, { replace: true })
   const [rows, setRows] = useState<DayListItem[]>([])
   const [applicationMonth, setApplicationMonth] = useState<CalendarMonth | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,13 +75,39 @@ export function HistoryPage() {
       <section className="mb-16 flex items-end justify-between gap-8">
         <div className="max-w-2xl">
           <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
-            Chronicle of focus
+            {view === 'trends' ? 'Trends' : 'Chronicle of focus'}
           </h1>
           <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-            Browse by month. Days you have opened appear in the archive; any day opens in Day.
+            {view === 'trends'
+              ? 'Patterns across your recorded days and completed work.'
+              : 'Browse by month. Days you have opened appear in the archive; any day opens in Day.'}
           </p>
         </div>
       </section>
+
+      <div role="tablist" aria-label="Chronicle view" className="mb-10 flex border-b border-outline-variant/30 dark:border-dark-outline-variant">
+        {(['calendar', 'trends'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="tab"
+            aria-selected={view === option}
+            onClick={() => selectView(option)}
+            className={`-mb-px flex-1 border-b-2 py-3 font-headline text-base font-light tracking-tight transition-colors sm:flex-none sm:px-10 ${view === option ? 'border-on-surface text-on-surface dark:border-dark-on-surface dark:text-dark-on-surface' : 'border-transparent text-on-surface-variant hover:text-on-surface dark:text-dark-on-surface-variant'}`}
+          >
+            {option === 'calendar' ? 'Calendar' : 'Trends'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'trends' ? (
+        <div className="max-w-xl rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 dark:border-dark-outline-variant dark:bg-dark-surface-container">
+          <p className="text-sm font-medium text-on-surface dark:text-dark-on-surface">Trends are on their way</p>
+          <p className="mt-1 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">
+            Patterns across your recorded days and completed work will appear here.
+          </p>
+        </div>
+      ) : <>
 
       {error && (
         <div className="mb-6 rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
@@ -98,6 +131,7 @@ export function HistoryPage() {
           onThisMonth={onThisMonth}
         />
       )}
+      </>}
     </Layout>
   )
 }

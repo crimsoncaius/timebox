@@ -3,6 +3,7 @@ import { BrowserCheckInHost } from './features/activity/BrowserCheckInHost'
 import { activityDevelopmentEnabled } from './features/activity/activityRepository'
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
+import { AssistantPage } from './features/assistant/AssistantPage'
 import { HistoryPage } from './features/history/HistoryPage'
 import { HomeRedirect } from './features/home/HomeRedirect'
 import { SettingsPage } from './features/settings/SettingsPage'
@@ -28,6 +29,7 @@ function AppRouteContent() {
         <Route path="/day/:date" element={<TodayPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/task-types" element={<TaskTypesPage />} />
+        <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/battle-plan" element={<BattlePlanRoute />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
