@@ -133,43 +133,74 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = colors.bg, contentColor = colors.on, shape = TimeboxShapes.sheet) {
         Column(Modifier.fillMaxWidth().imePadding().heightIn(max = 760.dp)) {
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("●  ACTUAL · ONGOING", Modifier.weight(1f), color = colors.actual, style = TimeboxTheme.type.laneLabel)
+                    Surface(color = colors.actualSurface, shape = TimeboxShapes.chip) {
+                        Text("●  ACTUAL BLOCK", Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            color = colors.actual, style = TimeboxTheme.type.laneLabel)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text("Recording", color = colors.actual, style = TimeboxTheme.type.bodySmall)
                     TextButton(enabled = !busy, onClick = onDismiss) { Text("Close", color = colors.onVariant) }
                 }
-                Text(title, style = TimeboxTheme.type.screenTitle)
                 val started = parseActivityInstant(actual.startAt).atZone(zone)
                 val clock = DateTimeFormatter.ofPattern(if (started.toLocalDate() == now.atZone(zone).toLocalDate()) "HH:mm" else "d MMM, HH:mm")
-                val category = actual.taskType.name.takeUnless { it == "unspecified" }?.let { "$it · " }.orEmpty()
-                Text("$category${clock.format(started)} → Now · ${elapsedDuration(Duration.between(started.toInstant(), now).toMinutes().coerceAtLeast(0))}",
-                    color = colors.actual, style = TimeboxTheme.type.body)
-                if (!editing) {
-                    actual.note?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.body) }
-                    actual.task?.let { task -> TextButton(enabled = enabled, onClick = { onOpenLinkedTask(task.id) }, contentPadding = PaddingValues(0.dp)) {
-                        Text("↗  ${task.title}", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
-                    } }
-                    TextButton(enabled = enabled, onClick = ::edit) { Text("Edit details", color = colors.actual) }
-                } else {
-                    OutlinedTextField(name, { name = it.take(500) }, enabled = enabled, singleLine = true,
-                        label = { Text("Block Name (optional)") }, modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field)
-                    ActivityTimeField("Started", start, zone, compact = true, enabled = enabled) { start = it }
-                    Text("Reporting Time Zone: $zone", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
-                    TaskTypePicker(
-                        taskTypes = types,
-                        query = typeQuery,
-                        onQueryChange = { if (enabled) typeQuery = it },
-                        selectedTypeId = typeId,
-                        onChoose = { if (enabled) { typeId = it.id; typeQuery = it.name } },
-                        onCreate = createType,
-                    )
-                    OutlinedTextField(note, { note = it }, enabled = enabled, label = { Text("Note (optional)") },
-                        modifier = Modifier.fillMaxWidth(), minLines = 2, shape = TimeboxShapes.field)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
+                    Text("${clock.format(started)} – Now", Modifier.weight(1f), style = TimeboxTheme.type.display)
+                    Text(elapsedDuration(Duration.between(started.toInstant(), now).toMinutes().coerceAtLeast(0)),
+                        color = colors.actual, style = TimeboxTheme.type.label)
                 }
+                if (!editing) {
+                    Text(title, style = TimeboxTheme.type.label)
+                    actual.taskType.name.takeUnless { it == "unspecified" || it == title }?.let {
+                        Text(it, color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
+                    }
+                    actual.note?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.body) }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { ActivityTimeField("Start", start, zone, compact = true, enabled = enabled) { start = it } }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("End", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                            Text("Now", style = TimeboxTheme.type.screenTitle, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                            Text("Recording continues", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                        }
+                    }
+                    Text("Reporting Time Zone: $zone", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
+                    OutlinedTextField(name, { name = it.take(500) }, enabled = enabled, singleLine = true,
+                        label = { Text("Block Name (optional)") }, modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)
+                    Column {
+                        Text("TASK TYPE", style = TimeboxTheme.type.kicker, color = colors.onVariant)
+                        Spacer(Modifier.height(8.dp))
+                        TaskTypePicker(
+                            taskTypes = types,
+                            query = typeQuery,
+                            onQueryChange = { if (enabled) typeQuery = it },
+                            selectedTypeId = typeId,
+                            onChoose = { if (enabled) { typeId = it.id; typeQuery = it.name } },
+                            onCreate = createType,
+                        )
+                    }
+                    OutlinedTextField(note, { note = it }, enabled = enabled, label = { Text("Note (optional)") },
+                        modifier = Modifier.fillMaxWidth(), minLines = 2, shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)
+                }
+                actual.task?.let { task ->
+                    Surface(shape = TimeboxShapes.group, color = colors.low, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("LINKED BATTLE PLAN TASK", style = TimeboxTheme.type.kicker, color = colors.onVariant)
+                            TextButton(enabled = enabled, onClick = { onOpenLinkedTask(task.id) }, contentPadding = PaddingValues(0.dp)) {
+                                Text("↗  ${task.title}" + if (task.status == "completed") "  ✓" else "", style = TimeboxTheme.type.label, color = colors.on)
+                            }
+                            Text(if (task.status == "completed") "Completed · Recording time does not change Task Completion."
+                                else "Recording time does not change Task Completion.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                        }
+                    }
+                }
+                if (!editing) TextButton(enabled = enabled, onClick = ::edit) { Text("Edit details") }
                 error?.let { Text(it, color = colors.error, style = TimeboxTheme.type.bodySmall) }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = colors.hairline)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (editing) {
                     OutlinedButton(enabled = enabled, onClick = { editing = false; error = null }, modifier = Modifier.weight(1f)) { Text("Cancel") }
                     Button(enabled = enabled, onClick = {
@@ -177,9 +208,8 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
                             taskTypeId = typeId, name = name.trim(), note = note, clearName = name.isBlank(), clearNote = note.isBlank(), runningOnly = true) }, { editing = false })
                     }, modifier = Modifier.weight(1f)) { Text(if (busy) "Saving…" else "Save changes") }
                 } else {
-                    Button(enabled = enabled, onClick = { action = "switch"; timing = null; error = null }, modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.actual, contentColor = colors.bg)) { Text("Switch activity") }
-                    OutlinedButton(enabled = enabled, onClick = { action = "stop"; timing = null; error = null }, modifier = Modifier.weight(1f)) { Text("Stop tracking", color = colors.on) }
+                    OutlinedButton(enabled = enabled, onClick = { action = "switch"; timing = null; error = null }, modifier = Modifier.weight(1f)) { Text("Switch activity") }
+                    Button(enabled = enabled, onClick = { action = "stop"; timing = null; error = null }, modifier = Modifier.weight(1f)) { Text("Stop tracking") }
                 }
             }
         }
