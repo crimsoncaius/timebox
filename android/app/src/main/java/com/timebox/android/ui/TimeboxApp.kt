@@ -338,6 +338,7 @@ fun TimeboxApp(
             )
         ) {
             if (surfaceRoute != AppRoutes.DayPattern &&
+                surfaceRoute != AppRoutes.Assistant &&
                 surfaceRoute != AppRoutes.RecurringNew &&
                 surfaceRoute != AppRoutes.RecurringEditPattern &&
                 surfaceRoute != AppRoutes.RecurringDetailPattern &&

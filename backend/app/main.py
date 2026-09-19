@@ -22,6 +22,8 @@ from app.db.session import get_engine, repair_sqlite_actual_record_operation_ref
 from app.models.app_settings import AppSettings
 from app.readiness import readiness_details
 from app.services.day_service import validate_timezone
+from app.api.routes import assistant
+from app.services.assistant_tracing import setup_tracing
 
 import app.models  # noqa: F401 — register models on Base before create_all
 
@@ -42,7 +44,12 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=get_engine())
         _ensure_app_settings_table()
     repair_sqlite_actual_record_operation_references(get_engine())
-    yield
+    tracing = setup_tracing()
+    try:
+        yield
+    finally:
+        if tracing:
+            tracing.shutdown()
 
 
 app = FastAPI(title="Timebox API", lifespan=lifespan)
@@ -77,6 +84,9 @@ app.include_router(recurring.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
 app.include_router(activity.router, dependencies=_protected)
+# Assistant has no Timebox mutation endpoints. Do not hold the legacy write
+# admission/database dependency open over an SSE response (Stop must run concurrently).
+app.include_router(assistant.router, dependencies=[Depends(require_api_key)])
 
 
 @app.get("/health")

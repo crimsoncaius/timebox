@@ -27,6 +27,11 @@ class TimeboxApplication : Application() {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var preferences: AppPreferences
+    val assistant by lazy {
+        com.timebox.android.ui.assistant.AssistantController(
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+        ) { com.timebox.android.ui.assistant.HttpAssistantTransport(repository.settings.first()) }
+    }
     val focusController by lazy { com.timebox.android.ui.focus.FocusController(com.timebox.android.ui.focus.AndroidFocusStorage(this)) }
     val checkIns by lazy { com.timebox.android.checkin.AndroidCheckIns(this, activityRepository) }
     val activityRepository by lazy {

@@ -1,0 +1,13 @@
+name: timebox-assistant-ede5
+services:
+  phoenix:
+    image: arizephoenix/phoenix:version-20.14.0
+    ports:
+      - "127.0.0.1:12022:6006"
+    environment:
+      PHOENIX_WORKING_DIR: /data
+      PHOENIX_DEFAULT_RETENTION_POLICY_DAYS: "7"
+    volumes:
+      - traces:/data
+volumes:
+  traces:

@@ -1,10 +1,14 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env", Path(__file__).resolve().parents[2] / ".env"),
+        env_file_encoding="utf-8", extra="ignore",
+    )
 
     database_url: str = "postgresql://timebox:timebox@localhost:5432/timebox"
     app_timezone: str = "America/New_York"
@@ -15,6 +19,9 @@ class Settings(BaseSettings):
     api_key: str | None = None
     # Opt in only on an isolated development database. Never a production cutover.
     activity_tracking_dev: bool = False
+    openrouter_api_key: str | None = None
+    # Opt-in local telemetry; never send traces to a hosted collector implicitly.
+    assistant_trace_endpoint: str | None = None
 
 
 @lru_cache
