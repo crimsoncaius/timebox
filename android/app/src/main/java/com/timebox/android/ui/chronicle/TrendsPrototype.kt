@@ -26,10 +26,7 @@ import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.LocalDate
 import java.time.DayOfWeek
-import java.time.Duration
 import java.time.ZoneId
-import java.time.ZonedDateTime
-import kotlinx.coroutines.delay
 import java.time.temporal.TemporalAdjusters
 import java.time.format.DateTimeFormatter
 
@@ -68,13 +65,6 @@ private val shades = listOf(Color(0xff576862), Color(0xff84918b), Color(0xffa6af
 internal fun TrendsPrototype() {
     val colors = TimeboxTheme.colors
     val context = LocalContext.current
-    var now by remember { mutableStateOf(ZonedDateTime.now(reportingZone)) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = ZonedDateTime.now(reportingZone)
-            delay(1_000)
-        }
-    }
     var preset by remember { mutableStateOf("Week") }
     var anchor by remember { mutableStateOf(sampleToday) }
     var customStart by remember { mutableStateOf(sampleToday.minusDays(13)) }
@@ -96,9 +86,6 @@ internal fun TrendsPrototype() {
     }
     val rows = sampleTimes.filter { !it.date.isBefore(start) && !it.date.isAfter(end) }
     val total = rows.sumOf { it.minutes }
-    val rangeStart = start.atStartOfDay(reportingZone)
-    val elapsedEnd = minOf(end.plusDays(1).atStartOfDay(reportingZone), now)
-    val elapsedMinutes = Duration.between(rangeStart, elapsedEnd).toMinutes().coerceAtLeast(0).toInt()
     val groups = rows.groupBy { it.path.substringBefore(" / ") }.entries.sortedByDescending { it.value.sumOf { row -> row.minutes } }
     fun cycle(step: Int) { TrendsStudy.variant = listOf("A", "B", "C")[(listOf("A", "B", "C").indexOf(variant) + step + 3) % 3] }
     fun shift(step: Long) { anchor = when (preset) { "Day" -> anchor.plusDays(step); "Week" -> anchor.plusWeeks(step); else -> anchor.plusMonths(step) } }
@@ -107,7 +94,7 @@ internal fun TrendsPrototype() {
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("SAMPLE DATA · LIVE RANGE CLOCK", color = colors.onVariant, fontSize = 10.sp, letterSpacing = 1.sp)
+            Text("SAMPLE DATA", color = colors.onVariant, fontSize = 10.sp, letterSpacing = 1.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("Day", "Week", "Month", "Custom").forEach { option ->
                     Box(Modifier.weight(1f).clip(TimeboxShapes.chip).background(if (preset == option) colors.on else colors.low).clickable { preset = option }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
@@ -131,7 +118,6 @@ internal fun TrendsPrototype() {
             if (variant != "B" || total == 0) {
                 Column {
                     Text(duration(total), color = colors.on, fontSize = 38.sp, fontWeight = FontWeight.Light)
-                    Text("out of ${duration(elapsedMinutes)} elapsed", color = colors.onVariant, fontSize = 12.sp)
                     Text("Recorded time · Asia/Singapore", color = colors.onVariant, fontSize = 12.sp)
                 }
             }
@@ -148,7 +134,6 @@ internal fun TrendsPrototype() {
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(duration(total), color = colors.on, fontSize = 27.sp, fontWeight = FontWeight.Light)
-                        Text("out of ${duration(elapsedMinutes)}", color = colors.onVariant, fontSize = 12.sp)
                         Text("Recorded time", color = colors.onVariant, fontSize = 12.sp)
                     }
                 }
