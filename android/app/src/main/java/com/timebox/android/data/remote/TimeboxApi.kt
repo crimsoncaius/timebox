@@ -198,6 +198,9 @@ interface TimeboxApi {
     @GET("recurring-templates/{templateId}")
     suspend fun getRecurringTemplate(@Path("templateId") templateId: Int): RecurringTemplateDto
 
+    @GET("recurring-templates/{templateId}/calendar")
+    suspend fun getRoutineCalendar(@Path("templateId") templateId: Int, @Query("month") month: String?): RoutineCalendarDto
+
     @PATCH("recurring-templates/{templateId}")
     suspend fun patchRecurringTemplate(
         @Path("templateId") templateId: Int,

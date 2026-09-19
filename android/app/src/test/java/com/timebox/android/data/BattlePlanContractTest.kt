@@ -34,6 +34,20 @@ class BattlePlanContractTest {
     private val json = ApiFactory.json
 
     @Test
+    fun `routine calendar preserves completion identities and server date bounds`() {
+        val calendar = json.decodeFromString(
+            com.timebox.android.data.remote.RoutineCalendarDto.serializer(),
+            """{"today":"2026-09-19","month":"2026-09-01","first_month":"2026-08-01","last_month":null,"has_dates":true,"upcoming":["2026-09-21"],"completed":[{"id":3,"title":"Session 1","date":"2026-09-05"},{"id":4,"title":"Session 2","date":"2026-09-05"}]}""",
+        ).toModel()
+        assertEquals(java.time.YearMonth.of(2026, 8), calendar.firstMonth)
+        assertNull(calendar.lastMonth)
+        assertEquals(setOf(LocalDate.parse("2026-09-21")), calendar.upcoming)
+        assertEquals(listOf(3, 4), calendar.completed.map { it.id })
+        assertEquals(2, calendar.completed.count { it.date == LocalDate.parse("2026-09-05") })
+    }
+
+
+    @Test
     fun `task list deserializes every relationship and java time field`() {
         val dto = json.decodeFromString(
             BattleTaskListDto.serializer(),

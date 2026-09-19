@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
+from app.api.routes.days import get_reporting_settings
 from app.db.session import get_db
 from app.models.battle_plan import RecurrenceStatus
 from app.schemas.battle_plan import (
@@ -13,9 +16,11 @@ from app.schemas.battle_plan import (
     RecurringTemplateCreate,
     RecurringTemplatePatch,
     RecurringTemplateRead,
+    RoutineCalendarRead,
 )
 from app.services import day_service
 from app.services import recurrence_service as service
+from app.services.recurrence.calendar import read_calendar
 
 router = APIRouter(prefix="/recurring-templates", tags=["recurring-templates"])
 
@@ -121,3 +126,15 @@ def delete_template(template_id: int, db: Session = Depends(get_db)) -> Response
     except ValueError as exc:
         raise _error(exc) from exc
     return Response(status_code=204)
+
+@router.get("/{template_id}/calendar", response_model=RoutineCalendarRead)
+def get_calendar(
+    template_id: int,
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}-01$"),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_reporting_settings),
+) -> RoutineCalendarRead:
+    try:
+        return read_calendar(db, template_id, dt.date.fromisoformat(month) if month else None, settings)
+    except ValueError as exc:
+        raise _error(exc) from exc

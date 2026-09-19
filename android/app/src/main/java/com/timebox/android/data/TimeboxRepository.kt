@@ -378,6 +378,9 @@ class TimeboxRepository private constructor(
         ).toModel()
     }
 
+    suspend fun getRoutineCalendar(templateId: Int, month: java.time.YearMonth?): Result<RoutineCalendar> =
+        call { api().getRoutineCalendar(templateId, month?.atDay(1)?.toString()).toModel() }
+
     suspend fun getRecurringTemplate(templateId: Int): Result<RecurringTemplate> =
         call { api().getRecurringTemplate(templateId).toModel() }
 

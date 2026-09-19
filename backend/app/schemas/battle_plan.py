@@ -424,3 +424,18 @@ class RecurringTemplateRead(BaseModel):
     current_tasks: list[RecurringTaskLink] = Field(default_factory=list)
     cadence: str
     next_occurrence: date | None = None
+
+class RoutineCalendarCompletion(BaseModel):
+    id: int
+    title: str
+    date: date
+
+
+class RoutineCalendarRead(BaseModel):
+    today: date
+    month: date
+    first_month: date | None
+    last_month: date | None
+    has_dates: bool
+    upcoming: list[date]
+    completed: list[RoutineCalendarCompletion]

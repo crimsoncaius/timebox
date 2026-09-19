@@ -260,3 +260,17 @@ data class RecurringTemplateCreateDto(
     @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
     @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleWriteDto? = null,
 )
+
+@Serializable
+data class RoutineCalendarCompletionDto(val id: Int, val title: String, val date: String)
+
+@Serializable
+data class RoutineCalendarDto(
+    val today: String,
+    val month: String,
+    @SerialName("first_month") val firstMonth: String? = null,
+    @SerialName("last_month") val lastMonth: String? = null,
+    @SerialName("has_dates") val hasDates: Boolean,
+    val upcoming: List<String>,
+    val completed: List<RoutineCalendarCompletionDto>,
+)

@@ -73,6 +73,8 @@ data class RecurringEditorUiState(
 )
 
 class RecurringEditorViewModel(private val repository: TimeboxRepository) : ViewModel() {
+    suspend fun calendar(templateId: Int, month: java.time.YearMonth?) = repository.getRoutineCalendar(templateId, month)
+
     private val _state = MutableStateFlow(RecurringEditorUiState())
     val state: StateFlow<RecurringEditorUiState> = _state.asStateFlow()
     private var previewJob: Job? = null

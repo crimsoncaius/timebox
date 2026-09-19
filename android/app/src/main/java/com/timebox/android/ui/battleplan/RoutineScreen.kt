@@ -101,9 +101,7 @@ fun RoutineScreen(
                     template.currentTasks.forEach { task ->
                         TextButton({ onOpenTask(task.id) }, enabled = !busy && !state.dirty) { Text(task.title + if (task.overdue) " · Overdue" else "") }
                     }
-                    Text("Upcoming", style = TimeboxTheme.type.label)
-                    if (template.upcoming.isEmpty()) Text("No upcoming occurrences", color = colors.onVariant)
-                    template.upcoming.forEach { Text(if (it.start == it.end) it.start.toString() else "${it.start} – ${it.end}", color = colors.onVariant) }
+                    RoutineCalendarSection(template, viewModel::calendar)
                     val status = lifecycle?.selectedTemplate?.status ?: template.status
                     Row(Modifier.horizontalScroll(rememberScrollState())) {
                         if (status == RecurrenceStatus.Active) TextButton({ lifecycleViewModel?.pause() }, enabled = !busy && !state.dirty) { Text("Pause") }

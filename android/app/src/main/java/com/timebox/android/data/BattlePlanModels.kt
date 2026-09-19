@@ -409,3 +409,21 @@ internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
     keepUnfinishedOverdue = keepUnfinishedOverdue,
     preplanningSchedule = preplanningSchedule?.toModel(),
 )
+
+data class RoutineCalendarCompletion(val id: Int, val title: String, val date: LocalDate)
+data class RoutineCalendar(
+    val today: LocalDate,
+    val month: java.time.YearMonth,
+    val firstMonth: java.time.YearMonth?,
+    val lastMonth: java.time.YearMonth?,
+    val hasDates: Boolean,
+    val upcoming: Set<LocalDate>,
+    val completed: List<RoutineCalendarCompletion>,
+)
+internal fun com.timebox.android.data.remote.RoutineCalendarDto.toModel() = RoutineCalendar(
+    LocalDate.parse(today), java.time.YearMonth.from(LocalDate.parse(month)),
+    firstMonth?.let { java.time.YearMonth.from(LocalDate.parse(it)) },
+    lastMonth?.let { java.time.YearMonth.from(LocalDate.parse(it)) }, hasDates,
+    upcoming.map { LocalDate.parse(it) }.toSet(),
+    completed.map { RoutineCalendarCompletion(it.id, it.title, LocalDate.parse(it.date)) },
+)
