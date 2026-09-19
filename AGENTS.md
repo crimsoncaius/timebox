@@ -16,6 +16,10 @@ This repo uses the single-context domain-doc layout. See `docs/agents/domain.md`
 
 After fixing an issue, launch or relaunch the affected application from the updated working tree and leave it running in a reviewable state. The fix is not complete until the launched instance reflects the change.
 
+### Review and merge workflow
+
+After implementation and validation, leave the changes on their branch with the application running for user review, then wait for the user's explicit instruction to merge into `master`. Create a pull request only when the user explicitly requests one, including draft pull requests. An instruction to implement or merge does not authorize creating a pull request.
+
 ### Android emulator ownership
 
 Before installing, launching, testing, capturing, or interacting with an Android emulator, read `docs/agents/android-emulators.md` and acquire an exclusive reservation through `scripts/android-emulator.py`. Use the helper for device commands. Acquire as many managed devices as the work needs. Release temporary devices automatically; retain devices explicitly for user review. Existing unregistered emulators and physical devices require explicit user assignment.
