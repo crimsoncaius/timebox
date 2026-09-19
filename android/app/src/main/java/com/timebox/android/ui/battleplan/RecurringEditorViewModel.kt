@@ -39,6 +39,8 @@ data class RecurringPreplanningSlotDraft(
 
 data class RecurringEditorUiState(
     val templateId: Int? = null,
+    val template: RecurringTemplate? = null,
+    val saveError: String? = null,
     val loading: Boolean = false,
     val saving: Boolean = false,
     val title: String = "",
@@ -74,9 +76,29 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     private val _state = MutableStateFlow(RecurringEditorUiState())
     val state: StateFlow<RecurringEditorUiState> = _state.asStateFlow()
     private var previewJob: Job? = null
+    private var baseline: RecurringEditorUiState? = null
+
+    fun applyDraft(draft: RecurringEditorUiState) {
+        if (_state.value.saving) return
+        edit { draft.copy(templateId = templateId, template = template, taskTypes = taskTypes, mode = if (templateId == null) draft.mode else mode, saveError = null) }
+    }
+
+    fun acceptTemplate(template: RecurringTemplate) {
+        val current = _state.value
+        if (current.templateId != template.id || current.saving || current.dirty || current.loading) return
+        val updated = template.toEditorState(current.taskTypes)
+        baseline = updated
+        _state.value = updated
+    }
+
+    fun discardDraft() {
+        previewJob?.cancel()
+        baseline?.let { _state.value = it.copy(savedTemplateId = null, message = null) }
+    }
 
     fun open(templateId: Int?) {
         previewJob?.cancel()
+        baseline = null
         _state.value = RecurringEditorUiState(templateId = templateId, loading = true)
         viewModelScope.launch {
             val taskTypes = repository.listTaskTypes().getOrElse {
@@ -95,6 +117,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                     },
                 )
             }
+            baseline = _state.value
             schedulePreview(immediate = true)
         }
     }
@@ -116,6 +139,20 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
             )
         }
     }
+    fun createRoutineTaskType(path: String, onCreated: (Int) -> Unit) {
+        viewModelScope.launch {
+            repository.createTaskType(path).fold(
+                onSuccess = { created ->
+                    val types = repository.listTaskTypes().getOrElse { _state.value.taskTypes + created }
+                    _state.update { it.copy(taskTypes = types) }
+                    baseline = baseline?.copy(taskTypes = types)
+                    onCreated(created.id)
+                },
+                onFailure = { cause -> _state.update { it.copy(saveError = cause.apiError.message) } },
+            )
+        }
+    }
+
     fun setUrgency(value: PriorityLevel?) = edit { copy(urgency = value) }
     fun setImportance(value: PriorityLevel?) = edit { copy(importance = value) }
     fun setMode(value: RecurrenceMode) {
@@ -173,13 +210,14 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
 
     fun save(confirmBackfill: Boolean = false) {
         val current = _state.value
+        if (current.saving) return
         val validation = validateRecurrenceDraft(current, requireTitle = true)
         if (validation != null) {
-            _state.update { it.copy(message = validation) }
+            _state.update { it.copy(message = validation, saveError = validation) }
             return
         }
         val rule = current.toRule() ?: return
-        _state.update { it.copy(saving = true, pendingBackfill = null, message = null) }
+        _state.update { it.copy(saving = true, pendingBackfill = null, message = null, saveError = null) }
         viewModelScope.launch {
             val result = if (current.templateId == null) {
                 repository.createRecurringTemplate(
@@ -199,34 +237,14 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
             } else {
                 repository.patchRecurringTemplate(
                     current.templateId,
-                    RecurringTemplatePatch(
-                        title = PatchField.of(current.title.trim()),
-                        description = PatchField.of(current.description.trim()),
-                        taskTypeId = current.taskTypeId.asPatch(),
-                        urgency = current.urgency.asPatch(),
-                        importance = current.importance.asPatch(),
-                        frequency = PatchField.of(rule.frequency),
-                        interval = PatchField.of(rule.interval),
-                        weekdays = PatchField.of(rule.weekdays),
-                        monthDay = rule.monthDay.asPatch(),
-                        quotaCount = rule.quotaCount.asPatch(),
-                        startDate = PatchField.of(rule.startDate),
-                        endDate = rule.endDate.asPatch(),
-                        cycleLimit = rule.cycleLimit.asPatch(),
-                        checklistTitles = PatchField.of(current.checklistTitles()),
-                        confirmBackfill = PatchField.of(confirmBackfill),
-                        keepUnfinishedOverdue = PatchField.of(
-                            current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue
-                        ),
-                        preplanningSchedule = current.toPreplanningSchedule().asPatch(),
-                    ),
+                    recurringDraftPatch(baseline ?: current, current, confirmBackfill),
                 )
             }
             result.fold(
                 onSuccess = { template ->
-                    _state.update {
-                        it.copy(saving = false, dirty = false, savedTemplateId = template.id, message = "Recurring template saved")
-                    }
+                    val saved = template.toEditorState(_state.value.taskTypes)
+                    baseline = saved
+                    _state.value = saved.copy(savedTemplateId = template.id)
                 },
                 onFailure = { cause ->
                     val apiError = cause.apiError
@@ -236,6 +254,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                             saving = false,
                             pendingBackfill = backfill.takeIf { apiError.code == ApiErrorCode.BackfillConfirmationRequired },
                             message = if (backfill == null) apiError.message else null,
+                            saveError = if (backfill == null) apiError.message else null,
                         )
                     }
                 },
@@ -248,6 +267,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
     private fun edit(block: RecurringEditorUiState.() -> RecurringEditorUiState) {
+        if (_state.value.saving) return
         _state.update { it.block().copy(dirty = true, preview = null, previewError = null, savedTemplateId = null) }
         schedulePreview()
     }
@@ -385,8 +405,9 @@ internal fun RecurringEditorUiState.toRule(): RecurrenceRule? {
 private fun RecurringEditorUiState.checklistTitles(): List<String> = checklistText.lineSequence()
     .map(String::trim).filter(String::isNotEmpty).toList()
 
-private fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = RecurringEditorUiState(
+internal fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = RecurringEditorUiState(
     templateId = id,
+    template = this,
     title = title,
     description = description,
     taskTypeId = taskTypeId,
@@ -420,3 +441,24 @@ private fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = Recurri
 )
 
 private fun <T : Any> T?.asPatch(): PatchField<T> = this?.let { PatchField.of(it) } ?: PatchField.Null
+
+
+internal fun recurringDraftPatch(before: RecurringEditorUiState, after: RecurringEditorUiState, confirmBackfill: Boolean): RecurringTemplatePatch {
+    fun <T : Any> changed(old: T?, value: T?): PatchField<T> = if (old == value) PatchField.Absent else value.asPatch()
+    val oldRule = checkNotNull(before.toRule())
+    val rule = checkNotNull(after.toRule())
+    return RecurringTemplatePatch(
+        title = changed(before.title.trim(), after.title.trim()),
+        description = changed(before.description.trim(), after.description.trim()),
+        taskTypeId = changed(before.taskTypeId, after.taskTypeId),
+        importance = changed(before.importance, after.importance), urgency = changed(before.urgency, after.urgency),
+        frequency = changed(oldRule.frequency, rule.frequency), interval = changed(oldRule.interval, rule.interval),
+        weekdays = changed(oldRule.weekdays, rule.weekdays), monthDay = changed(oldRule.monthDay, rule.monthDay),
+        quotaCount = changed(oldRule.quotaCount, rule.quotaCount), startDate = changed(oldRule.startDate, rule.startDate),
+        endDate = changed(oldRule.endDate, rule.endDate), cycleLimit = changed(oldRule.cycleLimit, rule.cycleLimit),
+        checklistTitles = changed(before.checklistTitles(), after.checklistTitles()),
+        keepUnfinishedOverdue = changed(before.keepUnfinishedOverdue, after.keepUnfinishedOverdue),
+        preplanningSchedule = changed(before.toPreplanningSchedule(), after.toPreplanningSchedule()),
+        confirmBackfill = PatchField.of(confirmBackfill),
+    )
+}

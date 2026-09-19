@@ -260,7 +260,7 @@ private fun RecurringListChip(icon: ImageVector, label: String, description: Str
 }
 
 @Composable
-private fun RecurringDeleteDialog(
+internal fun RecurringDeleteDialog(
     template: RecurringTemplate,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
@@ -592,7 +592,7 @@ internal fun PreviewCard(state: RecurringEditorUiState, onRefresh: () -> Unit) {
     SectionCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Server preview",
+                "Upcoming",
                 style = TimeboxTheme.type.sectionTitle,
                 color = colors.on,
                 modifier = Modifier.weight(1f),
