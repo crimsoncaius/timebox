@@ -197,7 +197,7 @@ fun TimeboxApp(
             AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
             AppRoutes.Recurring -> recurringViewModel.load()
             AppRoutes.RecurringNew -> recurringEditorViewModel.open(null)
-            AppRoutes.RecurringDetailPattern -> routeTemplateId?.let(recurringViewModel::openDetail)
+            AppRoutes.RecurringDetailPattern -> routeTemplateId?.let { recurringViewModel.openDetail(it); recurringEditorViewModel.open(it) }
             AppRoutes.RecurringEditPattern -> recurringEditorViewModel.open(routeTemplateId)
         }
     }
@@ -286,6 +286,8 @@ fun TimeboxApp(
             recurringViewModel.load(showSpinner = false)
             if (created) {
                 navController.popBackStack(AppRoutes.Recurring, inclusive = false)
+            } else if (route == AppRoutes.RecurringDetailPattern) {
+                recurringViewModel.openDetail(templateId)
             } else {
                 navController.navigate(AppRoutes.recurringDetail(templateId)) {
                     popUpTo(AppRoutes.RecurringEditPattern) { inclusive = true }
@@ -371,7 +373,12 @@ fun TimeboxApp(
                                 navArgument("mode") { defaultValue = "scheduled" },
                             ),
                         ) { entry ->
-                            com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype(
+                            if (entry.arguments?.getString("layout") == "routine") {
+                                com.timebox.android.ui.battleplan.RoutineSheetPrototype(
+                                    entry.arguments?.getString("flow") ?: "details",
+                                    entry.arguments?.getString("mode") ?: "scheduled",
+                                )
+                            } else com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype(
                                 initialFlow = entry.arguments?.getString("flow") ?: "edit",
                                 initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
                             )
@@ -609,59 +616,17 @@ fun TimeboxApp(
                         )
                     }
                     composable(AppRoutes.RecurringNew) {
-                        RecurringEditorScreen(
-                            state = recurringEditorState,
-                            onBack = { navController.popBackStack() },
-                            onRetry = { recurringEditorViewModel.open(null) },
-                            onTitle = recurringEditorViewModel::setTitle,
-                            onDescription = recurringEditorViewModel::setDescription,
-                            onTaskType = recurringEditorViewModel::setTaskType,
-                            onCreateTaskType = recurringEditorViewModel::createTaskTypeAndChoose,
-                            onUrgency = recurringEditorViewModel::setUrgency,
-                            onImportance = recurringEditorViewModel::setImportance,
-                            onMode = recurringEditorViewModel::setMode,
-                            onFrequency = recurringEditorViewModel::setFrequency,
-                            onInterval = recurringEditorViewModel::setInterval,
-                            onToggleWeekday = recurringEditorViewModel::toggleWeekday,
-                            onMonthDay = recurringEditorViewModel::setMonthDay,
-                            onQuotaCount = recurringEditorViewModel::setQuotaCount,
-                            onStartDate = recurringEditorViewModel::setStartDate,
-                            onEndMode = recurringEditorViewModel::setEndMode,
-                            onEndDate = recurringEditorViewModel::setEndDate,
-                            onCycleLimit = recurringEditorViewModel::setCycleLimit,
-                            onChecklist = recurringEditorViewModel::setChecklistText,
-                            onKeepUnfinishedOverdue = recurringEditorViewModel::setKeepUnfinishedOverdue,
-                            onPreplanningEnabled = recurringEditorViewModel::setPreplanningEnabled,
-                            onAddPreplanningSlot = recurringEditorViewModel::addPreplanningSlot,
-                            onRemovePreplanningSlot = recurringEditorViewModel::removePreplanningSlot,
-                            onPreplanningStart = recurringEditorViewModel::setPreplanningStart,
-                            onPreplanningEnd = recurringEditorViewModel::setPreplanningEnd,
-                            onPreplanningWeekday = recurringEditorViewModel::setPreplanningWeekday,
-                            onRefreshPreview = recurringEditorViewModel::refreshPreview,
-                            onSave = { recurringEditorViewModel.save() },
-                            onConfirmBackfill = { recurringEditorViewModel.save(confirmBackfill = true) },
-                            onDismissBackfill = recurringEditorViewModel::dismissBackfill,
-                        )
+                        com.timebox.android.ui.battleplan.RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
                     }
                     composable(
                         AppRoutes.RecurringDetailPattern,
                         arguments = listOf(navArgument(AppRoutes.TemplateIdArg) { type = NavType.IntType }),
                     ) { entry ->
                         val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@composable
-                        RecurringDetailScreen(
-                            state = recurringState,
-                            onBack = { navController.popBackStack() },
-                            onRetry = { recurringViewModel.openDetail(templateId) },
-                            onEdit = { navController.navigate(AppRoutes.recurringEdit(it)) },
+                        com.timebox.android.ui.battleplan.RoutineScreen(
+                            recurringEditorState, recurringEditorViewModel, { navController.popBackStack() },
                             onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
-                            onPause = recurringViewModel::pause,
-                            onResume = recurringViewModel::resume,
-                            onEnd = recurringViewModel::end,
-                            onRequestDelete = { recurringViewModel.requestDelete() },
-                            onDismissDelete = recurringViewModel::dismissDelete,
-                            onConfirmDelete = {
-                                recurringViewModel.confirmDelete { navController.popBackStack() }
-                            },
+                            lifecycle = recurringState, lifecycleViewModel = recurringViewModel,
                         )
                     }
                     composable(
@@ -669,39 +634,7 @@ fun TimeboxApp(
                         arguments = listOf(navArgument(AppRoutes.TemplateIdArg) { type = NavType.IntType }),
                     ) { entry ->
                         val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@composable
-                        RecurringEditorScreen(
-                            state = recurringEditorState,
-                            onBack = { navController.popBackStack() },
-                            onRetry = { recurringEditorViewModel.open(templateId) },
-                            onTitle = recurringEditorViewModel::setTitle,
-                            onDescription = recurringEditorViewModel::setDescription,
-                            onTaskType = recurringEditorViewModel::setTaskType,
-                            onCreateTaskType = recurringEditorViewModel::createTaskTypeAndChoose,
-                            onUrgency = recurringEditorViewModel::setUrgency,
-                            onImportance = recurringEditorViewModel::setImportance,
-                            onMode = recurringEditorViewModel::setMode,
-                            onFrequency = recurringEditorViewModel::setFrequency,
-                            onInterval = recurringEditorViewModel::setInterval,
-                            onToggleWeekday = recurringEditorViewModel::toggleWeekday,
-                            onMonthDay = recurringEditorViewModel::setMonthDay,
-                            onQuotaCount = recurringEditorViewModel::setQuotaCount,
-                            onStartDate = recurringEditorViewModel::setStartDate,
-                            onEndMode = recurringEditorViewModel::setEndMode,
-                            onEndDate = recurringEditorViewModel::setEndDate,
-                            onCycleLimit = recurringEditorViewModel::setCycleLimit,
-                            onChecklist = recurringEditorViewModel::setChecklistText,
-                            onKeepUnfinishedOverdue = recurringEditorViewModel::setKeepUnfinishedOverdue,
-                            onPreplanningEnabled = recurringEditorViewModel::setPreplanningEnabled,
-                            onAddPreplanningSlot = recurringEditorViewModel::addPreplanningSlot,
-                            onRemovePreplanningSlot = recurringEditorViewModel::removePreplanningSlot,
-                            onPreplanningStart = recurringEditorViewModel::setPreplanningStart,
-                            onPreplanningEnd = recurringEditorViewModel::setPreplanningEnd,
-                            onPreplanningWeekday = recurringEditorViewModel::setPreplanningWeekday,
-                            onRefreshPreview = recurringEditorViewModel::refreshPreview,
-                            onSave = { recurringEditorViewModel.save() },
-                            onConfirmBackfill = { recurringEditorViewModel.save(confirmBackfill = true) },
-                            onDismissBackfill = recurringEditorViewModel::dismissBackfill,
-                        )
+                        com.timebox.android.ui.battleplan.RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
                     }
                     composable(AppRoutes.Types) {
                         fun returnToTasks() {

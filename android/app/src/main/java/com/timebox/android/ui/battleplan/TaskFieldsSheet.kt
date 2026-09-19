@@ -333,7 +333,7 @@ internal fun TaskSheetRow(icon: ImageVector, value: String, label: String, enabl
 }
 
 @Composable
-private fun TaskFieldChip(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun TaskFieldChip(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
     Surface(onClick = onClick, enabled = enabled, color = TimeboxTheme.colors.high, shape = RoundedCornerShape(12.dp)) {
         Row(Modifier.padding(12.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Icon(icon, null, Modifier.size(18.dp)); Text(label, fontSize = 13.sp)
