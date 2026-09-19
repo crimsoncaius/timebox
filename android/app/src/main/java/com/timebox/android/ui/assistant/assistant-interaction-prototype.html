@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assistant interaction prototype</title>
+<style>
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:#111318;color:#e9eaf0;font:16px/1.5 system-ui}main{max-width:1100px;margin:40px auto;padding:0 24px}h1,h2,p{margin:0 0 16px}small,.muted{color:#a7acb9} .layout{display:grid;grid-template-columns:390px 1fr;gap:32px;margin-top:28px} .phone,.panel{border:1px solid #363b46;border-radius:20px;background:#191c23;padding:20px}.phone{height:650px;display:flex;flex-direction:column}.head,.row,nav{display:flex;gap:8px;align-items:center;justify-content:space-between}.head{border-bottom:1px solid #343944;padding-bottom:16px}.messages{flex:1;overflow:auto;padding-top:20px}.message{padding:12px;border-radius:12px;margin-bottom:12px;white-space:pre-wrap;background:#252933}.user{margin-left:35px;background:#39372a}.badge{font-size:13px;color:#edce69;display:block;margin-top:8px}button,input{font:inherit;border:1px solid #444956;border-radius:10px;padding:9px 12px;color:inherit;background:#252933}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}button:hover:enabled{border-color:#edce69}input{width:100%;min-width:0}.primary{background:#edce69;color:#171717}nav{margin-top:18px}nav button{font-size:13px}nav .selected{color:#edce69;border-color:#edce69}.panel{margin-bottom:16px}.actions{display:flex;flex-wrap:wrap;gap:8px}dt{color:#a7acb9}dd{margin:0 0 10px;overflow-wrap:anywhere}#status{min-height:28px;color:#edce69;font-size:14px}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}.active{border-color:#edce69}#steps{display:grid;gap:8px}.intro{max-width:780px} @media(max-width:800px){.layout{grid-template-columns:1fr}.phone{max-width:430px;width:100%;margin:auto}}
+</style>
+<main><small>THROWAWAY PROTOTYPE · SIMULATED DATA · NO MODEL CALLS</small><h1>One conversation, a few important edges</h1><p class="intro">Does the Assistant feel predictable when you leave the screen, stop an answer, retry an interruption, or start fresh? Use the phone controls or step through the scenarios. This explores behavior, not final Android styling.</p>
+<div class="layout"><section class="phone"><div class="head"><strong id="heading">Assistant</strong><button id="new">New conversation</button></div><div class="messages" id="messages"></div><div id="status" aria-live="polite"></div><form class="row" id="form"><input id="input" aria-label="Message" placeholder="Ask your assistant…"><button class="primary" id="send">Send</button><button type="button" id="stop">Stop</button></form><nav id="nav"></nav></section><aside><section class="panel"><h2>Current state</h2><dl id="state"></dl></section><section class="panel"><h2>Explore freely</h2><p class="muted">Advance the simulated response manually, including while another tab is open.</p><div class="actions" id="actions"></div></section><section class="panel"><h2>Guided walkthroughs</h2><div class="tabs" id="tabs"></div><p id="description"></p><div id="steps"></div></section></aside></div></main>
+<script>
+// Pure transition model. Every new run gets an identity so stale output cannot enter a reset conversation.
+const fresh=(generation=1)=>({generation,screen:'Assistant',phase:'idle',turns:[],active:null,nextRun:1,notice:'Ready'});
+const chunks=["Today you have two Planned Blocks. ","09:00–10:00: Write the proposal. ","14:00–14:30: Take a walk."];
+const running=s=>['reading','streaming'].includes(s.phase);
+function reduce(state,action){
+ let s=structuredClone(state);
+ if(action.type==='reset')return fresh(s.generation+1);
+ if(action.type==='screen'){s.screen=action.value;return s;}
+ if(action.type==='send'||action.type==='retry'){
+  if(running(s))return {...s,notice:'Wait for this answer or press Stop.'};
+  const previous=s.turns.at(-1);const text=action.type==='retry'?previous?.question:action.text;
+  if(!text?.trim())return s;
+  s.active=s.nextRun++;s.phase='reading';s.turns.push({question:text,answer:'',status:'reading',run:s.active,chunk:0});s.notice='Reading today’s plan…';return s;
+ }
+ if(action.type==='late')return {...s,notice:'Late output from the old run ignored.'};
+ if(!running(s))return {...s,notice:'No response is running.'};
+ let t=s.turns.at(-1);
+ if(action.type==='advance'){
+  if(t.chunk<chunks.length){t.answer+=chunks[t.chunk++];t.status='streaming';s.phase='streaming';s.notice='Writing…';}
+  else{t.status='complete';s.phase='idle';s.active=null;s.notice='Answer complete. This exchange is now available for follow-ups.';}
+ }
+ if(action.type==='stop'||action.type==='fail'){
+  t.status=action.type==='stop'?'stopped':'interrupted';s.phase='idle';s.active=null;s.notice='Partial exchange kept on screen, excluded from follow-up context.';
+ }
+ return s;
+}
+let state=fresh();let selected=0;let step=0;
+const scenarios=[
+ {name:'Complete',description:'A read-only tool runs, then the answer streams. Only a completed exchange enters follow-up context.',steps:[['Ask about today',{type:'send',text:'What have I planned for today?'}],['Begin answer',{type:'advance'}],['Continue',{type:'advance'}],['Finish text',{type:'advance'}],['Complete exchange',{type:'advance'}]]},
+ {name:'Leave & return',description:'Switching tabs keeps the conversation and response alive while the app stays open.',steps:[['Ask about today',{type:'send',text:'What have I planned for today?'}],['Go to Day',{type:'screen',value:'Day'}],['Answer starts in background',{type:'advance'}],['More arrives',{type:'advance'}],['Return to Assistant',{type:'screen',value:'Assistant'}]]},
+ {name:'Stop & retry',description:'Stopped text remains marked. Retry explicitly starts another attempt; the stopped exchange is not model context.',steps:[['Ask',{type:'send',text:'What have I planned for today?'}],['Receive partial text',{type:'advance'}],['Stop',{type:'stop'}],['Retry',{type:'retry'}],['Receive fresh answer',{type:'advance'}]]},
+ {name:'Connection lost',description:'A broken stream is marked Interrupted. Nothing retries automatically.',steps:[['Ask',{type:'send',text:'What have I planned for today?'}],['Receive partial text',{type:'advance'}],['Lose connection',{type:'fail'}],['Retry explicitly',{type:'retry'}]]},
+ {name:'Start fresh',description:'New conversation cancels the old run and clears the conversation. Restarting the app also starts fresh. Observability traces are separate and are not erased.',steps:[['Ask',{type:'send',text:'What have I planned for today?'}],['Receive text',{type:'advance'}],['New conversation',{type:'reset'}],['Old output arrives',{type:'late'}]]}
+];
+const el=id=>document.getElementById(id);const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function dispatch(a){state=reduce(state,a);render();}
+function button(label,fn,disabled=false){const b=document.createElement('button');b.textContent=label;b.disabled=disabled;b.onclick=fn;return b;}
+function render(){
+ el('heading').textContent=state.screen;el('messages').replaceChildren();
+ if(state.screen!=='Assistant'){el('messages').innerHTML='<h2>'+escapeHtml(state.screen)+'</h2><p class="muted">Simulated application tab. The Assistant response continues.</p>';}
+ else if(!state.turns.length){el('messages').innerHTML='<h2>What’s on your mind?</h2><p class="muted">Ask about today’s plan, or start a conversation.</p>';el('messages').append(button('What have I planned for today?',()=>dispatch({type:'send',text:'What have I planned for today?'})));}
+ else state.turns.forEach((t,i)=>{const d=document.createElement('div');d.innerHTML='<div class="message user">'+escapeHtml(t.question)+'</div><div class="message">'+escapeHtml(t.answer|| (t.status==='reading'?'Reading today’s plan…':'No answer received.'))+(['stopped','interrupted'].includes(t.status)?'<span class="badge">'+(t.status==='stopped'?'Stopped':'Interrupted')+'</span>':'')+'</div>';if(i===state.turns.length-1&&['stopped','interrupted'].includes(t.status))d.append(button('Retry',()=>dispatch({type:'retry'}),running(state)));el('messages').append(d);});
+ el('form').hidden=state.screen!=='Assistant';el('new').hidden=state.screen!=='Assistant';el('status').textContent=state.screen==='Assistant'&&running(state)?state.notice:'';
+ el('input').disabled=running(state);el('send').hidden=running(state);el('stop').hidden=!running(state);
+ el('nav').replaceChildren(...['Day','Battle Plan','Chronicle','Assistant'].map(name=>{const b=button(name,()=>dispatch({type:'screen',value:name}));if(name===state.screen)b.className='selected';return b;}));
+ const completed=state.turns.filter(t=>t.status==='complete');const fields={'Conversation':state.generation,'Visible tab':state.screen,'Response':state.phase,'Active run':state.active??'None','Visible exchanges':state.turns.length,'Exchanges used for follow-ups':completed.length,'Excluded incomplete exchanges':state.turns.length-completed.length,'Last change':state.notice};
+ el('state').innerHTML=Object.entries(fields).map(([k,v])=>'<dt>'+escapeHtml(k)+'</dt><dd>'+escapeHtml(v)+'</dd>').join('');
+ el('actions').replaceChildren(...[['Advance response','advance'],['Lose connection','fail'],['Stop','stop'],['Retry last question','retry'],['Restart app','reset']].map(([label,type])=>button(label,()=>dispatch({type}))));
+ el('tabs').replaceChildren(...scenarios.map((s,i)=>{const b=button(s.name,()=>{selected=i;step=0;state=fresh(state.generation+1);render();});if(i===selected)b.className='active';return b;}));
+ const scenario=scenarios[selected];el('description').textContent=scenario.description;el('steps').replaceChildren(...scenario.steps.map(([label,a],i)=>button((i+1)+'. '+label,()=>{step++;dispatch(a);},i!==step)));
+}
+el('form').onsubmit=e=>{e.preventDefault();dispatch({type:'send',text:el('input').value});el('input').value='';};el('stop').onclick=()=>dispatch({type:'stop'});el('new').onclick=()=>dispatch({type:'reset'});render();
+</script></html>
+
