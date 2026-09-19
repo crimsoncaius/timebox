@@ -6,10 +6,10 @@ Run from the repository root: `./scripts/prototype-trends.ps1` (optionally `-Var
 
 The prototype appears in the existing Android Chronicle Trends view. A bottom switcher cycles A (ranked bars), B (proportion wheel), and C (daily rhythm). An explicit Activity launch with `timebox://chronicle?variant=A` also selects a variant. This is the native equivalent of the UI prototype's URL variant switcher.
 
-All variants share deterministic sample Actual time from 22 June through 19 September 2026. They never write records. Day, Week, Month, previous/next, custom dates, hierarchy expansion, and duration-to-contributing-days inspection are interactive. The current range and expanded groups appear in the prototype state footer.
+All variants share generated sample Actual time for the 90 days ending on the launch date in Asia/Singapore. The headline compares recorded time with the elapsed selected range, capped at the live clock; historical ranges use their full duration. They never write records. Day, Week, Month, previous/next, custom dates, hierarchy expansion, and duration-to-contributing-days inspection are interactive. The current range and expanded groups appear in the prototype state footer.
 
 Unconfirmed assumptions for review: Monday week start; initial current week; largest duration first; all percentages use the range total; zero-activity types omitted. Calendar drill-through is represented only by a contributing-days dialog. Running activity, persistence across app restarts, and arbitrary-depth hierarchy are not being tested here. The sample hierarchy has two levels.
 
-The app shell and Calendar retain their normal behavior; Calendar still depends on the configured backend. The prototype's sample date is fixed and is independent of the device date.
+The app shell and Calendar retain their normal behavior; Calendar still depends on the configured backend. The sample records are generated at launch; the elapsed-range clock updates live in Asia/Singapore.
 
 Verdict: A (ranked bars), selected by the user. The follow-up adds ranked bars to expanded child Task Types, including directly assigned parent time. Child bars use the same range-total denominator, left edge, and full track width as parent bars. They are thinner; only their labels are indented. Keep this comparison on `codex/prototype-10-trends`; it is not production implementation.

@@ -7,6 +7,7 @@ Design discussion for GitHub issue #10. These decisions are agreed; the design i
 - Trends presents activity neutrally, without interpreting it against goals or assigning productivity scores.
 - The initial breakdown uses Actual Block time only, grouped by the Blocks' Task Types. Planned time is excluded.
 - Each Task Type shows duration and its percentage of all recorded time in the selected range.
+- The headline shows recorded time out of elapsed time in the selected range. Past ranges use their full duration; ranges including Today end at Now rather than the end of Today, excluding future time. Today alone runs from midnight to Now in the Reporting Time Zone. Task Type bars and percentages still use recorded time as their denominator.
 - Presets are calendar Day, Week, and Month, with previous/next navigation. Custom ranges have inclusive start and end dates.
 - Date boundaries use the Reporting Time Zone.
 - Parent Task Types show totals including descendants and can expand to show children. Time assigned directly to a parent remains visible in its breakdown. Each duration contributes only once to the overall total.
