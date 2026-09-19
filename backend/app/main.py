@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.api.deps import require_api_key
 from app.api.activity_gate import guard_legacy_actual_writes
 from app.api.routes import activity, actual_blocks, battle_plan, days, recurring, settings, task_types
+from app.api.routes import trends
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from sqlalchemy import inspect
@@ -77,6 +78,7 @@ app.include_router(recurring.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
 app.include_router(activity.router, dependencies=_protected)
+app.include_router(trends.router, dependencies=_protected)
 
 
 @app.get("/health")

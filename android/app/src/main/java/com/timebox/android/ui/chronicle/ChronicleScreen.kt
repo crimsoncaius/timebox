@@ -51,7 +51,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.RoundIconButton
@@ -79,15 +78,17 @@ fun ChronicleScreen(
     onOpenDay: (LocalDate) -> Unit,
     onRetry: () -> Unit,
     onSelectView: (ChronicleView) -> Unit = {},
+    onClearHighlights: () -> Unit = {},
+    trendsContent: @Composable () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
 
     when {
-        state.loading && state.archived.isEmpty() -> {
+        state.view == ChronicleView.Calendar && state.loading && state.archived.isEmpty() && state.highlightedDays.isEmpty() -> {
             LoadingState(Modifier.fillMaxSize())
             return
         }
-        state.error != null && state.archived.isEmpty() -> {
+        state.view == ChronicleView.Calendar && state.error != null && state.archived.isEmpty() && state.highlightedDays.isEmpty() -> {
             ErrorState(message = state.error, onRetry = onRetry, modifier = Modifier.fillMaxSize())
             return
         }
@@ -100,12 +101,15 @@ fun ChronicleScreen(
         ChronicleViewTabs(state.view, onSelectView)
 
         if (state.view == ChronicleView.Trends) {
-            EmptyStateCard(
-                title = "Trends are on their way",
-                description = "Patterns across your recorded days and completed work will appear here.",
-                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding),
-            )
+            trendsContent()
             return@Column
+        }
+
+        state.highlightedType?.let { name ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("$name · ${state.highlightedDays.size} contributing days", color = colors.on, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                androidx.compose.material3.TextButton(onClick = onClearHighlights) { Text("Clear") }
+            }
         }
 
         Row(
@@ -336,8 +340,9 @@ private fun ChronicleMonthPage(
                         inMonth = inMonth,
                         isToday = date == state.today,
                         archived = archived != null,
-                        windowLabel = archived?.windowLabel,
-                        actualIdentity = archived?.actualBlocks?.firstOrNull()?.primaryIdentity(),
+                        windowLabel = state.highlightedDays[date.toString()]?.let(::trendDuration) ?: archived?.windowLabel,
+                        actualIdentity = if (date.toString() in state.highlightedDays) state.highlightedType else archived?.actualBlocks?.firstOrNull()?.primaryIdentity(),
+                        highlighted = date.toString() in state.highlightedDays,
                         onClick = { onOpenDay(date) },
                         enabled = interactive,
                         modifier = Modifier.weight(1f),
@@ -364,12 +369,14 @@ private fun DayCell(
     /** Null for a day with nothing in it, so empty cells stay bare. */
     windowLabel: String?,
     actualIdentity: String?,
+    highlighted: Boolean = false,
     onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
     val background = when {
+        highlighted -> colors.primaryContainer
         !inMonth -> Color.Transparent
         archived -> colors.low
         else -> Color(0x0F808080)

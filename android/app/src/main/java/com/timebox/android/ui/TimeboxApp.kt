@@ -438,6 +438,8 @@ fun TimeboxApp(
                             onNextMonth = { chronicleViewModel.shiftMonth(1) },
                             onThisMonth = chronicleViewModel::goToThisMonth,
                             onSelectView = chronicleViewModel::selectView,
+                            onClearHighlights = chronicleViewModel::clearHighlights,
+                            trendsContent = { com.timebox.android.ui.chronicle.TrendsScreen(chronicleState, chronicleViewModel) },
                             onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                             onRetry = chronicleViewModel::load,
                         )

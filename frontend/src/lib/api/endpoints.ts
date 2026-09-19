@@ -25,6 +25,7 @@ import type {
 } from './types'
 
 export const api = {
+  trends: (query: URLSearchParams, signal?: AbortSignal) => fetchJson<import('./trends').TrendsReport>(`/trends?${query}`, { signal }),
   health: () => fetchJson<HealthResponse>('/health'),
 
   getDay: (date: string) => fetchJson<DayRead>(`/days/${date}`),

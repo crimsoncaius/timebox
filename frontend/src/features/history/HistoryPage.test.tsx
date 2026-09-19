@@ -24,6 +24,7 @@ describe('HistoryPage', () => {
       if (url.includes('/health')) {
         return response({ status: 'ok', today: '1980-02-27', timezone: 'Pacific/Kiritimati' })
       }
+      if (url.includes('/trends?')) return response({ start: '1980-02-25', end: '1980-03-02', today: '1980-02-27', timezone: 'Pacific/Kiritimati', captured_at: '1980-02-27T00:00:00Z', duration_seconds: 0, types: [] })
       if (url.includes('/days?limit=500')) return response(days)
       throw new Error(`Unexpected request: GET ${url}`)
     }) as typeof fetch
@@ -42,7 +43,7 @@ describe('HistoryPage', () => {
     expect(screen.getByRole('tab', { name: 'Calendar' })).toHaveAttribute('aria-selected', 'true')
     await user.click(screen.getByRole('tab', { name: 'Trends' }))
     expect(screen.getByRole('heading', { level: 1, name: 'Trends' })).toBeInTheDocument()
-    expect(screen.getByText('Trends are on their way')).toBeInTheDocument()
+    expect(await screen.findByText('No recorded time in this range.')).toBeInTheDocument()
     expect(screen.queryByTestId('chronicle-month-heading')).not.toBeInTheDocument()
   })
 
@@ -50,7 +51,7 @@ describe('HistoryPage', () => {
     render(<MemoryRouter initialEntries={['/history?view=trends']}><HistoryPage /></MemoryRouter>)
 
     expect(await screen.findByRole('tab', { name: 'Trends' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('Trends are on their way')).toBeInTheDocument()
+    expect(await screen.findByText('No recorded time in this range.')).toBeInTheDocument()
   })
 
   it('uses the application month when the Chronicle has no archived days', async () => {
