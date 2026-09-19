@@ -468,3 +468,30 @@ it('asks for a Task Type before starting without a covering Planned Block, and r
   expect(repository.state.snapshot?.current?.start_at).toBe('2026-09-11T10:02:00.000Z')
   expect(screen.queryByRole('form', { name: 'Start tracking' })).not.toBeInTheDocument()
 })
+
+
+it.each(['outbox', 'pending'])('retains obsolete %s changes for recovery across restart', async field => {
+  const at = '2026-09-11T10:00:00Z'
+  const row = { id: 7, task_type_id: 1, task_type: { id: 1, name: 'unspecified' }, start_at: at, end_at: null }
+  const snapshot = { protocol: 'activity-online-v1', offline_ready: true, cursor: 1, server_at: at, current: row, records: [row] }
+  const obsolete = { kind: 'describe', operation_id: 'obsolete', name: 'Keep my text' }
+  const dependent = { kind: 'stop', operation_id: 'dependent', predecessor_id: 'obsolete' }
+  const key = `timebox.activity.online.v1:${import.meta.env.VITE_API_BASE_URL ?? '/api'}`
+  localStorage.setItem(key, JSON.stringify({ device: 'original', sequence: 3, lastAction: 0, snapshot,
+    rejected: { kind: 'edit', operation_id: 'previous' },
+    ...(field === 'pending' ? { pending: obsolete } : { outbox: [obsolete, dependent] }) }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  expect(repository.state.snapshot?.current).toEqual(row)
+  expect(repository.state.pending).toBe(false)
+  expect(repository.recoveryData()).toContain('Keep my text')
+  expect(repository.recoveryData()).toContain('previous')
+  if (field === 'outbox') expect(repository.recoveryData()).toContain('dependent')
+  const restored = new ActivityRepository(localStorage, work => work())
+  expect(restored.recoveryData()).toBe(repository.recoveryData())
+  expect(restored.state.error).toBeNull()
+  const fetch = vi.fn(async () => new Response(JSON.stringify(snapshot)))
+  vi.stubGlobal('fetch', fetch)
+  await restored.refresh()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(localStorage.getItem(key)!).device).toBe('original')
+})

@@ -553,8 +553,9 @@ def test_subtasks_reject_task_lifecycle_planning_reminders_and_actual(client):
 
 
 def test_completed_task_and_subtasks_freeze_but_historical_correction_and_earlier_actual_remain(
-    client, captured_instants, actual_instants
+    client, captured_instants, actual_instants, monkeypatch
 ):
+    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2026, 8, 30, tzinfo=UTC))
     task_type = _task_type(client)
     task = _task(
         client,

@@ -1,3 +1,4 @@
+import { SubtaskTitle } from './SubtaskTitle'
 import { activityDevelopmentEnabled, getActivityRepository } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -94,6 +95,7 @@ export function TaskDetailPanel({
   const [draft, setDraft] = useState<TaskDraft>(initialDraft)
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [isAddingSubtask, setIsAddingSubtask] = useState(false)
+  const [reminderSaveError, setReminderSaveError] = useState<string | null>(null)
   const [trackingError, setTrackingError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [showAllPlannedDates, setShowAllPlannedDates] = useState(false)
@@ -107,11 +109,15 @@ export function TaskDetailPanel({
   const visiblePlannedDates = showAllPlannedDates ? plannedDates : plannedDates.slice(0, 5)
 
   const setDraftField = <Key extends keyof TaskDraft>(key: Key, value: TaskDraft[Key]) => {
+    setReminderSaveError(null)
     setDraft((current) => ({ ...current, [key]: value }))
   }
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(initialDraft)
-  const canSave = isDirty && !isSaving && Boolean(draft.title.trim())
+  const reminderError = draft.reminderAt && draft.reminderAt !== initialDraft.reminderAt
+    && new Date(zonedLocalToIso(draft.reminderAt, timezone)).getTime() <= Date.now()
+    ? 'Reminder must be in the future' : null
+  const canSave = !reminderError && isDirty && !isSaving && Boolean(draft.title.trim())
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -153,44 +159,19 @@ export function TaskDetailPanel({
 
   const setDeadlineMode = (mode: DeadlineMode) => {
     setDraft((current) => mode === 'none'
-      ? { ...current, deadlineMode: mode, deadlineDate: '', deadlineAt: '', reminderAt: '' }
+      ? { ...current, deadlineMode: mode, deadlineDate: '', deadlineAt: '' }
       : { ...current, deadlineMode: mode })
   }
 
-  const changeDeadlineDate = (value: string) => {
-    setDraft((current) => ({
-      ...current,
-      deadlineDate: value,
-      reminderAt: current.reminderAt
-        ? isoToZonedLocal(defaultReminderIso(value || null, null, timezone), timezone)
-        : '',
-    }))
-  }
-
-  const changeDeadlineAt = (value: string) => {
-    const deadlineIso = value ? zonedLocalToIso(value, timezone) : null
-    setDraft((current) => ({
-      ...current,
-      deadlineAt: value,
-      reminderAt: current.reminderAt
-        ? isoToZonedLocal(defaultReminderIso(null, deadlineIso, timezone), timezone)
-        : '',
-    }))
-  }
+  const changeDeadlineDate = (value: string) => setDraftField('deadlineDate', value)
+  const changeDeadlineAt = (value: string) => setDraftField('deadlineAt', value)
 
   const toggleReminder = (enabled: boolean) => {
     if (!enabled) {
       setDraftField('reminderAt', '')
       return
     }
-    const reminder = defaultReminderIso(
-      draft.deadlineMode === 'date' ? draft.deadlineDate || null : null,
-      draft.deadlineMode === 'datetime' && draft.deadlineAt
-        ? zonedLocalToIso(draft.deadlineAt, timezone)
-        : null,
-      timezone,
-    )
-    if (!reminder) return
+    const reminder = defaultReminderIso(new Date().toISOString(), timezone)
     if ('Notification' in window && Notification.permission === 'default') {
       void Notification.requestPermission()
     }
@@ -199,6 +180,11 @@ export function TaskDetailPanel({
 
   const save = async () => {
     if (!canSave) return
+    if (draft.reminderAt && draft.reminderAt !== initialDraft.reminderAt
+      && new Date(zonedLocalToIso(draft.reminderAt, timezone)).getTime() <= Date.now()) {
+      setReminderSaveError('Reminder must be in the future')
+      return
+    }
     setIsSaving(true)
     try {
       if (task.status === 'completed' && draft.status !== 'completed') {
@@ -216,9 +202,9 @@ export function TaskDetailPanel({
         deadline_at: draft.deadlineMode === 'datetime' && draft.deadlineAt
           ? zonedLocalToIso(draft.deadlineAt, timezone)
           : null,
-        reminder_at: draft.deadlineMode !== 'none' && draft.reminderAt
-          ? zonedLocalToIso(draft.reminderAt, timezone)
-          : null,
+        reminder_at: draft.reminderAt === initialDraft.reminderAt
+          ? task.reminder_at
+          : draft.reminderAt ? zonedLocalToIso(draft.reminderAt, timezone) : null,
       })
       if (task.status !== 'completed' && draft.status === 'completed') {
         await onSetCompletion(task.id, true)
@@ -330,9 +316,7 @@ export function TaskDetailPanel({
                         onChange={(event) => void onSetSubtaskChecked(subtask.id, event.target.checked)}
                         className="size-4 accent-[var(--task-detail-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
                       />
-                      <span className={`min-w-0 flex-1 text-sm ${subtask.checked ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`}>
-                        {subtask.title}
-                      </span>
+                      <SubtaskTitle id={subtask.id} title={subtask.title} disabled={task.status === 'completed'} onRename={(id, title) => onPatch(id, { title })} className={`min-w-0 flex-1 text-sm ${subtask.checked ? 'text-[var(--task-detail-muted)] line-through' : 'text-[var(--task-detail-primary)]'}`} />
                     </div>
                   ))}
                 </div>
@@ -408,22 +392,21 @@ export function TaskDetailPanel({
                   <option value="datetime">Date and time</option>
                 </PropertySelect>
 
-                {draft.deadlineMode !== 'none' ? (
-                  <div className="space-y-3 border-t border-[var(--task-detail-divider)] py-3">
-                    {draft.deadlineMode === 'date' ? (
-                      <input type="date" aria-label="Deadline date" value={draft.deadlineDate} onChange={(event) => changeDeadlineDate(event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
-                    ) : (
-                      <input type="datetime-local" aria-label="Deadline date and time" value={draft.deadlineAt} onChange={(event) => changeDeadlineAt(event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
-                    )}
-                    <label className="flex items-center justify-between gap-3 text-[13px] text-[var(--task-detail-muted)]">
-                      <span>Reminder</span>
-                      <input type="checkbox" checked={Boolean(draft.reminderAt)} disabled={draft.deadlineMode === 'date' ? !draft.deadlineDate : !draft.deadlineAt} onChange={(event) => toggleReminder(event.target.checked)} className="accent-[var(--task-detail-muted)] disabled:opacity-40" />
-                    </label>
-                    {draft.reminderAt ? (
-                      <input type="datetime-local" aria-label="Reminder date and time" value={draft.reminderAt} onChange={(event) => setDraftField('reminderAt', event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
-                    ) : null}
-                  </div>
-                ) : null}
+                <div className="space-y-3 border-t border-[var(--task-detail-divider)] py-3">
+                  {draft.deadlineMode === 'none' ? null : draft.deadlineMode === 'date' ? (
+                    <input type="date" aria-label="Deadline date" value={draft.deadlineDate} onChange={(event) => changeDeadlineDate(event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
+                  ) : (
+                    <input type="datetime-local" aria-label="Deadline date and time" value={draft.deadlineAt} onChange={(event) => changeDeadlineAt(event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
+                  )}
+                  <label className="flex items-center justify-between gap-3 text-[13px] text-[var(--task-detail-muted)]">
+                    <span>Reminder</span>
+                    <input type="checkbox" checked={Boolean(draft.reminderAt)} onChange={(event) => toggleReminder(event.target.checked)} className="accent-[var(--task-detail-muted)] disabled:opacity-40" />
+                  </label>
+                  {(reminderError || reminderSaveError) && <p role="alert" className="text-red-600">{reminderError || reminderSaveError}</p>}
+                  {draft.reminderAt ? (
+                    <input type="datetime-local" aria-label="Reminder date and time" value={draft.reminderAt} onChange={(event) => setDraftField('reminderAt', event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
+                  ) : null}
+                </div>
               </div>
 
               {plannedDates.length > 0 ? (

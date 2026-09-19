@@ -131,6 +131,24 @@ describe('BattlePlanPage', () => {
     expect(activeTasks[0].project_id).toBeNull()
   })
 
+  it.each(['card', 'detail'])('renames a checked subtask from the %s without toggling it', async (surface) => {
+    activeTasks = [task({ subtasks: [subtask({ checked: true })] })]
+    const user = userEvent.setup()
+    render(<MemoryRouter><BattlePlanPage /></MemoryRouter>)
+    const card = await screen.findByRole('article', { name: 'Move Draft launch brief' })
+    if (surface === 'card') await user.click(within(card).getByRole('button', { name: /1 of 1 subtasks/ }))
+    else await user.click(card)
+    await user.click(screen.getByRole('button', { name: 'Rename subtask Check figures' }))
+    const input = screen.getByRole('textbox', { name: 'Subtask title' })
+    await user.clear(input)
+    await user.type(input, '  Verify totals  ')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Subtask title' })).not.toBeInTheDocument())
+    expect(activeTasks[0].subtasks[0]).toMatchObject({ title: 'Verify totals', checked: true })
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringMatching(/\/tasks\/21$/), expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ title: 'Verify totals' }) }))
+    expect(screen.getByRole('checkbox', { name: 'Uncheck subtask Verify totals' })).toBeChecked()
+  })
+
   beforeEach(() => {
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
     localStorage.clear()
@@ -227,6 +245,10 @@ describe('BattlePlanPage', () => {
             if ('project_id' in body) patched.project = body.project_id === project.id ? project : null
             if (body.status === 'blocked') patched = { ...patched, status: 'open', is_blocked: true }
             return patched
+          }
+          if (row.subtasks.some((item) => item.id === id)) {
+            patched = task({ id, parent_id: row.id, title: body.title })
+            return { ...row, subtasks: row.subtasks.map((item) => item.id === id ? { ...item, title: body.title! } : item) }
           }
           return row
         })
@@ -532,6 +554,43 @@ describe('BattlePlanPage', () => {
         body: expect.stringContaining('"project_id":null'),
       }),
     )
+  })
+
+  it('saves a reminder without a deadline and preserves it through deadline edits', async () => {
+    activeTasks = [task({ deadline_date: null })]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByText('Draft launch brief'))
+    expect(screen.getByRole('checkbox', { name: 'Reminder' })).toBeEnabled()
+    await user.click(screen.getByRole('checkbox', { name: 'Reminder' }))
+    fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2099-09-19T09:00' } })
+    await user.selectOptions(screen.getByLabelText('Deadline'), 'date')
+    fireEvent.change(screen.getByLabelText('Deadline date'), { target: { value: '2099-09-18' } })
+    expect(screen.getByLabelText('Reminder date and time')).toHaveValue('2099-09-19T09:00')
+    await user.selectOptions(screen.getByLabelText('Deadline'), 'none')
+    expect(screen.getByLabelText('Reminder date and time')).toHaveValue('2099-09-19T09:00')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/11$/),
+      expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"reminder_at":"2099-09-19') }),
+    ))
+  })
+
+  it('blocks a new past reminder but preserves an unchanged past reminder precisely', async () => {
+    activeTasks = [task({ deadline_date: null, reminder_at: '2000-01-01T12:00:42Z' })]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByText('Draft launch brief'))
+    await user.type(screen.getByLabelText('Title'), ' edited')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/11$/),
+      expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"reminder_at":"2000-01-01T12:00:42Z"') }),
+    ))
+    await user.click(await screen.findByText('Draft launch brief edited'))
+    fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2001-01-01T09:00' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('Reminder must be in the future')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
   it('keeps task edits local until Save and commits the full task draft', async () => {

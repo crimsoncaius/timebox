@@ -2,6 +2,7 @@ package com.timebox.android.data
 
 import com.timebox.android.data.remote.*
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -147,23 +148,31 @@ class ActivityRepositoryTest {
         assertTrue(restored.state.value.pending)
     }
 
-    @Test fun describeUnknownRetainsIdentityAcrossOfflineRestart() = runTest {
+    @Test fun retiredCommandsKeepSnapshotAndRecoveryAcrossRestart() = runTest {
         val at = "2026-09-11T10:00:00Z"
-        val type = TaskTypeDto(1, "unspecified")
-        val current = ActualBlockDto(7, 1, type, startAt = at, createdAt = at, updatedAt = at)
-        val initial = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = at, reportingTimezone = "UTC", current = current, records = listOf(current), taskTypes = listOf(type, TaskTypeDto(2, "Reading")))
-        var durable: String? = null
-        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
-        val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
-        val repository = ActivityRepository(transport, store)
-        repository.refresh()
-        assertTrue(repository.command(ActivityKind.Describe, 2, observedTargetId = 7))
-        val restored = ActivityRepository(transport, store)
-        assertEquals(1, restored.state.value.snapshot!!.records.size)
-        assertEquals(7, restored.state.value.snapshot!!.current!!.id)
-        assertEquals(at, restored.state.value.snapshot!!.current!!.startAt)
-        assertEquals("Reading", restored.state.value.snapshot!!.current!!.taskType.name)
-        assertFalse(restored.command(ActivityKind.Describe, 2, observedTargetId = 7))
+        val row = ActualBlockDto(7, 1, TaskTypeDto(1, "unspecified"), startAt = at, createdAt = at, updatedAt = at)
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = at, reportingTimezone = "UTC", current = row, records = listOf(row))
+        for (field in listOf("outbox", "pending", "rejected", "rejectedOutbox")) {
+            val obsolete = """{"kind":"describe","name":"Keep my text"}"""
+            val value = if (field.endsWith("utbox")) "[$obsolete,{\"kind\":\"stop\",\"predecessor_id\":\"obsolete\"}]" else obsolete
+            val original = """{"device":"original","sequence":3,"snapshot":${ApiFactory.json.encodeToString(initial)},"$field":$value}"""
+            var durable: String? = original
+            val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+            val transport = object : ActivityTransport {
+                override suspend fun read() = initial
+                override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Must not replay obsolete commands")
+            }
+            val repository = ActivityRepository(transport, store)
+            assertNull(repository.state.value.error)
+            assertFalse(repository.state.value.pending)
+            assertEquals(row, repository.state.value.snapshot!!.current)
+            assertTrue(repository.state.value.rejectedRecovery!!.contains("Keep my text"))
+            val restored = ActivityRepository(transport, store)
+            assertEquals(repository.state.value.rejectedRecovery, restored.state.value.rejectedRecovery)
+            restored.refresh()
+            assertNull(restored.state.value.error)
+            assertEquals(row, restored.state.value.snapshot!!.current)
+        }
     }
 
     @Test fun historicalCorrectionsRejectOverlapAndKeepGapsOffline() = runTest {

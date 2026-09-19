@@ -11,6 +11,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -45,6 +48,7 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     val rejected: ActivityCommandDto? = null,
     val outbox: List<ActivityCommandDto> = emptyList(),
     val rejectedOutbox: List<ActivityCommandDto> = emptyList(),
+    val retiredJournal: String? = null,
     val calibration: ActivityCalibrationDto? = null,
 )
 data class ActivityUiState(
@@ -88,7 +92,21 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private var feedback: String? = null
     init {
         try {
-            storage.load()?.let { journal = ApiFactory.json.decodeFromString<ActivityJournal>(it) }
+            storage.load()?.let { raw ->
+                val fields = ApiFactory.json.parseToJsonElement(raw).jsonObject
+                fun retired(value: kotlinx.serialization.json.JsonElement?) =
+                    (value as? JsonObject)?.get("kind")?.jsonPrimitive?.contentOrNull == "describe"
+                val queueFields = listOf("outbox", "rejectedOutbox")
+                if (retired(fields["pending"]) || retired(fields["rejected"]) ||
+                    queueFields.any { key -> (fields[key] as? JsonArray)?.any { retired(it) } == true }) {
+                    // Keep original bytes, including dependent commands, available for recovery.
+                    val cleaned = JsonObject(fields + mapOf("pending" to JsonNull, "rejected" to JsonNull,
+                        "outbox" to JsonArray(emptyList()), "rejectedOutbox" to JsonArray(emptyList())))
+                    val migrated = ApiFactory.json.decodeFromString<ActivityJournal>(cleaned.toString()).copy(retiredJournal = raw)
+                    save(migrated)
+                    feedback = "An obsolete activity change was rejected. Saved changes are available for recovery."
+                } else journal = ApiFactory.json.decodeFromString<ActivityJournal>(raw)
+            }
             journal.pending?.let { journal = journal.copy(outbox = journal.outbox + it, pending = null) }
             publish()
         } catch (error: Exception) { storageError = "Activity storage unavailable: ${error.message}"; publish(storageError) }
@@ -133,11 +151,11 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             val order = Order(parseActivityInstant(command.actionAt), command.deviceId, command.sequence, command.operationId)
             val type = snapshot.taskTypes.find { it.id == command.taskTypeId } ?: TaskTypeDto(command.taskTypeId ?: 0, "unspecified")
             val row = if (command.kind == ActivityKind.Stop || command.kind == ActivityKind.Delete) null else ActualBlockDto(
-                if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe)) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
+                if (command.kind == ActivityKind.Edit) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
                 startAt = at, endAt = command.effective.end, createdAt = target?.createdAt ?: at, updatedAt = command.actionAt,
                 name = command.name, taskId = command.taskId, task = target?.task, note = command.note,
-                plannedBlockId = if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe) && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
-            if (row != null) provenance[row.id.toString()] = if (command.kind in listOf(ActivityKind.Edit, ActivityKind.Describe)) command.targetSource!! else command.operationId
+                plannedBlockId = if (command.kind == ActivityKind.Edit && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
+            if (row != null) provenance[row.id.toString()] = if (command.kind == ActivityKind.Edit) command.targetSource!! else command.operationId
             val oldStart = target?.startAt?.let(::parseActivityInstant) ?: start
             val oldEnd = target?.endAt?.let(::parseActivityInstant) ?: end
             val boundaries = (pieces.flatMap { listOf(it.start, it.end) } + start + end + Instant.MAX).distinct().sorted()
@@ -161,7 +179,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     private fun publish(error: String? = null, busy: Boolean = false) {
         mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback, journal.checkInPreferences, legacyRecovery,
-            journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) })
+            if (journal.retiredJournal != null) ApiFactory.json.encodeToString(journal)
+            else journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) })
     }
     private fun save(value: ActivityJournal) {
         try { storage.save(ApiFactory.json.encodeToString(value)) }
@@ -288,8 +307,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 check(journal.outbox.none { it.effective.mode == "server_now" }) { "Reconnect to confirm the previous online change first." }
                 val current = project()?.current
                 check((kind == ActivityKind.Start) != (current != null)) { "Activity changed. Review the current activity." }
-                check(kind !in listOf(ActivityKind.Switch, ActivityKind.Describe) || selectedType != null || taskId != null) { "Task Type is required" }
-                check(kind != ActivityKind.Describe || (current?.name.isNullOrBlank() && current?.taskType?.name == "unspecified")) { "Only an unknown Current Activity can be described" }
+                check(kind != ActivityKind.Switch || selectedType != null || taskId != null) { "Task Type is required" }
                 val latest = project()?.records?.maxOfOrNull { parseActivityInstant(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
                 val action = maxOf(journal.lastAction + 1, latest + 1, requestedAt)
                 val at = Instant.ofEpochMilli(action).toString()
@@ -297,12 +315,10 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) } ?: observed.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) }
                 val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
                     at, observed.calibration ?: calibration, observed.snapshot?.cursor ?: snapshot.cursor,
-                    ActivityEffectiveDto("instant", if (kind == ActivityKind.Describe) current!!.startAt else effectiveAt?.toString() ?: at), if (predecessor == null) observedCurrent?.id else null,
+                    ActivityEffectiveDto("instant", effectiveAt?.toString() ?: at), if (predecessor == null) observedCurrent?.id else null,
                     kind, selectedType, selectedName?.trim()?.ifEmpty { null },
-                    taskId = if (kind == ActivityKind.Describe) current?.taskId else selectedPlan?.taskId ?: taskId, plannedBlockId = if (kind == ActivityKind.Describe) current?.plannedBlockId else selectedPlan?.id,
-                    note = if (kind == ActivityKind.Describe) current?.note else selectedPlan?.note, selectionSnapshot = true, predecessorId = predecessor?.operationId,
-                    targetSource = if (kind == ActivityKind.Describe) project()?.provenance?.get(current!!.id.toString()) ?: journal.outbox.find { -it.sequence == current!!.id }?.operationId ?: "baseline:${current!!.id}" else null,
-                    targetStartAt = if (kind == ActivityKind.Describe) current!!.startAt else null)
+                    taskId = selectedPlan?.taskId ?: taskId, plannedBlockId = selectedPlan?.id,
+                    note = selectedPlan?.note, selectionSnapshot = true, predecessorId = predecessor?.operationId)
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command))
                 publish()
                 true

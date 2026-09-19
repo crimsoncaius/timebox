@@ -8,7 +8,6 @@ import kotlinx.serialization.Serializable
     @SerialName("start") Start,
     @SerialName("switch") Switch,
     @SerialName("stop") Stop,
-    @SerialName("describe") Describe,
     @SerialName("add") Add,
     @SerialName("edit") Edit,
     @SerialName("delete") Delete,

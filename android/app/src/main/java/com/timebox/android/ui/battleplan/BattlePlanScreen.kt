@@ -2110,6 +2110,7 @@ fun TaskDetailScreen(
             }
         }
         else -> TaskFieldsSheet(
+            savedReminder = state.task?.reminderAt,
             draft = state.toTaskDetailDraft(), projects = state.projects, taskTypes = state.taskTypes,
             timezone = state.timezone,
             today = state.serverNow.atZone(java.time.ZoneId.of(state.timezone)).toLocalDate(),
