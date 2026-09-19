@@ -152,3 +152,17 @@ Android repository tests: `ActivityRepositoryTest`; Compose interaction test:
 Local test logs and screenshots are under `artifacts/activity-147-*` and are
 not production data or tracked deliverables. Review leaves tracking enabled in
 the isolated database; use either client's Stop control when finished.
+
+
+## Retired describe command (#219)
+
+The Focus Mode question was removed in #216. The `describe` command is now
+removed from the API schema, reconciliation handler, and web/Android command
+types. A late request receives HTTP 422 without changing recorded activity;
+it is not converted into a switch. Previously accepted operation intents remain
+in the journal and continue to participate in reconciliation.
+
+On upgrade, clients retain obsolete local commands and their dependent queue
+for recovery, clear that queue from automatic replay, and keep the confirmed
+snapshot. Android also handles retired commands in already-rejected journal
+fields before decoding its command enum. Recovery data survives restart.
