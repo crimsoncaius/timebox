@@ -165,6 +165,9 @@ class TimeboxRepository private constructor(
     suspend fun listArchivedDays(): Result<List<ArchivedDay>> =
         call { api().listDays().map { it.toModel() } }
 
+    suspend fun trends(period: String, anchor: LocalDate?, start: LocalDate?, end: LocalDate?): Result<com.timebox.android.data.remote.TrendsDto> =
+        call { api().trends(period, anchor?.toString(), start?.toString(), end?.toString()) }
+
     suspend fun listTaskTypes(): Result<List<TaskType>> =
         call { api().listTaskTypes().map { it.toModel() } }
 

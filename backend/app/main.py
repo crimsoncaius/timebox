@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.api.deps import require_api_key
 from app.api.activity_gate import guard_legacy_actual_writes
 from app.api.routes import activity, actual_blocks, battle_plan, days, recurring, settings, task_types
+from app.api.routes import trends
 from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from sqlalchemy import inspect
@@ -87,6 +88,7 @@ app.include_router(activity.router, dependencies=_protected)
 # Assistant has no Timebox mutation endpoints. Do not hold the legacy write
 # admission/database dependency open over an SSE response (Stop must run concurrently).
 app.include_router(assistant.router, dependencies=[Depends(require_api_key)])
+app.include_router(trends.router, dependencies=_protected)
 
 
 @app.get("/health")

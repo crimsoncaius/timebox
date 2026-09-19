@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import { api, type DayListItem } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
+import { TrendsPanel } from './TrendsPanel'
 import { daysByDate, shiftMonth } from './historyCalendar'
 
 type CalendarMonth = { y: number; m: number }
@@ -19,6 +20,7 @@ export function HistoryPage() {
   const view: ChronicleView = searchParams.get('view') === 'trends' ? 'trends' : 'calendar'
   const selectView = (next: ChronicleView) =>
     setSearchParams(next === 'trends' ? { view: 'trends' } : {}, { replace: true })
+  const [highlight, setHighlight] = useState<{ name: string; days: Record<string, number> } | null>(null)
   const [rows, setRows] = useState<DayListItem[]>([])
   const [applicationMonth, setApplicationMonth] = useState<CalendarMonth | null>(null)
   const [loading, setLoading] = useState(true)
@@ -79,7 +81,7 @@ export function HistoryPage() {
           </h1>
           <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
             {view === 'trends'
-              ? 'Patterns across your recorded days and completed work.'
+              ? 'Recorded time by Task Type.'
               : 'Browse by month. Days you have opened appear in the archive; any day opens in Day.'}
           </p>
         </div>
@@ -100,15 +102,17 @@ export function HistoryPage() {
         ))}
       </div>
 
-      {view === 'trends' ? (
-        <div className="max-w-xl rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 dark:border-dark-outline-variant dark:bg-dark-surface-container">
-          <p className="text-sm font-medium text-on-surface dark:text-dark-on-surface">Trends are on their way</p>
-          <p className="mt-1 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">
-            Patterns across your recorded days and completed work will appear here.
-          </p>
-        </div>
-      ) : <>
-
+      <div hidden={view !== 'trends'}>
+        <TrendsPanel active={view === 'trends'} onDrill={(name, days) => {
+          const latest = Object.keys(days).sort().at(-1)
+          if (!latest) return
+          setHighlight({ name, days })
+          setViewMonth(calendarMonthFromIso(latest))
+          selectView('calendar')
+        }} />
+      </div>
+      {view === 'calendar' && <>
+      {highlight && <div className="mb-4 flex items-center gap-4"><p>{highlight.name} · {Object.keys(highlight.days).length} contributing days</p><button onClick={() => setHighlight(null)}>Clear</button><button onClick={() => selectView('trends')}>Back to Trends</button></div>}
       {error && (
         <div className="mb-6 rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
           {error}
@@ -117,7 +121,7 @@ export function HistoryPage() {
 
       {loading && <p className="text-on-surface-variant">Loading…</p>}
 
-      {!loading && rows.length === 0 && (
+      {!loading && rows.length === 0 && !highlight && (
         <p className="mb-10 text-on-surface-variant">No days yet. Open Day to create your first day.</p>
       )}
 
@@ -126,6 +130,8 @@ export function HistoryPage() {
           year={visibleMonth.y}
           month={visibleMonth.m}
           byDate={byDate}
+          highlightedDays={highlight?.days}
+          highlightedType={highlight?.name}
           onPrevMonth={onPrevMonth}
           onNextMonth={onNextMonth}
           onThisMonth={onThisMonth}

@@ -206,11 +206,11 @@ class ChronicleScreenTest {
     }
 
     @Test
-    fun trendsViewShowsItsPlaceholderInsteadOfTheCalendar() {
+    fun trendsViewShowsItsContentInsteadOfTheCalendar() {
         showChronicle(onPrevMonth = {}, onNextMonth = {}, view = ChronicleView.Trends)
 
         compose.onNodeWithTag("chronicle-view-trends").assertIsSelected()
-        compose.onNodeWithText("Trends are on their way").assertIsDisplayed()
+        compose.onNodeWithText("Recorded time content").assertIsDisplayed()
         compose.onNodeWithContentDescription("Chronicle month content").assertDoesNotExist()
     }
 
@@ -224,6 +224,7 @@ class ChronicleScreenTest {
             TimeboxTheme(darkTheme = false) {
                 ChronicleScreen(
                     onSelectView = onSelectView,
+                    trendsContent = { androidx.compose.material3.Text("Recorded time content") },
                     state = ChronicleUiState(
                         view = view,
                         monthStart = LocalDate.of(2026, 8, 1),
