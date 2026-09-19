@@ -353,7 +353,7 @@ fun TimeboxApp(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-                NavHost(navController, startDestination = AppRoutes.DayPattern) {
+                NavHost(navController, startDestination = if (com.timebox.android.BuildConfig.TRENDS_PROTOTYPE) AppRoutes.Chronicle else AppRoutes.DayPattern) {
                     if (com.timebox.android.BuildConfig.DEBUG) {
                         composable(
                             "prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}",

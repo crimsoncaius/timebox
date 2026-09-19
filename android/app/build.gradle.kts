@@ -20,10 +20,12 @@ android {
         // Activity Tracking and Focus are the standard experience in every build.
         buildConfigField("boolean", "ACTIVITY_TRACKING_DEV", "true")
         buildConfigField("boolean", "RECORDING_PROTOTYPE", "false")
+        buildConfigField("boolean", "TRENDS_PROTOTYPE", "false")
     }
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "TRENDS_PROTOTYPE", providers.gradleProperty("trendsPrototype").getOrElse("false"))
             buildConfigField("boolean", "RECORDING_PROTOTYPE", providers.gradleProperty("recordingPrototype").getOrElse("false"))
             // Optional isolated review install; ordinary debug builds keep their identity.
             applicationIdSuffix = providers.gradleProperty("reviewApplicationIdSuffix").orNull

@@ -82,6 +82,14 @@ fun ChronicleScreen(
 ) {
     val colors = TimeboxTheme.colors
 
+    if (com.timebox.android.BuildConfig.TRENDS_PROTOTYPE && state.view == ChronicleView.Trends) {
+        Column(Modifier.fillMaxSize()) {
+            ChronicleViewTabs(state.view, onSelectView)
+            TrendsPrototype()
+        }
+        return
+    }
+
     when {
         state.loading && state.archived.isEmpty() -> {
             LoadingState(Modifier.fillMaxSize())

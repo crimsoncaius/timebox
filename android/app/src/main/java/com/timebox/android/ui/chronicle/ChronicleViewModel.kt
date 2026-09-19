@@ -16,7 +16,7 @@ import java.time.LocalDate
 enum class ChronicleView { Calendar, Trends }
 
 data class ChronicleUiState(
-    val view: ChronicleView = ChronicleView.Calendar,
+    val view: ChronicleView = if (com.timebox.android.BuildConfig.TRENDS_PROTOTYPE) ChronicleView.Trends else ChronicleView.Calendar,
     val monthStart: LocalDate = LocalDate.now().withDayOfMonth(1),
     val archived: Map<LocalDate, ArchivedDay> = emptyMap(),
     val today: LocalDate = LocalDate.now(),
