@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:review": "vite --host=127.0.0.1 --port=5176",
+    "prototype:168": "vite --host=127.0.0.1 --port=12034 --strictPort",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

@@ -14,8 +14,13 @@ import { ReminderWatcher } from './components/ReminderWatcher'
 import { ReadinessProvider } from './features/readiness/ReadinessProvider'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
+const RecommendationPrototype = lazy(() => import('./features/battle-plan/TaskTypeRecommendation.prototype'))
 
 export function AppRoutes() {
+  const [prototypeParams] = useSearchParams()
+  if (import.meta.env.DEV && prototypeParams.get('prototype') === 'task-type-168') {
+    return <Suspense fallback={<p>Loading prototype…</p>}><RecommendationPrototype /></Suspense>
+  }
   return (
     <ReadinessProvider>
       {activityDevelopmentEnabled ? <><BrowserCheckInHost /><FocusHost><AppRouteContent /><ReminderWatcher /></FocusHost></> : <><AppRouteContent /><ReminderWatcher /></>}
