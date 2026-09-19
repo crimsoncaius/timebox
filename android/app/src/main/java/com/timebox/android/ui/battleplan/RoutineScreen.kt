@@ -87,7 +87,7 @@ fun RoutineScreen(
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TaskFieldChip(Icons.Outlined.Flag, "Importance: ${state.importance?.label ?: "Not set"}", editable) { open("Importance") }
                     TaskFieldChip(Icons.Outlined.Schedule, "Urgency: ${state.urgency?.label ?: "Not set"}", editable) { open("Urgency") }
-                    TaskFieldChip(Icons.AutoMirrored.Outlined.Label, state.taskTypes.find { it.id == state.taskTypeId }?.name ?: "Unset", editable) { open("Task Type") }
+                    TaskFieldChip(Icons.AutoMirrored.Outlined.Label, "Task: ${state.taskTypes.find { it.id == state.taskTypeId }?.name ?: "Unset"}", editable) { open("Task Type") }
                 }
                 val names = state.checklistText.lineSequence().filter { it.isNotBlank() }.toList()
                 TaskSubtasks(emptyList(), editable, busy, state.saveError, {}, {}, { commit(state.copy(checklistText = (names + it).joinToString("\n"))) },
