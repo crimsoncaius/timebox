@@ -53,6 +53,7 @@ internal fun RecurringCreationContent(
 ) {
     val colors = TimeboxTheme.colors
     val editing = state.templateId != null
+    val (recommendationState, recommendation) = com.timebox.android.ui.day.rememberTaskTypeRecommendation(state.title, state.taskTypes, state.taskTypeId)
     var extrasOverride by rememberSaveable(state.templateId) { mutableStateOf("default") }
     var preplanningOverride by rememberSaveable(state.templateId) { mutableStateOf("default") }
     var dateTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -154,12 +155,16 @@ internal fun RecurringCreationContent(
                 else -> "+  Notes & more"
             }
             TextButton({ extrasOverride = if (showExtras) "closed" else "open" }, contentPadding = PaddingValues(0.dp)) { Text(extrasLabel) }
+            com.timebox.android.ui.day.TaskTypeRecommendation(recommendation, {
+                recommendationState.markChosen(); onTaskType(it.id)
+            }, { recommendationState.dismiss(state.title) }, !state.saving)
             if (showExtras) {
                 OutlinedTextField(state.description, onDescription, Modifier.fillMaxWidth(), label = { Text("Notes · optional") }, minLines = 2)
                 OutlinedTextField(state.checklistText, onChecklist, Modifier.fillMaxWidth(), label = { Text("Subtasks · one per line") }, minLines = 2)
                 var typeQuery by rememberSaveable { mutableStateOf("") }
                 Text("Task type", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 com.timebox.android.ui.day.TaskTypePicker(
+                    recommendationState = recommendationState,
                     taskTypes = state.taskTypes,
                     query = typeQuery,
                     onQueryChange = { typeQuery = it },

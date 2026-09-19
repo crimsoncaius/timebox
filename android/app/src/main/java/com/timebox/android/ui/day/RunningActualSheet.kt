@@ -157,6 +157,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
                     ActivityTimeField("Started", start, zone, compact = true, enabled = enabled) { start = it }
                     Text("Reporting Time Zone: $zone", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
                     TaskTypePicker(
+                        recommendationName = name, recommendationEnabled = enabled && actual.plannedBlockId == null,
                         taskTypes = types,
                         query = typeQuery,
                         onQueryChange = { if (enabled) typeQuery = it },

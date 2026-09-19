@@ -25,6 +25,7 @@ import type {
 } from './types'
 
 export const api = {
+  recommendTaskType: (name: string, signal?: AbortSignal) => fetchJson<{ task_type_id: number | null; confidence: number | null; reason: string }>('/task-types/recommendation', { method: 'POST', body: JSON.stringify({ name }), signal }),
   trends: (query: URLSearchParams, signal?: AbortSignal) => fetchJson<import('./trends').TrendsReport>(`/trends?${query}`, { signal }),
   health: () => fetchJson<HealthResponse>('/health'),
 

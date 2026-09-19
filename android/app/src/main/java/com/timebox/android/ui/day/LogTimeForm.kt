@@ -53,7 +53,7 @@ internal fun LogTimeForm(
             Column {
                 Text("TASK TYPE", style = TimeboxTheme.type.kicker, color = colors.onVariant)
                 Spacer(Modifier.height(8.dp))
-                TaskTypePicker(taskTypes, query, onQuery, selectedTypeId, onChooseType, onCreateType)
+                TaskTypePicker(taskTypes, query, onQuery, selectedTypeId, onChooseType, onCreateType, recommendationName = name, recommendationEnabled = !saving)
                 Text("Selected: ${taskTypes.find { it.id == selectedTypeId }?.name ?: "unspecified"}",
                     Modifier.padding(top = 8.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }

@@ -25,6 +25,7 @@ from app.readiness import readiness_details
 from app.services.day_service import validate_timezone
 from app.api.routes import assistant
 from app.services.assistant_tracing import setup_tracing
+from app.api.routes import task_type_recommendations
 
 import app.models  # noqa: F401 — register models on Base before create_all
 
@@ -80,6 +81,7 @@ _protected = [Depends(require_api_key), Depends(guard_legacy_actual_writes)]
 app.include_router(days.router, dependencies=_protected)
 app.include_router(settings.router, dependencies=_protected)
 app.include_router(task_types.router, dependencies=_protected)
+app.include_router(task_type_recommendations.router, dependencies=[Depends(require_api_key)])
 app.include_router(battle_plan.router, dependencies=_protected)
 app.include_router(recurring.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)

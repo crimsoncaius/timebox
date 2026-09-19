@@ -10,6 +10,8 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TimeboxApi {
+    @POST("task-types/recommendation")
+    suspend fun recommendTaskType(@Body body: TaskTypeRecommendationRequest): TaskTypeRecommendationDto
     @GET("trends")
     suspend fun trends(
         @Query("period") period: String,

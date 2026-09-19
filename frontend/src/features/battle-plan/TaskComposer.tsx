@@ -261,6 +261,7 @@ export function TaskComposer({
       </div>
       <div className="mt-3">
         <TaskTypePathCombobox
+        recommendationName={title} recommendationEnabled={!busy}
           label="Task type"
           allowUnset
           taskTypes={taskTypes}

@@ -107,6 +107,9 @@ internal fun TaskFieldsSheet(
     var createTitle by rememberSaveable { mutableStateOf(draft.title) }
     val completed = draft.status == TaskStatus.Completed
     val editable = !fieldsLocked && !saving && !completed && (creating || !dirty)
+    val recommendationName = if (creating) createTitle else if (field == TaskSheetField.Title) edited.title else draft.title
+    val (recommendationState, recommendation) = com.timebox.android.ui.day.rememberTaskTypeRecommendation(
+        recommendationName, taskTypes, draft.taskTypeId, !completed && !fieldsLocked)
     val sheetDirty = dirty || (creating && createTitle.isNotBlank())
     val sheetDirtyLatest by rememberUpdatedState(sheetDirty)
     val savingLatest by rememberUpdatedState(saving)
@@ -193,6 +196,10 @@ internal fun TaskFieldsSheet(
                     TaskFieldChip(Icons.AutoMirrored.Outlined.Label, taskTypes.firstOrNull { it.id == draft.taskTypeId }?.takeUnless { it.name == "unspecified" }?.name ?: "Unset", editable) { open(TaskSheetField.TaskType) }
                     TaskFieldChip(Icons.Outlined.Circle, draft.status.label, editable && completable) { open(TaskSheetField.Status) }
                 }
+                if (field == null) com.timebox.android.ui.day.TaskTypeRecommendation(recommendation, {
+                    recommendationState.markChosen()
+                    publish(draft.copy(taskTypeId = it.id))
+                }, { recommendationState.dismiss(recommendationName) }, editable)
                 content()
                 Spacer(Modifier.height(16.dp))
             }
@@ -273,6 +280,7 @@ internal fun TaskFieldsSheet(
                     }
                     TaskSheetField.TaskType -> {
                         com.timebox.android.ui.day.TaskTypePicker(
+                            recommendationState = recommendationState,
                             taskTypes = taskTypes,
                             query = search,
                             onQueryChange = { search = it },

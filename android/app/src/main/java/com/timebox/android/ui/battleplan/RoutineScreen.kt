@@ -43,6 +43,9 @@ fun RoutineScreen(
     var discardField by remember { mutableStateOf(false) }
     val busy = state.saving || lifecycle?.actionInProgress == true
     val editable = !busy && !(state.dirty && !creating)
+    val recommendationName = if (editor == "Title") draft.title else state.title
+    val (recommendationState, recommendation) = com.timebox.android.ui.day.rememberTaskTypeRecommendation(
+        recommendationName, state.taskTypes, state.taskTypeId)
     fun close() { if (!busy) { if (state.dirty) discard = true else onBack() } }
     fun open(field: String) { if (editable) { draft = state; editor = field } }
     fun commit(next: RecurringEditorUiState) {
@@ -89,6 +92,9 @@ fun RoutineScreen(
                     TaskFieldChip(Icons.Outlined.Schedule, "Urgency: ${state.urgency?.label ?: "Not set"}", editable) { open("Urgency") }
                     TaskFieldChip(Icons.AutoMirrored.Outlined.Label, state.taskTypes.find { it.id == state.taskTypeId }?.name ?: "Unset", editable) { open("Task Type") }
                 }
+                if (editor == null) com.timebox.android.ui.day.TaskTypeRecommendation(recommendation, {
+                    recommendationState.markChosen(); commit(state.copy(taskTypeId = it.id))
+                }, { recommendationState.dismiss(recommendationName) }, editable)
                 val names = state.checklistText.lineSequence().filter { it.isNotBlank() }.toList()
                 TaskSubtasks(emptyList(), editable, busy, state.saveError, {}, {}, { commit(state.copy(checklistText = (names + it).joinToString("\n"))) },
                     draftNames = names, onRemoveDraft = { index -> commit(state.copy(checklistText = names.filterIndexed { i, _ -> i != index }.joinToString("\n"))) })
@@ -140,7 +146,7 @@ fun RoutineScreen(
                     }
                     "Task Type" -> {
                         var query by remember { mutableStateOf("") }
-                        TaskTypePicker(taskTypes = state.taskTypes, query = query, onQueryChange = { query = it }, selectedTypeId = draft.taskTypeId,
+                        TaskTypePicker(recommendationState = recommendationState, taskTypes = state.taskTypes, query = query, onQueryChange = { query = it }, selectedTypeId = draft.taskTypeId,
                             onChoose = { draft = draft.copy(taskTypeId = it.id) }, onCreate = { path -> viewModel.createRoutineTaskType(path) { id -> draft = draft.copy(taskTypeId = id) } }, allowUnset = true, onUnset = { draft = draft.copy(taskTypeId = null) })
                     }
                     "Pre-planning" -> RoutinePreplanningFields(draft) { draft = it }

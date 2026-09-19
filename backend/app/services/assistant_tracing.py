@@ -54,7 +54,7 @@ def setup_tracing():
             if settings.assistant_trace_api_key else None,
             timeout=3,
         ),
-        [settings.openrouter_api_key, settings.api_key, settings.assistant_trace_api_key],
+        [settings.openrouter_api_key, settings.jev_api_key, settings.api_key, settings.assistant_trace_api_key],
     )))
     trace.set_tracer_provider(provider)
     LangChainInstrumentor().instrument(tracer_provider=provider)

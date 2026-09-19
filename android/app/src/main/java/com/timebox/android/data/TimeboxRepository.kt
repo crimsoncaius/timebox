@@ -171,6 +171,9 @@ class TimeboxRepository private constructor(
     suspend fun listTaskTypes(): Result<List<TaskType>> =
         call { api().listTaskTypes().map { it.toModel() } }
 
+    suspend fun recommendTaskType(name: String): com.timebox.android.data.remote.TaskTypeRecommendationDto =
+        withContext(ioDispatcher) { api().recommendTaskType(com.timebox.android.data.remote.TaskTypeRecommendationRequest(name)) }
+
     suspend fun createTaskType(name: String): Result<TaskType> =
         call { api().createTaskType(TaskTypeCreateDto(name)).toModel() }
 

@@ -376,6 +376,7 @@ export function TaskDetailPanel({
 
               <div className="border-t border-[var(--task-detail-divider)] py-3">
                 <TaskTypePathCombobox
+        key={task.id} recommendationName={draft.title} recommendationEnabled={!isSaving}
                   label="Task type"
                   allowUnset
                   taskTypes={taskTypes}
