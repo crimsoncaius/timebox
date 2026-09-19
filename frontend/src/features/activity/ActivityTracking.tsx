@@ -123,6 +123,7 @@ function ActivitySelectionFields({ repository, taskTypes, typeId, onTypeId, name
 }) {
   return <>
     <TaskTypePathCombobox
+        recommendationName={name}
       label="Task Type"
       taskTypes={taskTypes}
       valueTaskTypeId={typeId ? Number(typeId) : null}

@@ -386,6 +386,7 @@ function LegacyTimeBlockInspectorContent({
 
       {/* Task type */}
       <TaskTypePathCombobox
+        key={block?.id ?? "new"} recommendationName={name} recommendationEnabled={!(lane === "actual" && block?.planned_block_id)}
         label="Task type"
         taskTypes={taskTypes}
         valueTaskTypeId={taskTypeId}

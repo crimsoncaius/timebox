@@ -95,7 +95,12 @@ fun TaskTypePicker(
     autoFocus: Boolean = false,
     allowUnset: Boolean = false,
     onUnset: () -> Unit = {},
+    recommendationName: String? = null,
+    recommendationEnabled: Boolean = true,
+    recommendationState: TaskTypeRecommendationState? = null,
 ) {
+    val (localRecommendationState, recommendation) = rememberTaskTypeRecommendation(recommendationName, taskTypes, selectedTypeId, recommendationEnabled)
+    val recommendationChoices = recommendationState ?: localRecommendationState
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
 
@@ -125,17 +130,20 @@ fun TaskTypePicker(
     fun tick() = haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
     val choose: (TaskType) -> Unit = { type ->
+        recommendationChoices.markChosen()
         tick()
         onChoose(type)
     }
     val create: () -> Unit = {
         canonical?.let {
+            recommendationChoices.markChosen()
             tick()
             onCreate(it)
         }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        TaskTypeRecommendation(recommendation, choose, { localRecommendationState.dismiss(recommendationName) }, recommendationEnabled)
         SearchField(
             query = query,
             onQueryChange = onQueryChange,
@@ -179,6 +187,7 @@ fun TaskTypePicker(
                 }
                 if (showUnset && unsetSelected) {
                     UnsetRow(selected = true, onClick = {
+                        recommendationChoices.markChosen()
                         tick()
                         onUnset()
                     })
@@ -195,6 +204,7 @@ fun TaskTypePicker(
                 if (showUnset && !unsetSelected) {
                     if (results.isNotEmpty()) RowDivider()
                     UnsetRow(selected = false, onClick = {
+                        recommendationChoices.markChosen()
                         tick()
                         onUnset()
                     })

@@ -156,6 +156,7 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                         Text("TASK TYPE", style = TimeboxTheme.type.kicker, color = colors.onVariant)
                         Spacer(Modifier.height(8.dp))
                         TaskTypePicker(
+                            recommendationName = name, recommendationEnabled = !saving && actual.plannedBlockId == null,
                             taskTypes = taskTypes,
                             query = typeQuery,
                             onQueryChange = { if (!saving) typeQuery = it },

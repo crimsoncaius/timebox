@@ -26,7 +26,7 @@ def test_export_authentication_and_redaction(monkeypatch, key):
 
     monkeypatch.setattr(assistant_tracing, "get_settings", lambda: SimpleNamespace(
         assistant_trace_endpoint="http://collector/v1/traces",
-        assistant_trace_api_key=key, openrouter_api_key="provider-secret", api_key="app-secret",
+        assistant_trace_api_key=key, openrouter_api_key="provider-secret", jev_api_key="jev-secret", api_key="app-secret",
     ))
     monkeypatch.setattr(assistant_tracing, "OTLPSpanExporter", Exporter)
     monkeypatch.setattr(assistant_tracing.trace, "set_tracer_provider", lambda provider: None)
@@ -34,11 +34,11 @@ def test_export_authentication_and_redaction(monkeypatch, key):
     provider = assistant_tracing.setup_tracing()
     try:
         with provider.get_tracer(__name__).start_as_current_span("response") as span:
-            span.set_attribute("input.value", "provider-secret app-secret " + (key or "local"))
+            span.set_attribute("input.value", "provider-secret app-secret jev-secret " + (key or "local"))
         assert provider.force_flush()
         assert options == {"endpoint": "http://collector/v1/traces", "timeout": 3,
                            "headers": {"Authorization": "Bearer phoenix-secret"} if key else None}
-        assert exported[0].attributes["input.value"] == "[redacted] [redacted] " + ("[redacted]" if key else "local")
+        assert exported[0].attributes["input.value"] == "[redacted] [redacted] [redacted] " + ("[redacted]" if key else "local")
     finally:
         provider.shutdown()
 

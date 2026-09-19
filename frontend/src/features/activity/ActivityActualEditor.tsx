@@ -38,6 +38,7 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
       <ActivityTimeField label="Start" value={start} onChange={setStart} timezone={zone} />
       <ActivityTimeField label="End" value={end} onChange={setEnd} timezone={zone} />
       <TaskTypePathCombobox
+        key={actual?.id ?? "new"} recommendationName={name} recommendationEnabled={!saving && !actual?.planned_block_id}
         label="Task Type"
         taskTypes={taskTypes}
         valueTaskTypeId={type || null}

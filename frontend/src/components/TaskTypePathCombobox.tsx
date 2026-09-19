@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { TaskType } from '../lib/api'
+import { useTaskTypeRecommendation } from './useTaskTypeRecommendation'
 import {
   buildTaskTypeSuggestions,
   createAncestorHint,
@@ -15,6 +16,8 @@ export function TaskTypePathCombobox({
   onSelectTaskTypeId,
   onCreateTaskTypePath,
   allowUnset = false,
+  recommendationName,
+  recommendationEnabled = true,
 }: {
   label: string
   taskTypes: TaskType[]
@@ -22,7 +25,10 @@ export function TaskTypePathCombobox({
   onSelectTaskTypeId: (taskTypeId: number | null) => void
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   allowUnset?: boolean
+  recommendationName?: string
+  recommendationEnabled?: boolean
 }) {
+  const { recommendation, markChosen, dismiss } = useTaskTypeRecommendation(recommendationName, taskTypes, valueTaskTypeId, recommendationEnabled)
   const listId = useId()
   const inputId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -51,6 +57,7 @@ export function TaskTypePathCombobox({
   const showUnset = allowUnset && suggestions.createPath == null && query.trim() === ''
 
   const choose = (taskTypeId: number | null, name: string) => {
+    markChosen()
     onSelectTaskTypeId(taskTypeId)
     setQuery(name)
     setOpen(false)
@@ -91,6 +98,10 @@ export function TaskTypePathCombobox({
         }}
       />
 
+      {recommendation && <div className="mt-2 flex items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-2 text-sm dark:bg-dark-surface-container">
+        <button type="button" className="flex-1 text-left" onClick={() => choose(recommendation.id, recommendation.name)}>Suggested: <strong>{recommendation.name}</strong><span className="ml-2 underline">Use</span></button>
+        <button type="button" aria-label="Dismiss Task Type recommendation" className="min-h-10 min-w-10" onClick={dismiss}>×</button>
+      </div>}
       {open && (
         <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-dark-surface-container-lowest/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]">
         <ul
@@ -135,6 +146,7 @@ export function TaskTypePathCombobox({
                 className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-container-high disabled:opacity-50 dark:hover:bg-dark-surface-container-high"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={async () => {
+                  markChosen()
                   setBusy(true)
                   try {
                     const created = await onCreateTaskTypePath(suggestions.createPath!)

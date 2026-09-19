@@ -622,6 +622,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
           <textarea rows={2} aria-label="Description" placeholder="Notes and context" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-3.5 w-full resize-y border-0 border-l-2 border-l-[var(--color-paper-rule)] bg-transparent py-0.5 pr-0 pl-3.5 text-sm leading-[1.7] text-[var(--task-detail-primary)] outline-none placeholder:text-[var(--task-detail-muted)]" />
           <div className="mt-[18px] grid gap-3.5 sm:grid-cols-2">
             <TaskTypePathCombobox
+        key={template?.id ?? "new"} recommendationName={title} recommendationEnabled={!saving}
               label="Task type"
               allowUnset
               taskTypes={taskTypes}

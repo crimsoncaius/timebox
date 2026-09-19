@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     # Opt in only on an isolated development database. Never a production cutover.
     activity_tracking_dev: bool = False
     openrouter_api_key: str | None = None
+    jev_api_key: str | None = None
+    typesafe_model: str = "jev-1.13.0"
     # Explicit opt-in telemetry; credentials stay on the backend.
     assistant_trace_endpoint: str | None = None
     assistant_trace_api_key: str | None = None

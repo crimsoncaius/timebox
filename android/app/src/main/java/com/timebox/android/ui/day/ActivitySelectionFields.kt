@@ -29,6 +29,7 @@ internal fun ActivitySelectionFields(
         textStyle = type.body, singleLine = true, enabled = !busy,
     )
     TaskTypePicker(
+        recommendationName = name, recommendationEnabled = !busy,
         taskTypes = taskTypes,
         query = typeQuery,
         onQueryChange = { typeQuery = it },
