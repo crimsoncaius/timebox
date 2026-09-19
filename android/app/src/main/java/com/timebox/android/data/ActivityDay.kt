@@ -26,7 +26,10 @@ fun ActivitySnapshotDto.projectDay(date: LocalDate, previous: Day?): Day {
         TimeBlock(r.id, Lane.Actual, r.taskTypeId, r.taskTypeName, r.taskId, r.task, r.note, r.plannedBlockId,
             actualBlockId = r.id, startMinute = p.startMinute, endMinute = p.endMinute, name = r.name)
     }
+    // Without a fetched Day (e.g. offline), the journal's server clock is the only "now";
+    // leaving it unknown would forbid every Actual placement on Today.
+    val local = now.atZone(zone)
     return (previous ?: Day(date, 0, 24, true, emptyList(), timezone = reportingTimezone,
-        today = now.atZone(zone).toLocalDate(), serverNowMinute = null, capturedAtMillis = now.toEpochMilli()))
+        today = local.toLocalDate(), serverNowMinute = local.hour * 60 + local.minute))
         .copy(blocks = blocks, actualBlocks = actuals, timezone = reportingTimezone)
 }
