@@ -176,9 +176,14 @@ internal fun TrendsPrototype() {
                         }
                         if (group.key in expanded && hasChildren) children.forEach { child ->
                             val childMinutes = child.value.sumOf { it.minutes }
-                            Row(Modifier.fillMaxWidth().clickable { drill = child.key }.padding(start = 22.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(if (child.key == group.key) "Directly under ${group.key}" else child.key.substringAfter(" / "), color = colors.onVariant, fontSize = 13.sp)
-                                Text("${duration(childMinutes)} · ${"%.1f".format(childMinutes * 100.0 / total)}%", color = colors.onVariant, fontSize = 12.sp)
+                            Column(Modifier.fillMaxWidth().clickable { drill = child.key }.padding(start = 22.dp, top = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(if (child.key == group.key) "Directly under ${group.key}" else child.key.substringAfter(" / "), color = colors.onVariant, fontSize = 13.sp)
+                                    Text("${duration(childMinutes)} · ${"%.1f".format(childMinutes * 100.0 / total)}%", color = colors.onVariant, fontSize = 12.sp)
+                                }
+                                if (variant == "A") Box(Modifier.fillMaxWidth().height(4.dp).clip(TimeboxShapes.chip).background(colors.low)) {
+                                    Box(Modifier.fillMaxWidth(childMinutes.toFloat() / total).fillMaxHeight().background(shades[1]))
+                                }
                             }
                         }
                         if (variant != "A") HorizontalDivider(color = colors.low)
