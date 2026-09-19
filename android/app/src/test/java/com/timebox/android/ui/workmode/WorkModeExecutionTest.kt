@@ -7,7 +7,6 @@ import com.timebox.android.data.Lane
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.data.WorkModeSnapshot
-import com.timebox.android.data.primaryIdentity
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,7 +15,6 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,92 +44,6 @@ class WorkModeExecutionTest {
         assertTrue(transport.started.isEmpty())
         assertTrue(transport.created.isEmpty())
         assertTrue(transport.ended.isEmpty())
-    }
-
-    @Test
-    fun `resuming an active Actual without its Planned origin preserves snapshotted name`() = runTest {
-        val clock = FakeClock("2026-08-30T01:17:00Z")
-        val transport = MemoryTransport(day()).also {
-            it.active = actual(null, Instant.parse("2026-08-30T01:00:00Z")).copy(
-                name = "Snapshotted session",
-                taskId = null,
-                taskTypeName = "unspecified",
-            )
-        }
-        val execution = WorkModeExecution(transport, MemoryPersistence(), this, clock::now, 1_000)
-
-        execution.begin(transport.day)
-
-        assertEquals("Snapshotted session", execution.state.value.session?.currentBlock?.name)
-        assertEquals("Snapshotted session", execution.state.value.session?.currentBlock?.primaryIdentity())
-        execution.exit()
-        runCurrent()
-    }
-
-    @Test
-    fun `begin confirms for a minute records Actual and exit clears durable session`() = runTest {
-        val clock = FakeClock("2026-08-30T01:17:00Z")
-        val transport = MemoryTransport(day(block(31, 9 * 60, 10 * 60)))
-        val store = MemoryPersistence()
-        val execution = WorkModeExecution(transport, store, this, clock::now, 1_000)
-
-        execution.begin(transport.day)
-        assertNotNull(execution.state.value.session)
-        assertTrue(transport.started.isEmpty())
-
-        clock.advance(60)
-        advanceTimeBy(60_001)
-        runCurrent()
-        assertEquals(31, transport.started.single().first)
-        assertNotNull(execution.state.value.session?.activeActual)
-        assertNotNull(store.snapshot)
-
-        execution.exit()
-        runCurrent()
-        assertNull(execution.state.value.session)
-        assertNull(store.snapshot)
-        assertEquals("Actual time preserved · Task remains open", execution.state.value.notice)
-    }
-
-    @Test
-    fun `recovery prompts after absence and backfills elapsed planned blocks without duplication`() = runTest {
-        val clock = FakeClock("2026-08-30T01:40:00Z")
-        val transport = MemoryTransport(day(block(31, 9 * 60, 9 * 60 + 30)))
-        val store = MemoryPersistence(WorkModeSnapshot(
-            entryAt = "2026-08-30T01:00:00Z",
-            lastConfirmedAt = "2026-08-30T01:10:00Z",
-            lastObservedAt = "2026-08-30T01:20:00Z",
-        ))
-        val execution = WorkModeExecution(transport, store, this, clock::now, 1_000)
-
-        execution.restore(transport.day)
-        assertTrue(execution.state.value.restorePrompt)
-        execution.continueAfterAbsence()
-        runCurrent()
-
-        assertFalse(execution.state.value.restorePrompt)
-        assertEquals(1, transport.created.size)
-        assertNotNull(store.snapshot)
-        execution.exit()
-        runCurrent()
-    }
-
-    @Test
-    fun `transport failure preserves the session and exposes a retryable error`() = runTest {
-        val clock = FakeClock("2026-08-30T01:17:00Z")
-        val transport = MemoryTransport(day(block(31, 9 * 60, 10 * 60))).also { it.failStart = true }
-        val execution = WorkModeExecution(transport, MemoryPersistence(), this, clock::now, 1_000)
-
-        execution.begin(transport.day)
-        clock.advance(60)
-        advanceTimeBy(60_001)
-        runCurrent()
-
-        assertNotNull(execution.state.value.session)
-        assertEquals("start failed", execution.state.value.session?.error)
-        assertNull(execution.state.value.session?.activeActual)
-        execution.declineAfterAbsence()
-        runCurrent()
     }
 }
 

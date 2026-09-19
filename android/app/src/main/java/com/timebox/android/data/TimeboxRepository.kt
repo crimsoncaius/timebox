@@ -19,6 +19,7 @@ import com.timebox.android.data.remote.TaskPlacementDto
 import com.timebox.android.data.remote.TaskReorderDto
 import com.timebox.android.data.remote.TimeBlockCreateDto
 import com.timebox.android.data.remote.TimeboxApi
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -74,6 +75,7 @@ data class ValidationIssue(val location: List<String>, val message: String, val 
 class TimeboxRepository private constructor(
     private val preferences: AppPreferences?,
     private val fixedApi: TimeboxApi?,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
     /** Production hooks keep device-local reminder work synchronized without caching task data. */
@@ -84,8 +86,12 @@ class TimeboxRepository private constructor(
 
     constructor(preferences: AppPreferences) : this(preferences, null)
 
-    /** Test seam for repository contract tests; production always uses [AppPreferences]. */
-    internal constructor(api: TimeboxApi) : this(null, api)
+    /**
+     * Test seam for repository contract tests; production always uses [AppPreferences].
+     * Pass a test dispatcher to keep calls on the test scheduler instead of real IO threads.
+     */
+    internal constructor(api: TimeboxApi, ioDispatcher: CoroutineDispatcher = Dispatchers.IO) :
+        this(null, api, ioDispatcher)
 
     val settings: Flow<AppSettings> = preferences?.settings
         ?: flowOf(AppSettings(baseUrl = "http://localhost/", apiKey = "", darkTheme = null))
@@ -496,7 +502,7 @@ class TimeboxRepository private constructor(
     suspend fun setBattlePlanView(view: BattlePlanPreferences) =
         preferences?.setBattlePlanView(view) ?: Unit
 
-    private suspend fun <T> call(block: suspend () -> T): Result<T> = withContext(Dispatchers.IO) {
+    private suspend fun <T> call(block: suspend () -> T): Result<T> = withContext(ioDispatcher) {
         try {
             Result.success(block())
         } catch (e: ApiErrorException) {
