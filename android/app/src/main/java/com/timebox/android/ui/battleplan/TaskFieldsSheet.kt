@@ -22,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -229,10 +231,14 @@ internal fun TaskFieldsSheet(
                     IconButton(onClick = ::dismissField, enabled = !saving) { Icon(Icons.Outlined.Close, "Close ${active.label}") }
                 }
                 when (active) {
-                    TaskSheetField.Title, TaskSheetField.Description -> OutlinedTextField(
+                    TaskSheetField.Title, TaskSheetField.Description -> {
+                        val inputFocus = remember { FocusRequester() }
+                        OutlinedTextField(
                         value = if (active == TaskSheetField.Title) edited.title else edited.description,
                         onValueChange = { edited = if (active == TaskSheetField.Title) edited.copy(title = it) else edited.copy(description = it) },
-                        label = { Text(active.label) }, modifier = Modifier.fillMaxWidth(), enabled = !saving, minLines = if (active == TaskSheetField.Description) 3 else 1)
+                        label = { Text(active.label) }, modifier = Modifier.fillMaxWidth().focusRequester(inputFocus), enabled = !saving, minLines = if (active == TaskSheetField.Description) 3 else 1)
+                        LaunchedEffect(active) { inputFocus.requestFocus() }
+                    }
                     TaskSheetField.Importance, TaskSheetField.Urgency -> {
                         val selected = if (active == TaskSheetField.Importance) draft.importance else draft.urgency
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
