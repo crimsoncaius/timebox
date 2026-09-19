@@ -469,14 +469,7 @@ class BattlePlanViewModel internal constructor(
             return
         }
         val zone = runCatching { ZoneId.of(current.timezone) }.getOrDefault(ZoneId.of("UTC"))
-        val date = runCatching { LocalDate.parse(draft.deadlineDate) }.getOrNull()
-            ?: current.serverNow.atZone(zone).toLocalDate()
-        val suggested = if (draft.deadlineMode == TaskDeadlineMode.DateTime) {
-            val time = runCatching { LocalTime.parse(draft.deadlineTime) }.getOrDefault(LocalTime.of(9, 0))
-            LocalDateTime.of(date, time).minusHours(1)
-        } else {
-            LocalDateTime.of(date, LocalTime.of(9, 0))
-        }
+        val suggested = suggestedReminderStart(Instant.now(), zone)
         updateComposerDraft(
             draft.copy(
                 reminderEnabled = true,

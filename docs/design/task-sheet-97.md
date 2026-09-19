@@ -161,11 +161,10 @@ and Next week; deadlines can be date-only or include a time. Each has a remove
 action through its enable switch. The sample reporting time zone is Asia/Singapore.
 Calendar/time dialog cancellation leaves the field draft unchanged.
 
-Preserved domain constraints from validateTaskDraft: a reminder requires a deadline
-and must precede its boundary (the start of the next day for a date-only deadline).
-An earlier deadline that conflicts with an existing reminder cannot save until the
-reminder is adjusted; removing the deadline also removes the reminder, with visible
-explanation. The backing sample Battle Plan card now reflects saved date and priority
+Current domain constraints (updated for #221): a Task Reminder is independent of
+the deadline. New or changed reminders must be strictly in the future; unchanged
+saved reminders may be in the past. Changing or removing a deadline preserves the
+reminder and its delivery state. The backing sample Battle Plan card now reflects saved date and priority
 values. This remains an in-memory prototype; it does not schedule notifications.
 
 The active routes are again `timebox://prototype/task-sheet?mode=details` and

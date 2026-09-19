@@ -12,30 +12,40 @@ import java.time.LocalDate
 
 class TaskDetailValidationTest {
     @Test
-    fun dateOnlyDeadlineUsesNextMidnightAsReminderBoundary() {
-        val valid = validateTaskDraft(
-            TaskDetailUiState(
-                title = "Task", timezone = "Asia/Singapore", deadlineMode = TaskDeadlineMode.DateOnly,
-                deadlineDate = "2026-08-17", reminderEnabled = true,
-                reminderDate = "2026-08-17", reminderTime = "23:59",
-            )
-        ) as TaskDraftValidation.Valid
-
-        assertEquals(LocalDate.parse("2026-08-17"), valid.deadlineDate)
-        assertEquals(Instant.parse("2026-08-17T15:59:00Z"), valid.reminderAt)
+    fun independentReminderValidatesOnlyNewChoicesAndPreservesSavedPrecision() {
+        val now = Instant.parse("2026-09-19T12:00:00Z")
+        val draft = TaskDetailUiState(title = "Task", timezone = "UTC", reminderEnabled = true,
+            reminderDate = "2026-09-19", reminderTime = "11:00")
+        assertEquals("Reminder must be in the future.", (validateTaskDraft(draft, now) as TaskDraftValidation.Invalid).message)
+        val saved = Instant.parse("2026-09-19T11:00:42Z")
+        assertEquals(saved, (validateTaskDraft(draft, now, saved) as TaskDraftValidation.Valid).reminderAt)
+        assertTrue(validateTaskDraft(draft.copy(reminderTime = "13:00"), now) is TaskDraftValidation.Valid)
     }
 
     @Test
-    fun reminderAtOrAfterDeadlineIsRejected() {
+    fun dateOnlyDeadlineDoesNotConstrainReminder() {
+        val valid = validateTaskDraft(
+            TaskDetailUiState(
+                title = "Task", timezone = "Asia/Singapore", deadlineMode = TaskDeadlineMode.DateOnly,
+                deadlineDate = "2099-08-17", reminderEnabled = true,
+                reminderDate = "2099-08-17", reminderTime = "23:59",
+            )
+        ) as TaskDraftValidation.Valid
+
+        assertEquals(LocalDate.parse("2099-08-17"), valid.deadlineDate)
+        assertEquals(Instant.parse("2099-08-17T15:59:00Z"), valid.reminderAt)
+    }
+
+    @Test
+    fun reminderAtDeadlineIsAccepted() {
         val result = validateTaskDraft(
             TaskDetailUiState(
                 title = "Task", timezone = "Asia/Singapore", deadlineMode = TaskDeadlineMode.DateTime,
-                deadlineDate = "2026-08-17", deadlineTime = "10:00", reminderEnabled = true,
-                reminderDate = "2026-08-17", reminderTime = "10:00",
+                deadlineDate = "2099-08-17", deadlineTime = "10:00", reminderEnabled = true,
+                reminderDate = "2099-08-17", reminderTime = "10:00",
             )
         )
-        assertTrue(result is TaskDraftValidation.Invalid)
-        assertEquals("Reminder must be before the deadline.", (result as TaskDraftValidation.Invalid).message)
+        assertTrue(result is TaskDraftValidation.Valid)
     }
 
     @Test

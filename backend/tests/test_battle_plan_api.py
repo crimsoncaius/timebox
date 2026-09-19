@@ -239,7 +239,8 @@ def test_task_type_removal_warns_then_clears_task_reference(client):
     assert refreshed[0]["task_type_id"] is None
 
 
-def test_deadlines_overdue_and_reminders_deliver_once(client):
+def test_deadlines_overdue_and_reminders_deliver_once(client, monkeypatch):
+    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
     today = client.get("/health").json()["today"]
     due_today = create_task(client, "Due today", deadline_date=today)
     assert due_today["overdue"] is False
@@ -249,7 +250,7 @@ def test_deadlines_overdue_and_reminders_deliver_once(client):
     future = create_task(
         client,
         "Reminder",
-        deadline_at="2099-01-02T12:00:00Z",
+        deadline_at="2020-01-01T01:00:00Z",
         reminder_at="2020-01-01T12:00:00Z",
     )
     due = client.get("/reminders/due").json()
@@ -258,11 +259,11 @@ def test_deadlines_overdue_and_reminders_deliver_once(client):
     assert client.get("/reminders/due").json() == []
 
 
-def test_reminder_requires_deadline_and_precedes_it(client):
+def test_reminder_is_independent_of_deadline(client):
     no_deadline = client.post(
         "/tasks", json={"title": "No due", "reminder_at": "2099-01-01T12:00:00Z"}
     )
-    assert no_deadline.status_code == 422
+    assert no_deadline.status_code == 201
     too_late = client.post(
         "/tasks",
         json={
@@ -271,7 +272,7 @@ def test_reminder_requires_deadline_and_precedes_it(client):
             "reminder_at": "2099-01-01T12:00:00Z",
         },
     )
-    assert too_late.status_code == 422
+    assert too_late.status_code == 201
 
 
 def test_move_project_preserves_task_subtasks_and_blocks(client):
@@ -310,3 +311,68 @@ def test_move_project_preserves_task_subtasks_and_blocks(client):
     assert failed.status_code == 404
     assert next(row for row in client.get("/tasks").json()["items"] if row["id"] == parent["id"])["project_id"] is None
     assert block_ids() == original_blocks
+
+
+def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
+    clock = dt.datetime(2098, 1, 1, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: clock)
+    task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
+    url = f"/tasks/{task['id']}"
+    assert client.post(f"/reminders/{task['id']}/delivered").status_code == 204
+    clock = dt.datetime(2100, 1, 1, tzinfo=dt.timezone.utc)
+    for patch in [
+        {"deadline_at": "2000-01-01T00:00:00Z"},
+        {"deadline_at": None, "deadline_date": None},
+        {"reminder_at": "2099-01-01T20:00:00+08:00"},
+        {"title": "Changed title"},
+    ]:
+        response = client.patch(url, json=patch)
+        assert response.status_code == 200, response.text
+        assert response.json()["reminder_at"] is not None
+        assert response.json()["reminder_delivered_at"] is not None
+    for value in ["2099-01-02T12:00:00Z", "2100-01-01T00:00:00Z"]:
+        response = client.patch(url, json={"reminder_at": value})
+        assert response.status_code == 422
+        assert "Reminder must be in the future" in response.text
+        response = client.post("/tasks", json={"title": "Past", "reminder_at": value})
+        assert response.status_code == 422
+    response = client.patch(url, json={"reminder_at": "2101-01-01T00:00:00Z"})
+    assert response.status_code == 200
+    assert response.json()["reminder_delivered_at"] is None
+    assert client.patch(url, json={"reminder_at": None}).json()["reminder_at"] is None
+
+
+def test_completion_undo_restores_past_reminder_and_delivery_verbatim(client, monkeypatch):
+    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
+    task = create_task(client, reminder_at="2020-01-01T12:00:00Z")
+    client.post(f"/reminders/{task['id']}/delivered")
+    saved_response = client.patch(f"/tasks/{task['id']}", json={})
+    assert saved_response.status_code == 200
+    saved = saved_response.json()
+    completed = client.post(f"/tasks/{task['id']}/complete", json={}).json()
+    assert completed["task"]["reminder_at"] is None
+    assert completed["task"]["reminder_delivered_at"] is None
+    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2100, 1, 1, tzinfo=dt.timezone.utc))
+    restored = client.post(f"/tasks/{task['id']}/undo-completion", json={"undo_token": completed["undo_token"]})
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["reminder_at"] == saved["reminder_at"]
+    assert restored.json()["reminder_delivered_at"] == saved["reminder_delivered_at"]
+
+
+def test_occurrence_and_session_reminders_without_deadlines(client):
+    today = client.get("/health").json()["today"]
+    for mode in ["scheduled", "quota"]:
+        response = client.post("/recurring-templates", json={
+            "title": mode, "mode": mode, "frequency": "daily", "interval": 1,
+            "start_date": today, **({"quota_count": 1} if mode == "quota" else {}),
+        })
+        assert response.status_code == 201, response.text
+    tasks = client.get("/tasks").json()["items"]
+    for task in tasks:
+        target = task["session_tasks"][0] if task["recurrence_kind"] == "quota_parent" else task
+        assert target["reminder_at"] is None
+        response = client.patch(f"/tasks/{target['id']}", json={
+            "deadline_date": None, "deadline_at": None, "reminder_at": "2099-01-01T12:00:00Z",
+        })
+        assert response.status_code == 200, response.text
+        assert response.json()["reminder_at"] is not None

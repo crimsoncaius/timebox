@@ -216,15 +216,16 @@ export function isoToZonedLocal(iso: string | null, timeZone: string): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
 }
 
-export function defaultReminderIso(
-  deadlineDate: string | null,
-  deadlineAt: string | null,
-  timeZone: string,
-) {
-  if (deadlineAt) return new Date(new Date(deadlineAt).getTime() - 24 * 60 * 60 * 1000).toISOString()
-  if (!deadlineDate) return null
-  const midday = new Date(`${deadlineDate}T12:00:00Z`)
-  midday.setUTCDate(midday.getUTCDate() - 1)
-  const previousDate = midday.toISOString().slice(0, 10)
-  return zonedLocalToIso(`${previousDate}T09:00`, timeZone)
+export function defaultReminderIso(now: string, timeZone: string): string {
+  const local = isoToZonedLocal(now, timeZone)
+  const date = local.slice(0, 10)
+  const instant = new Date(now)
+  // Skip a repeated local hour: the editor stores local time without an offset.
+  let next = new Date(Math.floor(instant.getTime() / 60_000) * 60_000 + 60_000)
+  while (isoToZonedLocal(next.toISOString(), timeZone).slice(14, 16) !== '00'
+    || isoToZonedLocal(next.toISOString(), timeZone) <= local) {
+    next = new Date(next.getTime() + 60_000)
+  }
+  if (dateInTimeZone(next.toISOString(), timeZone) === date) return next.toISOString()
+  return zonedLocalToIso(`${addCalendarDays(date, 1)}T09:00`, timeZone)
 }

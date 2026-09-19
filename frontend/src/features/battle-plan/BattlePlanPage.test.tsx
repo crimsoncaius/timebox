@@ -534,6 +534,43 @@ describe('BattlePlanPage', () => {
     )
   })
 
+  it('saves a reminder without a deadline and preserves it through deadline edits', async () => {
+    activeTasks = [task({ deadline_date: null })]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByText('Draft launch brief'))
+    expect(screen.getByRole('checkbox', { name: 'Reminder' })).toBeEnabled()
+    await user.click(screen.getByRole('checkbox', { name: 'Reminder' }))
+    fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2099-09-19T09:00' } })
+    await user.selectOptions(screen.getByLabelText('Deadline'), 'date')
+    fireEvent.change(screen.getByLabelText('Deadline date'), { target: { value: '2099-09-18' } })
+    expect(screen.getByLabelText('Reminder date and time')).toHaveValue('2099-09-19T09:00')
+    await user.selectOptions(screen.getByLabelText('Deadline'), 'none')
+    expect(screen.getByLabelText('Reminder date and time')).toHaveValue('2099-09-19T09:00')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/11$/),
+      expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"reminder_at":"2099-09-19') }),
+    ))
+  })
+
+  it('blocks a new past reminder but preserves an unchanged past reminder precisely', async () => {
+    activeTasks = [task({ deadline_date: null, reminder_at: '2000-01-01T12:00:42Z' })]
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    await user.click(await screen.findByText('Draft launch brief'))
+    await user.type(screen.getByLabelText('Title'), ' edited')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/11$/),
+      expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"reminder_at":"2000-01-01T12:00:42Z"') }),
+    ))
+    await user.click(await screen.findByText('Draft launch brief edited'))
+    fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2001-01-01T09:00' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('Reminder must be in the future')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
   it('keeps task edits local until Save and commits the full task draft', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)

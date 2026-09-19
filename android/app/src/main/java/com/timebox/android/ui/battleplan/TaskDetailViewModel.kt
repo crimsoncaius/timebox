@@ -242,7 +242,7 @@ class TaskDetailViewModel(
     fun setUrgency(value: PriorityLevel?) = edit { copy(urgency = value) }
     fun setImportance(value: PriorityLevel?) = edit { copy(importance = value) }
     fun setDeadlineMode(value: TaskDeadlineMode) = edit {
-        copy(deadlineMode = value, reminderEnabled = if (value == TaskDeadlineMode.None) false else reminderEnabled)
+        copy(deadlineMode = value)
     }
     fun setDeadlineDate(value: String) = edit { copy(deadlineDate = value) }
     fun setDeadlineTime(value: String) = edit { copy(deadlineTime = value) }
@@ -773,7 +773,7 @@ sealed interface TaskDraftValidation {
     data class Invalid(val field: TaskDraftField?, val message: String) : TaskDraftValidation
 }
 
-internal fun validateTaskDraft(state: TaskDetailUiState): TaskDraftValidation {
+internal fun validateTaskDraft(state: TaskDetailUiState, now: Instant = Instant.now(), savedReminder: Instant? = state.task?.reminderAt): TaskDraftValidation {
     if (state.title.isBlank()) return TaskDraftValidation.Invalid(TaskDraftField.Title, "Task title is required.")
     if (state.title.length > 500) return TaskDraftValidation.Invalid(TaskDraftField.Title, "Task title must be 500 characters or fewer.")
     val zone = runCatching { ZoneId.of(state.timezone) }
@@ -789,18 +789,17 @@ internal fun validateTaskDraft(state: TaskDetailUiState): TaskDraftValidation {
     } else null
     val deadlineDate = date.takeIf { state.deadlineMode == TaskDeadlineMode.DateOnly }
     val reminderAt = if (state.reminderEnabled) {
-        if (state.deadlineMode == TaskDeadlineMode.None) {
-            return TaskDraftValidation.Invalid(TaskDraftField.ReminderDate, "A reminder requires a deadline.")
-        }
         val reminderDate = runCatching { LocalDate.parse(state.reminderDate) }.getOrNull()
             ?: return TaskDraftValidation.Invalid(TaskDraftField.ReminderDate, "Enter a reminder date as YYYY-MM-DD.")
         val reminderTime = runCatching { LocalTime.parse(state.reminderTime) }.getOrNull()
             ?: return TaskDraftValidation.Invalid(TaskDraftField.ReminderTime, "Enter a reminder time as HH:MM.")
-        LocalDateTime.of(reminderDate, reminderTime).atZone(zone).toInstant()
+        val savedLocal = savedReminder?.atZone(zone)
+        if (savedLocal?.toLocalDate() == reminderDate && savedLocal.toLocalTime().withSecond(0).withNano(0) == reminderTime) {
+            savedReminder
+        } else LocalDateTime.of(reminderDate, reminderTime).atZone(zone).toInstant()
     } else null
-    val boundary = deadlineAt ?: deadlineDate?.plusDays(1)?.atStartOfDay(zone)?.toInstant()
-    if (reminderAt != null && boundary != null && !reminderAt.isBefore(boundary)) {
-        return TaskDraftValidation.Invalid(TaskDraftField.ReminderTime, "Reminder must be before the deadline.")
+    if (reminderAt != null && reminderAt != savedReminder && !reminderAt.isAfter(now)) {
+        return TaskDraftValidation.Invalid(TaskDraftField.ReminderTime, "Reminder must be in the future.")
     }
     return TaskDraftValidation.Valid(deadlineDate, deadlineAt, reminderAt)
 }
