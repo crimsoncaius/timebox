@@ -14,3 +14,11 @@ Deep link: `timebox://prototype/recurring-details?flow=details&layout=upcoming&m
 
 Verdict: pending user review. No design has been selected or promoted to production.
 Source branch: `codex/prototype-229-upcoming`.
+
+## Round 2 — completed work and future occurrences
+
+User explicitly approved expanding issue 229 beyond upcoming dates. Scheduled routines show completed Task Occurrences on their completion dates alongside upcoming occurrence dates. Quota routines show only completed Session Tasks on completion dates; no future quota markers or period shading. Multiple completions on one day display a count. The section is now Calendar. All three comparison variants follow these semantics.
+
+The sample includes a Monday occurrence completed on Tuesday 15 September, and quota days with two completed sessions. Tap a date to inspect its completion count or upcoming state. Month navigation reveals earlier sample completions in August. Final visual direction remains pending review.
+
+Round 2 verification: debug build and whitespace check passed. Visually inspected scheduled and quota month calendars on emulator-5588; selected September 5 and verified the detail reads '2 sessions completed'. Retained scheduled month view for review (token b91ce16d9d404d32b6e8f7cae35ab6bb).

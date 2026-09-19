@@ -24,6 +24,11 @@ import java.time.format.DateTimeFormatter
 // Fixed sample: today Sep 19, 2026; Mondays from Sep 21, or three sessions per week.
 private val sampleToday = LocalDate.of(2026, 9, 19)
 private val firstUpcoming = LocalDate.of(2026, 9, 21)
+private fun completions(quota: Boolean) = (if (quota)
+    mapOf("2026-08-27" to 1, "2026-09-02" to 1, "2026-09-05" to 2, "2026-09-09" to 1, "2026-09-12" to 2, "2026-09-17" to 1)
+    else mapOf("2026-08-24" to 1, "2026-08-31" to 1, "2026-09-07" to 1, "2026-09-15" to 1))
+    .mapKeys { LocalDate.parse(it.key) }
+private fun upcoming(date: LocalDate, quota: Boolean) = !quota && !date.isBefore(firstUpcoming) && date.dayOfWeek.value == 1
 private val dateLabel = DateTimeFormatter.ofPattern("EEE d MMM")
 
 @Composable
@@ -32,7 +37,7 @@ fun UpcomingCalendarPrototype(variant: String, mode: String, navigate: (String, 
     val quota = mode == "quota"
     val index = listOf("A", "B", "C").indexOf(variant).coerceAtLeast(0)
     var offset by rememberSaveable { mutableStateOf(0) }
-    var selected by rememberSaveable { mutableStateOf(firstUpcoming.toString()) }
+    var selected by rememberSaveable { mutableStateOf(if (quota) "2026-09-17" else firstUpcoming.toString()) }
     fun cycle(delta: Int) = navigate(listOf("A", "B", "C")[(index + delta + 3) % 3], mode)
     Column(Modifier.fillMaxSize().background(colors.sheet).statusBarsPadding().navigationBarsPadding()
         .onPreviewKeyEvent {
@@ -54,9 +59,9 @@ fun UpcomingCalendarPrototype(variant: String, mode: String, navigate: (String, 
             if (!quota) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Pre-planning", color = colors.onVariant); Text("Not set") }
             HorizontalDivider(color = colors.hairline)
             Text("Current work", style = TimeboxTheme.type.label)
-            Text(if (quota) "This week · 1 of 3 complete" else "Mon 14 Sep · Completed", color = colors.onVariant)
+            Text(if (quota) "This week · 1 of 3 complete" else "Latest completion · Tue 15 Sep", color = colors.onVariant)
             HorizontalDivider(color = colors.hairline)
-            Text("Upcoming", style = TimeboxTheme.type.sectionTitle)
+            Text("Calendar", style = TimeboxTheme.type.sectionTitle)
             when (index) {
                 0 -> {
                     val month = YearMonth.of(2026, 9).plusMonths(offset.toLong())
@@ -68,34 +73,38 @@ fun UpcomingCalendarPrototype(variant: String, mode: String, navigate: (String, 
                     val start = LocalDate.of(2026, 9, 14).plusWeeks(offset * 2L)
                     PeriodNavigation("${start.format(dateLabel)} – ${start.plusDays(13).format(dateLabel)}", { offset-- }, { offset++ })
                     CalendarGrid(start, 2, null, quota, selected) { selected = it.toString() }
-                    Text(if (quota) "Choose any days within each shaded week." else "A short look ahead, one fortnight at a time.", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
+                    Text(if (quota) "Completed sessions on the days you finished them." else "Completed work and upcoming occurrences.", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
                 }
                 else -> {
-                    Text(if (quota) "Next five weeks" else "Next five occurrences", color = colors.onVariant)
-                    repeat(5) { i ->
-                        val date = firstUpcoming.plusWeeks(i.toLong())
+                    Text(if (quota) "Completed sessions" else "Completed & upcoming", color = colors.onVariant)
+                    val dates = completions(quota).keys.sortedDescending() + if (quota) emptyList() else (0..4).map { firstUpcoming.plusWeeks(it.toLong()) }
+                    dates.forEach { date ->
+                        val count = completions(quota)[date] ?: 0
                         Surface(shape = RoundedCornerShape(12.dp), color = if (selected == date.toString()) colors.selected else colors.card,
                             modifier = Modifier.fillMaxWidth().clickable { selected = date.toString() }) {
                             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.width(58.dp)) { Text(date.dayOfMonth.toString(), style = TimeboxTheme.type.sectionTitle); Text(date.format(DateTimeFormatter.ofPattern("MMM")), style = TimeboxTheme.type.bodySmall) }
-                                Column { Text(if (quota) "${date.format(dateLabel)} – ${date.plusDays(6).format(dateLabel)}" else date.format(DateTimeFormatter.ofPattern("EEEE")))
-                                    Text(if (quota) "3 sessions · Any days" else if (i == 0) "In 2 days · Not planned" else "In ${2 + i * 7} days · Not planned", color = colors.onVariant, style = TimeboxTheme.type.bodySmall) }
+                                Column { Text(date.format(DateTimeFormatter.ofPattern("EEEE")))
+                                    Text(if (count > 0) "✓ $count ${if (quota) "session(s)" else "task"} completed" else "Upcoming · Not planned", color = colors.onVariant, style = TimeboxTheme.type.bodySmall) }
                             }
                         }
                     }
                 }
             }
             val date = LocalDate.parse(selected)
-            val eligible = !date.isBefore(firstUpcoming)
-            val week = date.minusDays((date.dayOfWeek.value - 1).toLong())
+            val count = completions(quota)[date] ?: 0
             Surface(color = colors.card, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (quota && eligible) "${week.format(dateLabel)} – ${week.plusDays(6).format(dateLabel)}" else date.format(dateLabel), style = TimeboxTheme.type.label)
-                    Text(if (quota && eligible) "3 sessions during this week. No fixed days." else if (eligible && date.dayOfWeek.value == 1) "Weekly review · Not planned" else "No upcoming occurrence", color = colors.onVariant)
+                    Text(date.format(dateLabel), style = TimeboxTheme.type.label)
+                    Text(if (count > 0) {
+                        if (quota) "$count ${if (count == 1) "session" else "sessions"} completed" else "✓ Weekly review · Completed"
+                    } else if (upcoming(date, quota)) "Weekly review · Upcoming · Not planned"
+                    else if (quota) "No completed sessions" else "No completed or upcoming tasks", color = colors.onVariant)
+                    if (!quota && date == LocalDate.of(2026, 9, 15)) Text("Occurrence: Mon 14 Sep · Completed Tue 15 Sep", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 }
             }
-            Text(if (quota) "Shading marks a quota period, not chosen task dates." else "Filled dates repeat. Outline marks today. Tap a date to inspect.", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
-            Text("SAMPLE · Today 19 Sep 2026\n${if (quota) "Weekly quota: 3" else "Scheduled: Mondays"} · From 21 Sep · No end\nSelected: $selected · Page: $offset · No changes saved", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
+            Text(if (quota) "✓ Completed sessions · Badge shows daily count\nFuture dates stay empty. Ring marks today." else "✓ Completed · • Upcoming\nCompletions appear on the day finished. Ring marks today.", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
+            Text("SAMPLE · Today 19 Sep 2026\n${if (quota) "Weekly quota: 3" else "Scheduled: Mondays"} · No end\nSelected: $selected · Page: $offset · No changes saved", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
             Spacer(Modifier.height(12.dp))
         }
         Surface(color = colors.inverseSurface, shape = RoundedCornerShape(28.dp), modifier = Modifier.align(Alignment.CenterHorizontally).padding(12.dp)) {
@@ -126,13 +135,16 @@ private fun CalendarGrid(start: LocalDate, weeks: Int, month: YearMonth?, quota:
             repeat(7) { col ->
                 val date = start.plusDays((row * 7 + col).toLong())
                 val inMonth = month == null || YearMonth.from(date) == month
-                val future = !date.isBefore(firstUpcoming)
-                val occurrence = inMonth && future && !quota && date.dayOfWeek.value == 1
-                Box(Modifier.weight(1f).height(44.dp).background(if (inMonth && quota && future) colors.primaryContainer.copy(alpha = 0.4f) else colors.sheet), contentAlignment = Alignment.Center) {
-                    if (inMonth) Box(Modifier.size(38.dp).then(if (date == sampleToday || selected == date.toString()) Modifier.border(1.dp, colors.onVariant, CircleShape) else Modifier)
-                        .background(if (occurrence) colors.primary else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
+                val occurrence = inMonth && upcoming(date, quota)
+                val count = completions(quota)[date] ?: 0
+                Box(Modifier.weight(1f).height(48.dp), contentAlignment = Alignment.Center) {
+                    if (inMonth) Box(Modifier.size(44.dp).then(if (date == sampleToday) Modifier.border(1.dp, colors.onVariant, CircleShape) else Modifier)
+                        .background(if (selected == date.toString()) colors.selected else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
                         .clickable { select(date) }, contentAlignment = Alignment.Center) {
-                        Text(date.dayOfMonth.toString(), color = if (occurrence) colors.onPrimary else colors.on)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(date.dayOfMonth.toString(), color = colors.on)
+                            if (count > 0 || occurrence) Text(if (count > 1) "✓$count" else if (count == 1) "✓" else "•", color = if (count > 0) colors.actual else colors.onVariant, style = TimeboxTheme.type.bodySmall)
+                        }
                     }
                 }
             }
