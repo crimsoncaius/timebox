@@ -1,6 +1,9 @@
 package com.timebox.android.ui.battleplan
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -10,8 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.Subtask
@@ -29,6 +37,10 @@ internal fun TaskSubtasks(
     onAdd: (String) -> Unit,
     draftNames: List<String> = emptyList(),
     onRemoveDraft: (Int) -> Unit = {},
+    rename: SubtaskRename? = null,
+    onStartRename: ((Subtask) -> Unit)? = null,
+    onRename: (Subtask, String) -> Unit = { _, _ -> },
+    onDismissRename: () -> Unit = {},
 ) {
     var adding by rememberSaveable { mutableStateOf(false) }
     var title by rememberSaveable { mutableStateOf("") }
@@ -46,7 +58,10 @@ internal fun TaskSubtasks(
     subtasks.forEach { task ->
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Checkbox(task.checked, { onToggle(task) }, enabled = enabled && !saving, modifier = Modifier.semantics { contentDescription = "Check ${task.title}" })
-            Text(task.title, Modifier.weight(1f), color = if (task.effectivelyResolved) TimeboxTheme.colors.onVariant else TimeboxTheme.colors.on,
+            val renamable = onStartRename != null && enabled && !saving
+            Text(task.title, Modifier.weight(1f)
+                .clickable(enabled = renamable, onClickLabel = "Rename ${task.title}") { onStartRename?.invoke(task) }
+                .padding(vertical = 8.dp), color = if (task.effectivelyResolved) TimeboxTheme.colors.onVariant else TimeboxTheme.colors.on,
                 textDecoration = if (task.checked) TextDecoration.LineThrough else null)
             IconButton(onClick = { onTrash(task) }, enabled = enabled && !saving) { Icon(Icons.Outlined.DeleteOutline, "Move ${task.title} to Trash") }
         }
@@ -77,7 +92,60 @@ internal fun TaskSubtasks(
             Text("$count subtasks · Add another or close to return", color = TimeboxTheme.colors.onVariant)
         }
     }
+    val renaming = rename?.let { active -> subtasks.firstOrNull { it.id == active.subtaskId } }
+    if (rename != null && renaming != null) SubtaskRenameSheet(renaming, rename, enabled, onRename, onDismissRename)
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("Discard this subtask draft?") },
         confirmButton = { TextButton(onClick = { discard = false; adding = false; title = "" }) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } })
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubtaskRenameSheet(
+    subtask: Subtask,
+    rename: SubtaskRename,
+    enabled: Boolean,
+    onRename: (Subtask, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var field by rememberSaveable(subtask.id, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(subtask.title, TextRange(subtask.title.length)))
+    }
+    var discard by rememberSaveable(subtask.id) { mutableStateOf(false) }
+    val trimmed = field.text.trim()
+    val changed = trimmed != subtask.title
+    val canSave = enabled && !rename.saving && trimmed.isNotEmpty() && trimmed.length <= SUBTASK_TITLE_MAX_LENGTH && changed
+    val focus = remember { FocusRequester() }
+    fun save() { if (canSave) onRename(subtask, trimmed) }
+    fun close() { if (!rename.saving) { if (changed) discard = true else onDismiss() } }
+    ModalBottomSheet(onDismissRequest = ::close,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = {
+            if (it == SheetValue.Hidden && (rename.saving || changed)) { if (!rename.saving) discard = true; false } else true
+        }), containerColor = TimeboxTheme.colors.surf) {
+        TaskSheetBackHandler(rename.saving, ::close)
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Edit subtask", Modifier.weight(1f), style = TimeboxTheme.type.sectionTitle)
+                IconButton(onClick = ::close, enabled = !rename.saving) { Icon(Icons.Outlined.Close, "Close subtask editor") }
+            }
+            OutlinedTextField(field, { field = it }, label = { Text("Subtask name") }, enabled = enabled && !rename.saving,
+                singleLine = true,
+                isError = trimmed.length > SUBTASK_TITLE_MAX_LENGTH,
+                supportingText = if (trimmed.length > SUBTASK_TITLE_MAX_LENGTH) {
+                    { Text("Subtask names must be $SUBTASK_TITLE_MAX_LENGTH characters or fewer.") }
+                } else null,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { save() }),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus))
+            LaunchedEffect(subtask.id) { focus.requestFocus() }
+            if (rename.error != null) Text(rename.error, color = TimeboxTheme.colors.error)
+            Button(onClick = ::save, enabled = canSave, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(if (rename.saving) "Saving…" else "Save")
+            }
+        }
+    }
+    if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("Discard this subtask edit?") },
+        confirmButton = { TextButton(onClick = { discard = false; onDismiss() }) { Text("Discard") } },
         dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } })
 }

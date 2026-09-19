@@ -29,7 +29,7 @@ A Battle Plan Task whose execution is decomposed into first-level Subtasks. Its 
 _Avoid_: Epic, subtask group
 
 **Subtask**:
-A non-exhaustive, first-level execution checkpoint within a Parent Task. It is not independently schedulable, and its checked state does not determine Parent Task completion.
+A non-exhaustive, first-level execution checkpoint within a Parent Task. It is not independently schedulable, and its checked state does not determine Parent Task completion. It has a title only and no Task Description; its title can be renamed while its Parent Task is incomplete, whether or not it is checked.
 _Avoid_: Child task, nested task
 
 **Task Type**:

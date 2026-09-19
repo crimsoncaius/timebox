@@ -94,6 +94,7 @@ data class TaskDetailUiState(
     val trashed: Boolean = false,
     val confirmTrash: Boolean = false,
     val pendingSubtaskTrash: Subtask? = null,
+    val subtaskRename: SubtaskRename? = null,
     val trashUndoTarget: TrashUndoTarget? = null,
     val error: String? = null,
     val message: String? = null,
@@ -101,6 +102,13 @@ data class TaskDetailUiState(
     val isSubtask: Boolean get() = task?.parentId != null
     val subtasks: List<Subtask> get() = task?.subtasks.orEmpty()
 }
+
+/** The open Subtask title editor; [saving] and [error] describe its latest save. */
+data class SubtaskRename(
+    val subtaskId: Int,
+    val saving: Boolean = false,
+    val error: String? = null,
+)
 
 data class TrashUndoTarget(
     val taskId: Int,
@@ -356,6 +364,64 @@ class TaskDetailViewModel(
                 onSuccess = { saved -> applySubtask(parentTaskId, saved) },
                 onFailure = { error -> _state.update { it.copy(saveError = error.apiError.message) } },
             )
+        }
+    }
+
+    fun startSubtaskRename(subtask: Subtask) {
+        val current = _state.value
+        if (current.saving || current.dirty || current.task?.status == TaskStatus.Completed) return
+        if (current.subtasks.none { it.id == subtask.id }) return
+        _state.update { it.copy(subtaskRename = SubtaskRename(subtask.id)) }
+    }
+
+    fun dismissSubtaskRename() {
+        if (_state.value.subtaskRename?.saving == true) return
+        _state.update { it.copy(subtaskRename = null) }
+    }
+
+    fun renameSubtask(subtask: Subtask, title: String) {
+        val current = _state.value
+        val parent = current.task?.takeIf { it.id == subtask.parentTaskId && it.status != TaskStatus.Completed } ?: return
+        val trimmed = title.trim()
+        if (trimmed.isEmpty() || trimmed.length > SUBTASK_TITLE_MAX_LENGTH || trimmed == subtask.title) return
+        if (current.saving || current.dirty || current.subtaskRename?.saving == true) return
+        _state.update { it.copy(subtaskRename = SubtaskRename(subtask.id, saving = true), saveError = null, message = null) }
+        viewModelScope.launch {
+            repository.patchBattleTask(subtask.id, BattleTaskPatch(title = PatchField.of(trimmed))).fold(
+                onSuccess = { saved ->
+                    _state.value.task?.takeIf { it.id == parent.id }?.let { latest ->
+                        applySubtasks(latest.copy(subtasks = latest.subtasks.map {
+                            if (it.id == saved.id) it.copy(title = saved.title, updatedAt = saved.updatedAt) else it
+                        }))
+                    }
+                    _state.update { it.copy(subtaskRename = null) }
+                },
+                onFailure = { error ->
+                    val rejected = SubtaskRename(subtask.id, error = error.apiError.message)
+                    if (error.apiError.statusCode in setOf(404, 422)) refreshAfterRejectedRename(parent.id, rejected)
+                    else _state.update { it.copy(subtaskRename = rejected) }
+                },
+            )
+        }
+    }
+
+    /** A rejected rename means the Subtask or its Parent Task changed elsewhere, so show their current state. */
+    private suspend fun refreshAfterRejectedRename(taskId: Int, rejected: SubtaskRename) {
+        val list = repository.listBattleTasks().getOrElse {
+            _state.update { it.copy(subtaskRename = rejected) }
+            return
+        }
+        readinessCoordinator?.mergeServerTasks(list.items)
+        val task = (readinessCoordinator?.projectTasks(list.items) ?: list.items).findTask(taskId)
+        if (task == null) {
+            _state.update { it.copy(subtaskRename = null) }
+            load(taskId, showSpinner = false)
+            return
+        }
+        acceptSaved(task)
+        _state.update { current ->
+            if (current.subtasks.any { it.id == rejected.subtaskId }) current.copy(subtaskRename = rejected)
+            else current.copy(subtaskRename = null, saveError = rejected.error)
         }
     }
 
@@ -740,6 +806,8 @@ internal fun validateTaskDraft(state: TaskDetailUiState): TaskDraftValidation {
 }
 
 private fun <T> T?.toPatchField(): PatchField<T> = if (this == null) PatchField.Null else PatchField.of(this)
+
+internal const val SUBTASK_TITLE_MAX_LENGTH = 500
 
 internal fun List<BattleTask>.findTask(id: Int): BattleTask? =
     firstNotNullOfOrNull { task -> task.takeIf { it.id == id } ?: task.sessionTasks.findTask(id) }
