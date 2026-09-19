@@ -36,6 +36,8 @@ class AppRoutesTest {
         assertEquals("day/2026-08-17", AppRoutes.day(LocalDate.parse("2026-08-17")))
         assertEquals("chronicle", AppRoutes.Chronicle)
         assertEquals("types", AppRoutes.Types)
+        assertEquals("Task Types", routeTitle(AppRoutes.Types, "Day", "Month"))
+        assertEquals("assistant", AppRoutes.Assistant)
         assertEquals("settings", AppRoutes.Settings)
         assertEquals("settings/theme-preview", AppRoutes.ThemePreview)
         assertEquals("Theme preview", routeTitle(AppRoutes.ThemePreview, "Day", "Month"))

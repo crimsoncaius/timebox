@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
+import { BattlePlanSidebarFrame } from '../battle-plan/BattlePlanSidebarFrame'
 import { RenameTaskTypeSheet } from './RenameTaskTypeSheet'
 import { DeleteTaskTypeResolutionModal } from '../../components/DeleteTaskTypeResolutionModal'
 import { ApiHttpError, api, TASK_TYPE_STILL_IN_USE_DETAIL, type TaskType } from '../../lib/api'
@@ -22,6 +23,9 @@ function apiErrorMessage(e: unknown, fallback: string): string {
   if (e instanceof Error) return e.message
   return fallback
 }
+
+/** Same frame as Battle Plan's own pages, since Task Types lives under Battle Plan. */
+const BATTLE_PLAN_MAIN = 'w-full px-4 py-6 sm:px-8 lg:px-10'
 
 export function TaskTypesPage() {
   const [types, setTypes] = useState<TaskType[]>([])
@@ -188,20 +192,23 @@ export function TaskTypesPage() {
 
   if (loading && types.length === 0) {
     return (
-      <Layout>
-        <p className="font-body text-on-surface-variant">Loading…</p>
+      <Layout mainClassName={BATTLE_PLAN_MAIN}>
+        <BattlePlanSidebarFrame>
+          <p className="font-body text-on-surface-variant">Loading…</p>
+        </BattlePlanSidebarFrame>
       </Layout>
     )
   }
 
   return (
-    <Layout>
+    <Layout mainClassName={BATTLE_PLAN_MAIN}>
+      <BattlePlanSidebarFrame>
       <div className="flex flex-col gap-12 lg:flex-row lg:items-start lg:gap-16 xl:gap-24">
         {/* Left: editorial intro — intentional asymmetry */}
         <section className="min-w-0 shrink-0 lg:max-w-md lg:pt-4">
           <div className="space-y-5">
             <h1 className="font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
-              Task types
+              Task Types
             </h1>
             <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
               Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a{' '}
@@ -391,6 +398,7 @@ export function TaskTypesPage() {
         onCascade={() => void confirmCascadeDelete()}
         onMigrate={(targetId) => void confirmMigrateDelete(targetId)}
       />
+      </BattlePlanSidebarFrame>
     </Layout>
   )
 }

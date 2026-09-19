@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
@@ -40,6 +42,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.RoundIconButton
@@ -73,6 +78,7 @@ fun ChronicleScreen(
     onThisMonth: () -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onRetry: () -> Unit,
+    onSelectView: (ChronicleView) -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
 
@@ -91,6 +97,17 @@ fun ChronicleScreen(
         modifier = Modifier
             .fillMaxSize(),
     ) {
+        ChronicleViewTabs(state.view, onSelectView)
+
+        if (state.view == ChronicleView.Trends) {
+            EmptyStateCard(
+                title = "Trends are on their way",
+                description = "Patterns across your recorded days and completed work will appear here.",
+                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding),
+            )
+            return@Column
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -137,6 +154,41 @@ fun ChronicleScreen(
             onOpenDay = onOpenDay,
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+/** Full-width underline tabs switching between Chronicle's Calendar and Trends views. */
+@Composable
+private fun ChronicleViewTabs(selected: ChronicleView, onSelect: (ChronicleView) -> Unit) {
+    val colors = TimeboxTheme.colors
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Row(Modifier.fillMaxWidth().selectableGroup()) {
+            ChronicleView.entries.forEach { view ->
+                val active = view == selected
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("chronicle-view-${view.name.lowercase(Locale.ENGLISH)}")
+                        .selectable(selected = active, role = Role.Tab) { onSelect(view) }
+                        .padding(top = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        view.name,
+                        style = TimeboxTheme.type.sectionTitle,
+                        color = if (active) colors.on else colors.onVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.4f)
+                            .height(2.dp)
+                            .background(if (active) colors.on else Color.Transparent),
+                    )
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.low))
     }
 }
 
