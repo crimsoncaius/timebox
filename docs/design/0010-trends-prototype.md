@@ -12,4 +12,4 @@ Unconfirmed assumptions for review: Monday week start; initial current week; lar
 
 The app shell and Calendar retain their normal behavior; Calendar still depends on the configured backend. The prototype's sample date is fixed and is independent of the device date.
 
-Verdict: A (ranked bars), selected by the user. The follow-up adds ranked bars to expanded child Task Types, including directly assigned parent time. Child bars use the same range-total denominator as the percentages and are thinner and indented. Keep this comparison on `codex/prototype-10-trends`; it is not production implementation.
+Verdict: A (ranked bars), selected by the user. The follow-up adds ranked bars to expanded child Task Types, including directly assigned parent time. Child bars use the same range-total denominator, left edge, and full track width as parent bars. They are thinner; only their labels are indented. Keep this comparison on `codex/prototype-10-trends`; it is not production implementation.

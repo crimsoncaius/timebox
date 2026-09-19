@@ -11,12 +11,13 @@ Design discussion for GitHub issue #10. These decisions are agreed; the design i
 - Date boundaries use the Reporting Time Zone.
 - Parent Task Types show totals including descendants and can expand to show children. Time assigned directly to a parent remains visible in its breakdown. Each duration contributes only once to the overall total.
 - The selected presentation is prototype A: ranked horizontal bars, including bars for expanded child Task Types and directly assigned parent time.
+- All bars share the same left edge, full track width, and range-total scale. Child labels remain indented to show hierarchy.
 - As settled in #210, Trends lives beside Calendar in Chronicle and owns its date range independently of Calendar. Task Type figures drill through to Calendar, highlighting contributing days.
 
 ## Still to resolve
 
 - Initial range and selection persistence.
-- Detailed breakdown ordering and bar scale.
+- Detailed breakdown ordering.
 - Whether to include a time-series chart in the initial scope.
 - Week boundaries, ongoing activity, and partial-day attribution.
 - Drill-through details, including single-day ranges and ranges spanning months.
