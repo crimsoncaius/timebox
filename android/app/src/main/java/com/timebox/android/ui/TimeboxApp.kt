@@ -366,15 +366,25 @@ fun TimeboxApp(
                             com.timebox.android.ui.battleplan.TaskSheetPrototype(entry.arguments?.getString("mode") == "create", entry.arguments?.getString("layout") ?: "full", entry.arguments?.getString("sample") ?: "normal")
                         }
                         composable(
-                            "prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}",
-                            deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}" }),
+                            "prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}&variant={variant}",
+                            deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}&variant={variant}" }),
                             arguments = listOf(
                                 navArgument("flow") { defaultValue = "edit" },
                                 navArgument("layout") { defaultValue = "rows" },
                                 navArgument("mode") { defaultValue = "scheduled" },
+                                navArgument("variant") { defaultValue = "A" },
                             ),
                         ) { entry ->
-                            if (entry.arguments?.getString("layout") == "routine") {
+                            if (entry.arguments?.getString("layout") == "upcoming") {
+                                com.timebox.android.ui.battleplan.UpcomingCalendarPrototype(
+                                    entry.arguments?.getString("variant") ?: "A",
+                                    entry.arguments?.getString("mode") ?: "scheduled",
+                                ) { variant, mode ->
+                                    navController.navigate("prototype/recurring-details?flow=details&layout=upcoming&mode=$mode&variant=$variant") {
+                                        popUpTo(entry.destination.id) { inclusive = true }
+                                    }
+                                }
+                            } else if (entry.arguments?.getString("layout") == "routine") {
                                 com.timebox.android.ui.battleplan.RoutineSheetPrototype(
                                     entry.arguments?.getString("flow") ?: "details",
                                     entry.arguments?.getString("mode") ?: "scheduled",
