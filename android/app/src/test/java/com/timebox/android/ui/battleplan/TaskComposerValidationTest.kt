@@ -12,6 +12,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TaskComposerValidationTest {
+    @Test fun reminderWithoutDeadlineIsAccepted() {
+        val result = validateTaskComposer(TaskComposerDraft(title = "Task", reminderEnabled = true,
+            reminderDate = "2099-09-19", reminderTime = "09:00"), "Asia/Singapore") as TaskComposerValidation.Valid
+        assertEquals(null, result.request.deadlineDate)
+        assertEquals(Instant.parse("2099-09-19T01:00:00Z"), result.request.reminderAt)
+    }
+
     @Test
     fun meaningfulDraftChangesCompareAgainstOpeningDefaults() {
         val initial = initialComposerDraft(BattlePlanScope.project(Project(42, "Timebox", Instant.EPOCH, Instant.EPOCH)), TaskStatus.InProgress)
@@ -47,10 +54,10 @@ class TaskComposerValidationTest {
                 urgency = PriorityLevel.High,
                 importance = PriorityLevel.Medium,
                 deadlineMode = TaskDeadlineMode.DateTime,
-                deadlineDate = "2026-09-05",
+                deadlineDate = "2099-09-05",
                 deadlineTime = "14:30",
                 reminderEnabled = true,
-                reminderDate = "2026-09-05",
+                reminderDate = "2099-09-05",
                 reminderTime = "13:30",
                 readyToPlan = true,
             ),
@@ -68,8 +75,8 @@ class TaskComposerValidationTest {
         assertEquals(PriorityLevel.Medium, request.importance)
         assertEquals(true, request.readyToPlan)
         assertEquals(null, request.deadlineDate)
-        assertEquals(Instant.parse("2026-09-05T06:30:00Z"), request.deadlineAt)
-        assertEquals(Instant.parse("2026-09-05T05:30:00Z"), request.reminderAt)
+        assertEquals(Instant.parse("2099-09-05T06:30:00Z"), request.deadlineAt)
+        assertEquals(Instant.parse("2099-09-05T05:30:00Z"), request.reminderAt)
     }
 
     @Test

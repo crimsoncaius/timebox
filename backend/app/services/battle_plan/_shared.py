@@ -58,11 +58,8 @@ def _deadline_boundary(task: Task, settings: Settings) -> dt.datetime | None:
 def _validate_reminder(task: Task, settings: Settings) -> None:
     if task.reminder_at is None:
         return
-    boundary = _deadline_boundary(task, settings)
-    if boundary is None:
-        raise ValueError("A reminder requires a deadline")
-    if _aware(task.reminder_at) >= boundary:
-        raise ValueError("Reminder must be before the deadline")
+    if _aware(task.reminder_at) <= _utc_now():
+        raise ValueError("Reminder must be in the future")
 
 
 def _task_select(task_id: int, *, for_update: bool = False):

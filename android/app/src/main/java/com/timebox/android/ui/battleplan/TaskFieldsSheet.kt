@@ -59,7 +59,7 @@ internal fun mergeTaskField(field: TaskSheetField, current: TaskDetailDraft, edi
     TaskSheetField.Urgency -> current.copy(urgency = edited.urgency)
     TaskSheetField.Status -> current.copy(status = edited.status)
     TaskSheetField.Deadline -> current.copy(deadlineMode = edited.deadlineMode, deadlineDate = edited.deadlineDate,
-        deadlineTime = edited.deadlineTime, reminderEnabled = current.reminderEnabled && edited.deadlineMode != TaskDeadlineMode.None)
+        deadlineTime = edited.deadlineTime)
     TaskSheetField.Reminder -> current.copy(reminderEnabled = edited.reminderEnabled, reminderDate = edited.reminderDate, reminderTime = edited.reminderTime)
 }
 
@@ -85,6 +85,7 @@ internal fun TaskFieldsSheet(
     onCreateTaskType: (String) -> Unit = {},
     onComplete: () -> Unit = {},
     onReady: (Boolean) -> Unit = { onChange(draft.copy(readyToPlan = it)) },
+    savedReminder: java.time.Instant? = null,
     fieldsLocked: Boolean = false,
     projectLocked: Boolean = false,
     contextLabel: String? = null,
@@ -206,7 +207,7 @@ internal fun TaskFieldsSheet(
     field?.let { active ->
         var search by rememberSaveable(active) { mutableStateOf("") }
         val merged = mergeTaskField(active, draft, edited)
-        val validation = validateTaskDraft(TaskDetailUiState(timezone = timezone).withDraft(merged.copy(title = merged.title.ifBlank { "New task" })))
+        val validation = validateTaskDraft(TaskDetailUiState(timezone = timezone).withDraft(merged.copy(title = merged.title.ifBlank { "New task" })), savedReminder = savedReminder)
         val validationMessage = (validation as? TaskDraftValidation.Invalid)?.message
         fun commit(value: TaskDetailDraft, close: Boolean = true) {
             val next = mergeTaskField(active, draft, value)
@@ -354,17 +355,15 @@ private fun TaskScheduleEditor(draft: TaskDetailDraft, reminder: Boolean, timezo
         val text = value.format(DateTimeFormatter.ofPattern("HH:mm"))
         onChange(if (reminder) draft.copy(reminderTime = text) else draft.copy(deadlineTime = text))
     }
-    val missingDeadline = reminder && draft.deadlineMode == TaskDeadlineMode.None
-    if (missingDeadline) Text("Set a deadline before adding a reminder.")
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(if (reminder) "Remind me" else "Set a deadline", Modifier.weight(1f))
         Switch(active, { checked ->
             if (reminder) {
                 if (checked && !notificationsAllowed) requestPermission()
-                val suggested = if (draft.deadlineMode == TaskDeadlineMode.DateTime) fallback.atTime(runCatching { LocalTime.parse(draft.deadlineTime) }.getOrDefault(LocalTime.of(9, 0))).minusHours(1) else fallback.atTime(9, 0)
+                val suggested = suggestedReminderStart(java.time.Instant.now(), ZoneId.of(timezone))
                 onChange(draft.copy(reminderEnabled = checked, reminderDate = suggested.toLocalDate().toString(), reminderTime = suggested.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))))
-            } else onChange(draft.copy(deadlineMode = if (checked) TaskDeadlineMode.DateOnly else TaskDeadlineMode.None, deadlineDate = date.toString(), reminderEnabled = draft.reminderEnabled && checked))
-        }, enabled = enabled && !missingDeadline)
+            } else onChange(draft.copy(deadlineMode = if (checked) TaskDeadlineMode.DateOnly else TaskDeadlineMode.None, deadlineDate = date.toString()))
+        }, enabled = enabled)
     }
     if (active) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -384,6 +383,5 @@ private fun TaskScheduleEditor(draft: TaskDetailDraft, reminder: Boolean, timezo
         }
         Text(timezone, color = TimeboxTheme.colors.onVariant, fontSize = 12.sp)
     }
-    if (!reminder && !active) Text("Removing a deadline also removes its reminder.", color = TimeboxTheme.colors.onVariant)
     if (reminder && !notificationsAllowed) Text("Reminders are saved, but notifications are disabled on this device.", color = TimeboxTheme.colors.error)
 }

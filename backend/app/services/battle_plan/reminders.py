@@ -7,7 +7,7 @@ from app.core.config import Settings
 from app.core.time import now_in_tz
 from app.models.battle_plan import Task, TaskStatus
 from app.schemas.battle_plan import ReminderRead
-from app.services.battle_plan._shared import _is_overdue, _load_task, _utc_now
+from app.services.battle_plan._shared import _load_task, _utc_now
 
 
 def due_reminders(db: Session, settings: Settings) -> list[ReminderRead]:
@@ -33,7 +33,6 @@ def due_reminders(db: Session, settings: Settings) -> list[ReminderRead]:
             reminder_at=row.reminder_at,
         )
         for row in rows
-        if not _is_overdue(row, settings, now)
     ]
 
 

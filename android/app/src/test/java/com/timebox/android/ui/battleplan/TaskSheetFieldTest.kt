@@ -23,16 +23,16 @@ class TaskSheetFieldTest {
         assertEquals(PriorityLevel.High, changed.importance)
     }
 
-    @Test fun removingDeadlineAlsoRemovesReminderButDoesNotChangeReadiness() {
+    @Test fun removingDeadlinePreservesReminderAndReadiness() {
         val initial = TaskComposerDraft(title = "Task", readyToPlan = true,
-            deadlineMode = TaskDeadlineMode.DateOnly, deadlineDate = "2026-09-19",
-            reminderEnabled = true, reminderDate = "2026-09-19", reminderTime = "09:00").toDetailDraft()
+            deadlineMode = TaskDeadlineMode.DateOnly, deadlineDate = "2099-09-19",
+            reminderEnabled = true, reminderDate = "2099-09-19", reminderTime = "09:00").toDetailDraft()
         val changed = mergeTaskField(TaskSheetField.Deadline, initial, initial.copy(deadlineMode = TaskDeadlineMode.None, readyToPlan = false))
-        assertFalse(changed.reminderEnabled)
+        assertTrue(changed.reminderEnabled)
         assertTrue(changed.readyToPlan)
         val validation = validateTaskDraft(TaskDetailUiState(timezone = "Asia/Singapore").withDraft(changed)) as TaskDraftValidation.Valid
         assertNull(validation.deadlineDate)
-        assertNull(validation.reminderAt)
+        assertEquals(java.time.Instant.parse("2099-09-19T01:00:00Z"), validation.reminderAt)
     }
 
     @Test fun creatingFieldEditsPreservesSubtasksAndRestoresThem() {

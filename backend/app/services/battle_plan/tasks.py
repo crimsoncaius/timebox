@@ -17,6 +17,7 @@ from app.schemas.battle_plan import TaskCreate, TaskPatch, TaskPlacement, TaskRe
 from app.services.recurrence.protection import protect_task_occurrence
 from app.services.battle_plan._shared import (
     TRASH_DAYS,
+    _aware,
     _clean_title,
     _is_overdue,
     _load_task,
@@ -140,7 +141,7 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
         raise ValueError("Subtasks do not have a Task lifecycle")
     if row.recurrence_kind == "quota_parent" and "status" in fields:
         raise ValueError("Quota parent status is derived from its sessions")
-    old_deadline = (row.deadline_date, row.deadline_at, row.reminder_at)
+    old_reminder = _aware(row.reminder_at) if row.reminder_at else None
     if "title" in fields and body.title is not None:
         row.title = _clean_title(body.title)
     if "description" in fields:
@@ -192,13 +193,11 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
         _validate_deadline(date_value, at_value)
         row.deadline_date = date_value
         row.deadline_at = at_value
-        if date_value is None and at_value is None:
-            row.reminder_at = None
     if "reminder_at" in fields:
         row.reminder_at = body.reminder_at
-    if old_deadline != (row.deadline_date, row.deadline_at, row.reminder_at):
+    if old_reminder != (_aware(row.reminder_at) if row.reminder_at else None):
+        _validate_reminder(row, settings)
         row.reminder_delivered_at = None
-    _validate_reminder(row, settings)
     from app.services import recurrence_service
 
     recurrence_service.record_task_overrides(row, fields)

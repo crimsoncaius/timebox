@@ -47,7 +47,7 @@ class ReminderInfrastructureTest {
     fun `schedule includes eligible parent and subtask and drops delivered or completed tasks`() {
         val future = Instant.parse("2026-08-18T01:00:00Z")
         val sessionTask = task(2, reminderAt = future)
-        val parent = task(1, reminderAt = future, sessionTasks = listOf(sessionTask))
+        val parent = task(1, reminderAt = future, sessionTasks = listOf(sessionTask)).copy(overdue = true, deadlineDate = java.time.LocalDate.parse("2000-01-01"))
         val completed = task(3, reminderAt = future, status = TaskStatus.Completed)
         val delivered = task(4, reminderAt = future, reminderDeliveredAt = Instant.EPOCH)
 
