@@ -91,6 +91,8 @@ fun TimeboxApp(
     notificationsAllowed: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    exactAlarmsAllowed: Boolean = true,
+    onRequestExactAlarms: () -> Unit = {},
     repository: TimeboxRepository = rememberRepository(),
     taskCompletion: TaskCompletion = rememberTaskCompletion(),
     readinessCoordinator: ReadyToPlanCoordinator,
@@ -714,6 +716,12 @@ fun TimeboxApp(
                             onEndHourDelta = settingsViewModel::adjustEndHour,
                             onToggleFullDay = settingsViewModel::toggleFullDay,
                             onDailyReminderChange = settingsViewModel::updateDailyReminder,
+                            onPlannedBlockRemindersChange = { next ->
+                                if (next.enabled && !settingsState.plannedBlockReminders.enabled && !exactAlarmsAllowed) onRequestExactAlarms()
+                                settingsViewModel.updatePlannedBlockReminders(next)
+                            },
+                            exactAlarmsAllowed = exactAlarmsAllowed,
+                            onRequestExactAlarms = onRequestExactAlarms,
                             onBaseUrlChange = settingsViewModel::onBaseUrlChange,
                             onApiKeyChange = settingsViewModel::onApiKeyChange,
                             onReportingZoneChange = settingsViewModel::changeReportingZone,

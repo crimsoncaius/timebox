@@ -91,3 +91,11 @@ def test_direct_task_and_session_leave_plans_readiness_and_completion_unchanged(
     assert after['session_tasks'][0]['status'] == session['status']
     assert after['session_tasks'][0]['ready_to_plan'] == session['ready_to_plan']
     assert tracking.get('/days/2026-09-10').json()['planned_blocks'] == []
+
+
+def test_snapshot_plans_carry_linked_task_title_for_reminders(tracking):
+    kind, task, plan = setup_plan(tracking)
+    unlinked = _planned_block(tracking, kind, date='2026-09-10', start_minute=780, end_minute=810)
+    plans = {p['id']: p for p in tracking.get('/activity').json()['plans']}
+    assert plans[plan['id']]['task_title'] == 'Draft chapter'
+    assert plans[unlinked['id']]['task_title'] is None

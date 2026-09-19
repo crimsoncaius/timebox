@@ -22,7 +22,7 @@ object AppRoutes {
     const val ThemePreview = "settings/theme-preview"
 
     const val TaskDeepLinkPattern = "timebox://battle-plan/task/{$TaskIdArg}"
-    const val DayDeepLinkPattern = "timebox://day/{$DateArg}"
+    const val DayDeepLinkPattern = "timebox://day/{$DateArg}?blockId={$BlockIdArg}"
 
     fun day(date: LocalDate, blockId: Int? = null): String =
         "day/$date" + (blockId?.let { "?blockId=$it" } ?: "")

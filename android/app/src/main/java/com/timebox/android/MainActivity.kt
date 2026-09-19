@@ -25,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.timebox.android.data.AppSettings
+import com.timebox.android.reminders.canScheduleExactAlarms
 import com.timebox.android.reminders.deliverDueReminders
 import com.timebox.android.ui.TimeboxApp
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -35,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap
 class MainActivity : ComponentActivity() {
 
     private var notificationsAllowed by mutableStateOf(false)
+    private var exactAlarmsAllowed by mutableStateOf(true)
     private val shownReminderIds: MutableSet<Int> = ConcurrentHashMap.newKeySet()
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
         com.timebox.android.ui.day.configureRecordingStudy(intent)
         enableEdgeToEdge()
         notificationsAllowed = canDisplayNotifications()
+        exactAlarmsAllowed = canScheduleExactAlarms(this)
 
         lifecycleScope.launch {
             if (BuildConfig.ACTIVITY_TRACKING_DEV) repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -94,6 +97,8 @@ class MainActivity : ComponentActivity() {
                     notificationsAllowed = notificationsAllowed,
                     onRequestNotificationPermission = ::requestNotificationPermission,
                     onOpenNotificationSettings = ::openNotificationSettings,
+                    exactAlarmsAllowed = exactAlarmsAllowed,
+                    onRequestExactAlarms = ::requestExactAlarms,
                     repository = repository,
                     taskCompletion = application.taskCompletion,
                     readinessCoordinator = application.readinessCoordinator,
@@ -121,6 +126,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         notificationsAllowed = canDisplayNotifications()
+        exactAlarmsAllowed = canScheduleExactAlarms(this)
+        (application as TimeboxApplication).plannedBlockReminders.launch { reconcile() }
+    }
+
+    private fun requestExactAlarms() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+        }
     }
 
     private fun requestNotificationPermission() {

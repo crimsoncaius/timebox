@@ -118,11 +118,15 @@ _Avoid_: Day Review screen, report
 
 **Daily Reminder**:
 An optional, device-local notification scheduled for a chosen local time to prompt Day Planning or Day Review. It creates no task, recurrence, work record, or overdue state; a missed prompt is skipped.
-_Avoid_: Recurring Task Series, Task Reminder, notification task
+_Avoid_: Recurring Task Series, Task Reminder, notification task, Planned Block Reminder
 
 **Task Reminder**:
 An optional, one-time nudge at a user-chosen moment for an incomplete Battle Plan Task or Session Task. A Task has at most one. It is independent of the Task's deadline: deadline changes and overdue state neither move, re-arm, nor suppress it. Task Completion clears it.
-_Avoid_: Deadline reminder, notification, Daily Reminder
+_Avoid_: Deadline reminder, notification, Daily Reminder, Planned Block Reminder
+
+**Planned Block Reminder**:
+An optional, device-local notification a chosen lead time before a Planned Block starts, offering to adopt that Planned Block. It creates no work record; a missed reminder is skipped, and a delivered one is withdrawn once the Planned Block is adopted, ends, moves, or is deleted.
+_Avoid_: Daily Reminder, Task Reminder, block alarm
 
 **Recurring Task Series**:
 A recurrence rule and template that produces Task Occurrences. It represents an ongoing routine and does not belong to a Project.
