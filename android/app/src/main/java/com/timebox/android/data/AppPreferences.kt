@@ -5,11 +5,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.timebox.android.BuildConfig
 import com.timebox.android.reminders.DailyReminder
 import com.timebox.android.reminders.DailyReminderSettings
+import com.timebox.android.reminders.PlannedBlockReminderSettings
 import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -101,6 +103,8 @@ class AppPreferences(private val context: Context) {
         val dayPlanningReminderTime = stringPreferencesKey("day_planning_reminder_time")
         val dayReviewReminderEnabled = booleanPreferencesKey("day_review_reminder_enabled")
         val dayReviewReminderTime = stringPreferencesKey("day_review_reminder_time")
+        val plannedBlockReminderEnabled = booleanPreferencesKey("planned_block_reminder_enabled")
+        val plannedBlockReminderLead = intPreferencesKey("planned_block_reminder_lead_minutes")
     }
 
     val battlePlanPreferences: Flow<BattlePlanPreferences> = context.dataStore.data.map { prefs ->
@@ -152,6 +156,22 @@ class AppPreferences(private val context: Context) {
                 time = prefs[Keys.dayReviewReminderTime].toLocalTimeOrDefault(LocalTime.of(18, 0)),
             ),
         )
+    }
+
+    val plannedBlockReminders: Flow<PlannedBlockReminderSettings> = context.dataStore.data.map { prefs ->
+        PlannedBlockReminderSettings(
+            enabled = prefs[Keys.plannedBlockReminderEnabled] ?: false,
+            leadMinutes = prefs[Keys.plannedBlockReminderLead]
+                ?.takeIf { it in PlannedBlockReminderSettings.LeadOptions }
+                ?: PlannedBlockReminderSettings.DEFAULT_LEAD_MINUTES,
+        )
+    }
+
+    suspend fun setPlannedBlockReminders(value: PlannedBlockReminderSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.plannedBlockReminderEnabled] = value.enabled
+            prefs[Keys.plannedBlockReminderLead] = value.leadMinutes
+        }
     }
 
     suspend fun setConnection(baseUrl: String, apiKey: String) {

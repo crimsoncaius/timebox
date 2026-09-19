@@ -278,7 +278,10 @@ class ReminderBootReceiver : BroadcastReceiver() {
                 ReminderScheduler(context.applicationContext).start()
             Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_TIME_CHANGED ->
                 (context.applicationContext as? TimeboxApplication)?.dailyReminderScheduler?.rescheduleForCurrentTimezone()
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" -> Unit
             else -> return
         }
+        // Alarms do not survive reboot, and a clock, zone, or permission change can move delivery.
+        (context.applicationContext as? TimeboxApplication)?.plannedBlockReminders?.launch { reconcile() }
     }
 }

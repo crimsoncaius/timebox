@@ -38,6 +38,7 @@ import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import com.timebox.android.reminders.DailyReminderSettings
+import com.timebox.android.reminders.PlannedBlockReminderSettings
 
 /** Message shown when a call fails, plus whether retrying makes sense. */
 data class ApiError(
@@ -109,6 +110,11 @@ class TimeboxRepository private constructor(
     suspend fun activityCommand(body: com.timebox.android.data.remote.ActivityCommandDto) = api().activityCommand(body)
     suspend fun activityEndpoint(): String = preferences?.settings?.first()?.baseUrl ?: "test"
 
+    val plannedBlockReminders: Flow<PlannedBlockReminderSettings> =
+        preferences?.plannedBlockReminders ?: flowOf(PlannedBlockReminderSettings())
+    suspend fun setPlannedBlockReminders(value: PlannedBlockReminderSettings) {
+        preferences?.setPlannedBlockReminders(value)
+    }
     suspend fun setDailyReminders(value: DailyReminderSettings) {
         preferences?.setDailyReminders(value)
     }

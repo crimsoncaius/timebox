@@ -6,6 +6,7 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.reminders.AndroidReminderNotifier
 import com.timebox.android.reminders.DailyReminderNotifier
 import com.timebox.android.reminders.DailyReminderScheduler
+import com.timebox.android.reminders.PlannedBlockReminders
 import com.timebox.android.reminders.ReminderScheduler
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
@@ -13,6 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
@@ -59,6 +63,8 @@ class TimeboxApplication : Application() {
         private set
     lateinit var dailyReminderScheduler: DailyReminderScheduler
         private set
+    lateinit var plannedBlockReminders: PlannedBlockReminders
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -80,6 +86,15 @@ class TimeboxApplication : Application() {
         com.timebox.android.checkin.CheckInWorker.schedule(this)
         if (BuildConfig.ACTIVITY_TRACKING_DEV) applicationScope.launch {
             activityRepository.state.collect { checkIns.reconcileNotification(it.snapshot?.checkIn?.question?.id) }
+        }
+        plannedBlockReminders = PlannedBlockReminders(this, activityRepository, preferences.plannedBlockReminders)
+            .also { it.createChannel() }
+        if (BuildConfig.ACTIVITY_TRACKING_DEV) applicationScope.launch {
+            // Plans, adoption, and settings changes all reschedule or withdraw Planned Block Reminders.
+            combine(
+                activityRepository.state.map { it.snapshot?.let { s -> s.plans to s.current?.plannedBlockId } }.distinctUntilChanged(),
+                preferences.plannedBlockReminders,
+            ) { _, _ -> }.collect { plannedBlockReminders.reconcile() }
         }
     }
 }

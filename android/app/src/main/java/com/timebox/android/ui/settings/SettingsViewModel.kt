@@ -7,6 +7,7 @@ import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.reminders.DailyReminderSettings
 import com.timebox.android.reminders.DailyReminder
+import com.timebox.android.reminders.PlannedBlockReminderSettings
 import java.time.LocalTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ data class SettingsUiState(
     val error: String? = null,
     val message: String? = null,
     val dailyReminders: DailyReminderSettings = DailyReminderSettings(),
+    val plannedBlockReminders: PlannedBlockReminderSettings = PlannedBlockReminderSettings(),
 )
 
 class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -44,9 +46,13 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
             if (!connectionPrimed) {
                 val stored = repository.settings.first()
                 val reminders = repository.dailyReminders.first()
+                val plannedBlockReminders = repository.plannedBlockReminders.first()
                 connectionPrimed = true
                 _state.update {
-                    it.copy(baseUrlInput = stored.baseUrl, apiKeyInput = stored.apiKey, dailyReminders = reminders)
+                    it.copy(
+                        baseUrlInput = stored.baseUrl, apiKeyInput = stored.apiKey, dailyReminders = reminders,
+                        plannedBlockReminders = plannedBlockReminders,
+                    )
                 }
             }
             if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) runCatching { repository.getActivity() }.fold(
@@ -122,6 +128,11 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
     fun toggleFullDay() {
         val window = _state.value.window ?: return
         patch(showFullDay = !window.showFullDay)
+    }
+
+    fun updatePlannedBlockReminders(next: PlannedBlockReminderSettings) {
+        _state.update { it.copy(plannedBlockReminders = next) }
+        viewModelScope.launch { repository.setPlannedBlockReminders(next) }
     }
 
     fun updateDailyReminder(planning: Boolean, enabled: Boolean? = null, time: LocalTime? = null) {

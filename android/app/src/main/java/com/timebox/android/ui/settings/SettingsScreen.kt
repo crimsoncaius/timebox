@@ -20,6 +20,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +32,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import com.timebox.android.reminders.PlannedBlockReminderSettings
+import com.timebox.android.reminders.plannedBlockLeadLabel
 import com.timebox.android.reminders.DailyReminder
 import java.time.LocalTime
 import androidx.compose.foundation.text.KeyboardOptions
@@ -52,6 +58,9 @@ fun SettingsScreen(
     onEndHourDelta: (Int) -> Unit,
     onToggleFullDay: () -> Unit,
     onDailyReminderChange: (Boolean, Boolean?, LocalTime?) -> Unit = { _, _, _ -> },
+    onPlannedBlockRemindersChange: (PlannedBlockReminderSettings) -> Unit = {},
+    exactAlarmsAllowed: Boolean = true,
+    onRequestExactAlarms: () -> Unit = {},
     onBaseUrlChange: (String) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSaveConnection: () -> Unit,
@@ -190,11 +199,31 @@ fun SettingsScreen(
 
         SectionCard {
             SectionHeader(
+                title = "Planned Block reminders",
+                description = "A reminder before each Planned Block starts, with a Switch action. Stays on this device.",
+            )
+            Column(
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlannedBlockReminderRows(
+                    settings = state.plannedBlockReminders,
+                    exactAlarmsAllowed = exactAlarmsAllowed,
+                    onChange = onPlannedBlockRemindersChange,
+                    onRequestExactAlarms = onRequestExactAlarms,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        SectionCard {
+            SectionHeader(
                 title = "Notifications",
                 description = if (notificationsAllowed) {
-                    "This device can display Battle Plan and Daily Reminders. Delivery may be delayed by battery restrictions."
+                    "This device can display Battle Plan, Daily, and Planned Block reminders. Delivery may be delayed by battery restrictions."
                 } else {
-                    "Battle Plan reminders still save to the server. Daily Reminder preferences stay saved on this device, but this device cannot display either until notifications are enabled."
+                    "Battle Plan reminders still save to the server. Daily Reminder preferences stay saved on this device, but this device cannot display any reminders until notifications are enabled."
                 },
             )
             Column(
@@ -258,6 +287,45 @@ fun SettingsScreen(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+@Composable
+private fun PlannedBlockReminderRows(
+    settings: PlannedBlockReminderSettings,
+    exactAlarmsAllowed: Boolean,
+    onChange: (PlannedBlockReminderSettings) -> Unit,
+    onRequestExactAlarms: () -> Unit,
+) {
+    var choosingLead by remember { mutableStateOf(false) }
+    SettingRow(
+        title = "Remind me before Planned Blocks",
+        description = if (settings.enabled) plannedBlockLeadLabel(settings.leadMinutes) else "Off",
+    ) {
+        TimeboxSwitch(checked = settings.enabled, onCheckedChange = { onChange(settings.copy(enabled = it)) })
+    }
+    SettingRow(title = "When", description = "Applies to every Planned Block") {
+        Box {
+            TextButton(enabled = settings.enabled, onClick = { choosingLead = true }) {
+                Text(plannedBlockLeadLabel(settings.leadMinutes))
+            }
+            androidx.compose.material3.DropdownMenu(expanded = choosingLead, onDismissRequest = { choosingLead = false }) {
+                PlannedBlockReminderSettings.LeadOptions.forEach { minutes ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(plannedBlockLeadLabel(minutes)) },
+                        onClick = {
+                            choosingLead = false
+                            onChange(settings.copy(leadMinutes = minutes))
+                        },
+                    )
+                }
+            }
+        }
+    }
+    if (settings.enabled && !exactAlarmsAllowed) {
+        SettingRow(title = "Reminders may arrive a few minutes late", description = "Exact alarms are not allowed for Timebox") {
+            TextButton(onClick = onRequestExactAlarms) { Text("Allow exact alarms") }
+        }
     }
 }
 
