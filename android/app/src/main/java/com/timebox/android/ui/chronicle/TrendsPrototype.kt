@@ -131,7 +131,7 @@ internal fun TrendsPrototype() {
             if (variant != "B" || total == 0) {
                 Column {
                     Text(duration(total), color = colors.on, fontSize = 38.sp, fontWeight = FontWeight.Light)
-                    Text("out of ${duration(elapsedMinutes)} elapsed", color = colors.on, fontSize = 17.sp)
+                    Text("out of ${duration(elapsedMinutes)} elapsed", color = colors.onVariant, fontSize = 12.sp)
                     Text("Recorded time · Asia/Singapore", color = colors.onVariant, fontSize = 12.sp)
                 }
             }
