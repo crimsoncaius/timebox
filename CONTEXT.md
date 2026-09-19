@@ -57,7 +57,7 @@ Optional freeform context attached to one Planned Block or Actual Block. It does
 _Avoid_: Task Description, journal entry
 
 **Transient Feedback**:
-A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app task reminders; it excludes validation, persistent errors, loading states, and native OS notifications.
+A short-lived, in-application presentation that communicates feedback or offers a follow-up action. It includes general feedback, Trash undo, Task Completion undo, and in-app Task Reminders; it excludes validation, persistent errors, loading states, and native OS notifications.
 _Avoid_: Toast, notification, banner
 
 **Transient Feedback Variant**:
@@ -69,7 +69,7 @@ The legacy execution surface that combines plan-following time recording with an
 _Avoid_: Task detail, Task status, timer mode
 
 **Activity Tracking**:
-Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
+Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Starting takes its Task Type from the Planned Block covering the current instant, or otherwise from an explicit choice; it never defaults to `unspecified`. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
 _Avoid_: Work Mode, Focus session
 
 **Offline**:
@@ -101,7 +101,7 @@ The Day surface marker for the current instant in the Reporting Time Zone. It ap
 _Avoid_: Playhead, now indicator, current time line, Day view
 
 **Inactivity Prompt**:
-A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting. It is distinct from the Focus Mode question used to name an unknown activity.
+A persistent question about whether the Current Activity continues, triggered by available device-inactivity signals. It leaves Activity Tracking running without requiring an answer. Its web presentation is inline; its Android presentation is modal and dismissible to Check-in waiting.
 _Avoid_: Periodic check-in, Transient Feedback
 
 **Focus Mode**:
@@ -118,11 +118,15 @@ _Avoid_: Day Review screen, report
 
 **Daily Reminder**:
 An optional, device-local notification scheduled for a chosen local time to prompt Day Planning or Day Review. It creates no task, recurrence, work record, or overdue state; a missed prompt is skipped.
-_Avoid_: Recurring Task Series, task reminder, notification task, Planned Block Reminder
+_Avoid_: Recurring Task Series, Task Reminder, notification task, Planned Block Reminder
+
+**Task Reminder**:
+An optional, one-time nudge at a user-chosen moment for an incomplete Battle Plan Task or Session Task. A Task has at most one. It is independent of the Task's deadline: deadline changes and overdue state neither move, re-arm, nor suppress it. Task Completion clears it.
+_Avoid_: Deadline reminder, notification, Daily Reminder, Planned Block Reminder
 
 **Planned Block Reminder**:
 An optional, device-local notification a chosen lead time before a Planned Block starts, offering to adopt that Planned Block. It creates no work record; a missed reminder is skipped, and a delivered one is withdrawn once the Planned Block is adopted, ends, moves, or is deleted.
-_Avoid_: Daily Reminder, task reminder, block alarm
+_Avoid_: Daily Reminder, Task Reminder, block alarm
 
 **Recurring Task Series**:
 A recurrence rule and template that produces Task Occurrences. It represents an ongoing routine and does not belong to a Project.
