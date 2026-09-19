@@ -4,7 +4,7 @@ The user approved expanding upcoming dates into a month calendar of completed wo
 
 ## Implemented behavior
 
-Android routine details replace the Upcoming date list with a month calendar. Completed Task Occurrences and Session Tasks appear on their completion dates in the Reporting Time Zone, using filled circles in the Actual Block `actual` theme color. Multiple completions on a day display a count; selecting the date lists the completed task titles inline.
+Android routine details replace the Upcoming date list with a month calendar. Completed Task Occurrences and Session Tasks appear on their completion dates in the Reporting Time Zone, using filled circles in the Actual Block `actual` theme color. Multiple completions on a day display a count. After review, the user requested a grid-only presentation: no legend, selected-date label, or task details below the calendar. Dates retain accessibility descriptions; the month arrows are the calendar controls.
 
 Scheduled active routines also show projected occurrence dots. The server uses the canonical recurrence iterator, excludes suppressed and already completed occurrences, and never materializes future tasks when browsing. Quota routines, paused routines, and ended routines display completion history only.
 

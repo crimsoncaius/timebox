@@ -2,7 +2,6 @@ package com.timebox.android.ui.battleplan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -17,10 +16,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.timebox.android.data.RecurringTemplate
 import com.timebox.android.data.RoutineCalendar
-import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.apiError
 import com.timebox.android.ui.theme.TimeboxTheme
-import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -34,7 +31,6 @@ fun RoutineCalendarSection(
 ) {
     val colors = TimeboxTheme.colors
     var requested by rememberSaveable(template.id) { mutableStateOf<String?>(null) }
-    var selected by rememberSaveable(template.id) { mutableStateOf<String?>(null) }
     var calendar by remember(template.id) { mutableStateOf<RoutineCalendar?>(null) }
     var error by remember(template.id) { mutableStateOf<String?>(null) }
     var loading by remember(template.id) { mutableStateOf(true) }
@@ -45,11 +41,7 @@ fun RoutineCalendarSection(
         load(template.id, requested?.let(YearMonth::parse)).fold(
             onSuccess = { result ->
                 calendar = result
-                if (selected == null || YearMonth.from(LocalDate.parse(selected)) != result.month) {
-                    selected = (if (YearMonth.from(result.today) == result.month) result.today
-                        else result.completed.minByOrNull { it.date }?.date
-                            ?: result.upcoming.minOrNull() ?: result.month.atDay(1)).toString()
-                }
+
             },
             onFailure = { error = it.apiError.message },
         )
@@ -98,14 +90,12 @@ fun RoutineCalendarSection(
                         val date = month.atDay(number)
                         val count = completions[date]?.size ?: 0
                         val upcoming = date in data.upcoming
-                        val isSelected = selected == date.toString()
                         val foreground = if (count > 0) { if (colors.actual.luminance() > 0.5f) Color.Black else Color.White } else colors.on
                         Box(Modifier.size(44.dp)
-                            .background(if (count > 0) colors.actual else if (isSelected) colors.selected else Color.Transparent, CircleShape)
-                            .then(if (date == data.today || isSelected) Modifier.border(if (isSelected) 2.dp else 1.dp, colors.onVariant, CircleShape) else Modifier)
-                            .clickable { selected = date.toString() }
+                            .background(if (count > 0) colors.actual else Color.Transparent, CircleShape)
+                            .then(if (date == data.today) Modifier.border(1.dp, colors.onVariant, CircleShape) else Modifier)
                             .semantics(mergeDescendants = true) {
-                                contentDescription = "$date${if (date == data.today) ", today" else ""}${if (count > 0) ", $count completed" else ""}${if (upcoming) ", upcoming" else ""}${if (isSelected) ", selected" else ""}"
+                                contentDescription = "$date${if (date == data.today) ", today" else ""}${if (count > 0) ", $count completed" else ""}${if (upcoming) ", upcoming" else ""}"
                             }, contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(number.toString(), color = foreground)
@@ -116,15 +106,5 @@ fun RoutineCalendarSection(
                 }
             }
         }
-    }
-    Text(if (template.mode == RecurrenceMode.Quota) "Green circles: completed sessions" else "Green circles: completed · Dots: upcoming", color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
-    selected?.let { value ->
-        val date = LocalDate.parse(value)
-        Text(date.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy")), style = TimeboxTheme.type.label)
-        completions[date].orEmpty().forEach { task ->
-            Text("✓ ${task.title}", color = colors.onVariant)
-        }
-        if (date in data.upcoming) Text("${template.title} · Upcoming", color = colors.onVariant)
-        if (completions[date].isNullOrEmpty() && date !in data.upcoming) Text("No tasks on this date", color = colors.onVariant)
     }
 }
