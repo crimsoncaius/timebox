@@ -93,6 +93,8 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
             or body.importance is not None
         ):
             raise ValueError("Subtasks do not have a Task lifecycle")
+        if body.description.strip():
+            raise ValueError("Subtasks do not have a Task Description")
         project_id = parent.project_id
     _validate_refs(db, project_id, body.task_type_id)
     row = Task(
@@ -132,7 +134,9 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     ):
         raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
     is_subtask = row.parent_id is not None and row.recurrence_kind != "quota_session"
-    if is_subtask and not fields <= {"title", "description"}:
+    if is_subtask and "description" in fields:
+        raise ValueError("Subtasks do not have a Task Description")
+    if is_subtask and not fields <= {"title"}:
         raise ValueError("Subtasks do not have a Task lifecycle")
     if row.recurrence_kind == "quota_parent" and "status" in fields:
         raise ValueError("Quota parent status is derived from its sessions")

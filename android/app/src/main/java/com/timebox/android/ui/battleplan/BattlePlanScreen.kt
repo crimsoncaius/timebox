@@ -2084,6 +2084,9 @@ fun TaskDetailScreen(
     onSaveField: (TaskDetailDraft) -> Unit = {},
     onCreateTaskType: (String) -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
+    onStartSubtaskRename: ((Subtask) -> Unit)? = null,
+    onRenameSubtask: (Subtask, String) -> Unit = { _, _ -> },
+    onDismissSubtaskRename: () -> Unit = {},
     feedback: @Composable () -> Unit = {},
 ) {
     var showAllPlannedDates by remember(state.taskId) { mutableStateOf(false) }
@@ -2132,6 +2135,8 @@ fun TaskDetailScreen(
             if (!state.isSubtask && state.task?.recurrenceKind != "quota_parent") TaskSubtasks(
                 state.subtasks, state.status != TaskStatus.Completed && !state.dirty,
                 state.saving, state.saveError, onToggleSubtask, onTrashSubtask, onAddSubtask,
+                rename = state.subtaskRename, onStartRename = onStartSubtaskRename,
+                onRename = onRenameSubtask, onDismissRename = onDismissSubtaskRename,
             )
             if (plannedDates.isNotEmpty()) {
                 Text("Planned Dates", style = TimeboxTheme.type.label)

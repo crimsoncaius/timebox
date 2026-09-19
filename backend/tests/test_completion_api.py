@@ -477,6 +477,30 @@ def test_database_failure_rolls_back_finished_actual_task_cleanup_and_undo_recor
         ).count() == 1
 
 
+def test_subtask_title_is_renamable_but_description_is_rejected(client):
+    parent = _task(client, "Parent")
+    subtask = _task(client, "Checkpoint", parent_id=parent["id"])
+    assert client.post(f"/subtasks/{subtask['id']}/check").status_code == 200
+
+    renamed = client.patch(f"/tasks/{subtask['id']}", json={"title": "  Draft outline  "})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["title"] == "Draft outline"
+    saved = client.get("/tasks").json()["items"][0]["subtasks"][0]
+    assert (saved["title"], saved["checked"]) == ("Draft outline", True)
+
+    for payload in ({"description": "Context"}, {"title": "Renamed", "description": ""}):
+        rejected = client.patch(f"/tasks/{subtask['id']}", json=payload)
+        assert rejected.status_code == 422, (payload, rejected.text)
+    described = client.post(
+        "/tasks", json={"title": "Described", "parent_id": parent["id"], "description": "Context"}
+    )
+    assert described.status_code == 422
+
+    assert client.post(f"/tasks/{parent['id']}/complete").status_code == 200
+    locked = client.patch(f"/tasks/{subtask['id']}", json={"title": "Too late"})
+    assert locked.status_code == 422
+
+
 def test_subtasks_reject_task_lifecycle_planning_reminders_and_actual(client):
     task_type = _task_type(client)
     parent = _task(client, "Parent", task_type_id=task_type["id"])
