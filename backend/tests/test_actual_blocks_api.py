@@ -7,8 +7,7 @@ import pytest
 from app.api.routes import actual_blocks
 from app.main import app
 
-
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 
 @pytest.fixture

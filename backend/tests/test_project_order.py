@@ -29,6 +29,7 @@ def test_invalid_reorder_is_atomic(client, invalid):
 def test_project_order_migration_preserves_alphabetical_order():
     import importlib.util
     from pathlib import Path
+
     import sqlalchemy as sa
     from alembic.migration import MigrationContext
     from alembic.operations import Operations

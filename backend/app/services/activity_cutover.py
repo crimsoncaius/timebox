@@ -1,4 +1,7 @@
 """Explicit restored-copy cutover; schema installation never runs this import."""
+
+from __future__ import annotations
+
 import datetime as dt
 from zoneinfo import ZoneInfo
 
@@ -7,8 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.activity_admission import admission
-from app.models.activity import ActivityState, ActivityOperation
-from app.models.time_block import TimeBlock, BlockLane
+from app.models.activity import ActivityOperation, ActivityState
+from app.models.time_block import BlockLane, TimeBlock
 from app.services import activity_reconciliation as reconciliation
 
 
@@ -20,9 +23,9 @@ def record_values(row):
 
 def local_instant(day, minute, zone):
     local = dt.datetime.combine(day, dt.time()) + dt.timedelta(minutes=minute)
-    candidates = {local.replace(tzinfo=zone, fold=fold).astimezone(dt.timezone.utc)
+    candidates = {local.replace(tzinfo=zone, fold=fold).astimezone(dt.UTC)
                   for fold in (0, 1)
-                  if local.replace(tzinfo=zone, fold=fold).astimezone(dt.timezone.utc)
+                  if local.replace(tzinfo=zone, fold=fold).astimezone(dt.UTC)
                   .astimezone(zone).replace(tzinfo=None) == local}
     if len(candidates) != 1:
         raise ValueError(f"Ambiguous or nonexistent legacy local time: {local}")

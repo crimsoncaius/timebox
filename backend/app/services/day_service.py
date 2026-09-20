@@ -8,17 +8,14 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import Settings
 from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz, utc_now
 from app.models.app_settings import AppSettings
-from app.models.day import Day
 from app.models.battle_plan import (
     RecurringPlannedBlockRealization,
     RecurringPlannedBlockState,
     Task,
 )
+from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
-from app.services import actual_block_service, task_type_service, activity_selection
-from app.services.recurrence.protection import protect_task_occurrence
-from app.services.task_queries import task_select
 from app.schemas.day import (
     DayListItem,
     DayMeta,
@@ -30,6 +27,9 @@ from app.schemas.day import (
 )
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
+from app.services import activity_selection, actual_block_service, task_type_service
+from app.services.recurrence.protection import protect_task_occurrence
+from app.services.task_queries import task_select
 
 MIN_PLANNED_BLOCK_MINUTES = 1
 DAY_END = 24 * 60  # 1440

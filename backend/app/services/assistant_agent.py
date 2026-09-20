@@ -1,4 +1,7 @@
 """Two model calls and at most one read-only tool call per response."""
+
+from __future__ import annotations
+
 import asyncio
 import json
 from contextlib import aclosing
@@ -6,9 +9,9 @@ from contextlib import aclosing
 from langchain_core.messages import SystemMessage, message_chunk_to_message
 from langchain_core.tools import tool
 from langchain_openrouter import ChatOpenRouter
-from langgraph.graph import StateGraph, MessagesState, START, END
-from opentelemetry import trace
+from langgraph.graph import END, START, MessagesState, StateGraph
 from openinference.instrumentation.langchain import get_current_span as get_langchain_span
+from opentelemetry import trace
 
 from app.core.config import get_settings
 from app.services.assistant_plan import read_today_plan

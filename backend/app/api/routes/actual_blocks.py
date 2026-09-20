@@ -3,8 +3,8 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.api.deps import utc_clock_seam
 from app.api.errors import domain_http_error
@@ -19,8 +19,7 @@ from app.schemas.time_block import (
     RecordActualAsPlannedUndo,
     RecordPlannedRequest,
 )
-from app.services import actual_block_service
-from app.services import planned_recording
+from app.services import actual_block_service, planned_recording
 
 router = APIRouter(prefix="/actual-blocks", tags=["actual-blocks"])
 planned_router = APIRouter(prefix="/planned-blocks", tags=["planned-blocks"])

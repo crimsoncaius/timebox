@@ -1,4 +1,7 @@
 """Ephemeral single-worker sessions. All methods run on the API event loop."""
+
+from __future__ import annotations
+
 import asyncio
 import time
 from dataclasses import dataclass, field

@@ -1,7 +1,5 @@
 """Observable API sequences, including real PostgreSQL transaction races."""
-import datetime as dt
 import itertools
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
@@ -199,6 +197,7 @@ def test_real_postgres_competing_range_writers_and_duplicate_receipts(tracking):
 def test_complete_canonical_records_provenance_and_tombstones_are_permutation_invariant(tracking):
     from sqlalchemy import delete
     from sqlalchemy.orm import Session
+
     from app.db.session import get_engine
     from app.models.activity import ActivityOperation, ActivityState
     from app.models.time_block import TimeBlock
@@ -274,7 +273,7 @@ def test_offline_corrections_follow_own_edits_and_keep_current_unchanged(trackin
     base = send(tracking, add)
     row = next(r for r in base['records'] if r['name'] == 'Writing')
     first = correction(base, 'edit', 8, 9, 20, sequence=2, target_id=row['id'])
-    moved = send(tracking, first)
+    send(tracking, first)
     second = correction(base, 'edit', 6, 7, 21, sequence=3, target_id=row['id'], target_source=add['operation_id'], target_start_at=at(8))
     moved_again = send(tracking, second)
     assert [(r['start_at'], r['end_at']) for r in moved_again['records'] if r['name'] == 'Writing'] == [('2026-09-10T06:00:00Z', '2026-09-10T07:00:00Z')]

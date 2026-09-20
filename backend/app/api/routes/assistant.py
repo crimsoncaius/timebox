@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import time
@@ -6,12 +8,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import get_settings
-from app.services.assistant_agent import agent_events, MODEL
+from app.services.assistant_agent import MODEL, agent_events
 from app.services.assistant_sessions import conversations
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])

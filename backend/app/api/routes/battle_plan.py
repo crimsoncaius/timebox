@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import utc_clock_seam
@@ -16,15 +16,15 @@ from app.schemas.battle_plan import (
     ProjectRead,
     ProjectReorder,
     ReminderRead,
-    TaskCreate,
+    SubtaskRead,
     TaskCompletionRead,
     TaskCompletionUndo,
+    TaskCreate,
     TaskIds,
     TaskListRead,
     TaskPatch,
     TaskRead,
     TaskReorder,
-    SubtaskRead,
 )
 from app.services import battle_plan_service as service
 from app.services import task_completion_service

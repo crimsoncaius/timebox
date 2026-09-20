@@ -12,7 +12,6 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-
 CONFIRMATION = "DELETE_TEST_DATA"
 
 

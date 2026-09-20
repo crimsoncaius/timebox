@@ -17,7 +17,7 @@ def main():
         parser.error("Pass --clear to explicitly delete the timebox-assistant project's traces.")
     response = httpx.delete(
         f"{args.url.rstrip('/')}/v1/projects/timebox-assistant/traces",
-        params={"start_time": "1970-01-01T00:00:00Z", "end_time": dt.datetime.now(dt.timezone.utc).isoformat()},
+        params={"start_time": "1970-01-01T00:00:00Z", "end_time": dt.datetime.now(dt.UTC).isoformat()},
         timeout=30,
     )
     response.raise_for_status()

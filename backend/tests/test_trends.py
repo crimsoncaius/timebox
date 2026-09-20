@@ -1,7 +1,7 @@
 import datetime as dt
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.routes.trends import capture_now
@@ -10,7 +10,7 @@ from app.db.session import get_engine
 from app.main import app
 from app.models.day import Day
 from app.models.task_type import TaskType
-from app.models.time_block import TimeBlock, BlockLane
+from app.models.time_block import BlockLane, TimeBlock
 
 
 def instant(value):

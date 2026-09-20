@@ -1,7 +1,10 @@
 """Additive online command journal; the Actual Block remains the time record."""
+
+from __future__ import annotations
+
 import datetime as dt
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base

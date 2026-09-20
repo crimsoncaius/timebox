@@ -4,20 +4,25 @@ All reads and commands lock the singleton so the cursor and records form one
 snapshot even at READ COMMITTED. Receipts and interval changes commit together.
 Original online receipts remain replayable across the gated protocol upgrade.
 """
+
+from __future__ import annotations
+
 import datetime as dt
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.activity import ActivityOperation, ActivityState
-from app.models.time_block import BlockLane, TimeBlock
 from app.models.task_type import TaskType
-from app.schemas.activity import ActivityCommand, ActivitySnapshot, ActivityAcknowledgement
+from app.models.time_block import BlockLane, TimeBlock
+from app.schemas.activity import ActivityAcknowledgement, ActivityCommand, ActivitySnapshot
 from app.schemas.time_block import ActualBlockRead
-from app.services import actual_block_service as actuals
+from app.services import activity_check_in, activity_selection
 from app.services import activity_reconciliation as reconciliation
-from app.services import activity_selection, activity_check_in
+from app.services import actual_block_service as actuals
 
 
 def _lock(db: Session) -> ActivityState:
@@ -34,26 +39,33 @@ def _lock(db: Session) -> ActivityState:
     return state
 
 
-def _snapshot(db, state, timezone, acknowledgement=None):
+def _snapshot(
+    db: Session,
+    state: ActivityState,
+    timezone: str,
+    acknowledgement: ActivityAcknowledgement | None = None,
+) -> ActivitySnapshot:
     timezone = state.reporting_timezone or timezone
     records = [ActualBlockRead.model_validate(row) for row in db.scalars(
         select(TimeBlock).where(TimeBlock.lane == BlockLane.actual, TimeBlock.start_at.is_not(None))
         .order_by(TimeBlock.start_at, TimeBlock.id)
     )]
-    check_in = activity_check_in.synchronize(state, next((row for row in records if row.end_at is None), None))
+    current = next((row for row in records if row.end_at is None), None)
+    operations = list(db.scalars(select(ActivityOperation)))
+    reconciliation_state = state.reconciliation or {}
     return ActivitySnapshot(
-        check_in=check_in,
-        cursor=state.cursor, server_at=dt.datetime.now(dt.timezone.utc),
+        check_in=activity_check_in.synchronize(state, current),
+        cursor=state.cursor, server_at=utc_now(),
         reporting_timezone=timezone, reporting_timezone_initialized=state.reporting_timezone is not None, records=records,
         plans=activity_selection.plans(db, timezone),
         task_types=list(db.scalars(select(TaskType))),
-        current=next((row for row in records if row.end_at is None), None),
+        current=current,
         acknowledgement=acknowledgement,
-        tombstones=(state.reconciliation or {}).get("tombstones", []),
-        provenance=(state.reconciliation or {}).get("provenance", {}),
-        coverage=reconciliation.coverage(state, list(db.scalars(select(ActivityOperation)))),
+        tombstones=reconciliation_state.get("tombstones", []),
+        provenance=reconciliation_state.get("provenance", {}),
+        coverage=reconciliation.coverage(state, operations),
         operation_outcomes={op.operation_id: {"device_id": op.device_id, "outcome": op.outcome}
-                            for op in db.scalars(select(ActivityOperation)) if op.intent},
+                            for op in operations if op.intent},
     )
 
 
@@ -74,9 +86,9 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
             raise ValueError("Operation ID already used with different content")
         effective_at = previous.effective_at
         if effective_at is not None and effective_at.tzinfo is None:
-            effective_at = effective_at.replace(tzinfo=dt.timezone.utc)
+            effective_at = effective_at.replace(tzinfo=dt.UTC)
         if effective_at is not None:
-            effective_at = effective_at.astimezone(dt.timezone.utc)
+            effective_at = effective_at.astimezone(dt.UTC)
         result = _snapshot(db, state, timezone, ActivityAcknowledgement(
             operation_id=previous.operation_id, outcome=previous.outcome,
             effective_at=effective_at,
@@ -133,15 +145,15 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
         if body.effective.mode == "instant":
             if requested is None or requested != body.action_at:
                 raise ValueError("Immediate offline commands require their original action instant")
-            if requested > dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=5):
+            if requested > dt.datetime.now(dt.UTC) + dt.timedelta(seconds=5):
                 raise ValueError("Activity instant is in the future; check the device clock")
             latest_end = db.scalar(select(func.max(TimeBlock.end_at)).where(TimeBlock.lane == BlockLane.actual))
             if latest_end is not None:
                 if latest_end.tzinfo is None:
-                    latest_end = latest_end.replace(tzinfo=dt.timezone.utc)
+                    latest_end = latest_end.replace(tzinfo=dt.UTC)
                 if requested < latest_end:
                     raise ValueError("Activity instant overlaps saved history")
-        selection = activity_selection.resolve(db, body, requested or dt.datetime.now(dt.timezone.utc), timezone) if body.kind != "stop" else {}
+        selection = activity_selection.resolve(db, body, requested or dt.datetime.now(dt.UTC), timezone) if body.kind != "stop" else {}
         effective_at = actuals.transition_unplanned_activity(
             db, kind=body.kind, task_type_id=selection.get("task_type_id"), name=selection.get("name"),
             effective_at=requested,
@@ -166,11 +178,10 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
 
 
 def set_reporting_timezone(db: Session, timezone: str, fallback: str, *, initialize: bool):
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     try:
         ZoneInfo(timezone)
-    except (ZoneInfoNotFoundError, ValueError):
-        raise ValueError("Choose a valid IANA time zone")
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("Choose a valid IANA time zone") from exc
     state = _lock(db)
     if not initialize or state.reporting_timezone is None:
         if state.reporting_timezone != timezone:

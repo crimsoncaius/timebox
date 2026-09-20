@@ -3,11 +3,10 @@ from __future__ import annotations
 from io import StringIO
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 
+from alembic import command
 from app.core.config import get_settings
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 

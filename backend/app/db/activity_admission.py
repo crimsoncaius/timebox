@@ -3,6 +3,9 @@
 PostgreSQL session advisory locks are held on a pinned connection. SQLite is
 supported only in a single process (tests/offline rehearsal).
 """
+
+from __future__ import annotations
+
 from contextlib import contextmanager
 from threading import Lock
 

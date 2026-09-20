@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings, get_settings as get_config
+from app.core.config import Settings
+from app.core.config import get_settings as get_config
 from app.db.session import get_db
 from app.schemas.settings import SettingsPatch, SettingsRead
 from app.services import day_service

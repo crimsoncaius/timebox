@@ -27,7 +27,7 @@ class Day(Base):
         nullable=False,
     )
 
-    time_blocks: Mapped[list["TimeBlock"]] = relationship(
+    time_blocks: Mapped[list[TimeBlock]] = relationship(
         "TimeBlock",
         back_populates="day",
         cascade="all, delete-orphan",

@@ -10,8 +10,7 @@ from app.schemas.task_type import (
     TaskTypePatch,
     TaskTypeRead,
 )
-from app.services import task_type_service
-from app.services import battle_plan_service
+from app.services import battle_plan_service, task_type_service
 
 router = APIRouter(prefix="/task-types", tags=["task-types"])
 

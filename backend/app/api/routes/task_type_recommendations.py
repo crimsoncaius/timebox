@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
-from app.services.task_type_service import list_task_types
 from app.services.task_type_recommendation import Recommendation, recommend
+from app.services.task_type_service import list_task_types
 
 router = APIRouter(prefix="/task-types", tags=["task-types"])
 

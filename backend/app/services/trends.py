@@ -1,4 +1,7 @@
 """Actual-time reporting, clipped once before aggregation into the type hierarchy."""
+
+from __future__ import annotations
+
 import datetime as dt
 from collections import defaultdict
 from zoneinfo import ZoneInfo
@@ -13,9 +16,9 @@ from app.schemas.trends import TrendNode, TrendsRead
 def report(db: Session, start: dt.date, end: dt.date, timezone: str, now: dt.datetime) -> TrendsRead:
     zone = ZoneInfo(timezone)
     def midnight(date):
-        return dt.datetime.combine(date, dt.time(), zone).astimezone(dt.timezone.utc)
+        return dt.datetime.combine(date, dt.time(), zone).astimezone(dt.UTC)
     def utc(value):
-        return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value.astimezone(dt.timezone.utc)
+        return value.replace(tzinfo=dt.UTC) if value.tzinfo is None else value.astimezone(dt.UTC)
 
     lower = midnight(start)
     upper = min(midnight(end + dt.timedelta(days=1)), now)

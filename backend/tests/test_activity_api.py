@@ -106,6 +106,7 @@ def test_task_type_cascade_and_migration_cannot_bypass_activity_protocol(trackin
 def test_concurrent_postgres_writers_and_duplicate_switches(tracking):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+
     from app.db.session import get_engine
 
     if get_engine().dialect.name != "postgresql":
@@ -134,17 +135,18 @@ def test_concurrent_postgres_writers_and_duplicate_switches(tracking):
 
 def test_recording_crosses_midnight_and_plan_boundaries_without_completion(tracking, monkeypatch):
     import datetime as dt
+
     from app.services import activity_service
 
     class Clock(dt.datetime):
-        instant = dt.datetime(2026, 9, 11, 23, 59, 10, tzinfo=dt.timezone.utc)
+        instant = dt.datetime(2026, 9, 11, 23, 59, 10, tzinfo=dt.UTC)
         @classmethod
         def now(cls, tz=None):
             return cls.instant
     monkeypatch.setattr(activity_service.dt, "datetime", Clock)
     initial = tracking.get("/activity").json()
     first = tracking.post("/activity/commands", json=command(initial, "start")).json()
-    Clock.instant = dt.datetime(2026, 9, 12, 1, 10, tzinfo=dt.timezone.utc)
+    Clock.instant = dt.datetime(2026, 9, 12, 1, 10, tzinfo=dt.UTC)
     later = tracking.get("/activity").json()
     assert later["current"]["id"] == first["current"]["id"]
     assert later["current"]["start_at"] == "2026-09-11T23:59:10Z"

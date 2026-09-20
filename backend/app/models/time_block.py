@@ -4,9 +4,9 @@ import datetime as dt
 import enum
 
 from sqlalchemy import (
+    DDL,
     CheckConstraint,
     DateTime,
-    DDL,
     Enum,
     ForeignKey,
     Index,
@@ -104,16 +104,16 @@ class TimeBlock(Base):
         nullable=False,
     )
 
-    day: Mapped["Day | None"] = relationship("Day", back_populates="time_blocks")
-    task_type: Mapped["TaskType"] = relationship("TaskType", back_populates="time_blocks")
-    task: Mapped["Task | None"] = relationship("Task", back_populates="time_blocks")
-    planned_block: Mapped["TimeBlock | None"] = relationship(
+    day: Mapped[Day | None] = relationship("Day", back_populates="time_blocks")
+    task_type: Mapped[TaskType] = relationship("TaskType", back_populates="time_blocks")
+    task: Mapped[Task | None] = relationship("Task", back_populates="time_blocks")
+    planned_block: Mapped[TimeBlock | None] = relationship(
         "TimeBlock",
         remote_side=[id],
         foreign_keys=[planned_block_id],
         back_populates="completion_actuals",
     )
-    completion_actuals: Mapped[list["TimeBlock"]] = relationship(
+    completion_actuals: Mapped[list[TimeBlock]] = relationship(
         "TimeBlock",
         foreign_keys=[planned_block_id],
         back_populates="planned_block",
@@ -128,9 +128,9 @@ class TimeBlock(Base):
 
     @property
     def actual_duration_minutes(self) -> float:
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         def utc(value):
-            return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value
+            return value.replace(tzinfo=dt.UTC) if value.tzinfo is None else value
         return sum(max(0, (utc(row.end_at) if row.end_at else now).timestamp() - utc(row.start_at).timestamp()) / 60
                    if row.start_at else row.end_minute - row.start_minute for row in self.completion_actuals)
 

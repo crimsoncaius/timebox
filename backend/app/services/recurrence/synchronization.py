@@ -3,9 +3,8 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import delete, or_, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.time import today_in_tz
@@ -15,15 +14,14 @@ from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
-    RecurringPlannedBlockState,
     RecurringPlannedBlockRealization,
+    RecurringPlannedBlockState,
     RecurringTemplate,
     Task,
     TaskStatus,
 )
 from app.models.day import Day
 from app.models.time_block import BlockLane, TimeBlock
-
 from app.services.recurrence.common import LEAD_DAYS, _json_list
 from app.services.recurrence.helpers import _task_kwargs
 from app.services.recurrence.protection import occurrence_is_protected

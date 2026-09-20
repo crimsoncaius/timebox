@@ -26,10 +26,10 @@ class TaskType(Base):
         nullable=False,
     )
 
-    time_blocks: Mapped[list["TimeBlock"]] = relationship(
+    time_blocks: Mapped[list[TimeBlock]] = relationship(
         "TimeBlock", back_populates="task_type"
     )
-    tasks: Mapped[list["Task"]] = relationship("Task", back_populates="task_type")
-    recurring_templates: Mapped[list["RecurringTemplate"]] = relationship(
+    tasks: Mapped[list[Task]] = relationship("Task", back_populates="task_type")
+    recurring_templates: Mapped[list[RecurringTemplate]] = relationship(
         "RecurringTemplate", back_populates="task_type"
     )

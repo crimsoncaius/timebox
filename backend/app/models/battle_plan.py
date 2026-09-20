@@ -4,8 +4,17 @@ import datetime as dt
 import enum
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Text,
-    UniqueConstraint, func, text,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -62,7 +71,7 @@ class Project(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    tasks: Mapped[list["Task"]] = relationship(
+    tasks: Mapped[list[Task]] = relationship(
         "Task", back_populates="project", cascade="all, delete"
     )
 class RecurringTemplate(Base):
@@ -112,16 +121,16 @@ class RecurringTemplate(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    task_type: Mapped["TaskType | None"] = relationship("TaskType", back_populates="recurring_templates")
-    checklist_items: Mapped[list["RecurringChecklistItem"]] = relationship(
+    task_type: Mapped[TaskType | None] = relationship("TaskType", back_populates="recurring_templates")
+    checklist_items: Mapped[list[RecurringChecklistItem]] = relationship(
         "RecurringChecklistItem", back_populates="template", cascade="all, delete-orphan",
         order_by="RecurringChecklistItem.position",
     )
-    preplanning_slots: Mapped[list["RecurringPreplanningSlot"]] = relationship(
+    preplanning_slots: Mapped[list[RecurringPreplanningSlot]] = relationship(
         "RecurringPreplanningSlot", back_populates="template", cascade="all",
         order_by="RecurringPreplanningSlot.position",
     )
-    occurrences: Mapped[list["RecurrenceOccurrence"]] = relationship(
+    occurrences: Mapped[list[RecurrenceOccurrence]] = relationship(
         "RecurrenceOccurrence", back_populates="template", passive_deletes=True
     )
 
@@ -171,7 +180,7 @@ class RecurringPreplanningSlot(Base):
     template: Mapped[RecurringTemplate] = relationship(
         "RecurringTemplate", back_populates="preplanning_slots"
     )
-    realizations: Mapped[list["RecurringPlannedBlockRealization"]] = relationship(
+    realizations: Mapped[list[RecurringPlannedBlockRealization]] = relationship(
         "RecurringPlannedBlockRealization", back_populates="slot", passive_deletes=True
     )
 
@@ -200,8 +209,8 @@ class RecurrenceOccurrence(Base):
     )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     template: Mapped[RecurringTemplate | None] = relationship("RecurringTemplate", back_populates="occurrences")
-    task: Mapped["Task | None"] = relationship("Task", foreign_keys=[task_id])
-    preplanning_realizations: Mapped[list["RecurringPlannedBlockRealization"]] = relationship(
+    task: Mapped[Task | None] = relationship("Task", foreign_keys=[task_id])
+    preplanning_realizations: Mapped[list[RecurringPlannedBlockRealization]] = relationship(
         "RecurringPlannedBlockRealization", back_populates="occurrence", cascade="all, delete-orphan"
     )
 
@@ -248,7 +257,7 @@ class RecurringPlannedBlockRealization(Base):
     slot: Mapped[RecurringPreplanningSlot | None] = relationship(
         "RecurringPreplanningSlot", back_populates="realizations"
     )
-    planned_block: Mapped["TimeBlock | None"] = relationship("TimeBlock")
+    planned_block: Mapped[TimeBlock | None] = relationship("TimeBlock")
 
 
 class Task(Base):
@@ -330,17 +339,17 @@ class Task(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    parent: Mapped["Task | None"] = relationship(
+    parent: Mapped[Task | None] = relationship(
         "Task", back_populates="subtasks", remote_side="Task.id"
     )
-    subtasks: Mapped[list["Task"]] = relationship(
+    subtasks: Mapped[list[Task]] = relationship(
         "Task", back_populates="parent", cascade="all, delete-orphan"
     )
     project: Mapped[Project | None] = relationship("Project", back_populates="tasks")
-    task_type: Mapped["TaskType | None"] = relationship("TaskType", back_populates="tasks")
-    time_blocks: Mapped[list["TimeBlock"]] = relationship("TimeBlock", back_populates="task")
+    task_type: Mapped[TaskType | None] = relationship("TaskType", back_populates="tasks")
+    time_blocks: Mapped[list[TimeBlock]] = relationship("TimeBlock", back_populates="task")
     recurring_template: Mapped[RecurringTemplate | None] = relationship("RecurringTemplate", foreign_keys=[recurring_template_id])
-    occurrence: Mapped["RecurrenceOccurrence | None"] = relationship(
+    occurrence: Mapped[RecurrenceOccurrence | None] = relationship(
         "RecurrenceOccurrence",
         primaryjoin="Task.id == RecurrenceOccurrence.task_id",
         foreign_keys="RecurrenceOccurrence.task_id",

@@ -1,13 +1,16 @@
 """Opt-in OpenInference tracing with credentials scrubbed at export."""
+
+from __future__ import annotations
+
 import copy
 import re
 
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider, Event
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import Event, TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 
 from app.core.config import get_settings
 

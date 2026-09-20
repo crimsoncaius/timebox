@@ -6,17 +6,17 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
-from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
-from sqlalchemy import select, func
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.routes import assistant
 from app.core.config import get_settings
 from app.db.session import get_engine
-from app.models.day import Day
-from app.models.time_block import TimeBlock, BlockLane
-from app.models.task_type import TaskType
 from app.models.battle_plan import Task
+from app.models.day import Day
+from app.models.task_type import TaskType
+from app.models.time_block import BlockLane, TimeBlock
 from app.services.assistant_plan import read_today_plan
 from app.services.assistant_sessions import Conversations, conversations
 
@@ -163,10 +163,11 @@ def test_provider_errors_are_actionable_without_raw_details():
 
 
 def test_trace_export_redacts_credentials():
-    from app.services.assistant_tracing import RedactingExporter
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from app.services.assistant_tracing import RedactingExporter
     sink = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(RedactingExporter(sink, ["sentinel-secret"])))
@@ -219,6 +220,7 @@ def test_missing_provider_finish_event_is_interrupted(monkeypatch):
 
 def test_provider_503_is_not_retried():
     import httpx
+
     from app.services.assistant_agent import create_model
     requests = []
     async def scenario():

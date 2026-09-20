@@ -6,9 +6,11 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_engine
 from app.core.config import get_settings
+from app.db.session import get_engine
 from app.models.battle_plan import (
+    RecurrenceFrequency,
+    RecurrenceMode,
     RecurrenceOccurrence,
     RecurringPlannedBlockRealization,
     RecurringPreplanningSlot,
@@ -16,10 +18,8 @@ from app.models.battle_plan import (
     Task,
     TaskStatus,
 )
-from app.models.battle_plan import RecurrenceFrequency, RecurrenceMode
 from app.schemas.battle_plan import RecurrencePreviewRequest
-from app.services.recurrence_service import iter_windows
-from app.services.recurrence_service import synchronize
+from app.services.recurrence_service import iter_windows, synchronize
 
 
 def rule(**changes):
@@ -476,7 +476,7 @@ def test_replacing_a_tombstoned_slot_retains_its_logical_realization_identity(cl
         assert realization is not None
         logical_slot_key = slot.slot_key
         realization_id = realization.id
-        slot.removed_at = dt.datetime.now(dt.timezone.utc)
+        slot.removed_at = dt.datetime.now(dt.UTC)
         db.commit()
         db.add(RecurringPreplanningSlot(
             template_id=slot.template_id,
@@ -1639,7 +1639,7 @@ def test_resume_after_longer_pause_still_suppresses_through_resume_day(client):
         row.paused_at = dt.datetime.combine(
             yesterday,
             dt.time(hour=12),
-            tzinfo=dt.timezone.utc,
+            tzinfo=dt.UTC,
         )
         db.commit()
 

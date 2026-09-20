@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.battle_plan import (
-    PriorityLevel, RecurrenceFrequency, RecurrenceMode, RecurrenceStatus, TaskStatus,
+    PriorityLevel,
+    RecurrenceFrequency,
+    RecurrenceMode,
+    RecurrenceStatus,
+    TaskStatus,
 )
 from app.schemas.task_type import TaskTypeRead
 
@@ -108,7 +112,7 @@ class TaskRead(BaseModel):
     occurrence: TaskOccurrenceIdentityRead | None = None
     subtasks: list[SubtaskRead] = Field(default_factory=list)
     # Quota Session Tasks are independently completable Tasks, not Subtasks.
-    session_tasks: list["TaskRead"] = Field(default_factory=list)
+    session_tasks: list[TaskRead] = Field(default_factory=list)
     outstanding_occurrence_count: int = 1
 
     @field_validator("completed_at")
@@ -119,8 +123,8 @@ class TaskRead(BaseModel):
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 class TaskListRead(BaseModel):
@@ -330,7 +334,7 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
     checklist_titles: list[str] = Field(default_factory=list)
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool = False
-    preplanning_schedule: "RecurringPreplanningScheduleWrite | None" = None
+    preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
 
     @model_validator(mode="after")
     def validate_carry_over(self):
@@ -361,7 +365,7 @@ class RecurringTemplatePatch(BaseModel):
     checklist_titles: list[str] | None = None
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool | None = None
-    preplanning_schedule: "RecurringPreplanningScheduleWrite | None" = None
+    preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
 
 
 class RecurrencePreviewRequest(RecurrenceRuleFields):

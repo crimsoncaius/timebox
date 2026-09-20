@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 from typing import Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from app.schemas.time_block import ActualBlockRead
 from app.schemas.task_type import TaskTypeRead
+from app.schemas.time_block import ActualBlockRead
 
 
 class Calibration(BaseModel):
@@ -84,3 +86,7 @@ class ActivitySnapshot(BaseModel):
     coverage: list[dict] = []
     acknowledgement: ActivityAcknowledgement | None = None
     check_in: dict = {}
+
+
+class ReportingTimezone(BaseModel):
+    timezone: str = Field(min_length=1, max_length=100)

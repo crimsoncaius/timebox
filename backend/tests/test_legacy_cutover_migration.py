@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import datetime as dt
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 import pytest
 import sqlalchemy as sa
+from alembic.config import Config
 
+import app.models  # noqa: F401
+from alembic import command
 from app.core.config import get_settings
 from app.db.base import Base
-import app.models  # noqa: F401
 
-
-UTC = dt.timezone.utc
+UTC = dt.UTC
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 CUTOVER_BASE = "014_recurrence_occurrence_protection"
 

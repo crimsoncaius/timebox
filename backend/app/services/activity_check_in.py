@@ -1,4 +1,7 @@
 """Durable question state. Called only while holding the activity singleton lock."""
+
+from __future__ import annotations
+
 import datetime as dt
 import uuid
 from copy import deepcopy
@@ -7,7 +10,7 @@ from copy import deepcopy
 def instant(value):
     if isinstance(value, str):
         value = dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
-    return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value
+    return value.replace(tzinfo=dt.UTC) if value.tzinfo is None else value
 
 
 def synchronize(state, current):
@@ -25,7 +28,7 @@ def apply(state, command):
     if event is None:
         raise ValueError('Check-in event is required')
     value = deepcopy(state.check_in)
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     if command.action_at > now + dt.timedelta(seconds=5):
         raise ValueError('Check-in instant is in the future')
     outcome = 'applied'

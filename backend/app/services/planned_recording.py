@@ -1,4 +1,7 @@
 """Online, previewed range replacement with journal-backed atomic Undo."""
+
+from __future__ import annotations
+
 import datetime as dt
 import hashlib
 import json
@@ -11,8 +14,8 @@ from sqlalchemy.dialects import postgresql, sqlite
 from app.models.activity import ActivityOperation, ActivityState, PlannedRecordingUndo
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.time_block import ActualBlockRead
-from app.services import actual_block_service as actuals
 from app.services import activity_reconciliation as rec
+from app.services import actual_block_service as actuals
 
 
 def lock(db):

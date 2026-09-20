@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.battle_plan import RecurringChecklistItem, RecurringTemplate, RecurrenceMode, Task, TaskStatus
+from app.models.battle_plan import RecurrenceMode, RecurringChecklistItem, RecurringTemplate, Task, TaskStatus
 from app.models.task_type import TaskType
 
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime as dt
 
 from pydantic import BaseModel, Field
@@ -10,7 +12,7 @@ class TrendNode(BaseModel):
     direct_seconds: float
     days: dict[dt.date, float]
     direct_days: dict[dt.date, float]
-    children: list['TrendNode'] = Field(default_factory=list)
+    children: list[TrendNode] = Field(default_factory=list)
 
 
 class TrendsRead(BaseModel):

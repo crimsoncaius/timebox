@@ -1,6 +1,11 @@
 """Plan/Task recording through the public activity and Day APIs."""
 import pytest
-from tests.test_activity_reconciliation import tracking, make, send
+
+from tests.test_activity_reconciliation import (  # noqa: F401 - pytest fixture, imported for its side effect
+    make,
+    send,
+    tracking,
+)
 from tests.test_actual_blocks_api import _planned_block
 
 

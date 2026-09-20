@@ -12,7 +12,7 @@ def _tid(client, name: str) -> int:
 def _block(client, date: str, lane: str, tid: int, start: int, end: int) -> None:
     if lane == "actual":
         start_at = dt.datetime.combine(
-            dt.date.fromisoformat(date), dt.time.min, tzinfo=dt.timezone.utc
+            dt.date.fromisoformat(date), dt.time.min, tzinfo=dt.UTC
         ) + dt.timedelta(minutes=start)
         r = client.post(
             "/actual-blocks",

@@ -16,8 +16,8 @@ from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.battle_plan import SubtaskRead
 from app.services.battle_plan._shared import _load_task
-from app.services.task_queries import task_select
 from app.services.recurrence.protection import protect_task_occurrence
+from app.services.task_queries import task_select
 
 
 def _is_subtask(task: Task) -> bool:
@@ -118,7 +118,7 @@ def _planned_start(
         day.date, dt.time.min, tzinfo=get_zone(settings.app_timezone)
     )
     return (local_midnight + dt.timedelta(minutes=block.start_minute)).astimezone(
-        dt.timezone.utc
+        dt.UTC
     )
 
 
@@ -455,7 +455,7 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
             )
             db.add(block)
             restored[state["id"]] = block
-            days[state["day_id"]].updated_at = dt.datetime.now(dt.timezone.utc)
+            days[state["day_id"]].updated_at = dt.datetime.now(dt.UTC)
         db.flush()
         for state in plan_states:
             actual_id = state.get("corresponding_actual_id")
@@ -474,7 +474,7 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
         row.reminder_delivered_at = _parse_datetime(
             task_state["reminder_delivered_at"]
         )
-        operation.undone_at = dt.datetime.now(dt.timezone.utc)
+        operation.undone_at = dt.datetime.now(dt.UTC)
         _derive_quota(db, row)
         db.commit()
     except IntegrityError as exc:

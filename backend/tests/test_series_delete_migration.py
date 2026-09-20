@@ -3,11 +3,11 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 import pytest
 import sqlalchemy as sa
+from alembic.config import Config
 
+from alembic import command
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import _create_engine

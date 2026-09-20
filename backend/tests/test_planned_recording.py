@@ -12,7 +12,7 @@ from app.services import activity_service
 
 @pytest.fixture
 def recording(client):
-    now = [dt.datetime(2026, 8, 30, 10, 30, tzinfo=dt.timezone.utc)]
+    now = [dt.datetime(2026, 8, 30, 10, 30, tzinfo=dt.UTC)]
     app.dependency_overrides[actual_blocks.capture_utc_now] = lambda: now[0]
     task_type = client.post('/task-types', json={'name': 'Writing'}).json()['id']
     day = client.post('/days/2026-08-30/blocks', json=dict(lane='planned', task_type_id=task_type,
@@ -125,9 +125,10 @@ def test_running_activity_and_journal_replay_survive_undo(client, recording):
         snapshot = activity_service.read(db, 'UTC')
         assert snapshot.current.id == original['id']
         assert snapshot.current.start_at.isoformat().startswith('2026-08-30T09:45:00')
+        from sqlalchemy import select
+
         from app.models.activity import ActivityOperation
         from app.services import activity_reconciliation as rec
-        from sqlalchemy import select
         state = db.get(ActivityState, 1)
         rec.materialize(db, state, list(db.scalars(select(ActivityOperation))))
         db.commit()

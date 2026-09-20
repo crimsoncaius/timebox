@@ -1,4 +1,4 @@
-from test_activity_api import tracking
+from tests.test_activity_api import tracking  # noqa: F401 - pytest fixture, imported for its side effect
 
 
 def test_reporting_initializes_once_and_changes_only_explicitly(tracking):
@@ -33,9 +33,11 @@ def test_cross_midnight_day_shares_use_elapsed_dst_duration(tracking):
 
 
 def test_concurrent_initialization_uses_one_device_zone(tracking):
-    import pytest
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+
+    import pytest
+
     from app.db.session import get_engine
     if get_engine().dialect.name != 'postgresql':
         pytest.skip('Requires isolated PostgreSQL')

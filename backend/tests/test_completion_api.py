@@ -3,9 +3,9 @@ from __future__ import annotations
 import datetime as dt
 
 import pytest
-from sqlalchemy import select, text as sql_text
-from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
+from sqlalchemy.orm import Session
 
 from app.api.routes import actual_blocks, battle_plan
 from app.core.config import Settings, get_settings
@@ -14,8 +14,7 @@ from app.main import app
 from app.models.battle_plan import Task
 from app.models.time_block import BlockLane, TimeBlock
 
-
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 
 @pytest.fixture
@@ -238,7 +237,7 @@ def test_completion_removes_only_selected_tasks_strictly_future_plans_and_undo_i
         is_blocked=True,
         blocking_reason="External dependency",
     )
-    first = _task(
+    _task(
         client,
         "First subtask",
         parent_id=parent["id"],
@@ -965,7 +964,6 @@ def test_quota_tracker_completion_stays_derived_across_complete_reopen_and_undo(
     captured_instants.append(dt.datetime(2026, 8, 30, 12, 1, tzinfo=UTC))
     completed = client.post(f"/tasks/{session['id']}/complete")
     assert completed.status_code == 200, completed.text
-    result = completed.json()
     refreshed = client.get("/tasks").json()["items"][0]
     assert refreshed["status"] == "in_progress"
     assert refreshed["quota_completed"] == 1

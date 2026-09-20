@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime as dt
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -15,7 +17,7 @@ router = APIRouter(prefix='/trends', tags=['trends'])
 
 
 def capture_now():
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 @router.get('', response_model=TrendsRead)

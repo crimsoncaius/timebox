@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import cors_middleware_options
 
-
 PREVIEW_ORIGIN_REGEX = r"^https://timebox-[a-z0-9-]+-caius-projects-fddd122e[.]vercel[.]app$"
 
 

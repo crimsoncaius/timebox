@@ -9,7 +9,7 @@ def get_zone(tz_name: str) -> ZoneInfo:
 
 
 def utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def as_utc(value: dt.datetime) -> dt.datetime:
@@ -19,8 +19,8 @@ def as_utc(value: dt.datetime) -> dt.datetime:
     comparison against a captured instant goes through here.
     """
     if value.tzinfo is None:
-        return value.replace(tzinfo=dt.timezone.utc)
-    return value.astimezone(dt.timezone.utc)
+        return value.replace(tzinfo=dt.UTC)
+    return value.astimezone(dt.UTC)
 
 
 def now_in_tz(tz_name: str) -> dt.datetime:
@@ -37,5 +37,5 @@ def parse_iso_date(s: str) -> dt.date:
 
 def isoformat_z(dt_value: dt.datetime) -> str:
     if dt_value.tzinfo is None:
-        dt_value = dt_value.replace(tzinfo=dt.timezone.utc)
+        dt_value = dt_value.replace(tzinfo=dt.UTC)
     return dt_value.isoformat()

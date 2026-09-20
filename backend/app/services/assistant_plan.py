@@ -1,14 +1,17 @@
 """Explicit read projection: never materialize a Day or recurrence."""
+
+from __future__ import annotations
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.time import today_in_tz
 from app.db.session import get_engine
-from app.models.day import Day
-from app.models.time_block import TimeBlock, BlockLane
-from app.models.task_type import TaskType
 from app.models.battle_plan import Task
+from app.models.day import Day
+from app.models.task_type import TaskType
+from app.models.time_block import BlockLane, TimeBlock
 from app.services.activity_service import reporting_settings
 
 

@@ -1,4 +1,7 @@
 """Keep the development timeline inaccessible to legacy Actual mutation routes."""
+
+from __future__ import annotations
+
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 

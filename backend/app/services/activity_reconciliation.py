@@ -4,24 +4,25 @@ Action timestamps are already calibrated by the author. Arrival cursors select
 what an author knew, but never choose a winner. Empty paint is durable stop/delete
 intent, not the absence of a row. Replay retains it just like occupied time.
 """
+
+from __future__ import annotations
+
 import datetime as dt
 import hashlib
 
 from sqlalchemy import select
 
-from app.models.activity import ActivityOperation
 from app.models.time_block import BlockLane, TimeBlock
-from app.models.task_type import TaskType
 from app.schemas.time_block import ActualBlockRead
 from app.services import actual_block_service as actuals
 
-INF = dt.datetime.max.replace(tzinfo=dt.timezone.utc)
+INF = dt.datetime.max.replace(tzinfo=dt.UTC)
 
 
 def instant(value):
     if isinstance(value, str):
         value = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value.astimezone(dt.timezone.utc)
+    return value.replace(tzinfo=dt.UTC) if value.tzinfo is None else value.astimezone(dt.UTC)
 
 
 def stamp(value):
@@ -103,11 +104,11 @@ def prepare(db, state, body, operations, timezone="UTC"):
             raise ValueError("Predecessor must be an earlier action from this installation")
     start = body.effective.at
     if body.effective.mode == "server_now":
-        start = dt.datetime.now(dt.timezone.utc)
+        start = dt.datetime.now(dt.UTC)
     if start is None:
         raise ValueError("An explicit effective instant is required")
     start = instant(start)
-    if start > dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=5):
+    if start > dt.datetime.now(dt.UTC) + dt.timedelta(seconds=5):
         raise ValueError("Activity instant is in the future; check the device clock")
     known = replay(state.reconciliation["baseline"], [op for op in operations if op.cursor <= body.base_cursor or (op.device_id == body.device_id and op.sequence < body.sequence)])
     target = next((p for p in known if p["data"] and identity(p) == body.target_id), None)
@@ -119,7 +120,7 @@ def prepare(db, state, body, operations, timezone="UTC"):
         if body.effective.mode != "range" or (not running_edit and (body.effective.end is None or body.effective.end <= start)):
             raise ValueError("Historical commands require an explicit positive range")
         end = INF if running_edit else instant(body.effective.end)
-        if not running_edit and end > dt.datetime.now(dt.timezone.utc):
+        if not running_edit and end > dt.datetime.now(dt.UTC):
             raise ValueError("Historical time cannot end in the future")
         if body.kind in {"edit", "delete"} and not running_edit and (target is None or target["end"] is None):
             raise ValueError("Historical commands require a known ended Actual Block")

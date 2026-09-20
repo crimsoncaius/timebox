@@ -1,14 +1,17 @@
 import datetime as dt
-import pytest
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
 from app.models.day import Day
 from app.models.task_type import TaskType
-from app.models.time_block import TimeBlock, BlockLane
+from app.models.time_block import BlockLane, TimeBlock
 from app.services import activity_cutover
-from test_activity_api import tracking, command
+from tests.test_activity_api import (  # noqa: F401 - pytest fixture, imported for its side effect  # noqa: F401 — pytest fixture
+    command,
+    tracking,
+)
 
 
 def test_rollback_preserves_all_original_actual_values(client):
@@ -17,9 +20,9 @@ def test_rollback_preserves_all_original_actual_values(client):
         db.add(type_)
         db.flush()
         row = TimeBlock(lane=BlockLane.actual, task_type_id=type_.id,
-                        start_at=dt.datetime(2026, 9, 10, tzinfo=dt.timezone.utc),
-                        end_at=dt.datetime(2026, 9, 10, 1, tzinfo=dt.timezone.utc),
-                        updated_at=dt.datetime(2026, 9, 10, 2, tzinfo=dt.timezone.utc))
+                        start_at=dt.datetime(2026, 9, 10, tzinfo=dt.UTC),
+                        end_at=dt.datetime(2026, 9, 10, 1, tzinfo=dt.UTC),
+                        updated_at=dt.datetime(2026, 9, 10, 2, tzinfo=dt.UTC))
         db.add(row)
         db.commit()
         original = activity_cutover.record_values(row)
@@ -48,7 +51,7 @@ def test_import_preserves_grid_history_running_identity_and_reporting_zone(track
         db.add_all([type_, day]); db.flush()
         history = TimeBlock(lane=BlockLane.actual, day_id=day.id, start_minute=1380,
                             end_minute=1440, task_type_id=type_.id, name="Draft", note="Keep me")
-        running = TimeBlock(lane=BlockLane.actual, start_at=dt.datetime(2026, 9, 11, tzinfo=dt.timezone.utc), task_type_id=type_.id)
+        running = TimeBlock(lane=BlockLane.actual, start_at=dt.datetime(2026, 9, 11, tzinfo=dt.UTC), task_type_id=type_.id)
         db.add_all([history, running]); db.commit()
         ids = (history.id, running.id)
     activity_cutover.apply(get_engine(), "Asia/Singapore")
@@ -110,9 +113,10 @@ def test_all_old_client_routes_rejected_after_cutover(tracking):
 def test_postgres_cutover_drains_an_admitted_legacy_request(client, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor, TimeoutError
     from threading import Event
-    from app.services import actual_block_service
+
     from app.core.config import Settings, get_settings
     from app.main import app
+    from app.services import actual_block_service
     if get_engine().dialect.name != "postgresql":
         pytest.skip("Requires restored PostgreSQL test database")
     admitted, release = Event(), Event()

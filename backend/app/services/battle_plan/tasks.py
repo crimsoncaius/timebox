@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
@@ -14,11 +15,9 @@ from app.models.battle_plan import (
 )
 from app.models.time_block import TimeBlock
 from app.schemas.battle_plan import TaskCreate, TaskPatch, TaskPlacement, TaskRead
-from app.services.recurrence.protection import protect_task_occurrence
 from app.services.battle_plan._shared import (
     TRASH_DAYS,
     _clean_title,
-    _is_overdue,
     _load_task,
     _next_position,
     _to_read,
@@ -26,6 +25,7 @@ from app.services.battle_plan._shared import (
     _validate_refs,
     _validate_reminder,
 )
+from app.services.recurrence.protection import protect_task_occurrence
 
 
 def _purge_expired_trash(db: Session) -> None:

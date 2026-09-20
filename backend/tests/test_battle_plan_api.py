@@ -18,7 +18,7 @@ def create_task(client, title="Task", **extra):
 def create_block(client, date, task_id, task_type_id, lane="planned", start_minute=540):
     if lane == "actual":
         start = dt.datetime.combine(
-            dt.date.fromisoformat(date), dt.time.min, tzinfo=dt.timezone.utc
+            dt.date.fromisoformat(date), dt.time.min, tzinfo=dt.UTC
         ) + dt.timedelta(minutes=start_minute)
         response = client.post(
             "/actual-blocks",
@@ -214,7 +214,7 @@ def test_expired_trash_is_purged(client):
     client.delete(f"/tasks/{task['id']}")
     with Session(get_engine()) as db:
         row = db.execute(select(Task).where(Task.id == task["id"])).scalar_one()
-        row.deleted_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=31)
+        row.deleted_at = dt.datetime.now(dt.UTC) - dt.timedelta(days=31)
         db.commit()
     assert client.get("/tasks?state=trash").json()["items"] == []
     assert client.patch(f"/tasks/{task['id']}", json={"title": "Gone"}).status_code == 404
@@ -240,7 +240,7 @@ def test_task_type_removal_warns_then_clears_task_reference(client):
 
 
 def test_deadlines_overdue_and_reminders_deliver_once(client, monkeypatch):
-    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.UTC))
     today = client.get("/health").json()["today"]
     due_today = create_task(client, "Due today", deadline_date=today)
     assert due_today["overdue"] is False
@@ -276,8 +276,7 @@ def test_reminder_is_independent_of_deadline(client):
 
 
 def test_move_project_preserves_task_subtasks_and_blocks(client):
-    from app.models.time_block import TimeBlock
-    from app.models.time_block import BlockLane
+    from app.models.time_block import BlockLane, TimeBlock
 
     first = client.post("/projects", json={"name": "First"}).json()["id"]
     second = client.post("/projects", json={"name": "Second"}).json()["id"]
@@ -314,12 +313,12 @@ def test_move_project_preserves_task_subtasks_and_blocks(client):
 
 
 def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
-    clock = dt.datetime(2098, 1, 1, tzinfo=dt.timezone.utc)
+    clock = dt.datetime(2098, 1, 1, tzinfo=dt.UTC)
     monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: clock)
     task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
     url = f"/tasks/{task['id']}"
     assert client.post(f"/reminders/{task['id']}/delivered").status_code == 204
-    clock = dt.datetime(2100, 1, 1, tzinfo=dt.timezone.utc)
+    clock = dt.datetime(2100, 1, 1, tzinfo=dt.UTC)
     for patch in [
         {"deadline_at": "2000-01-01T00:00:00Z"},
         {"deadline_at": None, "deadline_date": None},
@@ -343,7 +342,7 @@ def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
 
 
 def test_completion_undo_restores_past_reminder_and_delivery_verbatim(client, monkeypatch):
-    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.UTC))
     task = create_task(client, reminder_at="2020-01-01T12:00:00Z")
     client.post(f"/reminders/{task['id']}/delivered")
     saved_response = client.patch(f"/tasks/{task['id']}", json={})
@@ -352,7 +351,7 @@ def test_completion_undo_restores_past_reminder_and_delivery_verbatim(client, mo
     completed = client.post(f"/tasks/{task['id']}/complete", json={}).json()
     assert completed["task"]["reminder_at"] is None
     assert completed["task"]["reminder_delivered_at"] is None
-    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2100, 1, 1, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2100, 1, 1, tzinfo=dt.UTC))
     restored = client.post(f"/tasks/{task['id']}/undo-completion", json={"undo_token": completed["undo_token"]})
     assert restored.status_code == 200, restored.text
     assert restored.json()["reminder_at"] == saved["reminder_at"]

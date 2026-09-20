@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import Settings
 from app.core.time import as_utc, now_in_tz, utc_now
 from app.models.battle_plan import Project, Task, TaskStatus
-from app.models.time_block import BlockLane, TimeBlock
 from app.models.task_type import TaskType
+from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.battle_plan import ProjectRead, SubtaskRead, TaskOccurrenceIdentityRead, TaskRead
 
 TRASH_DAYS = 30

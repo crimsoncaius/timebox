@@ -2,7 +2,11 @@
 import pytest
 
 from tests.test_activity_planning import setup_plan
-from tests.test_activity_reconciliation import tracking, correction, send
+from tests.test_activity_reconciliation import (  # noqa: F401 - pytest fixture, imported for its side effect
+    correction,
+    send,
+    tracking,
+)
 
 
 @pytest.mark.parametrize("reverse", [False, True])

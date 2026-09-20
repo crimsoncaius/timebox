@@ -1,15 +1,14 @@
 import importlib.util
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import sqlalchemy as sa
-from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
+from alembic import command
 from app.core.config import get_settings
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 

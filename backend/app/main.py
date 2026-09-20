@@ -6,28 +6,33 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-from app.api.deps import require_api_key
-from app.api.activity_gate import guard_legacy_actual_writes
-from app.api.routes import activity, actual_blocks, battle_plan, days, recurring, settings, task_types
-from app.api.routes import trends
-from app.core.config import Settings, get_settings
-from app.core.time import today_in_tz
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.services.activity_service import reporting_settings
-
-from app.db.base import Base
-from app.db.session import get_engine, repair_sqlite_actual_record_operation_references
-from app.models.app_settings import AppSettings
-from app.readiness import readiness_details
-from app.services.day_service import validate_timezone
-from app.api.routes import assistant
-from app.services.assistant_tracing import setup_tracing
-from app.api.routes import task_type_recommendations
 
 import app.models  # noqa: F401 — register models on Base before create_all
+from app.api.activity_gate import guard_legacy_actual_writes
+from app.api.deps import require_api_key
+from app.api.routes import (
+    activity,
+    actual_blocks,
+    assistant,
+    battle_plan,
+    days,
+    recurring,
+    settings,
+    task_type_recommendations,
+    task_types,
+    trends,
+)
+from app.core.config import Settings, get_settings
+from app.core.time import today_in_tz
+from app.db.base import Base
+from app.db.session import get_db, get_engine, repair_sqlite_actual_record_operation_references
+from app.models.app_settings import AppSettings
+from app.readiness import readiness_details
+from app.services.activity_service import reporting_settings
+from app.services.assistant_tracing import setup_tracing
+from app.services.day_service import validate_timezone
 
 
 def _ensure_app_settings_table() -> None:

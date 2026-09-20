@@ -18,7 +18,7 @@ from app.schemas.day import (
     PlanningCommitRead,
 )
 from app.schemas.time_block import PlannedBlockCreate, TimeBlockPatch
-from app.services import day_service, activity_service
+from app.services import activity_service, day_service
 
 router = APIRouter(prefix="/days", tags=["days"])
 

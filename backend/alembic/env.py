@@ -4,15 +4,16 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 # Ensure backend package is importable when running from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import app.models  # noqa: E402, F401
 from app.core.config import get_settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
-import app.models  # noqa: E402, F401
 
 config = context.config
 

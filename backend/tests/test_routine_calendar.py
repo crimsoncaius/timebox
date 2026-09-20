@@ -1,5 +1,8 @@
 import datetime as dt
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
 from app.db.session import get_engine
 from app.models.battle_plan import (
@@ -9,8 +12,6 @@ from app.models.battle_plan import (
     TaskStatus,
 )
 from app.services.recurrence.calendar import read_calendar
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 
 def create(client, **changes):
@@ -65,8 +66,8 @@ def test_quota_completion_dates_counts_and_exclusions(client):
                     recurring_template_id=key,
                     recurrence_kind=kind,
                     status=TaskStatus.completed,
-                    completed_at=dt.datetime(2026, 9, 18, 18, tzinfo=dt.timezone.utc),
-                    deleted_at=dt.datetime.now(dt.timezone.utc) if deleted else None,
+                    completed_at=dt.datetime(2026, 9, 18, 18, tzinfo=dt.UTC),
+                    deleted_at=dt.datetime.now(dt.UTC) if deleted else None,
                 )
             )
         db.commit()
@@ -120,7 +121,7 @@ def test_reporting_zone_and_late_completion_extend_finite_history(client):
         db.add(ActivityState(id=1, reporting_timezone="Asia/Singapore"))
         task = db.scalars(select(Task).where(Task.recurring_template_id == key)).first()
         task.status = TaskStatus.completed
-        task.completed_at = dt.datetime(2026, 3, 31, 18, tzinfo=dt.timezone.utc)
+        task.completed_at = dt.datetime(2026, 3, 31, 18, tzinfo=dt.UTC)
         db.commit()
     result = client.get(f"/recurring-templates/{key}/calendar?month=2026-04-01").json()
     assert result["last_month"] == "2026-04-01"
@@ -136,7 +137,7 @@ def test_suppressed_and_early_completed_occurrences_are_not_projected(client):
             recurring_template_id=key,
             recurrence_kind="scheduled",
             status=TaskStatus.completed,
-            completed_at=dt.datetime(2089, 12, 31, tzinfo=dt.timezone.utc),
+            completed_at=dt.datetime(2089, 12, 31, tzinfo=dt.UTC),
         )
         db.add(task)
         db.flush()

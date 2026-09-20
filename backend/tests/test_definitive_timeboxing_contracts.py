@@ -12,8 +12,7 @@ from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 
-
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 
 def _type_and_day(db: Session, date: dt.date = dt.date(2026, 8, 30)) -> tuple[TaskType, Day]:

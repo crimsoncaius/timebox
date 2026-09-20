@@ -10,15 +10,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import Settings
 from app.core.time import as_utc, get_zone, utc_now
 from app.models.battle_plan import Task, TaskStatus
-from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 from app.models.task_type import TaskType
+from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 from app.schemas.time_block import (
     ActualBlockCreate,
-    ActualBlockStart,
     ActualBlockDayProjectionRead,
     ActualBlockDayRead,
-    ActualBlockRead,
     ActualBlockPatch,
+    ActualBlockRead,
+    ActualBlockStart,
 )
 from app.services import task_type_service
 from app.services.recurrence.protection import protect_task_occurrence
@@ -496,7 +496,7 @@ def record_actual_as_planned(
     local_midnight = dt.datetime.combine(planned_snapshot.day.date, dt.time.min, tzinfo=zone)
     retrospective_end = (
         local_midnight + dt.timedelta(minutes=planned_snapshot.end_minute)
-    ).astimezone(dt.timezone.utc)
+    ).astimezone(dt.UTC)
     resolve_origin_item(
         db,
         task_type_id=None,
@@ -513,10 +513,10 @@ def record_actual_as_planned(
     assert planned.start_minute is not None and planned.end_minute is not None
     local_midnight = dt.datetime.combine(planned.day.date, dt.time.min, tzinfo=zone)
     start_at = (local_midnight + dt.timedelta(minutes=planned.start_minute)).astimezone(
-        dt.timezone.utc
+        dt.UTC
     )
     end_at = (local_midnight + dt.timedelta(minutes=planned.end_minute)).astimezone(
-        dt.timezone.utc
+        dt.UTC
     )
     token = uuid.uuid4().hex
     actual = TimeBlock(
@@ -648,8 +648,8 @@ def project_actual_blocks_for_day(
     zone = get_zone(settings.app_timezone)
     local_start = dt.datetime.combine(date, dt.time.min, tzinfo=zone)
     local_end = dt.datetime.combine(date + dt.timedelta(days=1), dt.time.min, tzinfo=zone)
-    day_start = local_start.astimezone(dt.timezone.utc)
-    day_end = local_end.astimezone(dt.timezone.utc)
+    day_start = local_start.astimezone(dt.UTC)
+    day_end = local_end.astimezone(dt.UTC)
     captured_now = _minute_floor(as_utc(now or utc_now()))
 
     rows = list(

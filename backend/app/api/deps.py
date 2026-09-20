@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import secrets
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Depends, Header, HTTPException, Path
 

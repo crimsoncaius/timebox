@@ -1,11 +1,16 @@
-from tests.test_activity_api import tracking, command
+import datetime as dt
+
+from tests.test_activity_api import (  # noqa: F401 - pytest fixture, imported for its side effect
+    command,
+    tracking,
+)
 
 
 def test_shared_question_confirmation_and_stale_candidates(tracking):
     snapshot = tracking.post('/activity/commands', json=command(tracking.get('/activity').json(), 'start')).json()
     assert snapshot['check_in']['threshold_minutes'] == 60
     assert snapshot['check_in']['question'] is None
-import datetime as dt
+
 
 def event(tracking, snapshot, action, sequence=1, device='detector', **fields):
     action_at = fields.pop('action_at', snapshot['server_at'])
@@ -79,10 +84,12 @@ def test_offline_confirmation_preserves_newer_remote_activity(tracking):
 
 
 def test_candidate_switch_race_is_serialized_in_postgres(tracking):
-    from app.db.session import get_engine
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+
     import pytest
+
+    from app.db.session import get_engine
     if get_engine().dialect.name != 'postgresql':
         pytest.skip('Requires isolated PostgreSQL')
     first = running(tracking)
@@ -102,10 +109,12 @@ def test_candidate_switch_race_is_serialized_in_postgres(tracking):
     assert final['check_in']['question'] is None
 
 def test_concurrent_candidates_have_one_durable_question(tracking):
-    from app.db.session import get_engine
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+
     import pytest
+
+    from app.db.session import get_engine
     if get_engine().dialect.name != 'postgresql':
         pytest.skip('Requires isolated PostgreSQL')
     first = running(tracking)

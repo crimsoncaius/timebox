@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -84,8 +84,8 @@ class ActualBlockRead(BaseModel):
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return value.replace(tzinfo=dt.UTC)
+        return value.astimezone(dt.UTC)
 
 
 class ActualBlockStart(BaseModel):

@@ -1,4 +1,7 @@
 """Operator entrypoint for the local restored-copy rehearsal (never startup)."""
+
+from __future__ import annotations
+
 import argparse
 import json
 
@@ -6,8 +9,8 @@ from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401
 from app.core.config import get_settings
-from app.db.session import get_engine
 from app.db.activity_admission import admission
+from app.db.session import get_engine
 from app.services import activity_cutover
 
 

@@ -1,12 +1,11 @@
 import io
 import json
-from pathlib import Path
 import runpy
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
-
 
 verify = runpy.run_path(str(Path(__file__).parents[2] / "scripts" / "verify-api-release.py"))["verify"]
 
