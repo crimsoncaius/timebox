@@ -3,12 +3,10 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import func, select, update
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz
+from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz, utc_now
 from app.models.app_settings import AppSettings
 from app.models.day import Day
 from app.models.battle_plan import (
@@ -20,6 +18,7 @@ from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 from app.services import actual_block_service, task_type_service, activity_selection
 from app.services.recurrence.protection import protect_task_occurrence
+from app.services.task_queries import task_select
 from app.schemas.day import (
     DayListItem,
     DayMeta,
@@ -34,12 +33,6 @@ from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlo
 
 MIN_PLANNED_BLOCK_MINUTES = 1
 DAY_END = 24 * 60  # 1440
-UNSPECIFIED_TASK_TYPE = "unspecified"
-
-
-def _task_select(task_id: int, *, for_update: bool = False):
-    statement = select(Task).where(Task.id == task_id)
-    return statement.with_for_update() if for_update else statement
 
 
 def _assert_schedulable_task(task: Task, *, allow_completed: bool) -> None:
@@ -53,12 +46,8 @@ def _assert_schedulable_task(task: Task, *, allow_completed: bool) -> None:
         raise ValueError("Completed Tasks cannot receive new Planned Blocks")
 
 
-def _utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
-
-
 def _touch_day(day: Day) -> None:
-    day.updated_at = _utc_now()
+    day.updated_at = utc_now()
 
 
 def _validate_minutes(start: int, end: int) -> None:
@@ -80,44 +69,12 @@ def _active_task(
     if task_id is None:
         return None
     task = db.execute(
-        _task_select(task_id, for_update=for_update)
+        task_select(task_id, for_update=for_update)
     ).scalar_one_or_none()
     if task is None:
         raise ValueError("Task not found")
     _assert_schedulable_task(task, allow_completed=allow_completed)
     return task
-
-
-def _get_or_create_unspecified_task_type(db: Session) -> TaskType:
-    """Materialize the linked-task fallback without committing its caller's work."""
-
-    values = {"name": UNSPECIFIED_TASK_TYPE}
-    dialect = db.get_bind().dialect.name
-    if dialect == "postgresql":
-        statement = postgresql_insert(TaskType).values(**values).on_conflict_do_nothing(
-            index_elements=[TaskType.name]
-        )
-    elif dialect == "sqlite":
-        statement = sqlite_insert(TaskType).values(**values).on_conflict_do_nothing(
-            index_elements=[TaskType.name]
-        )
-    else:  # The application supports PostgreSQL and SQLite; keep test adapters usable.
-        existing = db.execute(
-            select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
-        ).scalar_one_or_none()
-        if existing is not None:
-            return existing
-        row = TaskType(name=UNSPECIFIED_TASK_TYPE)
-        db.add(row)
-        db.flush()
-        return row
-
-    db.execute(statement)
-    row = db.execute(
-        select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
-    ).scalar_one_or_none()
-    assert row is not None
-    return row
 
 
 def _resolve_planned_block_task_type(
@@ -139,13 +96,13 @@ def _resolve_planned_block_task_type(
             raise ValueError("Task type not found")
         return task_type
     if task is None:
-        return _get_or_create_unspecified_task_type(db)
+        return task_type_service.get_or_create_unspecified(db)
     if task.task_type_id is not None:
         task_type = task_type_service.get_task_type(db, task.task_type_id)
         if task_type is None:
             raise ValueError("Task type not found")
         return task_type
-    return _get_or_create_unspecified_task_type(db)
+    return task_type_service.get_or_create_unspecified(db)
 
 
 def _validate_recurrence_schedule(task: Task | None, day: Day) -> None:
@@ -410,10 +367,10 @@ def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
         s.week_start = body.week_start
     if s.start_hour >= s.end_hour or s.end_hour > 24 or s.start_hour < 0:
         raise ValueError("Invalid day window: require 0 <= start_hour < end_hour <= 24")
-    s.updated_at = _utc_now()
+    s.updated_at = utc_now()
     db.add(s)
     db.flush()
-    now = _utc_now()
+    now = utc_now()
     db.execute(
         update(Day).values(
             start_hour=s.start_hour,

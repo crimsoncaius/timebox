@@ -240,7 +240,7 @@ def test_task_type_removal_warns_then_clears_task_reference(client):
 
 
 def test_deadlines_overdue_and_reminders_deliver_once(client, monkeypatch):
-    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
     today = client.get("/health").json()["today"]
     due_today = create_task(client, "Due today", deadline_date=today)
     assert due_today["overdue"] is False
@@ -315,7 +315,7 @@ def test_move_project_preserves_task_subtasks_and_blocks(client):
 
 def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
     clock = dt.datetime(2098, 1, 1, tzinfo=dt.timezone.utc)
-    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: clock)
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: clock)
     task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
     url = f"/tasks/{task['id']}"
     assert client.post(f"/reminders/{task['id']}/delivered").status_code == 204
@@ -343,7 +343,7 @@ def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
 
 
 def test_completion_undo_restores_past_reminder_and_delivery_verbatim(client, monkeypatch):
-    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc))
     task = create_task(client, reminder_at="2020-01-01T12:00:00Z")
     client.post(f"/reminders/{task['id']}/delivered")
     saved_response = client.patch(f"/tasks/{task['id']}", json={})
@@ -352,7 +352,7 @@ def test_completion_undo_restores_past_reminder_and_delivery_verbatim(client, mo
     completed = client.post(f"/tasks/{task['id']}/complete", json={}).json()
     assert completed["task"]["reminder_at"] is None
     assert completed["task"]["reminder_delivered_at"] is None
-    monkeypatch.setattr("app.services.battle_plan._shared._utc_now", lambda: dt.datetime(2100, 1, 1, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2100, 1, 1, tzinfo=dt.timezone.utc))
     restored = client.post(f"/tasks/{task['id']}/undo-completion", json={"undo_token": completed["undo_token"]})
     assert restored.status_code == 200, restored.text
     assert restored.json()["reminder_at"] == saved["reminder_at"]

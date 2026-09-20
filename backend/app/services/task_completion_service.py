@@ -9,13 +9,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import Settings
-from app.core.time import get_zone
+from app.core.time import as_utc, get_zone
 from app.models.battle_plan import Task, TaskCompletionOperation, TaskStatus
 from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.battle_plan import SubtaskRead
 from app.services.battle_plan._shared import _load_task
+from app.services.task_queries import task_select
 from app.services.recurrence.protection import protect_task_occurrence
 
 
@@ -23,17 +24,6 @@ def _is_subtask(task: Task) -> bool:
     """Ordinary Subtasks exclude independently completable quota Session Tasks."""
 
     return task.parent_id is not None and task.recurrence_kind != "quota_session"
-
-
-def _utc(value: dt.datetime) -> dt.datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=dt.timezone.utc)
-    return value.astimezone(dt.timezone.utc)
-
-
-def _task_select(task_id: int, *, for_update: bool = False):
-    statement = select(Task).where(Task.id == task_id)
-    return statement.with_for_update() if for_update else statement
 
 
 def _planned_for_task_select(task_id: int, *, for_update: bool = False):
@@ -166,7 +156,7 @@ def set_subtask_checked(
     if not _is_subtask(snapshot):
         raise ValueError("Only a Subtask can be checked or unchecked")
     assert snapshot.parent_id is not None
-    db.execute(_task_select(snapshot.parent_id, for_update=True)).scalar_one()
+    db.execute(task_select(snapshot.parent_id, for_update=True)).scalar_one()
     row = db.execute(
         select(Task)
         .options(joinedload(Task.parent))
@@ -204,8 +194,8 @@ def complete_task(
 ) -> tuple[Task, str, list[int]]:
     """Apply the one global Task Completion transition atomically."""
 
-    completed_at = _utc(captured_at)
-    row = db.execute(_task_select(task_id, for_update=True)).scalar_one_or_none()
+    completed_at = as_utc(captured_at)
+    row = db.execute(task_select(task_id, for_update=True)).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")
     _assert_completable(row)
@@ -297,7 +287,7 @@ def complete_task(
     try:
         if active is not None:
             assert active.start_at is not None
-            if completed_at <= _utc(active.start_at):
+            if completed_at <= as_utc(active.start_at):
                 raise ValueError("Actual Block end must be after its start")
             active.end_at = completed_at
 
@@ -331,7 +321,7 @@ def complete_task(
 
 
 def reopen_task(db: Session, task_id: int) -> Task:
-    row = db.execute(_task_select(task_id, for_update=True)).scalar_one_or_none()
+    row = db.execute(task_select(task_id, for_update=True)).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")
     _assert_completable(row)
@@ -358,7 +348,7 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
     snapshot = json.loads(operation_snapshot.snapshot_json)
     plan_states = snapshot["removed_planned_blocks"]
 
-    row = db.execute(_task_select(task_id, for_update=True)).scalar_one_or_none()
+    row = db.execute(task_select(task_id, for_update=True)).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")
     _assert_completable(row)
@@ -413,7 +403,7 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
         row.status != TaskStatus.completed
         or row.completed_at is None
         or captured_at is None
-        or _utc(row.completed_at) != _utc(captured_at)
+        or as_utc(row.completed_at) != as_utc(captured_at)
         or row.version != operation.completed_task_version
     ):
         raise ValueError(conflict)

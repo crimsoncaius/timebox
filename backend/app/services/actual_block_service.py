@@ -4,12 +4,11 @@ import datetime as dt
 import uuid
 
 from sqlalchemy import or_, select, update
-from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import Settings
-from app.core.time import get_zone
+from app.core.time import as_utc, get_zone, utc_now
 from app.models.battle_plan import Task, TaskStatus
 from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 from app.models.task_type import TaskType
@@ -21,16 +20,9 @@ from app.schemas.time_block import (
     ActualBlockRead,
     ActualBlockPatch,
 )
+from app.services import task_type_service
 from app.services.recurrence.protection import protect_task_occurrence
-
-
-UNSPECIFIED_TASK_TYPE = "unspecified"
-
-
-def _as_utc(value: dt.datetime) -> dt.datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=dt.timezone.utc)
-    return value.astimezone(dt.timezone.utc)
+from app.services.task_queries import task_select
 
 
 def _minute_floor(value: dt.datetime) -> dt.datetime:
@@ -52,11 +44,6 @@ def _actual_select(actual_block_id: int, *, for_update: bool = False):
         )
     )
     return statement.with_for_update(of=TimeBlock) if for_update else statement
-
-
-def _task_select(task_id: int, *, for_update: bool = False):
-    statement = select(Task).where(Task.id == task_id)
-    return statement.with_for_update() if for_update else statement
 
 
 def _planned_select(planned_block_id: int, *, for_update: bool = False):
@@ -96,7 +83,7 @@ def _load_actual(
     return row
 
 
-def _validate_item(
+def validate_item(
     db: Session,
     task_type_id: int,
     task_id: int | None,
@@ -110,7 +97,7 @@ def _validate_item(
     if task_id is None:
         return None
     task = db.execute(
-        _task_select(task_id, for_update=for_update)
+        task_select(task_id, for_update=for_update)
     ).scalar_one_or_none()
     if task is None:
         raise ValueError("Task not found")
@@ -124,7 +111,7 @@ def _validate_item(
         if (
             retrospective_end is None
             or task.completed_at is None
-            or _as_utc(retrospective_end) > _as_utc(task.completed_at)
+            or as_utc(retrospective_end) > as_utc(task.completed_at)
         ):
             raise ValueError(
                 "Actual work after Task Completion requires ordinary reopen"
@@ -143,39 +130,7 @@ def _planned_row(
     return planned
 
 
-def _get_or_create_unspecified_task_type(db: Session) -> TaskType:
-    """Resolve the neutral category without committing the surrounding Actual write."""
-
-    values = {"name": UNSPECIFIED_TASK_TYPE}
-    dialect = db.get_bind().dialect.name
-    if dialect == "postgresql":
-        statement = postgresql.insert(TaskType).values(**values).on_conflict_do_nothing(
-            index_elements=[TaskType.name]
-        )
-    elif dialect == "sqlite":
-        statement = sqlite.insert(TaskType).values(**values).on_conflict_do_nothing(
-            index_elements=[TaskType.name]
-        )
-    else:
-        existing = db.execute(
-            select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
-        ).scalar_one_or_none()
-        if existing is not None:
-            return existing
-        row = TaskType(name=UNSPECIFIED_TASK_TYPE)
-        db.add(row)
-        db.flush()
-        return row
-
-    db.execute(statement)
-    row = db.execute(
-        select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
-    ).scalar_one_or_none()
-    assert row is not None
-    return row
-
-
-def _resolve_origin_item(
+def resolve_origin_item(
     db: Session,
     *,
     task_type_id: int | None,
@@ -187,8 +142,8 @@ def _resolve_origin_item(
         if task_type_id is None:
             if task_id is not None:
                 raise ValueError("task_type_id is required for task-backed Actual")
-            task_type_id = _get_or_create_unspecified_task_type(db).id
-        _validate_item(
+            task_type_id = task_type_service.get_or_create_unspecified(db).id
+        validate_item(
             db,
             task_type_id,
             task_id,
@@ -202,7 +157,7 @@ def _resolve_origin_item(
         raise ValueError("Linked Actual must use the Planned Block primary item")
     if task_id is not None and task_id != planned_snapshot.task_id:
         raise ValueError("Linked Actual must use the Planned Block primary item")
-    _validate_item(
+    validate_item(
         db,
         planned_snapshot.task_type_id,
         planned_snapshot.task_id,
@@ -238,7 +193,7 @@ def invalidate_record_actual_undo(db: Session, actual_block_id: int) -> None:
         _record_operation_for_actual_select(actual_block_id, for_update=True)
     ).scalar_one_or_none()
     if operation is not None:
-        operation.invalidated_at = dt.datetime.now(dt.timezone.utc)
+        operation.invalidated_at = utc_now()
 
 
 def start_actual_block(
@@ -246,12 +201,12 @@ def start_actual_block(
 ) -> ActualBlockRead:
     """Atomically create the sole active Actual Block."""
 
-    authoritative_now = _as_utc(captured_at)
-    started_at = _as_utc(body.start_at) if body.start_at is not None else authoritative_now
+    authoritative_now = as_utc(captured_at)
+    started_at = as_utc(body.start_at) if body.start_at is not None else authoritative_now
     if started_at > authoritative_now:
         raise ValueError("Actual Block start cannot be in the future")
 
-    task_type_id, task_id, planned_name = _resolve_origin_item(
+    task_type_id, task_id, planned_name = resolve_origin_item(
         db,
         task_type_id=body.task_type_id,
         task_id=body.task_id,
@@ -299,13 +254,13 @@ def transition_unplanned_activity(
         raise ValueError("Stop cannot change Task Type or Block Name")
     if kind != "stop":
         if task_type_id is None:
-            task_type_id = _get_or_create_unspecified_task_type(db).id
-        _validate_item(db, task_type_id, None)
+            task_type_id = task_type_service.get_or_create_unspecified(db).id
+        validate_item(db, task_type_id, None)
     current = get_active_actual_block(db)
     # The caller has already acquired the protocol lock.
-    effective_at = effective_at or dt.datetime.now(dt.timezone.utc)
+    effective_at = effective_at or utc_now()
     if current:
-        if effective_at <= _as_utc(current.start_at):
+        if effective_at <= as_utc(current.start_at):
             raise ValueError("Server clock is behind the current activity; retry later")
         row = _load_actual(db, current.id)
         row.end_at = effective_at
@@ -328,9 +283,9 @@ def finish_actual_block(
         raise ValueError("Actual Block is already finished")
     if row.task_id is not None:
         protect_task_occurrence(db, row.task_id)
-    finished_at = _as_utc(captured_at)
+    finished_at = as_utc(captured_at)
     assert row.start_at is not None
-    if finished_at <= _as_utc(row.start_at):
+    if finished_at <= as_utc(row.start_at):
         raise ValueError("Actual Block end must be after its start")
     try:
         result = db.execute(
@@ -351,7 +306,7 @@ def finish_actual_block(
 def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead:
     """Create a finished retrospective Actual Block in one transaction."""
 
-    task_type_id, task_id, planned_name = _resolve_origin_item(
+    task_type_id, task_id, planned_name = resolve_origin_item(
         db,
         task_type_id=body.task_type_id,
         task_id=body.task_id,
@@ -368,8 +323,8 @@ def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead
         day_id=None,
         start_minute=None,
         end_minute=None,
-        start_at=_as_utc(body.start_at),
-        end_at=_as_utc(body.end_at),
+        start_at=as_utc(body.start_at),
+        end_at=as_utc(body.end_at),
     )
     try:
         db.add(row)
@@ -393,7 +348,7 @@ def patch_actual_block(
     target_task_id = data.get("task_id", snapshot.task_id)
     if target_task_type_id is None:
         raise ValueError("task_type_id is required for Actual")
-    target_task = _validate_item(
+    target_task = validate_item(
         db,
         target_task_type_id,
         target_task_id,
@@ -409,8 +364,8 @@ def patch_actual_block(
     end_at = data.get("end_at", row.end_at)
     if start_at is None:
         raise ValueError("Actual Block start is required")
-    start_at = _as_utc(start_at)
-    end_at = _as_utc(end_at) if end_at is not None else None
+    start_at = as_utc(start_at)
+    end_at = as_utc(end_at) if end_at is not None else None
     if end_at is not None and end_at <= start_at:
         raise ValueError("Actual Block end must be after its start")
 
@@ -423,7 +378,7 @@ def patch_actual_block(
             if (
                 end_at is None
                 or target_task.completed_at is None
-                or end_at > _as_utc(target_task.completed_at)
+                or end_at > as_utc(target_task.completed_at)
             ):
                 raise ValueError(
                     "Actual work after Task Completion requires ordinary reopen"
@@ -478,7 +433,7 @@ def relink_actual_block(
     db: Session, actual_block_id: int, planned_block_id: int
 ) -> ActualBlockRead:
     planned_snapshot = _planned_row(db, planned_block_id)
-    target_task = _validate_item(
+    target_task = validate_item(
         db,
         planned_snapshot.task_type_id,
         planned_snapshot.task_id,
@@ -507,7 +462,7 @@ def relink_actual_block(
         if (
             row.end_at is None
             or target_task.completed_at is None
-            or _as_utc(row.end_at) > _as_utc(target_task.completed_at)
+            or as_utc(row.end_at) > as_utc(target_task.completed_at)
         ):
             raise ValueError(
                 "Actual work after Task Completion requires ordinary reopen"
@@ -542,7 +497,7 @@ def record_actual_as_planned(
     retrospective_end = (
         local_midnight + dt.timedelta(minutes=planned_snapshot.end_minute)
     ).astimezone(dt.timezone.utc)
-    _resolve_origin_item(
+    resolve_origin_item(
         db,
         task_type_id=None,
         task_id=None,
@@ -636,7 +591,7 @@ def undo_record_actual_as_planned(
         if actual.task_id is not None:
             protect_task_occurrence(db, actual.task_id)
         operation.actual_block_id = None
-        operation.undone_at = dt.datetime.now(dt.timezone.utc)
+        operation.undone_at = utc_now()
         db.delete(actual)
         db.commit()
     except IntegrityError as exc:
@@ -695,7 +650,7 @@ def project_actual_blocks_for_day(
     local_end = dt.datetime.combine(date + dt.timedelta(days=1), dt.time.min, tzinfo=zone)
     day_start = local_start.astimezone(dt.timezone.utc)
     day_end = local_end.astimezone(dt.timezone.utc)
-    captured_now = _minute_floor(_as_utc(now or dt.datetime.now(dt.timezone.utc)))
+    captured_now = _minute_floor(as_utc(now or utc_now()))
 
     rows = list(
         db.execute(
@@ -714,8 +669,8 @@ def project_actual_blocks_for_day(
     projections: list[ActualBlockDayProjectionRead] = []
     for row in rows:
         assert row.start_at is not None
-        actual_start = _as_utc(row.start_at)
-        actual_end = _as_utc(row.end_at) if row.end_at is not None else captured_now
+        actual_start = as_utc(row.start_at)
+        actual_end = as_utc(row.end_at) if row.end_at is not None else captured_now
         intersection_start = max(actual_start, day_start)
         intersection_end = min(actual_end, day_end)
         if intersection_end <= intersection_start:

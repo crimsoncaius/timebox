@@ -10,7 +10,6 @@ from app.services.recurrence.common import (
     _json_list,
     _month_date,
     _rule_value,
-    _utc_now,
     _week_boundary,
 )
 from app.services.recurrence.helpers import (

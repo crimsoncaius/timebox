@@ -80,7 +80,7 @@ def record(db, planned_id, settings, now, body):
     end = min(planned_end, rec.instant(body.until) if body.until else now)
     if end > now or end <= start:
         raise ValueError("Recording is available after the Planned Block starts and cannot include future time")
-    actuals._validate_item(db, plan.task_type_id, plan.task_id, retrospective_end=end)
+    actuals.validate_item(db, plan.task_type_id, plan.task_id, retrospective_end=end)
     conflicts = rows(db, start, end)
     copied = {key: getattr(plan, key) for key in ("task_type_id", "task_id", "name", "note")}
     fingerprint = digest([plan.id, plan.day.date.isoformat(), plan.start_minute, plan.end_minute,

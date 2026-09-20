@@ -6,21 +6,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import now_in_tz
+from app.core.time import as_utc, now_in_tz, utc_now
 from app.models.battle_plan import Project, Task, TaskStatus
 from app.models.time_block import BlockLane, TimeBlock
 from app.models.task_type import TaskType
 from app.schemas.battle_plan import ProjectRead, SubtaskRead, TaskOccurrenceIdentityRead, TaskRead
 
 TRASH_DAYS = 30
-
-
-def _utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
-
-
-def _aware(value: dt.datetime) -> dt.datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=dt.timezone.utc)
 
 
 def _clean_name(value: str) -> str:
@@ -44,7 +36,7 @@ def _validate_deadline(deadline_date: dt.date | None, deadline_at: dt.datetime |
 
 def _deadline_boundary(task: Task, settings: Settings) -> dt.datetime | None:
     if task.deadline_at is not None:
-        return _aware(task.deadline_at)
+        return as_utc(task.deadline_at)
     if task.deadline_date is not None:
         zone_now = now_in_tz(settings.app_timezone)
         return dt.datetime.combine(
@@ -58,11 +50,11 @@ def _deadline_boundary(task: Task, settings: Settings) -> dt.datetime | None:
 def _validate_reminder(task: Task, settings: Settings) -> None:
     if task.reminder_at is None:
         return
-    if _aware(task.reminder_at) <= _utc_now():
+    if as_utc(task.reminder_at) <= utc_now():
         raise ValueError("Reminder must be in the future")
 
 
-def _task_select(task_id: int, *, for_update: bool = False):
+def _task_detail_select(task_id: int, *, for_update: bool = False):
     statement = (
         select(Task)
         .options(
@@ -90,7 +82,7 @@ def _task_select(task_id: int, *, for_update: bool = False):
 
 def _load_task(db: Session, task_id: int, *, for_update: bool = False) -> Task:
     row = db.execute(
-        _task_select(task_id, for_update=for_update)
+        _task_detail_select(task_id, for_update=for_update)
     ).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")

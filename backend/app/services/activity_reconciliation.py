@@ -153,14 +153,14 @@ def prepare(db, state, body, operations, timezone="UTC"):
             data.update(selected)
             type_id, task_id = data["task_type_id"], data["task_id"]
         elif body.kind == "add":
-            type_id, task_id, planned_name = actuals._resolve_origin_item(
+            type_id, task_id, planned_name = actuals.resolve_origin_item(
                 db, task_type_id=type_id, task_id=body.task_id,
                 planned_block_id=body.planned_block_id, retrospective_end=end)
             data.update(task_id=task_id, planned_block_id=body.planned_block_id, name=planned_name)
         else:
             type_id = type_id or actuals._get_or_create_unspecified_task_type(db).id
             task_id = body.task_id if "task_id" in body.model_fields_set else data.get("task_id")
-            actuals._validate_item(db, type_id, task_id, retrospective_end=end if historical else None,
+            actuals.validate_item(db, type_id, task_id, retrospective_end=end if historical else None,
                                    allow_completed=body.kind == "edit" and task_id == data.get("task_id"))
             if data and (type_id != data.get("task_type_id") or task_id != data.get("task_id")):
                 data["planned_block_id"] = None

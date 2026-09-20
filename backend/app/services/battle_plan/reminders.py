@@ -4,10 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.core.time import now_in_tz
+from app.core.time import now_in_tz, utc_now
 from app.models.battle_plan import Task, TaskStatus
 from app.schemas.battle_plan import ReminderRead
-from app.services.battle_plan._shared import _load_task, _utc_now
+from app.services.battle_plan._shared import _load_task
 
 
 def due_reminders(db: Session, settings: Settings) -> list[ReminderRead]:
@@ -46,5 +46,5 @@ def acknowledge_reminder(db: Session, task_id: int) -> None:
         raise ValueError("Inactive tasks are read-only")
     if row.reminder_at is None:
         raise ValueError("Task has no reminder")
-    row.reminder_delivered_at = _utc_now()
+    row.reminder_delivered_at = utc_now()
     db.commit()

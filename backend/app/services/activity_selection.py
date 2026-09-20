@@ -1,27 +1,54 @@
 """Snapshot planning context without giving a plan ownership of recording."""
+
+from __future__ import annotations
+
 import datetime as dt
-from zoneinfo import ZoneInfo
+from copy import deepcopy
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session, joinedload
 
-from app.models.time_block import TimeBlock, BlockLane
+from app.core.time import get_zone
+from app.models.activity import ActivityOperation, ActivityState
 from app.models.battle_plan import Task
+from app.models.time_block import BlockLane, TimeBlock
+from app.schemas.activity import ActivityCommand
 from app.services import actual_block_service as actuals
+from app.services import task_type_service
 
 
-def plans(db, timezone):
-    result = []
-    for row in db.scalars(select(TimeBlock).where(TimeBlock.lane == BlockLane.planned)):
-        midnight = dt.datetime.combine(row.day.date, dt.time(), ZoneInfo(timezone))
-        result.append(dict(id=row.id, task_type_id=row.task_type_id, task_id=row.task_id,
-                           task_title=row.task.title if row.task else None,
-                           name=row.name, note=row.note,
-                           start_at=(midnight + dt.timedelta(minutes=row.start_minute)).isoformat(),
-                           end_at=(midnight + dt.timedelta(minutes=row.end_minute)).isoformat()))
+def plans(db: Session, timezone: str) -> list[dict[str, Any]]:
+    """Every Planned Block as a local-time interval, for snapshot and selection."""
+
+    zone = get_zone(timezone)
+    rows = db.scalars(
+        select(TimeBlock)
+        .options(joinedload(TimeBlock.day), joinedload(TimeBlock.task))
+        .where(TimeBlock.lane == BlockLane.planned)
+        .order_by(TimeBlock.id)
+    )
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        midnight = dt.datetime.combine(row.day.date, dt.time(), zone)
+        result.append(
+            dict(
+                id=row.id,
+                task_type_id=row.task_type_id,
+                task_id=row.task_id,
+                task_title=row.task.title if row.task else None,
+                name=row.name,
+                note=row.note,
+                start_at=(midnight + dt.timedelta(minutes=row.start_minute)).isoformat(),
+                end_at=(midnight + dt.timedelta(minutes=row.end_minute)).isoformat(),
+            )
+        )
     return result
 
 
-def resolve(db, body, start, timezone):
+def resolve(
+    db: Session, body: ActivityCommand, start: dt.datetime, timezone: str
+) -> dict[str, Any]:
     plan_id = body.planned_block_id
     type_id, task_id, name, note = body.task_type_id, body.task_id, body.name, body.note
     if body.kind == "start" and not body.selection_snapshot and all(
@@ -38,7 +65,7 @@ def resolve(db, body, start, timezone):
             if plan is None or plan.lane != BlockLane.planned or (plan.task_type_id, plan.task_id) != (type_id, task_id):
                 plan_id = None
         else:
-            type_id, task_id, name = actuals._resolve_origin_item(
+            type_id, task_id, name = actuals.resolve_origin_item(
                 db, task_type_id=type_id, task_id=task_id, planned_block_id=plan_id)
             note = plan.note
     elif task_id is not None and not body.selection_snapshot:
@@ -48,22 +75,18 @@ def resolve(db, body, start, timezone):
         type_id, name = task.task_type_id, task.title
     if body.kind == "switch" and type_id is None and task_id is None:
         raise ValueError("Task Type is required when switching")
-    type_id = type_id or actuals._get_or_create_unspecified_task_type(db).id
-    actuals._validate_item(db, type_id, task_id)
+    type_id = type_id or task_type_service.get_or_create_unspecified(db).id
+    actuals.validate_item(db, type_id, task_id)
     return dict(task_type_id=type_id, task_id=task_id, planned_block_id=plan_id, name=name, note=note)
 
 
-def lock_if_enabled(db):
-    from app.models.activity import ActivityState
-    from sqlalchemy import update
+def lock_if_enabled(db: Session) -> None:
     db.execute(update(ActivityState).where(ActivityState.id == 1, ActivityState.enabled.is_(True))
                .values(cursor=ActivityState.cursor))
 
 
-def detach_plan(db, plan_id):
+def detach_plan(db: Session, plan_id: int) -> None:
     """Carry explicit unlink through future replay without changing recorded facts."""
-    from copy import deepcopy
-    from app.models.activity import ActivityState, ActivityOperation
     state = db.get(ActivityState, 1)
     if state and state.enabled:
         state.cursor += 1

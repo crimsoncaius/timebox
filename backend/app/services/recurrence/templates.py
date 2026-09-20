@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import today_in_tz
+from app.core.time import today_in_tz, utc_now
 from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
     RecurrenceMode,
@@ -43,7 +43,6 @@ from app.services.recurrence.common import (
     SCHEDULE_FIELDS,
     _date_in_tz,
     _json_list,
-    _utc_now,
 )
 from app.services.recurrence.helpers import (
     _load_template,
@@ -160,7 +159,7 @@ def _replace_preplanning_schedule(
         slot.position = -temporary_position
     db.flush()
 
-    removed_at = _utc_now()
+    removed_at = utc_now()
     for key, slot in active_by_key.items():
         if key not in requested_keys:
             slot.removed_at = removed_at
@@ -301,7 +300,7 @@ def pause_template(
     today = today_in_tz(settings.app_timezone)
     _cleanup_future(db, row, today, suppress=False)
     row.status = RecurrenceStatus.paused
-    row.paused_at = _utc_now()
+    row.paused_at = utc_now()
     db.commit()
     return _load_template(db, row.id)
 
@@ -345,7 +344,7 @@ def end_template(
     today = today_in_tz(settings.app_timezone)
     _cleanup_future(db, row, today, suppress=True)
     row.status = RecurrenceStatus.ended
-    row.ended_at = _utc_now()
+    row.ended_at = utc_now()
     db.commit()
     return _load_template(db, row.id)
 

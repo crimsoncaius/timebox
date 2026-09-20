@@ -5,7 +5,7 @@ import datetime as dt
 import json
 from dataclasses import dataclass
 
-from app.core.time import get_zone
+from app.core.time import get_zone, utc_now
 
 LEAD_DAYS = 7
 INHERITED_FIELDS = {"title", "description", "task_type_id", "urgency", "importance"}
@@ -23,10 +23,6 @@ class Window:
     key: str
     start: dt.date
     end: dt.date
-
-
-def _utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def _date_in_tz(value: dt.datetime, tz_name: str) -> dt.date:

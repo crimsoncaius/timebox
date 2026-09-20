@@ -5,7 +5,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import now_in_tz, today_in_tz
+from app.core.time import as_utc, now_in_tz, today_in_tz, utc_now
 from app.models.battle_plan import (
     RecurrenceOccurrence,
     RecurringTemplate,
@@ -17,7 +17,6 @@ from app.schemas.battle_plan import TaskCreate, TaskPatch, TaskPlacement, TaskRe
 from app.services.recurrence.protection import protect_task_occurrence
 from app.services.battle_plan._shared import (
     TRASH_DAYS,
-    _aware,
     _clean_title,
     _is_overdue,
     _load_task,
@@ -26,12 +25,11 @@ from app.services.battle_plan._shared import (
     _validate_deadline,
     _validate_refs,
     _validate_reminder,
-    _utc_now,
 )
 
 
 def _purge_expired_trash(db: Session) -> None:
-    cutoff = _utc_now() - dt.timedelta(days=TRASH_DAYS)
+    cutoff = utc_now() - dt.timedelta(days=TRASH_DAYS)
     expired = list(
         db.execute(select(Task).where(Task.deleted_at.is_not(None), Task.deleted_at < cutoff)).scalars()
     )
@@ -141,7 +139,7 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
         raise ValueError("Subtasks do not have a Task lifecycle")
     if row.recurrence_kind == "quota_parent" and "status" in fields:
         raise ValueError("Quota parent status is derived from its sessions")
-    old_reminder = _aware(row.reminder_at) if row.reminder_at else None
+    old_reminder = as_utc(row.reminder_at) if row.reminder_at else None
     if "title" in fields and body.title is not None:
         row.title = _clean_title(body.title)
     if "description" in fields:
@@ -195,7 +193,7 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
         row.deadline_at = at_value
     if "reminder_at" in fields:
         row.reminder_at = body.reminder_at
-    if old_reminder != (_aware(row.reminder_at) if row.reminder_at else None):
+    if old_reminder != (as_utc(row.reminder_at) if row.reminder_at else None):
         _validate_reminder(row, settings)
         row.reminder_delivered_at = None
     from app.services import recurrence_service
@@ -368,7 +366,7 @@ def reorder_tasks(db: Session, placements: list[TaskPlacement]) -> None:
 
 
 def archive_tasks(db: Session, task_ids: list[int]) -> None:
-    now = _utc_now()
+    now = utc_now()
     rows = list(
         db.execute(
             select(Task)
@@ -404,7 +402,7 @@ def trash_task(db: Session, task_id: int) -> Task:
     row = _load_task_for_mutation(db, task_id)
     if row.parent is not None and row.parent.status == TaskStatus.completed:
         raise ValueError("Completed Tasks and their Subtasks are read-only until reopen")
-    now = _utc_now()
+    now = utc_now()
     row.deleted_at = now
     protect_task_occurrence(db, row)
     row.reminder_delivered_at = None

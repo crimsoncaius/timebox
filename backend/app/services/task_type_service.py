@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-import datetime as dt
 import uuid
 
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
 from app.schemas.task_type import TaskTypeCreate, TaskTypePatch
 from app.services.task_type_paths import canonicalize_task_type_path, path_prefixes
+
+#: The fixed neutral category for otherwise unclassified Blocks. Never renamed or deleted.
+UNSPECIFIED_TASK_TYPE = "unspecified"
 
 
 def _descendants_like(prefix: str) -> tuple[str, str]:
@@ -19,8 +23,32 @@ def _descendants_like(prefix: str) -> tuple[str, str]:
     return f"{escaped}/%", "\\"
 
 
-def _utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+def get_or_create_unspecified(db: Session) -> TaskType:
+    """Materialize the neutral category without committing the caller's work."""
+
+    dialect = db.get_bind().dialect.name
+    insert = {"postgresql": postgresql.insert, "sqlite": sqlite.insert}.get(dialect)
+    if insert is None:  # Keep non-native test adapters usable.
+        existing = db.execute(
+            select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
+        ).scalar_one_or_none()
+        if existing is not None:
+            return existing
+        row = TaskType(name=UNSPECIFIED_TASK_TYPE)
+        db.add(row)
+        db.flush()
+        return row
+
+    db.execute(
+        insert(TaskType)
+        .values(name=UNSPECIFIED_TASK_TYPE)
+        .on_conflict_do_nothing(index_elements=[TaskType.name])
+    )
+    row = db.execute(
+        select(TaskType).where(TaskType.name == UNSPECIFIED_TASK_TYPE)
+    ).scalar_one_or_none()
+    assert row is not None
+    return row
 
 
 def list_task_types(db: Session) -> list[TaskType]:
@@ -72,7 +100,7 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
     new_path = canonicalize_task_type_path(body.name)
     if new_path == old_path:
         return row
-    if old_path == "unspecified" or new_path == "unspecified":
+    if UNSPECIFIED_TASK_TYPE in (old_path, new_path):
         raise ValueError("The unspecified task type cannot be renamed")
 
     child_pat, child_esc = _descendants_like(old_path)
@@ -98,7 +126,7 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
     if conflict is not None:
         raise ValueError("A task type with this path already exists")
 
-    now = _utc_now()
+    now = utc_now()
     # Free all old paths before assigning overlapping destination paths.
     temporary_prefix = f"__rename_{uuid.uuid4().hex}"
     for br in branch_rows:
@@ -121,7 +149,7 @@ def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> Task
 def _touch_days(db: Session, day_ids: list[int]) -> None:
     if not day_ids:
         return
-    now = _utc_now()
+    now = utc_now()
     db.execute(update(Day).where(Day.id.in_(day_ids)).values(updated_at=now))
 
 
@@ -138,7 +166,7 @@ def delete_task_type(
     row = get_task_type(db, task_type_id)
     if row is None:
         raise ValueError("Task type not found")
-    if row.name == "unspecified":
+    if row.name == UNSPECIFIED_TASK_TYPE:
         raise ValueError("The unspecified task type cannot be deleted")
     desc_pat, desc_esc = _descendants_like(row.name)
     has_descendants = db.execute(
@@ -210,7 +238,7 @@ def delete_task_type(
                         ActualBlockRecordOperation.invalidated_at.is_(None),
                         ActualBlockRecordOperation.undone_at.is_(None),
                     )
-                    .values(invalidated_at=_utc_now())
+                    .values(invalidated_at=utc_now())
                 )
             db.execute(
                 update(TimeBlock)
