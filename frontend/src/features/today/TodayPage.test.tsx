@@ -1,12 +1,12 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TodayPage } from './TodayPage'
 import { ReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessProvider } from '../readiness/ReadinessProvider'
 
-// These legacy inspector / Work Mode scenarios explicitly exercise that surface.
+// These scenarios exercise the legacy inspector surface.
 // Canonical tracking and corrections have their own Activity tests.
 vi.mock('../activity/activityRepository', async original => ({ ...await original<object>(), activityDevelopmentEnabled: false }))
 
@@ -15,11 +15,6 @@ function jsonResponse(data: unknown, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
-}
-
-function DirectWorkRequest() {
-  const navigate = useNavigate()
-  return <button onClick={() => navigate('?workMode=start')}>Request work directly</button>
 }
 
 const dayPayload = {
@@ -265,23 +260,18 @@ describe('TodayPage inspector rail', () => {
     const rail = screen.getByRole('complementary', { name: 'Block details' })
     const name = within(rail).getByLabelText('Name')
     const note = within(rail).getByLabelText('Note')
-    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
     fireEvent.change(name, { target: { value: 'Renamed block' } })
-    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
     fireEvent.blur(name)
     fireEvent.focus(note)
     fireEvent.change(note, { target: { value: 'New note that should not disappear' } })
     expect(patches).toEqual([{ name: 'Renamed block' }])
-    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
     await act(async () => { releaseName() })
     expect(note).toHaveValue('New note that should not disappear')
-    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
     fireEvent.blur(note)
     await waitFor(() => expect(savedBlock.note).toBe('New note that should not disappear'))
     // The hidden responsive editor must not write its previously saved Note back.
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)) })
     expect(patches).toEqual([{ name: 'Renamed block' }, { note: 'New note that should not disappear' }])
-    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
   })
 
   it('preserves Note edits through responsive layout changes without a hidden editor saving over them', async () => {
@@ -344,13 +334,8 @@ describe('TodayPage inspector rail', () => {
 
     expect(screen.getByText(/is selected\. Choose a time/)).toHaveTextContent('Write launch narrative')
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
-    expect(screen.getByText('Finish planning to start Work Mode.')).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Start Work Mode' }))
-    expect(screen.queryByRole('dialog', { name: 'Start Work Mode' })).not.toBeInTheDocument()
     expect(taskButtons[0]).toHaveAttribute('aria-pressed', 'true')
     await user.click(taskButtons[0]!)
-    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
   })
 
   it('places a manual Actual draft beside occupied time and fits future clicks into elapsed time', async () => {
@@ -475,7 +460,6 @@ describe('TodayPage inspector rail', () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
     await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
-    expect(screen.queryByRole('button', { name: 'Start Work Mode' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]).toBeVisible()
   })
 
@@ -541,72 +525,6 @@ describe('TodayPage inspector rail', () => {
       releaseSave()
       await removal
     })
-  })
-
-  it('consumes a direct Work Mode request during planning without clearing the selection or replaying it', async () => {
-    const user = userEvent.setup()
-    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<><TodayPage /><DirectWorkRequest /></>} /></Routes></MemoryRouter>)
-    const task = (await screen.findAllByRole('button', { name: /Write launch narrative/ }))[0]!
-    await user.click(task)
-    await user.click(screen.getByRole('button', { name: 'Request work directly' }))
-    expect(task).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByRole('dialog', { name: 'Start Work Mode' })).not.toBeInTheDocument()
-    await user.click(task)
-    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: 'Start Work Mode' })).not.toBeInTheDocument()
-  })
-
-  it('keeps a planned draft intact when the disabled Work Mode control is pressed', async () => {
-    const user = userEvent.setup()
-    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
-    await screen.findByTestId('day-timeline')
-    const lane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')!
-    fireEvent.click(lane, { clientY: 190 })
-    const create = await screen.findByRole('button', { name: 'Create block' })
-    const work = screen.getByRole('button', { name: 'Start Work Mode' })
-    expect(work).toBeDisabled()
-    await user.click(work)
-    expect(create).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
-  })
-
-  it('finishes Plan something first before automatically entering Work Mode', async () => {
-    const user = userEvent.setup()
-    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
-    await screen.findByTestId('day-timeline')
-    await user.click(screen.getByRole('link', { name: 'Start Work Mode' }))
-    await user.click(await screen.findByRole('button', { name: 'Plan something first' }))
-    expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: 'Create block' }))
-    expect(await screen.findByRole('dialog', { name: 'Work Mode' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Create block' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Exit Work Mode' }))
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Work Mode' })).not.toBeInTheDocument())
-  })
-
-  it.each(['cancel', 'failed save'])('does not start Work Mode after Plan something first: %s', async (outcome) => {
-    const user = userEvent.setup()
-    if (outcome === 'failed save') {
-      const fallbackFetch = globalThis.fetch
-      globalThis.fetch = vi.fn((input, init) => String(input).endsWith('/blocks') && init?.method === 'POST'
-        ? Promise.resolve(jsonResponse({ detail: 'Save rejected' }, 409))
-        : fallbackFetch(input, init))
-    }
-    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
-    await screen.findByTestId('day-timeline')
-    await user.click(screen.getByRole('link', { name: 'Start Work Mode' }))
-    await user.click(await screen.findByRole('button', { name: 'Plan something first' }))
-    if (outcome === 'cancel') {
-      await user.keyboard('{Escape}')
-      expect(screen.getByRole('link', { name: 'Start Work Mode' })).toBeInTheDocument()
-    } else {
-      await user.click(screen.getByRole('button', { name: 'Create block' }))
-      await screen.findAllByText('Save rejected')
-      expect(screen.getByRole('button', { name: 'Start Work Mode' })).toBeDisabled()
-      expect(screen.getByRole('button', { name: 'Create block' })).toBeInTheDocument()
-    }
-    expect(screen.queryByRole('dialog', { name: 'Work Mode' })).not.toBeInTheDocument()
   })
 
   it('keeps a newly created standalone Actual selected without a stale discard prompt', async () => {

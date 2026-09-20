@@ -193,6 +193,17 @@ export function minuteOfDayWithSecondsInTimeZone(date: Date, timeZone: string): 
   return h * 60 + m + s / 60
 }
 
+/** Whole minutes from local midnight in `timeZone`, for an ISO instant. */
+export function minuteInTimeZone(instant: string, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant))
+  return intPart(parts, 'hour') * 60 + intPart(parts, 'minute')
+}
+
 export function snapToSlot(minute: number): number {
   return Math.round(minute / SLOT_MINUTES) * SLOT_MINUTES
 }

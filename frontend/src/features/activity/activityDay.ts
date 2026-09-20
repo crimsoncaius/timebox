@@ -1,7 +1,6 @@
 import type { DayRead } from '../../lib/api'
-import { addDaysIso, zonedLocalDateTimeCandidates } from '../../lib/time'
+import { addDaysIso, minuteInTimeZone, zonedLocalDateTimeCandidates } from '../../lib/time'
 import { dateInTimeZone } from '../../lib/battlePlan'
-import { minuteInTimeZone } from '../today/workModeExecution'
 import type { ActivitySnapshot } from './activityRepository'
 
 /** Project the durable journal into the existing Day, including offline history. */
