@@ -87,6 +87,14 @@ import com.timebox.android.ui.types.TypesViewModel
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import java.time.LocalDate
 import kotlinx.coroutines.launch
+import com.timebox.android.data.TaskCollection
+import com.timebox.android.data.TaskStatus
+import java.time.ZoneId
+import com.timebox.android.TimeboxApplication
+import com.timebox.android.BuildConfig
+import com.timebox.android.ui.focus.FocusMode
+import com.timebox.android.ui.battleplan.RoutineScreen
+import com.timebox.android.ui.chronicle.TrendsScreen
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -103,7 +111,8 @@ fun TimeboxApp(
     readinessCoordinator: ReadyToPlanCoordinator,
     imeVisibleOverride: Boolean? = null,
 ) {
-    val activityRepository = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository else null
+    val application = LocalContext.current.applicationContext as TimeboxApplication
+    val activityRepository = if (BuildConfig.ACTIVITY_TRACKING_DEV) application.activityRepository else null
     val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository) {
         timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository)
     }
@@ -118,22 +127,21 @@ fun TimeboxApp(
     val recurringViewModel: RecurringViewModel = viewModel(factory = factory)
     val recurringEditorViewModel: RecurringEditorViewModel = viewModel(factory = factory)
     val dayState by dayViewModel.state.collectAsState()
-    val focusController = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).focusController else null
+    val focusController = if (activityRepository != null) application.focusController else null
     val focusState = focusController?.state?.collectAsState()?.value
     val currentActivity = activityRepository?.state?.collectAsState()?.value
     val focused = focusState?.active == true && currentActivity?.snapshot?.current != null && !dayState.focusPlanningBlocked
-    val checkIns = if (activityRepository != null) (LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).checkIns else null
+    val checkIns = if (activityRepository != null) application.checkIns else null
     val requestedCheckIn = checkIns?.openQuestion?.collectAsState()?.value
     LaunchedEffect(requestedCheckIn) {
         if (requestedCheckIn != null && !focused && activityRepository != null) {
-            val zone = java.time.ZoneId.of(activityRepository.state.value.snapshot?.reportingTimezone ?: "UTC")
+            val zone = ZoneId.of(activityRepository.state.value.snapshot?.reportingTimezone ?: "UTC")
             navController.navigate(AppRoutes.day(activityRepository.now().atZone(zone).toLocalDate())) { launchSingleTop = true }
         }
     }
-    val activityApplication = LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
     LaunchedEffect(currentActivity, dayState.focusPlanningBlocked) {
         if (activityRepository != null) {
-            activityApplication.recoverLegacyWorkMode(dayViewModel.state.value.focusPlanningBlocked)
+            application.recoverLegacyWorkMode(dayViewModel.state.value.focusPlanningBlocked)
             focusController?.reconcile(activityRepository, dayViewModel.state.value.focusPlanningBlocked)
         }
     }
@@ -422,7 +430,7 @@ fun TimeboxApp(
                             onThisMonth = chronicleViewModel::goToThisMonth,
                             onSelectView = chronicleViewModel::selectView,
                             onClearHighlights = chronicleViewModel::clearHighlights,
-                            trendsContent = { com.timebox.android.ui.chronicle.TrendsScreen(chronicleState, chronicleViewModel) },
+                            trendsContent = { TrendsScreen(chronicleState, chronicleViewModel) },
                             onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                             onRetry = chronicleViewModel::load,
                         )
@@ -487,9 +495,9 @@ fun TimeboxApp(
                         val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@dialog
                         TaskDetailScreen(
                             state = taskDetailState,
-                            onTrackTask = if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && taskDetailState.task?.let { it.status != com.timebox.android.data.TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
+                            onTrackTask = if (BuildConfig.ACTIVITY_TRACKING_DEV && taskDetailState.task?.let { it.status != TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
                                 trackingScope.launch {
-                                    val activity = (context.applicationContext as com.timebox.android.TimeboxApplication).activityRepository
+                                    val activity = (context.applicationContext as TimeboxApplication).activityRepository
                                     val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activity.trackTask(taskDetailState.task!!) }
                                     if (saved) navController.navigate(AppRoutes.day(LocalDate.now()))
                                     else snackbarHostState.showSnackbar(activity.state.value.error ?: "Could not start tracking")
@@ -569,7 +577,7 @@ fun TimeboxApp(
                             state = recurringState,
                             navigationState = battlePlanState,
                             onSelectScope = {
-                                battlePlanViewModel.selectCollection(com.timebox.android.data.TaskCollection.Active)
+                                battlePlanViewModel.selectCollection(TaskCollection.Active)
                                 battlePlanViewModel.selectScope(it)
                                 returnToTasks()
                             },
@@ -591,14 +599,14 @@ fun TimeboxApp(
                         )
                     }
                     composable(AppRoutes.RecurringNew) {
-                        com.timebox.android.ui.battleplan.RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
+                        RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
                     }
                     composable(
                         AppRoutes.RecurringDetailPattern,
                         arguments = listOf(navArgument(AppRoutes.TemplateIdArg) { type = NavType.IntType }),
                     ) { entry ->
                         val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@composable
-                        com.timebox.android.ui.battleplan.RoutineScreen(
+                        RoutineScreen(
                             recurringEditorState, recurringEditorViewModel, { navController.popBackStack() },
                             onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
                             lifecycle = recurringState, lifecycleViewModel = recurringViewModel,
@@ -609,7 +617,7 @@ fun TimeboxApp(
                         arguments = listOf(navArgument(AppRoutes.TemplateIdArg) { type = NavType.IntType }),
                     ) { entry ->
                         val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@composable
-                        com.timebox.android.ui.battleplan.RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
+                        RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
                     }
                     composable(AppRoutes.Types) {
                         fun returnToTasks() {
@@ -623,7 +631,7 @@ fun TimeboxApp(
                                     state = battlePlanState,
                                     taskTypes = true,
                                     onSelectScope = {
-                                        battlePlanViewModel.selectCollection(com.timebox.android.data.TaskCollection.Active)
+                                        battlePlanViewModel.selectCollection(TaskCollection.Active)
                                         battlePlanViewModel.selectScope(it)
                                         returnToTasks()
                                     },
@@ -745,7 +753,7 @@ fun TimeboxApp(
             }
         }
 
-        if (focused) com.timebox.android.ui.focus.FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
+        if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
         dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
             WorkModeScreen(
                 state = workMode,
