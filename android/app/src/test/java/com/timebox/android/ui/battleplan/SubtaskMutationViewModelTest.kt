@@ -187,22 +187,6 @@ class SubtaskMutationViewModelTest {
         details.viewModelScope.cancel()
     }
 
-    @Test fun `battle plan checks a Subtask without reloading the board`() = runTest(dispatcher) {
-        val api = MutationApi()
-        val model = battlePlan(api)
-        model.load()
-        model.state.first { !it.loading }
-        val readsAfterLoad = api.reads.get()
-
-        model.toggleSubtaskComplete(model.state.value.tasks.single().subtasks.single())
-        model.state.first { it.tasks.single().subtasks.single().checked }
-
-        assertTrue(model.state.value.tasks.single().subtasks.single().checked)
-        assertFalse(model.state.value.refreshing)
-        assertEquals(readsAfterLoad, api.reads.get())
-        model.viewModelScope.cancel()
-    }
-
     @Test fun `battle plan composer title keystrokes do not reload the board`() = runTest(dispatcher) {
         val api = MutationApi()
         val model = battlePlan(api)

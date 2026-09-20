@@ -499,15 +499,6 @@ class BattlePlanViewModel internal constructor(
     fun consumeMessage() = _state.update { it.copy(message = null) }
     fun consumeCreatedTaskNotice() = _state.update { it.copy(createdTaskNotice = null) }
 
-    fun applySubtask(saved: Subtask) {
-        patchTasks { tasks ->
-            tasks.map { task ->
-                if (task.id != saved.parentTaskId) task
-                else task.copy(subtasks = task.subtasks.map { if (it.id == saved.id) saved else it })
-            }
-        }
-    }
-
     fun applyRemovedTask(taskId: Int) {
         patchTasks { tasks ->
             tasks.filterNot { it.id == taskId }.map { task ->
@@ -632,11 +623,6 @@ class BattlePlanViewModel internal constructor(
         }
     }
 
-    fun createSubtask(parent: BattleTask, title: String) {
-        if (title.isBlank() || parent.status == TaskStatus.Completed) return
-        mutate("Subtask created") { repository.createBattleTask(BattleTaskCreate(title.trim(), parentId = parent.id)) }
-    }
-
     fun moveProject(task: BattleTask, projectId: Int?) {
         if (task.status == TaskStatus.Completed || task.parentId != null || task.projectId == projectId) return
         val destination = _state.value.projects.firstOrNull { it.id == projectId }?.name ?: "Admin"
@@ -650,19 +636,6 @@ class BattlePlanViewModel internal constructor(
         if (task.status == TaskStatus.Completed) return
         _state.update { it.copy(message = null) }
         readinessCoordinator.setReady(task, !task.readyToPlan)
-    }
-
-    fun toggleSubtaskComplete(subtask: Subtask) {
-        if (_state.value.saving) return
-        _state.update { it.copy(message = null) }
-        viewModelScope.launch {
-            val result = if (subtask.checked) repository.uncheckSubtask(subtask.id)
-            else repository.checkSubtask(subtask.id)
-            result.fold(
-                onSuccess = { saved -> applySubtask(saved) },
-                onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
-            )
-        }
     }
 
     fun moveTask(task: BattleTask, target: TaskStatus) {
@@ -747,20 +720,6 @@ class BattlePlanViewModel internal constructor(
                 ),
             )
         }
-    }
-
-    fun reorderTask(task: BattleTask, offset: Int) {
-        if (_state.value.sort != BattlePlanSort.Manual || offset == 0) return
-        val visible = _state.value.visibleTasks
-        val index = visible.indexOfFirst { it.id == task.id }
-        val other = visible.getOrNull(index + offset) ?: return
-        val ordered = _state.value.tasks.filter { it.status == task.status }.sortedBy { it.position }.toMutableList()
-        val from = ordered.indexOfFirst { it.id == task.id }
-        val to = ordered.indexOfFirst { it.id == other.id }
-        if (from < 0 || to < 0) return
-        val moving = ordered.removeAt(from)
-        ordered.add(to, moving)
-        optimisticReorder(ordered.mapIndexed { position, item -> TaskPlacement(item.id, item.status, position) }, "Order saved")
     }
 
     fun moveTaskToBoundary(task: BattleTask, toTop: Boolean) {

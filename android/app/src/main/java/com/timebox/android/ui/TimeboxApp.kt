@@ -46,6 +46,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.dialog
 import androidx.navigation.compose.composable
+import com.timebox.android.ui.prototype.prototypeRoutes
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
@@ -357,34 +358,8 @@ fun TimeboxApp(
 
             Box(modifier = Modifier.weight(1f)) {
                 NavHost(navController, startDestination = AppRoutes.DayPattern) {
-                    if (com.timebox.android.BuildConfig.DEBUG) {
-                        composable(
-                            "prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}",
-                            deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}" }),
-                            arguments = listOf(navArgument("mode") { defaultValue = "details" }, navArgument("layout") { defaultValue = "full" }, navArgument("sample") { defaultValue = "normal" }),
-                        ) { entry ->
-                            com.timebox.android.ui.battleplan.TaskSheetPrototype(entry.arguments?.getString("mode") == "create", entry.arguments?.getString("layout") ?: "full", entry.arguments?.getString("sample") ?: "normal")
-                        }
-                        composable(
-                            "prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}",
-                            deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/recurring-details?flow={flow}&layout={layout}&mode={mode}" }),
-                            arguments = listOf(
-                                navArgument("flow") { defaultValue = "edit" },
-                                navArgument("layout") { defaultValue = "rows" },
-                                navArgument("mode") { defaultValue = "scheduled" },
-                            ),
-                        ) { entry ->
-                            if (entry.arguments?.getString("layout") == "routine") {
-                                com.timebox.android.ui.battleplan.RoutineSheetPrototype(
-                                    entry.arguments?.getString("flow") ?: "details",
-                                    entry.arguments?.getString("mode") ?: "scheduled",
-                                )
-                            } else com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype(
-                                initialFlow = entry.arguments?.getString("flow") ?: "edit",
-                                initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
-                            )
-                        }
-                    }
+                    prototypeRoutes()
+
                     composable(
                         AppRoutes.DayPattern,
                         deepLinks = listOf(navDeepLink { uriPattern = AppRoutes.DayDeepLinkPattern }),
@@ -470,12 +445,9 @@ fun TimeboxApp(
                             onToggleReady = battlePlanViewModel::toggleReady,
                             onMoveProject = battlePlanViewModel::moveProject,
                             onMoveTask = battlePlanViewModel::moveTask,
-                            onReorderTask = battlePlanViewModel::reorderTask,
                             onMoveTaskToBoundary = battlePlanViewModel::moveTaskToBoundary,
                             onDropTask = battlePlanViewModel::dropTask,
                             onSetBlocked = battlePlanViewModel::setBlocked,
-                            onCreateSubtask = battlePlanViewModel::createSubtask,
-                            onToggleSubtask = battlePlanViewModel::toggleSubtaskComplete,
                             onCreateTask = { _, _, _ -> battlePlanViewModel.createTask() },
                             onShowComposer = battlePlanViewModel::setComposerVisible,
                             onComposerDraftChange = battlePlanViewModel::updateComposerDraft,

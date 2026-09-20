@@ -24,12 +24,10 @@ class SubtaskCreationViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    @Test fun `task details creates and reloads a subtask in a project`() = verifyCreation(7, false)
-    @Test fun `task details creates and reloads a subtask without a project`() = verifyCreation(null, false)
-    @Test fun `battle plan creates and reloads a subtask in a project`() = verifyCreation(7, true)
-    @Test fun `battle plan creates and reloads a subtask without a project`() = verifyCreation(null, true)
+    @Test fun `task details creates and reloads a subtask in a project`() = verifyCreation(7)
+    @Test fun `task details creates and reloads a subtask without a project`() = verifyCreation(null)
 
-    private fun verifyCreation(projectId: Int?, fromBattlePlan: Boolean) = runTest(dispatcher) {
+    private fun verifyCreation(projectId: Int?) = runTest(dispatcher) {
         val timestamp = "2026-09-12T00:00:00Z"
         var parent = BattleTaskDto(
             id = 10, projectId = projectId, title = "Parent", description = "",
@@ -57,16 +55,8 @@ class SubtaskCreationViewModelTest {
         details.load(10)
         details.state.first { !it.loading }
         assertNotNull(details.state.value.task)
-        if (fromBattlePlan) {
-            val model = BattlePlanViewModel(repository, completion,
-                readinessCoordinator = createReadyToPlanCoordinator(repository, backgroundScope))
-            model.createSubtask(details.state.value.task!!, "  Checkpoint  ")
-            model.state.first { !it.saving }
-            model.viewModelScope.cancel()
-        } else {
-            details.addSubtask("  Checkpoint  ")
-            details.state.first { !it.saving }
-        }
+        details.addSubtask("  Checkpoint  ")
+        details.state.first { !it.saving }
         val reopened = TaskDetailViewModel(repository, completion)
         reopened.load(10)
         reopened.state.first { !it.loading }
