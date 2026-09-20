@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getBrowserCheckIns } from './browserCheckIns'
 import { getActivityRepository } from './activityRepository'
-import { dateInTimeZone } from '../../lib/battlePlan'
+import { calendarIsoDateInTimeZone } from '../../lib/time'
 
 export function BrowserCheckInHost() {
   const location = useLocation(), navigate = useNavigate()
@@ -22,7 +22,7 @@ export function BrowserCheckInHost() {
     void repository.refresh().then(() => {
       if (cancelled) return
       const snapshot = repository.state.snapshot
-      if (snapshot?.check_in?.question?.id === id) navigate(`/day/${dateInTimeZone(new Date(repository.now()).toISOString(), snapshot.reporting_timezone)}`, { replace: true })
+      if (snapshot?.check_in?.question?.id === id) navigate(`/day/${calendarIsoDateInTimeZone(new Date(repository.now()).toISOString(), snapshot.reporting_timezone)}`, { replace: true })
       else navigate(location.pathname, { replace: true })
     })
     return () => { cancelled = true }

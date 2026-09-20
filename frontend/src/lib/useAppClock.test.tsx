@@ -1,11 +1,12 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { dateInTimeZone } from './battlePlan'
+
 import { millisecondsUntilNextAppMidnight, useAppClock } from './useAppClock'
+import { calendarIsoDateInTimeZone } from './time'
 
 function ClockProbe({ serverNowIso, timezone }: { serverNowIso: string; timezone: string }) {
   const now = useAppClock(serverNowIso, timezone)
-  return <span>{dateInTimeZone(now, timezone)}</span>
+  return <span>{calendarIsoDateInTimeZone(now, timezone)}</span>
 }
 
 describe('app clock', () => {

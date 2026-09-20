@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { addCalendarDays, dateInTimeZone, zonedLocalToIso } from './battlePlan'
+import { addDaysIso, calendarIsoDateInTimeZone, zonedLocalToIso } from './time'
 
 export function millisecondsUntilNextAppMidnight(nowIso: string, timeZone: string): number {
-  const nextDate = addCalendarDays(dateInTimeZone(nowIso, timeZone), 1)
+  const nextDate = addDaysIso(calendarIsoDateInTimeZone(nowIso, timeZone), 1)
   return Math.max(1, new Date(zonedLocalToIso(`${nextDate}T00:00`, timeZone)).getTime() - new Date(nowIso).getTime())
 }
 

@@ -12,6 +12,39 @@ export function zonedLocalDateTimeToIso(local: string, timezone: string, occurre
   return occurrence === 'later' ? candidates[candidates.length - 1] : candidates[0]
 }
 
+/**
+ * Wall-clock to instant for plain date/time inputs that have no occurrence picker.
+ *
+ * Unlike `zonedLocalDateTimeToIso`, this never throws: an ambiguous autumn time
+ * takes the earlier occurrence, and a spring-forward gap (no such instant) takes
+ * the first valid minute after it, so a deadline the user typed still saves.
+ */
+export function zonedLocalToIso(localValue: string, timezone: string): string {
+  if (!localValue) return ''
+  const local = localValue.length === 10 ? `${localValue}T00:00` : localValue
+  for (let offset = 0; offset < 24 * 60; offset += 1) {
+    let candidates: string[]
+    try {
+      candidates = zonedLocalDateTimeCandidates(shiftLocalMinutes(local, offset), timezone)
+    } catch {
+      return ''
+    }
+    if (candidates.length) return candidates[0]
+  }
+  return ''
+}
+
+function shiftLocalMinutes(local: string, minutes: number): string {
+  if (!minutes) return local
+  const [date, time] = local.split('T')
+  const [y, m, d] = date.split('-').map(Number)
+  const [hh, mm] = time.split(':').map(Number)
+  const shifted = new Date(Date.UTC(y, m - 1, d, hh, mm + minutes))
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
+    + `T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`
+}
+
 /** All valid instants, ordered chronologically; usable offline by date/time editors. */
 export function zonedLocalDateTimeCandidates(local: string, timezone: string): string[] {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local)
@@ -162,13 +195,13 @@ export function formatHourLabelGcal12(minuteFromMidnight: number): string {
 }
 
 /** `YYYY-MM-DD` for the calendar day of `date` in `timeZone` (IANA), matching API day strings. */
-export function calendarIsoDateInTimeZone(date: Date, timeZone: string): string {
+export function calendarIsoDateInTimeZone(date: Date | string, timeZone: string): string {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(date)
+  }).format(typeof date === 'string' ? new Date(date) : date)
 }
 
 function intPart(parts: Intl.DateTimeFormatPart[], type: string): number {

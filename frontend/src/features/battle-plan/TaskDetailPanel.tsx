@@ -3,7 +3,6 @@ import { getActivityRepository } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  dateInTimeZone,
   defaultReminderIso,
   formatPlannedDate,
   isoToZonedLocal,
@@ -14,7 +13,6 @@ import {
   TASK_STATUSES,
   taskColumn,
   taskColumnChange,
-  zonedLocalToIso,
 } from '../../lib/battlePlan'
 import type {
   BattleTask,
@@ -26,6 +24,7 @@ import type {
 } from '../../lib/api'
 import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
+import { calendarIsoDateInTimeZone, zonedLocalToIso } from '../../lib/time'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
 
@@ -104,7 +103,7 @@ export function TaskDetailPanel({
   const previousFocusRef = useRef<HTMLElement | null>(
     typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null,
   )
-  const today = dateInTimeZone(serverNowIso, timezone)
+  const today = calendarIsoDateInTimeZone(serverNowIso, timezone)
   const plannedDates = orderedPlannedDates(task.planned_dates, today)
   const visiblePlannedDates = showAllPlannedDates ? plannedDates : plannedDates.slice(0, 5)
 
@@ -430,7 +429,6 @@ export function TaskDetailPanel({
                   ) : null}
                 </section>
               ) : null}
-
 
               <div className="border-t border-[var(--task-detail-divider)] py-4">
                 <button

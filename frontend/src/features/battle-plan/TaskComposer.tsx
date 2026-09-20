@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  addCalendarDays,
-  dateInTimeZone,
   PRIORITY_LEVELS,
   STATUS_LABELS,
-  zonedLocalToIso,
 } from '../../lib/battlePlan'
 import type {
   BattleTaskWrite,
@@ -14,6 +11,7 @@ import type {
   TaskType,
 } from '../../lib/api'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
+import { addDaysIso, calendarIsoDateInTimeZone, zonedLocalToIso } from '../../lib/time'
 
 type Picker = 'due' | 'urgency' | 'impact'
 
@@ -58,9 +56,9 @@ export function TaskComposer({
   const formRef = useRef<HTMLFormElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
 
-  const today = dateInTimeZone(serverNowIso, timezone)
-  const tomorrow = addCalendarDays(today, 1)
-  const nextWeek = addCalendarDays(today, 7)
+  const today = calendarIsoDateInTimeZone(serverNowIso, timezone)
+  const tomorrow = addDaysIso(today, 1)
+  const nextWeek = addDaysIso(today, 7)
   const effectiveProjectId = fixedProjectId === undefined ? projectId : fixedProjectId == null ? '' : String(fixedProjectId)
   const projectName = effectiveProjectId
     ? projects.find((project) => project.id === Number(effectiveProjectId))?.name ?? 'Project'

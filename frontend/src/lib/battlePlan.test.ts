@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { addDaysIso, calendarIsoDateInTimeZone } from './time'
 import {
-  addCalendarDays,
   defaultReminderIso,
-  dateInTimeZone,
   deadlineBadge,
   orderedPlannedDates,
   plannedDateSummary,
@@ -52,8 +51,8 @@ describe('deadlineBadge', () => {
 
 describe('calendar helpers', () => {
   it('derives the app date from the server instant and adds calendar days', () => {
-    expect(dateInTimeZone('2026-08-15T16:30:00Z', 'Asia/Singapore')).toBe('2026-08-16')
-    expect(addCalendarDays('2026-12-31', 1)).toBe('2027-01-01')
+    expect(calendarIsoDateInTimeZone('2026-08-15T16:30:00Z', 'Asia/Singapore')).toBe('2026-08-16')
+    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01')
   })
 })
 
@@ -98,7 +97,6 @@ describe('planned date presentation', () => {
     )).toMatchObject({ relativeLabel: 'Today', tone: 'today' })
   })
 })
-
 
 describe('reminder start suggestion', () => {
   it.each([

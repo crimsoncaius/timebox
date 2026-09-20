@@ -1,4 +1,5 @@
 import type { BattleTask, BattleTaskWrite, PriorityLevel, TaskStatus } from './api'
+import { addDaysIso, calendarIsoDateInTimeZone, zonedLocalToIso } from './time'
 
 export const TASK_STATUSES: TaskStatus[] = ['open', 'in_progress', 'blocked', 'completed']
 export const PRIORITY_LEVELS: PriorityLevel[] = ['low', 'medium', 'high']
@@ -72,7 +73,7 @@ export function plannedDateSummary(
   timeZone: string,
   locale?: string,
 ): PlannedDateSummary | null {
-  const today = datePartsInTimeZone(serverNowIso, timeZone)
+  const today = calendarIsoDateInTimeZone(serverNowIso, timeZone)
   const dates = orderedPlannedDates(values, today)
   const primaryDate = dates[0]
   if (!primaryDate) return null
@@ -84,29 +85,6 @@ export function plannedDateSummary(
     additionalCount: dates.length - 1,
     tone: difference === 0 ? 'today' : difference > 0 ? 'future' : 'past',
   }
-}
-
-function datePartsInTimeZone(instant: string | Date, timeZone: string) {
-  const date = instant instanceof Date ? instant : new Date(instant)
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(date).map((part) => [part.type, part.value]),
-  )
-  return `${parts.year}-${parts.month}-${parts.day}`
-}
-
-export function dateInTimeZone(instant: string, timeZone: string) {
-  return datePartsInTimeZone(instant, timeZone)
-}
-
-export function addCalendarDays(dateValue: string, days: number) {
-  const date = new Date(`${dateValue}T12:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
 }
 
 function calendarDayDifference(left: string, right: string) {
@@ -123,8 +101,8 @@ export function deadlineBadge(
 ): DeadlineBadge | null {
   if (!task.deadline_date && !task.deadline_at) return null
 
-  const deadlineDate = task.deadline_date ?? datePartsInTimeZone(task.deadline_at!, timeZone)
-  const today = datePartsInTimeZone(serverNowIso, timeZone)
+  const deadlineDate = task.deadline_date ?? calendarIsoDateInTimeZone(task.deadline_at!, timeZone)
+  const today = calendarIsoDateInTimeZone(serverNowIso, timeZone)
   const difference = calendarDayDifference(deadlineDate, today)
   const displayDate = new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -165,38 +143,6 @@ export function deadlineRank(task: BattleTask) {
   return Number.POSITIVE_INFINITY
 }
 
-/** Convert a wall-clock value in the configured app timezone to an ISO instant. */
-export function zonedLocalToIso(localValue: string, timeZone: string): string {
-  if (!localValue) return ''
-  const [datePart, timePart = '00:00'] = localValue.split('T')
-  const [year, month, day] = datePart.split('-').map(Number)
-  const [hour, minute] = timePart.split(':').map(Number)
-  const desired = Date.UTC(year, month - 1, day, hour, minute)
-  let guess = desired
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-  for (let pass = 0; pass < 2; pass += 1) {
-    const parts = Object.fromEntries(
-      formatter.formatToParts(new Date(guess)).map((part) => [part.type, part.value]),
-    )
-    const represented = Date.UTC(
-      Number(parts.year),
-      Number(parts.month) - 1,
-      Number(parts.day),
-      Number(parts.hour),
-      Number(parts.minute),
-    )
-    guess += desired - represented
-  }
-  return new Date(guess).toISOString()
-}
 
 export function isoToZonedLocal(iso: string | null, timeZone: string): string {
   if (!iso) return ''
@@ -226,6 +172,6 @@ export function defaultReminderIso(now: string, timeZone: string): string {
     || isoToZonedLocal(next.toISOString(), timeZone) <= local) {
     next = new Date(next.getTime() + 60_000)
   }
-  if (dateInTimeZone(next.toISOString(), timeZone) === date) return next.toISOString()
-  return zonedLocalToIso(`${addCalendarDays(date, 1)}T09:00`, timeZone)
+  if (calendarIsoDateInTimeZone(next.toISOString(), timeZone) === date) return next.toISOString()
+  return zonedLocalToIso(`${addDaysIso(date, 1)}T09:00`, timeZone)
 }

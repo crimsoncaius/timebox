@@ -1,6 +1,5 @@
 import type { DayRead } from '../../lib/api'
-import { addDaysIso, minuteInTimeZone, zonedLocalDateTimeCandidates } from '../../lib/time'
-import { dateInTimeZone } from '../../lib/battlePlan'
+import { addDaysIso, calendarIsoDateInTimeZone, minuteInTimeZone, zonedLocalDateTimeCandidates } from '../../lib/time'
 import type { ActivitySnapshot } from './activityRepository'
 
 /** Project the durable journal into the existing Day, including offline history. */
@@ -20,5 +19,5 @@ export function activityDay(date: string, snapshot: ActivitySnapshot, day: DayRe
     return { actual_block, date, start_minute: a === start ? 0 : minuteInTimeZone(new Date(a).toISOString(), zone), end_minute: b === end ? 1440 : minuteInTimeZone(new Date(b).toISOString(), zone), duration_minutes: Math.floor((b - a) / 60000), day_length_minutes: (end - start) / 60000 }
   })
   return { id: 0, date, start_hour: 0, end_hour: 24, show_full_day: true, created_at: snapshot.server_at, updated_at: snapshot.server_at, time_blocks: [], ...(day?.date === date ? day : {}),
-    actual_blocks, actual_minutes: actual_blocks.reduce((sum, p) => sum + p.duration_minutes, 0), meta: { timezone: zone, today: dateInTimeZone(new Date(now).toISOString(), zone), server_now_iso: new Date(now).toISOString() } }
+    actual_blocks, actual_minutes: actual_blocks.reduce((sum, p) => sum + p.duration_minutes, 0), meta: { timezone: zone, today: calendarIsoDateInTimeZone(new Date(now).toISOString(), zone), server_now_iso: new Date(now).toISOString() } }
 }

@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
   addDaysIso,
   addMonthsIso,
   calendarIsoDateInTimeZone,
   firstOfMonthIso,
   floorToSlotMinute,
+  formatHourLabelGcal12,
+  formatTimeRangeGcal12,
+  gapBoundsForDraft,
   minuteFromPointerYInVisibleLane,
   minuteOfDayWithSecondsInTimeZone,
   monthGridForIso,
   monthYearLabelForIso,
-  MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
   resolveSameLaneMovePreviewStart,
   resolveSameLaneMoveStart,
-  gapBoundsForDraft,
   sameLaneResizeBounds,
   snapToSlot,
   validStartMinuteRangesForDuration,
   visibleMinuteRange,
-  formatTimeRangeGcal12,
-  formatHourLabelGcal12,
   zonedLocalDateTimeToIso,
+  zonedLocalToIso,
 } from './time'
 
 describe('time helpers', () => {
@@ -244,5 +245,29 @@ describe('time helpers', () => {
   it('formatHourLabelGcal12 labels hour on the 12h clock', () => {
     expect(formatHourLabelGcal12(4 * 60)).toBe('4 AM')
     expect(formatHourLabelGcal12(12 * 60)).toBe('12 PM')
+  })
+
+  describe('zonedLocalToIso', () => {
+    it('converts an ordinary wall-clock time in the given zone', () => {
+      expect(zonedLocalToIso('2026-06-01T09:30', 'Asia/Singapore')).toBe('2026-06-01T01:30:00.000Z')
+    })
+
+    it('accepts a bare date as local midnight', () => {
+      expect(zonedLocalToIso('2026-06-01', 'Asia/Singapore')).toBe('2026-05-31T16:00:00.000Z')
+    })
+
+    it('takes the earlier occurrence of an ambiguous autumn time', () => {
+      // 01:30 happens twice when New York leaves DST on 2026-11-01.
+      expect(zonedLocalToIso('2026-11-01T01:30', 'America/New_York')).toBe('2026-11-01T05:30:00.000Z')
+    })
+
+    it('moves a spring-forward gap to the first instant that exists', () => {
+      // 02:30 never happens when New York enters DST on 2026-03-08.
+      expect(zonedLocalToIso('2026-03-08T02:30', 'America/New_York')).toBe('2026-03-08T07:00:00.000Z')
+    })
+
+    it('returns an empty string for an empty value', () => {
+      expect(zonedLocalToIso('', 'UTC')).toBe('')
+    })
   })
 })
