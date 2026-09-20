@@ -7,7 +7,6 @@ import { TimeBlockModal } from './TimeBlockModal'
 import { TimeBlockInspectorContent } from './TimeBlockInspectorContent'
 
 // This suite covers the legacy form; ActivityActualEditor is tested separately.
-vi.mock('../features/activity/activityRepository', async original => ({ ...await original<object>(), activityDevelopmentEnabled: false }))
 
 const taskTypes: TaskType[] = [
   { id: 1, name: 'work', created_at: '', updated_at: '' },
@@ -115,10 +114,8 @@ describe('TimeBlockModal', () => {
       expect(onSave).toHaveBeenLastCalledWith({ [field]: 'Newer draft still being typed' })
       await act(async () => { finish() })
 
-      // Planned and Actual IDs can collide; switching lanes is a new selection too.
-      view.rerender(<TimeBlockInspectorContent block={{ ...original, lane: 'actual', name: 'Actual name', note: 'Actual note' }} {...props} />)
-      expect(screen.getByLabelText('Name')).toHaveValue('Actual name')
-      expect(screen.getByLabelText('Note')).toHaveValue('Actual note')
+      // A different block is a new selection, so the drafts must not carry over.
+      // (Switching to the Actual lane now hands off to ActivityActualEditor.)
       view.rerender(<TimeBlockInspectorContent block={{ ...original, id: 11, name: 'Next name', note: 'Next note' }} {...props} />)
       expect(screen.getByLabelText('Name')).toHaveValue('Next name')
       expect(screen.getByLabelText('Note')).toHaveValue('Next note')
@@ -278,67 +275,8 @@ describe('TimeBlockModal', () => {
     })
   })
 
-  it('creates a named standalone Actual Block without choosing a Task Type', async () => {
-    const user = userEvent.setup()
-    const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
-    render(
-      <TimeBlockModal
-        open
-        block={null}
-        draft={{ lane: 'actual', start_minute: 480, end_minute: 510 }}
-        day={emptyDay}
-        taskTypes={taskTypes}
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onCreateFromDraft={onCreateFromDraft}
-        onDelete={vi.fn()}
-        onCreateTaskTypePath={noopCreate}
-      />,
-    )
-
-    const name = screen.getByLabelText('Name')
-    expect(name.compareDocumentPosition(screen.getByLabelText('Task type')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    await user.type(name, '  Walk   home  ')
-    await user.type(screen.getByLabelText('Note'), 'Took the river path')
-    await user.click(screen.getByRole('button', { name: 'Create block' }))
-
-    expect(onCreateFromDraft).toHaveBeenCalledWith({
-      name: 'Walk   home',
-      note: 'Took the river path',
-    })
-  })
-
-  it('adds, reloads, and clears a standalone Actual Block Name separately from Note', async () => {
-    const user = userEvent.setup()
-    const onSave = vi.fn().mockResolvedValue(undefined)
-    const actual = makeBlock({ lane: 'actual', task_id: null, name: null, note: 'Keep me' })
-    const props = {
-      open: true,
-      draft: null,
-      day: emptyDay,
-      taskTypes,
-      onClose: vi.fn(),
-      onSave,
-      onDelete: vi.fn(),
-      onCreateTaskTypePath: noopCreate,
-    }
-    const view = render(<TimeBlockModal block={actual} {...props} />)
-
-    await user.type(screen.getByLabelText('Name'), '  Evening walk  ')
-    await user.tab()
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: 'Evening walk' }))
-    expect(onSave).not.toHaveBeenCalledWith(expect.objectContaining({ note: expect.anything() }))
-
-    view.rerender(<TimeBlockModal block={{ ...actual, name: 'Evening walk' }} {...props} />)
-    expect(screen.getByLabelText('Name')).toHaveValue('Evening walk')
-    expect(screen.getByLabelText('Note')).toHaveValue('Keep me')
-    onSave.mockClear()
-    await user.clear(screen.getByLabelText('Name'))
-    await user.tab()
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: null }))
-  })
-
-  it.each(['planned', 'actual'] as const)(
+  // The Actual lane moved to ActivityActualEditor; see its own test file.
+  it.each(['planned'] as const)(
     'edits and reloads a task-backed %s Block Name without changing its linked context',
     async (lane) => {
       const user = userEvent.setup()
@@ -349,7 +287,7 @@ describe('TimeBlockModal', () => {
         task: { id: 42, title: 'Prepare launch', status: 'in_progress', task_type_id: 1 },
         name: 'Outline session',
         note: 'Keep me',
-        planned_block_id: lane === 'actual' ? 8 : null,
+        planned_block_id: null,
       })
       const props = {
         open: true,

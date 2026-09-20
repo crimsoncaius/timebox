@@ -19,7 +19,7 @@ import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorCo
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
 import { actualPlacementEnd, nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../../lib/blockPlacement'
 import { ActivityTracking } from '../activity/ActivityTracking'
-import { getActivityRepository, type ActivityCorrection, activityDevelopmentEnabled } from '../activity/activityRepository'
+import { getActivityRepository, type ActivityCorrection } from '../activity/activityRepository'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 import { TransientFeedback } from '../../components/TransientFeedback'
@@ -71,7 +71,7 @@ export function TodayPage() {
   const [storedDay, setDay] = useState<DayRead | null>(null)
   const activityRepository = useMemo(() => getActivityRepository(), [])
   const activityState = useSyncExternalStore(activityRepository.subscribe, activityRepository.getSnapshot)
-  const day = useMemo(() => activityDevelopmentEnabled && date && activityState.snapshot ? activityDay(date, activityState.snapshot, storedDay, activityRepository.now()) : storedDay, [date, activityState.snapshot, storedDay, activityRepository])
+  const day = useMemo(() => date && activityState.snapshot ? activityDay(date, activityState.snapshot, storedDay, activityRepository.now()) : storedDay, [date, activityState.snapshot, storedDay, activityRepository])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [storedBattleTasks, setBattleTasks] = useState<BattleTask[]>([])
   const battleTasks = readiness.projectTasks(storedBattleTasks)
@@ -412,25 +412,9 @@ export function TodayPage() {
       try {
         if (draft.lane === 'actual') {
           if (!day) return
-          if (activityDevelopmentEnabled) {
-            const repo = getActivityRepository()
-            if (!await repo.correct('add', null, { ...payload, task_id: draft.task_id ?? null, start_at: payload.start_at ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, draft.start_minute), day.meta.timezone), end_at: payload.end_at ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, draft.end_minute), day.meta.timezone) })) throw new Error(repo.state.error ?? 'Could not save correction')
-            setDraft(null); setInspectorDirty(false); return
-          }
-          const local = (minute: number) => `${date}T${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
-          const created = await api.createActualBlock({
-            task_type_id: payload.task_type_id,
-            task_id: draft.task_id ?? null,
-            name: payload.name,
-            note: payload.note,
-            start_at: zonedLocalDateTimeToIso(local(draft.start_minute), day.meta.timezone),
-            end_at: zonedLocalDateTimeToIso(local(draft.end_minute), day.meta.timezone),
-          })
-          setDay(await api.getDay(date))
-          setDraft(null)
-          setSelectedBlockRef({ id: created.id, lane: 'actual' })
-          setInspectorDirty(false)
-          return
+          const repo = getActivityRepository()
+          if (!await repo.correct('add', null, { ...payload, task_id: draft.task_id ?? null, start_at: payload.start_at ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, draft.start_minute), day.meta.timezone), end_at: payload.end_at ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, draft.end_minute), day.meta.timezone) })) throw new Error(repo.state.error ?? 'Could not save correction')
+          setDraft(null); setInspectorDirty(false); return
         }
         const next = await api.createBlock(date, {
           lane: 'planned', task_type_id: payload.task_type_id, task_id: draft.task_id ?? null,
@@ -504,12 +488,8 @@ export function TodayPage() {
               day.meta.timezone,
             )
           }
-          if (activityDevelopmentEnabled) {
-            const repo = getActivityRepository()
-            if (!await repo.correct('edit', blockId, actualPatch)) throw new Error(repo.state.error ?? 'Could not save correction')
-            return
-          } else await api.patchActualBlock(blockId, actualPatch)
-          setDay(await api.getDay(date))
+          const repo = getActivityRepository()
+          if (!await repo.correct('edit', blockId, actualPatch)) throw new Error(repo.state.error ?? 'Could not save correction')
           return
         }
         const next = await api.patchBlock(date, blockId, patch)
@@ -547,11 +527,9 @@ export function TodayPage() {
       if (!date) return
       setError(null)
       try {
-        if (activityDevelopmentEnabled) {
-          const repo = getActivityRepository()
-          if (!await repo.correct('edit', blockId, patch)) throw new Error(repo.state.error ?? 'Could not save correction')
-          setInspectorDirty(false)
-        } else { await api.patchActualBlock(blockId, patch); setDay(await api.getDay(date)) }
+        const repo = getActivityRepository()
+        if (!await repo.correct('edit', blockId, patch)) throw new Error(repo.state.error ?? 'Could not save correction')
+        setInspectorDirty(false)
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Failed to update Actual block')
         throw cause
@@ -565,11 +543,9 @@ export function TodayPage() {
       if (!date) return
       setError(null)
       try {
-        if (activityDevelopmentEnabled) {
-          const repo = getActivityRepository()
-          if (!await repo.correct('delete', blockId)) throw new Error(repo.state.error ?? 'Could not save correction')
-          setSelectedBlockRef(null); setInspectorDirty(false)
-        } else { await api.deleteActualBlock(blockId); setDay(await api.getDay(date)) }
+        const repo = getActivityRepository()
+        if (!await repo.correct('delete', blockId)) throw new Error(repo.state.error ?? 'Could not save correction')
+        setSelectedBlockRef(null); setInspectorDirty(false)
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Failed to delete Actual block')
         throw cause
@@ -583,17 +559,15 @@ export function TodayPage() {
       if (!date) return
       setError(null)
       try {
-        if (activityDevelopmentEnabled) {
-          const repo = getActivityRepository()
-          await repo.refresh()
-          if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before recording this plan.')
-        }
+        const repo = getActivityRepository()
+        await repo.refresh()
+        if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before recording this plan.')
         const result = await api.recordActualAsPlanned(blockId, confirmation ? { until: confirmation.end_at, fingerprint: confirmation.fingerprint } : undefined)
         if (result.status === 'confirmation_required') { setRecordPreview({ blockId, result }); return }
         setRecordPreview(null)
         if (result.undo_token) { setRecordActualUndo({ plannedBlockId: blockId, token: result.undo_token }); setDayNotice(null) }
         else setDayNotice('Already recorded')
-        if (activityDevelopmentEnabled) await getActivityRepository().refresh()
+        await getActivityRepository().refresh()
         setDay(await api.getDay(date))
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to record Actual as planned'
@@ -654,7 +628,7 @@ export function TodayPage() {
   if (!day) {
     return (
       <Layout>
-        {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {}} /> : null}
+        <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {}} />
         <p className="text-error">{error ?? 'Failed to load day.'}</p>
       </Layout>
     )
@@ -743,7 +717,7 @@ export function TodayPage() {
                 >
                   Next →
                 </button>
-            {!trackingVisible && activityDevelopmentEnabled && <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => changeDayView('tracking', true)}>{activityState.snapshot?.current ? '● Tracking' : 'Tracking'}</button>}
+            {!trackingVisible && <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => changeDayView('tracking', true)}>{activityState.snapshot?.current ? '● Tracking' : 'Tracking'}</button>}
             <button type="button" className="min-h-11 rounded-full border border-outline-variant/40 px-4 text-sm dark:border-dark-outline-variant" onClick={() => setViewOpen(true)}>View</button>
 
               </div>
@@ -791,14 +765,12 @@ export function TodayPage() {
               <button type="button" onClick={async () => {
                 setError(null)
                 try {
-                  if (activityDevelopmentEnabled) {
-                    const repo = getActivityRepository()
-                    await repo.refresh()
-                    if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before Undo.')
-                  }
+                  const repo = getActivityRepository()
+                  await repo.refresh()
+                  if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before Undo.')
                   await api.undoRecordActualAsPlanned(recordActualUndo.plannedBlockId, recordActualUndo.token)
                   setRecordActualUndo(null)
-                  if (activityDevelopmentEnabled) await getActivityRepository().refresh()
+                  await repo.refresh()
                   setDay(await api.getDay(date))
                 } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo recorded Actual') }
               }}>Undo</button>
@@ -832,10 +804,10 @@ export function TodayPage() {
                 : formatTimeRangeGcal12(readyDropPreview.start, readyDropPreview.start + SLOT_MINUTES)}
             </div>
           )}
-          {activityDevelopmentEnabled ? <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {
+          <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {
             void api.getDay(date).then(setDay).catch(() => {})
-          }} /> : null}
-          {activityDevelopmentEnabled && needsElapsedDayView(day) && <ReportingDayActuals day={day} onSelect={id => onBlockClick(id, 'actual')} />}
+          }} />
+          {needsElapsedDayView(day) && <ReportingDayActuals day={day} onSelect={id => onBlockClick(id, 'actual')} />}
           <section
             className="overflow-x-auto pb-24"
             data-auto-scroll-to-now={String(!hasBlockLanding || scrollToNowRequest > 0)}
@@ -845,7 +817,7 @@ export function TodayPage() {
               zoom={timelineZoom}
               onZoomChange={setTimelineZoom}
               ref={timelineRef}
-              day={activityDevelopmentEnabled && needsElapsedDayView(day) ? { ...day, actual_blocks: [] } : day}
+              day={needsElapsedDayView(day) ? { ...day, actual_blocks: [] } : day}
               readOnly={false}
               draft={draft}
               placementSelected={planningTaskId != null && !readyTaskDragging}

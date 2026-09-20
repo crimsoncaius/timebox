@@ -6,9 +6,57 @@ import { TodayPage } from './TodayPage'
 import { ReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessProvider } from '../readiness/ReadinessProvider'
 
-// These scenarios exercise the legacy inspector surface.
-// Canonical tracking and corrections have their own Activity tests.
-vi.mock('../activity/activityRepository', async original => ({ ...await original<object>(), activityDevelopmentEnabled: false }))
+// The page is tested against a stubbed Activity repository: the journal, its
+// outbox and its conflict handling have their own tests in features/activity.
+// `activityFake.snapshot` stays null by default, so `day` is the plain API day;
+// a test that needs projected Actuals opts in by setting it.
+const activityFake = {
+  snapshot: null as unknown,
+  pending: false,
+  error: null as string | null,
+  correct: vi.fn(async () => true),
+  refresh: vi.fn(async () => {}),
+  listeners: new Set<() => void>(),
+  // useSyncExternalStore requires a referentially stable snapshot between changes.
+  cached: { snapshot: null as unknown, pending: false, error: null as string | null },
+  read() {
+    const { snapshot, pending, error } = this
+    if (this.cached.snapshot !== snapshot || this.cached.pending !== pending || this.cached.error !== error) {
+      this.cached = { snapshot, pending, error }
+    }
+    return this.cached
+  },
+  emit() { this.listeners.forEach((listener) => listener()) },
+  reset() {
+    this.snapshot = null
+    this.pending = false
+    this.error = null
+    this.cached = { snapshot: null, pending: false, error: null }
+    this.correct = vi.fn(async () => true)
+    this.refresh = vi.fn(async () => {})
+    this.listeners.clear()
+  },
+}
+
+const activityRepositoryStub = {
+  subscribe: (listener: () => void) => {
+    activityFake.listeners.add(listener)
+    return () => activityFake.listeners.delete(listener)
+  },
+  getSnapshot: () => activityFake.read(),
+  now: () => Date.parse('2026-06-01T12:00:00Z'),
+  refresh: (...args: unknown[]) => activityFake.refresh(...args as []),
+  correct: (...args: unknown[]) => activityFake.correct(...args as []),
+  get state() { return { pending: activityFake.pending, error: activityFake.error } },
+}
+
+vi.mock('../activity/activityRepository', async (original) => ({
+  ...await original<object>(),
+  getActivityRepository: () => activityRepositoryStub,
+}))
+
+// The tracking controls have their own suite; the page only needs them to mount.
+vi.mock('../activity/ActivityTracking', () => ({ ActivityTracking: () => null }))
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -69,6 +117,7 @@ describe('TodayPage inspector rail', () => {
 
   beforeEach(() => {
     localStorage.clear()
+    activityFake.reset()
     rejectNextTaskUndo = false
     standaloneActual = null
     readySaveGate = null
@@ -527,7 +576,7 @@ describe('TodayPage inspector rail', () => {
     })
   })
 
-  it('keeps a newly created standalone Actual selected without a stale discard prompt', async () => {
+  it('clears the draft after creating a standalone Actual so no stale discard prompt follows', async () => {
     const user = userEvent.setup()
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     render(
@@ -543,14 +592,16 @@ describe('TodayPage inspector rail', () => {
     expect(actualLane).not.toBeNull()
     fireEvent.click(actualLane!, { clientY: 47 })
 
-    await user.type(within(rail).getByLabelText('Name'), 'Evening walk')
+    await user.type(within(rail).getByLabelText('Block Name (optional)'), 'Evening walk')
     await user.click(within(rail).getByRole('button', { name: 'Create block' }))
 
-    const actualButton = await screen.findByRole('button', { name: 'Edit actual block' })
-    await user.click(actualButton)
+    await waitFor(() => expect(activityFake.correct).toHaveBeenCalledWith(
+      'add', null, expect.objectContaining({ name: 'Evening walk' }),
+    ))
 
+    // The draft is gone and nothing is dirty, so selecting a block does not prompt.
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
     expect(confirmSpy).not.toHaveBeenCalled()
-    expect(within(rail).getByLabelText('Name')).toHaveValue('Evening walk')
   })
 
   it('asks before discarding unsaved note when selecting another block', async () => {

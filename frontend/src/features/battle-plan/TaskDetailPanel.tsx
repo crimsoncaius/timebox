@@ -1,5 +1,5 @@
 import { SubtaskTitle } from './SubtaskTitle'
-import { activityDevelopmentEnabled, getActivityRepository } from '../activity/activityRepository'
+import { getActivityRepository } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -271,7 +271,7 @@ export function TaskDetailPanel({
 
         <div className="grid min-[720px]:grid-cols-[minmax(0,1fr)_22rem]">
           <main className="flex min-w-0 flex-col gap-6 px-5 py-7 min-[480px]:px-9 min-[720px]:px-9 min-[720px]:py-8">
-            {activityDevelopmentEnabled && task.recurrence_kind !== 'quota_parent' ? <button type="button" disabled={isDirty || isSaving} onClick={async () => {
+            {task.recurrence_kind !== 'quota_parent' ? <button type="button" disabled={isDirty || isSaving} onClick={async () => {
               if (await getActivityRepository().trackTask(task)) requestClose()
               else setTrackingError(getActivityRepository().state.error ?? 'Could not start tracking')
             }}>Track Task</button> : null}

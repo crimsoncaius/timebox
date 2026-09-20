@@ -1,7 +1,7 @@
 import { BlockTimeFields } from './BlockTimeFields'
 import { formatDuration } from '../lib/duration'
 import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
-import { activityDevelopmentEnabled, type ActivityCorrection } from '../features/activity/activityRepository'
+import { type ActivityCorrection } from '../features/activity/activityRepository'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BlockDraftPlacement, DayRead, TaskType, TimeBlock } from '../lib/api'
 import { formatMinuteLabel24, zonedLocalDateTimeToIso } from '../lib/time'
@@ -19,7 +19,7 @@ const NAME_DEBOUNCE_MS = 450
  * Task type, Block Name, and Note persist automatically.
  */
 export function TimeBlockInspectorContent(props: Parameters<typeof LegacyTimeBlockInspectorContent>[0]) {
-  if (activityDevelopmentEnabled && (props.block?.lane ?? props.draft?.lane) === 'actual') return <ActivityActualEditor
+  if ((props.block?.lane ?? props.draft?.lane) === 'actual') return <ActivityActualEditor
     actual={props.day.actual_blocks.find(p => p.actual_block.id === props.block?.id)?.actual_block}
     draft={props.draft} day={props.day} taskTypes={props.taskTypes} onSave={props.onSave} onCreate={props.onCreateFromDraft}
     onDelete={props.onDelete} onClose={props.onClose} onDirtyChange={props.onDirtyChange}

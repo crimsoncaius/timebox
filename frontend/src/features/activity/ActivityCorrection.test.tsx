@@ -7,7 +7,6 @@ import { ActivityTracking } from './ActivityTracking'
 import { useState, useSyncExternalStore } from 'react'
 import type { ActivitySnapshot } from './activityRepository'
 
-vi.mock('./activityRepository', async original => ({ ...await original<object>(), activityDevelopmentEnabled: true }))
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear() })
 const type = { id: 1, name: 'Writing', created_at: '', updated_at: '' }
 const row = { id: 42, task_type_id: 1, task_type: type, task_id: null, task: null, name: 'Across midnight', note: null, planned_block_id: null, start_at: '2025-11-01T23:30:12Z', end_at: '2025-11-02T01:30:34Z', created_at: '', updated_at: '' }

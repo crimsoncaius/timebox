@@ -16,7 +16,9 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
 }) {
   const zone = day.meta.timezone
   const draftLocal = (minute: number) => `${addDaysIso(day.date, Math.floor(minute / 1440))}T${String(Math.floor(minute % 1440 / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
-  const [start, setStart] = useState(() => actual ? activityTimeValue(actual.start_at, zone) : { local: draftLocal(draft!.start_minute) })
+  // A selection can outlive its block: the Actual may already be gone from the day
+  // while no draft has replaced it. Fall back to the day's start rather than throwing.
+  const [start, setStart] = useState(() => actual ? activityTimeValue(actual.start_at, zone) : { local: draftLocal(draft?.start_minute ?? 0) })
   const [end, setEnd] = useState(() => actual?.end_at ? activityTimeValue(actual.end_at, zone) : { local: draftLocal(draft?.end_minute ?? 0) })
   const [name, setName] = useState(actual?.name ?? '')
   const [note, setNote] = useState(actual?.note ?? '')

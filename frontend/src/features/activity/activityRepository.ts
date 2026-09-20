@@ -1,7 +1,6 @@
 import { ApiHttpError, fetchJson } from '../../lib/api/client'
 import type { ActualBlock, TaskType } from '../../lib/api'
 
-export const activityDevelopmentEnabled = true
 export interface ActivityPlan {
   id: number; task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string
 }
