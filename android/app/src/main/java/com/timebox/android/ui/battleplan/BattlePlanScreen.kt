@@ -1532,73 +1532,6 @@ private var SemanticsPropertyReceiver.mobilePickupProgress by MobilePickupProgre
 internal val MobileDragPreviewSurfaceKey = SemanticsPropertyKey<Color>("MobileDragPreviewSurface")
 private var SemanticsPropertyReceiver.mobileDragPreviewSurface by MobileDragPreviewSurfaceKey
 
-internal fun insertionIndexForPointer(
-    pointerY: Float,
-    itemCount: Int,
-    measuredBounds: List<IndexedValue<Rect>>,
-): Int {
-    if (itemCount == 0 || measuredBounds.isEmpty()) return 0
-    val ordered = measuredBounds.sortedBy { it.index }
-    val next = ordered.firstOrNull { pointerY < it.value.center.y }
-    return (next?.index ?: (ordered.last().index + 1)).coerceIn(0, itemCount)
-}
-
-internal fun insertionIndexWithHysteresis(
-    pointerY: Float,
-    itemCount: Int,
-    measuredBounds: List<IndexedValue<Rect>>,
-    currentIndex: Int,
-    hysteresis: Float,
-): Int {
-    val raw = insertionIndexForPointer(pointerY, itemCount, measuredBounds)
-    val current = currentIndex.coerceIn(0, itemCount)
-    if (raw == current || hysteresis <= 0f) return raw
-    val boundaryIndex = if (raw > current) current else current - 1
-    val boundary = measuredBounds.firstOrNull { it.index == boundaryIndex }?.value?.center?.y ?: return raw
-    return when {
-        raw > current && pointerY <= boundary + hysteresis -> current
-        raw < current && pointerY >= boundary - hysteresis -> current
-        else -> raw
-    }
-}
-
-internal fun verticalAutoScrollStep(
-    pointerY: Float,
-    laneBounds: Rect,
-    edgeSize: Float,
-    maximumStep: Float,
-): Float = when {
-    edgeSize <= 0f || maximumStep <= 0f -> 0f
-    pointerY < laneBounds.top + edgeSize -> {
-        val strength = ((laneBounds.top + edgeSize - pointerY) / edgeSize).coerceIn(0f, 1f)
-        -maximumStep * strength
-    }
-    pointerY > laneBounds.bottom - edgeSize -> {
-        val strength = ((pointerY - (laneBounds.bottom - edgeSize)) / edgeSize).coerceIn(0f, 1f)
-        maximumStep * strength
-    }
-    else -> 0f
-}
-
-internal fun isUnchangedDrop(
-    sourceStatus: TaskStatus,
-    targetStatus: TaskStatus,
-    sourceIndex: Int,
-    targetIndex: Int,
-): Boolean = sourceStatus == targetStatus && sourceIndex == targetIndex
-
-internal fun edgePageDirection(
-    pointerX: Float,
-    viewportWidth: Float,
-    edgeWidth: Float,
-    currentPage: Int,
-    pageCount: Int,
-): Int = when {
-    pointerX <= edgeWidth && currentPage > 0 -> -1
-    pointerX >= viewportWidth - edgeWidth && currentPage < pageCount - 1 -> 1
-    else -> 0
-}
-
 @Composable
 private fun MobileTaskDragPreview(
     drag: MobileTaskDragState,
@@ -1884,55 +1817,6 @@ fun TaskDetailScreen(
             text = { Text("The subtask can be restored while its parent remains active.") },
             confirmButton = { TextButton(onClick = onConfirmSubtaskTrash) { Text("Move to Trash") } },
             dismissButton = { TextButton(onClick = onDismissSubtaskTrash) { Text("Cancel") } },
-        )
-    }
-}
-
-@Composable
-private fun MobileBlockedPill(task: BattleTask) {
-    val colors = TimeboxTheme.colors
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.error.copy(alpha = 0.08f))
-            .semantics {
-                contentDescription = "${task.title} is blocked"
-            }
-            .padding(horizontal = 9.dp, vertical = 5.dp),
-    ) {
-        Text(
-            "BLOCKED",
-            style = TimeboxTheme.type.laneLabel,
-            color = if (task.isBlocked) colors.error else colors.onVariant,
-        )
-    }
-}
-
-@Composable
-private fun MobilePrioritySignals(task: BattleTask) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (task.urgency == PriorityLevel.High) {
-            MobilePrioritySignal("URGENT", urgent = true)
-        }
-        if (task.importance == PriorityLevel.High) {
-            MobilePrioritySignal("IMPORTANT", urgent = false)
-        }
-    }
-}
-
-@Composable
-private fun MobilePrioritySignal(label: String, urgent: Boolean) {
-    val colors = TimeboxTheme.colors
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (urgent) colors.error.copy(alpha = 0.12f) else colors.plannedSurface)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-    ) {
-        Text(
-            label,
-            style = TimeboxTheme.type.laneLabel.copy(fontSize = 9.sp),
-            color = if (urgent) colors.error else colors.planned,
         )
     }
 }
