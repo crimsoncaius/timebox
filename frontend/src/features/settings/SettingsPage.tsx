@@ -4,6 +4,7 @@ import { ReportingTimezoneSettings } from '../activity/ReportingTimezoneSettings
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Layout } from '../../components/Layout'
 import { api, type SettingsRead } from '../../lib/api'
+import { errorMessage } from '../../lib/errors'
 
 function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
   if (saveState === 'error') return 'text-error'
@@ -65,7 +66,7 @@ export function SettingsPage() {
       latestAcceptedMetadata.current = { requestId: 0, updatedAt: s.updated_at }
       setSettings(s)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load settings')
+      setError(errorMessage(e, 'Failed to load settings'))
     } finally {
       setLoading(false)
     }
@@ -105,7 +106,7 @@ export function SettingsPage() {
         return requestId > acceptedRequestId && !laterPending
       })
       if (isRelevant) {
-        const message = e instanceof Error ? e.message : 'Failed to save settings'
+        const message = errorMessage(e, 'Failed to save settings')
         saveError.current = message
         setError(message)
       }

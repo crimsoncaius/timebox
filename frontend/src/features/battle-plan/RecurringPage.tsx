@@ -21,6 +21,7 @@ import { persistBattlePlanScope, projectTaskCount, type BattlePlanScope } from '
 import { ProjectEditor } from './ProjectEditor'
 import { PriorityControl } from './TaskDetailPanel'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
+import { errorMessage } from '../../lib/errors'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const buttonClass = 'rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
@@ -72,7 +73,7 @@ export function RecurringPage() {
       setTaskTypes(typeRows)
     } catch (cause) {
       if (requestId !== latestLoadRequest.current) return
-      setError(cause instanceof Error ? cause.message : 'Failed to load recurring templates')
+      setError(errorMessage(cause, 'Failed to load recurring templates'))
     } finally {
       if (requestId === latestLoadRequest.current) setLoading(false)
     }
@@ -104,7 +105,7 @@ export function RecurringPage() {
       setSearchParams({ view: 'recurring' })
       await load(status)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Recurring action failed')
+      setError(errorMessage(cause, 'Recurring action failed'))
     }
   }
 
@@ -581,7 +582,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
         : await api.createRecurringTemplate(body)
       await onSaved(saved)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to save recurring template')
+      setError(errorMessage(cause, 'Failed to save recurring template'))
     } finally {
       setSaving(false)
     }

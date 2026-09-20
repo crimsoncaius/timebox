@@ -5,6 +5,7 @@ import { ActivityTimeField } from './ActivityTimeField'
 import { activityTimeValue, resolveActivityTime } from './activityTime'
 import type { ActivityCorrection } from './activityRepository'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
+import { errorMessage } from '../../lib/errors'
 
 /** The Actual form inside the existing Day inspector rail / sheet. */
 export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, onCreate, onDelete, onClose, onDirtyChange, onCreateTaskTypePath }: {
@@ -32,7 +33,7 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
       const patch = { start_at: resolveActivityTime(start, zone), end_at: resolveActivityTime(end, zone), task_type_id: type || undefined, name: name.trim() || null, note: note.trim() || null }
       if (actual) await onSave(patch); else await onCreate?.(patch)
       setDirty(false); onDirtyChange?.(false)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save correction') } finally { setSaving(false) }
+    } catch (cause) { setError(errorMessage(cause, 'Could not save correction')) } finally { setSaving(false) }
   }}>
     <h2>{actual ? 'Actual Block' : 'New Actual Block'}</h2>
     <p className="text-xs">Reporting Time Zone: {zone}</p>

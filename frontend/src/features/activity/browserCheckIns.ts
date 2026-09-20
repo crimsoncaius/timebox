@@ -1,4 +1,5 @@
 import { ActivityRepository, getActivityRepository } from './activityRepository'
+import { errorMessage } from '../../lib/errors'
 
 interface NativeIdleDetector extends EventTarget {
   userState: 'active' | 'idle' | null
@@ -150,7 +151,7 @@ export class BrowserCheckIns {
           if (question) await registration.showNotification('Still doing this?', { body: 'Recording continues. Open Timebox to confirm or switch activity.', tag: `activity:${question.id}`, data: { activityQuestion: question.id }, renotify: false } as NotificationOptions)
         } catch { /* A consumed optional delivery attempt is never escalated again. */ }
       }
-    } catch (error) { if (!abort.signal.aborted) { this.reset(); this.publish({ detail: `Device detection paused: ${error instanceof Error ? error.message : 'unavailable'}` }) } }
+    } catch (error) { if (!abort.signal.aborted) { this.reset(); this.publish({ detail: `Device detection paused: ${errorMessage(error, 'unavailable')}` }) } }
     finally { abort.abort(); this.sampling = false }
   }
 }

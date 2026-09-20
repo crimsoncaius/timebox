@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { TransientFeedback } from '../../components/TransientFeedback'
+import { errorMessage } from '../../lib/errors'
 
 export type TrashUndoTarget = {
   noticeId: number
@@ -69,7 +70,7 @@ export function TrashUndoNotice({ target, onUndo, onDismiss, onExpire }: {
       await onUndo()
     } catch (error) {
       restoring.current = false
-      setFailure(error instanceof Error ? error.message : 'Could not restore the item')
+      setFailure(errorMessage(error, 'Could not restore the item'))
       setPhase('error')
     }
   }

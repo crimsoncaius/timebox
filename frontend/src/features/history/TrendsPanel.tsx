@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { shiftTrendRange, trendDuration, type TrendNode, type TrendsReport } from './trends'
+import { errorMessage } from '../../lib/errors'
 
 type Period = 'day' | 'week' | 'month' | 'custom'
 type Drill = (name: string, days: Record<string, number>) => void
@@ -28,7 +29,7 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
         const value = await api.trends(query, controller.signal)
         if (current) setReport(value)
       } catch (e) {
-        if (current) setError(e instanceof Error ? e.message : 'Unable to load recorded time')
+        if (current) setError(errorMessage(e, 'Unable to load recorded time'))
       } finally { if (current) setLoading(false) }
     }
     void load()

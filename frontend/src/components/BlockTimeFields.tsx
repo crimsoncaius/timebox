@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TimeBlock } from '../lib/api'
 import { formatMinuteLabel24 } from '../lib/time'
+import { errorMessage } from '../lib/errors'
 
 export function parseBlockMinute(text: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(text.trim())
@@ -31,7 +32,7 @@ export function BlockTimeFields({ block, onSave }: {
       if (a == null || b == null || !valid) return
       setSaving(true); setError(null)
       try { await onSave({ start_minute: a, end_minute: b }) }
-      catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save times') }
+      catch (cause) { setError(errorMessage(cause, 'Could not save times')) }
       finally { setSaving(false) }
     }}>{saving ? 'Saving…' : 'Save times'}</button>
   </section>

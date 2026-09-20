@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react'
+import { errorMessage } from '../../lib/errors'
 
 export function SubtaskTitle({ id, title, disabled, className, onRename }: {
   id: number
@@ -32,7 +33,7 @@ export function SubtaskTitle({ id, title, disabled, className, onRename }: {
       await onRename(id, cleanTitle)
       close()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not rename subtask. Please retry.')
+      setError(errorMessage(cause, 'Could not rename subtask. Please retry.'))
     } finally {
       pending.current = false
       setSaving(false)

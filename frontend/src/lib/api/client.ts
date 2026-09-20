@@ -84,7 +84,7 @@ function parseApiErrorBody(text: string): string {
   return trimmed
 }
 
-export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function request(path: string, init?: RequestInit): Promise<Response> {
   const timeout = timeoutSignal(DEFAULT_FETCH_TIMEOUT_MS)
   let res: Response
   try {
@@ -109,32 +109,13 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
     const text = await res.text()
     throw new ApiHttpError(res.status, parseApiErrorBody(text || res.statusText))
   }
-  return res.json() as Promise<T>
+  return res
+}
+
+export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await request(path, init)).json() as Promise<T>
 }
 
 export async function fetchVoid(path: string, init?: RequestInit): Promise<void> {
-  const timeout = timeoutSignal(DEFAULT_FETCH_TIMEOUT_MS)
-  let res: Response
-  try {
-    res = await fetch(`${apiPrefix()}${path}`, {
-      ...init,
-      signal: mergeSignals(init?.signal, timeout),
-      headers: {
-        'Content-Type': 'application/json',
-        ...protocolHeaders(),
-        ...init?.headers,
-      },
-    })
-  } catch (e) {
-    if (isAbortError(e)) {
-      throw new Error(
-        `No API response within ${DEFAULT_FETCH_TIMEOUT_MS / 1000}s. Start the backend (see README) or check the Vite /api proxy target.`,
-      )
-    }
-    throw e
-  }
-  if (!res.ok) {
-    const text = await res.text()
-    throw new ApiHttpError(res.status, parseApiErrorBody(text || res.statusText))
-  }
+  await request(path, init)
 }

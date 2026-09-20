@@ -1,5 +1,6 @@
 import { ApiHttpError, fetchJson } from '../../lib/api/client'
 import type { ActualBlock, TaskType } from '../../lib/api'
+import { errorMessage } from '../../lib/errors'
 
 export interface ActivityPlan {
   id: number; task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string
@@ -231,7 +232,7 @@ export class ActivityRepository {
         this.bootstrappedThisRun = true
         this.publish()
       })
-    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not refresh activity') }
+    } catch (error) { this.publish(errorMessage(error, 'Could not refresh activity')) }
   }
   checkInPreferences = (): CheckInPreferences => this.journal.checkInPreferences ?? { enabled: true, thresholdMinutes: 60 }
   async setCheckInPreferences(preferences: CheckInPreferences) {
@@ -241,7 +242,7 @@ export class ActivityRepository {
         if (!Number.isInteger(preferences.thresholdMinutes) || preferences.thresholdMinutes < 15 || preferences.thresholdMinutes > 480) throw new Error('Choose 15 to 480 minutes.')
         this.save({ ...this.journal, checkInPreferences: preferences }); this.publish()
       }); return true
-    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save settings'); return false }
+    } catch (error) { this.publish(errorMessage(error, 'Could not save settings')); return false }
   }
   async checkIn(event: CheckInEvent): Promise<string | false> {
     let saved: string | false = false
@@ -261,7 +262,7 @@ export class ActivityRepository {
         this.save({ ...this.journal, sequence, lastAction: at, outbox: [...this.journal.outbox, command] })
         saved = command.operation_id; this.publish(); await this.drain(); this.publish()
       })
-    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save check-in') }
+    } catch (error) { this.publish(errorMessage(error, 'Could not save check-in')) }
     return saved
   }
   async claimCheckInNotification(candidateOperation: string) {
@@ -288,7 +289,7 @@ export class ActivityRepository {
         this.publish()
       })
       return true
-    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save time zone'); return false }
+    } catch (error) { this.publish(errorMessage(error, 'Could not save time zone')); return false }
   }
   async command(kind: 'start' | 'switch' | 'stop', taskTypeId?: number, name?: string, retryOnly = false, selection?: ActivitySelection, timing?: { at?: string; targetId: number }) {
     if (retryOnly) { await this.refresh(); return !this.state.pending && !this.state.error }
@@ -325,7 +326,7 @@ export class ActivityRepository {
         saved = true
         this.publish()
       })
-    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save activity'); return false }
+    } catch (error) { this.publish(errorMessage(error, 'Could not save activity')); return false }
     if (saved) void this.refresh()
     return saved
   }
@@ -356,7 +357,7 @@ export class ActivityRepository {
       })
       void this.refresh()
       return true
-    } catch (error) { this.publish(error instanceof Error ? error.message : 'Could not save correction'); return false }
+    } catch (error) { this.publish(errorMessage(error, 'Could not save correction')); return false }
   }
   currentPlan = () => this.state.snapshot?.plans?.find(p => Date.parse(p.start_at) <= this.now() && this.now() < Date.parse(p.end_at))
   async trackTask(task: { id: number; title: string; task_type_id: number | null; recurrence_kind?: string | null; status: string }) {

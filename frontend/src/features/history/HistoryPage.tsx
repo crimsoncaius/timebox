@@ -5,6 +5,7 @@ import { api, type DayListItem } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
 import { TrendsPanel } from './TrendsPanel'
 import { daysByDate, shiftMonth } from './historyCalendar'
+import { errorMessage } from '../../lib/errors'
 
 type CalendarMonth = { y: number; m: number }
 
@@ -34,7 +35,7 @@ export function HistoryPage() {
       setRows(data)
       setApplicationMonth(calendarMonthFromIso(health.today))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load history')
+      setError(errorMessage(e, 'Failed to load history'))
     } finally {
       setLoading(false)
     }

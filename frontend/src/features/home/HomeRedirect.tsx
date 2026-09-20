@@ -5,6 +5,7 @@ import { calendarIsoDateInTimeZone } from '../../lib/time'
 import { Layout } from '../../components/Layout'
 import { ActivityTracking } from '../activity/ActivityTracking'
 import { getActivityRepository } from '../activity/activityRepository'
+import { errorMessage } from '../../lib/errors'
 
 export function HomeRedirect() {
   const [target, setTarget] = useState<string | null>(null)
@@ -19,7 +20,7 @@ export function HomeRedirect() {
         : api.health()
     })
       .then((h) => setTarget(h.today))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not reach API'))
+      .catch((e: unknown) => setError(errorMessage(e, 'Could not reach API')))
   }, [])
 
   if (error) {

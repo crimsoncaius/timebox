@@ -32,6 +32,7 @@ import {
   visibleMinuteRange,
   zonedLocalDateTimeToIso,
 } from '../../lib/time'
+import { errorMessage } from '../../lib/errors'
 
 function formatDisplayDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)
@@ -156,7 +157,7 @@ export function TodayPage() {
       setTaskTypes(tt)
       ingestBattleTasks(battle?.items ?? [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load day')
+      setError(errorMessage(e, 'Failed to load day'))
     } finally {
       setLoading(false)
     }
@@ -288,7 +289,7 @@ export function TodayPage() {
           ingestBattleTasks(refreshed.items)
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to plan task')
+        setError(errorMessage(e, 'Failed to plan task'))
         void api.getDay(date).then(setDay).catch(() => {})
       } finally {
         planningTaskInFlightRef.current = false
@@ -437,7 +438,7 @@ export function TodayPage() {
         setInspectorDirty(false)
         if (created) setSelectedBlockRef({ id: created.id, lane: created.lane })
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to create block')
+        setError(errorMessage(e, 'Failed to create block'))
         throw e
       } finally {
         draftCommitInFlightRef.current = false
@@ -495,7 +496,7 @@ export function TodayPage() {
         const next = await api.patchBlock(date, blockId, patch)
         setDay(next)
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to update block'
+        const msg = errorMessage(e, 'Failed to update block')
         setError(msg)
         void api.getDay(date).then(setDay).catch(() => {})
         throw e
@@ -514,7 +515,7 @@ export function TodayPage() {
         const next = await api.deleteBlock(date, blockId)
         setDay(next)
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to delete block'
+        const msg = errorMessage(e, 'Failed to delete block')
         setError(msg)
         throw e
       }
@@ -531,7 +532,7 @@ export function TodayPage() {
         if (!await repo.correct('edit', blockId, patch)) throw new Error(repo.state.error ?? 'Could not save correction')
         setInspectorDirty(false)
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Failed to update Actual block')
+        setError(errorMessage(cause, 'Failed to update Actual block'))
         throw cause
       }
     },
@@ -547,7 +548,7 @@ export function TodayPage() {
         if (!await repo.correct('delete', blockId)) throw new Error(repo.state.error ?? 'Could not save correction')
         setSelectedBlockRef(null); setInspectorDirty(false)
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Failed to delete Actual block')
+        setError(errorMessage(cause, 'Failed to delete Actual block'))
         throw cause
       }
     },
@@ -570,7 +571,7 @@ export function TodayPage() {
         await getActivityRepository().refresh()
         setDay(await api.getDay(date))
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to record Actual as planned'
+        const msg = errorMessage(e, 'Failed to record Actual as planned')
         setError(msg)
         throw e
       }
@@ -587,7 +588,7 @@ export function TodayPage() {
       setTaskTypes(nextTaskTypes)
       return created
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create task type'
+      const msg = errorMessage(e, 'Failed to create task type')
       setError(msg)
       throw e
     }
@@ -752,7 +753,7 @@ export function TodayPage() {
                     await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
                     setCompletionUndo(null)
                     await load()
-                  } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo Task Completion') }
+                  } catch (cause) { setError(errorMessage(cause, 'Failed to undo Task Completion')) }
                 }}
               >
                 Undo
@@ -772,7 +773,7 @@ export function TodayPage() {
                   setRecordActualUndo(null)
                   await repo.refresh()
                   setDay(await api.getDay(date))
-                } catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to undo recorded Actual') }
+                } catch (cause) { setError(errorMessage(cause, 'Failed to undo recorded Actual')) }
               }}>Undo</button>
             } />
           ) : null}
