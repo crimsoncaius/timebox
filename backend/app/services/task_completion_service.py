@@ -186,23 +186,26 @@ def set_subtask_checked(
     return _subtask_read(row)
 
 
-def complete_task(
-    db: Session,
-    task_id: int,
-    captured_at: dt.datetime,
-    settings: Settings,
-) -> tuple[Task, str, list[int]]:
-    """Apply the one global Task Completion transition atomically."""
+def _load_completable_task(db: Session, task_id: int) -> Task:
+    """Lock the Task and reject the states Completion cannot act on."""
 
-    completed_at = as_utc(captured_at)
     row = db.execute(task_select(task_id, for_update=True)).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")
     _assert_completable(row)
     if row.status == TaskStatus.completed:
         raise ValueError("Task is already completed")
+    return row
 
-    active_snapshot = db.execute(
+
+def _peek_active_actual(db: Session, task_id: int) -> tuple[int | None, int | None]:
+    """Read this Task's running Actual and its Planned correspondence, without locking.
+
+    Taken before the Day and Planned locks so the caller knows which Planned
+    Block to preserve; the row itself is locked afterwards, in lock order.
+    """
+
+    snapshot = db.execute(
         select(TimeBlock.id, TimeBlock.planned_block_id).where(
             TimeBlock.lane == BlockLane.actual,
             TimeBlock.task_id == task_id,
@@ -210,16 +213,31 @@ def complete_task(
             TimeBlock.end_at.is_(None),
         )
     ).one_or_none()
-    active_id = active_snapshot.id if active_snapshot is not None else None
-    active_planned_id = (
-        active_snapshot.planned_block_id if active_snapshot is not None else None
-    )
+    if snapshot is None:
+        return None, None
+    return snapshot.id, snapshot.planned_block_id
 
-    planned_snapshot = list(
-        db.execute(_planned_for_task_select(task_id)).scalars()
-    )
+
+def _lock_active_actual(
+    db: Session, task_id: int, active_id: int | None, planned_id: int | None
+) -> tuple[TimeBlock | None, int | None]:
+    """Lock the Actual seen by _peek_active_actual, if it is still running."""
+
+    if active_id is None:
+        return None, planned_id
+    active = db.execute(_actual_select(active_id, for_update=True)).scalar_one_or_none()
+    if active is None or active.task_id != task_id or active.end_at is not None:
+        return None, planned_id
+    return active, active.planned_block_id
+
+
+def _lock_planned_blocks(db: Session, task_id: int) -> tuple[list[TimeBlock], dict[int, Day]]:
+    """Lock this Task's Planned Blocks and the Days holding them, Days first."""
+
     day_ids = {
-        block.day_id for block in planned_snapshot if block.day_id is not None
+        block.day_id
+        for block in db.execute(_planned_for_task_select(task_id)).scalars()
+        if block.day_id is not None
     }
     days = {
         day.id: day
@@ -227,44 +245,56 @@ def complete_task(
             select(Day).where(Day.id.in_(day_ids)).order_by(Day.id).with_for_update()
         ).scalars()
     }
-    planned_rows = list(
-        db.execute(_planned_for_task_select(task_id, for_update=True)).scalars()
-    )
+    planned = list(db.execute(_planned_for_task_select(task_id, for_update=True)).scalars())
+    return planned, days
 
-    active: TimeBlock | None = None
-    if active_id is not None:
-        active = db.execute(
-            _actual_select(active_id, for_update=True)
-        ).scalar_one_or_none()
-        if active is not None and (
-            active.task_id != task_id or active.end_at is not None
-        ):
-            active = None
-        elif active is not None:
-            active_planned_id = active.planned_block_id
 
-    removable = [
+def _removable_future_blocks(
+    planned: list[TimeBlock],
+    days: dict[int, Day],
+    *,
+    keep_planned_id: int | None,
+    completed_at: dt.datetime,
+    settings: Settings,
+) -> list[TimeBlock]:
+    """Planned Blocks starting after Completion, minus the one being recorded."""
+
+    return [
         block
-        for block in planned_rows
-        if block.id != active_planned_id
+        for block in planned
+        if block.id != keep_planned_id
         and block.day_id in days
         and _planned_start(block, days[block.day_id], settings) > completed_at
     ]
-    removable_ids = {block.id for block in removable}
-    ended_actuals = {
+
+
+def _lock_corresponding_actuals(db: Session, planned_ids: set[int]) -> dict[int, TimeBlock]:
+    """Lock the Actual corresponding to each removable Planned Block, keyed by Planned id."""
+
+    if not planned_ids:
+        return {}
+    return {
         actual.planned_block_id: actual
         for actual in db.execute(
             select(TimeBlock)
             .where(
                 TimeBlock.lane == BlockLane.actual,
-                TimeBlock.planned_block_id.in_(removable_ids),
+                TimeBlock.planned_block_id.in_(planned_ids),
             )
             .order_by(TimeBlock.id)
             .with_for_update()
         ).scalars()
-    } if removable_ids else {}
+    }
 
-    token = uuid.uuid4().hex
+
+def _completion_operation(
+    row: Task,
+    removable: list[TimeBlock],
+    ended_actuals: dict[int, TimeBlock],
+    completed_at: dt.datetime,
+) -> TaskCompletionOperation:
+    """The Undo record: everything this Completion is about to remove."""
+
     snapshot = {
         "captured_at": completed_at.isoformat(),
         "task": _task_snapshot(row),
@@ -278,11 +308,40 @@ def complete_task(
             for block in removable
         ],
     }
-    operation = TaskCompletionOperation(
-        token=token,
+    return TaskCompletionOperation(
+        token=uuid.uuid4().hex,
         root_task_id=row.id,
         snapshot_json=json.dumps(snapshot),
     )
+
+
+def complete_task(
+    db: Session,
+    task_id: int,
+    captured_at: dt.datetime,
+    settings: Settings,
+) -> tuple[Task, str, list[int]]:
+    """Apply the one global Task Completion transition atomically.
+
+    Lock order is Task -> Day -> Planned -> Actual -> operation, the same order
+    every other command touching Planned/Actual correspondence uses.
+    """
+
+    completed_at = as_utc(captured_at)
+    row = _load_completable_task(db, task_id)
+    active_id, active_planned_id = _peek_active_actual(db, task_id)
+    planned_rows, days = _lock_planned_blocks(db, task_id)
+    active, active_planned_id = _lock_active_actual(db, task_id, active_id, active_planned_id)
+    removable = _removable_future_blocks(
+        planned_rows,
+        days,
+        keep_planned_id=active_planned_id,
+        completed_at=completed_at,
+        settings=settings,
+    )
+    ended_actuals = _lock_corresponding_actuals(db, {block.id for block in removable})
+    operation = _completion_operation(row, removable, ended_actuals, completed_at)
+    token = operation.token
 
     try:
         if active is not None:
