@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import datetime as dt
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import day_date
+from app.api.errors import domain_http_error
 from app.core.config import Settings, get_settings
-from app.core.time import parse_iso_date
 from app.db.session import get_db
 from app.schemas.day import (
     DayListItem,
@@ -24,6 +27,14 @@ def get_reporting_settings(db: Session = Depends(get_db), settings: Settings = D
     return activity_service.reporting_settings(db, settings)
 
 
+def _read_after_mutation(db: Session, d: dt.date, settings: Settings) -> DayRead:
+    """Re-read the day a mutation just committed, so callers see its final shape."""
+
+    day = day_service.get_day_by_date(db, d)
+    assert day is not None
+    return day_service.to_day_read(db, day, settings)
+
+
 @router.post("/plan", response_model=PlanningCommitRead)
 def commit_plan(
     body: PlanningCommitCreate,
@@ -32,9 +43,9 @@ def commit_plan(
 ) -> PlanningCommitRead:
     try:
         days = day_service.commit_planning_session(db, body.placements)
-    except ValueError as e:
+    except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=422, detail=str(e)) from e
+        raise domain_http_error(exc) from exc
     return PlanningCommitRead(days=[day_service.to_day_read(db, day, settings) for day in days])
 
 
@@ -50,102 +61,75 @@ def list_days(
 
 @router.get("/{date}", response_model=DayRead)
 def get_day(
-    date: str,
+    d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
     return day_service.to_day_read(db, day, settings)
 
 
 @router.get("/{date}/preview", response_model=DayPreviewRead)
 def get_day_preview(
-    date: str,
+    d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DayPreviewRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_day_by_date(db, d)
     return day_service.build_day_preview(db, day, d, settings)
 
 
 @router.get("/{date}/summary", response_model=DaySummaryRead)
 def get_day_summary(
-    date: str,
+    d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DaySummaryRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_day_by_date(db, d)
     return day_service.build_day_summary(db, day, d, settings)
 
 
 @router.post("/{date}/blocks", response_model=DayRead)
 def create_block(
-    date: str,
     body: PlannedBlockCreate,
+    d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
     try:
         day_service.create_time_block(db, day, body)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    db_day = day_service.get_day_by_date(db, d)
-    assert db_day is not None
-    return day_service.to_day_read(db, db_day, settings)
+    except ValueError as exc:
+        raise domain_http_error(exc) from exc
+    return _read_after_mutation(db, d, settings)
+
 
 @router.patch("/{date}/blocks/{block_id}", response_model=DayRead)
 def patch_block(
-    date: str,
     block_id: int,
     body: TimeBlockPatch,
+    d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
     try:
         day_service.patch_time_block(db, day, block_id, body)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    db_day = day_service.get_day_by_date(db, d)
-    assert db_day is not None
-    return day_service.to_day_read(db, db_day, settings)
+    except ValueError as exc:
+        raise domain_http_error(exc) from exc
+    return _read_after_mutation(db, d, settings)
+
+
 @router.delete("/{date}/blocks/{block_id}", response_model=DayRead)
 def delete_block(
-    date: str,
     block_id: int,
+    d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
-    try:
-        d = parse_iso_date(date)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="Invalid date, use YYYY-MM-DD") from e
     day = day_service.get_or_create_day(db, d)
     try:
         day_service.delete_time_block(db, day, block_id)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    db_day = day_service.get_day_by_date(db, d)
-    assert db_day is not None
-    return day_service.to_day_read(db, db_day, settings)
+    except ValueError as exc:
+        raise domain_http_error(exc) from exc
+    return _read_after_mutation(db, d, settings)

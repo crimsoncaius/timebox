@@ -580,12 +580,14 @@ def test_commit_plan_rejects_duplicate_tasks_without_writing(client):
 
 
 def test_create_block_unknown_task_type(client):
+    """A missing Task Type is 404 here, as it is on every other router."""
     client.get("/days/2026-04-20")
     r = client.post(
         "/days/2026-04-20/blocks",
         json={"lane": "planned", "task_type_id": 99999, "start_minute": 0, "end_minute": 30},
     )
-    assert r.status_code == 422
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Task type not found"
 
 
 def test_record_actual_as_planned_exact_repeat_is_idempotent(client):
