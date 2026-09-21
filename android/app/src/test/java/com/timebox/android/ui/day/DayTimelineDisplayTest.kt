@@ -67,7 +67,7 @@ class DayTimelineDisplayTest {
         ),
         timezone = "Asia/Singapore",
         today = today,
-        serverNowMinute = 10 * 60 + 45,
+        elapsedRealtime = { 0L }, serverNowMinute = 10 * 60 + 45,
     )
 
     @Test

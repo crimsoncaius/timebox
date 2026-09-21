@@ -77,6 +77,7 @@ class TimeboxRepository private constructor(
     private val preferences: AppPreferences?,
     private val fixedApi: TimeboxApi?,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val dayElapsedRealtime: () -> Long = android.os.SystemClock::elapsedRealtime,
 ) {
 
     /** Production hooks keep device-local reminder work synchronized without caching task data. */
@@ -91,8 +92,11 @@ class TimeboxRepository private constructor(
      * Test seam for repository contract tests; production always uses [AppPreferences].
      * Pass a test dispatcher to keep calls on the test scheduler instead of real IO threads.
      */
-    internal constructor(api: TimeboxApi, ioDispatcher: CoroutineDispatcher = Dispatchers.IO) :
-        this(null, api, ioDispatcher)
+    internal constructor(
+        api: TimeboxApi,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        dayElapsedRealtime: () -> Long = android.os.SystemClock::elapsedRealtime,
+    ) : this(null, api, ioDispatcher, dayElapsedRealtime)
 
     val settings: Flow<AppSettings> = preferences?.settings
         ?: flowOf(AppSettings(baseUrl = "http://localhost/", apiKey = "", darkTheme = null))
@@ -149,10 +153,10 @@ class TimeboxRepository private constructor(
         return created
     }
 
-    suspend fun getDay(date: LocalDate): Result<Day> = call { api().getDay(date.toString()).toModel() }
+    suspend fun getDay(date: LocalDate): Result<Day> = call { api().getDay(date.toString()).toModel(dayElapsedRealtime) }
 
     suspend fun getDayPreview(date: LocalDate): Result<Day> =
-        call { api().getDayPreview(date.toString()).toModel() }
+        call { api().getDayPreview(date.toString()).toModel(dayElapsedRealtime) }
 
     suspend fun getDaySummary(date: LocalDate): Result<DaySummary> =
         call { api().getDaySummary(date.toString()).toModel() }
@@ -205,7 +209,7 @@ class TimeboxRepository private constructor(
                 startMinute = startMinute,
                 endMinute = endMinute,
             ),
-        ).toModel()
+        ).toModel(dayElapsedRealtime)
     }
 
     suspend fun patchBlock(
@@ -222,7 +226,7 @@ class TimeboxRepository private constructor(
             date.toString(),
             blockId,
             timeBlockPatchBody(taskTypeId, taskId, name, note, startMinute, endMinute),
-        ).toModel()
+        ).toModel(dayElapsedRealtime)
     }
 
     suspend fun commitPlan(placements: List<PlanningCommitPlacement>): Result<List<Day>> = call {
@@ -237,7 +241,7 @@ class TimeboxRepository private constructor(
                     )
                 }
             )
-        ).days.map { it.toModel() }
+        ).days.map { it.toModel(dayElapsedRealtime) }
     }
 
     suspend fun listProjects(): Result<List<Project>> =
@@ -401,7 +405,7 @@ class TimeboxRepository private constructor(
         call { api().deleteRecurringTemplate(templateId) }
 
     suspend fun deleteBlock(date: LocalDate, blockId: Int): Result<Day> =
-        call { api().deleteBlock(date.toString(), blockId).toModel() }
+        call { api().deleteBlock(date.toString(), blockId).toModel(dayElapsedRealtime) }
 
     suspend fun startActualBlock(
         taskTypeId: Int? = null,

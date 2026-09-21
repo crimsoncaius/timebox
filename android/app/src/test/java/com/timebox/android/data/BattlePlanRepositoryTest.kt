@@ -30,7 +30,7 @@ class BattlePlanRepositoryTest {
     private val calls = mutableListOf<String>()
     private var recurringCreateBody: RecurringTemplateCreateDto? = null
     private var recurringPatchBody: JsonObject? = null
-    private val repository = TimeboxRepository(fakeApi())
+    private val repository = TimeboxRepository(fakeApi(), dayElapsedRealtime = { 0L })
 
     @Test
     fun `every Battle Plan and recurring endpoint is callable through repository`() = runBlocking {

@@ -34,7 +34,7 @@ class ActualBlockContractTest {
               }],
               "meta":{"timezone":"Asia/Singapore","today":"2026-08-30","server_now_iso":"2026-08-30T10:00:00+08:00"}
             }""",
-        ).toModel()
+        ).toModel(elapsedRealtime = { 0L })
 
         val planned = day.blocks.single { it.lane == Lane.Planned }
         val actual = day.actualBlocks.single().actualBlock
@@ -66,7 +66,7 @@ class ActualBlockContractTest {
               }],
               "meta":{"timezone":"Asia/Singapore","today":"2026-08-30","server_now_iso":"2026-08-30T23:50:00+08:00"}
             }""",
-        ).toModel()
+        ).toModel(elapsedRealtime = { 0L })
 
         val projection = dto.actualBlocks.single()
         assertEquals(1425, projection.startMinute)

@@ -1,5 +1,7 @@
 package com.timebox.android.data
 
+import android.os.SystemClock
+
 import com.timebox.android.data.remote.ActualBlockDayProjectionDto
 import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.DayDto
@@ -143,8 +145,10 @@ data class Day(
     val today: LocalDate,
     /** Minutes past midnight in the app timezone, or null when the clock is unknown. */
     val serverNowMinute: Int?,
-    /** When [serverNowMinute] was read, so the now line can advance between fetches. */
-    val capturedAtMillis: Long = System.currentTimeMillis(),
+    /** Monotonic milliseconds since boot, including device sleep. */
+    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
+    /** Captured in the same clock domain used to advance the server anchor. */
+    val capturedAtElapsedMillis: Long = elapsedRealtime(),
 ) {
     val visibleStart: Int get() = if (showFullDay) 0 else startHour * 60
     val visibleEnd: Int get() = if (showFullDay) DAY_END_MINUTES else endHour * 60
@@ -159,9 +163,9 @@ data class Day(
      * phone may sit in a different zone from `APP_TIMEZONE`, and the whole point of the
      * server clock is that every device agrees on the same time of day.
      */
-    fun nowMinuteAt(millis: Long): Int? {
+    fun nowMinuteAt(elapsedMillis: Long = elapsedRealtime()): Int? {
         val base = serverNowMinute ?: return null
-        val elapsed = ((millis - capturedAtMillis) / 60_000L).coerceAtLeast(0L)
+        val elapsed = ((elapsedMillis - capturedAtElapsedMillis) / 60_000L).coerceAtLeast(0L)
         return base + elapsed.toInt()
     }
 }
@@ -303,7 +307,8 @@ private fun ActualBlockDayProjectionDto.toTimelineBlock() = TimeBlock(
     endMinute = endMinute,
 )
 
-fun DayDto.toModel() = Day(
+fun DayDto.toModel(elapsedRealtime: () -> Long = SystemClock::elapsedRealtime) = Day(
+    elapsedRealtime = elapsedRealtime,
     date = LocalDate.parse(date),
     startHour = startHour,
     endHour = endHour,
@@ -316,7 +321,8 @@ fun DayDto.toModel() = Day(
     serverNowMinute = parseMinuteOfDay(meta.serverNowIso),
 )
 
-fun DayPreviewDto.toModel() = Day(
+fun DayPreviewDto.toModel(elapsedRealtime: () -> Long = SystemClock::elapsedRealtime) = Day(
+    elapsedRealtime = elapsedRealtime,
     date = LocalDate.parse(date),
     startHour = startHour,
     endHour = endHour,

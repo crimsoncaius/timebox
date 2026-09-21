@@ -1,5 +1,7 @@
 package com.timebox.android.data
 
+import android.os.SystemClock
+
 import com.timebox.android.data.remote.ActivitySnapshotDto
 import java.time.Duration
 import java.time.Instant
@@ -7,7 +9,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /** The journal supplies Actuals to the same Day model online and offline. */
-fun ActivitySnapshotDto.projectDay(date: LocalDate, previous: Day?): Day {
+fun ActivitySnapshotDto.projectDay(
+    date: LocalDate,
+    previous: Day?,
+    elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
+): Day {
     val zone = ZoneId.of(reportingTimezone)
     val start = date.atStartOfDay(zone).toInstant()
     val end = date.plusDays(1).atStartOfDay(zone).toInstant()
@@ -30,6 +36,6 @@ fun ActivitySnapshotDto.projectDay(date: LocalDate, previous: Day?): Day {
     // leaving it unknown would forbid every Actual placement on Today.
     val local = now.atZone(zone)
     return (previous ?: Day(date, 0, 24, true, emptyList(), timezone = reportingTimezone,
-        today = local.toLocalDate(), serverNowMinute = local.hour * 60 + local.minute))
+        elapsedRealtime = elapsedRealtime, today = local.toLocalDate(), serverNowMinute = local.hour * 60 + local.minute))
         .copy(blocks = blocks, actualBlocks = actuals, timezone = reportingTimezone)
 }

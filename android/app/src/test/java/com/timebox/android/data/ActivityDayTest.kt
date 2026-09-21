@@ -18,7 +18,7 @@ class ActivityDayTest {
         val snapshot = ActivitySnapshotDto(cursor = 1, serverAt = "2026-08-30T04:00:00Z",
             reportingTimezone = "Asia/Singapore", offlineReady = true, current = null, records = listOf(row))
 
-        val day = snapshot.projectDay(LocalDate.parse("2026-08-30"), previous = null)
+        val day = snapshot.projectDay(LocalDate.parse("2026-08-30"), previous = null, elapsedRealtime = { 0L })
 
         assertEquals(LocalDate.parse("2026-08-30"), day.today)
         assertEquals(12 * 60, day.serverNowMinute)

@@ -12,7 +12,7 @@ class ReadyToPlanTest {
         val date = java.time.LocalDate.parse("2026-08-31")
         val day = com.timebox.android.data.Day(
             date = date, startHour = 8, endHour = 20, showFullDay = false,
-            blocks = emptyList(), timezone = "UTC", today = date, serverNowMinute = null,
+            blocks = emptyList(), timezone = "UTC", today = date, elapsedRealtime = { 0L }, serverNowMinute = null,
         )
         val projected = DayUiState(date = date, pages = mapOf(date to DayPageState(day = day, loading = false)))
         assertFalse(projected.planningActionEnabled)

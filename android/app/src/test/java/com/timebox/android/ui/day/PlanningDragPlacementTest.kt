@@ -27,7 +27,7 @@ class PlanningDragPlacementTest {
 
     @Test
     fun `Actual placement never extends beyond the server clock or into future days`() {
-        val day = day().copy(serverNowMinute = 615, capturedAtMillis = System.currentTimeMillis())
+        val day = day().copy(elapsedRealtime = { 0L }, serverNowMinute = 615, capturedAtElapsedMillis = 0L)
         assertEquals(585, nearestSavedBlockDragStart(day, -1, 600, 30, Lane.Actual))
         assertEquals(585, nearestSavedBlockDragStart(day, -1, 630, 30, Lane.Actual))
         assertFalse(savedBlockRangeAvailable(day, -1, 600, 630, Lane.Actual))
@@ -105,7 +105,7 @@ class PlanningDragPlacementTest {
     private fun day(vararg blocks: TimeBlock) = Day(
         date = LocalDate.of(2026, 8, 20), startHour = 8, endHour = 20,
         showFullDay = false, blocks = blocks.toList(), timezone = "Asia/Singapore",
-        today = LocalDate.of(2026, 8, 20), serverNowMinute = 540,
+        today = LocalDate.of(2026, 8, 20), elapsedRealtime = { 0L }, serverNowMinute = 540,
     )
 
     private fun block(id: Int, start: Int, end: Int) = TimeBlock(

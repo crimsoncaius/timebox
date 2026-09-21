@@ -114,6 +114,6 @@ class PlannedRecordingStateTest {
         actualBlocks = actuals.toList(),
         timezone = "UTC",
         today = date,
-        serverNowMinute = 12 * 60,
+        elapsedRealtime = { 0L }, serverNowMinute = 12 * 60,
     )
 }

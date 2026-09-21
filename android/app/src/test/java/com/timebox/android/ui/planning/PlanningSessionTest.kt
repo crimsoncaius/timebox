@@ -270,7 +270,7 @@ private fun day(
     blocks = blocks.toList(),
     timezone = "Asia/Singapore",
     today = LocalDate.of(2026, 8, 31),
-    serverNowMinute = 9 * 60,
+    elapsedRealtime = { 0L }, serverNowMinute = 9 * 60,
 )
 
 private fun block(id: Int, start: Int, end: Int) = TimeBlock(

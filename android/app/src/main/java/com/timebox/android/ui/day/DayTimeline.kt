@@ -257,14 +257,14 @@ private const val NOW_TICK_MILLIS = 30_000L
  */
 @Composable
 private fun rememberNowMinute(day: Day): Int? {
-    var minute by remember(day) { mutableStateOf(day.nowMinuteAt(System.currentTimeMillis())) }
+    var minute by remember(day) { mutableStateOf(day.nowMinuteAt()) }
     LaunchedEffect(day) {
         // Re-synced at the top of the loop as well as on first composition, so a fresh day
         // takes effect immediately rather than after the next tick.
-        minute = day.nowMinuteAt(System.currentTimeMillis())
+        minute = day.nowMinuteAt()
         while (true) {
             delay(NOW_TICK_MILLIS)
-            minute = day.nowMinuteAt(System.currentTimeMillis())
+            minute = day.nowMinuteAt()
         }
     }
     return minute

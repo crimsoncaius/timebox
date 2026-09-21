@@ -117,5 +117,5 @@ internal fun blockResizeBounds(
 internal fun actualPlacementEnd(day: Day): Int = when {
     day.date < day.today -> day.visibleEnd
     day.date > day.today -> 0
-    else -> minOf(day.visibleEnd, day.nowMinuteAt(System.currentTimeMillis()) ?: 0)
+    else -> minOf(day.visibleEnd, day.nowMinuteAt() ?: 0)
 }

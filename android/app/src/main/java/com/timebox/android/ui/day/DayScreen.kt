@@ -558,7 +558,7 @@ internal fun AutoScrollTimelineToNowOnce(
         scrollToNowRequest,
     ) {
         if (!enabled || completed || viewportHeightPx <= 0) return@LaunchedEffect
-        val nowMinute = day.nowMinuteAt(System.currentTimeMillis())
+        val nowMinute = day.nowMinuteAt()
         if (nowMinute == null || nowMinute !in day.visibleStart until day.visibleEnd) {
             completed = true
             return@LaunchedEffect
