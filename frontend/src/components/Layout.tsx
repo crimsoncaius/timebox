@@ -20,7 +20,7 @@ export function Layout({
   mainClassName,
 }: {
   children: ReactNode;
-  /** Optional extra classes for the main content area. */
+  /** Optional replacement classes for the main content area. */
   mainClassName?: string;
 }) {
   const location = useLocation();
@@ -149,7 +149,7 @@ export function Layout({
           </div>
         </header>
         <main
-          className={mainClassName ?? "w-full max-w-7xl px-12 py-12"}
+          className={mainClassName ?? "w-full max-w-7xl px-4 py-12 sm:px-8 lg:px-12"}
         >
           {children}
         </main>
