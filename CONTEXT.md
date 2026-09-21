@@ -183,7 +183,7 @@ _Avoid_: Time completion, session completion
 ### Surfaces
 
 **Day**:
-The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planning, Day Review and Work Mode start from it.
+The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planning and Day Review start from it.
 _Avoid_: Today view, timeline page
 
 **Chronicle**:
