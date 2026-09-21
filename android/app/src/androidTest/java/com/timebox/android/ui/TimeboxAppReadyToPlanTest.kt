@@ -168,6 +168,11 @@ class TimeboxAppReadyToPlanTest {
             transport.failReadiness()
         }
         compose.onNodeWithContentDescription("Add App projection Task to Ready to Plan").assertDoesNotExist()
+        // Reconciliation resumes asynchronously after the failed write. The old
+        // Add action is also absent while saving, so its absence is not a barrier.
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Completed  1").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Completed  1").performClick()
         compose.onNodeWithText("App projection Task").assertExists()
         compose.onNodeWithContentDescription("App projection Task readiness error").assertDoesNotExist()
