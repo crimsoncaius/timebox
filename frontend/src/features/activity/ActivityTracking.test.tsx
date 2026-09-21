@@ -495,3 +495,35 @@ it.each(['outbox', 'pending'])('retains obsolete %s changes for recovery across 
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(JSON.parse(localStorage.getItem(key)!).device).toBe('original')
 })
+
+it.each(['Switch', 'Stop'])('bounds the 15 min ago shortcut in %s using the advancing repository clock', async (control) => {
+  const start = Date.parse('2026-09-11T10:00:00.123Z')
+  let clock = start + 15 * 60000 - 1
+  let row = { id: 1, name: 'Writing', task_type_id: 1, task_type: { id: 1, name: 'writing' }, start_at: new Date(start).toISOString(), end_at: null }
+  let cursor = 1
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ protocol: 'activity-online-v1', offline_ready: true, cursor, server_at: new Date(clock).toISOString(), reporting_timezone: 'UTC', current: row, records: [row] }))))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  vi.spyOn(repository, 'now').mockImplementation(() => clock)
+  vi.useFakeTimers()
+  const view = render(<ActivityTracking repository={repository} taskTypes={[]} onChanged={() => {}} />)
+  try {
+    fireEvent.click(screen.getByRole('button', { name: control }))
+    expect(screen.getByRole('button', { name: '15 min ago' })).toBeDisabled()
+    expect(screen.getByText(/15 min ago is before the Current Activity started/)).toBeInTheDocument()
+    clock = start + 15 * 60000
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(screen.getByRole('button', { name: '15 min ago' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: '15 min ago' }))
+    row = { ...row, id: 2, start_at: new Date(clock).toISOString() }
+    cursor++
+    await act(() => repository.refresh())
+    expect(screen.getByRole('button', { name: '15 min ago' })).toBeDisabled()
+    clock += 15 * 60000
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(screen.getByRole('button', { name: '15 min ago' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: control }))
+    expect(screen.getByRole('button', { name: '15 min ago' })).toBeEnabled()
+  } finally { view.unmount(); vi.useRealTimers() }
+})

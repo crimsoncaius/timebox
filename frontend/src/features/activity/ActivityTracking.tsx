@@ -42,6 +42,12 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     return () => { clearInterval(poll); clearInterval(clock); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
   }, [repository])
   const current = state.snapshot?.current
+  const shortcutAt = repository.now() - 15 * 60000
+  const shortcutReason = !current || current.id !== targetId
+    ? 'The Current Activity changed. Reopen Switch or Stop to choose a time.'
+    : shortcutAt < Date.parse(current.start_at)
+      ? '15 min ago is before the Current Activity started. Choose Now or a later time.'
+      : null
   const plan = repository.currentPlan()
   const disabled = state.busy || !state.snapshot
   const statusFlags = {
@@ -108,7 +114,8 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     }}>
       {!stopping ? selectionFields : null}
       <p>When did this {stopping ? "stop" : "change"} happen?</p>
-      <div className="flex gap-4"><button type="button" onClick={() => setTiming(null)}>Now</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now - 15 * 60000).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>15 min ago</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>Choose time</button></div>
+      <div className="flex gap-4"><button type="button" onClick={() => setTiming(null)}>Now</button><button type="button" disabled={Boolean(shortcutReason)} title={shortcutReason ?? undefined} className="disabled:opacity-40" onClick={() => setTiming(activityTimeValue(new Date(shortcutAt).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>15 min ago</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>Choose time</button></div>
+      {shortcutReason ? <p>{shortcutReason}</p> : null}
       {timing ? <ActivityTimeField label="Change time" value={timing} onChange={setTiming} timezone={state.snapshot?.reporting_timezone ?? "UTC"} /> : <p>Now</p>}
       <section aria-label="After this change"><h3>After this change</h3><p>{current?.name || current?.task_type.name} ends {timing?.local.replace("T", " ") ?? "now"}.</p><p>{stopping ? "Time after this is unrecorded." : `${name || availableTypes.find(t => t.id === Number(typeId))?.name || "Next activity"} starts at the same time and continues.`}</p></section>
       {timingError ? <p role="alert">{timingError}</p> : null}
