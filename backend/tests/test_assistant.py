@@ -77,7 +77,7 @@ def test_reporting_timezone_resolved_at_tool_execution(monkeypatch):
 
 def test_stream_context_committed_only_after_ack(client, monkeypatch):
     seen = []
-    async def fake(messages):
+    async def fake(messages, snapshots=None):
         seen.append(messages)
         yield "tool_started", {}
         yield "tool_completed", {}
@@ -97,7 +97,7 @@ def test_stream_context_committed_only_after_ack(client, monkeypatch):
 
 @pytest.mark.parametrize("error", [RuntimeError("SECRET PROVIDER ERROR"), TimeoutError()])
 def test_interrupted_run_never_enters_history(client, monkeypatch, error):
-    async def fake(messages):
+    async def fake(messages, snapshots=None):
         yield "text_delta", {"text": "Partial"}
         raise error
     monkeypatch.setattr(assistant, "agent_events", fake)
@@ -110,7 +110,7 @@ def test_interrupted_run_never_enters_history(client, monkeypatch, error):
 
 
 def test_timeout_and_stop_release_session(client, monkeypatch):
-    async def slow(messages):
+    async def slow(messages, snapshots=None):
         yield "text_delta", {"text": "Partial"}
         await asyncio.sleep(1)
     monkeypatch.setattr(assistant, "agent_events", slow)
@@ -128,7 +128,7 @@ def test_limits_and_expiry(client):
         store.reserve(key, "second")
     assert error.value.status_code == 409
     item.run_id = None
-    item.messages = [HumanMessage("q"), AIMessage("a")] * 20
+    item.exchange_count = 20
     with pytest.raises(HTTPException): store.reserve(key, "third")
     item.touched = time.monotonic() - 3601
     with pytest.raises(HTTPException) as error: store.get(key)

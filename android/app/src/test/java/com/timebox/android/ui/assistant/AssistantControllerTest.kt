@@ -10,6 +10,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class AssistantControllerTest {
     private class Fake : AssistantTransport {
+        override val supportsPlanCards = true
         val events = MutableSharedFlow<AssistantEvent>()
         var run = ""
         var sequence = 0
@@ -36,6 +37,61 @@ class AssistantControllerTest {
                 put("run_id", run); put("sequence", ++sequence); put("text", text); put("message", text)
             }))
         }
+    }
+
+    private suspend fun Fake.card() {
+        events.emit(AssistantEvent("plan_card", buildJsonObject {
+            put("run_id", run); put("sequence", ++sequence); put("schema_version", 1)
+            put("snapshot_id", "snapshot-1"); put("date", "2026-09-21")
+            put("reporting_timezone", "Asia/Singapore"); put("read_at", "2026-09-21T01:41:00Z")
+            putJsonArray("planned_blocks") {}
+        }))
+    }
+
+    @Test fun `card only completes and acknowledgement is atomic`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Show plan"); runCurrent()
+        api.card(); runCurrent()
+        assertNotNull(controller.state.value.exchanges.single().plan)
+        assertEquals("", controller.state.value.exchanges.single().status)
+        api.emit("completed"); api.emit("eof"); runCurrent()
+        assertEquals("Complete", controller.state.value.exchanges.single().status)
+        controller.send("Earlier plan?"); runCurrent()
+        assertEquals(1, api.acks)
+    }
+
+    @Test fun `second card interrupts and later completion cannot repair it`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Show plan"); runCurrent()
+        api.card(); api.card(); runCurrent()
+        api.emit("completed"); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.single().status)
+        assertNotNull(controller.state.value.exchanges.single().plan)
+        controller.send("Next"); runCurrent()
+        assertEquals(0, api.acks)
+    }
+
+    @Test fun `card after text is rejected and stop retains validated card`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Show plan"); runCurrent()
+        api.emit("text_delta", "answer"); api.card(); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.single().status)
+        assertNull(controller.state.value.exchanges.single().plan)
+        controller.retry(); runCurrent(); api.card(); runCurrent()
+        controller.stop(); runCurrent()
+        assertNotNull(controller.state.value.exchanges.last().plan)
+        assertEquals("Stopped", controller.state.value.exchanges.last().status)
+    }
+
+    @Test fun `unknown event after completion prevents acknowledgement`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Show plan"); runCurrent(); api.card(); api.emit("completed"); api.emit("unknown"); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.single().status)
+        controller.retry(); runCurrent(); assertEquals(0, api.acks)
     }
 
     @Test fun `stop retains partial text and retry is explicit`() = runTest {
