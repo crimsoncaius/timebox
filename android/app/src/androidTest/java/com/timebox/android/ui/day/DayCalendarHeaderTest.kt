@@ -314,12 +314,14 @@ class DayCalendarHeaderTest {
             state = DayUiState(
                 date = LocalDate.of(2026, 8, 28),
                 today = LocalDate.of(2026, 8, 30),
+                hasLoadedDay = true,
             ),
             onSetPlanningMode = { planning = it },
         )
 
         compose.onNodeWithText("DAY").assertIsDisplayed()
-        compose.onNodeWithText("Fri, August 28").assertIsDisplayed()
+        compose.onNodeWithText("Fri, Aug 28").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Selected date, Friday, August 28, 2026").assertIsDisplayed()
         compose.onNodeWithText("Go to today").assertIsDisplayed()
         compose.onNodeWithText("Week").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithText("Month").assertIsDisplayed()
@@ -330,6 +332,12 @@ class DayCalendarHeaderTest {
         compose.onNodeWithContentDescription("Toggle theme").assertDoesNotExist()
 
         compose.runOnIdle { assertTrue(planning) }
+    }
+
+    @Test
+    fun planningWaitsForFirstLoadedDay() {
+        showDay(state = DayUiState())
+        compose.onNodeWithTag("planning-mode-action").assertIsNotEnabled()
     }
 
     @Test

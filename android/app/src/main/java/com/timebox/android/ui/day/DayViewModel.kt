@@ -65,6 +65,10 @@ data class DayUiState(
     /** Backend-resolved today, kept independently of whichever day page is visible. */
     val today: LocalDate? = null,
     val pages: Map<LocalDate, DayPageState> = emptyMap(),
+    /** First successful day load, retained across navigation and background refreshes.
+     * Activity-only projections must not unlock planning before plans have loaded.
+     */
+    val hasLoadedDay: Boolean = pages.values.any { it.materialized && it.day != null },
     val taskTypes: List<TaskType> = emptyList(),
     val saving: Boolean = false,
     val message: String? = null,
@@ -106,6 +110,8 @@ data class DayUiState(
     val readyTasksError: String? get() = planning.queueError
     val focusPlanningBlocked: Boolean get() = planning.active || planning.saving || planning.drafts.isNotEmpty() || saving || (sheetOpen && sheetLane == Lane.Planned)
     val isPlanningMode: Boolean get() = planning.active
+    val planningActionEnabled: Boolean
+        get() = (hasLoadedDay || isPlanningMode) && !saving && !planning.saving
     val accessibilityPlanningTaskId: Int? get() = planning.selectedTaskId
     val accessibilityPlanningTask: BattleTask? get() = planning.selectedTask
     val planningDrafts: Map<Int, PlanningDraftPlacement> get() = planning.drafts
@@ -208,7 +214,7 @@ class DayViewModel(
     }
 
     fun setPlanningMode(enabled: Boolean) {
-        if (_state.value.saving) return
+        if (!_state.value.planningActionEnabled) return
         if (!enabled) {
             cancelPlanningSession()
             return
@@ -243,7 +249,7 @@ class DayViewModel(
                 onSuccess = { day ->
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
-                            state.copy(today = day.today).withPage(date) {
+                            state.copy(today = day.today, hasLoadedDay = true).withPage(date) {
                                 DayPageState(
                                     day = day,
                                     loading = false,

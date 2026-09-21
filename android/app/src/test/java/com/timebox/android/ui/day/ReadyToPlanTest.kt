@@ -8,6 +8,23 @@ import org.junit.Test
 
 class ReadyToPlanTest {
     @Test
+    fun planningRequiresLoadedPlansAndRemainsAvailableAfterNavigating() {
+        val date = java.time.LocalDate.parse("2026-08-31")
+        val day = com.timebox.android.data.Day(
+            date = date, startHour = 8, endHour = 20, showFullDay = false,
+            blocks = emptyList(), timezone = "UTC", today = date, serverNowMinute = null,
+        )
+        val projected = DayUiState(date = date, pages = mapOf(date to DayPageState(day = day, loading = false)))
+        assertFalse(projected.planningActionEnabled)
+        val loaded = projected.copy(hasLoadedDay = true)
+        assertTrue(loaded.planningActionEnabled)
+        assertTrue(loaded.copy(date = date.plusDays(7), pages = emptyMap()).planningActionEnabled)
+        assertFalse(loaded.copy(saving = true).planningActionEnabled)
+        assertFalse(loaded.copy(planning = PlanningSessionState(saving = true)).planningActionEnabled)
+        assertTrue(DayUiState(planning = PlanningSessionState(active = true)).planningActionEnabled)
+    }
+
+    @Test
     fun emptyPlanningQueueCollapsesWhileLoadingAndErrorsStayActionable() {
         val date = java.time.LocalDate.parse("2026-08-31")
         assertFalse(DayUiState().hasPlanningRailContent(date))

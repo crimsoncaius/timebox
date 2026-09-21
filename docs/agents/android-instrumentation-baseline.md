@@ -63,3 +63,33 @@ python scripts/android-emulator.py gradle TOKEN connectedDebugAndroidTest `
 Comma-separate several, and use `Class#method` for one case. Results land in
 `android/app/build/outputs/androidTest-results/connected/debug/*.xml`, which carries
 the stack traces; the console output does not always include them.
+
+
+## Follow-up review
+
+The `DayCalendarHeaderTest#titleLedHeaderSeparatesDateNavigationPlanningAndCalendarMode`
+assertion was reproduced again during completion of the refactor. `assertIsDisplayed`
+alone does not establish a geometry defect: it also fails when no matching node exists.
+`DayScreen` requests the compact date, whose visible text is `Fri, Aug 28`; the test
+still expected `Fri, August 28`. The corrected test also asserts the full accessibility
+description, `Selected date, Friday, August 28, 2026`. The original baseline above is
+historical; do not use its geometry diagnosis for this particular case.
+
+
+The refactor's completion review also exposed a timing dependency in
+`TimeboxAppReadyToPlanTest#serverLifecycleRejectionIsAuthoritativeAcrossAppNavigation`.
+It clicked `Completed  1` immediately after resuming a failed request. Its preceding
+"Add action absent" assertion was already true while the request was pending, so it
+did not wait for reconciliation. The test now waits for the completed count before
+clicking; it continues to assert the task's lifecycle and absence from Day planning.
+This case failed with the extracted graph and passed with the pre-extraction graph;
+the explicit wait then passed with the extracted graph without a production behavior
+change. Treat the previous pass as timing-dependent, not proof that reconciliation
+had completed synchronously.
+
+
+Final focused verification after these corrections: all 55 cases in
+`DayCalendarHeaderTest`, `TimeboxAppReadyToPlanTest`, and `BattlePlanScreenTest`
+passed on `timebox-agent-13` (`emulator-5604`). This includes a new regression for
+Plan remaining disabled before the first successful day load. The other historical
+baseline failures were not reclassified or retested by this focused run.
