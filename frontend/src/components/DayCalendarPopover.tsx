@@ -40,7 +40,10 @@ export function DayCalendarPopover({
     firstOfMonthIso(value),
   );
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
+  const dialogId = useId();
 
   useEffect(() => {
     setVisibleMonthIso(firstOfMonthIso(value));
@@ -48,11 +51,41 @@ export function DayCalendarPopover({
 
   useEffect(() => {
     if (!open) return;
+    const dialog = dialogRef.current;
+    const trigger = triggerRef.current;
+    if (!dialog) return;
+    const buttons = () => Array.from(dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    const focusInitial = () => {
+      (dialog.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? buttons()[0])?.focus();
+    };
+    focusInitial();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      } else if (e.key === "Tab") {
+        const items = buttons();
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    const onFocus = (e: FocusEvent) => {
+      if (e.target instanceof Node && !dialog.contains(e.target)) focusInitial();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.addEventListener("focusin", onFocus);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", onFocus);
+      if (trigger?.isConnected) trigger.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -82,10 +115,11 @@ export function DayCalendarPopover({
     <div ref={containerRef} className="relative inline-block">
       <button
         type="button"
+        ref={triggerRef}
         data-testid="day-calendar-trigger"
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-controls={open ? headingId : undefined}
+        aria-controls={open ? dialogId : undefined}
         className="inline-flex min-w-38 items-center justify-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low/80 px-3 py-1.5 font-headline text-sm tabular-nums text-on-surface shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-sm transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:bg-dark-surface-container/50 dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
         aria-label="Jump to date"
         onClick={() => setOpen((o) => !o)}
@@ -101,6 +135,8 @@ export function DayCalendarPopover({
 
       {open ? (
         <div
+          ref={dialogRef}
+          id={dialogId}
           data-testid="day-calendar-popover"
           role="dialog"
           aria-modal="true"
