@@ -27,7 +27,7 @@ export function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTas
         <span className="rounded-full bg-surface-container px-2 py-1 text-xs text-on-surface-variant">{tasks.length}</span>
       </div>
 
-      {tasks.length > 4 ? (
+      {tasks.length > 4 || query.length > 0 ? (
         <input
           type="search"
           aria-label="Search Ready to Plan tasks"
