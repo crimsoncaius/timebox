@@ -89,12 +89,12 @@ class TimeboxApplication : Application() {
         repository.onConnectionChanged = reminderScheduler::enqueueImmediateSync
         reminderScheduler.start()
         com.timebox.android.checkin.CheckInWorker.schedule(this)
-        if (BuildConfig.ACTIVITY_TRACKING_DEV) applicationScope.launch {
+        applicationScope.launch {
             activityRepository.state.collect { checkIns.reconcileNotification(it.snapshot?.checkIn?.question?.id) }
         }
         plannedBlockReminders = PlannedBlockReminders(this, activityRepository, preferences.plannedBlockReminders)
             .also { it.createChannel() }
-        if (BuildConfig.ACTIVITY_TRACKING_DEV) applicationScope.launch {
+        applicationScope.launch {
             // Plans, adoption, and settings changes all reschedule or withdraw Planned Block Reminders.
             combine(
                 activityRepository.state.map { it.snapshot?.let { s -> s.plans to s.current?.plannedBlockId } }.distinctUntilChanged(),

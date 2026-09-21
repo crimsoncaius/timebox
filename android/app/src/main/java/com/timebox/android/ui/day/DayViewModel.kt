@@ -26,11 +26,6 @@ import com.timebox.android.ui.planning.PlanningSession
 import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
-import com.timebox.android.ui.workmode.RepositoryWorkModePersistence
-import com.timebox.android.ui.workmode.RepositoryWorkModeTransport
-import com.timebox.android.ui.workmode.WorkModeExecution
-import com.timebox.android.ui.workmode.WorkModePersistence as WorkModePersistencePort
-import com.timebox.android.ui.workmode.WorkModeSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -64,9 +59,6 @@ data class DayPageState(
     val materialized: Boolean = false,
 )
 
-typealias WorkModeUiState = WorkModeSession
-typealias WorkModePersistence = WorkModePersistencePort
-
 data class DayUiState(
     /** The device's date until the backend's is known; see [DayViewModel.start]. */
     val date: LocalDate = LocalDate.now(),
@@ -87,12 +79,7 @@ data class DayUiState(
     /** Raw text in the task type picker; cleared whenever the sheet changes what it shows. */
     val typeQuery: String = "",
     val planning: PlanningSessionState = PlanningSessionState(),
-    val workMode: WorkModeUiState? = null,
-    val workModeVisible: Boolean = false,
     val activeActualAvailable: Boolean = false,
-    val workModeEntryWarning: Boolean = false,
-    val workModeRestorePrompt: Boolean = false,
-    val workModeRestored: Boolean = false,
     val scrollToNowRequest: Int = 0,
     val skipScrollToNow: Boolean = false,
 ) {
@@ -133,36 +120,24 @@ class DayViewModel(
     private val planningSession: PlanningSession,
     private val injectedScope: CoroutineScope? = null,
     private val clock: () -> Instant = Instant::now,
-    private val workModeTickMillis: Long = 1_000L,
-    private val workModePersistence: WorkModePersistence = RepositoryWorkModePersistence(repository),
-    workModeExecution: WorkModeExecution? = null,
     private val readinessCoordinator: ReadyToPlanCoordinator,
     private val activityRepository: ActivityRepository? = null,
 ) : ViewModel() {
 
     private val launchScope: CoroutineScope get() = injectedScope ?: viewModelScope
-    private val workModeBridgeScope: CoroutineScope =
+    private val bridgeScope: CoroutineScope =
         if (injectedScope == null) viewModelScope else CoroutineScope(injectedScope.coroutineContext + Job())
 
     private val _state = MutableStateFlow(DayUiState())
     val state: StateFlow<DayUiState> = _state.asStateFlow()
-    private val workMode = workModeExecution ?: WorkModeExecution(
-        RepositoryWorkModeTransport(repository),
-        workModePersistence,
-        launchScope,
-        clock,
-        workModeTickMillis,
-    )
-
     private var typesLoaded = false
     private var todayResolved = false
     private val pageRequestVersions = mutableMapOf<LocalDate, Int>()
-    private var planThenWork = false
     // Keep pending manual moves visible while the activity journal catches up.
     private val pendingActualMoves = mutableMapOf<Pair<LocalDate, Int>, Pair<Int, Int>>()
 
     init {
-        if (activityRepository != null) workModeBridgeScope.launch {
+        if (activityRepository != null) bridgeScope.launch {
             val activityClock = MutableStateFlow(activityRepository.now())
             launch { while (true) { kotlinx.coroutines.delay(60_000); activityClock.value = activityRepository.now() } }
             combine(_state, activityRepository.state, activityClock) { ui, activity, now ->
@@ -185,31 +160,10 @@ class DayViewModel(
             }
         }
 
-        workModeBridgeScope.launch {
+        bridgeScope.launch {
             readinessCoordinator.projections.collect {
                 planningSession.applyReadinessProjection(readinessCoordinator::projectTasks)
                 syncPlanningState()
-            }
-        }
-        workModeBridgeScope.launch {
-            workMode.state.collect { work ->
-                _state.update { state ->
-                    var next = state.copy(
-                        workMode = work.session,
-                        workModeVisible = work.visible,
-                        activeActualAvailable = work.activeActualAvailable,
-                        workModeEntryWarning = work.entryWarning,
-                        workModeRestorePrompt = work.restorePrompt,
-                        message = work.notice ?: state.message,
-                    )
-                    val day = work.day
-                    if (day != null && (state.day?.date != day.date || state.day != day)) {
-                        next = next.copy(date = day.date).withPage(day.date) {
-                            DayPageState(day = day, loading = false, materialized = true)
-                        }
-                    }
-                    next
-                }
             }
         }
     }
@@ -236,7 +190,7 @@ class DayViewModel(
             return
         }
         launchScope.launch {
-            if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) runCatching { repository.getActivity() }
+            runCatching { repository.getActivity() }
             val today = repository.getDaySummary(_state.value.date).getOrNull()?.today
             todayResolved = today != null
             if (today != null) _state.update { it.copy(today = today) }
@@ -254,7 +208,7 @@ class DayViewModel(
     }
 
     fun setPlanningMode(enabled: Boolean) {
-        if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
+        if (_state.value.saving) return
         if (!enabled) {
             cancelPlanningSession()
             return
@@ -265,14 +219,13 @@ class DayViewModel(
     }
 
     fun cancelPlanningSession() {
-        planThenWork = false
         planningSession.cancel()
         syncPlanningState()
         _state.update { it.copy(draft = null, selectedBlockId = null) }
     }
 
     fun armAccessiblePlanningTask(taskId: Int?) {
-        if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
+        if (_state.value.saving) return
         planningSession.toggleSelection(taskId)
         syncPlanningState()
         _state.update { it.copy(draft = null, selectedBlockId = null) }
@@ -299,8 +252,6 @@ class DayViewModel(
                                 )
                             }
                         }
-                        workMode.restore(day)
-                        _state.update { it.copy(workModeRestored = workMode.restorationComplete) }
                         if (_state.value.date == date) prefetchAdjacent(date)
                     }
                 },
@@ -430,7 +381,6 @@ class DayViewModel(
     fun shiftDay(days: Long) = goToDate(_state.value.date.plusDays(days))
 
     fun selectBlock(blockId: Int) {
-        if (workMode.state.value.session != null) return
         val block = _state.value.day?.blocks?.firstOrNull { it.id == blockId }
         if (block?.lane == Lane.Actual) {
             if (_state.value.isPlanningMode || _state.value.saving) return
@@ -443,7 +393,6 @@ class DayViewModel(
                 val actual = repository.getActualBlock(block.actualBlockId ?: block.id).getOrNull()
                 if (_state.value.isPlanningMode) return@launch
                 if (actual != null && actual.endAt == null && activityRepository == null) {
-                    _state.value.day?.let { workMode.resume(it, actual) }
                 } else {
                     _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
                 }
@@ -463,8 +412,7 @@ class DayViewModel(
     }
 
     fun startDraft(lane: Lane, startMinute: Int) {
-        if ((activityRepository == null && !workMode.restorationComplete) || workMode.state.value.session != null || _state.value.saving) return
-        planThenWork = false
+        if (_state.value.saving) return
         val day = _state.value.day ?: return
         val start = if (lane == Lane.Planned) {
             nearestPlanningDragStart(day, _state.value.planningDrafts(day.date), null,
@@ -493,7 +441,6 @@ class DayViewModel(
     }
 
     fun closeSheet() {
-        planThenWork = false
         val current = _state.value
         val selected = current.selectedBlock
         // Text fields save together on dismiss so Name and Note cannot race stale responses.
@@ -635,7 +582,6 @@ class DayViewModel(
                         syncPlanningState()
                         refreshReadyToPlan()
                     }
-                    if (lane == Lane.Planned && planThenWork) finishPlanningIntoWorkMode(day, start, end)
                 },
                 onFailure = { e ->
                     _state.update { it.copy(saving = false, message = e.apiError.message) }
@@ -645,7 +591,7 @@ class DayViewModel(
     }
 
     fun planTaskAt(taskId: Int, startMinute: Int) {
-        if (workMode.state.value.session != null || _state.value.saving) return
+        if (_state.value.saving) return
         val current = _state.value
         val day = current.day ?: return
         when (val result = planningSession.place(taskId, day, startMinute)) {
@@ -658,7 +604,7 @@ class DayViewModel(
     fun dropPlanningTask(placement: PlanningDraftPlacement): PlanningEditResult {
         val current = _state.value
         val day = current.day
-        if (workMode.state.value.session != null || current.saving || day == null || day.date != placement.date) {
+        if (current.saving || day == null || day.date != placement.date) {
             return PlanningEditResult.Rejected("That Task cannot be planned right now")
         }
         val result = planningSession.drop(placement.taskId, day, placement.startMinute, placement.endMinute)
@@ -709,7 +655,7 @@ class DayViewModel(
                 }
                 is PlanningCommitOutcome.Failed ->
                     _state.update { it.copy(message = outcome.reason) }
-                PlanningCommitOutcome.CancelledEmptySession -> planThenWork = false
+                PlanningCommitOutcome.CancelledEmptySession -> Unit
                 PlanningCommitOutcome.Ignored -> Unit
             }
             syncPlanningState()
@@ -880,31 +826,6 @@ class DayViewModel(
         }
     }
 
-    /** App-level entry: present time and today's plan always win over navigation context. */
-    fun startWorkMode() {
-        if (_state.value.isPlanningMode || _state.value.saving || !workMode.restorationComplete) return
-        if (workMode.state.value.session != null) {
-            workMode.show()
-            return
-        }
-        _state.update { it.copy(saving = true, message = null, selectedBlockId = null, draft = null) }
-        launchScope.launch {
-            val now = clock()
-            val targetDate = _state.value.today ?: _state.value.day?.today ?: _state.value.date
-            val day = _state.value.page(targetDate).day ?: repository.getDay(targetDate).getOrElse {
-                _state.update { state -> state.copy(saving = false, message = it.apiError.message) }
-                return@launch
-            }
-            _state.update { state ->
-                state.copy(date = targetDate).withPage(targetDate) {
-                    DayPageState(day = day, loading = false, materialized = true)
-                }
-            }
-            workMode.begin(day)
-            _state.update { it.copy(saving = false) }
-        }
-    }
-
     private fun saveBlockText(block: TimeBlock, name: String, note: String) {
         val date = _state.value.date
         launchScope.launch {
@@ -928,69 +849,6 @@ class DayViewModel(
                 _state.update { it.copy(message = error.apiError.message) }
             }
         }
-    }
-
-    fun continueWorkModeEntry() {
-        if (_state.value.isPlanningMode || _state.value.saving || !workMode.restorationComplete) return
-        val day = _state.value.day ?: return
-        _state.update { it.copy(saving = true) }
-        launchScope.launch {
-            workMode.continueEntry(day)
-            _state.update { it.copy(saving = false) }
-        }
-    }
-
-    fun planSomethingBeforeWorkMode() {
-        if (_state.value.isPlanningMode || workMode.state.value.session != null || _state.value.saving) return
-        val day = _state.value.day ?: return
-        val nowMinute = minuteOfDay(clock(), day.timezone)
-        val start = snapToBlockInteractionStep(nowMinute.toFloat())
-        val boundedStart = start.coerceIn(
-            day.visibleStart,
-            day.visibleEnd - SLOT_MINUTES,
-        )
-        planThenWork = true
-        _state.update {
-            it.copy(
-                workModeEntryWarning = false,
-                draft = Draft(
-                    Lane.Planned,
-                    boundedStart,
-                    boundedStart + SLOT_MINUTES,
-                ),
-                selectedBlockId = null,
-            )
-        }
-    }
-
-    private suspend fun finishPlanningIntoWorkMode(day: Day, start: Int, end: Int) {
-        planThenWork = false
-        if (_state.value.isPlanningMode) return
-        val now = clock()
-        if (now.atZone(ZoneId.of(day.timezone)).toLocalDate() != day.date) return
-        val minute = minuteOfDay(now, day.timezone)
-        if (!(start <= minute && minute < end) && !(start > minute && start - minute <= 10)) return
-        _state.update { it.copy(saving = true) }
-        workMode.begin(day)
-        _state.update { it.copy(saving = false) }
-    }
-
-    fun toggleWorkModeSubtask(subtask: Subtask) {
-        workMode.toggleSubtask(subtask)
-    }
-
-    fun exitWorkMode() {
-        launchScope.launch {
-            if (workMode.exit()) refreshCurrentDay()
-        }
-    }
-
-    fun confirmWorkContinued() {
-        workMode.continueAfterAbsence()
-    }
-
-    fun declineWorkContinued() {
-        workMode.declineAfterAbsence()
     }
 
     fun reopenSelectedTask() {

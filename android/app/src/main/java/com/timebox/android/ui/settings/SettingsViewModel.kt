@@ -55,7 +55,7 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
                     )
                 }
             }
-            if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) runCatching { repository.getActivity() }.fold(
+            runCatching { repository.getActivity() }.fold(
                 onSuccess = { snapshot -> _state.update { it.copy(timezone = snapshot.reportingTimezone, reportingZoneInput = snapshot.reportingTimezone) } },
                 onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
             )

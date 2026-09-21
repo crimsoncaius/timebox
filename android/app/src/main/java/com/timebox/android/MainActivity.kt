@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
         exactAlarmsAllowed = canScheduleExactAlarms(this)
 
         lifecycleScope.launch {
-            if (BuildConfig.ACTIVITY_TRACKING_DEV) repeatOnLifecycle(Lifecycle.State.STARTED) {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { (application as TimeboxApplication).checkIns.tick() }
                     delay(30_000)
@@ -116,7 +116,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openCheckIn(intent: Intent?) {
-        if (!BuildConfig.ACTIVITY_TRACKING_DEV) return
         intent?.getStringExtra(com.timebox.android.checkin.CheckInNotifier.QUESTION)?.let { id ->
             lifecycleScope.launch { (application as TimeboxApplication).checkIns.open(id) }
             intent.removeExtra(com.timebox.android.checkin.CheckInNotifier.QUESTION)

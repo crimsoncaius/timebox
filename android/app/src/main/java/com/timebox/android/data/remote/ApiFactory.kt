@@ -42,8 +42,8 @@ object ApiFactory {
 
         val client = OkHttpClient.Builder()
             .addInterceptor { chain ->
-                val request = if (BuildConfig.ACTIVITY_TRACKING_DEV) chain.request().newBuilder()
-                    .header("X-Timebox-Protocol", "activity-online-v1").build() else chain.request()
+                val request = chain.request().newBuilder()
+                    .header("X-Timebox-Protocol", "activity-online-v1").build()
                 chain.proceed(request)
             }
             .addInterceptor(ApiKeyInterceptor(apiKeyProvider))

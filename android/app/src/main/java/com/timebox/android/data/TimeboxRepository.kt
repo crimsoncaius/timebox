@@ -100,12 +100,7 @@ class TimeboxRepository private constructor(
     val battlePlanPreferences: Flow<BattlePlanPreferences> = preferences?.battlePlanPreferences
         ?: flowOf(BattlePlanPreferences())
 
-    val workMode: Flow<WorkModeSnapshot?> = preferences?.workMode ?: flowOf(null)
     val dailyReminders: Flow<DailyReminderSettings> = preferences?.dailyReminders ?: flowOf(DailyReminderSettings())
-
-    suspend fun setWorkMode(snapshot: WorkModeSnapshot?) {
-        preferences?.setWorkMode(snapshot)
-    }
 
     suspend fun getActivity(): com.timebox.android.data.remote.ActivitySnapshotDto {
         val response = api().getActivity()

@@ -16,7 +16,6 @@ class ActivityCheckInPlatformTest {
     private val app get() = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as TimeboxApplication
     @Test fun initializeMinimumThreshold() = runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("platformReview") == "true")
-        check(BuildConfig.ACTIVITY_TRACKING_DEV)
         app.activityRepository.refresh()
         assertNotNull(app.activityRepository.state.value.snapshot?.current)
         app.activityRepository.setCheckInPreferences(CheckInPreferences(true, 15))
@@ -26,7 +25,6 @@ class ActivityCheckInPlatformTest {
     }
     @Test fun inspectRealPlatform() = runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("platformReview") == "true")
-        check(BuildConfig.ACTIVITY_TRACKING_DEV)
         app.checkIns.tick()
         val now = System.currentTimeMillis()
         val history = app.getSystemService(UsageStatsManager::class.java).queryEvents(now - 2 * 60 * 60_000, now)
@@ -42,7 +40,6 @@ class ActivityCheckInPlatformTest {
     }
     @Test fun dismissThenOpenOriginalNotificationIntent() = runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("platformReview") == "true")
-        check(BuildConfig.ACTIVITY_TRACKING_DEV)
         app.checkIns.tick()
         val manager = app.getSystemService(android.app.NotificationManager::class.java)
         val notification = manager.activeNotifications.single { it.id == 15501 }
@@ -60,7 +57,6 @@ class ActivityCheckInPlatformTest {
     }
     @Test fun originalNotificationIntentOpensVisibleQuestion() = runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("platformReview") == "true")
-        check(BuildConfig.ACTIVITY_TRACKING_DEV)
         val pending = android.app.PendingIntent.getActivity(app, 15501, android.content.Intent(app, MainActivity::class.java),
             android.app.PendingIntent.FLAG_NO_CREATE or android.app.PendingIntent.FLAG_IMMUTABLE)
         assertNotNull("Original notification PendingIntent must already exist", pending)

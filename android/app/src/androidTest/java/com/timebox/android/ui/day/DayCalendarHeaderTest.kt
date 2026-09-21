@@ -40,7 +40,6 @@ class DayCalendarHeaderTest {
                     selectedDate = selectedDate,
                     today = LocalDate.of(2026, 9, 2),
                     isPlanningMode = false,
-                    onOpenWorkMode = {},
                     onSetPlanningMode = {},
                     onSelectDate = { selectedDate = it },
                     onNavigateToday = { selectedDate = it },
@@ -310,7 +309,6 @@ class DayCalendarHeaderTest {
     @Test
     fun titleLedHeaderSeparatesDateNavigationPlanningAndCalendarMode() {
         var planning = false
-        var workModeOpened = false
 
         showDay(
             state = DayUiState(
@@ -318,7 +316,6 @@ class DayCalendarHeaderTest {
                 today = LocalDate.of(2026, 8, 30),
             ),
             onSetPlanningMode = { planning = it },
-            onOpenWorkMode = { workModeOpened = true },
         )
 
         compose.onNodeWithText("DAY").assertIsDisplayed()
@@ -326,19 +323,13 @@ class DayCalendarHeaderTest {
         compose.onNodeWithText("Go to today").assertIsDisplayed()
         compose.onNodeWithText("Week").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithText("Month").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Work Mode").assertIsDisplayed().performClick()
-        val workModeBounds = compose.onNodeWithTag("work-mode-action").fetchSemanticsNode().boundsInRoot
-        val planningBounds = compose.onNodeWithTag("planning-mode-action").fetchSemanticsNode().boundsInRoot
-        assertTrue(workModeBounds.right <= planningBounds.left)
+        compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
         compose.onNodeWithText("Plan").performClick()
         compose.onNodeWithContentDescription("Day review").assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Toggle theme").assertDoesNotExist()
 
-        compose.runOnIdle {
-            assertTrue(workModeOpened)
-            assertTrue(planning)
-        }
+        compose.runOnIdle { assertTrue(planning) }
     }
 
     @Test
@@ -357,9 +348,6 @@ class DayCalendarHeaderTest {
         compose.onNodeWithText("Month").performClick()
         compose.onNodeWithText("August 2026").assertIsDisplayed()
         compose.onNodeWithText("Month").assertIsSelected()
-        compose.onNodeWithContentDescription("Work Mode").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Work Mode").assertIsNotEnabled()
-        compose.onNodeWithText("Finish planning to start Work Mode.").assertIsDisplayed()
         compose.onNodeWithText("Done").performClick()
         compose.runOnIdle { assertTrue(committed) }
     }
@@ -370,12 +358,11 @@ class DayCalendarHeaderTest {
         onNavigateToday: (LocalDate) -> Unit = {},
         onSetPlanningMode: (Boolean) -> Unit = {},
         onCommitPlanningMode: () -> Unit = {},
-        onOpenWorkMode: () -> Unit = {},
     ) {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 DayScreen(
-                    state = state.copy(workModeRestored = true),
+                    state = state,
                     onNavigateToday = onNavigateToday,
                     onDateSettled = onDateSettled,
                     onRetry = {}, onTapSlot = { _, _ -> }, onSelectBlock = {},
@@ -386,7 +373,6 @@ class DayCalendarHeaderTest {
                     onReopenSelectedTask = {}, onOpenLinkedTask = {},
                     onSetPlanningMode = onSetPlanningMode, onPlanTask = { _, _ -> },
                     onCommitPlanningMode = onCommitPlanningMode,
-                    onOpenWorkMode = onOpenWorkMode,
                     onArmAccessibleTask = {}, onRetryReadyTasks = {},
                 )
             }

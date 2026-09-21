@@ -93,7 +93,6 @@ fun DayScreen(
     onArmAccessibleTask: (Int?) -> Unit,
     onRetryReadyTasks: () -> Unit,
     onNavigateToday: (LocalDate) -> Unit = {},
-    onOpenWorkMode: () -> Unit = {},
     onEnterFocus: () -> Unit = {},
     onRecordPlanned: () -> Unit = {},
     onCancelRecording: () -> Unit = {},
@@ -149,8 +148,7 @@ fun DayScreen(
                 selectedDate = displayedDate,
                 today = state.today,
                 isPlanningMode = state.isPlanningMode,
-                planningActionEnabled = !state.saving && !state.planning.saving && state.workModeRestored && state.workMode == null,
-                onOpenWorkMode = onOpenWorkMode,
+                planningActionEnabled = !state.saving && !state.planning.saving,
                 onSetPlanningMode = { enabled ->
                     if (enabled) onSetPlanningMode(true) else onCommitPlanningMode()
                 },
@@ -158,13 +156,11 @@ fun DayScreen(
                 onNavigateToday = onNavigateToday,
             )
 
-            if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-                ActivityTracking(controlsVisible = trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
-                if (trackingVisible) {
-                Spacer(Modifier.height(6.dp))
-                androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
-                Spacer(Modifier.height(8.dp))
-                }
+            ActivityTracking(controlsVisible = trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+            if (trackingVisible) {
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
+            Spacer(Modifier.height(8.dp))
             }
             if (zoomVisible) Row(
                 Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding, vertical = 4.dp),
@@ -483,7 +479,7 @@ private fun DayPage(
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
             ) {
-                val elapsedDay = com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && day.actualBlocks.any { it.dayLengthMinutes != 1440 }
+                val elapsedDay = day.actualBlocks.any { it.dayLengthMinutes != 1440 }
                 Column {
                 if (elapsedDay) ReportingDayActuals(day, onSelectBlock)
                 DayTimeline(

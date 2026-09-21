@@ -73,7 +73,7 @@ fun BlockSheet(
     onOpenActual: (Int) -> Unit = {},
     onUndoRecording: () -> Unit = {},
 ) {
-    if (com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV && state.sheetLane == Lane.Actual) {
+    if (state.sheetLane == Lane.Actual) {
         ActivityActualEditor(state, onDismiss, onOpenLinkedTask = onOpenLinkedTask, onOpenPlanned = onOpenActual)
         return
     }

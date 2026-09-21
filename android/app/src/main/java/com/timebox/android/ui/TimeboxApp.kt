@@ -73,9 +73,6 @@ import com.timebox.android.ui.components.TimeboxTab
 import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayViewModel
-import com.timebox.android.ui.day.WorkModeScreen
-import com.timebox.android.ui.day.WorkModeEntryDialog
-import com.timebox.android.ui.day.WorkModeRestoreDialog
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import com.timebox.android.ui.readiness.LocalReadyToPlanRetry
 import com.timebox.android.ui.settings.SettingsScreen
@@ -112,7 +109,7 @@ fun TimeboxApp(
     imeVisibleOverride: Boolean? = null,
 ) {
     val application = LocalContext.current.applicationContext as TimeboxApplication
-    val activityRepository = if (BuildConfig.ACTIVITY_TRACKING_DEV) application.activityRepository else null
+    val activityRepository = application.activityRepository
     val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository) {
         timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository)
     }
@@ -344,9 +341,7 @@ fun TimeboxApp(
     CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         if (!focused) Column(
-            modifier = Modifier.fillMaxSize().imePadding().then(
-                if (dayState.workMode != null && dayState.workModeVisible) Modifier.clearAndSetSemantics { } else Modifier
-            )
+            modifier = Modifier.fillMaxSize().imePadding(),
         ) {
             if (surfaceRoute != AppRoutes.DayPattern &&
                 surfaceRoute != AppRoutes.Assistant &&
@@ -418,7 +413,6 @@ fun TimeboxApp(
                             onReturnPlanningDraft = dayViewModel::returnPlanningDraft,
                             onArmAccessibleTask = dayViewModel::armAccessiblePlanningTask,
                             onRetryReadyTasks = dayViewModel::refreshReadyToPlan,
-                            onOpenWorkMode = dayViewModel::startWorkMode,
                             onEnterFocus = { trackingScope.launch { if (activityRepository != null) focusController?.enter(activityRepository) { dayViewModel.state.value.focusPlanningBlocked } } },
                         )
                     }
@@ -495,7 +489,7 @@ fun TimeboxApp(
                         val taskId = it.arguments?.getInt(AppRoutes.TaskIdArg) ?: return@dialog
                         TaskDetailScreen(
                             state = taskDetailState,
-                            onTrackTask = if (BuildConfig.ACTIVITY_TRACKING_DEV && taskDetailState.task?.let { it.status != TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
+                            onTrackTask = if (taskDetailState.task?.let { it.status != TaskStatus.Completed && it.recurrenceKind != "quota_parent" && (it.parentId == null || it.recurrenceKind == "quota_session") } == true) ({
                                 trackingScope.launch {
                                     val activity = (context.applicationContext as TimeboxApplication).activityRepository
                                     val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activity.trackTask(taskDetailState.task!!) }
@@ -754,25 +748,6 @@ fun TimeboxApp(
         }
 
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
-        dayState.workMode?.takeIf { dayState.workModeVisible }?.let { workMode ->
-            WorkModeScreen(
-                state = workMode,
-                onToggleSubtask = dayViewModel::toggleWorkModeSubtask,
-                onExit = dayViewModel::exitWorkMode,
-            )
-        }
-        if (dayState.workModeEntryWarning) {
-            WorkModeEntryDialog(
-                onPlanFirst = dayViewModel::planSomethingBeforeWorkMode,
-                onContinue = dayViewModel::continueWorkModeEntry,
-            )
-        }
-        if (dayState.workModeRestorePrompt) {
-            WorkModeRestoreDialog(
-                onDecline = dayViewModel::declineWorkContinued,
-                onConfirm = dayViewModel::confirmWorkContinued,
-            )
-        }
     }
     }
 }

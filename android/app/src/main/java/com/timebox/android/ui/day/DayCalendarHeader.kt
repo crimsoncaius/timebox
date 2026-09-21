@@ -83,7 +83,6 @@ internal fun DayCalendarHeader(
     compactDate: Boolean = false,
     viewAction: @Composable () -> Unit = {},
     hiddenTrackingAction: @Composable () -> Unit = {},
-    onOpenWorkMode: () -> Unit,
     onSetPlanningMode: (Boolean) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onNavigateToday: (LocalDate) -> Unit,
@@ -135,9 +134,6 @@ internal fun DayCalendarHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                if (!com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-                    WorkModeAction(enabled = !isPlanningMode, onClick = onOpenWorkMode)
-                }
                 viewAction()
                 PlanningModeAction(
                     isPlanningMode = isPlanningMode,
@@ -147,14 +143,6 @@ internal fun DayCalendarHeader(
             }
         }
 
-        if (isPlanningMode && !com.timebox.android.BuildConfig.ACTIVITY_TRACKING_DEV) {
-            Text(
-                "Finish planning to start Work Mode.",
-                modifier = Modifier.padding(horizontal = 20.dp),
-                color = colors.onVariant,
-                fontSize = 11.sp,
-            )
-        }
         Spacer(Modifier.height(8.dp))
 
         Row(
@@ -211,36 +199,6 @@ internal fun DayCalendarHeader(
         Spacer(Modifier.height(24.dp))
         }
         Hairline(Modifier.testTag("day-header-divider"))
-    }
-}
-
-@Composable
-private fun WorkModeAction(enabled: Boolean, onClick: () -> Unit) {
-    val colors = TimeboxTheme.colors
-    val shape = RoundedCornerShape(percent = 50)
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .testTag("work-mode-action")
-            .clip(shape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Work Mode" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(shape)
-                .border(1.dp, colors.outlineVariant, shape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.PlayArrow,
-                contentDescription = null,
-                tint = colors.onVariant.copy(alpha = if (enabled) 1f else 0.38f),
-                modifier = Modifier.size(20.dp),
-            )
-        }
     }
 }
 
