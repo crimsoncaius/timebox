@@ -30,6 +30,7 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [hourErrors, setHourErrors] = useState<Partial<Record<'start_hour' | 'end_hour', string>>>({})
   const nextPatchRequestId = useRef(0)
   const activePatchRequests = useRef(0)
   const pendingPatches = useRef(new Map<number, SettingsPatch>())
@@ -116,6 +117,24 @@ export function SettingsPage() {
       setSettings(reconcileSettings)
       setSaveState(activePatchRequests.current > 0 ? 'saving' : saveError.current ? 'error' : 'saved')
     }
+  }
+
+  const saveHour = (field: 'start_hour' | 'end_hour', raw: string) => {
+    if (!settings) return
+    const value = Number(raw)
+    const isStart = field === 'start_hour'
+    const label = isStart ? 'Start hour' : 'End hour'
+    const min = isStart ? 0 : 1
+    const max = isStart ? 23 : 24
+    let message: string | undefined
+    if (raw.trim() === '') message = `${label} is required.`
+    else if (!Number.isInteger(value) || value < min || value > max) {
+      message = `${label} must be a whole hour from ${min} to ${max}.`
+    } else if (isStart ? value >= settings.end_hour : value <= settings.start_hour) {
+      message = 'Start hour must be before end hour.'
+    }
+    setHourErrors((current) => ({ ...current, [field]: message }))
+    if (!message) void patchSettings({ [field]: value })
   }
 
   if (loading) {
@@ -209,11 +228,16 @@ export function SettingsPage() {
               className={inputClassName}
               defaultValue={settings.start_hour}
               key={`start-${settings.updated_at}`}
-              onBlur={(e) => {
-                const v = Number(e.target.value)
-                if (Number.isFinite(v)) void patchSettings({ start_hour: v })
-              }}
+              required
+              aria-invalid={!!hourErrors.start_hour}
+              aria-describedby={hourErrors.start_hour ? 'settings-start-hour-error' : undefined}
+              onBlur={(e) => saveHour('start_hour', e.target.value)}
             />
+            {hourErrors.start_hour && (
+              <p id="settings-start-hour-error" role="alert" className="text-sm text-error">
+                {hourErrors.start_hour}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
@@ -231,11 +255,16 @@ export function SettingsPage() {
               className={inputClassName}
               defaultValue={settings.end_hour}
               key={`end-${settings.updated_at}`}
-              onBlur={(e) => {
-                const v = Number(e.target.value)
-                if (Number.isFinite(v)) void patchSettings({ end_hour: v })
-              }}
+              required
+              aria-invalid={!!hourErrors.end_hour}
+              aria-describedby={hourErrors.end_hour ? 'settings-end-hour-error' : undefined}
+              onBlur={(e) => saveHour('end_hour', e.target.value)}
             />
+            {hourErrors.end_hour && (
+              <p id="settings-end-hour-error" role="alert" className="text-sm text-error">
+                {hourErrors.end_hour}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">

@@ -119,3 +119,49 @@ describe('SettingsPage week start', () => {
     expect(screen.getByLabelText('Start hour')).toHaveValue(10)
   })
 })
+
+
+describe('SettingsPage day window validation', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it.each([
+    ['Start hour', '', '0', 'start_hour'],
+    ['End hour', '', '24', 'end_hour'],
+    ['Start hour', '-1', '9', 'start_hour'],
+    ['Start hour', '24', '9', 'start_hour'],
+    ['Start hour', '8.5', '9', 'start_hour'],
+    ['Start hour', '20', '9', 'start_hour'],
+    ['End hour', '0', '21', 'end_hour'],
+    ['End hour', '25', '21', 'end_hour'],
+    ['End hour', '20.5', '21', 'end_hour'],
+    ['End hour', '8', '21', 'end_hour'],
+  ])('rejects %s value "%s" and allows correction to %s', async (label, invalid, valid, field) => {
+    const settings = {
+      id: 1, start_hour: 8, end_hour: 20, show_full_day: false, week_start: 'monday',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    }
+    const patches: unknown[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        const patch = JSON.parse(String(init.body))
+        patches.push(patch)
+        return response({ ...settings, ...patch, updated_at: '2026-01-02T00:00:00Z' })
+      }
+      return response(settings)
+    }))
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>)
+    const input = await screen.findByLabelText(label)
+    fireEvent.change(input, { target: { value: invalid } })
+    fireEvent.blur(input)
+    expect(patches).toEqual([])
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input).toHaveAccessibleDescription(/hour/i)
+    expect(input).toHaveValue(invalid === '' ? null : Number(invalid))
+
+    fireEvent.change(input, { target: { value: valid } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(patches).toEqual([{ [field]: Number(valid) }]))
+    await waitFor(() => expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'false'))
+    expect(screen.getByLabelText(label)).toHaveValue(Number(valid))
+  })
+})
