@@ -400,25 +400,46 @@ def _overlaps(start: int, end: int, other: TimeBlock) -> bool:
     return not (end <= other.start_minute or other.end_minute <= start)
 
 
-def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
-    operation_snapshot = db.execute(_operation_select(token)).scalar_one_or_none()
-    if operation_snapshot is None or operation_snapshot.root_task_id != task_id:
+_UNDO_CONFLICT = "Completion changed; Undo is no longer available"
+_PLAN_CONFLICT = "Planned time changed; Undo is no longer available"
+
+
+def _peek_completion_snapshot(db: Session, task_id: int, token: str) -> dict:
+    """Read the Undo record snapshot without locking.
+
+    Taken before the Task lock because the snapshot names the Days and Actuals
+    to lock; the record itself is locked afterwards, last in lock order.
+    """
+
+    operation = db.execute(_operation_select(token)).scalar_one_or_none()
+    if operation is None or operation.root_task_id != task_id:
         raise ValueError("Completion Undo not found")
-    snapshot = json.loads(operation_snapshot.snapshot_json)
-    plan_states = snapshot["removed_planned_blocks"]
+    return json.loads(operation.snapshot_json)
+
+
+def _load_undoable_task(db: Session, task_id: int) -> Task:
+    """Lock the Task and reject the states Completion Undo cannot act on."""
 
     row = db.execute(task_select(task_id, for_update=True)).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")
     _assert_completable(row)
+    return row
 
-    day_ids = sorted({state["day_id"] for state in plan_states})
+
+def _lock_snapshot_days_and_plans(
+    db: Session, day_ids: list[int]
+) -> tuple[dict[int, Day], list[TimeBlock]]:
+    """Lock the Days the snapshot restores into and their Planned Blocks, Days first."""
+
+    if not day_ids:
+        return {}, []
     days = {
         day.id: day
         for day in db.execute(
             select(Day).where(Day.id.in_(day_ids)).order_by(Day.id).with_for_update()
         ).scalars()
-    } if day_ids else {}
+    }
     existing_plans = list(
         db.execute(
             select(TimeBlock)
@@ -429,13 +450,16 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
             .order_by(TimeBlock.id)
             .with_for_update()
         ).scalars()
-    ) if day_ids else []
-    actual_ids = sorted(
-        state["corresponding_actual_id"]
-        for state in plan_states
-        if state.get("corresponding_actual_id") is not None
     )
-    actuals = {
+    return days, existing_plans
+
+
+def _lock_snapshot_actuals(db: Session, actual_ids: list[int]) -> dict[int, TimeBlock]:
+    """Lock the Actuals the snapshot re-links, keyed by id."""
+
+    if not actual_ids:
+        return {}
+    return {
         actual.id: actual
         for actual in db.execute(
             select(TimeBlock)
@@ -443,21 +467,30 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
             .order_by(TimeBlock.id)
             .with_for_update()
         ).scalars()
-    } if actual_ids else {}
+    }
+
+
+def _lock_undo_operation(
+    db: Session, task_id: int, token: str
+) -> TaskCompletionOperation:
+    """Lock the Undo record and reject one already spent."""
+
     operation = db.execute(
         _operation_select(token, for_update=True)
     ).scalar_one_or_none()
-
-    conflict = "Completion changed; Undo is no longer available"
-    captured_at = _parse_datetime(snapshot["captured_at"])
-    if (
-        operation is None
-        or operation.root_task_id != task_id
-        or operation.undone_at is not None
-    ):
-        if operation is not None and operation.undone_at is not None:
-            raise ValueError("Completion has already been undone")
+    if operation is not None and operation.undone_at is not None:
+        raise ValueError("Completion has already been undone")
+    if operation is None or operation.root_task_id != task_id:
         raise ValueError("Completion Undo not found")
+    return operation
+
+
+def _assert_completion_unchanged(
+    row: Task, operation: TaskCompletionOperation, snapshot: dict
+) -> None:
+    """The Task must still hold the Completion this record was written for."""
+
+    captured_at = _parse_datetime(snapshot["captured_at"])
     if (
         row.status != TaskStatus.completed
         or row.completed_at is None
@@ -465,22 +498,32 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
         or as_utc(row.completed_at) != as_utc(captured_at)
         or row.version != operation.completed_task_version
     ):
-        raise ValueError(conflict)
+        raise ValueError(_UNDO_CONFLICT)
+
+
+def _assert_plans_restorable(
+    db: Session,
+    plan_states: list[dict],
+    days: dict[int, Day],
+    existing_plans: list[TimeBlock],
+    actuals: dict[int, TimeBlock],
+) -> None:
+    """Every removed Planned Block must still fit the Day it came from."""
 
     existing_by_id = {block.id: block for block in existing_plans}
     for state in plan_states:
         if state["id"] in existing_by_id:
-            raise ValueError("Planned time changed; Undo is no longer available")
+            raise ValueError(_PLAN_CONFLICT)
         if state["day_id"] not in days or db.get(TaskType, state["task_type_id"]) is None:
-            raise ValueError("Planned time changed; Undo is no longer available")
+            raise ValueError(_PLAN_CONFLICT)
         if state["task_id"] is not None and db.get(Task, state["task_id"]) is None:
-            raise ValueError("Planned time changed; Undo is no longer available")
+            raise ValueError(_PLAN_CONFLICT)
         if any(
             block.day_id == state["day_id"]
             and _overlaps(state["start_minute"], state["end_minute"], block)
             for block in existing_plans
         ):
-            raise ValueError("Planned time changed; Undo is no longer available")
+            raise ValueError(_PLAN_CONFLICT)
         actual_id = state.get("corresponding_actual_id")
         if actual_id is not None:
             actual = actuals.get(actual_id)
@@ -492,53 +535,91 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
             ):
                 raise ValueError("Actual correspondence changed; Undo is no longer available")
 
-    task_state = snapshot["task"]
+
+def _restore_planned_blocks(
+    db: Session, plan_states: list[dict], days: dict[int, Day]
+) -> dict[int, TimeBlock]:
+    """Re-add the removed Planned Blocks under their original ids."""
+
     restored: dict[int, TimeBlock] = {}
+    for state in plan_states:
+        block = TimeBlock(
+            id=state["id"],
+            day_id=state["day_id"],
+            lane=BlockLane.planned,
+            task_type_id=state["task_type_id"],
+            task_id=state["task_id"],
+            name=state.get("name"),
+            note=state["note"],
+            start_minute=state["start_minute"],
+            end_minute=state["end_minute"],
+            start_at=None,
+            end_at=None,
+            planned_block_id=None,
+            created_at=_parse_datetime(state["created_at"]),
+            updated_at=_parse_datetime(state["updated_at"]),
+        )
+        db.add(block)
+        restored[state["id"]] = block
+        days[state["day_id"]].updated_at = dt.datetime.now(dt.UTC)
+    return restored
+
+
+def _restore_task_state(db: Session, row: Task, task_state: dict) -> None:
+    """Put back the Task fields Completion overwrote."""
+
+    row.status = TaskStatus(task_state["status"])
+    protect_task_occurrence(db, row)
+    row.completed_at = _parse_datetime(task_state["completed_at"])
+    prior = task_state["last_non_completed_status"]
+    row.last_non_completed_status = TaskStatus(prior) if prior else None
+    row.ready_to_plan = task_state["ready_to_plan"]
+    row.is_blocked = task_state["is_blocked"]
+    row.blocking_reason = task_state["blocking_reason"]
+    row.reminder_at = _parse_datetime(task_state["reminder_at"])
+    row.reminder_delivered_at = _parse_datetime(task_state["reminder_delivered_at"])
+
+
+def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
+    """Reverse one Task Completion atomically, or refuse if anything it touched moved.
+
+    Lock order is Task -> Day -> Planned -> Actual -> operation, the same order
+    complete_task uses. The snapshot read that names those rows is unlocked and
+    is therefore taken first, before the Task lock.
+    """
+
+    snapshot = _peek_completion_snapshot(db, task_id, token)
+    plan_states = snapshot["removed_planned_blocks"]
+    day_ids = sorted({state["day_id"] for state in plan_states})
+    actual_ids = sorted(
+        state["corresponding_actual_id"]
+        for state in plan_states
+        if state.get("corresponding_actual_id") is not None
+    )
+
+    row = _load_undoable_task(db, task_id)
+    days, existing_plans = _lock_snapshot_days_and_plans(db, day_ids)
+    actuals = _lock_snapshot_actuals(db, actual_ids)
+    operation = _lock_undo_operation(db, task_id, token)
+
+    _assert_completion_unchanged(row, operation, snapshot)
+    _assert_plans_restorable(db, plan_states, days, existing_plans, actuals)
+
     try:
-        for state in plan_states:
-            block = TimeBlock(
-                id=state["id"],
-                day_id=state["day_id"],
-                lane=BlockLane.planned,
-                task_type_id=state["task_type_id"],
-                task_id=state["task_id"],
-                name=state.get("name"),
-                note=state["note"],
-                start_minute=state["start_minute"],
-                end_minute=state["end_minute"],
-                start_at=None,
-                end_at=None,
-                planned_block_id=None,
-                created_at=_parse_datetime(state["created_at"]),
-                updated_at=_parse_datetime(state["updated_at"]),
-            )
-            db.add(block)
-            restored[state["id"]] = block
-            days[state["day_id"]].updated_at = dt.datetime.now(dt.UTC)
+        restored = _restore_planned_blocks(db, plan_states, days)
         db.flush()
         for state in plan_states:
             actual_id = state.get("corresponding_actual_id")
             if actual_id is not None:
                 actuals[actual_id].planned_block_id = restored[state["id"]].id
 
-        row.status = TaskStatus(task_state["status"])
-        protect_task_occurrence(db, row)
-        row.completed_at = _parse_datetime(task_state["completed_at"])
-        prior = task_state["last_non_completed_status"]
-        row.last_non_completed_status = TaskStatus(prior) if prior else None
-        row.ready_to_plan = task_state["ready_to_plan"]
-        row.is_blocked = task_state["is_blocked"]
-        row.blocking_reason = task_state["blocking_reason"]
-        row.reminder_at = _parse_datetime(task_state["reminder_at"])
-        row.reminder_delivered_at = _parse_datetime(
-            task_state["reminder_delivered_at"]
-        )
+        _restore_task_state(db, row, snapshot["task"])
         operation.undone_at = dt.datetime.now(dt.UTC)
         _derive_quota(db, row)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise ValueError(conflict) from exc
+        raise ValueError(_UNDO_CONFLICT) from exc
     except Exception:
         db.rollback()
         raise
