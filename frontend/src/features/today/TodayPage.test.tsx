@@ -387,6 +387,42 @@ describe('TodayPage inspector rail', () => {
     await user.click(taskButtons[0]!)
   })
 
+  it('explains future Actual placement without creating a block and still allows Planned drafts', async () => {
+    const fallbackFetch = globalThis.fetch
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === '/api/days/2026-06-01'
+        ? Promise.resolve(jsonResponse({ ...dayPayload, meta: { ...dayPayload.meta, today: '2026-05-31' } }))
+        : fallbackFetch(input, init))
+    const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByTestId('day-timeline')
+    fireEvent.click(view.container.querySelector('[data-day-lane="actual"]')!, { clientY: 47 })
+    expect(screen.getByRole('alert')).toHaveTextContent('Actual time cannot be recorded in the future')
+    expect(screen.queryByTestId('draft-block')).not.toBeInTheDocument()
+    expect(activityFake.correct).not.toHaveBeenCalled()
+    expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
+    fireEvent.click(view.container.querySelector('[data-day-lane="planned"]')!, { clientY: 47 })
+    expect(screen.getByTestId('draft-block')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it.each(['2026-06-01', '2026-06-02'])('retains no-space feedback for occupied Actual time when today is %s', async (today) => {
+    const fallbackFetch = globalThis.fetch
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === '/api/days/2026-06-01'
+        ? Promise.resolve(jsonResponse({ ...dayPayload, meta: { ...dayPayload.meta, today }, actual_blocks: [{
+          start_minute: 480, end_minute: 1200,
+          actual_block: { id: 41, task_type_id: 1, task_type: taskTypes[0], task_id: null, task: null,
+            name: 'Recorded activity', note: null, planned_block_id: null,
+            start_at: '2026-06-01T08:00:00Z', end_at: '2026-06-01T20:00:00Z', created_at: '', updated_at: '' },
+        }] }))
+        : fallbackFetch(input, init))
+    const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByTestId('day-timeline')
+    fireEvent.click(view.container.querySelector('[data-day-lane="actual"]')!, { clientY: 47 })
+    expect(screen.getByRole('alert')).toHaveTextContent('No available space in this day')
+    expect(screen.queryByTestId('draft-block')).not.toBeInTheDocument()
+  })
+
   it('places a manual Actual draft beside occupied time and fits future clicks into elapsed time', async () => {
     standaloneActual = {
       id: 41, task_type_id: 1, task_type: taskTypes[0], task_id: null, task: null,

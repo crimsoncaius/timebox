@@ -310,6 +310,10 @@ export function TodayPage() {
         return
       }
       if (day) {
+        if (lane === 'actual' && day.date > day.meta.today) {
+          setError('Actual time cannot be recorded in the future')
+          return
+        }
         const range = visibleMinuteRange(day)
         const occupied = lane === 'planned' ? day.time_blocks.filter(b => b.lane === 'planned') : day.actual_blocks
         const resolved = nearestBlockStart(occupied,
@@ -716,7 +720,7 @@ export function TodayPage() {
           )}
 
           {error && (
-            <div className="mb-6 rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
+            <div role="alert" className="mb-6 rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
               {error}
             </div>
           )}
