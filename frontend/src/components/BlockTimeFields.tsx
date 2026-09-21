@@ -3,7 +3,7 @@ import type { TimeBlock } from '../lib/api'
 import { formatMinuteLabel24 } from '../lib/time'
 import { errorMessage } from '../lib/errors'
 
-export function parseBlockMinute(text: string): number | null {
+function parseBlockMinute(text: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(text.trim())
   if (!match) return null
   const hour = Number(match[1]), minute = Number(match[2])

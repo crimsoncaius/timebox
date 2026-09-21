@@ -2,7 +2,8 @@ import { DragDropProvider } from '@dnd-kit/react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DayRead } from '../lib/api'
-import { DayTimeline, nowLineScrollDelta } from './DayTimeline'
+import { DayTimeline } from './DayTimeline'
+import { nowLineScrollDelta } from '../lib/dayView'
 
 const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture
 const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture

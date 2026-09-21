@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { DayRead } from '../../lib/api'
-import { ReportingDayActuals, needsElapsedDayView } from './ReportingDayActuals'
+import { ReportingDayActuals } from './ReportingDayActuals'
+import { needsElapsedDayView } from '../../lib/dayView'
 
 it('shows the API elapsed share and both repeated-hour offsets, opening the original identity', () => {
   const type = { id: 1, name: 'Reading', created_at: '', updated_at: '' }

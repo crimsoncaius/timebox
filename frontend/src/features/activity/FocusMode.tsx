@@ -18,7 +18,11 @@ export function FocusHost({ children }: { children: ReactNode }) {
   const visible = state.active && !state.planning && !!activity.snapshot?.current
   const [wakeMessage, setWakeMessage] = useState('')
   useEffect(() => controller.reconcile(repository), [controller, repository, activity.snapshot])
-  useEffect(() => { if (visible) return observeFocusWake(state.wake, setWakeMessage); setWakeMessage('') }, [visible, state.wake])
+  useEffect(() => {
+    if (!visible) return
+    const stop = observeFocusWake(state.wake, setWakeMessage)
+    return () => { stop(); setWakeMessage('') }
+  }, [visible, state.wake])
   return <><div hidden={visible} inert={visible}>{children}</div>{visible && <main aria-label="Focus" className="min-h-screen bg-surface dark:bg-dark-background text-on-surface dark:text-dark-on-surface p-6">
     <div className="fixed right-6 top-6 z-50 rounded-xl bg-surface dark:bg-dark-background"><button className="p-3" onClick={controller.exit}>Exit Focus</button></div>
     <div className="mx-auto max-w-xl pt-16"><p className="text-center uppercase tracking-widest">Focus</p><ActivityTracking taskTypes={activity.snapshot?.task_types ?? []} onChanged={() => {}} focus />

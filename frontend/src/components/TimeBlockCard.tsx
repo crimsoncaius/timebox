@@ -127,7 +127,7 @@ export function TimeBlockCard({
     } finally {
       onDragSessionChange?.(false)
     }
-  }, [block.end_minute, block.id, block.start_minute, lane, onDragSessionChange])
+  }, [block.end_minute, block.id, block.start_minute, onDragSessionChange])
 
   const cancelDrag = useCallback(() => {
     const wasDragging = dragRef.current != null
@@ -213,7 +213,6 @@ export function TimeBlockCard({
       onDragSessionChange,
       resizeMaxEndMinute,
       resizeMinStartMinute,
-      lane,
       visibleStartMin,
       visibleEndMin,
     ],
@@ -331,7 +330,6 @@ export function TimeBlockCard({
       onBlockClick,
       onDragSessionChange,
       timeEditingDisabled,
-      lane,
     ],
   )
 

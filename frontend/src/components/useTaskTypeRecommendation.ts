@@ -3,7 +3,7 @@ import { api, type TaskType } from '../lib/api'
 
 /** Scoped to one editor instance. Manual choices, including Unset, win permanently. */
 export function useTaskTypeRecommendation(name: string | undefined, types: TaskType[], selectedId: number | null, enabled = true) {
-  const initialName = useRef(name)
+  const [initialName] = useState(name)
   const [edited, setEdited] = useState(false)
   const manual = useRef(false)
   const [chosen, setChosen] = useState(false)
@@ -11,12 +11,14 @@ export function useTaskTypeRecommendation(name: string | undefined, types: TaskT
   const [result, setResult] = useState<{ name: string; catalog: string; id: number } | null>(null)
   const catalog = JSON.stringify(types.map(t => [t.id, t.name]).sort((a, b) => Number(a[0]) - Number(b[0])))
   const classified = !!selectedId && types.find(t => t.id === selectedId)?.name !== 'unspecified'
-  useEffect(() => {
-    if (name !== initialName.current) setEdited(true)
+  const [seenName, setSeenName] = useState(name)
+  if (seenName !== name) {
+    setSeenName(name)
+    if (name !== initialName) setEdited(true)
     setDismissedName(null)
     setResult(null)
-  }, [name])
-  const eligible = enabled && name !== undefined && (edited || name !== initialName.current) && !!name.trim()
+  }
+  const eligible = enabled && name !== undefined && (edited || name !== initialName) && !!name.trim()
     && !classified && !chosen && dismissedName !== name
   useEffect(() => {
     if (!eligible || name === undefined) return

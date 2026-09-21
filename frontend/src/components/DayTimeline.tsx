@@ -1,6 +1,7 @@
 import { useDroppable } from '@dnd-kit/react'
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockDraftPlacement, BlockLane, DayRead, TimeBlock } from '../lib/api'
+import { nowLineScrollDelta } from '../lib/dayView'
 import {
   calendarIsoDateInTimeZone,
   formatHourLabelGcal12,
@@ -370,14 +371,6 @@ export const DayTimeline = forwardRef<
     </>
   )
 })
-
-/** Place the Now Line one-third down the visible timeline, favoring upcoming work. */
-export function nowLineScrollDelta(lineTop: number, timelineTop: number, viewportHeight: number) {
-  const visibleTop = Math.max(0, timelineTop)
-  const visibleHeight = Math.max(0, viewportHeight - visibleTop)
-  if (visibleHeight <= 0) return 0
-  return lineTop - (visibleTop + visibleHeight / 3)
-}
 
 function scrollCurrentTimeIntoView(line: HTMLElement, timeline: HTMLElement, viewportHeight = window.innerHeight) {
   window.scrollBy({
