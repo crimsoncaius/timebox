@@ -57,7 +57,12 @@ import com.timebox.android.ui.assistant.AssistantScreen
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleView
 import com.timebox.android.ui.chronicle.ChronicleViewModel
+import com.timebox.android.ui.battleplan.BattlePlanComposerActions
+import com.timebox.android.ui.battleplan.BattlePlanFilterActions
+import com.timebox.android.ui.battleplan.BattlePlanProjectActions
+import com.timebox.android.ui.battleplan.BattlePlanRemovalActions
 import com.timebox.android.ui.battleplan.BattlePlanScreen
+import com.timebox.android.ui.battleplan.BattlePlanTaskActions
 import com.timebox.android.ui.battleplan.BattlePlanTrashUndoNotice
 import com.timebox.android.ui.battleplan.BattlePlanViewModel
 import com.timebox.android.ui.battleplan.RecurringDetailScreen
@@ -433,51 +438,59 @@ fun TimeboxApp(
                         BattlePlanScreen(
                             state = battlePlanState,
                             onRetry = { battlePlanViewModel.load() },
-                            onSelectCollection = battlePlanViewModel::selectCollection,
-                            onSelectScope = battlePlanViewModel::selectScope,
-                            onReorderProjects = battlePlanViewModel::reorderProjects,
-                            onSelectStatus = battlePlanViewModel::selectStatus,
-                            onToggleUrgency = battlePlanViewModel::toggleUrgency,
-                            onToggleImportance = battlePlanViewModel::toggleImportance,
-                            onToggleTaskType = battlePlanViewModel::toggleTaskType,
-                            onClearFilters = battlePlanViewModel::clearFilters,
-                            onSetHideCompleted = battlePlanViewModel::setHideCompleted,
-                            onArchiveCompleted = battlePlanViewModel::archiveCompleted,
-                            onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
-                            onToggleReady = battlePlanViewModel::toggleReady,
-                            onMoveProject = battlePlanViewModel::moveProject,
-                            onMoveTask = battlePlanViewModel::moveTask,
-                            onMoveTaskToBoundary = battlePlanViewModel::moveTaskToBoundary,
-                            onDropTask = battlePlanViewModel::dropTask,
-                            onSetBlocked = battlePlanViewModel::setBlocked,
-                            onCreateTask = { _, _, _ -> battlePlanViewModel.createTask() },
-                            onShowComposer = battlePlanViewModel::setComposerVisible,
-                            onComposerDraftChange = battlePlanViewModel::updateComposerDraft,
-                            onComposerReminderEnabledChange = battlePlanViewModel::setComposerReminderEnabled,
-                            onCreateComposerTaskType = battlePlanViewModel::createComposerTaskType,
-                            notificationsAllowed = notificationsAllowed,
-                            onRequestNotificationPermission = onRequestNotificationPermission,
+                            filterActions = BattlePlanFilterActions(
+                                selectCollection = battlePlanViewModel::selectCollection,
+                                selectScope = battlePlanViewModel::selectScope,
+                                selectStatus = battlePlanViewModel::selectStatus,
+                                toggleUrgency = battlePlanViewModel::toggleUrgency,
+                                toggleImportance = battlePlanViewModel::toggleImportance,
+                                toggleTaskType = battlePlanViewModel::toggleTaskType,
+                                clearFilters = battlePlanViewModel::clearFilters,
+                                setHideCompleted = battlePlanViewModel::setHideCompleted,
+                            ),
+                            taskActions = BattlePlanTaskActions(
+                                open = { navController.navigate(AppRoutes.taskDetail(it)) },
+                                toggleReady = battlePlanViewModel::toggleReady,
+                                move = battlePlanViewModel::moveTask,
+                                moveToBoundary = battlePlanViewModel::moveTaskToBoundary,
+                                drop = battlePlanViewModel::dropTask,
+                                setBlocked = battlePlanViewModel::setBlocked,
+                                archiveCompleted = battlePlanViewModel::archiveCompleted,
+                            ),
+                            projectActions = BattlePlanProjectActions(
+                                reorder = battlePlanViewModel::reorderProjects,
+                                moveTaskTo = battlePlanViewModel::moveProject,
+                                create = battlePlanViewModel::startProjectCreation,
+                                edit = battlePlanViewModel::editProject,
+                                changeName = battlePlanViewModel::setProjectName,
+                                save = battlePlanViewModel::saveProject,
+                                cancelEditor = battlePlanViewModel::cancelProjectEditor,
+                                dismissEditor = battlePlanViewModel::dismissProjectEditor,
+                                prepareDelete = battlePlanViewModel::prepareProjectDelete,
+                                dismissDelete = battlePlanViewModel::dismissProjectDelete,
+                                confirmDelete = battlePlanViewModel::confirmProjectDelete,
+                            ),
+                            composerActions = BattlePlanComposerActions(
+                                show = battlePlanViewModel::setComposerVisible,
+                                create = { _, _, _ -> battlePlanViewModel.createTask() },
+                                changeDraft = battlePlanViewModel::updateComposerDraft,
+                                changeReminderEnabled = battlePlanViewModel::setComposerReminderEnabled,
+                                createTaskType = battlePlanViewModel::createComposerTaskType,
+                                notificationsAllowed = notificationsAllowed,
+                                requestNotificationPermission = onRequestNotificationPermission,
+                            ),
+                            removalActions = BattlePlanRemovalActions(
+                                requestTrash = battlePlanViewModel::requestTrash,
+                                dismissTrash = battlePlanViewModel::dismissTrash,
+                                confirmTrash = battlePlanViewModel::confirmTrash,
+                                restoreArchived = battlePlanViewModel::restoreArchived,
+                                restoreTrashed = battlePlanViewModel::restoreTrashed,
+                                requestPermanentDelete = battlePlanViewModel::requestPermanentDelete,
+                                dismissPermanentDelete = battlePlanViewModel::dismissPermanentDelete,
+                                confirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
+                            ),
                             onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
                             onOpenTaskTypes = { navController.navigate(AppRoutes.Types) },
-                            onNewProject = battlePlanViewModel::startProjectCreation,
-                            onProjectNameChange = battlePlanViewModel::setProjectName,
-                            onSaveProject = battlePlanViewModel::saveProject,
-                            onCancelProjectEditor = battlePlanViewModel::cancelProjectEditor,
-                            onDismissProjectEditor = battlePlanViewModel::dismissProjectEditor,
-                            onEditProject = battlePlanViewModel::editProject,
-                            onPrepareDeleteProject = battlePlanViewModel::prepareProjectDelete,
-                            onDismissDeleteProject = battlePlanViewModel::dismissProjectDelete,
-                            onConfirmDeleteProject = battlePlanViewModel::confirmProjectDelete,
-                            onRestoreArchived = battlePlanViewModel::restoreArchived,
-                            onRestoreTrashed = battlePlanViewModel::restoreTrashed,
-                            onUndoTrash = { battlePlanViewModel.undoTrash() },
-                            onDismissUndo = { battlePlanViewModel.dismissUndo() },
-                            onRequestTrash = battlePlanViewModel::requestTrash,
-                            onDismissTrash = battlePlanViewModel::dismissTrash,
-                            onConfirmTrash = battlePlanViewModel::confirmTrash,
-                            onRequestPermanentDelete = battlePlanViewModel::requestPermanentDelete,
-                            onDismissPermanentDelete = battlePlanViewModel::dismissPermanentDelete,
-                            onConfirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
                         )
                     }
                     dialog(

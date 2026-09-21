@@ -164,68 +164,30 @@ private data class CardCompletionActions(val saving: Boolean = false, val move: 
 private val LocalCardCompletion = androidx.compose.runtime.staticCompositionLocalOf { CardCompletionActions() }
 
 @Composable
-fun BattlePlanScreen(
+internal fun BattlePlanScreen(
     state: BattlePlanUiState,
     onRetry: () -> Unit,
-    onSelectCollection: (TaskCollection) -> Unit = {},
-    onSelectScope: (BattlePlanScope) -> Unit,
-    onReorderProjects: (List<Int>) -> Unit = {},
-    onSelectStatus: (TaskStatus) -> Unit,
-    onToggleUrgency: (String) -> Unit,
-    onToggleImportance: (String) -> Unit,
-    onToggleTaskType: (String) -> Unit,
-    onClearFilters: () -> Unit,
-    onSetHideCompleted: (Boolean) -> Unit = {},
-    onArchiveCompleted: () -> Unit = {},
-    onOpenTask: (Int) -> Unit,
-    onToggleReady: (BattleTask) -> Unit,
-    onMoveProject: (BattleTask, Int?) -> Unit = { _, _ -> },
-    onMoveTask: (BattleTask, TaskStatus) -> Unit,
-    onMoveTaskToBoundary: (BattleTask, Boolean) -> Unit = { _, _ -> },
-    onDropTask: (BattleTask, TaskStatus, Int) -> Unit = { _, _, _ -> },
-    onSetBlocked: (BattleTask, Boolean, String?) -> Unit = { _, _, _ -> },
-    onCreateTask: (String, String, Int?) -> Unit,
-    onShowComposer: (Boolean) -> Unit,
-    onComposerDraftChange: (TaskComposerDraft) -> Unit = {},
-    onComposerReminderEnabledChange: (Boolean) -> Unit = {},
-    onCreateComposerTaskType: (String) -> Unit = {},
-    notificationsAllowed: Boolean = true,
-    onRequestNotificationPermission: () -> Unit = {},
-    onOpenRecurring: () -> Unit,
+    filterActions: BattlePlanFilterActions = BattlePlanFilterActions(),
+    taskActions: BattlePlanTaskActions = BattlePlanTaskActions(),
+    projectActions: BattlePlanProjectActions = BattlePlanProjectActions(),
+    composerActions: BattlePlanComposerActions = BattlePlanComposerActions(),
+    removalActions: BattlePlanRemovalActions = BattlePlanRemovalActions(),
+    onOpenRecurring: () -> Unit = {},
     onOpenTaskTypes: () -> Unit = {},
-    onNewProject: () -> Unit,
-    onProjectNameChange: (String) -> Unit = {},
-    onSaveProject: () -> Unit = {},
-    onCancelProjectEditor: () -> Unit = {},
-    onDismissProjectEditor: () -> Unit = {},
-    onEditProject: (Project) -> Unit = {},
-    onPrepareDeleteProject: (Project) -> Unit,
-    onDismissDeleteProject: () -> Unit,
-    onConfirmDeleteProject: () -> Unit,
-    onRestoreArchived: (BattleTask) -> Unit,
-    onRestoreTrashed: (BattleTask) -> Unit,
-    onUndoTrash: () -> Unit,
-    onDismissUndo: () -> Unit,
-    onRequestTrash: (BattleTask) -> Unit = {},
-    onDismissTrash: () -> Unit = {},
-    onConfirmTrash: () -> Unit = {},
-    onRequestPermanentDelete: (BattleTask) -> Unit,
-    onDismissPermanentDelete: () -> Unit,
-    onConfirmPermanentDelete: () -> Unit,
 ) {
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalProjectMove provides ProjectMoveActions(state.projects, state.saving, state.message, onMoveProject),
-        LocalCardCompletion provides CardCompletionActions(state.saving, onMoveTask),
+        LocalProjectMove provides ProjectMoveActions(state.projects, state.saving, state.message, projectActions.moveTaskTo),
+        LocalCardCompletion provides CardCompletionActions(state.saving, taskActions.move),
     ) {
         var movingTask by remember { mutableStateOf<BattleTask?>(null) }
         val onRequestMoveProject: (BattleTask) -> Unit = { movingTask = it }
         movingTask?.let { task ->
             MoveTaskProjectDialog(task, state.projects, state.saving,
-                onMove = { destination -> onMoveProject(task, destination); movingTask = null },
+                onMove = { destination -> projectActions.moveTaskTo(task, destination); movingTask = null },
                 onDismiss = { movingTask = null })
         }
         var projectOrderOpen by remember { mutableStateOf(false) }
-        if (projectOrderOpen) ProjectOrderDialog(state.projects, state.projectOrderSaving, state.error, onReorderProjects) { projectOrderOpen = false }
+        if (projectOrderOpen) ProjectOrderDialog(state.projects, state.projectOrderSaving, state.error, projectActions.reorder) { projectOrderOpen = false }
         val colors = TimeboxTheme.colors
         when {
             state.loading -> LoadingState()
@@ -235,38 +197,23 @@ fun BattlePlanScreen(
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         MobileKanbanBoard(
                             state = state,
-                            onSelectScope = onSelectScope,
-                            onSelectCollection = onSelectCollection,
-                            onSelectStatus = onSelectStatus,
-                            onToggleUrgency = onToggleUrgency,
-                            onToggleImportance = onToggleImportance,
-                            onToggleTaskType = onToggleTaskType,
-                            onClearFilters = onClearFilters,
-                            onSetHideCompleted = onSetHideCompleted,
-                            onArchiveCompleted = onArchiveCompleted,
-                            onOpenTask = onOpenTask,
-                            onToggleReady = onToggleReady,
+                            filterActions = filterActions,
+                            taskActions = taskActions,
+                            projectActions = projectActions,
+                            removalActions = removalActions,
                             onRequestMoveProject = onRequestMoveProject,
-                            onDropTask = onDropTask,
-                            onMoveTaskToBoundary = onMoveTaskToBoundary,
-                            onSetBlocked = onSetBlocked,
-                            onRequestTrash = onRequestTrash,
-                            onShowComposer = onShowComposer,
+                            onShowComposer = composerActions.show,
                             onOpenRecurring = onOpenRecurring,
                             onOpenTaskTypes = onOpenTaskTypes,
-                            onNewProject = onNewProject,
-                            onReorderProjects = onReorderProjects,
-                            onEditProject = onEditProject,
-                            onPrepareDeleteProject = onPrepareDeleteProject,
                         )
                     }
                 } else {
                     UtilityTaskList(
                         state,
-                        onBackToBoard = { onSelectCollection(TaskCollection.Active) },
-                        onRestoreArchived,
-                        onRestoreTrashed,
-                        onRequestPermanentDelete,
+                        onBackToBoard = { filterActions.selectCollection(TaskCollection.Active) },
+                        removalActions.restoreArchived,
+                        removalActions.restoreTrashed,
+                        removalActions.requestPermanentDelete,
                     )
                 }
             }
@@ -275,32 +222,32 @@ fun BattlePlanScreen(
         state.projectEditor?.let { draft ->
             ProjectNameSheet(
                 state = draft,
-                onNameChange = onProjectNameChange,
-                onSave = onSaveProject,
-                onCancel = onCancelProjectEditor,
-                onDismiss = onDismissProjectEditor,
+                onNameChange = projectActions.changeName,
+                onSave = projectActions.save,
+                onCancel = projectActions.cancelEditor,
+                onDismiss = projectActions.dismissEditor,
             )
         }
 
         if (state.showComposer) {
             TaskComposerOverlay(
                 state = state,
-                notificationsAllowed = notificationsAllowed,
-                onRequestNotificationPermission = onRequestNotificationPermission,
-                onDraftChange = onComposerDraftChange,
-                onReminderEnabledChange = onComposerReminderEnabledChange,
-                onDismiss = { onShowComposer(false) },
-                onCreate = { onCreateTask("", "", null) },
-                onCreateTaskType = onCreateComposerTaskType,
+                notificationsAllowed = composerActions.notificationsAllowed,
+                onRequestNotificationPermission = composerActions.requestNotificationPermission,
+                onDraftChange = composerActions.changeDraft,
+                onReminderEnabledChange = composerActions.changeReminderEnabled,
+                onDismiss = { composerActions.show(false) },
+                onCreate = { composerActions.create("", "", null) },
+                onCreateTaskType = composerActions.createTaskType,
             )
         }
 
         state.projectDeleteSummary?.let { summary ->
-            ProjectDeleteDialog(summary, onDismissDeleteProject, onConfirmDeleteProject)
+            ProjectDeleteDialog(summary, projectActions.dismissDelete, projectActions.confirmDelete)
         }
         state.pendingTrashTask?.let { task ->
             AlertDialog(
-                onDismissRequest = onDismissTrash,
+                onDismissRequest = removalActions.dismissTrash,
                 title = { Text("Move ${task.title} to Trash?") },
                 text = {
                     Text(
@@ -308,17 +255,17 @@ fun BattlePlanScreen(
                         else "This also moves every Subtask to Trash. You can restore it for 30 days.",
                     )
                 },
-                confirmButton = { TextButton(onClick = onConfirmTrash) { Text("Move to Trash") } },
-                dismissButton = { TextButton(onClick = onDismissTrash) { Text("Cancel") } },
+                confirmButton = { TextButton(onClick = removalActions.confirmTrash) { Text("Move to Trash") } },
+                dismissButton = { TextButton(onClick = removalActions.dismissTrash) { Text("Cancel") } },
             )
         }
         state.permanentDeleteTask?.let { task ->
             AlertDialog(
-                onDismissRequest = onDismissPermanentDelete,
+                onDismissRequest = removalActions.dismissPermanentDelete,
                 title = { Text("Permanently delete ${task.title}?") },
                 text = { Text("This removes the task and its subtasks permanently. This cannot be undone.") },
-                confirmButton = { TextButton(onClick = onConfirmPermanentDelete) { Text("Delete permanently") } },
-                dismissButton = { TextButton(onClick = onDismissPermanentDelete) { Text("Cancel") } },
+                confirmButton = { TextButton(onClick = removalActions.confirmPermanentDelete) { Text("Delete permanently") } },
+                dismissButton = { TextButton(onClick = removalActions.dismissPermanentDelete) { Text("Cancel") } },
             )
         }
     }
@@ -397,29 +344,14 @@ private fun StatusTabs(state: BattlePlanUiState, onSelectStatus: (TaskStatus) ->
 @OptIn(ExperimentalMaterial3Api::class)
 private fun MobileKanbanBoard(
     state: BattlePlanUiState,
-    onSelectScope: (BattlePlanScope) -> Unit,
-    onSelectCollection: (TaskCollection) -> Unit,
-    onSelectStatus: (TaskStatus) -> Unit,
-    onToggleUrgency: (String) -> Unit,
-    onToggleImportance: (String) -> Unit,
-    onToggleTaskType: (String) -> Unit,
-    onClearFilters: () -> Unit,
-    onSetHideCompleted: (Boolean) -> Unit,
-    onArchiveCompleted: () -> Unit,
-    onOpenTask: (Int) -> Unit,
-    onToggleReady: (BattleTask) -> Unit,
+    filterActions: BattlePlanFilterActions,
+    taskActions: BattlePlanTaskActions,
+    projectActions: BattlePlanProjectActions,
+    removalActions: BattlePlanRemovalActions,
     onRequestMoveProject: (BattleTask) -> Unit,
-    onDropTask: (BattleTask, TaskStatus, Int) -> Unit,
-    onMoveTaskToBoundary: (BattleTask, Boolean) -> Unit,
-    onSetBlocked: (BattleTask, Boolean, String?) -> Unit,
-    onRequestTrash: (BattleTask) -> Unit,
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
     onOpenTaskTypes: () -> Unit = {},
-    onNewProject: () -> Unit,
-    onReorderProjects: (List<Int>) -> Unit,
-    onEditProject: (Project) -> Unit,
-    onPrepareDeleteProject: (Project) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     val density = LocalDensity.current
@@ -481,7 +413,7 @@ private fun MobileKanbanBoard(
         if (page != pagerState.currentPage) pagerState.animateScrollToPage(page)
     }
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-        if (!pagerState.isScrollInProgress) onSelectStatus(battlePlanStatuses[pagerState.currentPage])
+        if (!pagerState.isScrollInProgress) filterActions.selectStatus(battlePlanStatuses[pagerState.currentPage])
     }
     LaunchedEffect(activeDrag?.edgeDirection, activeDrag?.edgeLockedAtPage, pagerState.settledPage) {
         val lockedDrag = activeDrag
@@ -541,7 +473,7 @@ private fun MobileKanbanBoard(
         )
         if (settlingDrop != settling) return@LaunchedEffect
         if (!settling.unchanged) {
-            onDropTask(settling.drag.task, settling.drag.targetStatus, settling.drag.targetIndex)
+            taskActions.drop(settling.drag.task, settling.drag.targetStatus, settling.drag.targetIndex)
         }
         settlingDrop = null
     }
@@ -571,11 +503,11 @@ private fun MobileKanbanBoard(
         ) {
             TaskNavigationMenu(
                 state = state, modifier = Modifier.weight(1f),
-                onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
+                onSelectScope = filterActions.selectScope, onSelectCollection = filterActions.selectCollection,
                 onOpenRecurring = onOpenRecurring, onOpenTaskTypes = onOpenTaskTypes,
-                onReorderProjects = onReorderProjects,
-                onEditProject = onEditProject, onPrepareDeleteProject = onPrepareDeleteProject,
-                onNewProject = onNewProject,
+                onReorderProjects = projectActions.reorder,
+                onEditProject = projectActions.edit, onPrepareDeleteProject = projectActions.prepareDelete,
+                onNewProject = projectActions.create,
             )
             IconButton(onClick = { filterSheet = true }) {
                 Icon(Icons.Outlined.FilterList, contentDescription = "Filter tasks", tint = colors.on)
@@ -587,7 +519,7 @@ private fun MobileKanbanBoard(
                 val selected = pagerState.currentPage == index
                 Column(
                     Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable {
-                        onSelectStatus(status)
+                        filterActions.selectStatus(status)
                     }.padding(vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -652,7 +584,7 @@ private fun MobileKanbanBoard(
                                     ),
                                 )
                             } else if (!isUnchangedDrop(drag.task.status, drag.targetStatus, drag.sourceIndex, drag.targetIndex)) {
-                                onDropTask(drag.task, drag.targetStatus, drag.targetIndex)
+                                taskActions.drop(drag.task, drag.targetStatus, drag.targetIndex)
                             }
                         },
                         onDrag = { change, _ ->
@@ -691,13 +623,13 @@ private fun MobileKanbanBoard(
                     taskCount = { target -> state.filteredTasks.count { it.status == target } },
                     serverNow = state.serverNow,
                     timezone = state.timezone,
-                    onOpen = onOpenTask,
-                    onToggleReady = onToggleReady,
+                    onOpen = taskActions.open,
+                    onToggleReady = taskActions.toggleReady,
                     onRequestMoveProject = onRequestMoveProject,
-                    onDrop = onDropTask,
-                    onMoveToBoundary = onMoveTaskToBoundary,
-                    onSetBlocked = onSetBlocked,
-                    onRequestTrash = onRequestTrash,
+                    onDrop = taskActions.drop,
+                    onMoveToBoundary = taskActions.moveToBoundary,
+                    onSetBlocked = taskActions.setBlocked,
+                    onRequestTrash = removalActions.requestTrash,
                     manualOrder = state.sort == BattlePlanSort.Manual,
                     absoluteLaneTasks = state.tasks.filter { it.status == status }.sortedBy { it.position },
                     activeDrag = visualDrag,
@@ -762,13 +694,13 @@ private fun MobileKanbanBoard(
         ) {
             BattlePlanFilterSheetContent(
                 state = state,
-                onToggleUrgency = onToggleUrgency,
-                onToggleImportance = onToggleImportance,
-                onToggleTaskType = onToggleTaskType,
-                onClearFilters = onClearFilters,
-                onSetHideCompleted = onSetHideCompleted,
+                onToggleUrgency = filterActions.toggleUrgency,
+                onToggleImportance = filterActions.toggleImportance,
+                onToggleTaskType = filterActions.toggleTaskType,
+                onClearFilters = filterActions.clearFilters,
+                onSetHideCompleted = filterActions.setHideCompleted,
                 onArchiveCompleted = {
-                    onArchiveCompleted()
+                    taskActions.archiveCompleted()
                     filterSheet = false
                 },
                 onDismiss = { filterSheet = false },

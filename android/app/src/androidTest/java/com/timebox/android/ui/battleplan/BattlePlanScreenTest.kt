@@ -121,15 +121,11 @@ class BattlePlanScreenTest {
                         timezone = "Asia/Singapore",
                         serverNow = Instant.parse("2026-08-21T16:00:00Z"),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = { opened = true }, onToggleReady = {},
-                    onMoveTask = { _, target -> completion = target },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(
+                        open = { opened = true },
+                        move = { _, target -> completion = target },
+                    ),
                 )
             }
         }
@@ -170,15 +166,7 @@ class BattlePlanScreenTest {
                             ),
                         ),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
                 )
             }
         }
@@ -215,17 +203,11 @@ class BattlePlanScreenTest {
                         timezone = "UTC",
                         serverNow = Instant.parse("2026-08-22T12:00:00Z"),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {},
-                    onToggleReady = { readyToggles += it.id },
-                    onMoveTask = { _, _ -> },
-                    onSetBlocked = { task, blocked, _ -> blockedChanges += task.id to blocked },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(
+                        toggleReady = { readyToggles += it.id },
+                        setBlocked = { task, blocked, _ -> blockedChanges += task.id to blocked },
+                    ),
                 )
             }
         }
@@ -304,17 +286,8 @@ class BattlePlanScreenTest {
                             battleTask(1).copy(readyToPlan = true, readinessPending = true),
                         ),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {},
-                    onToggleReady = { toggled += it.id },
-                    onMoveTask = { _, _ -> },
-                    onSetBlocked = { _, _, _ -> }, onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                    onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
-                    onDismissDeleteProject = {}, onConfirmDeleteProject = {},
-                    onRestoreArchived = {}, onRestoreTrashed = {}, onUndoTrash = {},
-                    onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(toggleReady = { toggled += it.id }),
                 )
             }
         }
@@ -547,17 +520,8 @@ class BattlePlanScreenTest {
             TimeboxTheme(darkTheme = false) {
                 BattlePlanScreen(
                     state = BattlePlanUiState(loading = false),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {},
-                    onToggleTaskType = {}, onClearFilters = {}, onOpenTask = {},
-                    onToggleReady = {}, onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
+                    onRetry = {},
                     onOpenRecurring = { recurringOpened = true },
-                    onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {},
-                    onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                    onConfirmPermanentDelete = {},
                 )
             }
         }
@@ -586,18 +550,8 @@ class BattlePlanScreenTest {
             TimeboxTheme(darkTheme = false) {
                 BattlePlanScreen(
                     state = BattlePlanUiState(loading = false),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {},
-                    onToggleTaskType = {}, onClearFilters = {}, onOpenTask = {},
-                    onToggleReady = {}, onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {},
+                    onRetry = {},
                     onOpenTaskTypes = { taskTypesOpened = true },
-                    onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {},
-                    onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                    onConfirmPermanentDelete = {},
                 )
             }
         }
@@ -638,15 +592,11 @@ class BattlePlanScreenTest {
                         loading = false,
                         taskTypes = listOf(TaskType(id = 7, name = "Work / Focus", usageCount = 0)),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = { urgencyTapped = it }, onToggleImportance = {},
-                    onToggleTaskType = { taskTypeTapped = it }, onClearFilters = {}, onOpenTask = {},
-                    onToggleReady = {}, onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    filterActions = BattlePlanFilterActions(
+                        toggleUrgency = { urgencyTapped = it },
+                        toggleTaskType = { taskTypeTapped = it },
+                    ),
                 )
             }
         }
@@ -679,18 +629,12 @@ class BattlePlanScreenTest {
                         loading = false,
                         tasks = listOf(battleTask(1), battleTask(2)),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onMoveTaskToBoundary = { task, toTop -> boundaryMoves += task.id to toTop },
-                    onSetBlocked = { task, value, reason -> blocked = Triple(task.id, value, reason) },
-                    onRequestTrash = { trashRequested = it.id },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(
+                        moveToBoundary = { task, toTop -> boundaryMoves += task.id to toTop },
+                        setBlocked = { task, value, reason -> blocked = Triple(task.id, value, reason) },
+                    ),
+                    removalActions = BattlePlanRemovalActions(requestTrash = { trashRequested = it.id }),
                 )
             }
         }
@@ -732,16 +676,8 @@ class BattlePlanScreenTest {
                         tasks = listOf(battleTask(1)),
                         pendingTrashTask = battleTask(1),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onConfirmTrash = { confirmed = true },
-                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                    onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    removalActions = BattlePlanRemovalActions(confirmTrash = { confirmed = true }),
                 )
             }
         }
@@ -764,16 +700,10 @@ class BattlePlanScreenTest {
                             loading = false,
                             tasks = listOf(battleTask(1), battleTask(2), battleTask(3)),
                         ),
-                        onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                        onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                        onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                        onMoveTask = { _, _ -> },
-                        onDropTask = { task, status, index -> dropped = Triple(task.id, status, index) },
-                        onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                        onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                        onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                        onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                        onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                        onRetry = {},
+                        taskActions = BattlePlanTaskActions(
+                            drop = { task, status, index -> dropped = Triple(task.id, status, index) },
+                        ),
                     )
                 }
             }
@@ -818,16 +748,10 @@ class BattlePlanScreenTest {
                         loading = false,
                         tasks = listOf(battleTask(1)),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onDropTask = { task, status, index -> dropped = Triple(task.id, status, index) },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(
+                        drop = { task, status, index -> dropped = Triple(task.id, status, index) },
+                    ),
                 )
             }
         }
@@ -867,16 +791,10 @@ class BattlePlanScreenTest {
                         tasks = listOf(battleTask(1).copy(status = TaskStatus.Completed)),
                         selectedStatus = TaskStatus.Completed,
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onDropTask = { task, status, index -> dropped = Triple(task.id, status, index) },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(
+                        drop = { task, status, index -> dropped = Triple(task.id, status, index) },
+                    ),
                 )
             }
         }
@@ -914,16 +832,7 @@ class BattlePlanScreenTest {
                         loading = false,
                         tasks = listOf(battleTask(1), battleTask(2), battleTask(3)),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onDropTask = { _, _, _ -> }, onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                    onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
-                    onDismissDeleteProject = {}, onConfirmDeleteProject = {}, onRestoreArchived = {},
-                    onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                    onConfirmPermanentDelete = {},
+                    onRetry = {},
                 )
             }
         }
@@ -983,16 +892,10 @@ class BattlePlanScreenTest {
                         loading = false,
                         tasks = listOf(battleTask(1), battleTask(2), battleTask(3)),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onDropTask = { task, status, index -> dropped = Triple(task.id, status, index) },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    taskActions = BattlePlanTaskActions(
+                        drop = { task, status, index -> dropped = Triple(task.id, status, index) },
+                    ),
                 )
             }
         }
@@ -1047,16 +950,7 @@ class BattlePlanScreenTest {
                             battleTask(3),
                         ),
                     ),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onDropTask = { _, _, _ -> }, onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                    onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
-                    onDismissDeleteProject = {}, onConfirmDeleteProject = {}, onRestoreArchived = {},
-                    onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-                    onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                    onConfirmPermanentDelete = {},
+                    onRetry = {},
                 )
             }
         }
@@ -1107,16 +1001,8 @@ class BattlePlanScreenTest {
                 TimeboxTheme(darkTheme = false) {
                     BattlePlanScreen(
                         state = BattlePlanUiState(loading = false, tasks = listOf(battleTask(1), battleTask(2))),
-                        onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                        onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                        onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                        onMoveTask = { _, _ -> },
-                        onDropTask = { _, _, _ -> dropped = true }, onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                        onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
-                        onDismissDeleteProject = {}, onConfirmDeleteProject = {}, onRestoreArchived = {},
-                        onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-                        onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                        onConfirmPermanentDelete = {},
+                        onRetry = {},
+                        taskActions = BattlePlanTaskActions(drop = { _, _, _ -> dropped = true }),
                     )
                 }
             }
@@ -1149,16 +1035,8 @@ class BattlePlanScreenTest {
                 TimeboxTheme(darkTheme = false) {
                     BattlePlanScreen(
                         state = BattlePlanUiState(loading = false, tasks = listOf(battleTask(1), battleTask(2))),
-                        onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                        onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                        onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                        onMoveTask = { _, _ -> },
-                        onDropTask = { _, _, _ -> dropped = true }, onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                        onNewProject = {}, onOpenRecurring = {}, onPrepareDeleteProject = {},
-                        onDismissDeleteProject = {}, onConfirmDeleteProject = {}, onRestoreArchived = {},
-                        onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-                        onRequestPermanentDelete = {}, onDismissPermanentDelete = {},
-                        onConfirmPermanentDelete = {},
+                        onRetry = {},
+                        taskActions = BattlePlanTaskActions(drop = { _, _, _ -> dropped = true }),
                     )
                 }
             }

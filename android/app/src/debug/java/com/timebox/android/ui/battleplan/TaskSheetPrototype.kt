@@ -138,15 +138,16 @@ fun TaskSheetPrototype(startCreating: Boolean = false, initialLayout: String = "
         Text("Battle Plan", fontSize = 30.sp, modifier = Modifier.padding(20.dp, 8.dp), color = colors.on)
         BattlePlanScreen(
             state = BattlePlanUiState(loading = false, projects = listOf(project), tasks = listOf(sample), serverNow = now),
-            onRetry = {}, onSelectScope = {}, onSelectStatus = {}, onToggleUrgency = {}, onToggleImportance = {},
-            onToggleTaskType = {}, onClearFilters = {}, onOpenTask = { creating = false; visible = true },
-            onToggleReady = { saved = saved.copy(ready = !saved.ready) },
-            onMoveTask = { _, status -> saved = saved.copy(completed = status == TaskStatus.Completed) },
-            onCreateTask = { _, _, _ -> creating = true; visible = true },
-            onShowComposer = { if (it) { creating = true; visible = true } }, onOpenRecurring = {}, onNewProject = {},
-            onPrepareDeleteProject = {}, onDismissDeleteProject = {}, onConfirmDeleteProject = {},
-            onRestoreArchived = {}, onRestoreTrashed = {}, onUndoTrash = {}, onDismissUndo = {},
-            onRequestPermanentDelete = {}, onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+            onRetry = {},
+            taskActions = BattlePlanTaskActions(
+                open = { creating = false; visible = true },
+                toggleReady = { saved = saved.copy(ready = !saved.ready) },
+                move = { _, status -> saved = saved.copy(completed = status == TaskStatus.Completed) },
+            ),
+            composerActions = BattlePlanComposerActions(
+                show = { if (it) { creating = true; visible = true } },
+                create = { _, _, _ -> creating = true; visible = true },
+            ),
         )
     }
     if (visible) ModalBottomSheet(

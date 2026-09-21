@@ -121,16 +121,7 @@ class DarkThemeScreenshotTest {
             DarkFrame {
                 BattlePlanScreen(
                     state = BattlePlanUiState(loading = false, tasks = listOf(battleTask(1))),
-                    onRetry = {}, onSelectScope = {}, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                    onOpenRecurring = {}, onNewProject = {}, onPrepareDeleteProject = {},
-                    onDismissDeleteProject = {}, onConfirmDeleteProject = {},
-                    onRestoreArchived = {}, onRestoreTrashed = {}, onUndoTrash = {},
-                    onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
                 )
             }
         }

@@ -85,16 +85,11 @@ class ProjectNavigationListTest {
             TimeboxTheme(darkTheme = true) {
                 BattlePlanScreen(
                     state = BattlePlanUiState(loading = false, projects = rows),
-                    onReorderProjects = { ids -> requested = ids; rows = ids.map { id -> projects.first { it.id == id } } },
-                    onRetry = {}, onSelectScope = { selected = it }, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {}, onNewProject = {},
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    filterActions = BattlePlanFilterActions(selectScope = { selected = it }),
+                    projectActions = BattlePlanProjectActions(
+                        reorder = { ids -> requested = ids; rows = ids.map { id -> projects.first { it.id == id } } },
+                    ),
                 )
             }
         }

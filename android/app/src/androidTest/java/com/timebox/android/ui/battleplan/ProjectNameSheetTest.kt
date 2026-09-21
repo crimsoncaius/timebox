@@ -149,21 +149,16 @@ class ProjectNameSheetTest {
             TimeboxTheme(darkTheme = false) {
                 BattlePlanScreen(
                     state = state,
-                    onRetry = {}, onSelectScope = { state = state.copy(selectedScope = it) }, onSelectStatus = {},
-                    onToggleUrgency = {}, onToggleImportance = {}, onToggleTaskType = {},
-                    onClearFilters = {}, onOpenTask = {}, onToggleReady = {},
-                    onMoveTask = { _, _ -> },
-                    onCreateTask = { _, _, _ -> }, onShowComposer = {},
-                    onNewProject = { state = state.copy(projectEditor = retained ?: ProjectNameDraft()) },
-                    onProjectNameChange = { state = state.copy(projectEditor = state.projectEditor!!.copy(name = it, error = null)) },
-                    onCancelProjectEditor = { retained = null; state = state.copy(projectEditor = null) },
-                    onDismissProjectEditor = { retained = state.projectEditor; state = state.copy(projectEditor = null) },
-                    onEditProject = { state = state.copy(projectEditor = ProjectNameDraft(projectId = it.id, name = it.name)) },
-                    onSaveProject = { submit() },
-                    onOpenRecurring = {}, onPrepareDeleteProject = {}, onDismissDeleteProject = {},
-                    onConfirmDeleteProject = {}, onRestoreArchived = {}, onRestoreTrashed = {},
-                    onUndoTrash = {}, onDismissUndo = {}, onRequestPermanentDelete = {},
-                    onDismissPermanentDelete = {}, onConfirmPermanentDelete = {},
+                    onRetry = {},
+                    filterActions = BattlePlanFilterActions(selectScope = { state = state.copy(selectedScope = it) }),
+                    projectActions = BattlePlanProjectActions(
+                        create = { state = state.copy(projectEditor = retained ?: ProjectNameDraft()) },
+                        edit = { state = state.copy(projectEditor = ProjectNameDraft(projectId = it.id, name = it.name)) },
+                        changeName = { state = state.copy(projectEditor = state.projectEditor!!.copy(name = it, error = null)) },
+                        save = { submit() },
+                        cancelEditor = { retained = null; state = state.copy(projectEditor = null) },
+                        dismissEditor = { retained = state.projectEditor; state = state.copy(projectEditor = null) },
+                    ),
                 )
             }
         }
