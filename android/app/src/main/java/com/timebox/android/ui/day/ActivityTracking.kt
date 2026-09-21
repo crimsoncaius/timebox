@@ -169,11 +169,6 @@ fun ActivityTracking(
                     onSwitch = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } },
                 )
             }
-            if (!focus && expanded) current?.plannedBlockId?.let { id ->
-                val linked = state.snapshot!!.records.filter { it.plannedBlockId == id }
-                val minutes = linked.sumOf { Duration.between(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: now).seconds }.coerceAtLeast(0) / 60
-                Text("${linked.size} session${if (linked.size == 1) "" else "s"} · ${elapsedDuration(minutes)} on this plan", color = colors.onVariant)
-            }
             state.feedback?.let { Text(it, color = colors.onVariant) }
             if (!focus && state.rejectedRecovery != null) {
                 TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }

@@ -121,7 +121,7 @@ class ActivityTrackingTest {
         assertNull(repository.state.value.error)
     }
 
-    @Test fun planStartAndExplicitResumeShowMultipleActuals() {
+    @Test fun planStartAndExplicitResumePreserveLinkedActuals() {
         val at = "2026-09-11T10:00:00Z"
         val plan = ActivityPlanDto(4, 2, 7, "Chapter", "Outline", at, "2026-09-11T11:00:00Z")
         var journal: String? = null
@@ -161,13 +161,13 @@ class ActivityTrackingTest {
         compose.onNode(hasText("Switch") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
         compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("2 sessions ·", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("on this plan", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("2 sessions ·", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
         assertEquals(7, repository.state.value.snapshot?.current?.taskId)
     }
 
     @Test fun focusOmitsPlanSessionSummary() = verifyPlanSessionSummary(focus = true)
-    @Test fun expandedControlShowsPlanSessionSummary() = verifyPlanSessionSummary(focus = false)
+    @Test fun expandedControlOmitsPlanSessionSummary() = verifyPlanSessionSummary(focus = false)
 
     private fun verifyPlanSessionSummary(focus: Boolean) {
         val at = "2026-09-11T10:00:00Z"
@@ -184,8 +184,8 @@ class ActivityTrackingTest {
         } else {
             compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
             compose.onNodeWithText("Current activity").performClick()
-            compose.onNodeWithText("2 sessions ·", substring = true).assertIsDisplayed()
-            compose.onNodeWithText("on this plan", substring = true).assertIsDisplayed()
+            compose.onNodeWithText("2 sessions ·", substring = true).assertDoesNotExist()
+            compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
         }
     }
 
