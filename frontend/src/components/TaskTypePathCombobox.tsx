@@ -40,6 +40,7 @@ export function TaskTypePathCombobox({
   const unsetSelected = allowUnset && (valueTaskTypeId == null || taskTypes.find((row) => row.id === valueTaskTypeId)?.name === UNSPECIFIED)
   const [query, setQuery] = useState(selected?.name ?? '')
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [busy, setBusy] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -65,6 +66,45 @@ export function TaskTypePathCombobox({
     setOpen(false)
   }
 
+  const optionCount = suggestions.rows.length + Number(showUnset) + Number(!!suggestions.createPath)
+  const activeOptionId = open && activeIndex >= 0 && activeIndex < optionCount
+    ? `${listId}-${activeIndex}` : undefined
+  const optionProps = (index: number, selected: boolean) => ({
+    id: `${listId}-${index}`,
+    'aria-selected': selected,
+    'data-active': index === activeIndex,
+    onMouseMove: () => setActiveIndex(index),
+  })
+
+  useEffect(() => {
+    if (activeOptionId) document.getElementById(activeOptionId)?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeOptionId])
+
+  const create = async () => {
+    if (busy || !suggestions.createPath) return
+    setCreateError(null)
+    markChosen()
+    setBusy(true)
+    try {
+      const created = await onCreateTaskTypePath(suggestions.createPath)
+      choose(created.id, created.name)
+    } catch {
+      setCreateError('Could not create Task Type. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const commitActive = () => {
+    if (showUnset && activeIndex === (unsetSelected ? 0 : suggestions.rows.length)) {
+      choose(null, '')
+      return
+    }
+    const row = suggestions.rows[activeIndex - Number(showUnset && unsetSelected)]
+    if (row) choose(row.id, row.name)
+    else void create()
+  }
+
   return (
     <div
       ref={rootRef}
@@ -86,18 +126,38 @@ export function TaskTypePathCombobox({
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
-        aria-controls={listId}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={activeOptionId}
         aria-autocomplete="list"
         className="w-full rounded-xl border border-outline-variant/15 bg-surface px-3 py-2.5 font-body text-sm text-on-surface outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
         value={query}
         placeholder={allowUnset ? 'Unset' : undefined}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { setOpen(true); setActiveIndex(-1) }}
         onChange={(e) => {
           setQuery(e.target.value)
+          setActiveIndex(-1)
           setOpen(true)
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false)
+          if (e.nativeEvent.isComposing) return
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            setOpen(true)
+            const direction = e.key === 'ArrowDown' ? 1 : -1
+            setActiveIndex((index) => {
+              if (!optionCount) return -1
+              if (!open || index < 0 || index >= optionCount) return direction === 1 ? 0 : optionCount - 1
+              return (index + direction + optionCount) % optionCount
+            })
+          } else if (e.key === 'Enter' && activeOptionId) {
+            e.preventDefault()
+            commitActive()
+          } else if (e.key === 'Escape' && open) {
+            e.preventDefault()
+            e.stopPropagation()
+            setOpen(false)
+            setActiveIndex(-1)
+          }
         }}
       />
 
@@ -111,19 +171,21 @@ export function TaskTypePathCombobox({
         <ul
           id={listId}
           role="listbox"
+          aria-label={`${label} options`}
           className="max-h-64 overflow-auto"
         >
           {showUnset && unsetSelected ? (
-            <UnsetOption onChoose={() => choose(null, '')} />
+            <UnsetOption {...optionProps(unsetSelected ? 0 : suggestions.rows.length, unsetSelected)} onChoose={() => choose(null, '')} />
           ) : null}
-          {suggestions.rows.map((row) => {
+          {suggestions.rows.map((row, index) => {
             const parts = formatTaskTypePathParts(row.name)
             return (
-              <li key={row.id}>
+              <li key={row.id} role="presentation">
                 <button
                   type="button"
                   role="option"
-                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface-container-high dark:hover:bg-dark-surface-container-high"
+                  {...optionProps(index + Number(showUnset && unsetSelected), row.id === valueTaskTypeId)}
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm data-[active=true]:bg-surface-container-high hover:bg-surface-container-high dark:data-[active=true]:bg-dark-surface-container-high dark:hover:bg-dark-surface-container-high"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => choose(row.id, row.name)}
                 >
@@ -138,30 +200,20 @@ export function TaskTypePathCombobox({
             )
           })}
           {showUnset && !unsetSelected ? (
-            <UnsetOption onChoose={() => choose(null, '')} />
+            <UnsetOption {...optionProps(unsetSelected ? 0 : suggestions.rows.length, unsetSelected)} onChoose={() => choose(null, '')} />
           ) : null}
 
           {suggestions.createPath ? (
-            <li>
+            <li role="presentation">
               <button
                 type="button"
                 role="option"
+                {...optionProps(suggestions.rows.length, false)}
                 disabled={busy}
-                className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-container-high disabled:opacity-50 dark:hover:bg-dark-surface-container-high"
+                aria-disabled={busy}
+                className="w-full px-3 py-2 text-left text-sm text-primary data-[active=true]:bg-surface-container-high hover:bg-surface-container-high disabled:opacity-50 dark:data-[active=true]:bg-dark-surface-container-high dark:hover:bg-dark-surface-container-high"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={async () => {
-                  setCreateError(null)
-                  markChosen()
-                  setBusy(true)
-                  try {
-                    const created = await onCreateTaskTypePath(suggestions.createPath!)
-                    choose(created.id, created.name)
-                  } catch {
-                    setCreateError('Could not create Task Type. Try again.')
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
+                onClick={() => void create()}
               >
                 {busy ? 'Creating…' : `Create "${suggestions.createPath}"`}
               </button>
@@ -181,13 +233,14 @@ export function TaskTypePathCombobox({
   )
 }
 
-function UnsetOption({ onChoose }: { onChoose: () => void }) {
+function UnsetOption({ onChoose, ...props }: { onChoose: () => void; id: string; 'aria-selected': boolean; 'data-active': boolean; onMouseMove: () => void }) {
   return (
-    <li>
+    <li role="presentation">
       <button
         type="button"
         role="option"
-        className="flex w-full px-3 py-2 text-left text-sm text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-dark-surface-container-high"
+        {...props}
+        className="flex w-full px-3 py-2 text-left text-sm text-on-surface-variant data-[active=true]:bg-surface-container-high hover:bg-surface-container-high dark:data-[active=true]:bg-dark-surface-container-high dark:hover:bg-dark-surface-container-high"
         onMouseDown={(e) => e.preventDefault()}
         onClick={onChoose}
       >

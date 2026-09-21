@@ -9,6 +9,87 @@ const taskTypes = [
 ]
 
 describe('TaskTypePathCombobox', () => {
+  it('commits an active matching option without submitting its form', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const onSubmit = vi.fn((event) => event.preventDefault())
+    render(<form onSubmit={onSubmit}><TaskTypePathCombobox label="Task type"
+      taskTypes={[{ id: 3, name: 'exercise', created_at: '', updated_at: '' }]}
+      valueTaskTypeId={null} onSelectTaskTypeId={onSelect} onCreateTaskTypePath={vi.fn()} />
+      <button type="submit">Save</button></form>)
+    const input = screen.getByRole('combobox')
+    await user.type(input, 'exer')
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(onSelect).toHaveBeenCalledWith(3)
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(input).toHaveFocus()
+  })
+
+  it('announces active and saved options, navigates both directions and resets on editing', async () => {
+    const user = userEvent.setup()
+    render(<TaskTypePathCombobox label="Task type" taskTypes={taskTypes}
+      valueTaskTypeId={2} onSelectTaskTypeId={vi.fn()} onCreateTaskTypePath={vi.fn()} />)
+    const input = screen.getByRole('combobox')
+    await user.clear(input)
+    const list = screen.getByRole('listbox', { name: 'Task type options' })
+    const options = screen.getAllByRole('option')
+    expect(input).toHaveAttribute('aria-controls', list.id)
+    expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    expect(options[1]).toHaveAttribute('aria-selected', 'false')
+    await user.keyboard('{ArrowDown}')
+    expect(input).toHaveAttribute('aria-activedescendant', options[0].id)
+    await user.keyboard('{ArrowDown}')
+    expect(input).toHaveAttribute('aria-activedescendant', options[1].id)
+    await user.keyboard('{ArrowUp}')
+    expect(input).toHaveAttribute('aria-activedescendant', options[0].id)
+    await user.type(input, 'coding/ai')
+    expect(input).not.toHaveAttribute('aria-activedescendant')
+    await user.keyboard('{Escape}')
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    expect(input).not.toHaveAttribute('aria-controls')
+    await user.keyboard('{ArrowUp}')
+    expect(input).toHaveAttribute('aria-expanded', 'true')
+    expect(input).toHaveAttribute('aria-activedescendant', screen.getAllByRole('option').at(-1)!.id)
+  })
+
+  it.each([null, 2])('commits Unset from its ranked position (%s)', async (valueTaskTypeId) => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    render(<TaskTypePathCombobox label="Task type" allowUnset taskTypes={taskTypes}
+      valueTaskTypeId={valueTaskTypeId} onSelectTaskTypeId={onSelect} onCreateTaskTypePath={vi.fn()} />)
+    await user.clear(screen.getByRole('combobox'))
+    await user.keyboard(valueTaskTypeId == null ? '{ArrowDown}{Enter}' : '{ArrowUp}{Enter}')
+    expect(onSelect).toHaveBeenCalledWith(null)
+  })
+
+  it('commits Create only once while pending and reports failure', async () => {
+    const user = userEvent.setup()
+    let reject!: (error: Error) => void
+    const onCreate = vi.fn(() => new Promise<never>((_, no) => { reject = no }))
+    render(<TaskTypePathCombobox label="Task type" taskTypes={taskTypes}
+      valueTaskTypeId={null} onSelectTaskTypeId={vi.fn()} onCreateTaskTypePath={onCreate} />)
+    await user.type(screen.getByRole('combobox'), 'new/path')
+    await user.keyboard('{ArrowDown}{Enter}{Enter}')
+    expect(onCreate).toHaveBeenCalledExactlyOnceWith('new/path')
+    expect(screen.getByRole('option')).toHaveAttribute('aria-disabled', 'true')
+    await act(async () => reject(new Error('Failed')))
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not create Task Type')
+  })
+
+  it('allows Tab to leave without committing and handles an empty list', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    render(<><TaskTypePathCombobox label="Task type" taskTypes={[]}
+      valueTaskTypeId={null} onSelectTaskTypeId={onSelect} onCreateTaskTypePath={vi.fn()} />
+      <button>Outside</button></>)
+    await user.click(screen.getByRole('combobox'))
+    await user.keyboard('{ArrowDown}{ArrowUp}')
+    expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-activedescendant')
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Outside' })).toHaveFocus()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it.each(['mouse', 'keyboard'])('preserves an internal option commit via %s', async (method) => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
