@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.activityIdentityText
+import com.timebox.android.data.identityText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -48,10 +50,7 @@ internal fun SwitchActivityTimeline(
     LaunchedEffect(titleDates, plans) {
         for (date in titleDates) planTitles = planTitles + titleLoader(date)
     }
-    fun planTitle(plan: ActivityPlanDto): String = plan.name?.trim()?.takeIf { it.isNotEmpty() }
-        ?: planTitles[plan.id]
-        ?: taskTypes.find { it.id == plan.taskTypeId }?.name?.takeUnless { it == "unspecified" }
-        ?: if (plan.taskId != null) "Linked task" else "Untitled"
+    fun planTitle(plan: ActivityPlanDto): String = activityIdentityText(plan.name, plan.taskTitle ?: planTitles[plan.id], taskTypes.find { it.id == plan.taskTypeId }?.name)
     val boundaries = remember(plans, records, start) {
         (plans.flatMap { listOf(parseActivityInstant(it.startAt), parseActivityInstant(it.endAt)) } +
             records.flatMap { listOfNotNull(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant)) } + start).distinct()
@@ -126,7 +125,7 @@ internal fun SwitchActivityTimeline(
                     planTitle(plan), true) }
                 records.forEach { record -> block(parseActivityInstant(record.startAt),
                     if (record.id == currentId) selected else record.endAt?.let(::parseActivityInstant) ?: now,
-                    record.name?.takeIf { it.isNotBlank() } ?: record.taskType.name, false) }
+                    record.identityText(), false) }
                 // Stopping leaves the recorded lane empty from the selected end onward.
                 // Extend through the visible future so "Now" still previews the unrecorded state.
                 block(selected, if (stopping) maxOf(now, window.end) else now,

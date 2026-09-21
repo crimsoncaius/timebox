@@ -230,7 +230,7 @@ describe('DayTimeline Actual Block movement', () => {
     )
   })
 
-  it('identifies standalone Actual Blocks by Name, meaningful Task Type, then Untitled', () => {
+  it('identifies standalone Actual Blocks by Name, meaningful Task Type, then Unnamed activity', () => {
     const actual = {
       id: 40,
       task_type_id: 1,
@@ -270,7 +270,7 @@ describe('DayTimeline Actual Block movement', () => {
         actual_block: { ...actual, name: null, task_type: { ...actual.task_type, name: 'unspecified' } },
       }],
     }))
-    expect(screen.getByText('Untitled')).toBeInTheDocument()
+    expect(screen.getByText('Unnamed activity')).toBeInTheDocument()
     expect(screen.queryByText('unspecified')).not.toBeInTheDocument()
   })
 })

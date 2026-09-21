@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.activityIdentityText
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,7 +54,7 @@ internal fun SwitchActivitySheet(
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
 
-    val nextActivity = name.trim().ifBlank { selectedType?.name ?: "Next activity" }
+    val nextActivity = activityIdentityText(name, null, selectedType?.name)
     val selected = timing?.resolve(zone) ?: now
     val effectiveTime = switchTimeLabel(selected, zone)
     val valid = selected >= start && selected <= now

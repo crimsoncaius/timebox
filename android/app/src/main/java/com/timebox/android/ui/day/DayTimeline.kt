@@ -963,9 +963,7 @@ private fun BlockCard(
             ) {
                 if (innerHeight >= 22.dp) Text(
                     text = buildString {
-                        append(if (block.lane == Lane.Actual)
-                            block.name?.takeIf { it.isNotBlank() } ?: block.taskTypeName
-                        else block.primaryIdentity())
+                        append(block.primaryIdentity())
                         block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
                     },
                     style = if (selected) {

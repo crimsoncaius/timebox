@@ -1,15 +1,17 @@
+import { blockPrimaryIdentity, blockSecondaryIdentity, type IdentifiableBlock } from '../../lib/blockIdentity'
 import { useEffect, useRef, useState } from 'react'
 import type { PlannedRecordingResult } from '../../lib/api'
 import { recordingTimeline, type RecordingPiece } from './recordingTimeline'
 import './RecordingPreview.css'
 
-export function RecordingPreview({ preview, timezone, onConfirm, onCancel, error }: {
-  preview: PlannedRecordingResult; timezone: string; onConfirm: () => Promise<void>; onCancel: () => void; error?: string | null
+export function RecordingPreview({ preview, timezone, onConfirm, onCancel, error, plannedBlock }: {
+  preview: PlannedRecordingResult; timezone: string; onConfirm: () => Promise<void>; onCancel: () => void; error?: string | null; plannedBlock?: IdentifiableBlock
 }) {
   const [busy, setBusy] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close() }, [])
-  const model = recordingTimeline(preview)
+  const replacement = { ...plannedBlock, name: preview.replacement.name }
+  const model = recordingTimeline(preview, replacement)
   const exact = (value: string | number) => new Date(value).toLocaleString(undefined, { timeZone: timezone, timeZoneName: 'shortOffset' })
   const clock = (value: number) => new Date(value).toLocaleTimeString(undefined, { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
   const date = (value: number) => new Date(value).toLocaleDateString(undefined, { timeZone: timezone, month: 'short', day: 'numeric' })
@@ -34,14 +36,16 @@ export function RecordingPreview({ preview, timezone, onConfirm, onCancel, error
       <div className="recording-preview__new">
         <p className="recording-preview__range">{range}</p>
         <p className="recording-preview__muted">{Math.floor((model.end - model.start) / 60_000)} min {Math.floor((model.end - model.start) / 1000) % 60} sec</p>
-        <p className="font-medium">{preview.replacement.name || 'Unnamed activity'}</p>
+        <p className="font-medium">{blockPrimaryIdentity(replacement)}</p>
+        <p className="recording-preview__muted">{blockSecondaryIdentity(replacement)}</p>
         <p className="recording-preview__muted">From your Planned Block</p>
       </div>
       {model.before.length ? <>
         <RecordingDiagram model={model} clock={clock} />
         <p className="recording-preview__muted">Only overlapping time is replaced. Time outside this range keeps its original details.</p>
         <ul className="recording-preview__changes">{preview.conflicts.map(row => <li key={row.id}>
-          <p className="font-medium">{row.name || row.task_type.name}</p>
+          <p className="font-medium">{blockPrimaryIdentity(row)}</p>
+          {blockSecondaryIdentity(row) && <p className="recording-preview__muted">{blockSecondaryIdentity(row)}</p>}
           <p className="recording-preview__error">Replace {exact(Math.max(Date.parse(row.start_at), model.start))} – {exact(Math.min(row.end_at ? Date.parse(row.end_at) : model.end, model.end))}</p>
           {Date.parse(row.start_at) < model.start && <p>Keep {exact(row.start_at)} – {exact(model.start)}.</p>}
           {row.end_at && Date.parse(row.end_at) > model.end && <p>Keep {exact(model.end)} – {exact(row.end_at)}.</p>}
@@ -51,11 +55,11 @@ export function RecordingPreview({ preview, timezone, onConfirm, onCancel, error
       {changed.length > 0 && <details key={preview.fingerprint} className="recording-preview__details">
         <summary>Name or note will change for {changed.length} overlapping {changed.length === 1 ? 'block' : 'blocks'}.<span>See name and note changes</span></summary>
         {changed.map(row => <div key={row.id}>
-          <p className="font-medium">Existing: {row.name || 'Unnamed activity'}</p>
+          <p className="font-medium">Existing: {blockPrimaryIdentity(row)}</p>
           <p className="recording-preview__muted">{exact(row.start_at)} – {row.end_at ? exact(row.end_at) : 'Running'}</p>
           <p className="whitespace-pre-wrap">{row.note || 'No note'}</p>
         </div>)}
-        <p className="font-medium">After: {preview.replacement.name || 'Unnamed activity'}</p>
+        <p className="font-medium">After: {blockPrimaryIdentity(replacement)}</p>
         <p className="whitespace-pre-wrap">{preview.replacement.note || 'No note'}</p>
         <p className="recording-preview__muted">Kept time retains its original details.</p>
       </details>}

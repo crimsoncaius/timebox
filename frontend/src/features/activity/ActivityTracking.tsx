@@ -1,3 +1,4 @@
+import { blockPrimaryIdentity, blockSecondaryIdentity, blockIdentityText } from '../../lib/blockIdentity'
 import { formatDuration } from '../../lib/duration'
 import { getFocusController } from './focusController'
 import { ActivityTimeField } from './ActivityTimeField'
@@ -54,6 +55,8 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     offline: state.offline, pending: state.pending, busy: state.busy, hasSnapshot: Boolean(state.snapshot), error: state.error,
   }
   const availableTypes = state.snapshot?.task_types ?? taskTypes
+  const planIdentity = plan ? { name: plan.name, task: plan.task_title ? { title: plan.task_title } : null, task_type: availableTypes.find(t => t.id === plan.task_type_id) } : null
+  const nextIdentity = { name, task_type: availableTypes.find(t => t.id === Number(typeId)) }
   const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
   // Without a covering Planned Block, starting waits for an explicit Task Type.
   const start = (then: 'track' | 'focus') => {
@@ -65,7 +68,8 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const statusMark = <ActivityTrackingStatus flags={statusFlags} retryDisabled={statusFlags.busy} onRetry={retryStatus} />
   const controls = <>
     {current ? <>
-      <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{current.name || current.task_type.name}</span>
+      <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{blockPrimaryIdentity(current)}</span>
+      {blockSecondaryIdentity(current) && <span className="text-sm">{blockSecondaryIdentity(current)}</span>}
       <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{formatDuration(elapsed)}</span>
       <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
       {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
@@ -77,7 +81,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     : <div className="flex flex-wrap items-center gap-x-4 gap-y-1">{statusMark}<div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">{controls}</div></div>
   return <div className={`${controlsVisible ? "mb-3 " : ""}text-sm text-on-surface-variant dark:text-dark-on-surface-variant`} aria-label="Activity tracking">
     {current && state.snapshot?.check_in?.question && <section aria-label="Inactivity check-in" className="my-4 rounded-2xl bg-surface-container-low p-6 dark:bg-dark-surface-container">
-      <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{current.name || current.task_type.name}</p>
+      <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{blockPrimaryIdentity(current)}</p>{blockSecondaryIdentity(current) && <p>{blockSecondaryIdentity(current)}</p>}
       <div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 text-on-primary" onClick={() => void repository.checkIn({ action: 'confirm', question_id: state.snapshot!.check_in!.question!.id })}>Yes, still doing this</button>
       <button className="rounded-xl border px-5 py-3" onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch activity</button></div>
       <p className="mt-3 text-sm">Recording continues while you decide.</p>
@@ -88,7 +92,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {!focus && focusState.error && <p role="status">{focusState.error}</p>}
     {!focus && focusState.recovery && <details><summary>Review old Work Mode data</summary><p>These are saved device observations, not recorded time. Use Day add/edit for any correction.</p><pre className="whitespace-pre-wrap break-all">{focusState.recovery}</pre></details>}
     {!focus && repository.recoveryData() && <details><summary>Review rejected changes</summary><p>These changes were not replayed. Use Day add/edit to correct the saved timeline.</p><pre className="whitespace-pre-wrap break-all">{repository.recoveryData()}</pre></details>}
-    {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {plan.name || availableTypes.find(t => t.id === plan.task_type_id)?.name} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
+    {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {blockIdentityText(planIdentity!)} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
     {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</p> : null}
     </div>
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
@@ -117,7 +121,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       <div className="flex gap-4"><button type="button" onClick={() => setTiming(null)}>Now</button><button type="button" disabled={Boolean(shortcutReason)} title={shortcutReason ?? undefined} className="disabled:opacity-40" onClick={() => setTiming(activityTimeValue(new Date(shortcutAt).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>15 min ago</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>Choose time</button></div>
       {shortcutReason ? <p>{shortcutReason}</p> : null}
       {timing ? <ActivityTimeField label="Change time" value={timing} onChange={setTiming} timezone={state.snapshot?.reporting_timezone ?? "UTC"} /> : <p>Now</p>}
-      <section aria-label="After this change"><h3>After this change</h3><p>{current?.name || current?.task_type.name} ends {timing?.local.replace("T", " ") ?? "now"}.</p><p>{stopping ? "Time after this is unrecorded." : `${name || availableTypes.find(t => t.id === Number(typeId))?.name || "Next activity"} starts at the same time and continues.`}</p></section>
+      <section aria-label="After this change"><h3>After this change</h3><p>{current ? blockIdentityText(current) : "Unnamed activity"} ends {timing?.local.replace("T", " ") ?? "now"}.</p><p>{stopping ? "Time after this is unrecorded." : `${blockIdentityText(nextIdentity)} starts at the same time and continues.`}</p></section>
       {timingError ? <p role="alert">{timingError}</p> : null}
       <div className="flex justify-end gap-4"><button type="button" onClick={() => { setSwitching(false); setStopping(false) }}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || (!stopping && !typeId)}>{stopping ? "Stop tracking" : "Switch activity"}</button></div>
     </form> : null}

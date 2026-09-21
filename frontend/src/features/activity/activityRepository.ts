@@ -3,6 +3,7 @@ import type { ActualBlock, TaskType } from '../../lib/api'
 import { errorMessage } from '../../lib/errors'
 
 export interface ActivityPlan {
+  task_title?: string | null
   id: number; task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string
 }
 export interface ActivitySelection { task_id?: number | null; planned_block_id?: number | null; note?: string | null }

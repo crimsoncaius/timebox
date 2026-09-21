@@ -413,7 +413,7 @@ export function TimeBlockCard({
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
-          aria-description={`${displayLabel}, ${timeRangeLabel}`}
+          aria-description={`${[displayLabel, secondaryLabel].filter(Boolean).join(", ")}, ${timeRangeLabel}`}
           className={`relative flex min-h-0 min-w-0 flex-1 touch-none overflow-hidden border-0 bg-transparent text-left select-none ${
             drag?.kind === 'move' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
@@ -507,7 +507,7 @@ function CardContent({
         <span data-block-title className={titleClassName}>{displayLabel}</span>
         {compact ? <span aria-hidden className="shrink-0 text-on-surface-variant">·</span> : null}
         <span data-block-time className={timeClassName}>{timeRangeLabel}</span>
-        {!compact && secondaryLabel ? (
+        {secondaryLabel ? (
           <span data-block-context className="min-h-0 truncate font-body text-[9px] leading-tight text-on-surface-variant">
             {secondaryLabel}
           </span>

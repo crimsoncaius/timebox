@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.RoundIconButton
-import com.timebox.android.data.primaryIdentity
+import com.timebox.android.data.identityText
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -341,7 +341,7 @@ private fun ChronicleMonthPage(
                         isToday = date == state.today,
                         archived = archived != null,
                         windowLabel = state.highlightedDays[date.toString()]?.let(::trendDuration) ?: archived?.windowLabel,
-                        actualIdentity = if (date.toString() in state.highlightedDays) state.highlightedType else archived?.actualBlocks?.firstOrNull()?.primaryIdentity(),
+                        actualIdentity = if (date.toString() in state.highlightedDays) state.highlightedType else archived?.actualBlocks?.firstOrNull()?.identityText(),
                         highlighted = date.toString() in state.highlightedDays,
                         onClick = { onOpenDay(date) },
                         enabled = interactive,

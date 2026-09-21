@@ -54,7 +54,7 @@ it('represents multiple conflicts, with outside edges kept and contained time re
     { ...base, id: 2, name: 'Contained', start_at: '2026-09-13T10:20:00Z', end_at: '2026-09-13T10:40:00Z' },
     { ...base, id: 3, name: 'Suffix', start_at: '2026-09-13T10:50:00Z', end_at: '2026-09-13T11:15:00Z' },
   ] })
-  expect(model.after.map(row => row.title)).toEqual(['Prefix', 'Chapter', 'Suffix'])
+  expect(model.after.map(row => row.title)).toEqual(['Prefix · Writing', 'Chapter', 'Suffix · Writing'])
   expect(model.after.map(row => [new Date(row.start).toISOString(), new Date(row.end).toISOString()])).toEqual([
     ['2026-09-13T09:45:00.000Z', '2026-09-13T10:00:00.000Z'],
     ['2026-09-13T10:00:00.000Z', '2026-09-13T11:00:00.000Z'],
@@ -79,4 +79,14 @@ it('requires a new confirmation after a refreshed preview and shows errors insid
   expect(confirm).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Replace overlapping time' }))
   expect(confirm).toHaveBeenCalledOnce()
+})
+
+
+it('uses the linked task and meaningful type for an unnamed planned replacement', () => {
+  render(<RecordingPreview preview={{ ...preview, conflicts: [], replacement: { ...preview.replacement, name: null } }}
+    plannedBlock={{ name: null, task: { title: 'Prepare launch' }, task_type: { name: 'Writing' } }}
+    timezone="UTC" onConfirm={vi.fn()} onCancel={vi.fn()} />)
+  expect(screen.getByText('Prepare launch')).toBeInTheDocument()
+  expect(screen.getByText('Writing')).toBeInTheDocument()
+  expect(screen.queryByText('Unnamed activity')).not.toBeInTheDocument()
 })

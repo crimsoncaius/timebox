@@ -112,7 +112,7 @@ it('starts an explicitly chosen unspecified Task Type and retries a lost acknowl
   const restored = new ActivityRepository(localStorage, (work) => work())
   render(<ActivityTracking repository={restored} taskTypes={[]} onChanged={() => {}} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
-  await screen.findByText('unspecified')
+  await screen.findByText('Unnamed activity')
   expect(operations[1]).toEqual(operations[0])
   // An older read cannot turn recording off.
   saved = initial
@@ -526,4 +526,34 @@ it.each(['Switch', 'Stop'])('bounds the 15 min ago shortcut in %s using the adva
     fireEvent.click(screen.getByRole('button', { name: control }))
     expect(screen.getByRole('button', { name: '15 min ago' })).toBeEnabled()
   } finally { view.unmount(); vi.useRealTimers() }
+})
+
+
+it.each([false, true])('uses linked task identity with unspecified type (focus=%s)', async (focus) => {
+  const at = new Date().toISOString()
+  const row = { id: 240, name: null, task_type_id: 1, task_type: { id: 1, name: 'unspecified' }, task: { id: 7, title: 'Prepare launch', status: 'open' }, start_at: at, end_at: null }
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ protocol: 'activity-online-v1', cursor: 1, server_at: at, reporting_timezone: 'UTC', current: row, records: [row] }))))
+  const repository = new ActivityRepository(localStorage, work => work())
+  const view = render(<ActivityTracking repository={repository} taskTypes={[]} focus={focus} onChanged={() => {}} />)
+  await screen.findByText('Prepare launch')
+  expect(screen.queryByText('unspecified')).not.toBeInTheDocument()
+  view.unmount()
+})
+
+
+it.each([
+  { name: 'Outline', title: 'Prepare launch', type: 'Writing', primary: 'Outline', secondary: 'Writing' },
+  { name: null, title: 'Prepare launch', type: 'Writing', primary: 'Prepare launch', secondary: 'Writing' },
+  { name: ' ', title: ' ', type: 'Writing', primary: 'Writing', secondary: null },
+  { name: ' ', title: ' ', type: 'unspecified', primary: 'Unnamed activity', secondary: null },
+])('displays activity identity $primary / $secondary', async ({ name, title, type, primary, secondary }) => {
+  const at = new Date().toISOString()
+  const row = { id: 240, name, task_type_id: 1, task_type: { id: 1, name: type }, task: { id: 7, title, status: 'open' }, start_at: at, end_at: null }
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ protocol: 'activity-online-v1', cursor: 1, server_at: at, reporting_timezone: 'UTC', current: row, records: [row] }))))
+  const view = render(<ActivityTracking repository={new ActivityRepository(localStorage, work => work())} taskTypes={[]} onChanged={() => {}} />)
+  await screen.findByText(primary)
+  if (secondary) expect(screen.getByText(secondary)).toBeInTheDocument()
+  else expect(screen.getAllByText(primary)).toHaveLength(1)
+  expect(screen.queryByText('unspecified')).not.toBeInTheDocument()
+  view.unmount()
 })

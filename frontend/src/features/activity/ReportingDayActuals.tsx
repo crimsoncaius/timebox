@@ -1,3 +1,4 @@
+import { blockPrimaryIdentity, blockSecondaryIdentity } from '../../lib/blockIdentity'
 import { formatDuration } from '../../lib/duration'
 import type { DayRead } from '../../lib/api'
 
@@ -6,7 +7,8 @@ export function ReportingDayActuals({ day, onSelect }: { day: DayRead; onSelect:
   return <section aria-label="Actual time on clock-change day" className="mb-4 space-y-2">
     <p className="text-sm">Actual time · {day.meta.timezone}. This day includes a clock change; elapsed daily shares are shown below.</p>
     {day.actual_blocks.map(p => <button key={p.actual_block.id} className="block w-full rounded-lg bg-actual-surface p-3 text-left dark:bg-actual-dark-surface" onClick={() => onSelect(p.actual_block.id)}>
-      <strong>{p.actual_block.name || p.actual_block.task_type.name}</strong> · {formatDuration(p.duration_minutes)} on this day
+      <strong>{blockPrimaryIdentity(p.actual_block)}</strong> · {formatDuration(p.duration_minutes)} on this day
+      {blockSecondaryIdentity(p.actual_block) && <span className="block text-sm">{blockSecondaryIdentity(p.actual_block)}</span>}
       <span className="block text-sm">{format(p.actual_block.start_at)} – {p.actual_block.end_at ? format(p.actual_block.end_at) : 'Running'}</span>
     </button>)}
   </section>

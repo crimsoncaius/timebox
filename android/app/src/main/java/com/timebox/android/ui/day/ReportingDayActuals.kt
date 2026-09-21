@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.activityIdentityText
 import com.timebox.android.ui.elapsedDuration
 
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,7 @@ fun ReportingDayActuals(day: Day, onSelectBlock: (Int) -> Unit) {
         day.actualBlocks.forEach { projection ->
             val actual = projection.actualBlock
             TextButton(onClick = { day.blocks.find { it.actualBlockId == actual.id }?.let { onSelectBlock(it.id) } }) {
-                Text("${actual.name ?: actual.taskTypeName} - ${elapsedDuration(projection.durationMinutes.toLong())} on this day\n${format.format(actual.startAt)} - ${actual.endAt?.let(format::format) ?: "Running"}")
+                Text("${activityIdentityText(actual.name, actual.task?.title, actual.taskTypeName)} - ${elapsedDuration(projection.durationMinutes.toLong())} on this day\n${format.format(actual.startAt)} - ${actual.endAt?.let(format::format) ?: "Running"}")
             }
         }
     }

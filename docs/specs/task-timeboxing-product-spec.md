@@ -191,7 +191,7 @@ When a task-backed Planned Block is active, Work Mode exposes:
 - Its Subtasks
 - Controls to check and uncheck Subtasks
 
-A Planned Block may have its own optional Block Name. Work Mode identifies a Block by its Block Name when present, otherwise by its linked Battle Plan Task title, otherwise by a meaningful Task Type, and finally as **Untitled**. A Note remains supporting detail. **Up next** uses the same identity precedence in a compact title, time, and countdown presentation.
+A Planned Block may have its own optional Block Name. Work Mode identifies a Block by its Block Name when present, otherwise by its linked Battle Plan Task title, otherwise by a meaningful Task Type, and finally as **Unnamed activity**. A Note remains supporting detail. **Up next** uses the same identity precedence in a compact title, time, and countdown presentation.
 
 Work Mode assumes the active Planned Block is being performed. It does not provide **Skip this block**. If that assumption is wrong, the user can explicitly exit Work Mode. Work Mode also does not provide a combined Task Completion action in the current scope.
 
@@ -798,15 +798,15 @@ There is no separate "task completed" concept.
 For a task-backed Planned Block, Work Mode can surface:
 
 - Its Block Name when present, otherwise the Battle Plan Task title
-- The linked Battle Plan Task as secondary context when the Block Name is primary
+- Its meaningful Task Type as secondary context when a Block Name or Battle Plan Task title is primary
 - The Battle Plan Task notes
 - Its Subtasks
 - Its Task Type
 
 For a taskless Planned Block, Work Mode can surface:
 
-- Its Block Name when present, otherwise a meaningful Task Type, otherwise **Untitled**
-- Its meaningful Task Type as secondary context where space permits
+- Its Block Name when present, otherwise a meaningful Task Type, otherwise **Unnamed activity**
+- Its meaningful Task Type as secondary context when the Block Name is primary
 - Its Note
 
 Both use the same **Exit Work Mode** action. Taskless work has no Task Completion state.
@@ -822,7 +822,9 @@ A Block Name identifies one specific Planned Block or Actual Block. It is indepe
 - Empty or whitespace-only input is stored as no Name. Non-empty input is trimmed at its outer edges and may contain up to 500 characters.
 - Existing Blocks receive no derived or backfilled Name.
 - The creation experience presents Name before Task Type. A taskless Block defaults to `unspecified`, so classification requires no interaction unless the user wants it.
-- Wherever a Block needs a visible identity, the precedence is Block Name, linked Battle Plan Task title, meaningful Task Type, then **Untitled**. The neutral `unspecified` Task Type is not shown as secondary context.
+- Wherever a Block needs a visible identity on Android or web, the precedence is Block Name, linked Battle Plan Task title, meaningful Task Type, then **Unnamed activity**. Empty or whitespace-only names are treated as absent. The neutral `unspecified` Task Type is not a meaningful type and is hidden from the activity identity.
+- When a Block Name or linked Battle Plan Task title supplies the primary text and a meaningful Task Type exists, show the Task Type as secondary text. This also applies when both a Block Name and linked task title exist: the Block Name is primary and the Task Type is secondary. When only a meaningful Task Type exists, show it once as primary text.
+- This display rule applies across activity presentations, including timelines, Activity Tracking, Focus Mode, activity details, and previews. It changes neither stored names nor Task Type assignments. See [issue #240](https://github.com/crimsoncaius/timebox/issues/240).
 - Task Type remains the sole source of category reporting. Block Names are not grouped, managed, suggested, or interpreted as reusable values.
 
 When an Actual Block is derived from a Planned Block, it copies the Planned Block Name once. Later Name edits are independent, preserving the distinction between intended and recorded time.

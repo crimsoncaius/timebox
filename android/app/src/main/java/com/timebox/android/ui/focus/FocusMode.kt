@@ -1,5 +1,6 @@
 package com.timebox.android.ui.focus
 
+import com.timebox.android.data.primaryIdentity
 import kotlinx.coroutines.launch
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.TaskStatus
@@ -85,7 +86,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
     if (task == null || task?.id != taskId) elapsed()
     task?.takeIf { it.id == taskId }?.let { current ->
         val colors = TimeboxTheme.colors
-        val activityTitle = activity.snapshot?.current?.let { it.name?.takeIf(String::isNotBlank) ?: it.taskType.name }
+        val activityTitle = activity.snapshot?.current?.let { it.primaryIdentity() }
         if (current.title != activityTitle) Text(current.title, style = TimeboxTheme.type.sectionTitle, color = colors.onVariant)
         elapsed()
         Spacer(Modifier.height(24.dp))

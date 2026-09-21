@@ -10,6 +10,27 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class ActivityTrackingTest {
+    @Test fun dayUsesLinkedTaskNameInsteadOfUnspecified() = verifyLinkedIdentity(false)
+    @Test fun focusUsesLinkedTaskNameInsteadOfUnspecified() = verifyLinkedIdentity(true)
+
+    private fun verifyLinkedIdentity(focus: Boolean) {
+        val at = java.time.Instant.now().toString()
+        val row = ActualBlockDto(240, 1, TaskTypeDto(1, "unspecified"), taskId = 7,
+            task = LinkedTaskDto(7, "Prepare launch", "open"), startAt = at, createdAt = at, updatedAt = at)
+        val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = at, reportingTimezone = "UTC", current = row, records = listOf(row))
+        val repository = ActivityRepository(object : ActivityTransport {
+            override suspend fun read() = snapshot
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Unexpected mutation")
+        }, object : ActivityStorage {
+            override fun load(): String? = null
+            override fun save(value: String) {}
+        })
+        compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository, focus = focus) } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Prepare launch").assertIsDisplayed()
+        compose.onNodeWithText("unspecified").assertDoesNotExist()
+    }
+
     @Test fun pendingQuestionDismissesToWaitingAndReopensOnlyExplicitlyInFocus() {
         val at = "2026-09-11T10:00:00Z"
         val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, createdAt = at, updatedAt = at)
@@ -220,7 +241,7 @@ class ActivityTrackingTest {
         chooseTaskType("unspec", "unspecified")
         compose.onNode(hasText("Start") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
-        compose.onNodeWithText("unspecified").assertIsDisplayed()
+        compose.onNodeWithText("Unnamed activity").assertIsDisplayed()
         compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Switch activity").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).assertIsNotEnabled()

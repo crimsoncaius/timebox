@@ -1,5 +1,9 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.primaryIdentity
+import com.timebox.android.data.secondaryIdentity
+import com.timebox.android.data.identityText
+import com.timebox.android.data.activityIdentityText
 import com.timebox.android.ui.elapsedDuration
 import com.timebox.android.ui.elapsedDurationSeconds
 
@@ -21,7 +25,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
 import com.timebox.android.data.TaskType
-import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
@@ -125,9 +128,9 @@ fun ActivityTracking(
         Column(Modifier.fillMaxWidth().padding(horizontal = if (focus) 0.dp else 20.dp)) {
             if (focus && current != null) {
                 Spacer(Modifier.height(36.dp))
-                if (current.taskType.name != "unspecified") Text(current.taskType.name.uppercase(), style = TimeboxTheme.type.kicker, color = colors.actual)
+                current.secondaryIdentity()?.let { Text(it, style = TimeboxTheme.type.kicker, color = colors.actual) }
                 Spacer(Modifier.height(16.dp))
-                Text(current.name?.takeIf { it.isNotBlank() } ?: current.taskType.name,
+                Text(current.primaryIdentity(),
                     style = TimeboxTheme.type.display, color = colors.on)
                 val elapsed: @Composable () -> Unit = {
                     Spacer(Modifier.height(28.dp))
@@ -142,7 +145,8 @@ fun ActivityTracking(
             }
             if (!focus) {
                 CurrentActivityControl(
-                    activity = current?.name?.takeIf { it.isNotBlank() } ?: current?.taskType?.name.orEmpty(),
+                    activity = current?.primaryIdentity().orEmpty(),
+                    secondary = current?.secondaryIdentity(),
                     elapsed = current?.let { elapsedDuration(Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)) }.orEmpty(),
                     running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
                     onToggle = { expanded = !expanded },
@@ -163,7 +167,7 @@ fun ActivityTracking(
             if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
                 PlannedBlockSuggestion(
-                    name = plan.name ?: availableTypes.find { it.id == plan.taskTypeId }?.name ?: "Planned Block",
+                    name = activityIdentityText(plan.name, plan.taskTitle, availableTypes.find { it.id == plan.taskTypeId }?.name),
                     timing = plannedSuggestionTiming(plan, now, runCatching { ZoneId.of(state.snapshot!!.reportingTimezone) }.getOrDefault(ZoneId.systemDefault())),
                     enabled = enabled, focus = focus,
                     onSwitch = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } },
@@ -222,7 +226,8 @@ fun ActivityTracking(
     if (question != null && current != null && checkInOpen) ModalBottomSheet(onDismissRequest = { dismissCheckIn() }) {
         Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Text("Still doing this?", style = MaterialTheme.typography.headlineLarge)
-            Text(current.name ?: current.taskType.name, style = MaterialTheme.typography.headlineSmall)
+            Text(current.primaryIdentity(), style = MaterialTheme.typography.headlineSmall)
+            current.secondaryIdentity()?.let { Text(it) }
             Button(modifier = Modifier.fillMaxWidth(), onClick = { scope.launch { if (repository.checkIn(com.timebox.android.data.remote.CheckInEventDto("confirm", questionId = question.id))) checkInOpen = false } }) { Text("Yes, still doing this") }
             OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { dismissCheckIn(); targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch activity") }
             Text("Recording continues while you decide.")
@@ -258,7 +263,7 @@ fun ActivityTracking(
     )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(
-        currentActivity = switchTarget?.name?.takeIf { it.isNotBlank() } ?: switchTarget?.taskType?.name.orEmpty(),
+        currentActivity = switchTarget?.identityText().orEmpty(),
         currentId = targetId ?: 0, start = switchTarget?.startAt?.let(::parseActivityInstant) ?: now,
         loadPlanTitles = { date ->
             (context.applicationContext as TimeboxApplication).repository.getDayPreview(date).getOrNull()
@@ -295,7 +300,7 @@ fun ActivityTracking(
                 ?.blocks?.filter { it.lane == com.timebox.android.data.Lane.Planned }
                 ?.associate { it.id to it.primaryIdentity() }.orEmpty()
         },
-        activity = stopTarget.name?.takeIf { it.isNotBlank() } ?: stopTarget.taskType.name,
+        activity = stopTarget.identityText(),
         start = parseActivityInstant(stopTarget.startAt), timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),

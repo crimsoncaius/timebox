@@ -180,7 +180,7 @@ describe('TimeBlockCard', () => {
     expect(view.shell.style.top).toBe('0px')
   })
 
-  it('shows linked Block Name as Day identity and the Battle Plan Task as context', () => {
+  it('shows linked Block Name as Day identity and the Task Type as context', () => {
     const linked = {
       ...block,
       name: 'Outline session',
@@ -190,7 +190,7 @@ describe('TimeBlockCard', () => {
     }
     const view = renderIdentityCard(linked)
     expect(screen.getByText('Outline session')).toBeInTheDocument()
-    expect(screen.getByText('Prepare launch')).toHaveAttribute('data-block-context')
+    expect(screen.getByText('alpha')).toHaveAttribute('data-block-context')
 
     const unnamed: TimeBlock = { ...linked, name: null }
     view.rerender(

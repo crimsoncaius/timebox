@@ -63,43 +63,31 @@ data class TimeBlock(
     val durationMinutes: Int get() = endMinute - startMinute
 }
 
-fun TimeBlock.meaningfulTaskTypeName(): String? =
-    taskTypeName.trim().takeIf { it.isNotEmpty() && !it.equals("unspecified", ignoreCase = true) }
+fun meaningfulActivityType(type: String?): String? =
+    type?.trim()?.takeIf { it.isNotEmpty() && !it.equals("unspecified", ignoreCase = true) }
 
-fun TimeBlock.primaryIdentity(taskTitle: String? = task?.title): String =
+fun activityPrimaryIdentity(name: String?, taskTitle: String?, type: String?): String =
     name?.trim()?.takeIf(String::isNotEmpty)
         ?: taskTitle?.trim()?.takeIf(String::isNotEmpty)
-        ?: meaningfulTaskTypeName()
-        ?: "Untitled"
+        ?: meaningfulActivityType(type)
+        ?: "Unnamed activity"
 
-fun TimeBlock.secondaryIdentity(taskTitleOverride: String? = task?.title): String? {
-    val hasName = !name.isNullOrBlank()
-    val taskTitle = taskTitleOverride?.trim()?.takeIf(String::isNotEmpty)
-    return when {
-        hasName && taskTitle != null -> taskTitle
-        hasName || taskTitle != null -> meaningfulTaskTypeName()
-        else -> null
-    }
-}
+fun activitySecondaryIdentity(name: String?, taskTitle: String?, type: String?): String? =
+    if (!name.isNullOrBlank() || !taskTitle.isNullOrBlank()) meaningfulActivityType(type) else null
 
-fun ActualBlock.meaningfulTaskTypeName(): String? =
-    taskTypeName.trim().takeIf { it.isNotEmpty() && !it.equals("unspecified", ignoreCase = true) }
+fun activityIdentityText(name: String?, taskTitle: String?, type: String?): String =
+    listOfNotNull(activityPrimaryIdentity(name, taskTitle, type), activitySecondaryIdentity(name, taskTitle, type)).joinToString(" · ")
 
-fun ActualBlock.primaryIdentity(): String =
-    name?.trim()?.takeIf(String::isNotEmpty)
-        ?: task?.title?.trim()?.takeIf(String::isNotEmpty)
-        ?: meaningfulTaskTypeName()
-        ?: "Untitled"
-
-fun ActualBlock.secondaryIdentity(): String? {
-    val hasName = !name.isNullOrBlank()
-    val taskTitle = task?.title?.trim()?.takeIf(String::isNotEmpty)
-    return when {
-        hasName && taskTitle != null -> taskTitle
-        hasName || taskTitle != null -> meaningfulTaskTypeName()
-        else -> null
-    }
-}
+fun TimeBlock.meaningfulTaskTypeName(): String? = meaningfulActivityType(taskTypeName)
+fun TimeBlock.primaryIdentity(taskTitle: String? = task?.title): String = activityPrimaryIdentity(name, taskTitle, taskTypeName)
+fun TimeBlock.secondaryIdentity(taskTitleOverride: String? = task?.title): String? = activitySecondaryIdentity(name, taskTitleOverride, taskTypeName)
+fun ActualBlock.meaningfulTaskTypeName(): String? = meaningfulActivityType(taskTypeName)
+fun ActualBlock.primaryIdentity(): String = activityPrimaryIdentity(name, task?.title, taskTypeName)
+fun ActualBlock.secondaryIdentity(): String? = activitySecondaryIdentity(name, task?.title, taskTypeName)
+fun ActualBlock.identityText(): String = activityIdentityText(name, task?.title, taskTypeName)
+fun ActualBlockDto.primaryIdentity(): String = activityPrimaryIdentity(name, task?.title, taskType.name)
+fun ActualBlockDto.secondaryIdentity(): String? = activitySecondaryIdentity(name, task?.title, taskType.name)
+fun ActualBlockDto.identityText(): String = activityIdentityText(name, task?.title, taskType.name)
 
 data class ActualBlock(
     val id: Int,

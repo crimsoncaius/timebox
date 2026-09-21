@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -25,7 +26,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit, error: String? = null) {
+fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit, error: String? = null, plannedBlock: TimeBlock? = null) {
     if (com.timebox.android.BuildConfig.RECORDING_PROTOTYPE) {
         RecordingPreviewStudy(preview, timezone, onCancel)
         return
@@ -33,10 +34,11 @@ fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boole
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
     val zone = ZoneId.of(timezone)
-    val model = remember(preview) { recordingTimelineModel(preview) }
+    val title = activityPrimaryIdentity(preview.replacement.name, plannedBlock?.task?.title, plannedBlock?.taskTypeName)
+    val secondary = activitySecondaryIdentity(preview.replacement.name, plannedBlock?.task?.title, plannedBlock?.taskTypeName)
+    val model = remember(preview, title, secondary) { recordingTimelineModel(preview, listOfNotNull(title, secondary).joinToString(" · ")) }
     val start = model.start
     val end = model.end
-    val title = preview.replacement.name ?: "Unnamed activity"
     val sameDay = start.atZone(zone).toLocalDate() == end.atZone(zone).toLocalDate()
     val clockPattern = if (start.epochSecond % 60 == 0L && end.epochSecond % 60 == 0L) "HH:mm" else "HH:mm:ss"
     val short = DateTimeFormatter.ofPattern(if (sameDay) clockPattern else "MMM d $clockPattern").withZone(zone)
@@ -63,6 +65,7 @@ fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boole
                     Text("${short.format(start)} – ${short.format(end)}", style = type.display.copy(fontSize = 26.sp))
                     Text("${Duration.between(start, end).seconds / 60} min ${Duration.between(start, end).seconds % 60} sec", style = type.monoSmall, color = colors.onVariant)
                     Text(title, style = type.label)
+                    secondary?.let { Text(it, style = type.bodySmall, color = colors.onVariant) }
                     Text("From your Planned Block", style = type.bodySmall, color = colors.onVariant)
                 }
                 if (model.before.isNotEmpty()) {
@@ -73,7 +76,8 @@ fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boole
                         val a = Instant.parse(row.startAt)
                         val b = row.endAt?.let(Instant::parse)
                         Column(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(row.name ?: row.taskType.name, style = type.label)
+                            Text(row.primaryIdentity(), style = type.label)
+                            row.secondaryIdentity()?.let { Text(it, style = type.bodySmall, color = colors.onVariant) }
                             Text("Replace ${time(maxOf(a, start))} – ${time(minOf(b ?: end, end))}", style = type.bodySmall, color = colors.error)
                             if (a < start) Text("Keep ${time(a)} – ${time(start)}", style = type.bodySmall)
                             if (b != null && b > end) Text("Keep ${time(end)} – ${time(b)}", style = type.bodySmall)
@@ -89,7 +93,7 @@ fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boole
                         }
                         if (details) {
                             changedDetails.forEach { row ->
-                                Text("Existing: ${row.name ?: "Unnamed activity"}", style = type.label)
+                                Text("Existing: ${row.identityText()}", style = type.label)
                                 Text("${time(Instant.parse(row.startAt))} – ${row.endAt?.let { time(Instant.parse(it)) } ?: "Running"}", style = type.monoSmall, color = colors.onVariant)
                                 Text(row.note ?: "No note", style = type.bodySmall)
                             }

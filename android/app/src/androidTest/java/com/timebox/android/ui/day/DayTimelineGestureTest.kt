@@ -212,7 +212,7 @@ class DayTimelineGestureTest {
     }
 
     @Test
-    fun taskBackedDayBlockUsesNameThenLinkedTaskContext() {
+    fun taskBackedDayBlockUsesNameAndTaskType() {
         val date = LocalDate.of(2026, 8, 20)
         val base = stateWithBlock(date)
         val task = LinkedTask(
@@ -236,7 +236,7 @@ class DayTimelineGestureTest {
         )
 
         compose.onNodeWithText("Outline session · Task ○").assertIsDisplayed()
-        compose.onNodeWithText("Prepare launch").assertIsDisplayed()
+        compose.onNodeWithText(named.taskTypeName).assertIsDisplayed()
     }
 
     @Test
