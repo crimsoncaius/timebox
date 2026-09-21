@@ -16,4 +16,4 @@ Browser checks: syntax, appended retry preserving the interrupted attempt, stabl
 
 Limitations: fixture data and scripted timing, no real AI, no actual contextual reasoning or backend acknowledgement, no persistence, and only simulated navigation/keyboard/expiry. The schedule expansion and disclosure are presentation controls, not navigation to Planned Blocks. Native Android IME, TalkBack, text scaling, and real transport behavior still require implementation validation. All dates are fixture dates. The switcher lives only in this standalone prototype, outside production routes/builds.
 
-User verdict is pending. No production design or acceptance criteria are finalized by this artifact. Implementation remains out of scope for the Wayfinder map.
+User verdict: "A is perfect." Variant A (inline schedule) is the approved visual direction. The resolution and its scope are recorded in [Review the combined conversation and plan-card interaction](https://github.com/crimsoncaius/timebox/issues/236). Native Android validation and the final implementation acceptance criteria remain outstanding. Implementation remains out of scope for the Wayfinder map.
