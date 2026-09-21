@@ -160,6 +160,7 @@ def delete_task_type(
     cascade_blocks: bool = False,
     migrate_blocks_to: int | None = None,
 ) -> None:
+    """Delete within the caller-owned transaction, including reference changes."""
     if cascade_blocks and migrate_blocks_to is not None:
         raise ValueError("Cannot use cascade_blocks and migrate_blocks_to together")
 
@@ -250,4 +251,3 @@ def delete_task_type(
         raise ValueError("TASK_TYPE_IN_USE")
 
     db.delete(row)
-    db.commit()

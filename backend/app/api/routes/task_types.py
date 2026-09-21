@@ -92,7 +92,9 @@ def delete_task_type(
             cascade_blocks=cascade_blocks,
             migrate_blocks_to=migrate_blocks_to,
         )
+        db.commit()
     except ValueError as e:
+        db.rollback()
         msg = str(e)
         if msg == "TASK_TYPE_IN_USE":
             raise HTTPException(
@@ -112,3 +114,6 @@ def delete_task_type(
         if msg == "Task type not found":
             raise HTTPException(status_code=404, detail=msg) from e
         raise HTTPException(status_code=422, detail=msg) from e
+    except Exception:
+        db.rollback()
+        raise

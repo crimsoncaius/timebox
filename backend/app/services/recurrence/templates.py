@@ -562,9 +562,9 @@ def template_type_counts(db: Session) -> dict[int, int]:
 
 
 def clear_template_type_references(db: Session, task_type_id: int) -> None:
+    """Clear classifications without committing the caller's deletion."""
     db.execute(
         update(RecurringTemplate)
         .where(RecurringTemplate.task_type_id == task_type_id)
         .values(task_type_id=None)
     )
-    db.commit()
