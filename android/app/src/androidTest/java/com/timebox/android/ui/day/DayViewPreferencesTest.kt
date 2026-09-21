@@ -17,20 +17,18 @@ class DayViewPreferencesTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val preferences = AppPreferences(context)
         val before = preferences.dayViewPreferences.first()
-        assertEquals(DayViewPreferences(true, false, false), DayViewPreferences())
+        assertEquals(DayViewPreferences(true, false), DayViewPreferences())
         try {
             listOf(
                 async { preferences.setDaySectionVisible(DayViewSection.Calendar, false) },
                 async { preferences.setDaySectionVisible(DayViewSection.Tracking, true) },
-                async { preferences.setDaySectionVisible(DayViewSection.Zoom, true) },
             ).awaitAll()
-            assertEquals(DayViewPreferences(false, true, true), AppPreferences(context).dayViewPreferences.first())
-            preferences.setDaySectionVisible(DayViewSection.Zoom, false)
-            assertEquals(DayViewPreferences(false, true, false), AppPreferences(context).dayViewPreferences.first())
+            assertEquals(DayViewPreferences(false, true), AppPreferences(context).dayViewPreferences.first())
+            preferences.setDaySectionVisible(DayViewSection.Tracking, false)
+            assertEquals(DayViewPreferences(false, false), AppPreferences(context).dayViewPreferences.first())
         } finally {
             preferences.setDaySectionVisible(DayViewSection.Calendar, before.calendar)
             preferences.setDaySectionVisible(DayViewSection.Tracking, before.tracking)
-            preferences.setDaySectionVisible(DayViewSection.Zoom, before.zoom)
         }
     }
 }

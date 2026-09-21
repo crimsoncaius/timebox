@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RestartAlt
-import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,12 +25,10 @@ import com.timebox.android.ui.theme.TimeboxTheme
 internal fun DayViewOptionsDialog(
     calendar: Boolean,
     tracking: Boolean,
-    zoom: Boolean,
     zoomScale: Float,
     onResetZoom: () -> Unit,
     onCalendar: (Boolean) -> Unit,
     onTracking: (Boolean) -> Unit,
-    onZoom: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -50,8 +47,6 @@ internal fun DayViewOptionsDialog(
                     VisibilityRow("Calendar", Icons.Outlined.CalendarToday, calendar, onCalendar)
                     HorizontalDivider(color = colors.hairline)
                     VisibilityRow("Activity Tracking", Icons.Outlined.PlayArrow, tracking, onTracking)
-                    HorizontalDivider(color = colors.hairline)
-                    VisibilityRow("Zoom", Icons.Outlined.ZoomIn, zoom, onZoom)
                     HorizontalDivider(color = colors.hairline)
                     ResetZoomRow(zoomScale, onResetZoom)
                     Spacer(Modifier.height(16.dp))

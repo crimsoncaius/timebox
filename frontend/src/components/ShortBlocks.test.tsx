@@ -49,18 +49,15 @@ it('clamps zoom and changes creation coordinates without patching saved blocks',
   const patch = vi.fn(async () => {}), create = vi.fn()
   const view = render(<DragDropProvider><DayTimeline now={Date.now} day={day} readOnly={false} draft={null} selectedBlockId={null}
     onPatchBlock={patch} onLaneSlotClick={create} /></DragDropProvider>)
-  const zoom = screen.getByLabelText(/Timeline zoom/)
-  for (let i = 0; i < 30; i++) fireEvent.keyDown(zoom, { key: 'ArrowUp' })
-  expect(zoom).toHaveTextContent('12.0×')
+  const timeline = screen.getByTestId('day-timeline')
+  fireEvent.wheel(timeline, { ctrlKey: true, deltaY: -1000 })
   const lane = view.container.querySelector('[data-day-lane="planned"]')!
   expect(lane).toHaveAttribute('data-slot-height', '552')
   fireEvent.click(lane, { clientY: 552 })
   expect(create).toHaveBeenCalledWith('planned', 630, 660)
   expect(patch).not.toHaveBeenCalled()
-  for (let i = 0; i < 50; i++) fireEvent.keyDown(zoom, { key: 'ArrowDown' })
-  expect(zoom).toHaveTextContent('0.5×')
-  fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
-  expect(zoom).toHaveTextContent('1.0×')
+  fireEvent.wheel(timeline, { ctrlKey: true, deltaY: 1000 })
+  expect(lane).toHaveAttribute('data-slot-height', '23')
 })
 
 it('cancels a pending block move when a second touch starts a pinch', () => {

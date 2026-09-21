@@ -707,7 +707,7 @@ export function TodayPage() {
             </div>
           </section>
 
-          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} zoom={timelineZoom} onResetZoom={() => setTimelineZoom(1)} onClose={() => setViewOpen(false)} storageError={storageError} />}
+          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} zoom={timelineZoom} onZoomChange={setTimelineZoom} onResetZoom={() => setTimelineZoom(1)} onClose={() => setViewOpen(false)} storageError={storageError} />}
 
           {taskTypes.length === 0 && (
             <div className="mb-6 rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 text-sm text-on-surface-variant">
@@ -800,7 +800,6 @@ export function TodayPage() {
           >
             <DayTimeline
               now={activityRepository.now}
-              showZoomControls={dayView.zoom}
               zoom={timelineZoom}
               onZoomChange={setTimelineZoom}
               ref={timelineRef}

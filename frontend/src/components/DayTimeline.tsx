@@ -38,7 +38,6 @@ export const DayTimeline = forwardRef<
     day: DayRead
     /** Same server-anchored clock used by Activity Tracking. */
     now: () => number
-    showZoomControls?: boolean
     /** Controlled zoom, so menus outside the timeline can reset it; uncontrolled when omitted. */
     zoom?: number
     onZoomChange?: (zoom: number) => void
@@ -72,7 +71,6 @@ export const DayTimeline = forwardRef<
   {
     day,
     now,
-    showZoomControls = true,
     zoom: controlledZoom,
     onZoomChange,
     readOnly,
@@ -260,23 +258,6 @@ export const DayTimeline = forwardRef<
 
   return (
     <>
-    {showZoomControls && (<div className="flex justify-end pb-1">
-        <div className="inline-flex min-h-11 items-center rounded-full border border-outline-variant/40 bg-surface-container-low/60 pl-4 pr-1 text-xs text-on-surface-variant dark:border-dark-outline-variant dark:bg-dark-surface-container dark:text-dark-on-surface-variant">
-        <span className="inline-flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary" tabIndex={0} aria-label={`Timeline zoom ${zoom.toFixed(1)} times. Use arrow keys to adjust.`}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-              e.preventDefault()
-              const next = Math.min(12, Math.max(0.5, zoom * (e.key === 'ArrowUp' ? 1.2 : 1 / 1.2)))
-              setZoom(next)
-            }
-          }}>Zoom <span className="min-w-[3.5ch] font-mono font-medium tabular-nums text-on-surface dark:text-dark-on-surface">{zoom.toFixed(1)}×</span></span>
-        <span aria-hidden className="mx-3 h-4 w-px bg-outline-variant/50 dark:bg-dark-outline-variant" />
-        <button type="button" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-medium text-planned transition-colors hover:bg-planned/10 focus-visible:outline-2 focus-visible:outline-planned" onClick={() => setZoom(1)}>
-          <span className="material-symbols-outlined text-[16px]" aria-hidden>restart_alt</span>
-          Reset
-        </button>
-        </div>
-      </div>)}
     <div
       ref={(node) => {
         timelineRef.current = node

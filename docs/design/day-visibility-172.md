@@ -1,5 +1,7 @@
 # Day view visibility — implementation
 
+> Superseded in part by [issue #241](https://github.com/crimsoncaius/timebox/issues/241): Android and web no longer show a standalone Zoom bar or a Zoom visibility switch. View retains the current scale and Reset zoom; web keyboard zoom adjustment now lives in View. Calendar and Activity Tracking visibility remain independent. Legacy zoom visibility preferences are ignored.
+
 ## Current implementation status
 
 The user approved implementation after the design rounds below. This section supersedes historical pending decisions and launch state in those rounds. The approved prototype is preserved at commit `4fb4746` on `codex/issue-172-approved-prototype`; production work is on `codex/issue-172-implementation`.

@@ -107,7 +107,6 @@ fun DayScreen(
     }
     val calendarVisible = visibility.calendar
     val trackingVisible = visibility.tracking
-    val zoomVisible = visibility.zoom
     var viewOpen by remember { mutableStateOf(false) }
     val activityRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).activityRepository
     val activityState by activityRepository.state.collectAsState()
@@ -121,10 +120,10 @@ fun DayScreen(
     }
     val zoom = rememberSaveable(saver = TimelineZoom.Saver) { TimelineZoom() }
     if (viewOpen) DayViewOptionsDialog(
-        calendar = calendarVisible, tracking = trackingVisible, zoom = zoomVisible,
+        calendar = calendarVisible, tracking = trackingVisible,
         zoomScale = zoom.scale, onResetZoom = { zoom.set(1f) },
         onCalendar = { setVisible(com.timebox.android.data.DayViewSection.Calendar, it) }, onTracking = { setVisible(com.timebox.android.data.DayViewSection.Tracking, it) },
-        onZoom = { setVisible(com.timebox.android.data.DayViewSection.Zoom, it) }, onDismiss = { viewOpen = false },
+        onDismiss = { viewOpen = false },
     )
     var displayedDate by remember(state.date) { mutableStateOf(state.date) }
 
@@ -161,33 +160,6 @@ fun DayScreen(
             Spacer(Modifier.height(6.dp))
             androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
             Spacer(Modifier.height(8.dp))
-            }
-            if (zoomVisible) Row(
-                Modifier.fillMaxWidth().padding(horizontal = TimeboxDimens.screenPadding, vertical = 4.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                androidx.compose.material3.Surface(
-                    shape = com.timebox.android.ui.theme.TimeboxShapes.chip,
-                    color = TimeboxTheme.colors.low,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, TimeboxTheme.colors.hairline),
-                ) {
-                    Row(
-                        Modifier.padding(start = 16.dp, end = 4.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.material3.Text("Zoom", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-                        Spacer(Modifier.width(8.dp))
-                        androidx.compose.material3.Text("${"%.1f".format(zoom.scale)}×", style = TimeboxTheme.type.monoSmall, color = TimeboxTheme.colors.on)
-                        Spacer(Modifier.width(12.dp))
-                        androidx.compose.material3.VerticalDivider(Modifier.height(16.dp), color = TimeboxTheme.colors.hairline)
-                        androidx.compose.material3.TextButton(
-                            onClick = { zoom.set(1f) },
-                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = TimeboxTheme.colors.planned),
-                        ) {
-                            androidx.compose.material3.Text("Reset", style = TimeboxTheme.type.bodySmall)
-                        }
-                    }
-                }
             }
             Box(Modifier.weight(1f)) {
                 if (state.isPlanningMode) {

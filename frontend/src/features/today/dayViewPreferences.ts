@@ -1,8 +1,8 @@
 import { useState } from 'react'
 
-export type DayViewPreferences = { calendar: boolean; tracking: boolean; zoom: boolean }
+export type DayViewPreferences = { calendar: boolean; tracking: boolean }
 export const DAY_VIEW_STORAGE_KEY = 'timebox.dayView'
-export const DEFAULT_DAY_VIEW: DayViewPreferences = { calendar: true, tracking: false, zoom: false }
+export const DEFAULT_DAY_VIEW: DayViewPreferences = { calendar: true, tracking: false }
 
 export function readDayViewPreferences(): DayViewPreferences {
   try {

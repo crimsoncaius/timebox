@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
 import type { DayViewPreferences } from './dayViewPreferences'
 
-export function DayViewOptions({ preferences, onChange, zoom, onResetZoom, onClose, storageError }: {
+export function DayViewOptions({ preferences, onChange, zoom, onZoomChange, onResetZoom, onClose, storageError }: {
   preferences: DayViewPreferences
   onChange: (section: keyof DayViewPreferences, value: boolean) => void
   zoom: number
+  onZoomChange: (zoom: number) => void
   onResetZoom: () => void
   onClose: () => void
   storageError: string | null
@@ -26,7 +27,7 @@ export function DayViewOptions({ preferences, onChange, zoom, onResetZoom, onClo
       <h2 id="day-view-title" className="font-headline text-[27px] font-extralight tracking-tight">Day view</h2>
       <p className="mt-2 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">Choose what stays in view.</p>
       <div className="mt-5 divide-y divide-outline-variant/40 dark:divide-dark-outline-variant">
-        {([['calendar', 'Calendar', 'calendar_today'], ['tracking', 'Activity Tracking', 'play_arrow'], ['zoom', 'Zoom', 'zoom_in']] as const).map(([key, label, icon]) =>
+        {([['calendar', 'Calendar', 'calendar_today'], ['tracking', 'Activity Tracking', 'play_arrow']] as const).map(([key, label, icon]) =>
           <button key={key} type="button" role="switch" aria-checked={preferences[key]} onClick={() => onChange(key, !preferences[key])}
             className="flex min-h-16 w-full items-center gap-3 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-planned">
             <span aria-hidden className="material-symbols-outlined text-xl text-on-surface-variant dark:text-dark-on-surface-variant">{icon}</span>
@@ -35,6 +36,20 @@ export function DayViewOptions({ preferences, onChange, zoom, onResetZoom, onClo
               <span className={`h-5 w-5 rounded-full ${preferences[key] ? 'bg-white dark:bg-dark-surface' : 'bg-on-surface-variant dark:bg-dark-on-surface-variant'}`} />
             </span>
           </button>)}
+        <div className="flex min-h-14 items-center justify-between gap-3">
+          <label htmlFor="day-view-zoom" className="text-sm font-medium">Zoom</label>
+          <input id="day-view-zoom" type="range" min={0.5} max={12} step="any" value={zoom}
+            aria-valuetext={`${zoom.toFixed(1)} times`}
+            onChange={event => onZoomChange(Number(event.target.value))}
+            onKeyDown={event => {
+              if (event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+                event.preventDefault()
+                const increase = event.key === 'ArrowUp' || event.key === 'ArrowRight'
+                onZoomChange(Math.min(12, Math.max(0.5, zoom * (increase ? 1.2 : 1 / 1.2))))
+              }
+            }}
+            className="w-40 accent-planned focus-visible:outline-2 focus-visible:outline-planned" />
+        </div>
         <button type="button" disabled={zoom === 1} onClick={onResetZoom}
           className="flex min-h-14 w-full items-center gap-3 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-planned disabled:opacity-50">
           <span aria-hidden className="material-symbols-outlined text-xl text-on-surface-variant dark:text-dark-on-surface-variant">restart_alt</span>
