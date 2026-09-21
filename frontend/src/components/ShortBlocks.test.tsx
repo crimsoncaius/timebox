@@ -47,7 +47,7 @@ it('clamps zoom and changes creation coordinates without patching saved blocks',
     show_full_day: false, time_blocks: [block], actual_blocks: [], created_at: '', updated_at: '',
     meta: { timezone: 'UTC', today: '2026-09-13', server_now_iso: '2026-09-13T12:00:00Z' } }
   const patch = vi.fn(async () => {}), create = vi.fn()
-  const view = render(<DragDropProvider><DayTimeline day={day} readOnly={false} draft={null} selectedBlockId={null}
+  const view = render(<DragDropProvider><DayTimeline now={Date.now} day={day} readOnly={false} draft={null} selectedBlockId={null}
     onPatchBlock={patch} onLaneSlotClick={create} /></DragDropProvider>)
   const zoom = screen.getByLabelText(/Timeline zoom/)
   for (let i = 0; i < 30; i++) fireEvent.keyDown(zoom, { key: 'ArrowUp' })
@@ -68,7 +68,7 @@ it('cancels a pending block move when a second touch starts a pinch', () => {
     show_full_day: false, time_blocks: [block], actual_blocks: [], created_at: '', updated_at: '',
     meta: { timezone: 'UTC', today: '2026-09-13', server_now_iso: '2026-09-13T12:00:00Z' } }
   const patch = vi.fn(async () => {})
-  render(<DragDropProvider><DayTimeline day={day} readOnly={false} draft={null} selectedBlockId={null}
+  render(<DragDropProvider><DayTimeline now={Date.now} day={day} readOnly={false} draft={null} selectedBlockId={null}
     onPatchBlock={patch} onLaneSlotClick={vi.fn()} /></DragDropProvider>)
   const card = screen.getByRole('button', { name: 'Edit planned block' })
   fireEvent.pointerDown(card, { button: 0, pointerType: 'touch', pointerId: 1, clientY: 100 })

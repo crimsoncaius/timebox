@@ -789,6 +789,7 @@ export function TodayPage() {
             data-auto-scroll-to-now={String(!hasBlockLanding || scrollToNowRequest > 0)}
           >
             <DayTimeline
+              now={activityRepository.now}
               showZoomControls={dayView.zoom}
               zoom={timelineZoom}
               onZoomChange={setTimelineZoom}

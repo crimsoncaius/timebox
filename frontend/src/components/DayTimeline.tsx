@@ -36,6 +36,8 @@ export const DayTimeline = forwardRef<
   HTMLDivElement,
   {
     day: DayRead
+    /** Same server-anchored clock used by Activity Tracking. */
+    now: () => number
     showZoomControls?: boolean
     /** Controlled zoom, so menus outside the timeline can reset it; uncontrolled when omitted. */
     zoom?: number
@@ -69,6 +71,7 @@ export const DayTimeline = forwardRef<
 >(function DayTimeline(
   {
     day,
+    now,
     showZoomControls = true,
     zoom: controlledZoom,
     onZoomChange,
@@ -177,14 +180,14 @@ export const DayTimeline = forwardRef<
   }, [])
 
   const [, setNowTick] = useState(0)
-  const isTodayInTz = calendarIsoDateInTimeZone(new Date(), day.meta.timezone) === day.date
+  const currentInstant = new Date(now())
+  const isTodayInTz = calendarIsoDateInTimeZone(currentInstant, day.meta.timezone) === day.date
   useEffect(() => {
-    if (!isTodayInTz) return
     const id = window.setInterval(() => setNowTick((n) => n + 1), 30_000)
     return () => window.clearInterval(id)
-  }, [isTodayInTz])
+  }, [])
 
-  const nowMinuteOfDay = minuteOfDayWithSecondsInTimeZone(new Date(), day.meta.timezone)
+  const nowMinuteOfDay = minuteOfDayWithSecondsInTimeZone(currentInstant, day.meta.timezone)
 
   const onLaneClick = (lane: BlockLane, e: React.MouseEvent<HTMLDivElement>) => {
     if (readOnly) return

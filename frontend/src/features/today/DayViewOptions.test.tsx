@@ -53,7 +53,7 @@ it('resets timeline zoom from the menu while the zoom bar is hidden', () => {
     return <DragDropProvider>
       <DayViewOptions preferences={{ calendar: true, tracking: false, zoom: false }} onChange={() => {}}
         zoom={zoom} onResetZoom={() => setZoom(1)} storageError={null} onClose={() => {}} />
-      <DayTimeline day={day} showZoomControls={false} zoom={zoom} onZoomChange={setZoom} readOnly={false} draft={null}
+      <DayTimeline now={Date.now} day={day} showZoomControls={false} zoom={zoom} onZoomChange={setZoom} readOnly={false} draft={null}
         selectedBlockId={null} onPatchBlock={async () => {}} onLaneSlotClick={() => {}} />
     </DragDropProvider>
   }

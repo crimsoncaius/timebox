@@ -24,7 +24,7 @@ const day: DayRead = {
 function renderTimeline(onDraftTimeChange: (startMin: number, endMin: number) => void, dayValue = day) {
   const view = render(
     <DragDropProvider>
-      <DayTimeline
+      <DayTimeline now={Date.now}
         day={dayValue}
         readOnly={false}
         draft={{ lane: 'planned', start_minute: 480, end_minute: 510 }}
@@ -43,7 +43,7 @@ function renderTimeline(onDraftTimeChange: (startMin: number, endMin: number) =>
 function timeline(dayValue: DayRead, autoScrollToNow = false, scrollToNowRequest = 0) {
   return (
     <DragDropProvider>
-      <DayTimeline
+      <DayTimeline now={Date.now}
         day={dayValue}
         readOnly={false}
         draft={null}
@@ -74,7 +74,7 @@ describe('DayTimeline half-hour creation requests', () => {
   it.each([false, true])('floors clicks in both lanes with task selection %s', (placementSelected) => {
     const clicked = vi.fn()
     const view = render(<DragDropProvider>
-      <DayTimeline day={day} readOnly={false} draft={null} selectedBlockId={null}
+      <DayTimeline now={Date.now} day={day} readOnly={false} draft={null} selectedBlockId={null}
         placementSelected={placementSelected} onLaneSlotClick={clicked} onPatchBlock={vi.fn()} />
     </DragDropProvider>)
     for (const lane of ['planned', 'actual']) {
@@ -103,7 +103,7 @@ describe('DayTimeline draft resize', () => {
 
   it('moves an Actual draft and clamps its resize at the current-time boundary', () => {
     const changed = vi.fn()
-    render(<DragDropProvider><DayTimeline day={day} readOnly={false}
+    render(<DragDropProvider><DayTimeline now={Date.now} day={day} readOnly={false}
       draft={{ lane: 'actual', start_minute: 660, end_minute: 690 }} selectedBlockId={null}
       onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} onDraftTimeChange={changed} />
     </DragDropProvider>)
@@ -185,7 +185,7 @@ describe('DayTimeline Actual Block movement', () => {
     const onPatchBlock = vi.fn(() => Promise.resolve())
     render(
       <DragDropProvider>
-        <DayTimeline
+        <DayTimeline now={Date.now}
           day={{
             ...day,
             actual_blocks: [{
@@ -352,5 +352,51 @@ describe('DayTimeline initial current-time positioning', () => {
     vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
     act(() => { vi.advanceTimersByTime(30_000) })
     expect(scrollBy).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('DayTimeline authoritative clock', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+
+  it('positions the line and running range from the same live instant', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2030-01-01T12:00:00Z'))
+    const anchor = Date.now()
+    const now = () => Date.parse('2026-06-01T12:00:00Z') + Date.now() - anchor
+    const onPatchBlock = vi.fn()
+    render(<DragDropProvider><DayTimeline now={now} day={{ ...day, actual_blocks: [{
+      date: day.date, start_minute: 660, end_minute: 690, duration_minutes: 30,
+      actual_block: { id: 1, task_type_id: 1, task_type: { id: 1, name: 'Work', created_at: '', updated_at: '' },
+        task_id: null, task: null, name: null, note: null, planned_block_id: null,
+        start_at: '2026-06-01T11:00:00Z', end_at: null, created_at: '', updated_at: '' },
+    }] }} readOnly={false} draft={null} selectedBlockId={null}
+      onLaneSlotClick={vi.fn()} onPatchBlock={onPatchBlock} /></DragDropProvider>)
+    const line = screen.getByTestId('day-now-line').firstElementChild as HTMLElement
+    expect(line.style.top).toBe('368px')
+    expect(screen.getByText('11am – 12pm')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(parseFloat(line.style.top)).toBeCloseTo(369.5333)
+    expect(screen.getByText('11am – 12:01pm')).toBeInTheDocument()
+    expect(onPatchBlock).not.toHaveBeenCalled()
+  })
+
+  it('uses reporting time for the Now Line and updates across midnight with a skewed device clock', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2030-01-01T12:00:00Z'))
+    const anchor = Date.now()
+    const now = () => Date.parse('2026-06-01T15:59:30Z') + Date.now() - anchor
+    const renderDay = (date: string) => <DragDropProvider><DayTimeline
+      day={{ ...day, date, show_full_day: true, meta: { ...day.meta, timezone: 'Asia/Singapore' } }}
+      now={now} readOnly={false} draft={null} selectedBlockId={null}
+      onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} /></DragDropProvider>
+    const view = render(renderDay('2026-06-01'))
+    expect(screen.getByTestId('day-now-line')).toBeInTheDocument()
+    view.rerender(renderDay('2026-06-02'))
+    expect(screen.queryByTestId('day-now-line')).not.toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(screen.getByTestId('day-now-line')).toBeInTheDocument()
+    view.rerender(renderDay('2026-06-01'))
+    expect(screen.queryByTestId('day-now-line')).not.toBeInTheDocument()
   })
 })
