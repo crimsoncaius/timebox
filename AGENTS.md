@@ -24,6 +24,12 @@ After implementation and validation, leave the changes on their branch with the 
 
 Before installing, launching, testing, capturing, or interacting with an Android emulator, read `docs/agents/android-emulators.md` and acquire an exclusive reservation through `scripts/android-emulator.py`. Use the helper for device commands. Acquire as many managed devices as the work needs. Release temporary devices automatically; retain devices explicitly for user review. Existing unregistered emulators and physical devices require explicit user assignment.
 
+### Android instrumentation baseline
+
+The instrumentation suite does not pass. `docs/agents/android-instrumentation-baseline.md`
+records which cases already fail on `master` and which are flaky, so a run can be read
+against a known baseline rather than treated as a regression.
+
 ### Worktree lifecycle
 
 After a worktree branch is merged into the repository's primary branch (`master` here), remove the clean merged worktree and prune stale worktree metadata. The merge is not complete until the removed worktree no longer appears in `git worktree list`; preserve any dirty or unmerged worktree.
