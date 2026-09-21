@@ -41,6 +41,7 @@ export function TaskTypePathCombobox({
   const [query, setQuery] = useState(selected?.name ?? '')
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
     setQuery(selected?.name ?? '')
@@ -57,6 +58,7 @@ export function TaskTypePathCombobox({
   const showUnset = allowUnset && suggestions.createPath == null && query.trim() === ''
 
   const choose = (taskTypeId: number | null, name: string) => {
+    setCreateError(null)
     markChosen()
     onSelectTaskTypeId(taskTypeId)
     setQuery(name)
@@ -71,6 +73,7 @@ export function TaskTypePathCombobox({
         const next = event.relatedTarget
         if (next instanceof Node && rootRef.current?.contains(next)) return
         setOpen(false)
+        setQuery(selected?.name ?? '')
       }}
     >
       <label htmlFor={inputId} className="mb-0.5 block font-body text-xs text-on-surface-variant">
@@ -98,6 +101,7 @@ export function TaskTypePathCombobox({
         }}
       />
 
+      {createError && <p role="alert" className="mt-2 text-sm text-error">{createError}</p>}
       {recommendation && <div className="mt-2 flex items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-2 text-sm dark:bg-dark-surface-container">
         <button type="button" className="flex-1 text-left" onClick={() => choose(recommendation.id, recommendation.name)}>Suggested: <strong>{recommendation.name}</strong><span className="ml-2 underline">Use</span></button>
         <button type="button" aria-label="Dismiss Task Type recommendation" className="min-h-10 min-w-10" onClick={dismiss}>×</button>
@@ -146,11 +150,14 @@ export function TaskTypePathCombobox({
                 className="w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-container-high disabled:opacity-50 dark:hover:bg-dark-surface-container-high"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={async () => {
+                  setCreateError(null)
                   markChosen()
                   setBusy(true)
                   try {
                     const created = await onCreateTaskTypePath(suggestions.createPath!)
                     choose(created.id, created.name)
+                  } catch {
+                    setCreateError('Could not create Task Type. Try again.')
                   } finally {
                     setBusy(false)
                   }
