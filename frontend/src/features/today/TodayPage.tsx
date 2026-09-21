@@ -86,6 +86,7 @@ export function TodayPage() {
   const [error, setError] = useState<string | null>(null)
   const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const [dayNotice, setDayNotice] = useState<string | null>(null)
+  const recordingOperation = useRef(0)
   const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
   const [recordPreview, setRecordPreview] = useState<{ blockId: number; result: PlannedRecordingResult } | null>(null)
   const allBattleTasks = useMemo(
@@ -533,21 +534,23 @@ export function TodayPage() {
   const recordActualAsPlanned = useCallback(
     async (blockId: number, confirmation?: PlannedRecordingResult) => {
       if (!date) return
+      const operation = ++recordingOperation.current
       setError(null)
       try {
         const repo = getActivityRepository()
         await repo.refresh()
         if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before recording this plan.')
         const result = await api.recordActualAsPlanned(blockId, confirmation ? { until: confirmation.end_at, fingerprint: confirmation.fingerprint } : undefined)
+        if (operation !== recordingOperation.current) return
         if (result.status === 'confirmation_required') { setRecordPreview({ blockId, result }); return }
         setRecordPreview(null)
         if (result.undo_token) { setRecordActualUndo({ plannedBlockId: blockId, token: result.undo_token }); setDayNotice(null) }
-        else setDayNotice('Already recorded')
+        else { setRecordActualUndo(null); setDayNotice('Already recorded') }
         await getActivityRepository().refresh()
         setDay(await api.getDay(date))
       } catch (e) {
         const msg = errorMessage(e, 'Failed to record Actual as planned')
-        setError(msg)
+        if (operation === recordingOperation.current) setError(msg)
         throw e
       }
     },
@@ -737,18 +740,21 @@ export function TodayPage() {
           ) : null}
           {dayNotice && !completionUndo && !recordActualUndo ? <TransientFeedback floating title={dayNotice} /> : null}
           {recordActualUndo ? (
-            <TransientFeedback floating title={dayNotice === 'Already recorded' ? dayNotice : 'Actual recorded.'} action={
+            <TransientFeedback floating title="Actual recorded." action={
               <button type="button" onClick={async () => {
+                const undo = recordActualUndo
+                const operation = ++recordingOperation.current
                 setError(null)
                 try {
                   const repo = getActivityRepository()
                   await repo.refresh()
                   if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before Undo.')
-                  await api.undoRecordActualAsPlanned(recordActualUndo.plannedBlockId, recordActualUndo.token)
+                  await api.undoRecordActualAsPlanned(undo.plannedBlockId, undo.token)
+                  if (operation !== recordingOperation.current) return
                   setRecordActualUndo(null)
                   await repo.refresh()
                   setDay(await api.getDay(date))
-                } catch (cause) { setError(errorMessage(cause, 'Failed to undo recorded Actual')) }
+                } catch (cause) { if (operation === recordingOperation.current) setError(errorMessage(cause, 'Failed to undo recorded Actual')) }
               }}>Undo</button>
             } />
           ) : null}

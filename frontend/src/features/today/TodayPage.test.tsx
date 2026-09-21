@@ -462,7 +462,44 @@ describe('TodayPage inspector rail', () => {
     expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]!)
     expect(await screen.findByText('Already recorded')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+  })
+
+  it('keeps a newer recording Undo when an older Undo request completes', async () => {
+    const user = userEvent.setup()
+    const originalFetch = globalThis.fetch
+    let finishUndo!: (response: Response) => void
+    const undoPending = new Promise<Response>((resolve) => { finishUndo = resolve })
+    let records = 0
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/planned-blocks/10/undo-record-actual')) return undoPending
+      if (url.includes('/planned-blocks/10/record-actual-as-planned')) {
+        records++
+        return Promise.resolve(jsonResponse({ status: 'recorded', actual_block: { id: 12 }, undo_token: `token-${records}` }, 201))
+      }
+      return originalFetch(input, init)
+    })
+    render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes>
+      <Route path="/day/:date" element={<TodayPage />} />
+    </Routes></MemoryRouter>)
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    await user.click(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]!)
+    await user.click(await screen.findByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/planned-blocks/10/undo-record-actual'),
+      expect.objectContaining({ body: JSON.stringify({ undo_token: 'token-1' }) }),
+    ))
+    await user.click((await screen.findAllByRole('button', { name: 'Edit planned block' }))[0]!)
+    await user.click((await screen.findAllByRole('button', { name: 'Record Actual as planned' }))[0]!)
+    await waitFor(() => expect(records).toBe(2))
+    finishUndo(new Response(null, { status: 204 }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/planned-blocks/10/undo-record-actual'),
+      expect.objectContaining({ body: JSON.stringify({ undo_token: 'token-2' }) }),
+    ))
   })
 
   it('delegates untyped Ready to Plan fallback resolution to the backend', async () => {

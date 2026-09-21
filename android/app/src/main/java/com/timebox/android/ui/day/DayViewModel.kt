@@ -913,8 +913,8 @@ class DayViewModel(
         val preview = _state.value.recordingPreview
         val id = preview?.first ?: _state.value.selectedBlockId ?: return
         if (_state.value.saving) return
+        _state.update { it.copy(saving = true, recordingError = null, recordingNotice = null) }
         launchScope.launch {
-            _state.update { it.copy(saving = true, recordingError = null, recordingNotice = null) }
             try {
                 if (preview == null && input.selectedBlock != null &&
                     (input.nameInput != input.selectedBlock!!.name.orEmpty() || input.noteInput != input.selectedBlock!!.note.orEmpty())) {
@@ -929,7 +929,7 @@ class DayViewModel(
                 if (result.status == "confirmation_required") {
                     _state.update { it.copy(recordingPreview = id to result) }
                 } else {
-                    _state.update { it.copy(recordingPreview = null, recordingUndo = result.undoToken?.let { token -> id to token } ?: it.recordingUndo,
+                    _state.update { it.copy(recordingPreview = null, recordingUndo = result.undoToken?.let { token -> id to token },
                         recordingNotice = id to if (result.status == "already_recorded") "Already recorded" else "Actual recorded",
                         message = if (result.status == "already_recorded") "Already recorded" else "Actual recorded") }
                     activityRepository?.refresh()
@@ -943,8 +943,8 @@ class DayViewModel(
     fun undoRecording() {
         val undo = _state.value.recordingUndo ?: return
         if (_state.value.saving) return
+        _state.update { it.copy(saving = true, recordingError = null) }
         launchScope.launch {
-            _state.update { it.copy(saving = true, recordingError = null) }
             try {
                 activityRepository?.refresh()
                 check(activityRepository?.state?.value?.pending != true && activityRepository?.state?.value?.error == null) { "Sync pending activity before Undo." }
