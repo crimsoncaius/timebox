@@ -92,7 +92,8 @@ def test_stale_preview_requires_confirmation_and_freezes_end(client, recording):
 
 
 def test_undo_rejects_edit_to_surviving_portion(client, recording):
-    _, record, undo, actual, _ = recording
+    now, record, undo, actual, _ = recording
+    now[0] = now[0].replace(hour=11, minute=15)
     original = actual('09:00', '11:15')
     result = record(record())
     client.patch(f"/actual-blocks/{original['id']}", json={'note': 'Later intent'})

@@ -33,9 +33,10 @@ capture_utc_now = utc_clock_seam()
 def create_actual_block(
     body: ActualBlockCreate,
     db: Session = Depends(get_db),
+    captured_at: dt.datetime = Depends(capture_utc_now),
 ) -> ActualBlockRead:
     try:
-        return actual_block_service.create_actual_block(db, body)
+        return actual_block_service.create_actual_block(db, body, captured_at)
     except ValueError as exc:
         raise domain_http_error(exc) from exc
 
@@ -69,9 +70,10 @@ def patch_actual_block(
     actual_block_id: int,
     body: ActualBlockPatch,
     db: Session = Depends(get_db),
+    captured_at: dt.datetime = Depends(capture_utc_now),
 ) -> ActualBlockRead:
     try:
-        return actual_block_service.patch_actual_block(db, actual_block_id, body)
+        return actual_block_service.patch_actual_block(db, actual_block_id, body, captured_at)
     except ValueError as exc:
         raise domain_http_error(exc) from exc
 

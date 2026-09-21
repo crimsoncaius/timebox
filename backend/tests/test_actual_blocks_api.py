@@ -141,6 +141,7 @@ def test_every_planned_to_actual_creation_flow_snapshots_the_planned_name(
             },
         )
     elif flow == "retrospective":
+        captured_instants.append(dt.datetime(2026, 8, 30, 11, tzinfo=UTC))
         response = client.post(
             "/actual-blocks",
             json={
@@ -743,6 +744,7 @@ def test_second_live_start_and_overlapping_actual_are_rejected_without_partial_w
     assert second.json()["detail"] == "An Actual Block is already active"
     assert client.get("/actual-blocks/active").json()["id"] == first.json()["id"]
 
+    captured_instants.append(dt.datetime(2026, 8, 30, 12, tzinfo=UTC))
     overlapping = client.post(
         "/actual-blocks",
         json={

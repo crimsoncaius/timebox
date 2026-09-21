@@ -303,8 +303,22 @@ def finish_actual_block(
     return _read(_load_actual(db, actual_block_id))
 
 
-def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead:
+def _validate_retrospective_time(
+    start_at: dt.datetime, end_at: dt.datetime | None, captured_at: dt.datetime
+) -> None:
+    authoritative_now = as_utc(captured_at)
+    if as_utc(start_at) > authoritative_now:
+        raise ValueError("Actual Block start cannot be in the future")
+    if end_at is not None and as_utc(end_at) > authoritative_now:
+        raise ValueError("Actual Block end cannot be in the future")
+
+
+def create_actual_block(
+    db: Session, body: ActualBlockCreate, captured_at: dt.datetime
+) -> ActualBlockRead:
     """Create a finished retrospective Actual Block in one transaction."""
+
+    _validate_retrospective_time(body.start_at, body.end_at, captured_at)
 
     task_type_id, task_id, planned_name = resolve_origin_item(
         db,
@@ -338,7 +352,7 @@ def create_actual_block(db: Session, body: ActualBlockCreate) -> ActualBlockRead
 
 
 def patch_actual_block(
-    db: Session, actual_block_id: int, body: ActualBlockPatch
+    db: Session, actual_block_id: int, body: ActualBlockPatch, captured_at: dt.datetime
 ) -> ActualBlockRead:
     """Correct Actual facts without rewriting its corresponding Planned Block."""
 
@@ -366,6 +380,7 @@ def patch_actual_block(
         raise ValueError("Actual Block start is required")
     start_at = as_utc(start_at)
     end_at = as_utc(end_at) if end_at is not None else None
+    _validate_retrospective_time(start_at, end_at, captured_at)
     if end_at is not None and end_at <= start_at:
         raise ValueError("Actual Block end must be after its start")
 

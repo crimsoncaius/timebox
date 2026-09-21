@@ -136,7 +136,7 @@ def test_actual_correspondence_is_independent_and_detach_preserves_actual_work(c
 
 
 def test_deleting_paired_actual_leaves_planned_and_record_overlap_is_atomic(client, actual_instants):
-    actual_instants.extend([dt.datetime(2099, 3, 1, 12, tzinfo=UTC)] * 2)
+    actual_instants.extend([dt.datetime(2099, 3, 1, 12, tzinfo=UTC)] * 3)
     task_type = _task_type(client)
     task = _task(client, task_type_id=task_type["id"])
     planned = _planned_block(client, "2099-03-01", task, task_type)
@@ -566,6 +566,7 @@ def test_completed_task_and_subtasks_freeze_but_historical_correction_and_earlie
     trashed_subtask = _task(client, "Trashed checkpoint", parent_id=task["id"])
     assert client.delete(f"/tasks/{trashed_subtask['id']}").status_code == 200
     historical_plan = _planned_block(client, "2026-08-29", task, task_type)
+    actual_instants.extend([dt.datetime(2026, 8, 30, 13, tzinfo=UTC)] * 4)
     historical_actual = client.post(
         "/actual-blocks",
         json={
@@ -667,6 +668,7 @@ def test_completed_actual_reassignment_and_relink_obey_completion_boundary(
     target_plan = _planned_block(
         client, "2026-08-30", target, task_type, start=660
     )
+    actual_instants.extend([dt.datetime(2026, 8, 30, 15, tzinfo=UTC)] * 6)
     existing = client.post(
         "/actual-blocks",
         json={
@@ -737,6 +739,7 @@ def test_completed_actual_reassignment_and_relink_obey_completion_boundary(
         "/actual-blocks/start",
         json={"task_type_id": task_type["id"], "task_id": source["id"]},
     ).json()
+    actual_instants.append(dt.datetime(2026, 8, 30, 15, tzinfo=UTC))
     active_reassignment = client.patch(
         f"/actual-blocks/{active['id']}", json={"task_id": target["id"]}
     )
