@@ -247,6 +247,15 @@ describe('time helpers', () => {
     expect(formatHourLabelGcal12(12 * 60)).toBe('12 PM')
   })
 
+  it('floors fractional range endpoints only for display', () => {
+    const end = minuteOfDayWithSecondsInTimeZone(new Date('2026-06-01T10:23:21Z'), 'UTC')
+    expect(end).toBeCloseTo(623.35)
+    expect(formatTimeRangeGcal12(540, end)).toBe('9 – 10:23am')
+    expect(formatTimeRangeGcal12(540.9, 600.9)).toBe('9 – 10am')
+    expect(formatTimeRangeGcal12(719.99, 720.5)).toBe('11:59am – 12pm')
+    expect(formatTimeRangeGcal12(1439.99, 1440.5)).toBe('11:59pm – 12am')
+  })
+
   describe('zonedLocalToIso', () => {
     it('converts an ordinary wall-clock time in the given zone', () => {
       expect(zonedLocalToIso('2026-06-01T09:30', 'Asia/Singapore')).toBe('2026-06-01T01:30:00.000Z')

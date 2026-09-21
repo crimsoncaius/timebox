@@ -359,6 +359,25 @@ describe('DayTimeline initial current-time positioning', () => {
 describe('DayTimeline authoritative clock', () => {
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
+  it('shows whole-minute running labels without rounding second-based geometry', () => {
+    const now = () => Date.parse('2026-06-01T10:23:21Z')
+    const onPatchBlock = vi.fn()
+    render(<DragDropProvider><DayTimeline now={now} day={{ ...day, actual_blocks: [{
+      date: day.date, start_minute: 540, end_minute: 570, duration_minutes: 30,
+      actual_block: { id: 1, task_type_id: 1, task_type: { id: 1, name: 'Work', created_at: '', updated_at: '' },
+        task_id: null, task: null, name: null, note: null, planned_block_id: null,
+        start_at: '2026-06-01T09:00:00Z', end_at: null, created_at: '', updated_at: '' },
+    }] }} readOnly={false} draft={null} selectedBlockId={null}
+      onLaneSlotClick={vi.fn()} onPatchBlock={onPatchBlock} /></DragDropProvider>)
+    expect(screen.getByText('9 – 10:23am')).toBeInTheDocument()
+    const block = screen.getByRole('button', { name: 'Edit actual block' })
+    expect(block).toHaveAccessibleDescription('Work, 9 – 10:23am')
+    expect(parseFloat(block.parentElement!.style.height)).toBeCloseTo((623.35 - 540) / 30 * 46)
+    const line = screen.getByTestId('day-now-line').firstElementChild as HTMLElement
+    expect(parseFloat(line.style.top)).toBeCloseTo((623.35 - 480) / 30 * 46)
+    expect(onPatchBlock).not.toHaveBeenCalled()
+  })
+
   it('positions the line and running range from the same live instant', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2030-01-01T12:00:00Z'))

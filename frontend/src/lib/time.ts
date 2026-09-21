@@ -165,8 +165,9 @@ const normMinute = (minuteFromMidnight: number) =>
  * Uses an en dash between start and end; single am/pm when both times share the same half of the day.
  */
 export function formatTimeRangeGcal12(startMin: number, endMin: number): string {
-  const s = normMinute(startMin)
-  const e = normMinute(endMin)
+  // Running Actual Blocks retain seconds for geometry; labels show whole minutes.
+  const s = normMinute(Math.floor(startMin))
+  const e = normMinute(Math.floor(endMin))
   const sH = Math.floor(s / 60)
   const eH = Math.floor(e / 60)
   const sPart = s % 60
