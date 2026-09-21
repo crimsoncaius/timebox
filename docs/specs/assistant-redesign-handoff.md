@@ -1,16 +1,16 @@
 # Assistant redesign implementation handoff
 
-Status: proposed handoff, awaiting live confirmation in [Agree the Assistant implementation handoff and acceptance criteria](https://github.com/crimsoncaius/timebox/issues/238). This document does not authorize implementation or merge.
+Status: approved in live review; the user accepted all three handoff recommendations in [Agree the Assistant implementation handoff and acceptance criteria](https://github.com/crimsoncaius/timebox/issues/238). Ready for a later implementation task. This document does not authorize implementation or merge.
 
 ## Scope and authorities
 
 Implement the Android Conversation layout with the approved A inline schedule from [the prototype](../design/assistant-236/README.md). This expressly adds one agent-selected plan card to the original design-refinement scope. Backend changes are limited to the contract, snapshot memory, and completion handling needed for that card. Rewrite production components; do not ship the prototype.
 
-Authoritative product decisions live in their tickets: [presentation](https://github.com/crimsoncaius/timebox/issues/233), [freshness and memory](https://github.com/crimsoncaius/timebox/issues/234), [streaming and retry](https://github.com/crimsoncaius/timebox/issues/235), [visual selection](https://github.com/crimsoncaius/timebox/issues/236), and [response contract](https://github.com/crimsoncaius/timebox/issues/237). The details below make those decisions implementable; new technical defaults are proposed for handoff approval.
+Authoritative product decisions live in their tickets: [presentation](https://github.com/crimsoncaius/timebox/issues/233), [freshness and memory](https://github.com/crimsoncaius/timebox/issues/234), [streaming and retry](https://github.com/crimsoncaius/timebox/issues/235), [visual selection](https://github.com/crimsoncaius/timebox/issues/236), and [response contract](https://github.com/crimsoncaius/timebox/issues/237). The concrete defaults, implementation sequence, scope and acceptance criteria below were accepted in the final handoff review.
 
 Exclude mutations, additional reading tools/card types, arbitrary generated UI, saved history, web UI, provider replacement, and broad backend redesign. Keep credentials backend-only and preserve existing tool field exclusions and tracing retention.
 
-## Concrete protocol proposal
+## Concrete protocol
 
 - Preserve the existing application protocol header. Negotiate Assistant separately at conversation creation: optional `capabilities: ["plan_card_v1"]`; echo the accepted capability list. Persist the accepted mode for that conversation. Missing capability means legacy text mode. A new client receiving no capability echo also uses text mode, without retrying a model request. Deploy the compatible backend before the new Android client.
 - Add one SSE event, `plan_card`, with the existing `run_id` and contiguous `sequence` envelope. Payload: `schema_version: 1`, `snapshot_id`, ISO calendar `date`, IANA `reporting_timezone`, UTC RFC3339 `read_at`, and ordered `planned_blocks`. Read time is captured by the server at snapshot creation; render it in the snapshot's Reporting Time Zone.
