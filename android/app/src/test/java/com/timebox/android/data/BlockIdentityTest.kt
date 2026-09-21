@@ -30,9 +30,9 @@ class BlockIdentityTest {
     )
 
     @Test
-    fun `linked name is primary and Battle Plan Task is secondary`() {
+    fun `linked name is primary and Task Type is secondary`() {
         assertEquals("Outline session", linked.primaryIdentity())
-        assertEquals("Prepare launch", linked.secondaryIdentity())
+        assertEquals("Deep work", linked.secondaryIdentity())
 
         val unnamed = linked.copy(name = null)
         assertEquals("Prepare launch", unnamed.primaryIdentity())
@@ -65,7 +65,16 @@ class BlockIdentityTest {
             name = "Review session",
         )
         assertEquals("Review session", actual.primaryIdentity())
-        assertEquals("Prepare launch", actual.secondaryIdentity())
+        assertEquals("Deep work", actual.secondaryIdentity())
         assertEquals("Prepare launch", actual.copy(name = null).primaryIdentity())
+    }
+
+    @Test
+    fun `blank names and unspecified type use task then unnamed activity`() {
+        val block = linked.copy(name = "  ", taskTypeName = " Unspecified ")
+        assertEquals("Prepare launch", block.primaryIdentity())
+        assertNull(block.secondaryIdentity())
+        assertEquals("Unnamed activity", block.copy(task = null).primaryIdentity())
+        assertNull(block.copy(task = null).secondaryIdentity())
     }
 }

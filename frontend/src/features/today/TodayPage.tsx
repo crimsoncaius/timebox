@@ -763,7 +763,7 @@ export function TodayPage() {
             } />
           ) : null}
 
-          {recordPreview && <RecordingPreview preview={recordPreview.result} timezone={day?.meta.timezone ?? 'UTC'} error={error}
+          {recordPreview && <RecordingPreview plannedBlock={day?.time_blocks.find(block => block.id === recordPreview.blockId && block.lane === 'planned')} preview={recordPreview.result} timezone={day?.meta.timezone ?? 'UTC'} error={error}
             onCancel={() => setRecordPreview(null)} onConfirm={async () => {
               try { await recordActualAsPlanned(recordPreview.blockId, recordPreview.result) } catch { /* Error is shown by the page. */ }
             }} />}

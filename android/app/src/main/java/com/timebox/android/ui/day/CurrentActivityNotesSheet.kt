@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.primaryIdentity
+import com.timebox.android.data.secondaryIdentity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -48,10 +50,7 @@ internal fun CurrentActivityNotesSheet(
     val linked = actual.taskId != null
     val readOnly = linked && (actual.task?.archivedAt != null || actual.task?.deletedAt != null)
     val fieldName = if (linked) "Task Description" else "Supporting Note"
-    val title = actual.task?.title
-        ?: actual.name?.takeIf(String::isNotBlank)
-        ?: actual.taskType.name.takeUnless { it == "unspecified" }
-        ?: "Unnamed activity"
+    val title = actual.primaryIdentity()
     var task by remember(actual.id) { mutableStateOf<BattleTask?>(null) }
     var loading by remember(actual.id) { mutableStateOf(linked) }
     var draft by remember(actual.id) { mutableStateOf(actual.note.orEmpty()) }
@@ -95,6 +94,7 @@ internal fun CurrentActivityNotesSheet(
                 Column(Modifier.weight(1f)) {
                     Text("CURRENT ACTIVITY", style = TimeboxTheme.type.kicker, color = colors.actual)
                     Text(title, style = TimeboxTheme.type.screenTitle, color = colors.on)
+                    actual.secondaryIdentity()?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
                 }
                 TextButton(enabled = !saving, onClick = onDismiss) { Text("Close", color = colors.onVariant) }
             }

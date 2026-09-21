@@ -30,7 +30,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 internal fun CurrentActivityControl(
     activity: String, enabled: Boolean, focusEnabled: Boolean, elapsed: String, running: Boolean, expanded: Boolean,
     onToggle: () -> Unit, onStart: () -> Unit, onNotes: () -> Unit, onSwitch: () -> Unit,
-    onFocus: () -> Unit, onStop: () -> Unit,
+    onFocus: () -> Unit, onStop: () -> Unit, secondary: String? = null,
 ) {
     val colors = TimeboxTheme.colors
     val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(180), label = "Tracking disclosure")
@@ -49,6 +49,7 @@ internal fun CurrentActivityControl(
                 }
                 Text(if (running) activity else "Start tracking", color = colors.on, fontSize = 14.sp, lineHeight = 20.sp,
                     fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (running && secondary != null) Text(secondary, color = colors.onVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (running) Text(elapsed, color = colors.onVariant, fontSize = 13.sp,
                     style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
                     modifier = Modifier.padding(top = 2.dp))

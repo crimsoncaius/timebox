@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { DayListItem } from "../../lib/api";
-import { blockPrimaryIdentity } from "../../lib/blockIdentity";
+import { blockIdentityText } from "../../lib/blockIdentity";
 import { buildMonthGridUTC, formatMonthYearUTC } from "./historyCalendar";
 import { trendDuration } from './trends';
 
@@ -101,7 +101,7 @@ export function ChronicleMonthGrid({
           const contribution = highlightedDays?.[cell.iso];
           const hasArchive = item != null;
           const actualIdentity = item?.actual_blocks?.[0]
-            ? blockPrimaryIdentity(item.actual_blocks[0].actual_block)
+            ? blockIdentityText(item.actual_blocks[0].actual_block)
             : null;
           const muted = !cell.inMonth;
           const baseCell =

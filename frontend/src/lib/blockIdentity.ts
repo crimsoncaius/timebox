@@ -1,8 +1,6 @@
-import type { TimeBlock } from './api'
+export type IdentifiableBlock = { name?: string | null; task?: { title: string } | null; task_type?: { name: string } | null }
 
-type IdentifiableBlock = Pick<TimeBlock, 'name' | 'task' | 'task_type'>
-
-export const UNTITLED_BLOCK = 'Untitled'
+export const UNTITLED_BLOCK = 'Unnamed activity'
 
 export function meaningfulTaskTypeName(block: IdentifiableBlock): string | null {
   const name = block.task_type?.name?.trim()
@@ -16,6 +14,10 @@ export function blockPrimaryIdentity(block: IdentifiableBlock): string {
 export function blockSecondaryIdentity(block: IdentifiableBlock): string | null {
   const hasName = !!block.name?.trim()
   const taskTitle = block.task?.title.trim() || null
-  if (hasName && taskTitle) return taskTitle
   return hasName || taskTitle ? meaningfulTaskTypeName(block) : null
+}
+
+/** Compact prose and accessibility labels retain both parts of the identity. */
+export function blockIdentityText(block: IdentifiableBlock): string {
+  return [blockPrimaryIdentity(block), blockSecondaryIdentity(block)].filter(Boolean).join(' · ')
 }

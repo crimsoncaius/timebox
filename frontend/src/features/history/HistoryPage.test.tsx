@@ -145,7 +145,7 @@ describe('HistoryPage', () => {
     }]
     render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
 
-    expect(await screen.findByText('Outline session')).toBeInTheDocument()
+    expect(await screen.findByText('Outline session · Deep work')).toBeInTheDocument()
     expect(screen.queryByText('Prepare launch')).not.toBeInTheDocument()
     expect(screen.getByLabelText(/1980-02-13, archived day, Outline session/)).toBeInTheDocument()
   })

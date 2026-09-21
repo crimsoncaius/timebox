@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.data.primaryIdentity
+import com.timebox.android.data.secondaryIdentity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -71,7 +73,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
     val typeRepository = (context.applicationContext as TimeboxApplication).repository
     val types = (state.snapshot?.taskTypes.orEmpty().map { it.toModel() } + createdTypes).distinctBy { it.id }
     val enabled = !busy && !state.busy
-    val title = actual.name?.takeIf { it.isNotBlank() } ?: actual.taskType.name.takeUnless { it == "unspecified" } ?: "Unnamed activity"
+    val title = actual.primaryIdentity()
     val createType: (String) -> Unit = { path ->
         if (!busy) {
             busy = true
@@ -153,7 +155,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
                 }
                 if (!editing) {
                     Text(title, style = TimeboxTheme.type.label)
-                    actual.taskType.name.takeUnless { it == "unspecified" || it == title }?.let {
+                    actual.secondaryIdentity()?.let {
                         Text(it, color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
                     }
                     actual.note?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.body) }

@@ -18,10 +18,10 @@ const base: TimeBlock = {
 }
 
 describe('Block identity', () => {
-  it('puts a linked Block Name first and keeps the Battle Plan Task as context', () => {
+  it('puts a linked Block Name first and keeps the Task Type as context', () => {
     const named = { ...base, name: 'Outline session' }
     expect(blockPrimaryIdentity(named)).toBe('Outline session')
-    expect(blockSecondaryIdentity(named)).toBe('Prepare launch')
+    expect(blockSecondaryIdentity(named)).toBe('Deep work')
   })
 
   it('uses the linked task first when unnamed and keeps meaningful Task Type context', () => {
@@ -38,4 +38,13 @@ describe('Block identity', () => {
     expect(blockPrimaryIdentity(unnamedUnlinked)).toBe('Deep work')
     expect(blockSecondaryIdentity(unnamedUnlinked)).toBeNull()
   })
+})
+
+
+it.each([null, '', '   '])('hides unspecified with absent name %s', name => {
+  const block = { ...base, name, task: null, task_type: { ...base.task_type, name: ' Unspecified ' } }
+  expect(blockPrimaryIdentity(block)).toBe('Unnamed activity')
+  expect(blockSecondaryIdentity(block)).toBeNull()
+  expect(blockPrimaryIdentity({ ...block, task: base.task })).toBe('Prepare launch')
+  expect(blockSecondaryIdentity({ ...block, task: base.task })).toBeNull()
 })

@@ -17,15 +17,15 @@ class RecordingTimelineModelTest {
 
     @Test fun `spanning actual keeps both outside portions`() {
         val model = recordingTimelineModel(preview(row(1, "09:45", "11:15")))
-        assertEquals(listOf("Old 1", "New", "Old 1"), model.after.map { it.title })
+        assertEquals(listOf("Old 1 · writing", "New", "Old 1 · writing"), model.after.map { it.title })
         assertEquals(listOf(at("09:45"), at("10:00"), at("11:00")), model.after.map { it.start.toString() })
         assertEquals(listOf(at("10:00"), at("11:00"), at("11:15")), model.after.map { it.end.toString() })
     }
 
     @Test fun `multiple overlaps remove contained records and preserve only outside edges`() {
         val model = recordingTimelineModel(preview(row(3, "10:50", "11:30"), row(1, "09:45", "10:15"), row(2, "10:20", "10:40")))
-        assertEquals(listOf("Old 1", "Old 2", "Old 3"), model.before.map { it.title })
-        assertEquals(listOf("Old 1", "New", "Old 3"), model.after.map { it.title })
+        assertEquals(listOf("Old 1 · writing", "Old 2 · writing", "Old 3 · writing"), model.before.map { it.title })
+        assertEquals(listOf("Old 1 · writing", "New", "Old 3 · writing"), model.after.map { it.title })
         assertEquals(1, model.after.count { it.fresh })
         assertEquals(Instant.parse(at("11:00")), model.after.last().start)
     }
