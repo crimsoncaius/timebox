@@ -2,6 +2,10 @@ package com.timebox.android.ui.day
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,6 +23,8 @@ internal fun ActivitySelectionFields(
     onNameChange: (String) -> Unit,
     busy: Boolean,
     onCreateType: (String) -> Unit,
+    typeError: String? = null,
+    onTypeQueryChange: () -> Unit = {},
 ) {
     val type = TimeboxTheme.type
     var typeQuery by remember { mutableStateOf(selectedType?.name.orEmpty()) }
@@ -32,7 +38,7 @@ internal fun ActivitySelectionFields(
         recommendationName = name, recommendationEnabled = !busy,
         taskTypes = taskTypes,
         query = typeQuery,
-        onQueryChange = { typeQuery = it },
+        onQueryChange = { typeQuery = it; onTypeQueryChange() },
         selectedTypeId = selectedType?.id,
         onChoose = { chosen ->
             onTypeChange(chosen)
@@ -40,4 +46,8 @@ internal fun ActivitySelectionFields(
         },
         onCreate = onCreateType,
     )
+    typeError?.let {
+        Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+    }
 }

@@ -39,6 +39,7 @@ fun ActivityTracking(
     repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
     focus: Boolean = false, focusTask: @Composable (@Composable () -> Unit) -> Unit = { elapsed -> elapsed() }, planning: Boolean = false, onEnterFocus: () -> Unit = {},
     controlsVisible: Boolean = true,
+    createTaskType: suspend (String) -> Result<TaskType> = (LocalContext.current.applicationContext as TimeboxApplication).repository::createTaskType,
 ) {
     val state by repository.state.collectAsState()
     val owner = LocalLifecycleOwner.current
@@ -55,6 +56,7 @@ fun ActivityTracking(
     var notesTargetId by remember { mutableStateOf<Int?>(null) }
     var targetId by remember { mutableStateOf<Int?>(null) }
     var timing by remember { mutableStateOf<ActivityTimeValue?>(null) }
+    var typeError by remember { mutableStateOf<String?>(null) }
     var timingError by remember { mutableStateOf<String?>(null) }
     var selectedType by remember { mutableStateOf<TaskType?>(null) }
     var name by remember { mutableStateOf("") }
@@ -78,7 +80,6 @@ fun ActivityTracking(
     val checkIns = (LocalContext.current.applicationContext as? TimeboxApplication)?.checkIns
     val detectionAccess = checkIns?.access?.collectAsState()?.value
     val context = LocalContext.current
-    val typeRepository = (context.applicationContext as TimeboxApplication).repository
     var createdTypes by remember { mutableStateOf(emptyList<TaskType>()) }
     var typeQuery by remember { mutableStateOf("") }
     val requestedQuestion = checkIns?.openQuestion?.collectAsState()?.value
@@ -87,7 +88,8 @@ fun ActivityTracking(
     }
     fun dismissCheckIn() { checkInOpen = false; question?.let { scope.launch { repository.dismissCheckIn(it.id) } } }
 
-    LaunchedEffect(current?.id) { selectedType = null; typeQuery = "" }
+    LaunchedEffect(current?.id) { selectedType = null; typeQuery = ""; typeError = null }
+    LaunchedEffect(starting, switching) { typeError = null }
     val plan = repository.currentPlan()
     // Without a covering Planned Block, starting waits for an explicit Task Type.
     fun start() {
@@ -101,9 +103,10 @@ fun ActivityTracking(
     )
     val availableTypes = ((state.snapshot?.taskTypes?.takeIf { it.isNotEmpty() }?.map { TaskType(it.id, it.name, 0) } ?: taskTypes) + createdTypes).distinctBy { it.id }
     val createType: (String) -> Unit = { path ->
+        typeError = null
         scope.launch {
             try {
-                val created = typeRepository.createTaskType(path).getOrThrow()
+                val created = createTaskType(path).getOrThrow()
                 createdTypes = createdTypes + created
                 selectedType = created
                 typeQuery = created.name
@@ -111,7 +114,7 @@ fun ActivityTracking(
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (cause: Exception) {
-                timingError = cause.message ?: "Could not create Task Type."
+                typeError = cause.message ?: "Could not create Task Type."
             }
         }
     }
@@ -238,7 +241,7 @@ fun ActivityTracking(
         onDismiss = { notesTargetId = null },
     )
     if (starting && current == null) StartTrackingSheet(
-        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name },
+        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name; typeError = null },
         name = name, onNameChange = { name = it },
         enabled = enabled, busy = startSaving || state.busy, error = startError,
         onDismiss = { if (!startSaving) starting = false },
@@ -255,7 +258,8 @@ fun ActivityTracking(
                 }
             }
         },
-        onCreateType = createType,
+        onCreateType = createType, typeError = typeError,
+        onTypeQueryChange = { typeError = null },
     )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(
@@ -267,7 +271,7 @@ fun ActivityTracking(
                 ?.associate { it.id to it.primaryIdentity() }.orEmpty()
         },
         records = state.snapshot?.records.orEmpty(), plans = state.snapshot?.plans.orEmpty(),
-        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name },
+        taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name; typeError = null },
         name = name, onNameChange = { name = it }, timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
@@ -284,7 +288,8 @@ fun ActivityTracking(
                 } catch (error: Exception) { timingError = error.message }
             }
         },
-        onCreateType = createType,
+        onCreateType = createType, typeError = typeError,
+        onTypeQueryChange = { typeError = null },
     )
     val stopTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (stopping && stopTarget != null) StopTrackingSheet(

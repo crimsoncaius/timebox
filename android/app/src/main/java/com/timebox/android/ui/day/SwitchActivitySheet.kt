@@ -46,6 +46,8 @@ internal fun SwitchActivitySheet(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     onCreateType: (String) -> Unit = {},
+    typeError: String? = null,
+    onTypeQueryChange: () -> Unit = {},
     loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { emptyMap() },
 ) {
     val colors = TimeboxTheme.colors
@@ -72,7 +74,7 @@ internal fun SwitchActivitySheet(
             ) {
                 Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
                 Text("Switch activity", style = type.screenTitle.copy(fontSize = 28.sp))
-                ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType)
+                ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType, typeError, onTypeQueryChange)
                 Text("When did this change happen?", style = type.label)
                 Text("Drag the line or tap a time. Nearby block boundaries snap into place.", style = type.bodySmall, color = colors.onVariant)
                 SwitchActivityTimeline(

@@ -32,6 +32,8 @@ internal fun StartTrackingSheet(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     onCreateType: (String) -> Unit = {},
+    typeError: String? = null,
+    onTypeQueryChange: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
@@ -51,7 +53,7 @@ internal fun StartTrackingSheet(
             ) {
                 Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
                 Text("Start tracking", style = type.screenTitle.copy(fontSize = 28.sp))
-                ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType)
+                ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType, typeError, onTypeQueryChange)
                 error?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
