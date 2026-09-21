@@ -16,6 +16,7 @@ export interface TaskType {
   updated_at: string
   usage_count?: number
   task_usage_count?: number
+  recurring_template_usage_count?: number
 }
 
 export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'completed'

@@ -59,6 +59,52 @@ describe('TaskTypesPage', () => {
     )
   }
 
+  it.each([false, true])('resolves series-only deletion with cancellation and rejection: %s', async (reject) => {
+    const user = userEvent.setup()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
+    let deleted = false
+    const deletes: string[] = []
+    const fallback = globalThis.fetch
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/task-types') && init?.method === 'DELETE') {
+        deletes.push(url)
+        deleted = !reject
+        return Promise.resolve(reject
+          ? jsonResponse({ detail: 'Task type still has saved subpaths' }, 409)
+          : new Response(null, { status: 204 }))
+      }
+      if (url.endsWith('/task-types')) {
+        return Promise.resolve(jsonResponse(deleted ? [] : [{
+          id: 23, name: 'Routine', usage_count: 0, task_usage_count: 0,
+          recurring_template_usage_count: 2, created_at: '', updated_at: '',
+        }]))
+      }
+      return fallback(input, init)
+    })
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Delete Routine' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('2 Recurring Task Series')
+    expect(dialog).toHaveTextContent('Recurring Task Series remain, with their task type cleared.')
+    expect(confirm).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(deletes).toEqual([])
+    await user.click(screen.getByRole('button', { name: 'Delete Routine' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Remove task type/ }))
+    await waitFor(() => expect(deletes).toHaveLength(1))
+    expect(deletes[0]).toContain('clear_task_references=true')
+    expect(deletes[0]).not.toContain('cascade_blocks')
+    expect(deletes[0]).not.toContain('migrate_blocks_to')
+    if (reject) {
+      expect(await screen.findByRole('alert')).toHaveTextContent('Task type still has saved subpaths')
+      expect(screen.getByRole('button', { name: 'Delete Routine' })).toBeInTheDocument()
+    } else {
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Delete Routine' })).not.toBeInTheDocument())
+    }
+  })
+
   it('keeps the Battle Plan lists and projects beside Task Types', async () => {
     renderPage()
 

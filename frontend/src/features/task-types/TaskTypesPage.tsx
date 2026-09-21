@@ -35,7 +35,7 @@ export function TaskTypesPage() {
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [renameError, setRenameError] = useState<string | null>(null)
-  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string; blockCount: number; taskCount: number } | null>(null)
+  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string; blockCount: number; taskCount: number; seriesCount: number } | null>(null)
   const [resolveBusy, setResolveBusy] = useState(false)
 
   const visibleTypes = useMemo(() => filterTaskTypesByQuery(types, newName), [types, newName])
@@ -108,13 +108,15 @@ export function TaskTypesPage() {
     const name = selected?.name ?? `Task type #${id}`
     const blockCount = selected?.usage_count ?? 0
     const taskCount = selected?.task_usage_count ?? 0
-    if (blockCount > 0 || taskCount > 0) {
+    const seriesCount = selected?.recurring_template_usage_count ?? 0
+    if (blockCount > 0 || taskCount > 0 || seriesCount > 0) {
       setEditingId((cur) => (cur === id ? null : cur))
       setResolveDelete({
         id,
         name,
         blockCount,
         taskCount,
+        seriesCount,
       })
       setSaveState('idle')
       return
@@ -139,6 +141,7 @@ export function TaskTypesPage() {
           name: row?.name ?? `Task type #${id}`,
           blockCount: row?.usage_count ?? 1,
           taskCount: row?.task_usage_count ?? 0,
+          seriesCount: row?.recurring_template_usage_count ?? 0,
         })
         setSaveState('idle')
         setError(null)
@@ -154,7 +157,7 @@ export function TaskTypesPage() {
     setResolveBusy(true)
     setError(null)
     try {
-      await api.deleteTaskType(resolveDelete.id, { cascadeBlocks: true, clearTaskReferences: true })
+      await api.deleteTaskType(resolveDelete.id, { cascadeBlocks: resolveDelete.blockCount > 0, clearTaskReferences: true })
       setResolveDelete(null)
       await load()
       setSaveState('saved')
@@ -390,6 +393,7 @@ export function TaskTypesPage() {
         taskTypeName={resolveDelete?.name ?? ''}
         blockUsageCount={resolveDelete?.blockCount ?? 0}
         taskUsageCount={resolveDelete?.taskCount ?? 0}
+        seriesUsageCount={resolveDelete?.seriesCount ?? 0}
         migrateTargets={migrateTargets}
         busy={resolveBusy}
         onClose={() => {
