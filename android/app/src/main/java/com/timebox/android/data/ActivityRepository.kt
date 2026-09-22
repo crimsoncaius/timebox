@@ -192,8 +192,13 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private suspend fun checkEndpoint() {
         check(storageError == null) { storageError!! }
         val endpoint = transport.endpoint()
-        check(journal.endpoint == null || journal.endpoint == endpoint) { "Return to the original activity server to recover this device's recording." }
-        if (journal.endpoint == null) save(journal.copy(endpoint = endpoint))
+        // A failed first connection can pin the default URL before Settings is saved.
+        // Only an unused journal can move; confirmed or recoverable data stays bound.
+        val unused = journal.snapshot == null && journal.sequence == 0 && journal.pending == null &&
+            journal.outbox.isEmpty() && journal.rejected == null && journal.rejectedOutbox.isEmpty() &&
+            journal.retiredJournal == null
+        check(journal.endpoint == null || journal.endpoint == endpoint || unused) { "Return to the original activity server to recover this device's recording." }
+        if (journal.endpoint != endpoint) save(journal.copy(endpoint = endpoint))
     }
     private fun newer(snapshot: ActivitySnapshotDto): Boolean {
         check(snapshot.protocol == "activity-online-v1") { "Incompatible activity server" }

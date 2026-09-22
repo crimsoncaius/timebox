@@ -163,6 +163,7 @@ fun ActivityTracking(
                 onRetry = { scope.launch(Dispatchers.IO) { if (state.pending) repository.retry() else repository.refresh() } },
                 modifier = Modifier.padding(top = if (focus) 12.dp else 4.dp, bottom = 4.dp),
             )
+            state.error?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.bodySmall) }
             if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
             if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {

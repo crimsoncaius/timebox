@@ -8,6 +8,37 @@ import org.junit.Test
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 class ActivityRepositoryTest {
+    @Test fun failedInitialConnectionCanMoveToConfiguredServerAfterRestart() = runTest {
+        var endpoint = "http://10.0.2.2:8001/"
+        var durable: String? = null
+        val snapshot = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-21T10:00:00Z",
+            reportingTimezone = "UTC", offlineReady = true, current = null, records = emptyList())
+        val store = object : ActivityStorage {
+            override fun load() = durable
+            override fun save(value: String) { durable = value }
+        }
+        val transport = object : ActivityTransport {
+            override suspend fun endpoint() = endpoint
+            override suspend fun read(): ActivitySnapshotDto {
+                if (endpoint.startsWith("http:")) throw java.io.IOException("Unreachable default server")
+                return snapshot
+            }
+            override suspend fun execute(command: ActivityCommandDto) = snapshot.copy(
+                acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+        }
+        ActivityRepository(transport, store).refresh()
+        endpoint = "https://api-production-db7f.up.railway.app"
+        val restored = ActivityRepository(transport, store)
+        restored.refresh()
+        assertNull(restored.state.value.error)
+        assertNotNull(restored.state.value.snapshot)
+        assertTrue(restored.command(ActivityKind.Start, 15))
+        // Once initialized, a genuinely different server must remain protected.
+        endpoint = "https://another-server.example"
+        restored.refresh()
+        assertTrue(restored.state.value.error!!.contains("original activity server"))
+    }
+
     @Test fun reviewedRejectionsStayDismissedUntilANewRejectionAndSurviveStorageFailure() = runTest {
         for (httpRejection in listOf(false, true)) {
             val snapshot = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-21T10:00:00Z",
