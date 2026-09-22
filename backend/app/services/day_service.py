@@ -6,7 +6,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.core.time import get_zone, isoformat_z, now_in_tz, today_in_tz, utc_now
+from app.core.time import get_zone, isoformat_with_timezone, now_in_tz, today_in_tz, utc_now
 from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
     RecurringPlannedBlockRealization,
@@ -281,7 +281,7 @@ def _day_meta(settings: Settings) -> DayMeta:
     return DayMeta(
         timezone=tz_name,
         today=today_in_tz(tz_name),
-        server_now_iso=isoformat_z(now_in_tz(tz_name)),
+        server_now_iso=isoformat_with_timezone(now_in_tz(tz_name)),
     )
 
 

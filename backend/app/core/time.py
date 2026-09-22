@@ -35,7 +35,8 @@ def parse_iso_date(s: str) -> dt.date:
     return dt.date.fromisoformat(s)
 
 
-def isoformat_z(dt_value: dt.datetime) -> str:
+def isoformat_with_timezone(dt_value: dt.datetime) -> str:
+    """Serialize with an ISO offset, treating naive datetimes as UTC."""
     if dt_value.tzinfo is None:
         dt_value = dt_value.replace(tzinfo=dt.UTC)
     return dt_value.isoformat()
