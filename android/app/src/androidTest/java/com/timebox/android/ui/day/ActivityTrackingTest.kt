@@ -31,6 +31,28 @@ class ActivityTrackingTest {
         compose.onNodeWithText("unspecified").assertDoesNotExist()
     }
 
+    @Test fun reviewedRejectedChangesCanBeDismissedAcrossRestart() {
+        val snapshot = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-21T10:00:00Z", reportingTimezone = "UTC", current = null, records = emptyList())
+        var journal: String? = """{"retiredJournal":"Saved rejected change"}"""
+        val store = object : ActivityStorage {
+            override fun load() = journal
+            override fun save(value: String) { journal = value }
+        }
+        val transport = object : ActivityTransport {
+            override suspend fun read() = snapshot
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Must not replay")
+        }
+        val repository = ActivityRepository(transport, store)
+        compose.setContent { TimeboxTheme(darkTheme = true) { ActivityTracking(emptyList(), {}, repository) } }
+        compose.onNodeWithText("Review rejected changes").performClick()
+        compose.onNodeWithText("Dismiss reviewed changes").assertIsDisplayed().performClick()
+        compose.waitUntil(5000) { repository.state.value.rejectedRecovery == null }
+        compose.onNodeWithText("Review rejected changes").assertDoesNotExist()
+        val restored = ActivityRepository(transport, store)
+        assertNull(restored.state.value.rejectedRecovery)
+        assertTrue(journal!!.contains("Saved rejected change"))
+    }
+
     @Test fun pendingQuestionDismissesToWaitingAndReopensOnlyExplicitlyInFocus() {
         val at = "2026-09-11T10:00:00Z"
         val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Reading"), startAt = at, createdAt = at, updatedAt = at)

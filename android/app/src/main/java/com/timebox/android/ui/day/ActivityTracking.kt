@@ -178,6 +178,12 @@ fun ActivityTracking(
                 TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }
                 if (reviewingRejected) {
                     Text("These changes were not replayed. Use Day add/edit to correct the saved timeline.")
+                    TextButton(onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            if (repository.dismissRejectedRecovery()) withContext(Dispatchers.Main) { reviewingRejected = false }
+                        }
+                    }) { Text("Dismiss reviewed changes") }
+                    Text("Dismissing hides this notice. Recovery data stays saved on this device.")
                     Text(state.rejectedRecovery!!)
                 }
             }

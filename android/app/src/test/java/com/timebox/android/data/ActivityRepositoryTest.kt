@@ -8,6 +8,51 @@ import org.junit.Test
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 class ActivityRepositoryTest {
+    @Test fun reviewedRejectionsStayDismissedUntilANewRejectionAndSurviveStorageFailure() = runTest {
+        for (httpRejection in listOf(false, true)) {
+            val snapshot = ActivitySnapshotDto(cursor = 0, serverAt = "2026-09-21T10:00:00Z",
+                reportingTimezone = "UTC", offlineReady = true, current = null, records = emptyList(),
+                taskTypes = listOf(TaskTypeDto(2, "Reading")))
+            var durable: String? = null
+            var failStorage = false
+            var executions = 0
+            val store = object : ActivityStorage {
+                override fun load() = durable
+                override fun save(value: String) { check(!failStorage) { "Disk full" }; durable = value }
+            }
+            val transport = object : ActivityTransport {
+                override suspend fun read() = snapshot
+                override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                    executions++
+                    if (httpRejection) throw retrofit2.HttpException(retrofit2.Response.error<ActivitySnapshotDto>(422, "Invalid change".toResponseBody()))
+                    return snapshot.copy(acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Conflict))
+                }
+            }
+            val repository = ActivityRepository(transport, store)
+            repository.refresh()
+            repository.command(ActivityKind.Start, 2, "Rejected reading")
+            assertNotNull(repository.state.value.rejectedRecovery)
+            failStorage = true
+            assertFalse(repository.dismissRejectedRecovery())
+            assertNotNull(repository.state.value.rejectedRecovery)
+            assertTrue(repository.state.value.error!!.contains("storage failed"))
+            failStorage = false
+            assertTrue(repository.dismissRejectedRecovery())
+            assertNull(repository.state.value.rejectedRecovery)
+            assertTrue(durable!!.contains("Rejected reading"))
+            val restored = ActivityRepository(transport, store)
+            restored.refresh()
+            assertNull(restored.state.value.rejectedRecovery)
+            assertEquals(1, executions)
+            assertFalse(restored.state.value.pending)
+            assertEquals(snapshot, restored.state.value.snapshot)
+            restored.command(ActivityKind.Start, 2, "New rejected reading")
+            assertNotNull(restored.state.value.rejectedRecovery)
+            assertEquals(2, executions)
+            assertTrue(restored.state.value.rejectedRecovery!!.contains("New rejected reading"))
+        }
+    }
+
     @Test fun onlineCurrentNoteWriteIsAcknowledgedWithoutOfflineQueue() = runTest {
         val at = "2026-09-11T10:00:00Z"
         val row = ActualBlockDto(1, 1, TaskTypeDto(1, "Design"), startAt = at, createdAt = at, updatedAt = at)
