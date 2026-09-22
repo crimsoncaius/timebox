@@ -49,6 +49,7 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     val outbox: List<ActivityCommandDto> = emptyList(),
     val rejectedOutbox: List<ActivityCommandDto> = emptyList(),
     val retiredJournal: String? = null,
+    val rejectedRecoveryReviewed: Boolean = false,
     val calibration: ActivityCalibrationDto? = null,
 )
 data class ActivityUiState(
@@ -102,7 +103,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                     // Keep original bytes, including dependent commands, available for recovery.
                     val cleaned = JsonObject(fields + mapOf("pending" to JsonNull, "rejected" to JsonNull,
                         "outbox" to JsonArray(emptyList()), "rejectedOutbox" to JsonArray(emptyList())))
-                    val migrated = ApiFactory.json.decodeFromString<ActivityJournal>(cleaned.toString()).copy(retiredJournal = raw)
+                    val migrated = ApiFactory.json.decodeFromString<ActivityJournal>(cleaned.toString()).copy(retiredJournal = raw, rejectedRecoveryReviewed = false)
                     save(migrated)
                     feedback = "An obsolete activity change was rejected. Saved changes are available for recovery."
                 } else journal = ApiFactory.json.decodeFromString<ActivityJournal>(raw)
@@ -179,7 +180,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     private fun publish(error: String? = null, busy: Boolean = false) {
         mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback, journal.checkInPreferences, legacyRecovery,
-            if (journal.retiredJournal != null) ApiFactory.json.encodeToString(journal)
+            if (journal.rejectedRecoveryReviewed) null
+            else if (journal.retiredJournal != null) ApiFactory.json.encodeToString(journal)
             else journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) })
     }
     private fun save(value: ActivityJournal) {
@@ -199,6 +201,17 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         return snapshot.cursor > previous.cursor || (snapshot.cursor == previous.cursor && parseActivityInstant(snapshot.serverAt) >= parseActivityInstant(previous.serverAt))
     }
     suspend fun dismissFeedback() = mutex.withLock { feedback = null; publish(state.value.error) }
+    suspend fun dismissRejectedRecovery(): Boolean = mutex.withLock {
+        try {
+            // Acknowledge the notice without deleting recovery data or replaying commands.
+            save(journal.copy(rejectedRecoveryReviewed = true))
+            publish(state.value.error)
+            true
+        } catch (error: Exception) {
+            publish(errorDetail(error))
+            false
+        }
+    }
     private fun noteReconciliation(snapshot: ActivitySnapshotDto) {
         if (newer(snapshot) && snapshot.operationOutcomes.any { (id, result) ->
             result.deviceId == journal.device && result.outcome == ActivityOutcome.Superseded &&
@@ -212,7 +225,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (error is retrofit2.HttpException && error.code() == 422) {
-                    save(journal.copy(rejectedOutbox = journal.rejectedOutbox + journal.outbox, outbox = emptyList()))
+                    save(journal.copy(rejectedOutbox = journal.rejectedOutbox + journal.outbox, outbox = emptyList(), rejectedRecoveryReviewed = false))
                 }
                 offline = error is java.io.IOException
                 throw error
@@ -223,7 +236,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             noteReconciliation(response)
             save(journal.copy(snapshot = if (newer(response)) response else journal.snapshot,
                 outbox = if (applied) journal.outbox.drop(1) else emptyList(),
-                rejectedOutbox = if (applied) journal.rejectedOutbox else journal.rejectedOutbox + journal.outbox))
+                rejectedOutbox = if (applied) journal.rejectedOutbox else journal.rejectedOutbox + journal.outbox,
+                rejectedRecoveryReviewed = applied && journal.rejectedRecoveryReviewed))
             offline = false
             check(applied) { "Activity changed on another device. Pending changes were retained for review." }
         }
