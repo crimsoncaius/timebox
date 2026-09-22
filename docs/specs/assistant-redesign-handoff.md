@@ -4,7 +4,7 @@ Status: approved in live review; the user accepted all three handoff recommendat
 
 ## Scope and authorities
 
-Implement the Android Conversation layout with the approved A inline schedule from [the prototype](../design/assistant-236/README.md). This expressly adds one agent-selected plan card to the original design-refinement scope. Backend changes are limited to the contract, snapshot memory, and completion handling needed for that card. Rewrite production components; do not ship the prototype.
+Implement the Android Conversation layout with the approved A inline schedule from [the prototype](https://github.com/crimsoncaius/timebox/tree/codex/prototype-assistant-236/docs/design/assistant-236). This expressly adds one agent-selected plan card to the original design-refinement scope. Backend changes are limited to the contract, snapshot memory, and completion handling needed for that card. Rewrite production components; do not ship the prototype.
 
 Authoritative product decisions live in their tickets: [presentation](https://github.com/crimsoncaius/timebox/issues/233), [freshness and memory](https://github.com/crimsoncaius/timebox/issues/234), [streaming and retry](https://github.com/crimsoncaius/timebox/issues/235), [visual selection](https://github.com/crimsoncaius/timebox/issues/236), and [response contract](https://github.com/crimsoncaius/timebox/issues/237). The concrete defaults, implementation sequence, scope and acceptance criteria below were accepted in the final handoff review.
 
