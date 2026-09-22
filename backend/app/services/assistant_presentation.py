@@ -115,6 +115,13 @@ class PresentationParser:
             events.append(("text_delta", {"text": rest}))
         return events
 
-    def finish(self):
-        if not self.selected:
-            raise ValueError("Incomplete presentation header")
+    def finish(self, *, successful_terminal: bool = False) -> list[tuple[str, dict]]:
+        if self.selected:
+            return []
+        # Only a confirmed normal model terminal may delimit a card-only selector.
+        # EOF, cancellation, truncation, or a closing brace during streaming cannot.
+        if successful_terminal:
+            value = json.loads(self.buffer, object_pairs_hook=unique_object)
+            if isinstance(value, dict) and value.get("presentation") == "snapshot":
+                return self.feed("\n")
+        raise ValueError("Incomplete presentation header")

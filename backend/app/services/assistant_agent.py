@@ -28,9 +28,9 @@ Every final answer MUST start with exactly one JSON line and a newline:
 {"presentation":"none"}
 or {"presentation":"snapshot","snapshot_id":"ID_FROM_DATA"}
 Then write the answer text, or no text for a card-only answer. Never use code fences around this line.
-The JSON line MUST end with an actual LF newline character, EVEN FOR CARD-ONLY OUTPUT.
-Do not stop at the closing brace: emit the newline before ending. A closing brace without
-the trailing newline is invalid and will fail the response. Do not output a literal backslash-n.
+Always emit an actual LF newline after the JSON line before any answer text.
+For card-only output you may end immediately after the complete snapshot selector.
+Do not output a literal backslash-n.
 Explicit requests to show the plan require a snapshot card. Otherwise choose a card only
 when seeing the schedule helps; narrow gap questions and follow-ups normally need text only.
 Reading alone never requires a card. At most one card. Never invent snapshot IDs or rows.
@@ -173,7 +173,8 @@ async def translate_events(events, snapshots=None):
                 if not second:
                     for item in parser.feed(first_text):
                         yield item
-                parser.finish()
+                for item in parser.finish(successful_terminal=True):
+                    yield item
                 finished = True
     if not finished:
         raise RuntimeError("The model response was incomplete.")

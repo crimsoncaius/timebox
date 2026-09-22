@@ -31,10 +31,13 @@ conversation. Malformed or out-of-order card events cannot become completed
 context. Card-only answers require a valid selector and confirmed completion.
 
 The implementation handoff is in `docs/specs/assistant-redesign-handoff.md`.
-The current provider verification gate remains open: live card-only generations
-omitted the mandatory trailing newline even after explicit prompt reinforcement.
-They fail safely under the approved strict grammar. Do not relax that grammar
-or expand the smoke-check budget without the requested explicit decision.
+Live card-only generations omitted the original mandatory trailing newline.
+The user approved a narrow amendment: after a confirmed normal model completion,
+a complete valid snapshot selector alone can produce the card without a newline.
+The newline is still required before any answer text. No exception applies to
+EOF, cancellation, truncation, malformed selectors or unauthorized references.
+The eight-call smoke budget was exhausted during diagnosis; regression replay
+checks cover the captured output pattern without additional provider calls.
 
 The tool resolves Today in the Reporting Time Zone at execution. It selects
 stored Planned Blocks directly, including times, Block Name, Task Type and linked

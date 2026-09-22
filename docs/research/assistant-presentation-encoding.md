@@ -2,6 +2,8 @@
 
 Research for #237, 2026-09-21. Read-only source inspection and public metadata requests; no credentials or model inference calls were used.
 
+Implementation follow-up (2026-09-22): subsequent live checks found that card-only responses omit the trailing newline. The user approved accepting a complete valid snapshot selector at confirmed successful model termination only. The newline remains mandatory before answer text. See the amended implementation handoff; the original research recommendations below predate that evidence.
+
 ## Finding
 
 Recommend choosing the bounded JSON control line followed by plain text described below as the exact model encoding. It enforces selector-first order in application code and does not depend on unproven native schema-plus-tools behavior. Track a provider smoke check as an explicit implementation dependency before rollout: the design can be chosen now, but prompt adherence has not been empirically verified. Native structured streaming is a credible alternative, not a required assumption. Neither option requires another presentation tool or more than two model calls.
