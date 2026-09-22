@@ -39,6 +39,29 @@ Other branches and pull requests receive Vercel preview deployments. Railway pro
 
 The API service requires the production `DATABASE_URL`, `APP_TIMEZONE`, and CORS configuration in Railway variables. Never copy resolved database credentials into documentation, source control, logs, or shell history. Production schema changes must use Alembic; `AUTO_CREATE_TABLES=1` is only for disposable local SQLite environments.
 
+## CORS configuration
+
+Decision for #280 (2026-09-23): keep production permissive for now by explicitly
+setting `CORS_ORIGINS=*` on the Railway `api` service. This is a deployment choice,
+not a change to the application's localhost defaults.
+
+| Configuration | Allowed origins |
+| --- | --- |
+| `CORS_ORIGINS` omitted from environment and dotenv files | Existing localhost defaults on port 5174 |
+| Explicit `*` | Every origin |
+| Comma-separated origins | Those exact origins, after trimming whitespace |
+| Empty, whitespace, or comma-only value | None through this list; the server still starts |
+
+`CORS_ORIGIN_REGEX` independently allows matching origins, even when the list is
+empty. To deny all cross-origin access, leave both settings explicitly empty.
+Credentials, methods, headers, and optional API-key authentication retain their
+existing behavior. CORS controls browser access to responses; it is not authentication.
+
+Before rolling out the empty-value change, any deployment relying on an empty list
+to allow all origins must explicitly set `*` or configure its intended origins.
+Restart or redeploy the API after changing settings. Railway variable changes
+normally trigger this automatically.
+
 ## Phoenix observability
 
 The production [Phoenix dashboard](https://phoenix-production-6691.up.railway.app)

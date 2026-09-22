@@ -67,7 +67,7 @@ _settings = get_settings()
 def cors_middleware_options(settings: Settings) -> dict[str, object]:
     origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
     return {
-        "allow_origins": origins if origins else ["*"],
+        "allow_origins": origins,
         "allow_origin_regex": settings.cors_origin_regex or None,
         "allow_credentials": True,
         "allow_methods": ["*"],
