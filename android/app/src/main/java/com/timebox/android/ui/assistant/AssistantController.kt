@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null)
-data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), val busy: Boolean = false, val readingPlan: Boolean = false)
+data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null, val plan: AssistantPlan? = null)
+data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), val busy: Boolean = false, val readingPlan: Boolean = false, val ended: String? = null)
 
 /** Process-owned: tab navigation and activity recreation do not cancel a response. */
 class AssistantController(
@@ -29,7 +29,7 @@ class AssistantController(
     }
 
     fun send(message: String) {
-        if (state.value.busy || message.isBlank() || message.length > 4000) return
+        if (state.value.busy || state.value.ended != null || message.isBlank() || message.length > 4000) return
         val epoch = generation
         val runId = UUID.randomUUID().toString()
         run = runId
@@ -44,7 +44,7 @@ class AssistantController(
                 }
                 // Confirm the previous terminal event before starting another turn.
                 // A lost acknowledgement is safe to repeat; generation is never retried.
-                completedRun?.let { api.acknowledge(id, it) }
+                completedRun?.let { api.acknowledge(id, it); completedRun = null }
                 var sequence = 0
                 api.stream(id, runId, message).collect { event ->
                     if (epoch != generation || run != runId) return@collect
@@ -52,24 +52,37 @@ class AssistantController(
                     val next = event.data["sequence"]?.jsonPrimitive?.content?.toIntOrNull() ?: error("Invalid stream")
                     check(next == sequence + 1) { "Interrupted stream" }
                     sequence = next
+                    check(!completed) { "Event after completion" }
                     when (event.kind) {
+                        "started" -> check(sequence == 1) { "Invalid stream start" }
+                        "plan_card" -> {
+                            check(api.supportsPlanCards) { "Unnegotiated plan card" }
+                            check(state.value.exchanges.last().let { it.plan == null && it.answer.isEmpty() }) { "Invalid card order" }
+                            val plan = AssistantPlan.parse(event.data)
+                            updateLast { it.copy(plan = plan) }
+                        }
                         "text_delta" -> updateLast { it.copy(answer = it.answer + event.data.getValue("text").jsonPrimitive.content) }
                         "tool_started" -> mutableState.value = state.value.copy(readingPlan = true)
                         "tool_completed" -> mutableState.value = state.value.copy(readingPlan = false)
                         "completed" -> {
-                            completedRun = runId
+                            check(state.value.exchanges.last().let { it.answer.isNotBlank() || it.plan != null }) { "Empty response" }
                             completed = true
-                            updateLast { it.copy(status = "Complete") }
                         }
                         "failed" -> throw java.io.IOException(event.data.getValue("message").jsonPrimitive.content)
                         "stopped" -> { updateLast { it.copy(status = "Stopped") }; throw CancellationException("Stopped") }
+                        else -> error("Unsupported Assistant event")
                     }
                 }
                 if (!completed) throw java.io.IOException("Connection lost before the response finished. Please retry.")
+                completedRun = runId
+                updateLast { it.copy(status = "Complete") }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
-                if (!completed && epoch == generation && run == runId) updateLast {
+                if (epoch == generation && run == runId) {
+                    if (error is AssistantEndedException) mutableState.value = state.value.copy(ended = error.message)
+                    updateLast {
                     it.copy(status = "Interrupted", error = if (error is java.io.IOException) error.message else "Response interrupted. Please retry.")
+                    }
                 }
             } finally {
                 if (epoch == generation && run == runId) {
@@ -93,7 +106,7 @@ class AssistantController(
     }
 
     fun retry() {
-        if (state.value.busy) return
+        if (state.value.busy || state.value.ended != null) return
         val last = state.value.exchanges.lastOrNull() ?: return
         if (last.status !in listOf("Stopped", "Interrupted")) return
         send(last.question)

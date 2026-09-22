@@ -8,6 +8,37 @@ deadline. Only explicitly acknowledged completed exchanges enter later context.
 Android acknowledges the previous completed response before sending the next
 message. A lost acknowledgement can be repeated without regenerating an answer.
 
+## Plan cards and compatibility
+
+Conversation creation accepts `capabilities: ["plan_card_v1"]` and echoes the
+accepted capabilities. The mode belongs to the conversation. Clients without
+card support get a server-rendered textual schedule; a new client talking to an
+older server also stays in text mode. Roll out the compatible backend first.
+
+The model selects either no card or a server-owned snapshot using a bounded
+512-byte JSON control line. The backend validates and consumes that line before
+emitting a single `plan_card` event followed by any answer text. It buffers the
+first tool-capable call, discarding preliminary prose when a read is requested.
+Only the final tool-free call streams answer text incrementally. Snapshot IDs,
+read times, dates, time zones and rows come from the server. Reading a plan does
+not force a card. Completed reads, including undisplayed reads, join temporary
+context only on acknowledgement; stopped and interrupted attempts never do.
+
+Android uses the approved Conversation layout with a dated inline card, three
+initial rows and expansion for longer plans. Retry appends an attempt. Expired
+or capped conversations retain their displayed transcript and offer New
+conversation. Malformed or out-of-order card events cannot become completed
+context. Card-only answers require a valid selector and confirmed completion.
+
+The implementation handoff is in `docs/specs/assistant-redesign-handoff.md`.
+Live card-only generations omitted the original mandatory trailing newline.
+The user approved a narrow amendment: after a confirmed normal model completion,
+a complete valid snapshot selector alone can produce the card without a newline.
+The newline is still required before any answer text. No exception applies to
+EOF, cancellation, truncation, malformed selectors or unauthorized references.
+The eight-call smoke budget was exhausted during diagnosis; regression replay
+checks cover the captured output pattern without additional provider calls.
+
 The tool resolves Today in the Reporting Time Zone at execution. It selects
 stored Planned Blocks directly, including times, Block Name, Task Type and linked
 Task ID/title. It does not materialize missing Days or recurring work. Supporting

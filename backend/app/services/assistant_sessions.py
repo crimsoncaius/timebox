@@ -17,20 +17,23 @@ class Conversation:
     run_id: str | None = None
     task: asyncio.Task | None = None
     pending: tuple | None = None
+    snapshots: dict = field(default_factory=dict)
+    capabilities: list[str] = field(default_factory=list)
+    exchange_count: int = 0
 
 
 class Conversations:
     def __init__(self):
         self.items: dict[str, Conversation] = {}
 
-    def create(self) -> str:
+    def create(self, capabilities=None) -> str:
         for key, item in list(self.items.items()):
             if item.run_id is None and time.monotonic() - item.touched >= 3600:
                 del self.items[key]
         if len(self.items) >= 100:
             raise HTTPException(429, "Too many conversations. Try again later.")
         key = str(uuid4())
-        self.items[key] = Conversation()
+        self.items[key] = Conversation(capabilities=capabilities or [])
         return key
 
     def get(self, key) -> Conversation:
@@ -44,7 +47,7 @@ class Conversations:
         item = self.get(key)
         if item.run_id is not None:
             raise HTTPException(409, "A response is already running. Stop it or wait.")
-        if len(item.messages) >= 40:
+        if item.exchange_count >= 20:
             raise HTTPException(409, "20 exchanges reached. Start a new conversation.")
         item.pending = None
         item.run_id = run_id
@@ -62,6 +65,8 @@ class Conversations:
         item = self.get(key)
         if item.pending and item.pending[0] == run_id:
             item.messages.extend(item.pending[1])
+            item.snapshots.update(item.pending[2])
+            item.exchange_count += 1
             item.pending = None
             item.touched = time.monotonic()
 

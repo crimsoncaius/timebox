@@ -18,8 +18,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 data class AssistantEvent(val kind: String, val data: JsonObject)
+class AssistantEndedException(message: String) : IOException(message)
 
 interface AssistantTransport {
+    val supportsPlanCards: Boolean get() = false
     suspend fun create(): String
     suspend fun delete(conversation: String)
     suspend fun stop(conversation: String, run: String)
@@ -28,6 +30,8 @@ interface AssistantTransport {
 }
 
 class HttpAssistantTransport(private val settings: AppSettings) : AssistantTransport {
+    override var supportsPlanCards: Boolean = false
+        private set
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS).callTimeout(130, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false).build()
@@ -58,6 +62,9 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
         val detail = runCatching {
             ApiFactory.json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject["detail"]?.jsonPrimitive?.content
         }.getOrNull()
+        if (response.code == 410 || (response.code == 409 && detail?.contains("20 exchanges") == true)) {
+            throw AssistantEndedException(detail ?: "Conversation expired. Start a new conversation.")
+        }
         throw IOException(detail ?: when (response.code) {
             401, 403 -> "Check the Timebox API key in Settings."
             410 -> "Conversation expired. Start a new conversation."
@@ -65,9 +72,13 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
         })
     }
 
-    override suspend fun create(): String = execute(request("conversations")).use {
+    override suspend fun create(): String = execute(request("conversations", body = buildJsonObject {
+        putJsonArray("capabilities") { add("plan_card_v1") }
+    })).use {
         check(it)
-        ApiFactory.json.parseToJsonElement(it.body!!.string()).jsonObject.getValue("conversation_id").jsonPrimitive.content
+        val result = ApiFactory.json.parseToJsonElement(it.body!!.string()).jsonObject
+        supportsPlanCards = result["capabilities"]?.jsonArray?.any { value -> value.jsonPrimitive.content == "plan_card_v1" } == true
+        result.getValue("conversation_id").jsonPrimitive.content
     }
     override suspend fun delete(conversation: String) { execute(request("conversations/$conversation", "DELETE")).use(::check) }
     override suspend fun stop(conversation: String, run: String) {
