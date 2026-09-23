@@ -110,7 +110,6 @@ const taskTypes = [
 
 describe('TodayPage inspector rail', () => {
   const originalFetch = globalThis.fetch
-  let rejectNextTaskUndo = false
   let standaloneActual: Record<string, unknown> | null = null
   let readySaveGate: Promise<void> | null = null
   let recordingCalls = 0
@@ -118,7 +117,6 @@ describe('TodayPage inspector rail', () => {
   beforeEach(() => {
     localStorage.clear()
     activityFake.reset()
-    rejectNextTaskUndo = false
     standaloneActual = null
     readySaveGate = null
     recordingCalls = 0
@@ -138,14 +136,6 @@ describe('TodayPage inspector rail', () => {
         }, 201))
       }
       if (url.includes('/actual-blocks/40/finish') && method === 'POST') return Promise.resolve(jsonResponse({}))
-      if (url.includes('/tasks/77/complete') && method === 'POST') return Promise.resolve(jsonResponse({ task: {}, undo_token: 'task-undo', removed_planned_block_ids: [99, 100] }))
-      if (url.includes('/tasks/77/undo-completion') && method === 'POST') {
-        if (rejectNextTaskUndo) {
-          rejectNextTaskUndo = false
-          return Promise.resolve(jsonResponse({ detail: 'Task completion changed on another surface' }, 409))
-        }
-        return Promise.resolve(jsonResponse({}))
-      }
       if (url.includes('/tasks/77') && method === 'PATCH') {
         const body = JSON.parse(String(init?.body)) as { ready_to_plan: boolean }
         const respond = () => jsonResponse({ id: 77, title: 'Write launch narrative', ready_to_plan: body.ready_to_plan })

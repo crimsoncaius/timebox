@@ -84,7 +84,6 @@ export function TodayPage() {
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
   const [dayNotice, setDayNotice] = useState<string | null>(null)
   const recordingOperation = useRef(0)
   const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
@@ -725,24 +724,7 @@ export function TodayPage() {
             </div>
           )}
 
-          {completionUndo && !recordActualUndo ? (
-            <TransientFeedback floating title="Task completed" detail={`${completionUndo.removed} future Planned ${completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.`} action={
-              <button
-                type="button"
-                onClick={async () => {
-                  setError(null)
-                  try {
-                    await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
-                    setCompletionUndo(null)
-                    await load()
-                  } catch (cause) { setError(errorMessage(cause, 'Failed to undo Task Completion')) }
-                }}
-              >
-                Undo
-              </button>
-            } />
-          ) : null}
-          {dayNotice && !completionUndo && !recordActualUndo ? <TransientFeedback floating title={dayNotice} /> : null}
+          {dayNotice && !recordActualUndo ? <TransientFeedback floating title={dayNotice} /> : null}
           {recordActualUndo ? (
             <TransientFeedback floating title="Actual recorded." action={
               <button type="button" onClick={async () => {
