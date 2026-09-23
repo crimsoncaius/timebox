@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { shiftTrendRange, trendDuration, type TrendNode, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, trendDuration, type TrendNode, type TrendsReport } from './trends'
 import { errorMessage } from '../../lib/errors'
 
 type Period = 'day' | 'week' | 'month' | 'custom'
@@ -12,11 +12,18 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
   const [anchor, setAnchor] = useState('')
   const [custom, setCustom] = useState({ start: '', end: '' })
   const [report, setReport] = useState<TrendsReport | null>(null)
+  const [today, setToday] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [retry, setRetry] = useState(0)
+  const customError = period !== 'custom' ? ''
+    : !custom.start || !custom.end ? 'Choose a start and end date.'
+    : custom.start > custom.end ? 'Start date must be on or before end date.'
+    : today && (custom.start > today || custom.end > today) ? 'Choose dates on or before Today in the Reporting Time Zone.'
+    : ''
   useEffect(() => {
     if (!active) return
+    if (period === 'custom' && customError) { setLoading(false); setError(''); return }
     const controller = new AbortController()
     let current = true
     async function load() {
@@ -27,7 +34,7 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
         if (anchor) query.set('anchor', anchor)
         if (period === 'custom') { query.set('start', custom.start); query.set('end', custom.end) }
         const value = await api.trends(query, controller.signal)
-        if (current) setReport(value)
+        if (current) { setReport(value); setToday(value.today) }
       } catch (e) {
         if (current) setError(errorMessage(e, 'Unable to load recorded time'))
       } finally { if (current) setLoading(false) }
@@ -37,19 +44,20 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
     const focus = () => { void load() }
     window.addEventListener('focus', focus)
     return () => { current = false; controller.abort(); clearInterval(timer); window.removeEventListener('focus', focus) }
-  }, [active, period, anchor, custom.start, custom.end, retry])
+  }, [active, period, anchor, custom.start, custom.end, customError, retry])
 
   function select(next: Period) {
     if (next === period) return
     if (next === 'custom' && (!custom.start || !custom.end)) {
       if (!report) return
-      setCustom({ start: report.start, end: report.end })
+      setCustom({ start: report.start, end: report.end > report.today ? report.today : report.end })
     }
     setReport(null)
     setPeriod(next)
   }
   function shift(step: number) {
     if (!report) return
+    if (step > 0 && !canAdvanceTrendRange(report.start, period, report.today)) return
     setAnchor(shiftTrendRange(report.start, period, step))
     setReport(null)
   }
@@ -58,13 +66,14 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
       {(['day', 'week', 'month', 'custom'] as const).map(option => <button key={option} type="button" aria-pressed={period === option} disabled={option === 'custom' && !report && !custom.start} onClick={() => select(option)} className={`${control} ${period === option ? 'ring-2 ring-current' : ''}`}>{option[0].toUpperCase() + option.slice(1)}</button>)}
     </div>
     {period === 'custom' ? <div className="flex flex-wrap gap-4">
-      <label className="text-sm">From <input aria-label="Range start" type="date" value={custom.start} className={control} onChange={e => { const start = e.target.value; if (start) { setReport(null); setCustom({ start, end: custom.end < start ? start : custom.end }) } }} /></label>
-      <label className="text-sm">To (inclusive) <input aria-label="Range end" type="date" value={custom.end} className={control} onChange={e => { const end = e.target.value; if (end) { setReport(null); setCustom({ end, start: custom.start > end ? end : custom.start }) } }} /></label>
+      <label className="text-sm">From <input aria-label="Range start" type="date" value={custom.start} max={today || undefined} className={control} onChange={e => { setReport(null); setCustom(value => ({ ...value, start: e.target.value })) }} /></label>
+      <label className="text-sm">To (inclusive) <input aria-label="Range end" type="date" value={custom.end} max={today || undefined} className={control} onChange={e => { setReport(null); setCustom(value => ({ ...value, end: e.target.value })) }} /></label>
     </div> : <div className="flex items-center justify-between gap-3">
       <button className={control} aria-label={`Previous ${period}`} disabled={!report} onClick={() => shift(-1)}>‹</button>
       <div className="text-center"><p className="text-sm tabular-nums">{report ? report.start === report.end ? report.start : `${report.start} – ${report.end}` : '…'}</p><button className="mt-1 text-sm text-on-surface-variant" onClick={() => { setAnchor(''); setReport(null); setRetry(x => x + 1) }}>{period === 'day' ? 'Today' : `This ${period}`}</button></div>
-      <button className={control} aria-label={`Next ${period}`} disabled={!report} onClick={() => shift(1)}>›</button>
+      <button className={control} aria-label={`Next ${period}`} disabled={!report || !canAdvanceTrendRange(report.start, period, report.today)} onClick={() => shift(1)}>›</button>
     </div>}
+    {customError && <p role="alert" className="text-sm text-on-error-container">{customError}</p>}
     {loading && <p role="status" className="text-sm text-on-surface-variant">Updating recorded time…</p>}
     {error && <div role="alert"><p>{error}</p><button className={control} onClick={() => setRetry(x => x + 1)}>Retry</button></div>}
     {report && <>
