@@ -76,6 +76,11 @@ def _task_snapshot(task: Task) -> dict[str, object]:
             if task.reminder_delivered_at
             else None
         ),
+        "reminder_skipped_at": (
+            task.reminder_skipped_at.isoformat()
+            if task.reminder_skipped_at
+            else None
+        ),
     }
 
 
@@ -359,6 +364,9 @@ def complete_task(
         row.blocking_reason = None
         row.reminder_at = None
         row.reminder_delivered_at = None
+        row.reminder_skipped_at = None
+        row.reminder_claim_token = None
+        row.reminder_claim_until = None
 
         for block in removable:
             linked_actual = ended_actuals.get(block.id)
@@ -578,6 +586,9 @@ def _restore_task_state(db: Session, row: Task, task_state: dict) -> None:
     row.blocking_reason = task_state["blocking_reason"]
     row.reminder_at = _parse_datetime(task_state["reminder_at"])
     row.reminder_delivered_at = _parse_datetime(task_state["reminder_delivered_at"])
+    row.reminder_skipped_at = _parse_datetime(task_state.get("reminder_skipped_at"))
+    row.reminder_claim_token = None
+    row.reminder_claim_until = None
 
 
 def undo_task_completion(db: Session, task_id: int, token: str) -> Task:

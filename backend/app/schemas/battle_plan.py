@@ -102,6 +102,7 @@ class TaskRead(BaseModel):
     deadline_at: datetime | None
     reminder_at: datetime | None
     reminder_delivered_at: datetime | None
+    reminder_skipped_at: datetime | None
     position: int
     archived_at: datetime | None
     deleted_at: datetime | None
@@ -202,6 +203,19 @@ class ReminderRead(BaseModel):
     deadline_date: date | None
     deadline_at: datetime | None
     reminder_at: datetime
+
+
+class ReminderClaimRequest(BaseModel):
+    reminder_at: datetime
+
+
+class ReminderClaimRead(BaseModel):
+    token: str
+
+
+class ReminderClaimAction(BaseModel):
+    reminder_at: datetime
+    token: str
 
 
 class RecurrenceRuleFields(BaseModel):

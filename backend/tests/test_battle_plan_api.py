@@ -253,9 +253,12 @@ def test_deadlines_overdue_and_reminders_deliver_once(client, monkeypatch):
         deadline_at="2020-01-01T01:00:00Z",
         reminder_at="2020-01-01T12:00:00Z",
     )
+    monkeypatch.setattr("app.services.battle_plan.reminders.utc_now", lambda: dt.datetime(2020, 1, 1, 12, 5, tzinfo=dt.UTC))
     due = client.get("/reminders/due").json()
     assert [row["id"] for row in due] == [future["id"]]
-    assert client.post(f"/reminders/{future['id']}/delivered").status_code == 204
+    claim = client.post(f"/reminders/{future['id']}/claim", json={"reminder_at": future["reminder_at"]})
+    assert claim.status_code == 200, claim.text
+    assert client.post(f"/reminders/{future['id']}/delivered", json={"reminder_at": future["reminder_at"], "token": claim.json()["token"]}).status_code == 204
     assert client.get("/reminders/due").json() == []
 
 
@@ -317,7 +320,10 @@ def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
     monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: clock)
     task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
     url = f"/tasks/{task['id']}"
-    assert client.post(f"/reminders/{task['id']}/delivered").status_code == 204
+    monkeypatch.setattr("app.services.battle_plan.reminders.utc_now", lambda: dt.datetime(2099, 1, 1, 12, 5, tzinfo=dt.UTC))
+    claim = client.post(f"/reminders/{task['id']}/claim", json={"reminder_at": task["reminder_at"]})
+    assert claim.status_code == 200, claim.text
+    assert client.post(f"/reminders/{task['id']}/delivered", json={"reminder_at": task["reminder_at"], "token": claim.json()["token"]}).status_code == 204
     clock = dt.datetime(2100, 1, 1, tzinfo=dt.UTC)
     for patch in [
         {"deadline_at": "2000-01-01T00:00:00Z"},
@@ -341,10 +347,63 @@ def test_reminder_changes_and_unchanged_past_values(client, monkeypatch):
     assert client.patch(url, json={"reminder_at": None}).json()["reminder_at"] is None
 
 
+def test_task_reminder_expires_after_thirty_minutes_and_rearming_clears_missed_outcome(client, monkeypatch):
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2098, 1, 1, tzinfo=dt.UTC))
+    task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
+    monkeypatch.setattr("app.services.battle_plan.reminders.utc_now", lambda: dt.datetime(2099, 1, 1, 12, 31, tzinfo=dt.UTC))
+
+    assert client.get("/reminders/due").json() == []
+    saved = next(row for row in client.get("/tasks").json()["items"] if row["id"] == task["id"])
+    assert saved["reminder_delivered_at"] is None
+    assert saved["reminder_skipped_at"] is not None
+    assert client.post(f"/reminders/{task['id']}/claim", json={"reminder_at": task["reminder_at"]}).status_code == 409
+
+    rearmed = client.patch(f"/tasks/{task['id']}", json={"reminder_at": "2100-01-01T12:00:00Z"})
+    assert rearmed.status_code == 200, rearmed.text
+    assert rearmed.json()["reminder_skipped_at"] is None
+
+
+def test_task_reminder_claim_serializes_delivery_and_rejects_stale_occurrence(client, monkeypatch):
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2098, 1, 1, tzinfo=dt.UTC))
+    task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
+    monkeypatch.setattr("app.services.battle_plan.reminders.utc_now", lambda: dt.datetime(2099, 1, 1, 12, 5, tzinfo=dt.UTC))
+    url = f"/reminders/{task['id']}"
+    body = {"reminder_at": task["reminder_at"]}
+
+    first = client.post(f"{url}/claim", json=body)
+    assert first.status_code == 200, first.text
+    assert client.get("/reminders/due").json() == []
+    assert client.post(f"{url}/claim", json=body).status_code == 409
+    assert client.post(f"{url}/release", json={**body, "token": first.json()["token"]}).status_code == 204
+    assert [row["id"] for row in client.get("/reminders/due").json()] == [task["id"]]
+
+    second = client.post(f"{url}/claim", json=body)
+    assert second.status_code == 200, second.text
+    changed = client.patch(f"/tasks/{task['id']}", json={"reminder_at": "2100-01-01T12:00:00Z"})
+    assert changed.status_code == 200, changed.text
+    assert client.post(f"{url}/delivered", json={**body, "token": second.json()["token"]}).status_code == 409
+    assert changed.json()["reminder_delivered_at"] is None
+
+
+def test_restoring_trashed_task_does_not_replay_delivered_reminder(client, monkeypatch):
+    monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2098, 1, 1, tzinfo=dt.UTC))
+    task = create_task(client, reminder_at="2099-01-01T12:00:00Z")
+    monkeypatch.setattr("app.services.battle_plan.reminders.utc_now", lambda: dt.datetime(2099, 1, 1, 12, 5, tzinfo=dt.UTC))
+    body = {"reminder_at": task["reminder_at"]}
+    claim = client.post(f"/reminders/{task['id']}/claim", json=body).json()
+    assert client.post(f"/reminders/{task['id']}/delivered", json={**body, "token": claim["token"]}).status_code == 204
+
+    assert client.delete(f"/tasks/{task['id']}").status_code == 200
+    assert client.post(f"/tasks/{task['id']}/restore").status_code == 204
+    assert client.get("/reminders/due").json() == []
+
+
 def test_completion_undo_restores_past_reminder_and_delivery_verbatim(client, monkeypatch):
     monkeypatch.setattr("app.services.battle_plan._shared.utc_now", lambda: dt.datetime(2019, 1, 1, tzinfo=dt.UTC))
     task = create_task(client, reminder_at="2020-01-01T12:00:00Z")
-    client.post(f"/reminders/{task['id']}/delivered")
+    monkeypatch.setattr("app.services.battle_plan.reminders.utc_now", lambda: dt.datetime(2020, 1, 1, 12, 5, tzinfo=dt.UTC))
+    claim = client.post(f"/reminders/{task['id']}/claim", json={"reminder_at": task["reminder_at"]}).json()
+    client.post(f"/reminders/{task['id']}/delivered", json={"reminder_at": task["reminder_at"], "token": claim["token"]})
     saved_response = client.patch(f"/tasks/{task['id']}", json={})
     assert saved_response.status_code == 200
     saved = saved_response.json()

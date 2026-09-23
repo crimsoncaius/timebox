@@ -8,6 +8,7 @@ import com.timebox.android.reminders.DailyReminderNotifier
 import com.timebox.android.reminders.DailyReminderScheduler
 import com.timebox.android.reminders.PlannedBlockReminders
 import com.timebox.android.reminders.ReminderScheduler
+import com.timebox.android.reminders.AndroidReminderSuppressionStore
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +66,7 @@ class TimeboxApplication : Application() {
     lateinit var reminderNotifier: AndroidReminderNotifier
         private set
     lateinit var reminderScheduler: ReminderScheduler
+    lateinit var reminderSuppressions: AndroidReminderSuppressionStore
         private set
     lateinit var dailyReminderScheduler: DailyReminderScheduler
         private set
@@ -78,6 +80,7 @@ class TimeboxApplication : Application() {
         readinessCoordinator = createReadyToPlanCoordinator(repository, applicationScope)
         taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository))
         reminderNotifier = AndroidReminderNotifier(this).also { it.createChannel() }
+        reminderSuppressions = AndroidReminderSuppressionStore(this)
         reminderScheduler = ReminderScheduler(this)
         DailyReminderNotifier(this).createChannel()
         dailyReminderScheduler = DailyReminderScheduler(this)

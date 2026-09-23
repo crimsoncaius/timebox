@@ -8,7 +8,7 @@ const tasks: BattleTask[] = Array.from({ length: 5 }, (_, index) => ({
   project_id: null, project: null, task_type_id: null, task_type: null,
   description: '', ready_to_plan: true, status: 'open', urgency: null,
   importance: null, deadline_date: null, deadline_at: null, reminder_at: null,
-  reminder_delivered_at: null, position: index, archived_at: null, deleted_at: null,
+  reminder_delivered_at: null, reminder_skipped_at: null, position: index, archived_at: null, deleted_at: null,
   created_at: '', updated_at: '', overdue: false, subtasks: [],
 }))
 

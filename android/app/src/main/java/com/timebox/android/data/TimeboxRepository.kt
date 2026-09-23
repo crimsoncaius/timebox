@@ -10,6 +10,8 @@ import com.timebox.android.data.remote.PlanningCommitDto
 import com.timebox.android.data.remote.PlanningPlacementDto
 import com.timebox.android.data.remote.ProjectCreateDto
 import com.timebox.android.data.remote.RecurrenceRuleDto
+import com.timebox.android.data.remote.ReminderClaimActionDto
+import com.timebox.android.data.remote.ReminderClaimRequestDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
 import com.timebox.android.data.remote.SettingsPatchDto
 import com.timebox.android.data.remote.TaskTypeCreateDto
@@ -345,8 +347,14 @@ class TimeboxRepository private constructor(
     suspend fun listDueReminders(): Result<List<DueReminder>> =
         call { api().listDueReminders().map { it.toModel() } }
 
-    suspend fun acknowledgeReminder(taskId: Int): Result<Unit> =
-        call { api().acknowledgeReminder(taskId) }
+    suspend fun claimReminder(taskId: Int, reminderAt: Instant): Result<String> =
+        call { api().claimReminder(taskId, ReminderClaimRequestDto(reminderAt.toString())).token }
+
+    suspend fun acknowledgeReminder(taskId: Int, reminderAt: Instant, token: String): Result<Unit> =
+        call { api().acknowledgeReminder(taskId, ReminderClaimActionDto(reminderAt.toString(), token)) }
+
+    suspend fun releaseReminder(taskId: Int, reminderAt: Instant, token: String): Result<Unit> =
+        call { api().releaseReminder(taskId, ReminderClaimActionDto(reminderAt.toString(), token)) }
 
     suspend fun previewRecurrence(rule: RecurrenceRule): Result<RecurrencePreview> =
         call { api().previewRecurrence(rule.toDto()).toModel() }

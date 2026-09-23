@@ -44,6 +44,9 @@ def prepare_legacy_schema():
             connection.execute(text("DROP TABLE IF EXISTS activity_operations"))
             connection.execute(text("DROP TABLE IF EXISTS activity_state"))
             connection.execute(text("DROP TABLE IF EXISTS planned_recording_undo"))
+            connection.execute(text("ALTER TABLE tasks DROP COLUMN reminder_claim_until"))
+            connection.execute(text("ALTER TABLE tasks DROP COLUMN reminder_claim_token"))
+            connection.execute(text("ALTER TABLE tasks DROP COLUMN reminder_skipped_at"))
             connection.execute(text("DROP TABLE IF EXISTS recurring_planned_block_realizations"))
             connection.execute(text("DROP TABLE IF EXISTS recurring_preplanning_slots"))
             project_columns = {

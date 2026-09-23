@@ -196,6 +196,9 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     if old_reminder != (as_utc(row.reminder_at) if row.reminder_at else None):
         _validate_reminder(row, settings)
         row.reminder_delivered_at = None
+        row.reminder_skipped_at = None
+        row.reminder_claim_token = None
+        row.reminder_claim_until = None
     from app.services import recurrence_service
 
     recurrence_service.record_task_overrides(row, fields)
@@ -405,11 +408,13 @@ def trash_task(db: Session, task_id: int) -> Task:
     now = utc_now()
     row.deleted_at = now
     protect_task_occurrence(db, row)
-    row.reminder_delivered_at = None
+    row.reminder_claim_token = None
+    row.reminder_claim_until = None
     if row.parent_id is None:
         for child in row.subtasks:
             child.deleted_at = now
-            child.reminder_delivered_at = None
+            child.reminder_claim_token = None
+            child.reminder_claim_until = None
     db.commit()
     return _load_task(db, task_id)
 

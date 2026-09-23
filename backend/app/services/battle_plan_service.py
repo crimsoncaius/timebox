@@ -14,7 +14,12 @@ from app.services.battle_plan.projects import (
     patch_project,
     reorder_projects,
 )
-from app.services.battle_plan.reminders import acknowledge_reminder, due_reminders
+from app.services.battle_plan.reminders import (
+    acknowledge_reminder,
+    claim_reminder,
+    due_reminders,
+    release_reminder,
+)
 from app.services.battle_plan.tasks import (
     archive_tasks,
     clear_task_type_references,
@@ -32,12 +37,14 @@ from app.services.battle_plan.tasks import (
 __all__ = [
     "_to_read",
     "acknowledge_reminder",
+    "claim_reminder",
     "archive_tasks",
     "clear_task_type_references",
     "create_project",
     "create_task",
     "delete_project",
     "due_reminders",
+    "release_reminder",
     "list_projects",
     "list_tasks",
     "patch_project",

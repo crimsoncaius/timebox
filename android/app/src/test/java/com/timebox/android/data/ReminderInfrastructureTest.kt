@@ -1,8 +1,10 @@
 package com.timebox.android.data
 
 import com.timebox.android.data.remote.DueReminderDto
+import com.timebox.android.data.remote.ReminderClaimDto
 import com.timebox.android.data.remote.TimeboxApi
 import com.timebox.android.reminders.ReminderNotifier
+import com.timebox.android.reminders.ReminderSuppressionStore
 import com.timebox.android.reminders.deliverDueReminders
 import com.timebox.android.reminders.reminderSchedule
 import kotlinx.coroutines.runBlocking
@@ -19,28 +21,33 @@ class ReminderInfrastructureTest {
         val calls = mutableListOf<String>()
         val repository = reminderRepository(calls)
         val notifier = RecordingNotifier(calls)
-        val shown = mutableSetOf<Int>()
+        val shown = mutableSetOf<String>()
 
         val first = deliverDueReminders(repository, notifier, shownInProcess = shown)
         val second = deliverDueReminders(repository, notifier, shownInProcess = shown)
 
-        assertEquals(listOf("due", "notify:42", "ack:42", "due"), calls)
+        assertEquals(listOf("due", "claim:42", "notify:42", "ack:42", "due"), calls)
         assertEquals(1, first.handedOff)
         assertEquals(0, second.handedOff)
-        assertEquals(setOf(42), shown)
+        assertEquals(setOf("42|2026-08-17T01:00:00Z"), shown)
     }
 
     @Test
     fun `permission denial is non blocking and never acknowledges unseen reminder`() = runBlocking {
         val calls = mutableListOf<String>()
+        val suppressions = RecordingSuppressions()
         val result = deliverDueReminders(
             reminderRepository(calls),
             RecordingNotifier(calls, allowed = false),
+            suppressions = suppressions,
         )
 
-        assertEquals(emptyList<String>(), calls)
+        assertEquals(listOf("due"), calls)
         assertEquals(0, result.handedOff)
         assertFalse(result.fetchFailed)
+        deliverDueReminders(reminderRepository(calls), RecordingNotifier(calls), suppressions = suppressions)
+        assertEquals(listOf("due", "due"), calls)
+        assertFalse(suppressions.isSuppressed(DueReminder(42, "Write release notes", null, null, Instant.parse("2026-08-18T01:00:00Z"))))
     }
 
     @Test
@@ -50,8 +57,9 @@ class ReminderInfrastructureTest {
         val parent = task(1, reminderAt = future, sessionTasks = listOf(sessionTask)).copy(overdue = true, deadlineDate = java.time.LocalDate.parse("2000-01-01"))
         val completed = task(3, reminderAt = future, status = TaskStatus.Completed)
         val delivered = task(4, reminderAt = future, reminderDeliveredAt = Instant.EPOCH)
+        val skipped = task(5, reminderAt = future, reminderSkippedAt = Instant.EPOCH)
 
-        val schedule = reminderSchedule(listOf(parent, completed, delivered))
+        val schedule = reminderSchedule(listOf(parent, completed, delivered, skipped))
 
         assertEquals(listOf(1, 2), schedule.map { it.taskId })
         assertTrue(schedule.all { it.at == future })
@@ -67,6 +75,10 @@ class ReminderInfrastructureTest {
                     calls += "due"
                     listOf(DueReminderDto(42, "Write release notes", null, null, "2026-08-17T01:00:00Z"))
                 }
+                "claimReminder" -> {
+                    calls += "claim:${args?.first()}"
+                    ReminderClaimDto("token")
+                }
                 "acknowledgeReminder" -> {
                     calls += "ack:${args?.first()}"
                     Unit
@@ -75,6 +87,12 @@ class ReminderInfrastructureTest {
             }
         } as TimeboxApi
         return TimeboxRepository(api)
+    }
+
+    private class RecordingSuppressions : ReminderSuppressionStore {
+        private val occurrences = mutableSetOf<Pair<Int, Instant>>()
+        override fun isSuppressed(reminder: DueReminder) = (reminder.id to reminder.reminderAt) in occurrences
+        override fun suppress(reminder: DueReminder) { occurrences += reminder.id to reminder.reminderAt }
     }
 
     private class RecordingNotifier(
@@ -93,6 +111,7 @@ class ReminderInfrastructureTest {
         reminderAt: Instant?,
         status: TaskStatus = TaskStatus.Open,
         reminderDeliveredAt: Instant? = null,
+        reminderSkippedAt: Instant? = null,
         sessionTasks: List<BattleTask> = emptyList(),
     ) = BattleTask(
         id = id,
@@ -121,6 +140,7 @@ class ReminderInfrastructureTest {
         deadlineAt = null,
         reminderAt = reminderAt,
         reminderDeliveredAt = reminderDeliveredAt,
+        reminderSkippedAt = reminderSkippedAt,
         position = 0,
         archivedAt = null,
         deletedAt = null,

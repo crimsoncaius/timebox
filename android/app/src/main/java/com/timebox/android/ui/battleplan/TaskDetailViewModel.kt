@@ -547,7 +547,11 @@ class TaskDetailViewModel(
                     importance = draft.importance.changedNullableFrom(normalizedBaseline.importance),
                     deadlineDate = parsed.deadlineDate.changedNullableFrom(original.deadlineDate),
                     deadlineAt = parsed.deadlineAt.changedNullableFrom(original.deadlineAt),
-                    reminderAt = parsed.reminderAt.changedNullableFrom(original.reminderAt),
+                    reminderAt = if (
+                        draft.reminderEnabled == normalizedBaseline.reminderEnabled &&
+                        draft.reminderDate == normalizedBaseline.reminderDate &&
+                        draft.reminderTime == normalizedBaseline.reminderTime
+                    ) PatchField.Absent else parsed.reminderAt.changedNullableFrom(original.reminderAt),
                     readyToPlan = if (readinessCoordinator == null) {
                         draft.readyToPlan.changedFrom(normalizedBaseline.readyToPlan)
                     } else {
@@ -615,7 +619,9 @@ private fun BattleTask.toTaskDetailDraft(zone: ZoneId): TaskDetailDraft {
         else -> TaskDeadlineMode.None
     }
     val deadlineLocal = deadlineAt?.atZone(zone)
-    val reminderLocal = reminderAt?.atZone(zone)
+    val expiredReminder = reminderAt != null && reminderDeliveredAt == null &&
+        (reminderSkippedAt != null || reminderAt.plusSeconds(30 * 60).isBefore(Instant.now()))
+    val reminderLocal = if (expiredReminder) null else reminderAt?.atZone(zone)
     return TaskDetailDraft(
         title = title,
         description = description,
@@ -627,7 +633,7 @@ private fun BattleTask.toTaskDetailDraft(zone: ZoneId): TaskDetailDraft {
         deadlineMode = deadlineMode,
         deadlineDate = deadlineDate?.toString() ?: deadlineLocal?.toLocalDate()?.toString().orEmpty(),
         deadlineTime = deadlineLocal?.toLocalTime()?.format(DateTimeFormatter.ofPattern("HH:mm")).orEmpty(),
-        reminderEnabled = reminderAt != null,
+        reminderEnabled = reminderLocal != null,
         reminderDate = reminderLocal?.toLocalDate()?.toString().orEmpty(),
         reminderTime = reminderLocal?.toLocalTime()?.format(DateTimeFormatter.ofPattern("HH:mm")).orEmpty(),
         readyToPlan = readyToPlan,

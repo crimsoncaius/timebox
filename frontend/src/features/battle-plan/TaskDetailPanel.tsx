@@ -43,6 +43,8 @@ type TaskDraft = {
 }
 
 function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
+  const reminderExpired = task.reminder_at && !task.reminder_delivered_at
+    && (Boolean(task.reminder_skipped_at) || Date.parse(task.reminder_at) + 30 * 60_000 < Date.now())
   return {
     title: task.title,
     description: task.description,
@@ -54,7 +56,7 @@ function draftFromTask(task: BattleTask, timezone: string): TaskDraft {
     deadlineMode: task.deadline_at ? 'datetime' : task.deadline_date ? 'date' : 'none',
     deadlineDate: task.deadline_date ?? '',
     deadlineAt: isoToZonedLocal(task.deadline_at, timezone),
-    reminderAt: isoToZonedLocal(task.reminder_at, timezone),
+    reminderAt: reminderExpired ? '' : isoToZonedLocal(task.reminder_at, timezone),
   }
 }
 

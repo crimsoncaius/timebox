@@ -1,0 +1,7 @@
+# Deliver Task Reminders on a best-effort, time-limited basis
+
+Task Reminders are account-wide and best-effort while online, with no exact-time or offline guarantee. An eligible reminder may be delivered up to 30 minutes after its chosen moment, through a visible web in-app reminder or an accepted Android or browser notification; after that it is silently missed. This avoids surprising, stale notifications while allowing short network and Android scheduling delays.
+
+An Android attempt made while notifications are disabled is skipped on that device, without cancelling delivery on another device; if permission returns before Android's first attempt, it may still deliver within the window. A hidden web tab waits until visible unless browser notifications are allowed, and a web delivery uses one presentation rather than both in-app and browser notifications. Delivery is recorded only after the presentation is handed off, while ordinary simultaneous attempts are coordinated across clients; a rare duplicate remains possible if handoff succeeds but the subsequent acknowledgement is lost.
+
+Missed and delivered outcomes remain distinct. The Task editor does not present an expired reminder as active, but the original scheduled moment is retained; choosing a new moment creates a new reminder. Task Completion, archive, trash, deletion, or clearing the reminder prevent delivery, and deadline changes do not alter Task Reminders.

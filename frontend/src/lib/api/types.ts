@@ -64,6 +64,7 @@ export interface BattleTask {
   deadline_at: string | null
   reminder_at: string | null
   reminder_delivered_at: string | null
+  reminder_skipped_at: string | null
   position: number
   archived_at: string | null
   deleted_at: string | null

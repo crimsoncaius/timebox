@@ -49,6 +49,26 @@ interface ReminderNotifier {
     fun show(reminder: DueReminder): Boolean
 }
 
+interface ReminderSuppressionStore {
+    fun isSuppressed(reminder: DueReminder): Boolean
+    fun suppress(reminder: DueReminder)
+}
+
+private object NoReminderSuppressions : ReminderSuppressionStore {
+    override fun isSuppressed(reminder: DueReminder) = false
+    override fun suppress(reminder: DueReminder) = Unit
+}
+
+class AndroidReminderSuppressionStore(context: Context) : ReminderSuppressionStore {
+    private val preferences = context.getSharedPreferences("suppressed_task_reminders", Context.MODE_PRIVATE)
+    private fun key(reminder: DueReminder) = "${reminder.id}|${reminder.reminderAt}"
+
+    override fun isSuppressed(reminder: DueReminder): Boolean = preferences.getBoolean(key(reminder), false)
+    override fun suppress(reminder: DueReminder) {
+        preferences.edit().putBoolean(key(reminder), true).apply()
+    }
+}
+
 class AndroidReminderNotifier(private val context: Context) : ReminderNotifier {
     fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -67,7 +87,10 @@ class AndroidReminderNotifier(private val context: Context) : ReminderNotifier {
         val permissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
-        return permissionGranted && NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val channelEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            context.getSystemService(NotificationManager::class.java)
+                .getNotificationChannel(REMINDER_CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
+        return permissionGranted && NotificationManagerCompat.from(context).areNotificationsEnabled() && channelEnabled
     }
 
     @SuppressLint("MissingPermission") // canNotify checks the runtime grant immediately before notify.
@@ -106,6 +129,8 @@ data class ReminderDeliveryResult(
     val handedOff: Int = 0,
     val acknowledgementFailures: Int = 0,
     val fetchFailed: Boolean = false,
+    val claimFailures: Int = 0,
+    val handoffFailures: Int = 0,
 )
 
 /**
@@ -116,28 +141,43 @@ suspend fun deliverDueReminders(
     repository: TimeboxRepository,
     notifier: ReminderNotifier,
     taskId: Int? = null,
-    shownInProcess: MutableSet<Int> = ConcurrentHashMap.newKeySet(),
+    shownInProcess: MutableSet<String> = ConcurrentHashMap.newKeySet(),
+    suppressions: ReminderSuppressionStore = NoReminderSuppressions,
 ): ReminderDeliveryResult {
-    if (!notifier.canNotify()) return ReminderDeliveryResult()
     val due = repository.listDueReminders().getOrElse {
         return ReminderDeliveryResult(fetchFailed = true)
     }
     var handedOff = 0
     var acknowledgementFailures = 0
+    var claimFailures = 0
+    var handoffFailures = 0
     due.asSequence()
         .filter { taskId == null || it.id == taskId }
-        .filter { shownInProcess.add(it.id) }
         .forEach { reminder ->
+            if (suppressions.isSuppressed(reminder)) return@forEach
+            if (!notifier.canNotify()) {
+                suppressions.suppress(reminder)
+                return@forEach
+            }
+            val occurrence = "${reminder.id}|${reminder.reminderAt}"
+            if (!shownInProcess.add(occurrence)) return@forEach
+            val token = repository.claimReminder(reminder.id, reminder.reminderAt).getOrElse {
+                shownInProcess.remove(occurrence)
+                claimFailures += 1
+                return@forEach
+            }
             if (!notifier.show(reminder)) {
-                shownInProcess.remove(reminder.id)
+                shownInProcess.remove(occurrence)
+                if (!notifier.canNotify()) suppressions.suppress(reminder) else handoffFailures += 1
+                repository.releaseReminder(reminder.id, reminder.reminderAt, token)
                 return@forEach
             }
             handedOff += 1
-            if (repository.acknowledgeReminder(reminder.id).isFailure) {
+            if (repository.acknowledgeReminder(reminder.id, reminder.reminderAt, token).isFailure) {
                 acknowledgementFailures += 1
             }
         }
-    return ReminderDeliveryResult(handedOff, acknowledgementFailures)
+    return ReminderDeliveryResult(handedOff, acknowledgementFailures, claimFailures = claimFailures, handoffFailures = handoffFailures)
 }
 
 data class ReminderScheduleEntry(val taskId: Int, val at: Instant)
@@ -148,7 +188,7 @@ fun reminderSchedule(tasks: List<BattleTask>): List<ReminderScheduleEntry> = tas
     .flatMap { it.flattenForReminders() }
     .filter { it.status != TaskStatus.Completed }
     .filter { it.archivedAt == null && it.deletedAt == null }
-    .filter { it.reminderDeliveredAt == null }
+    .filter { it.reminderDeliveredAt == null && it.reminderSkippedAt == null }
     .mapNotNull { task -> task.reminderAt?.let { ReminderScheduleEntry(task.id, it) } }
     .distinctBy(ReminderScheduleEntry::taskId)
     .toList()
@@ -263,9 +303,9 @@ class DueReminderWorker(
         val taskId = inputData.getInt(TASK_ID_KEY, -1)
         if (taskId < 0) return Result.failure()
         val app = applicationContext as TimeboxApplication
-        val result = deliverDueReminders(app.repository, app.reminderNotifier, taskId)
+        val result = deliverDueReminders(app.repository, app.reminderNotifier, taskId, suppressions = app.reminderSuppressions)
         return when {
-            result.fetchFailed || result.acknowledgementFailures > 0 -> Result.retry()
+            result.fetchFailed || result.acknowledgementFailures > 0 || result.claimFailures > 0 || result.handoffFailures > 0 -> Result.retry()
             else -> Result.success()
         }
     }

@@ -128,6 +128,14 @@ _Avoid_: Recurring Task Series, Task Reminder, notification task, Planned Block 
 An optional, one-time nudge at a user-chosen moment for an incomplete Battle Plan Task or Session Task. A Task has at most one. It is independent of the Task's deadline: deadline changes and overdue state neither move, re-arm, nor suppress it. Task Completion clears it.
 _Avoid_: Deadline reminder, notification, Daily Reminder, Planned Block Reminder
 
+**Task Reminder Delivery**:
+An account-wide presentation of a Task Reminder, whether as in-app Transient Feedback on the web or a notification accepted by Android. It does not imply that the user opened or saw the reminder.
+_Avoid_: Notification receipt, reminder opened
+
+**Missed Task Reminder**:
+A Task Reminder that passed its delivery window without Task Reminder Delivery. It is distinct from a delivered reminder and is not replayed when a device reconnects or gains notification permission.
+_Avoid_: Delivered reminder, overdue Task
+
 **Planned Block Reminder**:
 An optional, device-local notification a chosen lead time before a Planned Block starts, offering to adopt that Planned Block. It creates no work record; a missed reminder is skipped, and a delivered one is withdrawn once the Planned Block is adopted, ends, moves, or is deleted.
 _Avoid_: Daily Reminder, Task Reminder, block alarm

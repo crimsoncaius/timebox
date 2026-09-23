@@ -48,6 +48,7 @@ data class BattleTaskDto(
     @SerialName("deadline_at") val deadlineAt: String? = null,
     @SerialName("reminder_at") val reminderAt: String? = null,
     @SerialName("reminder_delivered_at") val reminderDeliveredAt: String? = null,
+    @SerialName("reminder_skipped_at") val reminderSkippedAt: String? = null,
     val position: Int,
     @SerialName("archived_at") val archivedAt: String? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,
@@ -127,6 +128,18 @@ data class DueReminderDto(
     @SerialName("deadline_date") val deadlineDate: String? = null,
     @SerialName("deadline_at") val deadlineAt: String? = null,
     @SerialName("reminder_at") val reminderAt: String,
+)
+
+@Serializable
+data class ReminderClaimRequestDto(@SerialName("reminder_at") val reminderAt: String)
+
+@Serializable
+data class ReminderClaimDto(val token: String)
+
+@Serializable
+data class ReminderClaimActionDto(
+    @SerialName("reminder_at") val reminderAt: String,
+    val token: String,
 )
 
 @Serializable
