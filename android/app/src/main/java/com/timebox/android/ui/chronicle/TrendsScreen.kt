@@ -29,6 +29,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -51,13 +52,15 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
         }
     }
     fun pick(initial: LocalDate, selected: (LocalDate) -> Unit) {
-        DatePickerDialog(context, { _, y, m, d -> selected(LocalDate.of(y, m + 1, d)) }, initial.year, initial.monthValue - 1, initial.dayOfMonth).show()
+        DatePickerDialog(context, { _, y, m, d -> selected(LocalDate.of(y, m + 1, d)) }, initial.year, initial.monthValue - 1, initial.dayOfMonth).apply {
+            datePicker.maxDate = state.today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1
+        }.show()
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("day", "week", "month", "custom").forEach { period ->
                 Box(Modifier.weight(1f).clip(TimeboxShapes.chip).background(if (state.period == period) colors.on else colors.low)
-                    .selectable(selected = state.period == period, role = Role.Tab) { viewModel.setPeriod(period) }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                    .selectable(selected = state.period == period, enabled = period != "custom" || report != null || state.customStart != null, role = Role.Tab) { viewModel.setPeriod(period) }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                     Text(period.replaceFirstChar { it.uppercase() }, color = if (state.period == period) colors.bg else colors.on, fontSize = 13.sp)
                 }
             }
@@ -66,22 +69,23 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
             val start = state.customStart ?: state.today
             val end = state.customEnd ?: state.today
             Column {
-                TextButton(onClick = { pick(start) { viewModel.customRange(it, maxOf(it, end)) } }) { Text("From ${start.format(formatter)}") }
-                TextButton(onClick = { pick(end) { viewModel.customRange(minOf(start, it), it) } }) { Text("To ${end.format(formatter)} (inclusive)") }
+                TextButton(onClick = { pick(start) { viewModel.customRange(it, end) } }) { Text("From ${start.format(formatter)}") }
+                TextButton(onClick = { pick(end) { viewModel.customRange(start, it) } }) { Text("To ${end.format(formatter)} (inclusive)") }
             }
         } else {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { viewModel.shiftRange(-1) }, modifier = Modifier.semantics { contentDescription = "Previous ${state.period}" }) { Text("‹", fontSize = 26.sp) }
+                TextButton(onClick = { viewModel.shiftRange(-1) }, enabled = report != null, modifier = Modifier.semantics { contentDescription = "Previous ${state.period}" }) { Text("‹", fontSize = 26.sp) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     report?.let {
                         Text(if (it.start == it.end) LocalDate.parse(it.start).format(formatter) else "${LocalDate.parse(it.start).format(formatter)} – ${LocalDate.parse(it.end).format(formatter)}", color = colors.on, fontSize = 15.sp)
                     }
                     TextButton(onClick = viewModel::currentRange) { Text(if (state.period == "day") "Today" else "This ${state.period}") }
                 }
-                TextButton(onClick = { viewModel.shiftRange(1) }, modifier = Modifier.semantics { contentDescription = "Next ${state.period}" }) { Text("›", fontSize = 26.sp) }
+                TextButton(onClick = { viewModel.shiftRange(1) }, enabled = report != null && canAdvanceTrendRange(report, state.period), modifier = Modifier.semantics { contentDescription = "Next ${state.period}" }) { Text("›", fontSize = 26.sp) }
             }
         }
         if (state.trendsLoading) Text("Updating recorded time…", color = colors.onVariant)
+        state.customRangeError?.let { Text(it, color = colors.error) }
         state.trendsError?.let {
             Text(it, color = colors.error)
             TextButton(onClick = viewModel::loadTrends) { Text("Retry") }

@@ -18,6 +18,26 @@ import kotlinx.coroutines.ensureActive
 /** Chronicle's two views: one past day at a time, or Trends across many days. */
 enum class ChronicleView { Calendar, Trends }
 
+internal fun canAdvanceTrendRange(report: TrendsDto, period: String): Boolean {
+    val start = LocalDate.parse(report.start)
+    val next = when (period) {
+        "day" -> start.plusDays(1)
+        "week" -> start.plusWeeks(1)
+        "month" -> start.plusMonths(1)
+        else -> return false
+    }
+    return !next.isAfter(LocalDate.parse(report.today))
+}
+
+private fun customRangeError(state: ChronicleUiState): String? {
+    if (state.period != "custom") return null
+    val start = state.customStart ?: return "Choose a start and end date."
+    val end = state.customEnd ?: return "Choose a start and end date."
+    if (start.isAfter(end)) return "Start date must be on or before end date."
+    if (start.isAfter(state.today) || end.isAfter(state.today)) return "Choose dates on or before Today in the Reporting Time Zone."
+    return null
+}
+
 data class ChronicleUiState(
     val view: ChronicleView = ChronicleView.Calendar,
     val monthStart: LocalDate = LocalDate.now().withDayOfMonth(1),
@@ -28,6 +48,7 @@ data class ChronicleUiState(
     val trends: TrendsDto? = null,
     val trendsLoading: Boolean = false,
     val trendsError: String? = null,
+    val customRangeError: String? = null,
     val period: String = "week",
     val anchor: LocalDate? = null,
     val customStart: LocalDate? = null,
@@ -78,7 +99,12 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     fun loadTrends() {
         trendsJob?.cancel()
         val selected = _state.value
-        _state.update { it.copy(trendsLoading = true, trendsError = null) }
+        val rangeError = customRangeError(selected)
+        if (rangeError != null) {
+            _state.update { it.copy(trends = null, trendsLoading = false, trendsError = null, customRangeError = rangeError) }
+            return
+        }
+        _state.update { it.copy(trendsLoading = true, trendsError = null, customRangeError = null) }
         trendsJob = viewModelScope.launch {
             val result = repository.trends(selected.period, selected.anchor, selected.customStart, selected.customEnd)
             ensureActive()
@@ -93,13 +119,15 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     fun setPeriod(period: String) {
         _state.update { it.copy(period = period, trends = null,
             customStart = it.customStart ?: it.trends?.start?.let(LocalDate::parse) ?: it.today,
-            customEnd = it.customEnd ?: it.trends?.end?.let(LocalDate::parse) ?: it.today) }
+            customEnd = it.customEnd ?: minOf(it.trends?.end?.let(LocalDate::parse) ?: it.today, it.today)) }
         loadTrends()
     }
 
     fun shiftRange(step: Long) {
+        val report = _state.value.trends ?: return
+        if (_state.value.period == "custom" || (step > 0 && !canAdvanceTrendRange(report, _state.value.period))) return
         _state.update {
-            val base = it.trends?.start?.let(LocalDate::parse) ?: it.anchor ?: it.today
+            val base = LocalDate.parse(report.start)
             val anchor = when (it.period) { "day" -> base.plusDays(step); "week" -> base.plusWeeks(step); else -> base.plusMonths(step) }
             it.copy(anchor = anchor, trends = null)
         }

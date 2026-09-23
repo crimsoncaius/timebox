@@ -12,3 +12,7 @@ export function shiftTrendRange(start: string, period: string, step: number) {
   else date.setUTCDate(date.getUTCDate() + step * (period === 'week' ? 7 : 1))
   return date.toISOString().slice(0, 10)
 }
+
+export function canAdvanceTrendRange(start: string, period: string, today: string) {
+  return shiftTrendRange(start, period, 1) <= today
+}

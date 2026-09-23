@@ -63,7 +63,7 @@ def test_inclusive_range_clips_midnight_and_running_time(reporting):
     assert result['duration_seconds'] == 13 * 3600 + 1800
     assert result['types'][0]['days'] == {'2026-09-19': 13 * 3600}
     assert result['types'][1]['days'] == {'2026-09-18': 1800}
-    assert reporting.get('/trends?period=day&anchor=2026-09-20').json()['duration_seconds'] == 0
+    assert reporting.get('/trends?period=day&anchor=2026-09-20').status_code == 422
     with Session(get_engine()) as db:
         assert db.scalar(select(func.count()).select_from(Day)) == 0  # reporting creates no Days
 
@@ -81,10 +81,26 @@ def test_presets_empty_and_validation(reporting):
     week = reporting.get('/trends').json()
     assert (week['start'], week['end']) == ('2026-09-14', '2026-09-20')
     assert week['types'] == []
+    assert reporting.get('/trends?period=week&anchor=2026-09-20').status_code == 200
+    month = reporting.get('/trends?period=month&anchor=2026-09-30').json()
+    assert (month['start'], month['end'], month['today']) == ('2026-09-01', '2026-09-30', '2026-09-19')
     leap = reporting.get('/trends?period=month&anchor=2024-02-29').json()
     assert (leap['start'], leap['end']) == ('2024-02-01', '2024-02-29')
-    for query in ['period=custom', 'period=custom&start=2026-09-20&end=2026-09-19', 'period=nope', 'anchor=invalid', 'period=day&anchor=9999-12-31']:
+    for query in [
+        'period=custom', 'period=custom&start=2026-09-20&end=2026-09-19',
+        'period=custom&start=2026-09-18&end=2026-09-20',
+        'period=day&anchor=2026-09-20', 'period=week&anchor=2026-09-21',
+        'period=month&anchor=2026-10-01', 'period=nope', 'anchor=invalid',
+        'period=day&anchor=9999-12-31',
+    ]:
         assert reporting.get(f'/trends?{query}').status_code == 422
+
+
+def test_future_boundary_uses_reporting_timezone(reporting):
+    app.dependency_overrides[capture_now] = lambda: instant('2026-09-19T20:00:00Z')
+    assert reporting.get('/trends?period=day&anchor=2026-09-20').json()['today'] == '2026-09-20'
+    assert reporting.get('/trends?period=custom&start=2026-09-20&end=2026-09-20').status_code == 200
+    assert reporting.get('/trends?period=day&anchor=2026-09-21').status_code == 422
 
 
 def test_subminute_time_is_aggregated_before_display_rounding(reporting):

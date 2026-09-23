@@ -30,7 +30,8 @@ def read_trends(
     settings: Settings = Depends(get_reporting_settings),
     now: dt.datetime = Depends(capture_now),
 ):
-    anchor = anchor or now.astimezone(ZoneInfo(settings.app_timezone)).date()
+    today = now.astimezone(ZoneInfo(settings.app_timezone)).date()
+    anchor = anchor or today
     try:
         if period == 'day':
             start = end = anchor
@@ -42,6 +43,8 @@ def read_trends(
             end = (start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)) - dt.timedelta(days=1)
         if start is None or end is None or start > end or end == dt.date.max:
             raise ValueError('Choose a valid inclusive date range')
+        if (end if period == 'custom' else start) > today:
+            raise ValueError('Choose a range no later than Today in the Reporting Time Zone')
         return report(db, start, end, settings.app_timezone, now)
     except (ValueError, OverflowError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

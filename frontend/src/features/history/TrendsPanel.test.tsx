@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TrendsPanel } from './TrendsPanel'
-import { shiftTrendRange, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, type TrendsReport } from './trends'
 import { api } from '../../lib/api'
 
 const report: TrendsReport = {
@@ -29,20 +29,39 @@ it('expands child totals on the range scale and drills direct time separately', 
 })
 
 it('uses server date boundaries for navigation and inclusive custom ranges', async () => {
-  const get = vi.spyOn(api, 'trends').mockResolvedValue(report)
+  const get = vi.spyOn(api, 'trends').mockImplementation(async query => query.get('anchor') === '2026-09-07'
+    ? { ...report, start: '2026-09-07', end: '2026-09-13' }
+    : report)
   render(<TrendsPanel active onDrill={() => {}} />)
   const user = userEvent.setup()
   await screen.findByTestId('trends-total')
+  expect(screen.getByRole('button', { name: 'Next week' })).toBeDisabled()
   await user.click(screen.getByRole('button', { name: 'Previous week' }))
   await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('anchor')).toBe('2026-09-07'))
-  await screen.findByTestId('trends-total')
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next week' })).toBeEnabled())
+  await user.click(screen.getByRole('button', { name: 'This week' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Next week' })).toBeDisabled())
   await user.click(screen.getByRole('button', { name: 'Custom' }))
   await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('start')).toBe('2026-09-14'))
-  expect(get.mock.calls.at(-1)?.[0].get('end')).toBe('2026-09-20')
+  expect(get.mock.calls.at(-1)?.[0].get('end')).toBe('2026-09-19')
+  expect(screen.getByLabelText('Range end')).toHaveAttribute('max', '2026-09-19')
+  const callCount = get.mock.calls.length
+  fireEvent.change(screen.getByLabelText('Range end'), { target: { value: '2026-09-20' } })
+  expect(screen.getByRole('alert')).toHaveTextContent('Choose dates on or before Today')
+  expect(screen.getByLabelText('Range end')).toHaveValue('2026-09-20')
+  expect(get).toHaveBeenCalledTimes(callCount)
+  fireEvent.change(screen.getByLabelText('Range end'), { target: { value: '2026-09-19' } })
+  await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(callCount))
 })
 
 it('navigates across leap months and year boundaries without local timezone drift', () => {
   expect(shiftTrendRange('2024-03-01', 'month', -1)).toBe('2024-02-01')
   expect(shiftTrendRange('2026-12-01', 'month', 1)).toBe('2027-01-01')
   expect(shiftTrendRange('2026-01-01', 'day', -1)).toBe('2025-12-31')
+  expect(canAdvanceTrendRange('2026-09-18', 'day', '2026-09-19')).toBe(true)
+  expect(canAdvanceTrendRange('2026-09-19', 'day', '2026-09-19')).toBe(false)
+  expect(canAdvanceTrendRange('2026-09-07', 'week', '2026-09-19')).toBe(true)
+  expect(canAdvanceTrendRange('2026-09-14', 'week', '2026-09-19')).toBe(false)
+  expect(canAdvanceTrendRange('2026-08-01', 'month', '2026-09-19')).toBe(true)
+  expect(canAdvanceTrendRange('2026-09-01', 'month', '2026-09-19')).toBe(false)
 })
