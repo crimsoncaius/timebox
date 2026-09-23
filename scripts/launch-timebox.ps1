@@ -102,7 +102,7 @@ if (-not $frontendProcess) {
     $vite = Join-Path $frontendRoot "node_modules\vite\bin\vite.js"
     if (-not (Test-Path -LiteralPath $vite)) { throw "Frontend dependencies are not installed." }
     $frontendProcess = Start-Process -FilePath $node -ArgumentList @(
-        $vite, "--host=127.0.0.1", "--port=5176"
+        $vite, "--mode=review", "--host=127.0.0.1", "--port=5176"
     ) -WorkingDirectory $frontendRoot -RedirectStandardOutput (Join-Path $launchDirectory "frontend.stdout.log") -RedirectStandardError (Join-Path $launchDirectory "frontend.stderr.log") -WindowStyle Hidden -PassThru
 }
 $frontendResponse = Wait-TimeboxHttp -Uri "http://127.0.0.1:5176/" -TimeoutSeconds 30

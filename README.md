@@ -23,6 +23,13 @@ There is also a native **Kotlin + Compose** Android client in [android/](android
 
 The backend reads `DATABASE_URL`, `APP_TIMEZONE`, `CORS_ORIGINS`, optional `CORS_ORIGIN_REGEX`, and optional `API_KEY`. Vite uses `VITE_API_BASE_URL` for direct API requests, or proxies `/api` to `VITE_API_PROXY_TARGET` during development.
 
+| Frontend command (from `frontend/`) | UI port | Default `/api` proxy target |
+| --- | ---: | --- |
+| `npm run dev` | 5174 | `http://127.0.0.1:8000` |
+| `npm run dev:review` | 5176 | `http://127.0.0.1:8001` |
+
+Set `VITE_API_PROXY_TARGET` in `frontend/.env` or the shell to override either default. Vite reads `frontend/.env` from the frontend working directory. Both commands stop if their UI port is already occupied.
+
 ## Database
 
 Create a database and user matching `DATABASE_URL`, then run migrations from `backend/`:
@@ -65,7 +72,7 @@ npm install
 npm run dev:review
 ```
 
-Set `VITE_API_PROXY_TARGET=http://127.0.0.1:8001` in `frontend/.env` or the shell, then open `http://127.0.0.1:5176`.
+The review command proxies `/api` to `http://127.0.0.1:8001` by default. Open `http://127.0.0.1:5176`.
 
 These commands use the workspace's registered Timebox ports. The Android emulator's debug build also defaults to API port `8001`.
 
