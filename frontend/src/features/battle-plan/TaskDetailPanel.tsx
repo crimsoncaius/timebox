@@ -24,6 +24,7 @@ import type {
 } from '../../lib/api'
 import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
+import { CalendarDateField, CalendarDateTimeField } from '../../components/CalendarDateField'
 import { calendarIsoDateInTimeZone, zonedLocalToIso } from '../../lib/time'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
@@ -394,9 +395,9 @@ export function TaskDetailPanel({
 
                 <div className="space-y-3 border-t border-[var(--task-detail-divider)] py-3">
                   {draft.deadlineMode === 'none' ? null : draft.deadlineMode === 'date' ? (
-                    <input type="date" aria-label="Deadline date" value={draft.deadlineDate} onChange={(event) => changeDeadlineDate(event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
+                    <CalendarDateField label="Deadline date" value={draft.deadlineDate} onChange={changeDeadlineDate} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
                   ) : (
-                    <input type="datetime-local" aria-label="Deadline date and time" value={draft.deadlineAt} onChange={(event) => changeDeadlineAt(event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
+                    <CalendarDateTimeField label="Deadline date and time" value={draft.deadlineAt} onChange={changeDeadlineAt} className="rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
                   )}
                   <label className="flex items-center justify-between gap-3 text-[13px] text-[var(--task-detail-muted)]">
                     <span>Reminder</span>
@@ -404,7 +405,7 @@ export function TaskDetailPanel({
                   </label>
                   {(reminderError || reminderSaveError) && <p role="alert" className="text-red-600">{reminderError || reminderSaveError}</p>}
                   {draft.reminderAt ? (
-                    <input type="datetime-local" aria-label="Reminder date and time" value={draft.reminderAt} onChange={(event) => setDraftField('reminderAt', event.target.value)} className="w-full rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
+                    <CalendarDateTimeField label="Reminder date and time" value={draft.reminderAt} onChange={(value) => setDraftField('reminderAt', value)} className="rounded-[10px] border border-[var(--task-detail-input-border)] bg-[var(--task-detail-input-surface)] px-3 py-2 text-sm text-[var(--task-detail-primary)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" />
                   ) : null}
                 </div>
               </div>

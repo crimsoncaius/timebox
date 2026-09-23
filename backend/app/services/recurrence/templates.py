@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.time import today_in_tz, utc_now
-from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
@@ -68,12 +67,7 @@ def create_template(
     if not title:
         raise ValueError("Template title is required")
     today = today_in_tz(settings.app_timezone)
-    app_settings = db.execute(
-        select(AppSettings).where(AppSettings.id == 1)
-    ).scalar_one_or_none()
-    past, _ = _windows_for_preview(
-        body, today, app_settings.week_start if app_settings else "monday"
-    )
+    past, _ = _windows_for_preview(body, today)
     if past and not body.confirm_backfill:
         task_count = len(past) * (
             (body.quota_count or 1) if body.mode == RecurrenceMode.quota else 1
@@ -316,16 +310,12 @@ def resume_template(
         if row.paused_at is not None
         else today
     )
-    app_settings = db.execute(
-        select(AppSettings).where(AppSettings.id == 1)
-    ).scalar_one_or_none()
     if paused < today:
         _suppress_pause_interval(
             db,
             row,
             paused,
             today,
-            app_settings.week_start if app_settings else "monday",
         )
     row.status = RecurrenceStatus.active
     row.paused_at = None
@@ -396,9 +386,6 @@ def to_read(
     db: Session, row: RecurringTemplate, settings: Settings
 ) -> RecurringTemplateRead:
     today = today_in_tz(settings.app_timezone)
-    app_settings = db.execute(
-        select(AppSettings).where(AppSettings.id == 1)
-    ).scalar_one_or_none()
     suppressed_keys = set(
         db.execute(
             select(RecurrenceOccurrence.occurrence_key).where(
@@ -413,7 +400,6 @@ def to_read(
         for window in iter_windows(
             row,
             today + relativedelta(years=20),
-            app_settings.week_start if app_settings else "monday",
         )
         if (
             window.end >= today

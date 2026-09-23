@@ -10,7 +10,6 @@ from __future__ import annotations
 from app.services.recurrence.preview import preview
 from app.services.recurrence.synchronization import (
     _derive_quota_parents,
-    recalculate_weekly_quotas,
     synchronize,
 )
 from app.services.recurrence.task_overrides import quota_progress, record_task_overrides
@@ -42,7 +41,6 @@ __all__ = [
     "pause_template",
     "preview",
     "quota_progress",
-    "recalculate_weekly_quotas",
     "record_task_overrides",
     "resume_template",
     "synchronize",

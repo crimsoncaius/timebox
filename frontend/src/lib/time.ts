@@ -112,13 +112,13 @@ export function addMonthsIso(iso: string, delta: number): string {
 export type MonthGridCell = { iso: string; inMonth: boolean }
 
 /**
- * 42 cells (6×7), week starting Sunday, UTC calendar dates matching API `YYYY-MM-DD`.
+ * 42 cells (6×7), week starting Monday, UTC calendar dates matching API `YYYY-MM-DD`.
  */
 export function monthGridForIso(iso: string): MonthGridCell[] {
   const [y, m, d] = iso.split('-').map(Number)
   if (!y || !m || !d) return []
   const first = new Date(Date.UTC(y, m - 1, 1))
-  const startWeekday = first.getUTCDay()
+  const startWeekday = (first.getUTCDay() + 6) % 7
   const gridStart = new Date(Date.UTC(y, m - 1, 1))
   gridStart.setUTCDate(gridStart.getUTCDate() - startWeekday)
   const out: MonthGridCell[] = []
@@ -146,8 +146,8 @@ export function monthYearLabelForIso(iso: string, locale?: string): string {
   })
 }
 
-/** Short weekday labels for a Sunday-first row (UTC convention). */
-export const WEEKDAY_LABELS_SUN_FIRST = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const
+/** Short weekday labels for the app's Monday-first calendar rows. */
+export const WEEKDAY_LABELS_MON_FIRST = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const
 
 /** 24-hour label for minute 0–1439 (e.g. 08:00, 08:30). */
 export function formatMinuteLabel24(minuteFromMidnight: number): string {

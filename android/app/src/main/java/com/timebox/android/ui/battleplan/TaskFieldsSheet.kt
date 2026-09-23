@@ -1,7 +1,7 @@
 package com.timebox.android.ui.battleplan
 
-import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import com.timebox.android.ui.showMondayDatePicker
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.findViewTreeOnBackPressedDispatcherOwner
@@ -386,7 +386,7 @@ private fun TaskScheduleEditor(draft: TaskDetailDraft, reminder: Boolean, timezo
             }
         }
         TaskSheetRow(Icons.Outlined.CalendarToday, date.toString(), "Choose date", enabled) {
-            DatePickerDialog(context, { _, y, m, d -> setDate(LocalDate.of(y, m + 1, d)) }, date.year, date.monthValue - 1, date.dayOfMonth).show()
+            showMondayDatePicker(context, date) { selected -> setDate(selected) }
         }
         if (!reminder) Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Include a time", Modifier.weight(1f))

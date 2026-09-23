@@ -16,58 +16,49 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-describe('SettingsPage week start', () => {
+describe('SettingsPage', () => {
   const originalFetch = globalThis.fetch
 
   afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks() })
 
-  it('loads and updates the weekly recurrence boundary', async () => {
+  it('has no configurable week boundary', async () => {
     const settings = {
-      id: 1, start_hour: 8, end_hour: 20, show_full_day: false, week_start: 'monday',
+      id: 1, start_hour: 8, end_hour: 20, show_full_day: false,
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     }
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.includes('/health')) return response({ status: 'ok', today: '2026-08-16', timezone: 'UTC' })
-      if (init?.method === 'PATCH') {
-        const body = JSON.parse(String(init.body)) as { week_start: string }
-        return response({ ...settings, week_start: body.week_start, updated_at: '2026-01-02T00:00:00Z' })
-      }
+      void init
       return response(settings)
     }) as typeof fetch
 
-    const user = userEvent.setup()
     render(<MemoryRouter><SettingsPage /></MemoryRouter>)
-    const select = await screen.findByLabelText('Week starts on')
-    expect(select).toHaveValue('monday')
-    await user.selectOptions(select, 'sunday')
-    await waitFor(() => expect(select).toHaveValue('sunday'))
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/settings'),
-      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ week_start: 'sunday' }) }),
-    )
+    await screen.findByLabelText('Start hour')
+    expect(screen.queryByLabelText('Week starts on')).not.toBeInTheDocument()
   })
 
   it('keeps independently accepted field changes when responses resolve out of order', async () => {
     const settings = {
-      id: 1, start_hour: 8, end_hour: 20, show_full_day: false, week_start: 'monday' as const,
+      id: 1, start_hour: 8, end_hour: 20, show_full_day: false,
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     }
-    const weekResponse = deferred<Response>()
+    const startHourResponse = deferred<Response>()
     const fullDayResponse = deferred<Response>()
     globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method !== 'PATCH') return Promise.resolve(response(settings))
-      const body = JSON.parse(String(init.body)) as { week_start?: string; show_full_day?: boolean }
-      if (body.week_start) return weekResponse.promise
+      const body = JSON.parse(String(init.body)) as { start_hour?: number; show_full_day?: boolean }
+      if (body.start_hour !== undefined) return startHourResponse.promise
       return fullDayResponse.promise
     }) as typeof fetch
 
     const user = userEvent.setup()
     render(<MemoryRouter><SettingsPage /></MemoryRouter>)
-    const weekStart = await screen.findByLabelText('Week starts on')
+    const startHour = await screen.findByLabelText('Start hour')
     const showFullDay = screen.getByRole('checkbox', { name: 'Show full 24 hours' })
 
-    await user.selectOptions(weekStart, 'sunday')
+    fireEvent.change(startHour, { target: { value: '9' } })
+    fireEvent.blur(startHour)
     await user.click(showFullDay)
 
     await act(async () => {
@@ -75,17 +66,17 @@ describe('SettingsPage week start', () => {
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 0))
     })
     await act(async () => {
-      weekResponse.resolve(response({ ...settings, week_start: 'sunday', updated_at: '2026-01-02T00:00:00Z' }))
+      startHourResponse.resolve(response({ ...settings, start_hour: 9, updated_at: '2026-01-02T00:00:00Z' }))
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 0))
     })
 
-    expect(weekStart).toHaveValue('sunday')
+    expect(startHour).toHaveValue(9)
     expect(showFullDay).toBeChecked()
   })
 
   it('keeps the latest repeated field change when its response resolves first', async () => {
     const settings = {
-      id: 1, start_hour: 8, end_hour: 20, show_full_day: false, week_start: 'monday' as const,
+      id: 1, start_hour: 8, end_hour: 20, show_full_day: false,
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     }
     const firstResponse = deferred<Response>()
@@ -137,7 +128,7 @@ describe('SettingsPage day window validation', () => {
     ['End hour', '8', '21', 'end_hour'],
   ])('rejects %s value "%s" and allows correction to %s', async (label, invalid, valid, field) => {
     const settings = {
-      id: 1, start_hour: 8, end_hour: 20, show_full_day: false, week_start: 'monday',
+      id: 1, start_hour: 8, end_hour: 20, show_full_day: false,
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     }
     const patches: unknown[] = []

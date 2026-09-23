@@ -96,6 +96,10 @@ _Avoid_: Current Task, Activity catalog
 The shared time zone used to divide recorded activity between calendar days on all devices. Changing it changes daily attribution without changing elapsed time.
 _Avoid_: Device time zone
 
+**Calendar Week**:
+The Monday-through-Sunday period in the Reporting Time Zone used when Timebox displays or groups days by week, including Trends and weekly quotas.
+_Avoid_: Locale week, quota-specific week
+
 **Today**:
 The calendar date in the Reporting Time Zone that contains the current instant.
 _Avoid_: Device today, local today

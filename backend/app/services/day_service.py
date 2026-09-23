@@ -169,7 +169,7 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
 def get_or_create_app_settings(db: Session) -> AppSettings:
     row = get_app_settings(db)
     if row is None:
-        row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False, week_start="monday")
+        row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False)
         db.add(row)
         db.flush()
         db.refresh(row)
@@ -363,8 +363,6 @@ def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
         s.end_hour = body.end_hour
     if body.show_full_day is not None:
         s.show_full_day = body.show_full_day
-    if body.week_start is not None:
-        s.week_start = body.week_start
     if s.start_hour >= s.end_hour or s.end_hour > 24 or s.start_hour < 0:
         raise ValueError("Invalid day window: require 0 <= start_hour < end_hour <= 24")
     s.updated_at = utc_now()

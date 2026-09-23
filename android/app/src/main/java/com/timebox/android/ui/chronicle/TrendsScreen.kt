@@ -1,6 +1,5 @@
 package com.timebox.android.ui.chronicle
 
-import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.remote.TrendNodeDto
 import com.timebox.android.ui.theme.TimeboxShapes
+import com.timebox.android.ui.showMondayDatePicker
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
@@ -51,7 +51,7 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
         }
     }
     fun pick(initial: LocalDate, selected: (LocalDate) -> Unit) {
-        DatePickerDialog(context, { _, y, m, d -> selected(LocalDate.of(y, m + 1, d)) }, initial.year, initial.monthValue - 1, initial.dayOfMonth).show()
+        showMondayDatePicker(context, initial, selected)
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

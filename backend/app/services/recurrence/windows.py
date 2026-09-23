@@ -8,7 +8,7 @@ from app.models.battle_plan import RecurrenceFrequency, RecurrenceMode
 from app.services.recurrence.common import Window, _month_date, _rule_value, _week_boundary
 
 
-def iter_windows(rule, through: dt.date, week_start: str = "monday") -> list[Window]:
+def iter_windows(rule, through: dt.date) -> list[Window]:
     """Return all cycles from the rule start through `through`, with inclusive endings."""
     start = _rule_value(rule, "start_date")
     end_date = _rule_value(rule, "end_date")
@@ -67,7 +67,7 @@ def iter_windows(rule, through: dt.date, week_start: str = "monday") -> list[Win
                 break
             cursor += dt.timedelta(days=1)
     elif frequency == RecurrenceFrequency.weekly:
-        cursor = _week_boundary(start, week_start)
+        cursor = _week_boundary(start)
         while cursor <= through:
             period_end = cursor + dt.timedelta(days=6)
             effective_start = max(cursor, start)
@@ -85,9 +85,9 @@ def iter_windows(rule, through: dt.date, week_start: str = "monday") -> list[Win
     return windows
 
 
-def _windows_for_preview(rule, today: dt.date, week_start: str) -> tuple[list[Window], list[Window]]:
+def _windows_for_preview(rule, today: dt.date) -> tuple[list[Window], list[Window]]:
     horizon = today + relativedelta(years=20)
-    all_windows = iter_windows(rule, horizon, week_start)
+    all_windows = iter_windows(rule, horizon)
     past = [window for window in all_windows if window.end < today]
     upcoming = [window for window in all_windows if window.end >= today][:5]
     return past, upcoming

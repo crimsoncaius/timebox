@@ -33,7 +33,7 @@ export const api = {
 
   getSettings: () => fetchJson<SettingsRead>('/settings'),
 
-  patchSettings: (body: Partial<{ start_hour: number; end_hour: number; show_full_day: boolean; week_start: 'monday' | 'sunday' }>) =>
+  patchSettings: (body: Partial<{ start_hour: number; end_hour: number; show_full_day: boolean }>) =>
     fetchJson<SettingsRead>('/settings', {
       method: 'PATCH',
       body: JSON.stringify(body),

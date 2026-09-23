@@ -22,6 +22,7 @@ import { ProjectEditor } from './ProjectEditor'
 import { PriorityControl } from './TaskDetailPanel'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 import { errorMessage } from '../../lib/errors'
+import { CalendarDateField } from '../../components/CalendarDateField'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const buttonClass = 'rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
@@ -663,9 +664,9 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
                 </div>
               </Field>
             )}
-            <Field label="Starts"><input aria-label="Start date" required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={recurringFieldClass} /></Field>
+            <Field label="Starts"><CalendarDateField label="Start date" required value={startDate} onChange={setStartDate} className={recurringFieldClass} /></Field>
             <Select label="Ends" ariaLabel="Ending" value={ending} onChange={(value) => setEnding(value as typeof ending)}><option value="never">Never</option><option value="date">On date</option><option value="cycles">After cycles</option></Select>
-            {ending === 'date' ? <Field label="Inclusive end date"><input aria-label="Inclusive end date" required type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} className={recurringFieldClass} /></Field> : null}
+            {ending === 'date' ? <Field label="Inclusive end date"><CalendarDateField label="Inclusive end date" required minIso={startDate} value={endDate} onChange={setEndDate} className={recurringFieldClass} /></Field> : null}
             {ending === 'cycles' ? <Field label="Cycle limit"><input aria-label="Cycle limit" type="number" min={1} value={cycleLimit} onChange={(event) => setCycleLimit(Number(event.target.value))} className={recurringFieldClass} /></Field> : null}
           </div>
 

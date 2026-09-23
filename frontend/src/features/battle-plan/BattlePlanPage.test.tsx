@@ -563,12 +563,15 @@ describe('BattlePlanPage', () => {
     await user.click(await screen.findByText('Draft launch brief'))
     expect(screen.getByRole('checkbox', { name: 'Reminder' })).toBeEnabled()
     await user.click(screen.getByRole('checkbox', { name: 'Reminder' }))
-    fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2099-09-19T09:00' } })
+    fireEvent.change(screen.getByLabelText('Reminder date'), { target: { value: '2099-09-19' } })
+    fireEvent.change(screen.getByLabelText('Reminder time'), { target: { value: '09:00' } })
     await user.selectOptions(screen.getByLabelText('Deadline'), 'date')
     fireEvent.change(screen.getByLabelText('Deadline date'), { target: { value: '2099-09-18' } })
-    expect(screen.getByLabelText('Reminder date and time')).toHaveValue('2099-09-19T09:00')
+    expect(screen.getByLabelText('Reminder date')).toHaveValue('2099-09-19')
+    expect(screen.getByLabelText('Reminder time')).toHaveValue('09:00')
     await user.selectOptions(screen.getByLabelText('Deadline'), 'none')
-    expect(screen.getByLabelText('Reminder date and time')).toHaveValue('2099-09-19T09:00')
+    expect(screen.getByLabelText('Reminder date')).toHaveValue('2099-09-19')
+    expect(screen.getByLabelText('Reminder time')).toHaveValue('09:00')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/tasks\/11$/),
@@ -588,7 +591,8 @@ describe('BattlePlanPage', () => {
       expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"reminder_at":"2000-01-01T12:00:42Z"') }),
     ))
     await user.click(await screen.findByText('Draft launch brief edited'))
-    fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2001-01-01T09:00' } })
+    fireEvent.change(screen.getByLabelText('Reminder date'), { target: { value: '2001-01-01' } })
+    fireEvent.change(screen.getByLabelText('Reminder time'), { target: { value: '09:00' } })
     expect(screen.getByRole('alert')).toHaveTextContent('Reminder must be in the future')
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })

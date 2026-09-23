@@ -46,8 +46,8 @@ describe('DayCalendarPopover', () => {
     const onSelect = vi.fn()
     render(<DayCalendarPopover value="2026-06-01" todayIso="2026-06-15" onSelect={onSelect} />)
     await user.click(screen.getByTestId('day-calendar-trigger'))
-    await user.click(screen.getByRole('button', { name: '2026-05-31' }))
-    expect(onSelect).toHaveBeenCalledWith('2026-05-31')
+    await user.click(screen.getByRole('button', { name: '2026-07-01' }))
+    expect(onSelect).toHaveBeenCalledWith('2026-07-01')
   })
 
   it('Today navigates to todayIso', async () => {

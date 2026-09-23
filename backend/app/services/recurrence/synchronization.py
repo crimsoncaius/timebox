@@ -8,9 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.time import today_in_tz
-from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
-    RecurrenceFrequency,
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
@@ -427,8 +425,8 @@ def _derive_quota_parents(db: Session) -> None:
             parent.status = TaskStatus.open
 
 
-def _suppress_pause_interval(db: Session, template: RecurringTemplate, start: dt.date, end: dt.date, week_start: str) -> None:
-    for window in iter_windows(template, end, week_start):
+def _suppress_pause_interval(db: Session, template: RecurringTemplate, start: dt.date, end: dt.date) -> None:
+    for window in iter_windows(template, end):
         if window.start < start or window.start > end:
             continue
         existing = db.execute(select(RecurrenceOccurrence).where(
@@ -450,8 +448,6 @@ def synchronize(
     planning_date: dt.date | None = None,
 ) -> None:
     today = today or today_in_tz(settings.app_timezone)
-    app_settings = db.execute(select(AppSettings).where(AppSettings.id == 1)).scalar_one_or_none()
-    week_start = app_settings.week_start if app_settings is not None else "monday"
     templates = list(db.execute(
         select(RecurringTemplate)
         .where(RecurringTemplate.status == RecurrenceStatus.active)
@@ -462,7 +458,7 @@ def synchronize(
     ).scalars().unique())
     horizon = max(today + dt.timedelta(days=LEAD_DAYS), planning_date or today)
     for template in templates:
-        for window in iter_windows(template, horizon, week_start):
+        for window in iter_windows(template, horizon):
             if window.start < template.generation_start_date:
                 continue
             _materialize(
@@ -475,16 +471,3 @@ def synchronize(
     _set_period_availability(db, today, planning_date=planning_date)
     _derive_quota_parents(db)
     db.commit()
-
-
-def recalculate_weekly_quotas(db: Session, settings: Settings) -> None:
-    today = today_in_tz(settings.app_timezone)
-    templates = list(db.execute(select(RecurringTemplate).where(
-        RecurringTemplate.status == RecurrenceStatus.active,
-        RecurringTemplate.mode == RecurrenceMode.quota,
-        RecurringTemplate.frequency == RecurrenceFrequency.weekly,
-    )).scalars())
-    for row in templates:
-        _cleanup_future(db, row, today, suppress=False)
-    db.commit()
-    synchronize(db, settings, today=today)
