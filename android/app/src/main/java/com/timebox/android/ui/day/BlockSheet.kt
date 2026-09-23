@@ -207,7 +207,7 @@ fun BlockSheet(
                         now = now,
                         saving = state.saving,
                         notice = recordingNotice,
-                        undoAvailable = state.recordingUndo != null,
+                        undoAvailable = false,
                         error = state.recordingError,
                         onRecord = onRecordPlanned,
                         onOpenActual = onOpenActual,

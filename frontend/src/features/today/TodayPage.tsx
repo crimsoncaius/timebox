@@ -23,6 +23,8 @@ import { ActivityTracking } from '../activity/ActivityTracking'
 import { getActivityRepository, type ActivityCorrection } from '../activity/activityRepository'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { TransientFeedback } from '../../components/TransientFeedback'
+import { UndoNotice } from '../../components/UndoNotice'
+import { useUndoNotice } from '../../components/useUndoNotice'
 import {
   addDaysIso,
   formatTimeRangeGcal12,
@@ -84,10 +86,17 @@ export function TodayPage() {
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
+  const { notice, offer, dismiss } = useUndoNotice()
   const [dayNotice, setDayNotice] = useState<string | null>(null)
   const recordingOperation = useRef(0)
-  const [recordActualUndo, setRecordActualUndo] = useState<{ plannedBlockId: number; token: string } | null>(null)
+  const currentDate = useRef(date)
+  useLayoutEffect(() => { currentDate.current = date }, [date])
+  useEffect(() => { dismiss() }, [date, dismiss])
+  useEffect(() => {
+    const close = () => dismiss()
+    window.addEventListener('timebox:focus-open', close)
+    return () => window.removeEventListener('timebox:focus-open', close)
+  }, [dismiss])
   const [recordPreview, setRecordPreview] = useState<{ blockId: number; result: PlannedRecordingResult } | null>(null)
   const allBattleTasks = useMemo(
     () => battleTasks.flatMap((task) => [task, ...(task.session_tasks ?? [])]),
@@ -545,11 +554,28 @@ export function TodayPage() {
         await repo.refresh()
         if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before recording this plan.')
         const result = await api.recordActualAsPlanned(blockId, confirmation ? { until: confirmation.end_at, fingerprint: confirmation.fingerprint } : undefined)
-        if (operation !== recordingOperation.current) return
+        if (operation !== recordingOperation.current || currentDate.current !== date) return
         if (result.status === 'confirmation_required') { setRecordPreview({ blockId, result }); return }
         setRecordPreview(null)
-        if (result.undo_token) { setRecordActualUndo({ plannedBlockId: blockId, token: result.undo_token }); setDayNotice(null) }
-        else { setRecordActualUndo(null); setDayNotice('Already recorded') }
+        if (result.undo_token) {
+          const token = result.undo_token
+          const block = day?.time_blocks.find(item => item.id === blockId)
+          const title = block?.name || block?.task?.title ||
+            (block?.task_type.name !== 'unspecified' ? block?.task_type.name : null) || 'Planned Block'
+          offer({ title, label: `${title} recorded as Actual`, ariaLabel: 'Recording undo', kind: 'recording', targetId: blockId,
+            undo: async () => {
+              const repo = getActivityRepository()
+              await repo.refresh()
+              if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before Undo.')
+              await api.undoRecordActualAsPlanned(blockId, token)
+              try {
+                await repo.refresh()
+                if (currentDate.current === date) setDay(await api.getDay(date))
+              } catch (cause) { setError(errorMessage(cause, 'Could not refresh Day after Undo')) }
+            },
+          })
+          setDayNotice(null)
+        } else setDayNotice('Already recorded')
         await getActivityRepository().refresh()
         setDay(await api.getDay(date))
       } catch (e) {
@@ -558,7 +584,7 @@ export function TodayPage() {
         throw e
       }
     },
-    [date],
+    [date, day, offer],
   )
 
 
@@ -725,43 +751,9 @@ export function TodayPage() {
             </div>
           )}
 
-          {completionUndo && !recordActualUndo ? (
-            <TransientFeedback floating title="Task completed" detail={`${completionUndo.removed} future Planned ${completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.`} action={
-              <button
-                type="button"
-                onClick={async () => {
-                  setError(null)
-                  try {
-                    await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
-                    setCompletionUndo(null)
-                    await load()
-                  } catch (cause) { setError(errorMessage(cause, 'Failed to undo Task Completion')) }
-                }}
-              >
-                Undo
-              </button>
-            } />
-          ) : null}
-          {dayNotice && !completionUndo && !recordActualUndo ? <TransientFeedback floating title={dayNotice} /> : null}
-          {recordActualUndo ? (
-            <TransientFeedback floating title="Actual recorded." action={
-              <button type="button" onClick={async () => {
-                const undo = recordActualUndo
-                const operation = ++recordingOperation.current
-                setError(null)
-                try {
-                  const repo = getActivityRepository()
-                  await repo.refresh()
-                  if (repo.state.pending || repo.state.error) throw new Error('Sync pending activity before Undo.')
-                  await api.undoRecordActualAsPlanned(undo.plannedBlockId, undo.token)
-                  if (operation !== recordingOperation.current) return
-                  setRecordActualUndo(null)
-                  await repo.refresh()
-                  setDay(await api.getDay(date))
-                } catch (cause) { if (operation === recordingOperation.current) setError(errorMessage(cause, 'Failed to undo recorded Actual')) }
-              }}>Undo</button>
-            } />
-          ) : null}
+          {dayNotice && !notice ? <TransientFeedback floating title={dayNotice} /> : null}
+          {notice && <UndoNotice key={notice.id} notice={notice}
+            onDismiss={dismiss} onFailure={setError} />}
 
           {recordPreview && <RecordingPreview plannedBlock={day?.time_blocks.find(block => block.id === recordPreview.blockId && block.lane === 'planned')} preview={recordPreview.result} timezone={day?.meta.timezone ?? 'UTC'} error={error}
             onCancel={() => setRecordPreview(null)} onConfirm={async () => {

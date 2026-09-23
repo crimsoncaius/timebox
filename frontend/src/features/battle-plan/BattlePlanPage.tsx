@@ -1,6 +1,6 @@
 import { DragDropProvider, useDroppable, type DragEndEvent } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import {
@@ -33,8 +33,8 @@ import { BATTLE_PLAN_STORAGE_KEY, type BattlePlanScope } from './battlePlanState
 import { ProjectEditor } from './ProjectEditor'
 import { TaskComposer } from './TaskComposer'
 import { TaskDetailPanel } from './TaskDetailPanel'
-import { TrashUndoNotice, type TrashUndoTarget } from './TrashUndoNotice'
-import { TransientFeedback } from '../../components/TransientFeedback'
+import { UndoNotice } from '../../components/UndoNotice'
+import { useUndoNotice } from '../../components/useUndoNotice'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 
 type Scope = BattlePlanScope
@@ -149,9 +149,12 @@ export function BattlePlanPage() {
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [mobileSidebar, setMobileSidebar] = useState(false)
-  const [trashUndo, setTrashUndo] = useState<TrashUndoTarget | null>(null)
-  const nextTrashUndoId = useRef(1)
-  const [completionUndo, setCompletionUndo] = useState<{ taskId: number; token: string; removed: number } | null>(null)
+  const { notice, offer, dismiss } = useUndoNotice()
+  useEffect(() => {
+    const close = () => dismiss()
+    window.addEventListener('timebox:focus-open', close)
+    return () => window.removeEventListener('timebox:focus-open', close)
+  }, [dismiss])
   const screenNowIso = useAppClock(serverNowIso, timezone)
 
   const setPrefs = useCallback((change: Partial<Preferences>) => {
@@ -368,12 +371,16 @@ export function BattlePlanPage() {
     try {
       if (!completed) {
         await api.reopenBattleTask(id)
-        setCompletionUndo(null)
+        if (notice?.kind === 'completion' && notice.targetId === id) dismiss(notice.id)
         await loadActive()
         return
       }
       const result = await api.completeBattleTask(id)
-      setCompletionUndo({ taskId: id, token: result.undo_token, removed: result.removed_planned_block_ids.length })
+      const title = result.task.title
+      offer({ title, label: `${title} completed`, ariaLabel: 'Task completion undo', kind: 'completion', targetId: id,
+        detail: `${result.removed_planned_block_ids.length} future Planned ${result.removed_planned_block_ids.length === 1 ? 'Block' : 'Blocks'} removed.`,
+        undo: async () => { await api.undoBattleTaskCompletion(id, result.undo_token); await loadActive().catch(cause => setError(errorMessage(cause))) },
+      })
       await loadActive()
     } catch (cause) {
       setError(errorMessage(cause))
@@ -448,18 +455,6 @@ export function BattlePlanPage() {
           </header>
 
           {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
-          {completionUndo && !trashUndo ? (
-            <TransientFeedback floating title="Task completed" detail={`${completionUndo.removed} future Planned ${completionUndo.removed === 1 ? 'Block' : 'Blocks'} removed.`}
-              action={<button type="button" onClick={async () => {
-                setError(null)
-                try {
-                  await api.undoBattleTaskCompletion(completionUndo.taskId, completionUndo.token)
-                  setCompletionUndo(null)
-                  await loadActive()
-                } catch (cause) { setError(errorMessage(cause)) }
-              }}>Undo</button>}
-            />
-          ) : null}
           {loadedCollection !== collection ? <p className="text-on-surface-variant">Loading Battle Plan…</p> : collection === 'active' ? (
             <>
               <TaskFilters preferences={preferences} taskTypes={taskTypes} onChange={setPrefs} />
@@ -499,13 +494,13 @@ export function BattlePlanPage() {
               onRestore={async (task) => {
                 if (collection === 'archived') await api.unarchiveBattleTask(task.id)
                 else await api.restoreBattleTask(task.id)
-                if (collection === 'trash') setTrashUndo((current) => current?.id === task.id ? null : current)
+                if (collection === 'trash' && notice?.kind === 'trash' && notice.targetId === task.id) dismiss(notice.id)
                 await loadCollection(collection)
               }}
               onPermanentDelete={async (task) => {
                 if (!window.confirm(`Permanently delete “${task.title}”? This cannot be undone.`)) return
                 await api.permanentlyDeleteBattleTask(task.id)
-                setTrashUndo((current) => current?.id === task.id ? null : current)
+                if (notice?.kind === 'trash' && notice.targetId === task.id) dismiss(notice.id)
                 await loadCollection('trash')
               }}
             />
@@ -531,7 +526,10 @@ export function BattlePlanPage() {
           onTrash={async (id) => {
             const title = selectedTask.title
             await api.trashBattleTask(id)
-            setTrashUndo({ noticeId: nextTrashUndoId.current++, id, title })
+            offer({ title, label: `${title} moved to Trash`, ariaLabel: 'Trash undo', kind: 'trash', targetId: id,
+              progressLabel: `Restoring ${title}`, failureLabel: `Could not restore ${title}`,
+              undo: async () => { await api.restoreBattleTask(id); await loadActive().catch(cause => setError(errorMessage(cause))) },
+            })
             if (id === selectedTask.id) closeTask()
             ingestTasks(withoutTask(storedTasks, id))
           }}
@@ -564,18 +562,9 @@ export function BattlePlanPage() {
         />
       ) : null}
 
-      {trashUndo != null ? (
-        <TrashUndoNotice
-          key={trashUndo.noticeId}
-          target={trashUndo}
-          onUndo={async () => {
-            await api.restoreBattleTask(trashUndo.id)
-            setTrashUndo((current) => current?.noticeId === trashUndo.noticeId ? null : current)
-            await loadActive()
-          }}
-          onDismiss={() => setTrashUndo((current) => current?.noticeId === trashUndo.noticeId ? null : current)}
-          onExpire={() => setTrashUndo((current) => current?.noticeId === trashUndo.noticeId ? null : current)}
-        />
+      {notice != null ? (
+        <UndoNotice key={notice.id} notice={notice}
+          onDismiss={dismiss} onFailure={setError} />
       ) : null}
     </Layout>
   )

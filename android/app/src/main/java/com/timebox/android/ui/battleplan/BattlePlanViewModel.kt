@@ -1,6 +1,5 @@
 package com.timebox.android.ui.battleplan
 
-import android.os.SystemClock
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,6 +22,8 @@ import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.undo.UndoLifecycle
+import com.timebox.android.ui.undo.UndoNotice
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -97,16 +98,6 @@ private fun TaskComposerDraft.comparableComposerDraft(): TaskComposerDraft = cop
 
 data class CreatedTaskNotice(val taskId: Int, val message: String)
 
-enum class TrashUndoPhase { Ready, Restoring, Failed, Expiring }
-
-data class TrashUndoNotice(
-    val noticeId: Long,
-    val taskId: Int,
-    val title: String,
-    val phase: TrashUndoPhase = TrashUndoPhase.Ready,
-    val error: String? = null,
-)
-
 internal interface TrashRestoreTransport {
     suspend fun restore(taskId: Int): Result<Unit>
 }
@@ -148,7 +139,6 @@ data class BattlePlanUiState(
     val createdTaskNotice: CreatedTaskNotice? = null,
     val deleteSummaryLoading: Boolean = false,
     val projectDeleteSummary: ProjectDeleteSummary? = null,
-    val trashUndo: TrashUndoNotice? = null,
     val restoredTrashTaskId: Int? = null,
     val pendingTrashTask: BattleTask? = null,
     val permanentDeleteTask: BattleTask? = null,
@@ -210,8 +200,8 @@ class BattlePlanViewModel internal constructor(
     private val taskCompletion: TaskCompletion,
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     private val trashRestoreTransport: TrashRestoreTransport = RepositoryTrashRestoreTransport(repository),
-    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
     private val readinessCoordinator: ReadyToPlanCoordinator,
+    injectedUndoLifecycle: UndoLifecycle? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(
         BattlePlanUiState(
@@ -227,12 +217,8 @@ class BattlePlanViewModel internal constructor(
     // Session-only drafts: null is creation; each existing Project owns its edit.
     private val projectDrafts = mutableMapOf<Int?, ProjectNameDraft>()
     private var clockJob: Job? = null
-    private var nextTrashUndoId = 1L
-    private var undoExposureActive = false
-    private var undoRecommendedTimeoutMillis = TRASH_UNDO_BASE_TIMEOUT_MILLIS
-    private var undoEligibleExposureMillis = 0L
-    private var undoExposureStartedAt: Long? = null
-    private var undoExpiryJob: Job? = null
+    private val undoLifecycle = injectedUndoLifecycle ?: UndoLifecycle(viewModelScope)
+    val undoNotice: StateFlow<UndoNotice?> get() = undoLifecycle.notice
 
     init {
         viewModelScope.launch {
@@ -516,75 +502,18 @@ class BattlePlanViewModel internal constructor(
     }
 
     fun offerUndo(taskId: Int, title: String) {
-        pauseUndoExposure()
-        undoEligibleExposureMillis = 0L
-        _state.update {
-            it.copy(
-                trashUndo = TrashUndoNotice(
-                    noticeId = nextTrashUndoId++,
-                    taskId = taskId,
-                    title = title,
-                ),
-            )
-        }
-        scheduleUndoExpiry()
-    }
-
-    fun setUndoExposureActive(active: Boolean, recommendedTimeoutMillis: Long) {
-        pauseUndoExposure()
-        undoRecommendedTimeoutMillis = maxOf(TRASH_UNDO_BASE_TIMEOUT_MILLIS, recommendedTimeoutMillis)
-        undoExposureActive = active
-        scheduleUndoExpiry()
-    }
-
-    fun dismissUndo(noticeId: Long? = _state.value.trashUndo?.noticeId) {
-        if (_state.value.trashUndo?.noticeId != noticeId) return
-        clearUndo()
-    }
-
-    fun finishUndoExpiry(noticeId: Long) {
-        val notice = _state.value.trashUndo
-        if (notice?.noticeId == noticeId && notice.phase == TrashUndoPhase.Expiring) clearUndo()
+        undoLifecycle.offer("battle-plan", title, "$title moved to Trash", targetId = taskId, undo = {
+            trashRestoreTransport.restore(taskId).onSuccess {
+                _state.update { state -> state.copy(restoredTrashTaskId = taskId) }
+            }
+        })
     }
 
     fun invalidateUndo(taskId: Int) {
-        if (_state.value.trashUndo?.taskId == taskId) clearUndo()
+        if (undoLifecycle.notice.value?.targetId == taskId) undoLifecycle.dismiss()
     }
 
     fun consumeRestoredTrashTask() = _state.update { it.copy(restoredTrashTaskId = null) }
-
-    private fun pauseUndoExposure() {
-        undoExpiryJob?.cancel()
-        undoExpiryJob = null
-        undoExposureStartedAt?.let { started ->
-            undoEligibleExposureMillis += (elapsedRealtime() - started).coerceAtLeast(0L)
-        }
-        undoExposureStartedAt = null
-    }
-
-    private fun scheduleUndoExpiry() {
-        val notice = _state.value.trashUndo ?: return
-        if (!undoExposureActive || notice.phase != TrashUndoPhase.Ready) return
-        val remaining = (undoRecommendedTimeoutMillis - undoEligibleExposureMillis).coerceAtLeast(0L)
-        undoExposureStartedAt = elapsedRealtime()
-        undoExpiryJob = viewModelScope.launch {
-            delay(remaining)
-            val current = _state.value.trashUndo
-            if (current?.noticeId != notice.noticeId || current.phase != TrashUndoPhase.Ready || !undoExposureActive) return@launch
-            undoExposureStartedAt = null
-            undoEligibleExposureMillis = undoRecommendedTimeoutMillis
-            undoExpiryJob = null
-            _state.update { it.copy(trashUndo = current.copy(phase = TrashUndoPhase.Expiring)) }
-        }
-    }
-
-    private fun clearUndo() {
-        undoExpiryJob?.cancel()
-        undoExpiryJob = null
-        undoExposureStartedAt = null
-        undoEligibleExposureMillis = 0L
-        _state.update { it.copy(trashUndo = null) }
-    }
 
     fun createTask() {
         val current = _state.value
@@ -756,28 +685,6 @@ class BattlePlanViewModel internal constructor(
         }
     }
 
-    fun undoTrash(noticeId: Long? = _state.value.trashUndo?.noticeId) {
-        val notice = _state.value.trashUndo ?: return
-        if (notice.noticeId != noticeId || notice.phase !in setOf(TrashUndoPhase.Ready, TrashUndoPhase.Failed)) return
-        pauseUndoExposure()
-        _state.update { it.copy(trashUndo = notice.copy(phase = TrashUndoPhase.Restoring, error = null)) }
-        viewModelScope.launch {
-            trashRestoreTransport.restore(notice.taskId).fold(
-                onSuccess = {
-                    if (_state.value.trashUndo?.noticeId == notice.noticeId) clearUndo()
-                    _state.update { it.copy(restoredTrashTaskId = notice.taskId) }
-                },
-                onFailure = { error ->
-                    if (_state.value.trashUndo?.noticeId == notice.noticeId) {
-                        _state.update {
-                            it.copy(trashUndo = notice.copy(phase = TrashUndoPhase.Failed, error = error.apiError.message))
-                        }
-                    }
-                },
-            )
-        }
-    }
-
     fun requestPermanentDelete(task: BattleTask) = _state.update { it.copy(permanentDeleteTask = task) }
     fun dismissPermanentDelete() = _state.update { it.copy(permanentDeleteTask = null) }
     fun confirmPermanentDelete() {
@@ -897,7 +804,6 @@ class BattlePlanViewModel internal constructor(
             COMPOSER_READY, COMPOSER_MORE_OPEN, COMPOSER_DIRTY,
             COMPOSER_INITIAL_STATUS, COMPOSER_INITIAL_PROJECT_ID,
         )
-        private const val TRASH_UNDO_BASE_TIMEOUT_MILLIS = 10_000L
     }
 }
 

@@ -216,11 +216,6 @@ fun DayScreen(
     state.recordingPreview?.let { (planId, preview) ->
         RecordingPreview(preview, state.day?.timezone ?: "UTC", state.saving, onRecordPlanned, onCancelRecording, state.recordingError, state.day?.blocks?.find { it.id == planId && it.lane == Lane.Planned })
     }
-    if (state.recordingUndo != null && !state.sheetOpen) {
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) {
-            TransientFeedback("Actual recorded", Modifier.padding(16.dp), actionLabel = "Undo", onAction = onUndoRecording, actionsEnabled = !state.saving)
-        }
-    }
 }
 
 @Composable

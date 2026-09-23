@@ -19,6 +19,7 @@ import com.timebox.android.ui.planning.RepositoryPlanningSessionTransport
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import com.timebox.android.ui.settings.SettingsViewModel
 import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.undo.UndoLifecycle
 import com.timebox.android.ui.types.TypesViewModel
 
 @Composable
@@ -39,6 +40,7 @@ fun timeboxViewModelFactory(
     taskCompletion: TaskCompletion,
     readinessCoordinator: ReadyToPlanCoordinator,
     activityRepository: com.timebox.android.data.ActivityRepository? = null,
+    undoLifecycle: UndoLifecycle? = null,
 ): ViewModelProvider.Factory =
     viewModelFactory {
         initializer {
@@ -50,6 +52,7 @@ fun timeboxViewModelFactory(
                 ),
                 readinessCoordinator = readinessCoordinator,
                 activityRepository = activityRepository,
+                injectedUndoLifecycle = undoLifecycle,
             )
         }
         initializer { ChronicleViewModel(repository) }
@@ -61,6 +64,7 @@ fun timeboxViewModelFactory(
                 taskCompletion,
                 createSavedStateHandle(),
                 readinessCoordinator = readinessCoordinator,
+                injectedUndoLifecycle = undoLifecycle,
             )
         }
         initializer {

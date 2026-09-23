@@ -76,13 +76,12 @@ import com.timebox.android.ui.theme.TimeboxTheme
     val app = LocalContext.current.applicationContext as TimeboxApplication
     val activity by app.activityRepository.state.collectAsState()
     val taskId = activity.snapshot?.current?.taskId
-    val notice by app.taskCompletion.notice.collectAsState()
+    val notice by app.undoLifecycle.notice.collectAsState()
     var task by remember(taskId) { mutableStateOf<BattleTask?>(null) }
     var error by remember(taskId) { mutableStateOf<String?>(null) }
     var busy by remember(taskId) { mutableStateOf(false) }
-    var ownCompletion by remember(taskId) { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(taskId) { if (taskId != null) app.repository.listBattleTasks().onSuccess { task = it.items.flattenBattleTasks().find { it.id == taskId } } }
+    LaunchedEffect(taskId, notice?.id) { if (taskId != null) app.repository.listBattleTasks().onSuccess { task = it.items.flattenBattleTasks().find { it.id == taskId } } }
     if (task == null || task?.id != taskId) elapsed()
     task?.takeIf { it.id == taskId }?.let { current ->
         val colors = TimeboxTheme.colors
@@ -106,12 +105,17 @@ import com.timebox.android.ui.theme.TimeboxTheme
         }
         if (current.status != TaskStatus.Completed) OutlinedButton(modifier = Modifier.fillMaxWidth().padding(top = 16.dp).heightIn(min = 48.dp), border = BorderStroke(1.dp, colors.hairline), enabled = !busy, onClick = {
             busy = true; scope.launch {
-                app.taskCompletion.transition(current.id, current.status, TaskStatus.Completed).onSuccess { if (task?.id == current.id) { task = it; ownCompletion = app.taskCompletion.notice.value?.id }; onTaskChanged() }.onFailure { error = "Could not complete Task." }; busy = false
+                app.taskCompletion.transition(current.id, current.status, TaskStatus.Completed).onSuccess { if (task?.id == current.id) task = it; onTaskChanged() }.onFailure { error = "Could not complete Task." }; busy = false
             }
         }) { Text("Complete Task") }
-        notice?.takeIf { it.canUndo && it.id == ownCompletion }?.let { saved -> TextButton(enabled = !busy, onClick = {
-            busy = true; scope.launch { app.taskCompletion.undo(saved.id).onSuccess { if (task?.id == it.id) task = it; onTaskChanged() }.onFailure { error = "Could not undo Task completion." }; busy = false }
-        }) { Text("Undo Task completion") } }
+        notice?.let { saved ->
+            com.timebox.android.ui.undo.UndoNoticeHost(
+                notice = saved,
+                onUndo = { app.undoLifecycle.undo(saved.id) },
+                onDismiss = { app.undoLifecycle.dismiss(saved.id) },
+                onExpiryFinished = { app.undoLifecycle.finishExpiry(saved.id) },
+            )
+        }
         error?.let { Text(it) }
     }
 }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.undo.UndoLifecycle
 
 /** Manual DI: the application owns process-wide modules and their shared adapters. */
 class TimeboxApplication : Application() {
@@ -60,6 +61,7 @@ class TimeboxApplication : Application() {
     }
     lateinit var taskCompletion: TaskCompletion
         private set
+    val undoLifecycle by lazy { UndoLifecycle(CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
     lateinit var readinessCoordinator: ReadyToPlanCoordinator
         private set
     lateinit var reminderNotifier: AndroidReminderNotifier

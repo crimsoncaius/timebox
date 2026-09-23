@@ -221,7 +221,7 @@ class SubtaskMutationViewModelTest {
         assertFalse(model.state.value.refreshing)
         assertFalse(model.state.value.saving)
         assertEquals(readsAfterLoad, api.reads.get())
-        assertEquals(10, model.state.value.trashUndo?.taskId)
+        assertEquals(10, model.undoNotice.value?.targetId)
         model.viewModelScope.cancel()
     }
 

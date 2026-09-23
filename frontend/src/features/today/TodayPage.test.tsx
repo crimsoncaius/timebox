@@ -497,8 +497,9 @@ describe('TodayPage inspector rail', () => {
     })
     expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'Record Actual as planned' })[0]!)
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(await screen.findByText('Already recorded')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
   })
 
   it('keeps a newer recording Undo when an older Undo request completes', async () => {

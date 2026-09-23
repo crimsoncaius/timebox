@@ -63,11 +63,12 @@ afterEach(() => {
 })
 
 it('shows Focus over the routed app and returns to the app after exiting', async () => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
   render(<FocusHost><div>Day content</div></FocusHost>)
 
   const focus = await screen.findByRole('main', { name: 'Focus' })
   expect(focus).toBeVisible()
-  expect(screen.getByText('Writing')).toBeVisible()
+  expect(screen.getAllByText('Writing')[0]).toBeVisible()
   expect(screen.getByRole('button', { name: 'Exit Focus' })).toBeVisible()
   expect(screen.getByText('Day content').closest('[hidden]')).not.toBeNull()
 

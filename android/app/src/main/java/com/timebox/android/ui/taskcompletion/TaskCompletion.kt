@@ -23,6 +23,8 @@ data class TaskCompletionNotice(
     val id: Long,
     val message: String,
     val canUndo: Boolean,
+    val taskTitle: String? = null,
+    val taskId: Int? = null,
 )
 
 /** Internal seam between task-completion policy and its transport. */
@@ -77,22 +79,24 @@ class TaskCompletion internal constructor(
                 IllegalArgumentException("Task Completion only changes transitions into or out of Completed."),
             )
         }
-        clearNoticeAndUndo()
         if (to == TaskStatus.Completed) complete(taskId) else reopen(taskId, to)
     }
 
     private suspend fun complete(taskId: Int): Result<BattleTask> =
         transport.complete(taskId).fold(
             onSuccess = { result ->
+                clearNoticeAndUndo()
                 pendingUndo = PendingUndo(taskId, result.undoToken)
                 publish(
                     message = completionMessage(result.removedPlannedBlockIds.size),
                     canUndo = true,
+                    taskTitle = result.task.title,
+                    taskId = taskId,
                 )
                 Result.success(result.task)
             },
             onFailure = { failure ->
-                publish(failure.apiError.message, canUndo = false)
+                if (pendingUndo == null) publish(failure.apiError.message, canUndo = false)
                 Result.failure(failure)
             },
         )
@@ -105,11 +109,13 @@ class TaskCompletion internal constructor(
                 } else {
                     transport.setStatus(taskId, target)
                 }
-                final.onSuccess { publish("Task reopened", canUndo = false) }
-                    .onFailure { publish(it.apiError.message, canUndo = false) }
+                final.onSuccess {
+                    if (pendingUndo?.taskId == taskId) clearNoticeAndUndo()
+                    if (pendingUndo == null) publish("Task reopened", canUndo = false, taskId = taskId)
+                }.onFailure { if (pendingUndo == null) publish(it.apiError.message, canUndo = false) }
             },
             onFailure = { failure ->
-                publish(failure.apiError.message, canUndo = false)
+                if (pendingUndo == null) publish(failure.apiError.message, canUndo = false)
                 Result.failure(failure)
             },
         )
@@ -121,15 +127,13 @@ class TaskCompletion internal constructor(
             return@withLock Result.failure(IllegalStateException("Task completion is no longer available to undo."))
         }
 
-        clearNoticeAndUndo()
         transport.undo(undo.taskId, undo.token).fold(
             onSuccess = { task ->
-                publish("Task completion undone", canUndo = false)
+                clearNoticeAndUndo()
+                publish("Task completion undone", canUndo = false, taskId = undo.taskId)
                 Result.success(task)
             },
             onFailure = { failure ->
-                pendingUndo = undo
-                publish(failure.apiError.message, canUndo = true)
                 Result.failure(failure)
             },
         )
@@ -139,11 +143,13 @@ class TaskCompletion internal constructor(
         if (_notice.value?.id == noticeId) clearNoticeAndUndo()
     }
 
-    private fun publish(message: String, canUndo: Boolean) {
+    private fun publish(message: String, canUndo: Boolean, taskTitle: String? = null, taskId: Int? = null) {
         _notice.value = TaskCompletionNotice(
             id = nextNoticeId++,
             message = message,
             canUndo = canUndo,
+            taskTitle = taskTitle,
+            taskId = taskId,
         )
     }
 

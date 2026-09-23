@@ -42,7 +42,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.TimeboxRepository
-import com.timebox.android.ui.battleplan.BattlePlanTrashUndoNotice
+import com.timebox.android.ui.undo.UndoNoticeHost
 import com.timebox.android.ui.battleplan.BattlePlanViewModel
 import com.timebox.android.ui.battleplan.RecurringEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringViewModel
@@ -82,8 +82,9 @@ fun TimeboxApp(
 ) {
     val application = LocalContext.current.applicationContext as TimeboxApplication
     val activityRepository = application.activityRepository
-    val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository) {
-        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository)
+    val undoLifecycle = application.undoLifecycle
+    val factory = remember(repository, taskCompletion, readinessCoordinator, activityRepository, undoLifecycle) {
+        timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository, undoLifecycle)
     }
     val navController = rememberNavController()
 
@@ -121,6 +122,7 @@ fun TimeboxApp(
     val battlePlanState by battlePlanViewModel.state.collectAsState()
     val taskDetailState by taskDetailViewModel.state.collectAsState()
     val taskCompletionNotice by taskCompletion.notice.collectAsState()
+    val undoNotice by undoLifecycle.notice.collectAsState()
     val recurringState by recurringViewModel.state.collectAsState()
     val recurringEditorState by recurringEditorViewModel.state.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -144,7 +146,6 @@ fun TimeboxApp(
     val routeBlockId = backStackEntry?.arguments?.getInt(AppRoutes.BlockIdArg)?.takeIf { it >= 0 }
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
-    val taskCompletionScope = rememberCoroutineScope()
     val openedDayEntryIds = remember { mutableSetOf<String>() }
     val openedBattlePlanEntryIds = remember { mutableSetOf<String>() }
 
@@ -232,23 +233,25 @@ fun TimeboxApp(
     }
     LaunchedEffect(taskCompletionNotice?.id) {
         taskCompletionNotice?.let { notice ->
-            val result = snackbarHostState.showSnackbar(
-                message = notice.message,
-                actionLabel = if (notice.canUndo) "Undo" else null,
-                duration = taskCompletionSnackbarDuration(),
-            )
-            if (result == SnackbarResult.ActionPerformed && notice.canUndo) {
-                taskCompletionScope.launch {
+            if (notice.canUndo) {
+                val context = if (focused) "focus" else if (isBattlePlanRoute(route)) "battle-plan" else "day:${routeDate ?: dayState.date}"
+                val title = notice.taskTitle ?: "Task"
+                undoLifecycle.offer(context, title, "$title completed", notice.message, targetId = notice.taskId, undo = {
                     taskCompletion.undo(notice.id).onSuccess { task ->
                         dayViewModel.refreshAfterTaskCompletion()
                         battlePlanViewModel.refreshAfterTaskCompletion()
                         taskDetailViewModel.refreshAfterTaskCompletion(task.id)
-                    }
-                }
+                    }.map { Unit }
+                }, release = { taskCompletion.dismiss(notice.id) })
             } else {
+                if (notice.taskId != null && undoLifecycle.notice.value?.targetId == notice.taskId) undoLifecycle.dismiss()
+                snackbarHostState.showSnackbar(notice.message, duration = taskCompletionSnackbarDuration())
                 taskCompletion.dismiss(notice.id)
             }
         }
+    }
+    LaunchedEffect(undoLifecycle) {
+        undoLifecycle.lateErrors.collect { snackbarHostState.showSnackbar(it) }
     }
 
     LaunchedEffect(recurringState.message) {
@@ -302,12 +305,14 @@ fun TimeboxApp(
         1f,
     ) == 0f
     val withinBattlePlan = isBattlePlanRoute(route)
-    LaunchedEffect(withinBattlePlan, appResumed, recommendedUndoTimeoutMillis) {
-        if (!withinBattlePlan) battlePlanViewModel.dismissUndo()
-        battlePlanViewModel.setUndoExposureActive(
-            active = withinBattlePlan && appResumed,
-            recommendedTimeoutMillis = recommendedUndoTimeoutMillis,
-        )
+    val undoContext = when {
+        focused -> "focus"
+        withinBattlePlan -> "battle-plan"
+        route == AppRoutes.DayPattern -> "day:${routeDate ?: dayState.date}"
+        else -> null
+    }
+    LaunchedEffect(undoContext, appResumed, recommendedUndoTimeoutMillis) {
+        undoLifecycle.setExposure(undoContext, appResumed, recommendedUndoTimeoutMillis)
     }
 
     val screenModels = remember(
@@ -325,7 +330,7 @@ fun TimeboxApp(
     ))
     val navigation = remember(
         screenModels, navController, snackbarHostState, trackingScope,
-        activityRepository, focusController, navigationOptions,
+        activityRepository, focusController, navigationOptions, undoLifecycle,
     ) {
         TimeboxNavigationDependencies(
             models = screenModels,
@@ -339,6 +344,7 @@ fun TimeboxApp(
                 }
             },
             options = navigationOptions,
+            undoLifecycle = undoLifecycle,
         )
     }
 
@@ -388,9 +394,8 @@ fun TimeboxApp(
             }
         }
 
-        // Keep the queued snackbar available while task-scoped Trash recovery owns the slot.
-        if (route != AppRoutes.TaskDetailPattern && (!withinBattlePlan || battlePlanState.trashUndo == null)) {
-            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp)) { data ->
+        if (route != AppRoutes.TaskDetailPattern) {
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = if (undoNotice == null) 92.dp else 172.dp)) { data ->
                 TransientFeedback(
                     message = data.visuals.message,
                     modifier = Modifier.semantics {
@@ -404,13 +409,13 @@ fun TimeboxApp(
             }
         }
 
-        if (withinBattlePlan && route != AppRoutes.TaskDetailPattern) {
-            battlePlanState.trashUndo?.let { notice ->
-                BattlePlanTrashUndoNotice(
+        if (route != AppRoutes.TaskDetailPattern) {
+            undoNotice?.let { notice ->
+                UndoNoticeHost(
                     notice = notice,
-                    onUndo = { battlePlanViewModel.undoTrash(notice.noticeId) },
-                    onDismiss = { battlePlanViewModel.dismissUndo(notice.noticeId) },
-                    onExpiryFinished = { battlePlanViewModel.finishUndoExpiry(notice.noticeId) },
+                    onUndo = { undoLifecycle.undo(notice.id) },
+                    onDismiss = { undoLifecycle.dismiss(notice.id) },
+                    onExpiryFinished = { undoLifecycle.finishExpiry(notice.id) },
                     reducedMotion = reducedMotion,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp),
                 )

@@ -6,190 +6,96 @@ import com.timebox.android.data.remote.TimeboxApi
 import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
 import com.timebox.android.ui.taskcompletion.RepositoryTaskCompletionTransport
 import com.timebox.android.ui.taskcompletion.TaskCompletion
+import com.timebox.android.ui.undo.UndoLifecycle
+import com.timebox.android.ui.undo.UndoPhase
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BattlePlanTrashUndoViewModelTest {
-    private val dispatcher: TestDispatcher = StandardTestDispatcher()
+    private val dispatcher = StandardTestDispatcher()
+    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    @After fun tearDown() = Dispatchers.resetMain()
 
-    @Before
-    fun setUp() = Dispatchers.setMain(dispatcher)
-
-    @After
-    fun tearDown() = Dispatchers.resetMain()
-
-    @Test
-    fun `eligible exposure uses the accessibility timeout and pauses in background`() = runTest(dispatcher) {
-        val model = viewModel(elapsedRealtime = { testScheduler.currentTime })
-
+    @Test fun `restore retries once per request and consumes only its own notice`() = runTest(dispatcher) {
+        val transport = FakeRestore().apply { fail = true }
+        val lifecycle = UndoLifecycle(backgroundScope) { testScheduler.currentTime }
+        lifecycle.setExposure("battle-plan", true, 10_000)
+        val model = viewModel(transport, lifecycle)
         model.offerUndo(7, "Draft launch brief")
-        model.setUndoExposureActive(active = true, recommendedTimeoutMillis = 15_000)
-        advanceTimeBy(10_000)
+        val id = lifecycle.notice.value!!.id
+        lifecycle.undo(id)
+        lifecycle.undo(id)
         runCurrent()
+        assertEquals(listOf(7), transport.calls)
+        assertEquals(UndoPhase.Failed, lifecycle.notice.value?.phase)
 
-        assertEquals(TrashUndoPhase.Ready, model.state.value.trashUndo?.phase)
-        model.setUndoExposureActive(active = false, recommendedTimeoutMillis = 15_000)
-        advanceTimeBy(30_000)
+        transport.fail = false
+        lifecycle.undo(id)
         runCurrent()
-        assertEquals(TrashUndoPhase.Ready, model.state.value.trashUndo?.phase)
-
-        model.setUndoExposureActive(active = true, recommendedTimeoutMillis = 15_000)
-        advanceTimeBy(5_000)
-        runCurrent()
-
-        val expiring = model.state.value.trashUndo
-        assertNotNull(expiring)
-        assertEquals(TrashUndoPhase.Expiring, expiring?.phase)
-        assertEquals("Draft launch brief", expiring?.title)
-        assertEquals(7, expiring?.taskId)
-    }
-
-    @Test
-    fun `Undo is exactly once and a failed restore stays available for Retry`() = runTest(dispatcher) {
-        val transport = FakeTrashRestoreTransport().apply { failRestore = true }
-        val model = viewModel({ testScheduler.currentTime }, transport)
-        model.offerUndo(7, "Draft launch brief")
-        val noticeId = model.state.value.trashUndo!!.noticeId
-
-        model.undoTrash(noticeId)
-        model.undoTrash(noticeId)
-        assertEquals(TrashUndoPhase.Restoring, model.state.value.trashUndo?.phase)
-        runCurrent()
-
-        assertEquals(listOf(7), transport.restoreCalls)
-        assertEquals(TrashUndoPhase.Failed, model.state.value.trashUndo?.phase)
-        assertTrue(model.state.value.trashUndo?.error?.isNotBlank() == true)
-
-        transport.failRestore = false
-        model.undoTrash(noticeId)
-        runCurrent()
-
-        assertEquals(listOf(7, 7), transport.restoreCalls)
-        assertNull(model.state.value.trashUndo)
+        assertEquals(listOf(7, 7), transport.calls)
+        assertNull(lifecycle.notice.value)
         assertEquals(7, model.state.value.restoredTrashTaskId)
     }
 
-    @Test
-    fun `an older Undo completion cannot clear a replacement notice`() = runTest(dispatcher) {
-        val transport = FakeTrashRestoreTransport()
-        val model = viewModel({ testScheduler.currentTime }, transport)
-        model.offerUndo(7, "First Task")
-        val firstNoticeId = model.state.value.trashUndo!!.noticeId
-        model.undoTrash(firstNoticeId)
-
-        model.offerUndo(8, "Second Task")
-        runCurrent()
-
-        assertEquals("Second Task", model.state.value.trashUndo?.title)
-        assertEquals(TrashUndoPhase.Ready, model.state.value.trashUndo?.phase)
-        assertEquals(listOf(7), transport.restoreCalls)
-    }
-
-    @Test
-    fun `external lifecycle action invalidates only its matching notice`() = runTest(dispatcher) {
-        val model = viewModel(elapsedRealtime = { testScheduler.currentTime })
+    @Test fun `matching external restore invalidates only that target`() = runTest(dispatcher) {
+        val lifecycle = UndoLifecycle(backgroundScope) { testScheduler.currentTime }
+        val model = viewModel(FakeRestore(), lifecycle)
         model.offerUndo(7, "Draft launch brief")
-
         model.invalidateUndo(8)
-        assertNotNull(model.state.value.trashUndo)
-
+        assertEquals(7, lifecycle.notice.value?.targetId)
         model.invalidateUndo(7)
-        assertNull(model.state.value.trashUndo)
+        assertNull(lifecycle.notice.value)
     }
 
-    @Test
-    fun `Dismiss removes the notice without restoring the Task`() = runTest(dispatcher) {
-        val transport = FakeTrashRestoreTransport()
-        val model = viewModel({ testScheduler.currentTime }, transport)
-        model.offerUndo(7, "Draft launch brief")
-        val noticeId = model.state.value.trashUndo!!.noticeId
+    @Test fun `transient opportunity is not saved with the ViewModel`() = runTest(dispatcher) {
+        val saved = SavedStateHandle()
+        val first = UndoLifecycle(backgroundScope) { testScheduler.currentTime }
+        viewModel(FakeRestore(), first, saved).offerUndo(7, "Draft launch brief")
+        assertEquals(7, first.notice.value?.targetId)
 
-        model.dismissUndo(noticeId)
-        runCurrent()
-
-        assertNull(model.state.value.trashUndo)
-        assertTrue(transport.restoreCalls.isEmpty())
-    }
-
-    @Test
-    fun `a replacement gets a fresh interval and ignores stale expiry and dismissal`() = runTest(dispatcher) {
-        val model = viewModel(elapsedRealtime = { testScheduler.currentTime })
-        model.setUndoExposureActive(active = true, recommendedTimeoutMillis = 10_000)
-        model.offerUndo(7, "First Task")
-        val firstNoticeId = model.state.value.trashUndo!!.noticeId
-        advanceTimeBy(5_000)
-
-        model.offerUndo(8, "Second Task")
-        val secondNoticeId = model.state.value.trashUndo!!.noticeId
-        model.dismissUndo(firstNoticeId)
-        model.finishUndoExpiry(firstNoticeId)
-        advanceTimeBy(5_000)
-        runCurrent()
-
-        assertEquals(secondNoticeId, model.state.value.trashUndo?.noticeId)
-        assertEquals(TrashUndoPhase.Ready, model.state.value.trashUndo?.phase)
-
-        advanceTimeBy(5_000)
-        runCurrent()
-        assertEquals(TrashUndoPhase.Expiring, model.state.value.trashUndo?.phase)
-    }
-
-    @Test
-    fun `transient Undo state is not restored into a new ViewModel`() = runTest(dispatcher) {
-        val savedState = SavedStateHandle()
-        val current = viewModel({ testScheduler.currentTime }, savedStateHandle = savedState)
-        current.offerUndo(7, "Draft launch brief")
-        assertNotNull(current.state.value.trashUndo)
-
-        val recreatedAfterProcessDeath = viewModel({ testScheduler.currentTime }, savedStateHandle = savedState)
-
-        assertNull(recreatedAfterProcessDeath.state.value.trashUndo)
+        val restarted = UndoLifecycle(backgroundScope) { testScheduler.currentTime }
+        viewModel(FakeRestore(), restarted, saved)
+        assertNull(restarted.notice.value)
     }
 
     private fun kotlinx.coroutines.test.TestScope.viewModel(
-        elapsedRealtime: () -> Long,
-        transport: TrashRestoreTransport = FakeTrashRestoreTransport(),
-        savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        transport: FakeRestore,
+        lifecycle: UndoLifecycle,
+        savedState: SavedStateHandle = SavedStateHandle(),
     ): BattlePlanViewModel {
         val repository = TimeboxRepository(fakeApi())
         return BattlePlanViewModel(
             repository = repository,
             taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
-            savedStateHandle = savedStateHandle,
+            savedStateHandle = savedState,
             trashRestoreTransport = transport,
-            elapsedRealtime = elapsedRealtime,
             readinessCoordinator = createReadyToPlanCoordinator(repository, this),
+            injectedUndoLifecycle = lifecycle,
         )
     }
 
-    private class FakeTrashRestoreTransport : TrashRestoreTransport {
-        val restoreCalls = mutableListOf<Int>()
-        var failRestore = false
-
+    private class FakeRestore : TrashRestoreTransport {
+        val calls = mutableListOf<Int>()
+        var fail = false
         override suspend fun restore(taskId: Int): Result<Unit> {
-            restoreCalls += taskId
-            return if (failRestore) Result.failure(java.io.IOException("Restore unavailable")) else Result.success(Unit)
+            calls += taskId
+            return if (fail) Result.failure(java.io.IOException("Restore unavailable")) else Result.success(Unit)
         }
     }
 
     private fun fakeApi(): TimeboxApi = Proxy.newProxyInstance(
-        TimeboxApi::class.java.classLoader,
-        arrayOf(TimeboxApi::class.java),
+        TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java),
     ) { _, _, _ -> Unit } as TimeboxApi
 }

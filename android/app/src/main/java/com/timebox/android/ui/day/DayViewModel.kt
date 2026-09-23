@@ -26,6 +26,7 @@ import com.timebox.android.ui.planning.PlanningSession
 import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.taskcompletion.TaskCompletion
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import com.timebox.android.ui.undo.UndoLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -73,7 +74,6 @@ data class DayUiState(
     val saving: Boolean = false,
     val message: String? = null,
     val recordingPreview: Pair<Int, com.timebox.android.data.remote.PlannedRecordingDto>? = null,
-    val recordingUndo: Pair<Int, String>? = null,
     val recordingError: String? = null,
     val recordingNotice: Pair<Int, String>? = null,
     val selectedBlockId: Int? = null,
@@ -128,9 +128,11 @@ class DayViewModel(
     private val clock: () -> Instant = Instant::now,
     private val readinessCoordinator: ReadyToPlanCoordinator,
     private val activityRepository: ActivityRepository? = null,
+    injectedUndoLifecycle: UndoLifecycle? = null,
 ) : ViewModel() {
 
     private val launchScope: CoroutineScope get() = injectedScope ?: viewModelScope
+    private val undoLifecycle = injectedUndoLifecycle ?: UndoLifecycle(launchScope)
     private val bridgeScope: CoroutineScope =
         if (injectedScope == null) viewModelScope else CoroutineScope(injectedScope.coroutineContext + Job())
 
@@ -929,7 +931,27 @@ class DayViewModel(
                 if (result.status == "confirmation_required") {
                     _state.update { it.copy(recordingPreview = id to result) }
                 } else {
-                    _state.update { it.copy(recordingPreview = null, recordingUndo = result.undoToken?.let { token -> id to token },
+                    if (result.undoToken != null) {
+                        val token = result.undoToken
+                        val title = input.day?.blocks?.firstOrNull { it.id == id }?.let { block ->
+                            block.name?.takeIf(String::isNotBlank) ?: block.task?.title
+                                ?: block.taskTypeName.takeUnless { it.equals("unspecified", ignoreCase = true) }
+                        } ?: "Planned Block"
+                        undoLifecycle.offer("day:${input.date}", title, "$title recorded as Actual", targetId = id, undo = {
+                            try {
+                                activityRepository?.refresh()
+                                check(activityRepository?.state?.value?.pending != true && activityRepository?.state?.value?.error == null) {
+                                    "Sync pending activity before Undo."
+                                }
+                                repository.undoRecordPlanned(id, token).onSuccess {
+                                    _state.update { state -> state.copy(recordingNotice = id to "Recording undone") }
+                                    activityRepository?.refresh()
+                                    refreshCurrentDay()
+                                }
+                            } catch (error: Exception) { Result.failure(error) }
+                        })
+                    }
+                    _state.update { it.copy(recordingPreview = null,
                         recordingNotice = id to if (result.status == "already_recorded") "Already recorded" else "Actual recorded",
                         message = if (result.status == "already_recorded") "Already recorded" else "Actual recorded") }
                     activityRepository?.refresh()
@@ -941,20 +963,7 @@ class DayViewModel(
     }
 
     fun undoRecording() {
-        val undo = _state.value.recordingUndo ?: return
-        if (_state.value.saving) return
-        _state.update { it.copy(saving = true, recordingError = null) }
-        launchScope.launch {
-            try {
-                activityRepository?.refresh()
-                check(activityRepository?.state?.value?.pending != true && activityRepository?.state?.value?.error == null) { "Sync pending activity before Undo." }
-                repository.undoRecordPlanned(undo.first, undo.second).getOrThrow()
-                _state.update { it.copy(recordingUndo = null, recordingNotice = undo.first to "Recording undone", message = "Recording undone") }
-                activityRepository?.refresh()
-                refreshCurrentDay()
-            } catch (error: Exception) { _state.update { it.copy(recordingError = error.message ?: "Undo unavailable", message = error.message ?: "Undo unavailable") } }
-            finally { _state.update { it.copy(saving = false) } }
-        }
+        undoLifecycle.notice.value?.takeIf { it.context == "day:${_state.value.date}" }?.let { undoLifecycle.undo(it.id) }
     }
 
     private suspend fun refreshCurrentDay() {
