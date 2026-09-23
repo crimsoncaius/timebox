@@ -9,7 +9,6 @@ import java.time.Instant
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +29,8 @@ class TaskCompletionTest {
                 id = 1,
                 message = "Task completed · 2 future Planned Blocks removed",
                 canUndo = true,
+                taskTitle = "Task 7",
+                taskId = 7,
             ),
             completion.notice.value,
         )
@@ -66,7 +67,7 @@ class TaskCompletionTest {
     }
 
     @Test
-    fun `undo failure restores availability under a fresh notice identity`() = runTest {
+    fun `undo failure retains the same opportunity for retry`() = runTest {
         val transport = InMemoryTaskCompletionTransport().apply {
             undoFailure = ApiErrorException(ApiError("Undo is temporarily unavailable"))
         }
@@ -77,8 +78,8 @@ class TaskCompletionTest {
         assertTrue(completion.undo(firstNoticeId).isFailure)
 
         val retryNotice = completion.notice.value!!
-        assertNotEquals(firstNoticeId, retryNotice.id)
-        assertEquals("Undo is temporarily unavailable", retryNotice.message)
+        assertEquals(firstNoticeId, retryNotice.id)
+        assertEquals("Task completed", retryNotice.message)
         assertTrue(retryNotice.canUndo)
 
         transport.undoFailure = null

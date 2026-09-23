@@ -721,6 +721,34 @@ describe('BattlePlanPage', () => {
     expect(screen.getAllByText(/moved to Trash/i)).toHaveLength(1)
   })
 
+  it('replaces Task Completion Undo with Trash Undo without reviving the older notice', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    activeTasks = [task(), task({ id: 12, title: 'Follow up from reminder', position: 1 })]
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /><HistoryControls /></MemoryRouter>)
+
+    await user.click((await screen.findAllByRole('button', { name: 'Complete Task' }))[0]!)
+    const completion = await screen.findByRole('status', { name: 'Task completion undo' })
+    expect(completion).toHaveTextContent('Draft launch brief completed')
+    expect(within(completion).getByRole('button', { name: 'Undo' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Open reminder task' }))
+    await user.click(await screen.findByRole('button', { name: 'Move to Trash' }))
+    expect(await screen.findByRole('status', { name: 'Trash undo' })).toHaveTextContent('Follow up from reminder')
+    expect(screen.queryByRole('status', { name: 'Task completion undo' })).not.toBeInTheDocument()
+    await user.click(within(screen.getByRole('status', { name: 'Trash undo' })).getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByRole('status', { name: 'Task completion undo' })).not.toBeInTheDocument()
+  })
+
+  it('clears Task Completion Undo when that same Task is reopened ordinarily', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
+    await user.click((await screen.findAllByRole('button', { name: 'Complete Task' }))[0]!)
+    expect(await screen.findByRole('status', { name: 'Task completion undo' })).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Reopen Task' }))
+    expect(screen.queryByRole('status', { name: 'Task completion undo' })).not.toBeInTheDocument()
+  })
+
   it('consumes the web Undo opportunity after ten seconds and fades for 150 ms', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)

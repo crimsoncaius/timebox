@@ -35,7 +35,8 @@ import com.timebox.android.ui.battleplan.BattlePlanProjectActions
 import com.timebox.android.ui.battleplan.BattlePlanRemovalActions
 import com.timebox.android.ui.battleplan.BattlePlanScreen
 import com.timebox.android.ui.battleplan.BattlePlanTaskActions
-import com.timebox.android.ui.battleplan.BattlePlanTrashUndoNotice
+import com.timebox.android.ui.undo.UndoLifecycle
+import com.timebox.android.ui.undo.UndoNoticeHost
 import com.timebox.android.ui.battleplan.BattlePlanViewModel
 import com.timebox.android.ui.battleplan.RecurringEditorViewModel
 import com.timebox.android.ui.battleplan.RecurringScreen
@@ -95,6 +96,7 @@ internal class TimeboxNavigationDependencies(
     val activityRepository: ActivityRepository,
     val onEnterFocus: () -> Unit,
     val options: State<TimeboxNavigationOptions>,
+    val undoLifecycle: UndoLifecycle,
 )
 
 @Composable
@@ -340,22 +342,27 @@ private fun NavGraphBuilder.taskDetailRoute(dependencies: TimeboxNavigationDepen
                     onCreateTaskType = taskDetailViewModel::createTaskTypeAndChoose,
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     feedback = {
-                        val notice = battlePlanState.trashUndo
-                        if (notice != null) BattlePlanTrashUndoNotice(
-                            notice = notice,
-                            onUndo = { battlePlanViewModel.undoTrash(notice.noticeId) },
-                            onDismiss = { battlePlanViewModel.dismissUndo(notice.noticeId) },
-                            onExpiryFinished = { battlePlanViewModel.finishUndoExpiry(notice.noticeId) },
-                            reducedMotion = reducedMotion,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        ) else SnackbarHost(snackbarHostState, Modifier.padding(horizontal = 16.dp)) { data ->
-                            TransientFeedback(
-                                message = data.visuals.message,
-                                modifier = Modifier.semantics { paneTitle = "Feedback"; dismiss { data.dismiss(); true } },
-                                actionLabel = data.visuals.actionLabel,
-                                onAction = data::performAction,
-                                onDismiss = if (data.visuals.withDismissAction) data::dismiss else null,
-                            )
+                        val notice = dependencies.undoLifecycle.notice.collectAsState().value
+                        Column {
+                            SnackbarHost(snackbarHostState, Modifier.padding(horizontal = 16.dp)) { data ->
+                                TransientFeedback(
+                                    message = data.visuals.message,
+                                    modifier = Modifier.semantics { paneTitle = "Feedback"; dismiss { data.dismiss(); true } },
+                                    actionLabel = data.visuals.actionLabel,
+                                    onAction = data::performAction,
+                                    onDismiss = if (data.visuals.withDismissAction) data::dismiss else null,
+                                )
+                            }
+                            notice?.let {
+                                UndoNoticeHost(
+                                    notice = it,
+                                    onUndo = { dependencies.undoLifecycle.undo(it.id) },
+                                    onDismiss = { dependencies.undoLifecycle.dismiss(it.id) },
+                                    onExpiryFinished = { dependencies.undoLifecycle.finishExpiry(it.id) },
+                                    reducedMotion = reducedMotion,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                )
+                            }
                         }
                     },
                 )

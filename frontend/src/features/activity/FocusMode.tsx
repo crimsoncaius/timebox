@@ -5,6 +5,8 @@ import { ActivityTracking } from './ActivityTracking'
 import { getActivityRepository } from './activityRepository'
 import { getFocusController } from './focusController'
 import { observeFocusWake } from './focusWake'
+import { UndoNotice } from '../../components/UndoNotice'
+import { useUndoNotice } from '../../components/useUndoNotice'
 
 export function FocusWakeSettings() {
   const controller = getFocusController()
@@ -17,6 +19,7 @@ export function FocusHost({ children }: { children: ReactNode }) {
   const activity = useSyncExternalStore(repository.subscribe, repository.getSnapshot)
   const visible = state.active && !state.planning && !!activity.snapshot?.current
   const [wakeMessage, setWakeMessage] = useState('')
+  useEffect(() => { if (visible) window.dispatchEvent(new Event('timebox:focus-open')) }, [visible])
   useEffect(() => controller.reconcile(repository), [controller, repository, activity.snapshot])
   useEffect(() => {
     if (!visible) return
@@ -35,12 +38,12 @@ function FocusTask({ taskId }: { taskId: number | null }) {
   const [task, setTask] = useState<BattleTask | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [undo, setUndo] = useState<{ id: number; token: string } | null>(null)
+  const { notice, offer, dismiss } = useUndoNotice()
   useEffect(() => { let current = true; setTask(null); if (taskId != null) void api.listBattleTasks('active').then(r => r.items.flatMap(t => [t, ...(t.session_tasks ?? [])]).find(t => t.id === taskId) ?? null).then(t => { if (current) setTask(t) }).catch(() => {}); return () => { current = false } }, [taskId])
   if (!task || task.id !== taskId) return null
   return <section className="mt-6"><h2>{task.title}</h2>{task.description && <p>{task.description}</p>}{error && <p role="alert">{error}</p>}
     {task.subtasks.map(subtask => <label className="block" key={subtask.id}><input type="checkbox" checked={subtask.checked} disabled={busy || task.status === 'completed'} onChange={async () => { setBusy(true); try { const next = await (subtask.checked ? api.uncheckSubtask(subtask.id) : api.checkSubtask(subtask.id)); setTask(t => t?.id === task.id ? { ...t, subtasks: t.subtasks.map(s => s.id === next.id ? next : s) } : t) } catch { setError('Could not update Subtask.') } finally { setBusy(false) } }} />{subtask.title}</label>)}
-    {task.status !== 'completed' && <button disabled={busy} onClick={async () => { setBusy(true); try { const next = await api.completeBattleTask(task.id); setTask(t => t?.id === task.id ? next.task : t); readiness.observeTasks([next.task]); setUndo({ id: next.task.id, token: next.undo_token }); window.dispatchEvent(new Event('timebox:focus-task-changed')) } catch { setError('Could not complete Task. Try again.') } finally { setBusy(false) } }}>Complete Task</button>}
-    {undo && undo.id === task.id && <button disabled={busy} onClick={async () => { setBusy(true); try { const next = await api.undoBattleTaskCompletion(undo.id, undo.token); setTask(t => t?.id === next.id ? next : t); readiness.observeTasks([next]); setUndo(null); window.dispatchEvent(new Event('timebox:focus-task-changed')) } catch { setError('Could not undo Task completion.') } finally { setBusy(false) } }}>Undo Task completion</button>}
+    {task.status !== 'completed' && <button disabled={busy} onClick={async () => { setBusy(true); try { const next = await api.completeBattleTask(task.id); setTask(t => t?.id === task.id ? next.task : t); readiness.observeTasks([next.task]); offer({ title: next.task.title, label: `${next.task.title} completed`, ariaLabel: 'Task completion undo', kind: 'completion', targetId: next.task.id, detail: `${next.removed_planned_block_ids.length} future Planned ${next.removed_planned_block_ids.length === 1 ? 'Block' : 'Blocks'} removed.`, undo: async () => { const restored = await api.undoBattleTaskCompletion(next.task.id, next.undo_token); setTask(t => t?.id === restored.id ? restored : t); readiness.observeTasks([restored]); window.dispatchEvent(new Event('timebox:focus-task-changed')) } }); window.dispatchEvent(new Event('timebox:focus-task-changed')) } catch { setError('Could not complete Task. Try again.') } finally { setBusy(false) } }}>Complete Task</button>}
+    {notice && <UndoNotice key={notice.id} notice={notice} onDismiss={dismiss} onFailure={setError} />}
   </section>
 }
