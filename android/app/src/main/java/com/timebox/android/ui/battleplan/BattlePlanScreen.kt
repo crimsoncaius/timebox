@@ -102,6 +102,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -1794,16 +1796,39 @@ private fun MobilePlanningControl(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
-            Text(
-                if (!completed && plannedSummary == null && !task.readinessPending && !task.readyToPlan) "Add to Plan" else label,
-                style = TimeboxTheme.type.bodySmall,
-                color = if (accented) colors.planned else colors.onVariant,
-            )
-            if (actionable) Text(
-                if (task.readyToPlan) "→" else "+",
-                style = TimeboxTheme.type.bodySmall,
-                color = if (accented) colors.planned else colors.onVariant,
-            )
+            Box(contentAlignment = Alignment.Center) {
+                if (actionable) {
+                    // Measure both labels so toggling and saving never resize the pill,
+                    // including when the user increases their font size.
+                    listOf("Add to Plan", "Ready to Plan").forEach { sizingLabel ->
+                        Text(
+                            sizingLabel,
+                            modifier = Modifier.alpha(0f).clearAndSetSemantics {},
+                            style = TimeboxTheme.type.bodySmall,
+                        )
+                    }
+                }
+                Text(
+                    if (actionable) {
+                        if (task.readyToPlan) "Ready to Plan" else "Add to Plan"
+                    } else label,
+                    style = TimeboxTheme.type.bodySmall,
+                    color = if (accented) colors.planned else colors.onVariant,
+                )
+            }
+            if (actionable) Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
+                if (task.readinessPending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp).clearAndSetSemantics {},
+                        color = if (accented) colors.planned else colors.onVariant,
+                        strokeWidth = 1.5.dp,
+                    )
+                } else Text(
+                    if (task.readyToPlan) "→" else "+",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = if (accented) colors.planned else colors.onVariant,
+                )
+            }
         }
     }
 }
