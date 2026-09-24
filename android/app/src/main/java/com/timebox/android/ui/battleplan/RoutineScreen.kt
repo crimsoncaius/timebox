@@ -134,7 +134,14 @@ fun RoutineScreen(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { value -> if (value == SheetValue.Hidden && draft != state) { discardField = true; false } else true }), containerColor = colors.sheet.copy(alpha = 1f)) {
             TaskSheetBackHandler(false, ::closeField)
             Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(field, style = TimeboxTheme.type.sectionTitle)
+                if (field == "Pre-planning") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(field, Modifier.weight(1f), style = TimeboxTheme.type.screenTitle)
+                        IconButton(::closeField) { Icon(Icons.Outlined.Close, "Close pre-planning") }
+                    }
+                    Text("${state.title} \u00b7 ${routineRuleSummary(state)}", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    Spacer(Modifier.height(10.dp))
+                } else Text(field, style = TimeboxTheme.type.sectionTitle)
                 when (field) {
                     "Title" -> OutlinedTextField(draft.title, { draft = draft.copy(title = it) }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
                     "Description" -> OutlinedTextField(draft.description, { draft = draft.copy(description = it) }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
@@ -152,8 +159,15 @@ fun RoutineScreen(
                 if (field == "Task Type") state.saveError?.let { Text(it, color = colors.error) }
                 val error = if (field == "Pre-planning") validateRecurrenceDraft(draft, false) else null
                 if (error != null) Text(error, color = colors.error)
-                Button({ commit(draft) }, enabled = error == null && (field != "Title" || draft.title.isNotBlank()), modifier = Modifier.fillMaxWidth()) { Text("Save") }
-                TextButton(::closeField) { Text("Cancel") }
+                if (field == "Pre-planning") {
+                    Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(::closeField, Modifier.weight(1f)) { Text("Cancel") }
+                        Button({ commit(draft) }, enabled = error == null, modifier = Modifier.weight(2f).height(48.dp)) { Text("Save") }
+                    }
+                } else {
+                    Button({ commit(draft) }, enabled = error == null && (field != "Title" || draft.title.isNotBlank()), modifier = Modifier.fillMaxWidth()) { Text("Save") }
+                    TextButton(::closeField) { Text("Cancel") }
+                }
             }
         }
     }
@@ -164,27 +178,3 @@ fun RoutineScreen(
     lifecycle?.pendingDelete?.let { templateToDelete -> RecurringDeleteDialog(templateToDelete, { lifecycleViewModel?.dismissDelete() }, { lifecycleViewModel?.confirmDelete(onBack) }) }
 }
 
-
-@Composable
-internal fun RoutinePreplanningFields(state: RecurringEditorUiState, onChange: (RecurringEditorUiState) -> Unit) {
-    fun slot(index: Int, change: (RecurringPreplanningSlotDraft) -> RecurringPreplanningSlotDraft) = onChange(state.copy(preplanningSlots = state.preplanningSlots.mapIndexed { i, value -> if (i == index) change(value) else value }))
-    RecurrenceMenu("Pre-planning", when (state.preplanningDestination()) {
-        "ready_to_plan" -> "Ready to Plan"
-        "planned_time" -> "Planned time"
-        else -> "No pre-planning"
-    }, listOf("No pre-planning" to "none", "Ready to Plan" to "ready_to_plan", "Planned time" to "planned_time")) { destination ->
-        onChange(state.copy(
-            queuePreplanning = destination == "ready_to_plan",
-            preplanningSlots = if (destination == "planned_time") state.preplanningSlots.ifEmpty {
-                listOf(RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull()))
-            } else emptyList(),
-        ))
-    }
-    if (state.queuePreplanning) Text("Add each occurrence to Ready to Plan on its date, without assigning a time.", style = TimeboxTheme.type.bodySmall)
-    if (state.preplanningDestination() != "planned_time") return
-    RecurringPreplanningScheduleEditor(state,
-        { onChange(state.copy(preplanningSlots = if (it) listOf(RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull())) else emptyList())) },
-        { onChange(state.copy(preplanningSlots = state.preplanningSlots + RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull()))) },
-        { index -> onChange(state.copy(preplanningSlots = state.preplanningSlots.filterIndexed { i, _ -> i != index })) },
-        { i, value -> slot(i) { it.copy(start = value) } }, { i, value -> slot(i) { it.copy(end = value) } }, { i, value -> slot(i) { it.copy(weekday = value) } }, showEnabledSwitch = false)
-}
