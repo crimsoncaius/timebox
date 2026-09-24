@@ -175,7 +175,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
                         Text("TASK TYPE", style = TimeboxTheme.type.kicker, color = colors.onVariant)
                         Spacer(Modifier.height(8.dp))
                         TaskTypePicker(
-                        recommendationName = name, recommendationEnabled = enabled && actual.plannedBlockId == null,
+                        recommendationName = name, recommendationLinkedTaskName = actual.task?.title, recommendationEnabled = enabled && actual.plannedBlockId == null,
                             taskTypes = types,
                             query = typeQuery,
                             onQueryChange = { if (enabled) typeQuery = it },

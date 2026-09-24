@@ -41,7 +41,7 @@ The absence of a Task Type on a Battle Plan Task or Recurring Task Series. It is
 _Avoid_: unspecified, empty type
 
 **Task Type Recommendation**:
-An optional proposed existing Task Type based on a Battle Plan Task, Session Task, or Recurring Task Series name, or a Block Name. It requires explicit acceptance and is distinct from the Task Type picker's search results.
+An optional proposed existing Task Type based on a Battle Plan Task, Session Task, or Recurring Task Series name, a Block Name, or text entered into a Task Type picker. It requires explicit acceptance and is distinct from a match against a Task Type Path.
 _Avoid_: Automatic classification, new category
 
 **Task Type Path**:

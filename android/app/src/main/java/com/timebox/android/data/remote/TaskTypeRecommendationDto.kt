@@ -4,7 +4,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 
 @Serializable
-data class TaskTypeRecommendationRequest(val name: String)
+data class TaskTypeRecommendationRequest(
+    val name: String = "",
+    @SerialName("picker_query") val pickerQuery: String = "",
+    @SerialName("linked_task_name") val linkedTaskName: String = "",
+)
 
 @Serializable
 data class TaskTypeRecommendationDto(

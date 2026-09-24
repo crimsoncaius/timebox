@@ -3,7 +3,7 @@ import { formatDuration } from '../lib/duration'
 import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
 import { type ActivityCorrection } from '../features/activity/activityRepository'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { BlockDraftPlacement, DayRead, TaskType, TimeBlock } from '../lib/api'
+import { api, type BlockDraftPlacement, type DayRead, type TaskType, type TimeBlock } from '../lib/api'
 import { formatMinuteLabel24, zonedLocalDateTimeToIso } from '../lib/time'
 import { TaskTypePathCombobox } from './TaskTypePathCombobox'
 import { Link } from 'react-router-dom'
@@ -57,6 +57,14 @@ function LegacyTimeBlockInspectorContent({
 }) {
   const [taskTypeId, setTaskTypeId] = useState(() => block?.task_type_id ?? draft?.task_type_id ?? 0)
   const [name, setName] = useState(() => block?.name ?? '')
+  const [linkedTask, setLinkedTask] = useState<{ id: number; title: string } | null>(null)
+  const linkedTaskName = linkedTask?.id === draft?.task_id ? linkedTask?.title : undefined
+  useEffect(() => {
+    if (!draft?.task_id) return
+    let active = true
+    void api.listBattleTasks('active').then(reply => { const task = reply.items.find(row => row.id === draft.task_id); if (active && task) setLinkedTask({ id: task.id, title: task.title }) }).catch(() => {})
+    return () => { active = false }
+  }, [draft?.task_id])
   const [note, setNote] = useState(() => block?.note ?? '')
   const [saving, setSaving] = useState(false)
   const [clock, setClock] = useState(Date.now)
@@ -386,7 +394,7 @@ function LegacyTimeBlockInspectorContent({
 
       {/* Task type */}
       <TaskTypePathCombobox
-        key={block?.id ?? "new"} recommendationName={name} recommendationEnabled={!(lane === "actual" && block?.planned_block_id)}
+        key={block?.id ?? "new"} recommendationName={name} recommendationLinkedTaskName={block?.task?.title ?? linkedTaskName} recommendationEnabled={!(lane === "actual" && block?.planned_block_id)}
         label="Task type"
         taskTypes={taskTypes}
         valueTaskTypeId={taskTypeId}
