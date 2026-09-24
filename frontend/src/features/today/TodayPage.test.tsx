@@ -109,6 +109,8 @@ const taskTypes = [
 ]
 
 describe('TodayPage inspector rail', () => {
+  const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture
+  const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture
   const originalFetch = globalThis.fetch
   let standaloneActual: Record<string, unknown> | null = null
   let readySaveGate: Promise<void> | null = null
@@ -251,6 +253,8 @@ describe('TodayPage inspector rail', () => {
   afterEach(() => {
     localStorage.clear()
     globalThis.fetch = originalFetch
+    HTMLElement.prototype.setPointerCapture = originalSetPointerCapture
+    HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -393,6 +397,35 @@ describe('TodayPage inspector rail', () => {
     fireEvent.click(view.container.querySelector('[data-day-lane="planned"]')!, { clientY: 47 })
     expect(screen.getByTestId('draft-block')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['end', 600, '2026-06-01T08:17:32.123Z', '2026-06-01T10:00:32.456Z'],
+    ['start', 0, '2026-06-01T08:17:32.123Z', '2026-06-01T09:13:47.456Z'],
+  ])('preserves exact Actual timestamps when resizing %s into a neighbor', async (edge, y, expectedStart, expectedEnd) => {
+    const records = [
+      { id: 40, start_minute: 480, end_minute: 497, start_at: '2026-06-01T08:00:00Z', end_at: '2026-06-01T08:17:32.123Z' },
+      { id: 41, start_minute: edge === 'start' ? 510 : 497, end_minute: 553, start_at: edge === 'start' ? '2026-06-01T08:30:00Z' : '2026-06-01T08:17:32.123Z', end_at: '2026-06-01T09:13:47.456Z' },
+      { id: 42, start_minute: 600, end_minute: 660, start_at: '2026-06-01T10:00:32.456Z', end_at: '2026-06-01T11:00:00Z' },
+    ]
+    const fallbackFetch = globalThis.fetch
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === '/api/days/2026-06-01'
+        ? Promise.resolve(jsonResponse({ ...dayPayload, actual_blocks: records.map(r => ({
+          start_minute: r.start_minute, end_minute: r.end_minute,
+          actual_block: { ...r, task_type_id: 1, task_type: taskTypes[0], task_id: null, task: null,
+            name: `Activity ${r.id}`, note: null, planned_block_id: null, created_at: '', updated_at: '' },
+        })) })) : fallbackFetch(input, init))
+    HTMLElement.prototype.setPointerCapture = vi.fn()
+    HTMLElement.prototype.releasePointerCapture = vi.fn()
+    const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await screen.findByText('Activity 41')
+    const card = view.container.querySelector('[data-day-lane="actual"] [data-block-id="41"]')!
+    const handle = within(card as HTMLElement).getByRole('button', { name: `Resize block ${edge}` })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 100 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientY: Number(y) })
+    fireEvent.pointerUp(window, { pointerId: 1, clientY: Number(y) })
+    await waitFor(() => expect(activityFake.correct).toHaveBeenCalledWith('edit', 41, { start_at: expectedStart, end_at: expectedEnd }))
   })
 
   it.each(['2026-06-01', '2026-06-02'])('retains no-space feedback for occupied Actual time when today is %s', async (today) => {
