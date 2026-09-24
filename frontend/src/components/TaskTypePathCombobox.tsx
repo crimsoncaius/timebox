@@ -17,6 +17,7 @@ export function TaskTypePathCombobox({
   onCreateTaskTypePath,
   allowUnset = false,
   recommendationName,
+  recommendationLinkedTaskName,
   recommendationEnabled = true,
 }: {
   label: string
@@ -26,9 +27,9 @@ export function TaskTypePathCombobox({
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   allowUnset?: boolean
   recommendationName?: string
+  recommendationLinkedTaskName?: string
   recommendationEnabled?: boolean
 }) {
-  const { recommendation, markChosen, dismiss } = useTaskTypeRecommendation(recommendationName, taskTypes, valueTaskTypeId, recommendationEnabled)
   const listId = useId()
   const inputId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -40,6 +41,8 @@ export function TaskTypePathCombobox({
   const unsetSelected = allowUnset && (valueTaskTypeId == null || taskTypes.find((row) => row.id === valueTaskTypeId)?.name === UNSPECIFIED)
   const [query, setQuery] = useState(selected?.name ?? '')
   const [open, setOpen] = useState(false)
+  const [predictionQuery, setPredictionQuery] = useState('')
+  const { recommendation, dismiss } = useTaskTypeRecommendation(recommendationName, taskTypes, valueTaskTypeId, recommendationEnabled && open, predictionQuery, recommendationLinkedTaskName)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [busy, setBusy] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -60,9 +63,9 @@ export function TaskTypePathCombobox({
 
   const choose = (taskTypeId: number | null, name: string) => {
     setCreateError(null)
-    markChosen()
     onSelectTaskTypeId(taskTypeId)
     setQuery(name)
+    setPredictionQuery('')
     setOpen(false)
   }
 
@@ -83,7 +86,6 @@ export function TaskTypePathCombobox({
   const create = async () => {
     if (busy || !suggestions.createPath) return
     setCreateError(null)
-    markChosen()
     setBusy(true)
     try {
       const created = await onCreateTaskTypePath(suggestions.createPath)
@@ -131,10 +133,12 @@ export function TaskTypePathCombobox({
         aria-autocomplete="list"
         className="w-full rounded-xl border border-outline-variant/15 bg-surface px-3 py-2.5 font-body text-sm text-on-surface outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest dark:text-dark-on-surface"
         value={query}
-        placeholder={allowUnset ? 'Unset' : undefined}
-        onFocus={() => { setOpen(true); setActiveIndex(-1) }}
+        placeholder={selected?.name ?? (allowUnset ? 'Unset' : 'Search Task Types')}
+        onFocus={() => { if (!open) { setQuery(''); setPredictionQuery('') }; setOpen(true); setActiveIndex(-1) }}
+        onClick={() => { if (!open) { setQuery(''); setPredictionQuery(''); setOpen(true); setActiveIndex(-1) } }}
         onChange={(e) => {
           setQuery(e.target.value)
+          setPredictionQuery(e.target.value)
           setActiveIndex(-1)
           setOpen(true)
         }}
@@ -162,12 +166,13 @@ export function TaskTypePathCombobox({
       />
 
       {createError && <p role="alert" className="mt-2 text-sm text-error">{createError}</p>}
-      {recommendation && <div className="mt-2 flex items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-2 text-sm dark:bg-dark-surface-container">
-        <button type="button" className="flex-1 text-left" onClick={() => choose(recommendation.id, recommendation.name)}>Suggested: <strong>{recommendation.name}</strong><span className="ml-2 underline">Use</span></button>
+      {open && (
+        <div className="relative z-20 mt-2 w-full overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-dark-surface-container-lowest/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]">
+      {recommendation && <div className="m-2 flex items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-2 text-sm dark:bg-dark-surface-container">
+        <div className="min-w-0 flex-1"><p className="text-xs text-on-surface-variant">Suggested Task Type</p><strong className="break-words">{recommendation.name}</strong></div>
+        <button type="button" aria-label={`Use suggested Task Type ${recommendation.name}`} className="min-h-10 rounded-lg border border-outline-variant/30 px-3" onClick={() => choose(recommendation.id, recommendation.name)}>Use</button>
         <button type="button" aria-label="Dismiss Task Type recommendation" className="min-h-10 min-w-10" onClick={dismiss}>×</button>
       </div>}
-      {open && (
-        <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_0_40px_rgba(45,52,53,0.08)] dark:bg-dark-surface-container-lowest/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.35)]">
         <ul
           id={listId}
           role="listbox"

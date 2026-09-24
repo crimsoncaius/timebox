@@ -1,5 +1,7 @@
 # Task Type Recommendations
 
+The picker-context extension in [Task Type recommendations inside the picker](task-type-picker-recommendations.md) supersedes the triggers, context inputs and placement below. This document retains the original implementation history.
+
 Issue: https://github.com/crimsoncaius/timebox/issues/168
 
 Status: implemented on web and Android. The user delegated the final design choice; variant B was selected, with recommendations in task details after committing the focused name editor. No PR requested.

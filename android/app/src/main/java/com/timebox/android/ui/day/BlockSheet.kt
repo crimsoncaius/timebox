@@ -266,7 +266,7 @@ fun BlockSheet(
             SheetLabel("Task type")
             Spacer(Modifier.height(8.dp))
             TaskTypePicker(
-                recommendationName = state.nameInput, recommendationEnabled = !state.saving,
+                recommendationName = state.nameInput, recommendationLinkedTaskName = state.selectedBlock?.task?.title ?: state.readyTasks.find { it.id == state.draft?.taskId }?.title, recommendationEnabled = !state.saving,
                 taskTypes = state.taskTypes,
                 query = state.typeQuery,
                 onQueryChange = onTypeQueryChange,

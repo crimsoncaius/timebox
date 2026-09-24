@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TaskTypePathCombobox } from './TaskTypePathCombobox'
+import { api } from '../lib/api'
 
 const taskTypes = [
   { id: 1, name: 'coding', created_at: '', updated_at: '' },
@@ -9,6 +10,26 @@ const taskTypes = [
 ]
 
 describe('TaskTypePathCombobox', () => {
+  it('shows predictions only inside the open picker and accepts without submitting', async () => {
+    const request = vi.spyOn(api, 'recommendTaskType').mockResolvedValue({ task_type_id: 2, confidence: .95, reason: 'recommended' })
+    const select = vi.fn()
+    const submit = vi.fn((event) => event.preventDefault())
+    const user = userEvent.setup()
+    render(<form onSubmit={submit}><TaskTypePathCombobox label="Task type" taskTypes={taskTypes}
+      valueTaskTypeId={1} recommendationName="Train a model" recommendationLinkedTaskName="Research AI"
+      onSelectTaskTypeId={select} onCreateTaskTypePath={vi.fn()} /></form>)
+    expect(screen.queryByText('Suggested Task Type')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('combobox'))
+    const use = await screen.findByRole('button', { name: 'Use suggested Task Type coding/ai' })
+    expect(request.mock.calls[0][0]).toEqual({ name: 'Train a model', linked_task_name: 'Research AI' })
+    await user.click(use)
+    expect(select).toHaveBeenCalledWith(2)
+    expect(submit).not.toHaveBeenCalled()
+    expect(screen.queryByText('Suggested Task Type')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('combobox'))
+    expect(await screen.findByRole('button', { name: 'Use suggested Task Type coding/ai' })).toBeInTheDocument()
+    request.mockRestore()
+  })
   it('commits an active matching option without submitting its form', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
@@ -149,7 +170,7 @@ describe('TaskTypePathCombobox', () => {
     await user.type(input, 'exer')
     await user.click(screen.getByText('Outside'))
     expect(input).toHaveValue(valueTaskTypeId === 2 ? 'coding/ai' : '')
-    expect(input).toHaveAttribute('placeholder', 'Unset')
+    expect(input).toHaveAttribute('placeholder', valueTaskTypeId === 2 ? 'coding/ai' : 'Unset')
     expect(onSelect).not.toHaveBeenCalled()
     expect(onCreate).not.toHaveBeenCalled()
   })

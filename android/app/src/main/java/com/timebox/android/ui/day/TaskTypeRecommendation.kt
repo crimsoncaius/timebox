@@ -19,45 +19,30 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 class TaskTypeRecommendationState {
-    var chosen by mutableStateOf(false)
-        private set
-    var dismissedName by mutableStateOf<String?>(null)
-        private set
-    internal var resultName by mutableStateOf<String?>(null)
-    internal var resultCatalog by mutableStateOf<List<Pair<Int, String>>>(emptyList())
+    var dismissed by mutableStateOf(false)
     internal var resultId by mutableStateOf<Int?>(null)
-    fun markChosen() { chosen = true }
-    fun dismiss(name: String?) { dismissedName = name }
-    fun nameChanged() { dismissedName = null; resultId = null }
+    fun dismiss() { dismissed = true; resultId = null }
 }
 
 @Composable
-fun rememberTaskTypeRecommendation(name: String?, types: List<TaskType>, selectedId: Int?, enabled: Boolean = true): Pair<TaskTypeRecommendationState, TaskType?> {
-    val state = remember { TaskTypeRecommendationState() }
-    val initialName = remember { name }
-    var edited by remember { mutableStateOf(false) }
-    LaunchedEffect(name) {
-        if (name != initialName) edited = true
-        state.nameChanged()
-    }
+fun rememberTaskTypeRecommendation(name: String?, types: List<TaskType>, selectedId: Int?, enabled: Boolean,
+                                   query: String = "", linkedTaskName: String? = null): Pair<TaskTypeRecommendationState, TaskType?> {
+    val context = listOf(name.orEmpty().trim(), query.trim(), linkedTaskName.orEmpty().trim())
     val catalog = types.map { it.id to it.name }.sortedBy { it.first }
-    val classified = selectedId != null && types.find { it.id == selectedId }?.name != "unspecified"
-    val eligible = enabled && !name.isNullOrBlank() && (edited || name != initialName) && !classified && !state.chosen && state.dismissedName != name
+    // A context change or new picker session cannot display an old response.
+    val state = remember(context, catalog, enabled) { TaskTypeRecommendationState() }
+    val eligible = enabled && context.any { it.isNotBlank() } && !state.dismissed
     val repository = (LocalContext.current.applicationContext as? TimeboxApplication)?.repository
-    LaunchedEffect(name, catalog, eligible) {
-        state.resultId = null
+    LaunchedEffect(state, eligible) {
         if (!eligible || repository == null) return@LaunchedEffect
         delay(500)
         try {
-            val result = repository.recommendTaskType(name)
-            if (!state.chosen && result.reason == "recommended" && (result.confidence ?: 0.0) >= 0.8) {
-                state.resultName = name; state.resultCatalog = catalog; state.resultId = result.taskTypeId
-            }
+            val result = repository.recommendTaskType(context[0], context[1], context[2])
+            if (result.reason == "recommended" && (result.confidence ?: 0.0) >= 0.8) state.resultId = result.taskTypeId
         } catch (cancelled: CancellationException) { throw cancelled
         } catch (_: Exception) { /* Optional: manual selection remains available. */ }
     }
-    val result = if (eligible && state.resultName == name && state.resultCatalog == catalog)
-        types.find { it.id == state.resultId && it.name != "unspecified" } else null
+    val result = if (eligible) types.find { it.id == state.resultId && it.id != selectedId && it.name != "unspecified" } else null
     return state to result
 }
 

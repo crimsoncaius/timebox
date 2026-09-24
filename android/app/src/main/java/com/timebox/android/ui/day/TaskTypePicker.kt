@@ -97,10 +97,20 @@ fun TaskTypePicker(
     onUnset: () -> Unit = {},
     recommendationName: String? = null,
     recommendationEnabled: Boolean = true,
-    recommendationState: TaskTypeRecommendationState? = null,
+    recommendationLinkedTaskName: String? = null,
 ) {
-    val (localRecommendationState, recommendation) = rememberTaskTypeRecommendation(recommendationName, taskTypes, selectedTypeId, recommendationEnabled)
-    val recommendationChoices = recommendationState ?: localRecommendationState
+    var pickerOpen by remember { mutableStateOf(true) }
+    var typed by remember { mutableStateOf(false) }
+    val currentName = taskTypes.find { it.id == selectedTypeId }?.name
+    val searchQuery = if (!typed && query == currentName) "" else query
+    val (localRecommendationState, recommendation) = rememberTaskTypeRecommendation(
+        recommendationName, taskTypes, selectedTypeId, recommendationEnabled && pickerOpen, searchQuery, recommendationLinkedTaskName)
+    if (!pickerOpen) {
+        androidx.compose.material3.TextButton(onClick = { typed = false; onQueryChange(""); pickerOpen = true }, modifier = modifier.fillMaxWidth()) {
+            Text(currentName ?: "Unset")
+        }
+        return
+    }
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
 
@@ -114,11 +124,11 @@ fun TaskTypePicker(
             selectedTypeId
         }
     }
-    val canonical = remember(query) { canonicalizeTaskTypePath(query) }
-    val results = remember(pickerTypes, query, currentTypeId) {
-        rankTaskTypes(pickerTypes, query, currentTypeId)
+    val canonical = remember(searchQuery) { canonicalizeTaskTypePath(searchQuery) }
+    val results = remember(pickerTypes, searchQuery, currentTypeId) {
+        rankTaskTypes(pickerTypes, searchQuery, currentTypeId)
     }
-    val showCreate = remember(pickerTypes, query) { shouldOfferCreate(pickerTypes, query) }
+    val showCreate = remember(pickerTypes, searchQuery) { shouldOfferCreate(pickerTypes, searchQuery) }
     val hint = remember(pickerTypes, canonical) {
         canonical?.let { createAncestorHint(pickerTypes, it) }
     }
@@ -130,23 +140,22 @@ fun TaskTypePicker(
     fun tick() = haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
     val choose: (TaskType) -> Unit = { type ->
-        recommendationChoices.markChosen()
+        pickerOpen = false
         tick()
         onChoose(type)
     }
     val create: () -> Unit = {
         canonical?.let {
-            recommendationChoices.markChosen()
+            pickerOpen = false
             tick()
             onCreate(it)
         }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        TaskTypeRecommendation(recommendation, choose, { localRecommendationState.dismiss(recommendationName) }, recommendationEnabled)
         SearchField(
-            query = query,
-            onQueryChange = onQueryChange,
+            query = searchQuery,
+            onQueryChange = { typed = true; onQueryChange(it) },
             // The example path doubles as the syntax lesson when there is nothing to search.
             placeholder = when {
                 pickerTypes.isEmpty() && !allowUnset -> "Name this type, e.g. coding/ai"
@@ -164,6 +173,8 @@ fun TaskTypePicker(
         )
 
         Spacer(Modifier.height(8.dp))
+        TaskTypeRecommendation(recommendation, choose, { localRecommendationState.dismiss() }, recommendationEnabled)
+        if (recommendation != null) Spacer(Modifier.height(8.dp))
 
         if (pickerTypes.isEmpty() && canonical == null && !allowUnset) {
             EmptyPanel()
@@ -187,7 +198,7 @@ fun TaskTypePicker(
                 }
                 if (showUnset && unsetSelected) {
                     UnsetRow(selected = true, onClick = {
-                        recommendationChoices.markChosen()
+                        pickerOpen = false
                         tick()
                         onUnset()
                     })
@@ -204,7 +215,7 @@ fun TaskTypePicker(
                 if (showUnset && !unsetSelected) {
                     if (results.isNotEmpty()) RowDivider()
                     UnsetRow(selected = false, onClick = {
-                        recommendationChoices.markChosen()
+                        pickerOpen = false
                         tick()
                         onUnset()
                     })
