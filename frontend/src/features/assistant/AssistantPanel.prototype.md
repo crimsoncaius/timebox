@@ -36,3 +36,5 @@ Verdict: awaiting user comparison; no direction selected. Preserved on
 `codex/prototype-assistant-panel`. After selection, record the decision and link
 this branch from the implementation issue; rewrite the selected approach in native
 production code. Keep this throwaway comparison out of master.
+
+Current reference: ?variant=current recreates the existing AssistantScreen.kt plan card and controls with the same fixture. It is a browser approximation, not a native screenshot.
