@@ -105,6 +105,35 @@ describe('TaskTypesPage', () => {
     }
   })
 
+  it('discloses inactive task counts and restoration consequences before clearing', async () => {
+    const user = userEvent.setup()
+    const fallback = globalThis.fetch
+    const deletes: string[] = []
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/task-types') && init?.method === 'DELETE') {
+        deletes.push(url)
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      if (url.endsWith('/task-types')) return Promise.resolve(jsonResponse([{
+        id: 24, name: 'research', usage_count: 0, task_usage_count: 6,
+        active_task_usage_count: 1, archived_task_usage_count: 2, trashed_task_usage_count: 3,
+        recurring_template_usage_count: 0, created_at: '', updated_at: '',
+      }]))
+      return fallback(input, init)
+    })
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Delete research' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('1 active task, 2 archived tasks, and 3 trashed tasks')
+    expect(dialog).toHaveTextContent('Restoring archived or trashed tasks will not restore their type.')
+    expect(dialog).toHaveTextContent('This cannot be undone.')
+    expect(deletes).toEqual([])
+    await user.click(within(dialog).getByRole('button', { name: /Remove task type/ }))
+    await waitFor(() => expect(deletes).toHaveLength(1))
+    expect(deletes[0]).toContain('clear_task_references=true')
+  })
+
   it('keeps the Battle Plan lists and projects beside Task Types', async () => {
     renderPage()
 

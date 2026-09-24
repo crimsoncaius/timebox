@@ -185,9 +185,11 @@ fun TypesScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = buildString {
-                            append("Used by ${pending.usageCount} block(s), ${pending.taskUsageCount} Battle Plan task(s), and ${pending.recurringTemplateUsageCount} recurring template(s). ")
-                            if (pending.hasTaskReferences) append("Task and template references will be cleared. ")
-                            if (pending.usageCount > 0) append("Choose whether to delete its blocks or migrate them.")
+                            append("Used by ${pending.usageCount} block(s), ${pending.taskUsageCount - pending.archivedTaskUsageCount - pending.trashedTaskUsageCount} active task(s), ${pending.archivedTaskUsageCount} archived task(s), ${pending.trashedTaskUsageCount} trashed task(s), and ${pending.recurringTemplateUsageCount} recurring template(s). ")
+                            if (pending.hasTaskReferences) append("Affected tasks and Recurring Task Series will become Unset. ")
+                            if (pending.taskUsageCount > 0) append("Restoring archived or trashed tasks will not restore their type. ")
+                            append("This cannot be undone. ")
+                            if (pending.usageCount > 0) append("Blocks are classified independently of tasks. Delete all blocks using this type, or move them to the selected type.")
                         },
                         style = TimeboxTheme.type.bodySmall,
                     )

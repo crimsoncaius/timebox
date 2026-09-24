@@ -39,6 +39,8 @@ data class TaskType(
     val usageCount: Int,
     val taskUsageCount: Int = 0,
     val recurringTemplateUsageCount: Int = 0,
+    val archivedTaskUsageCount: Int = 0,
+    val trashedTaskUsageCount: Int = 0,
 ) {
     val root: String get() = name.substringBefore('/')
     val leaf: String get() = name.substringAfterLast('/')
@@ -205,6 +207,8 @@ fun TaskTypeDto.toModel() = TaskType(
     name = name,
     usageCount = usageCount,
     taskUsageCount = taskUsageCount,
+    archivedTaskUsageCount = archivedTaskUsageCount,
+    trashedTaskUsageCount = trashedTaskUsageCount,
     recurringTemplateUsageCount = recurringTemplateUsageCount,
 )
 

@@ -35,7 +35,7 @@ export function TaskTypesPage() {
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [renameError, setRenameError] = useState<string | null>(null)
-  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string; blockCount: number; taskCount: number; seriesCount: number } | null>(null)
+  const [resolveDelete, setResolveDelete] = useState<{ id: number; name: string; blockCount: number; taskCount: number; archivedTaskCount: number; trashedTaskCount: number; seriesCount: number } | null>(null)
   const [resolveBusy, setResolveBusy] = useState(false)
 
   const visibleTypes = useMemo(() => filterTaskTypesByQuery(types, newName), [types, newName])
@@ -116,6 +116,8 @@ export function TaskTypesPage() {
         name,
         blockCount,
         taskCount,
+        archivedTaskCount: selected?.archived_task_usage_count ?? 0,
+        trashedTaskCount: selected?.trashed_task_usage_count ?? 0,
         seriesCount,
       })
       setSaveState('idle')
@@ -141,6 +143,8 @@ export function TaskTypesPage() {
           name: row?.name ?? `Task type #${id}`,
           blockCount: row?.usage_count ?? 1,
           taskCount: row?.task_usage_count ?? 0,
+          archivedTaskCount: row?.archived_task_usage_count ?? 0,
+          trashedTaskCount: row?.trashed_task_usage_count ?? 0,
           seriesCount: row?.recurring_template_usage_count ?? 0,
         })
         setSaveState('idle')
@@ -393,6 +397,8 @@ export function TaskTypesPage() {
         taskTypeName={resolveDelete?.name ?? ''}
         blockUsageCount={resolveDelete?.blockCount ?? 0}
         taskUsageCount={resolveDelete?.taskCount ?? 0}
+        archivedTaskUsageCount={resolveDelete?.archivedTaskCount ?? 0}
+        trashedTaskUsageCount={resolveDelete?.trashedTaskCount ?? 0}
         seriesUsageCount={resolveDelete?.seriesCount ?? 0}
         migrateTargets={migrateTargets}
         busy={resolveBusy}
