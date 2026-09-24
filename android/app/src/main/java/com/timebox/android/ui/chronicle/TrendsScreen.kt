@@ -6,6 +6,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -15,9 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.remote.TrendNodeDto
@@ -70,17 +74,26 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
                 TextButton(onClick = { pick(end) { viewModel.customRange(start, it) } }) { Text("To ${end.format(formatter)} (inclusive)") }
             }
         } else {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { viewModel.shiftRange(-1) }, enabled = report != null, modifier = Modifier.semantics { contentDescription = "Previous ${state.period}" }) { Text("‹", fontSize = 26.sp) }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    report?.let {
-                        Text(if (it.start == it.end) LocalDate.parse(it.start).format(formatter) else "${LocalDate.parse(it.start).format(formatter)} – ${LocalDate.parse(it.end).format(formatter)}", color = colors.on, fontSize = 15.sp)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { viewModel.shiftRange(-1) }, enabled = report != null, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous ${state.period}", modifier = Modifier.size(24.dp))
                     }
-                    TextButton(onClick = viewModel::currentRange) { Text(if (state.period == "day") "Today" else "This ${state.period}") }
+                    Text(
+                        text = report?.let { trendRangeLabel(state.period, LocalDate.parse(it.start), LocalDate.parse(it.end)) } ?: "…",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        color = colors.on,
+                        fontSize = 15.sp,
+                    )
+                    IconButton(onClick = { viewModel.shiftRange(1) }, enabled = report != null && canAdvanceTrendRange(report, state.period), modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = "Next ${state.period}", modifier = Modifier.size(24.dp))
+                    }
                 }
-                TextButton(onClick = { viewModel.shiftRange(1) }, enabled = report != null && canAdvanceTrendRange(report, state.period), modifier = Modifier.semantics { contentDescription = "Next ${state.period}" }) { Text("›", fontSize = 26.sp) }
+                TextButton(onClick = viewModel::currentRange) { Text(if (state.period == "day") "Today" else "This ${state.period}") }
             }
         }
+
         if (state.trendsLoading) Text("Updating recorded time…", color = colors.onVariant)
         state.customRangeError?.let { Text(it, color = colors.error) }
         state.trendsError?.let {
@@ -139,5 +152,17 @@ private fun TrendRow(name: String, seconds: Double, total: Double, depth: Int, e
         Box(Modifier.fillMaxWidth().height(if (depth == 0) 6.dp else 4.dp).clip(TimeboxShapes.chip).background(colors.low)) {
             Box(Modifier.fillMaxWidth(fraction.toFloat()).fillMaxHeight().background(if (depth == 0) colors.onVariant else colors.outline))
         }
+    }
+}
+
+/** Compact labels leave equal space for the two fixed-size navigation targets. */
+internal fun trendRangeLabel(period: String, start: LocalDate, end: LocalDate): String {
+    val fullDate = DateTimeFormatter.ofPattern("d MMM uuuu")
+    return when {
+        period == "month" -> start.format(DateTimeFormatter.ofPattern("MMMM uuuu"))
+        start == end -> start.format(fullDate)
+        start.year != end.year -> "${start.format(fullDate)} – ${end.format(fullDate)}"
+        start.month == end.month -> "${start.dayOfMonth}–${end.format(fullDate)}"
+        else -> "${start.format(DateTimeFormatter.ofPattern("d MMM"))} – ${end.format(fullDate)}"
     }
 }
