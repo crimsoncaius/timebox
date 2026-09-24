@@ -18,7 +18,7 @@ import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
 import { actualPlacementEnd, nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../../lib/blockPlacement'
-import { needsElapsedDayView } from '../../lib/dayView'
+import { captureTimelineCentre, needsElapsedDayView } from '../../lib/dayView'
 import { ActivityTracking } from '../activity/ActivityTracking'
 import { getActivityRepository, type ActivityCorrection } from '../activity/activityRepository'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
@@ -116,6 +116,11 @@ export function TodayPage() {
   }, [])
   const [blockDragActive, setBlockDragActive] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const resetTimelineZoom = () => {
+    const restoreCentre = captureTimelineCentre(timelineRef.current)
+    setTimelineZoom(1)
+    requestAnimationFrame(restoreCentre)
+  }
   const [scrollToNowRequest, setScrollToNowRequest] = useState(0)
   const draftCommitInFlightRef = useRef(false)
   const planningTaskInFlightRef = useRef(false)
@@ -738,7 +743,7 @@ export function TodayPage() {
             </div>
           </section>
 
-          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} zoom={timelineZoom} onZoomChange={setTimelineZoom} onResetZoom={() => setTimelineZoom(1)} onClose={() => setViewOpen(false)} storageError={storageError} />}
+          {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} zoom={timelineZoom} onZoomChange={setTimelineZoom} onResetZoom={resetTimelineZoom} onClose={() => setViewOpen(false)} storageError={storageError} />}
 
           {taskTypes.length === 0 && (
             <div className="mb-6 rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 text-sm text-on-surface-variant">
