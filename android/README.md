@@ -11,7 +11,7 @@ both talk to the same FastAPI backend, and neither shares code with the other.
 | **Day** | Dual-lane planned/actual timeline on the 30-minute grid, hour gutter, now line, tap-to-create, long-press then drag to move, grooves to resize, bottom sheet to edit. |
 | **Battle Plan** | Projects and admin tasks, subtasks, filters, deadlines, reminders, Ready to Plan, archive/trash, and task detail editing. |
 | **Recurring** | Scheduled and quota-based templates with preview, create/edit, pause, resume, end, and delete flows. |
-| **Chronicle** | Month grid; days that have at least one block show their window (e.g. `8–20`). Any cell opens that date in Day. |
+| **Chronicle** | Month grid through the current reporting month; dates with Planned Blocks, Actual Blocks, or Task Completion show activity. Any cell opens that date in Day. |
 | **Types** | Slash-path task types grouped by root, with usage counts and delete. |
 | **Settings** | Day-window steppers, full-24h toggle, dark theme, and the server address / API key for this device. |
 
@@ -99,13 +99,12 @@ browser UI.
 
 - `GET /days/{date}/preview` — renderable blocks and window settings for the live
   adjacent-page swipe. Missing dates stay read-only, so peeking and snapping back does
-  not add an empty Chronicle row.
+  not save an empty Day row.
 - `GET /days/{date}/summary` — planned/actual totals plus per-task-type minutes for
-  future reporting. Read-only: unlike `GET /days/{date}` it does not create the day.
+  future reporting. Read-only, like `GET /days/{date}`.
 - `GET /task-types` now includes `usage_count` per row, for the Types screen.
-- `GET /days` now includes `block_count` per row. Opening a date creates the day, so the
-  archive fills with empty entries; the count is what lets Chronicle print a window label
-  only for days that actually hold something.
+- `GET /days/chronicle?month=YYYY-MM` returns dates with plans, recorded activity, or
+  Task Completion in that month. Missing and empty Day rows do not appear.
 - `/projects`, `/tasks`, and `/reminders` provide the Battle Plan, Ready to Plan, and
   notification workflows.
 - `/recurring-templates` provides preview and lifecycle operations for scheduled and

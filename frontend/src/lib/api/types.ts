@@ -183,13 +183,13 @@ export interface DayMeta {
 }
 
 export interface DayRead {
-  id: number
+  id: number | null
   date: string
   start_hour: number
   end_hour: number
   show_full_day: boolean
-  created_at: string
-  updated_at: string
+  created_at: string | null
+  updated_at: string | null
   time_blocks: TimeBlock[]
   planned_blocks?: Array<{
     id: number
@@ -221,6 +221,20 @@ export interface DayListItem {
   updated_at: string
   block_count?: number
   actual_blocks?: ActualBlockDayProjection[]
+}
+
+export interface ChronicleDay {
+  date: string
+  planned_count: number
+  actual_count: number
+  has_completion: boolean
+  actual_blocks: ActualBlockDayProjection[]
+}
+
+export interface ChronicleMonth {
+  month: string
+  today: string
+  days: ChronicleDay[]
 }
 
 export interface HealthResponse {

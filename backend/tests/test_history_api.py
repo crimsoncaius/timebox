@@ -1,43 +1,27 @@
-"""History list endpoint coverage."""
+"""Chronicle Calendar endpoint coverage."""
 
 
 from __future__ import annotations
 
 
-def test_list_days_returns_rows_without_summary(client):
-    client.get("/days/2026-05-01")
-    r = client.get("/days?limit=5")
-    assert r.status_code == 200
-    rows = r.json()
-    assert len(rows) >= 1
-    row = next(x for x in rows if x["date"] == "2026-05-01")
-    assert "date" in row
-    assert "updated_at" in row
-    assert "summary" not in row
-
-
-def test_list_days_counts_blocks(client):
-    """Opening a date creates an empty day; only real blocks lift the count."""
-    tt = client.post("/task-types", json={"name": "reading"}).json()
+def test_chronicle_excludes_opened_dates_and_reports_saved_plans(client):
     client.get("/days/2026-05-02")
-    client.get("/days/2026-05-03")
-    client.post(
+    task_type = client.post("/task-types", json={"name": "reading"}).json()
+    saved = client.post(
         "/days/2026-05-03/blocks",
-        json={
-            "lane": "planned",
-            "task_type_id": tt["id"],
-            "start_minute": 540,
-            "end_minute": 600,
-        },
+        json={"lane": "planned", "task_type_id": task_type["id"], "start_minute": 540, "end_minute": 600},
     )
+    assert saved.status_code == 200, saved.text
 
-    rows = {row["date"]: row for row in client.get("/days?limit=50").json()}
-    assert rows["2026-05-02"]["block_count"] == 0
-    assert rows["2026-05-03"]["block_count"] == 1
+    response = client.get("/days/chronicle?month=2026-05")
+    assert response.status_code == 200
+    assert response.json()["days"] == [{
+        "date": "2026-05-03", "planned_count": 1, "actual_count": 0,
+        "has_completion": False, "actual_blocks": [],
+    }]
 
 
-def test_list_days_exposes_named_standalone_actual_for_chronicle(client):
-    client.get("/days/2026-05-04")
+def test_chronicle_exposes_named_actual_without_day_row(client):
     created = client.post(
         "/actual-blocks",
         json={
@@ -48,11 +32,9 @@ def test_list_days_exposes_named_standalone_actual_for_chronicle(client):
     )
     assert created.status_code == 201, created.text
 
-    row = next(
-        row for row in client.get("/days?limit=50").json()
-        if row["date"] == "2026-05-04"
-    )
-    assert row["block_count"] == 1
-    assert len(row["actual_blocks"]) == 1
-    assert row["actual_blocks"][0]["actual_block"]["name"] == "Evening walk"
-    assert row["actual_blocks"][0]["actual_block"]["task_type"]["name"] == "unspecified"
+    response = client.get("/days/chronicle?month=2026-05")
+    assert response.status_code == 200
+    day = next(row for row in response.json()["days"] if row["date"] == "2026-05-04")
+    assert day["actual_count"] == 1
+    assert day["actual_blocks"][0]["actual_block"]["name"] == "Evening walk"
+    assert day["actual_blocks"][0]["actual_block"]["task_type"]["name"] == "unspecified"

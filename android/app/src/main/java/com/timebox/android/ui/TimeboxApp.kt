@@ -165,7 +165,7 @@ fun TimeboxApp(
             }
             AppRoutes.Chronicle -> {
                 dayState.day?.today?.let(chronicleViewModel::setToday)
-                chronicleViewModel.load()
+                chronicleViewModel.open()
             }
             AppRoutes.Types -> typesViewModel.load()
             AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)

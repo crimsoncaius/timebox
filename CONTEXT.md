@@ -199,7 +199,7 @@ The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planni
 _Avoid_: Today view, timeline page
 
 **Chronicle**:
-The retrospective surface: what already happened, whether recorded time or completed work. It has two views, Calendar (one past day at a time) and Trends.
+The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. It has two views, Calendar (one month at a time) and Trends.
 _Avoid_: History, Analytics tab
 
 **Trends**:

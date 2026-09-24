@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
-import { api, type DayListItem } from '../../lib/api'
+import { api, type ChronicleDay } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
 import { TrendsPanel } from './TrendsPanel'
 import { daysByDate, shiftMonth } from './historyCalendar'
@@ -22,56 +22,54 @@ export function HistoryPage() {
   const selectView = (next: ChronicleView) =>
     setSearchParams(next === 'trends' ? { view: 'trends' } : {}, { replace: true })
   const [highlight, setHighlight] = useState<{ name: string; days: Record<string, number> } | null>(null)
-  const [rows, setRows] = useState<DayListItem[]>([])
+  const [rows, setRows] = useState<ChronicleDay[]>([])
   const [applicationMonth, setApplicationMonth] = useState<CalendarMonth | null>(null)
+  const [viewMonth, setViewMonth] = useState<CalendarMonth | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [data, health] = await Promise.all([api.listDays(500), api.health()])
-      setRows(data)
-      setApplicationMonth(calendarMonthFromIso(health.today))
-    } catch (e) {
-      setError(errorMessage(e, 'Failed to load history'))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   useEffect(() => {
-    void load()
-  }, [load])
+    let active = true
+    const month = viewMonth ? `${viewMonth.y}-${String(viewMonth.m).padStart(2, '0')}` : undefined
+    void api.chronicleMonth(month).then((data) => {
+      if (!active) return
+      setRows(data.days)
+      setApplicationMonth(calendarMonthFromIso(data.today))
+      setError(null)
+      setLoading(false)
+    }).catch((cause) => {
+      if (!active) return
+      setError(errorMessage(cause, 'Failed to load Chronicle'))
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [viewMonth])
 
-  const derivedDefaultMonth = useMemo(() => {
-    if (rows.length > 0) {
-      return calendarMonthFromIso(rows[0].date)
-    }
-    return applicationMonth
-  }, [applicationMonth, rows])
-
-  const [viewMonth, setViewMonth] = useState<CalendarMonth | null>(null)
-  const visibleMonth = viewMonth ?? derivedDefaultMonth
+  const visibleMonth = viewMonth ?? applicationMonth
 
   const byDate = useMemo(() => daysByDate(rows), [rows])
+
+  const showMonth = useCallback((month: CalendarMonth | null) => {
+    setLoading(true)
+    setError(null)
+    setViewMonth(month)
+  }, [])
 
   const onPrevMonth = useCallback(() => {
     if (!visibleMonth) return
     const n = shiftMonth(visibleMonth.y, visibleMonth.m, -1)
-    setViewMonth({ y: n.year, m: n.month })
-  }, [visibleMonth])
+    showMonth({ y: n.year, m: n.month })
+  }, [visibleMonth, showMonth])
 
   const onNextMonth = useCallback(() => {
-    if (!visibleMonth) return
+    if (!visibleMonth || !applicationMonth || visibleMonth.y > applicationMonth.y || (visibleMonth.y === applicationMonth.y && visibleMonth.m >= applicationMonth.m)) return
     const n = shiftMonth(visibleMonth.y, visibleMonth.m, 1)
-    setViewMonth({ y: n.year, m: n.month })
-  }, [visibleMonth])
+    showMonth({ y: n.year, m: n.month })
+  }, [visibleMonth, applicationMonth, showMonth])
 
   const onThisMonth = useCallback(() => {
-    if (applicationMonth) setViewMonth(applicationMonth)
-  }, [applicationMonth])
+    if (viewMonth) showMonth(null)
+  }, [viewMonth, showMonth])
 
   return (
     <Layout>
@@ -83,7 +81,7 @@ export function HistoryPage() {
           <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
             {view === 'trends'
               ? 'Recorded time by Task Type.'
-              : 'Browse by month. Days you have opened appear in the archive; any day opens in Day.'}
+              : 'Browse planned, recorded, and completed days through today. Any date opens in Day.'}
           </p>
         </div>
       </section>
@@ -108,7 +106,7 @@ export function HistoryPage() {
           const latest = Object.keys(days).sort().at(-1)
           if (!latest) return
           setHighlight({ name, days })
-          setViewMonth(calendarMonthFromIso(latest))
+          showMonth(calendarMonthFromIso(latest))
           selectView('calendar')
         }} />
       </div>
@@ -123,7 +121,7 @@ export function HistoryPage() {
       {loading && <p className="text-on-surface-variant">Loading…</p>}
 
       {!loading && rows.length === 0 && !highlight && (
-        <p className="mb-10 text-on-surface-variant">No days yet. Open Day to create your first day.</p>
+        <p className="mb-10 text-on-surface-variant">No planned, recorded, or completed days this month.</p>
       )}
 
       {!loading && visibleMonth && (
@@ -135,6 +133,7 @@ export function HistoryPage() {
           highlightedType={highlight?.name}
           onPrevMonth={onPrevMonth}
           onNextMonth={onNextMonth}
+          canNextMonth={applicationMonth != null && (visibleMonth.y < applicationMonth.y || (visibleMonth.y === applicationMonth.y && visibleMonth.m < applicationMonth.m))}
           onThisMonth={onThisMonth}
         />
       )}

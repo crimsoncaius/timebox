@@ -75,7 +75,7 @@ data class DayMetaDto(
 
 @Serializable
 data class DayDto(
-    val id: Int,
+    val id: Int? = null,
     val date: String,
     @SerialName("start_hour") val startHour: Int,
     @SerialName("end_hour") val endHour: Int,
@@ -109,6 +109,22 @@ data class DayListItemDto(
     @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("block_count") val blockCount: Int,
     @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
+)
+
+@Serializable
+data class ChronicleDayDto(
+    val date: String,
+    @SerialName("planned_count") val plannedCount: Int,
+    @SerialName("actual_count") val actualCount: Int,
+    @SerialName("has_completion") val hasCompletion: Boolean,
+    @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
+)
+
+@Serializable
+data class ChronicleMonthDto(
+    val month: String,
+    val today: String,
+    val days: List<ChronicleDayDto>,
 )
 
 @Serializable

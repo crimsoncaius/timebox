@@ -44,6 +44,9 @@ interface TimeboxApi {
     @GET("days")
     suspend fun listDays(@Query("limit") limit: Int = 120): List<DayListItemDto>
 
+    @GET("days/chronicle")
+    suspend fun chronicleMonth(@Query("month") month: String? = null): ChronicleMonthDto
+
     @GET("days/{date}")
     suspend fun getDay(@Path("date") date: String): DayDto
 

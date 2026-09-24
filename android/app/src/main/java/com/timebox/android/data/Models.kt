@@ -5,7 +5,8 @@ import android.os.SystemClock
 import com.timebox.android.data.remote.ActualBlockDayProjectionDto
 import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.DayDto
-import com.timebox.android.data.remote.DayListItemDto
+import com.timebox.android.data.remote.ChronicleDayDto
+import com.timebox.android.data.remote.ChronicleMonthDto
 import com.timebox.android.data.remote.DayPreviewDto
 import com.timebox.android.data.remote.DaySummaryDto
 import com.timebox.android.data.remote.SettingsDto
@@ -160,20 +161,23 @@ data class Day(
 
 data class ArchivedDay(
     val date: LocalDate,
-    val startHour: Int,
-    val endHour: Int,
-    val showFullDay: Boolean,
-    val blockCount: Int,
+    val plannedCount: Int,
+    val actualCount: Int,
+    val hasCompletion: Boolean,
     val actualBlocks: List<ActualBlock> = emptyList(),
 ) {
-    /** The day's window, or null for a date that was opened but never filled in. */
-    val windowLabel: String?
-        get() = when {
-            blockCount == 0 -> null
-            showFullDay -> "24h"
-            else -> "$startHour–$endHour"
-        }
+    val summaryLabel: String
+        get() = listOfNotNull(
+            plannedCount.takeIf { it > 0 }?.let { "$it planned" },
+            actualCount.takeIf { it > 0 }?.let { "$it actual" },
+            if (hasCompletion) "Completed" else null,
+        ).joinToString(" · ")
 }
+
+data class ChronicleMonth(
+    val today: LocalDate,
+    val days: List<ArchivedDay>,
+)
 
 data class DaySummaryRow(
     val taskTypeName: String,
@@ -323,13 +327,17 @@ fun DayPreviewDto.toModel(elapsedRealtime: () -> Long = SystemClock::elapsedReal
     serverNowMinute = parseMinuteOfDay(meta.serverNowIso),
 )
 
-fun DayListItemDto.toModel() = ArchivedDay(
+fun ChronicleDayDto.toModel() = ArchivedDay(
     date = LocalDate.parse(date),
-    startHour = startHour,
-    endHour = endHour,
-    showFullDay = showFullDay,
-    blockCount = blockCount,
+    plannedCount = plannedCount,
+    actualCount = actualCount,
+    hasCompletion = hasCompletion,
     actualBlocks = actualBlocks.map { it.actualBlock.toModel() },
+)
+
+fun ChronicleMonthDto.toModel() = ChronicleMonth(
+    today = LocalDate.parse(today),
+    days = days.map { it.toModel() },
 )
 
 fun DaySummaryDto.toModel() = DaySummary(
