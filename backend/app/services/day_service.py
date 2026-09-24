@@ -29,6 +29,7 @@ from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
 from app.services import activity_selection, actual_block_service, task_type_service
 from app.services.recurrence.protection import protect_task_occurrence
+from app.services.recurrence.task_overrides import record_task_overrides
 from app.services.task_queries import task_select
 
 MIN_PLANNED_BLOCK_MINUTES = 1
@@ -543,6 +544,7 @@ def create_time_block(db: Session, day: Day, body: PlannedBlockCreate) -> TimeBl
     db.add(block)
     if task is not None and body.lane == BlockLane.planned:
         task.ready_to_plan = False
+        record_task_overrides(task, {"ready_to_plan"})
         protect_task_occurrence(db, task)
     _touch_day(day)
     db.commit()
@@ -629,6 +631,7 @@ def commit_planning_session(
                 )
             )
             task.ready_to_plan = False
+            record_task_overrides(task, {"ready_to_plan"})
             protect_task_occurrence(db, task)
             _touch_day(day)
         db.commit()
@@ -691,6 +694,7 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
     if "task_id" in data:
         if target_task is not None and block.lane == BlockLane.planned:
             target_task.ready_to_plan = False
+            record_task_overrides(target_task, {"ready_to_plan"})
             protect_task_occurrence(db, target_task)
     if (data or target_date != day.date) and block.lane == BlockLane.planned:
         _mark_generated_planned_block(

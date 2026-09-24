@@ -278,6 +278,7 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
           <div><dt className="text-xs text-on-surface-variant">Starts</dt><dd className="mt-1">{displayDate(template.start_date)}</dd></div>
           <div><dt className="text-xs text-on-surface-variant">Ends</dt><dd className="mt-1">{template.end_date ? displayDate(template.end_date) : template.cycle_limit ? `${template.cycle_limit} cycles` : 'Never'}</dd></div>
         </dl>
+        {template.preplanning_mode === 'ready_to_plan' ? <section className="mt-8"><h3 className="font-headline text-lg font-light">Pre-planning</h3><p className="mt-3 text-sm">Ready to Plan · Each occurrence enters the queue on its date.</p></section> : null}
         {template.preplanning_schedule ? (
           <section className="mt-8" aria-labelledby={`preplanning-schedule-${template.id}`}>
             <h3 id={`preplanning-schedule-${template.id}`} className="font-headline text-lg font-light">Recurring Pre-planning Schedule</h3>
@@ -417,6 +418,8 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
   const [cycleLimit, setCycleLimit] = useState(template?.cycle_limit ?? 10)
   const [checklist, setChecklist] = useState(template?.checklist_items.map((item) => item.title).join('\n') ?? '')
   const [keepUnfinishedOverdue, setKeepUnfinishedOverdue] = useState(template?.keep_unfinished_overdue ?? false)
+  const initialPreplanningMode = template?.preplanning_mode ?? (template?.preplanning_schedule ? 'planned_time' : 'none')
+  const [preplanningMode, setPreplanningMode] = useState(initialPreplanningMode)
   const [preplanningSlots, setPreplanningSlots] = useState<PreplanningSlotDraft[]>(
     () => initialPreplanningSlots(template),
   )
@@ -448,8 +451,9 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     || cycleLimit !== (template?.cycle_limit ?? 10)
     || checklist !== (template?.checklist_items.map((item) => item.title).join('\n') ?? '')
     || keepUnfinishedOverdue !== (template?.keep_unfinished_overdue ?? false)
+    || preplanningMode !== initialPreplanningMode
     || JSON.stringify(preplanningSlots) !== JSON.stringify(initialPreplanningSlots(template))
-  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, preplanningSlots, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
+  ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, preplanningMode, initialPreplanningMode, preplanningSlots, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
 
   const requestClose = useCallback(() => {
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
@@ -521,7 +525,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     if (endOfDay && hour === 0 && minute === 0) return 24 * 60
     return hour * 60 + minute
   }
-  const scheduleSlots = preplanningSlots.map((slot) => ({
+  const scheduleSlots = (mode === 'scheduled' && preplanningMode === 'planned_time' ? preplanningSlots : []).map((slot) => ({
     ...(slot.key ? { key: slot.key } : {}),
     start_minute: minuteForTime(slot.start),
     end_minute: minuteForTime(slot.end, true),
@@ -539,7 +543,8 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     && slot.start_minute < other.end_minute
     && other.start_minute < slot.end_minute
   )))
-  const preplanningError = invalidSlot
+  const preplanningError = mode === 'scheduled' && preplanningMode === 'planned_time' && scheduleSlots.length === 0
+    ? 'Add a Planned Block slot.' : invalidSlot
     ? 'A Planned Block must end at least 30 minutes after it starts.'
     : overlappingSlots ? 'Recurring Pre-planning Schedule slots cannot overlap.' : null
   const updatePreplanningSlot = (index: number, changes: Partial<PreplanningSlotDraft>) => {
@@ -573,6 +578,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
         confirm_backfill: confirmBackfill,
         keep_unfinished_overdue: mode === 'scheduled' && keepUnfinishedOverdue,
         ...(mode === 'scheduled' ? {
+          preplanning_mode: preplanningMode,
           preplanning_schedule: scheduleSlots.length ? { slots: scheduleSlots } : null,
         } : {}),
       }
@@ -712,23 +718,23 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
 
           {mode === 'scheduled' ? (
             <div className="mt-4 rounded-xl border border-[var(--task-detail-border)] p-3.5">
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  aria-label="Pre-plan each Task Occurrence"
-                  checked={preplanningSlots.length > 0}
-                  onChange={(event) => {
-                    if (event.target.checked) addPreplanningSlot()
-                    else setPreplanningSlots([])
-                  }}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm text-[var(--task-detail-primary)]">Pre-plan each Task Occurrence</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-[var(--task-detail-muted)]">Create attached Planned Blocks in the existing seven-day horizon.</span>
-                </span>
-              </label>
-              {preplanningSlots.length > 0 ? (
+              <Select label="Pre-planning" value={preplanningMode} onChange={(value) => {
+                const destination = value as typeof preplanningMode
+                setPreplanningMode(destination)
+                if (destination === 'planned_time' && preplanningSlots.length === 0) addPreplanningSlot()
+              }}>
+                <option value="none">No pre-planning</option>
+                <option value="ready_to_plan">Ready to Plan</option>
+                <option value="planned_time">Planned time</option>
+              </Select>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">
+                {preplanningMode === 'ready_to_plan'
+                  ? 'Add each occurrence to Ready to Plan on its date, without assigning a time.'
+                  : preplanningMode === 'planned_time'
+                    ? 'Create attached Planned Blocks in the existing seven-day horizon.'
+                    : 'Create occurrences without adding them to the queue or assigning a time.'}
+              </p>
+              {preplanningMode === 'planned_time' ? (
                 <div className="mt-3 space-y-3">
                   {preplanningSlots.map((slot, index) => {
                     const suffix = index === 0 ? '' : ` ${index + 1}`

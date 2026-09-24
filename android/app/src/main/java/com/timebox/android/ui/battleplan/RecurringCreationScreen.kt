@@ -242,9 +242,10 @@ internal fun RecurringPreplanningScheduleEditor(
     onStart: (Int, String) -> Unit,
     onEnd: (Int, String) -> Unit,
     onWeekday: (Int, Int) -> Unit,
+    showEnabledSwitch: Boolean = true,
 ) {
     val slots = state.preplanningSlots
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    if (showEnabledSwitch) Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Pre-plan each Task Occurrence", style = TimeboxTheme.type.body)
             Text("Create attached Planned Blocks in the existing seven-day horizon.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)

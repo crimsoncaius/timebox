@@ -292,6 +292,7 @@ export interface RecurringTemplate {
   end_date: string | null
   cycle_limit: number | null
   keep_unfinished_overdue?: boolean
+  preplanning_mode?: 'none' | 'ready_to_plan' | 'planned_time'
   preplanning_schedule?: RecurringPreplanningSchedule | null
   urgency: PriorityLevel | null
   importance: PriorityLevel | null
@@ -327,6 +328,7 @@ export type RecurringTemplateWrite = RecurrenceRuleWrite & {
   checklist_titles?: string[]
   confirm_backfill?: boolean
   keep_unfinished_overdue?: boolean
+  preplanning_mode?: 'none' | 'ready_to_plan' | 'planned_time'
   preplanning_schedule?: {
     slots: Array<{
       key?: string

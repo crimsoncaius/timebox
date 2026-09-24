@@ -153,6 +153,27 @@ describe('RecurringPage', () => {
     expect(within(schedule).getByRole('status')).toHaveTextContent('Unavailable on 19 Aug 2026, 15:00–00:00')
   })
 
+  it('creates queue preplanning without time slots, even after switching from Planned time', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
+    await screen.findByText('3 times per week')
+    await user.click(screen.getByRole('button', { name: 'New recurring task' }))
+    const form = screen.getByRole('dialog', { name: 'New recurring task' })
+    await user.type(within(form).getByLabelText('Title'), 'Queued routine')
+    await user.selectOptions(within(form).getByLabelText('Pre-planning'), 'planned_time')
+    await user.clear(within(form).getByLabelText('Pre-planning start'))
+    await user.selectOptions(within(form).getByLabelText('Pre-planning'), 'ready_to_plan')
+    expect(within(form).queryByLabelText('Pre-planning start')).not.toBeInTheDocument()
+    await user.click(within(form).getByRole('button', { name: 'Create recurrence' }))
+    await screen.findByText('Queued routine')
+    const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([input, init]) => String(input).endsWith('/recurring-templates') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
+      preplanning_mode: 'ready_to_plan', preplanning_schedule: null,
+    })
+  })
+
   it('creates a scheduled template from the previewed form', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
@@ -165,7 +186,7 @@ describe('RecurringPage', () => {
     expect(within(form).getByText(/3 times per calendar week/)).toBeInTheDocument()
     await user.click(within(form).getByRole('radio', { name: 'On a schedule' }))
     await user.type(within(form).getByLabelText('Title'), 'Morning review')
-    await user.click(within(form).getByLabelText('Pre-plan each Task Occurrence'))
+    await user.selectOptions(within(form).getByLabelText('Pre-planning'), 'planned_time')
     await user.clear(within(form).getByLabelText('Pre-planning start'))
     await user.type(within(form).getByLabelText('Pre-planning start'), '08:30')
     await user.clear(within(form).getByLabelText('Pre-planning end'))
@@ -196,7 +217,7 @@ describe('RecurringPage', () => {
     await user.click(screen.getByRole('button', { name: 'New recurring task' }))
     const form = screen.getByRole('dialog', { name: 'New recurring task' })
     await user.type(within(form).getByLabelText('Title'), 'Evening review')
-    await user.click(within(form).getByLabelText('Pre-plan each Task Occurrence'))
+    await user.selectOptions(within(form).getByLabelText('Pre-planning'), 'planned_time')
     await user.clear(within(form).getByLabelText('Pre-planning start'))
     await user.type(within(form).getByLabelText('Pre-planning start'), '23:00')
     await user.clear(within(form).getByLabelText('Pre-planning end'))

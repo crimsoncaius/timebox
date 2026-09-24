@@ -42,6 +42,26 @@ class RoutinePatchTest {
         val before = baseline.copy(preplanningSlots = listOf(RecurringPreplanningSlotDraft(weekday = 0)))
         assertEquals(PatchField.Null, recurringDraftPatch(before, baseline, false).preplanningSchedule)
     }
+    @Test fun `switching timed planning to queue clears slots and serializes the destination`() {
+        val before = baseline.copy(preplanningSlots = listOf(RecurringPreplanningSlotDraft(weekday = 0)))
+        val after = before.copy(queuePreplanning = true, preplanningSlots = emptyList())
+        val patch = recurringDraftPatch(before, after, false)
+        assertEquals(PatchField.of("ready_to_plan"), patch.preplanningMode)
+        assertEquals(PatchField.Null, patch.preplanningSchedule)
+        assertTrue(patch.toJson().toString().contains("\"preplanning_mode\":\"ready_to_plan\""))
+        assertEquals(PatchField.of("none"), recurringDraftPatch(after, baseline, false).preplanningMode)
+    }
+
+    @Test fun `queue choice survives draft restoration and has no timed schedule`() {
+        val draft = baseline.copy(queuePreplanning = true)
+        val saver = routineDraftSaver(baseline)
+        val saved = with(saver) { androidx.compose.runtime.saveable.SaverScope { true }.save(draft) }!!
+        val restored = saver.restore(saved)!!
+        assertTrue(restored.queuePreplanning)
+        assertEquals("ready_to_plan", restored.preplanningDestination())
+        assertNull(restored.toPreplanningSchedule())
+        assertEquals("none", restored.copy(mode = RecurrenceMode.Quota).preplanningDestination())
+    }
     @Test fun `quota summaries retain their period and scheduled summaries their selected days`() {
         val quota = baseline.copy(mode = RecurrenceMode.Quota, quotaCount = "3", frequency = RecurrenceFrequency.Monthly)
         assertEquals("3 times per month", routineRuleSummary(quota))

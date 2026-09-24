@@ -62,7 +62,7 @@ internal fun RoutineRepeatEditor(saved: RecurringEditorUiState, creating: Boolea
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (creating) {
                     CreationMode("On a schedule", "Create tasks on particular dates", !quota, true) { state = state.copy(mode = RecurrenceMode.Scheduled) }
-                    CreationMode("Flexible quota", "Complete a number of sessions each period", quota, true) { state = state.copy(mode = RecurrenceMode.Quota, interval = "1", keepUnfinishedOverdue = false, preplanningSlots = emptyList()) }
+                    CreationMode("Flexible quota", "Complete a number of sessions each period", quota, true) { state = state.copy(mode = RecurrenceMode.Quota, interval = "1", keepUnfinishedOverdue = false, queuePreplanning = false, preplanningSlots = emptyList()) }
                 } else {
                     Text(if (quota) "Flexible quota" else "On a schedule", style = TimeboxTheme.type.label)
                     Text("Chosen when this routine was created.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)

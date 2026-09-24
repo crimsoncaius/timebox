@@ -384,6 +384,7 @@ class TimeboxRepository private constructor(
                 confirmBackfill = request.confirmBackfill,
                 keepUnfinishedOverdue = request.keepUnfinishedOverdue,
                 preplanningSchedule = request.preplanningSchedule?.toWriteDto(),
+                preplanningMode = request.preplanningMode,
             )
         ).toModel()
     }
