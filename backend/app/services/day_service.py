@@ -232,6 +232,14 @@ def to_day_read(db: Session, day: Day, settings: Settings) -> DayRead:
     )
 
 
+def read_day(db: Session, day: Day | None, d: dt.date, settings: Settings) -> DayRead:
+    """Render an unsaved date without changing storage."""
+    if day is not None:
+        return to_day_read(db, day, settings)
+    preview = build_day_preview(db, None, d, settings)
+    return DayRead(id=None, created_at=None, updated_at=None, **preview.model_dump())
+
+
 def build_day_preview(
     db: Session,
     day: Day | None,

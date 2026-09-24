@@ -1,4 +1,4 @@
-import type { DayListItem } from '../../lib/api'
+import type { ChronicleDay } from '../../lib/api'
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n)
@@ -45,8 +45,8 @@ export function buildMonthGridUTC(year: number, month: number): MonthGridCell[] 
   return cells
 }
 
-export function daysByDate(items: DayListItem[]): Map<string, DayListItem> {
-  const m = new Map<string, DayListItem>()
+export function daysByDate(items: ChronicleDay[]): Map<string, ChronicleDay> {
+  const m = new Map<string, ChronicleDay>()
   for (const row of items) {
     m.set(row.date, row)
   }

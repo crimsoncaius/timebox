@@ -7,6 +7,7 @@ import type {
   PlannedRecordingResult,
   DayListItem,
   DayRead,
+  ChronicleMonth,
   DueReminder,
   HealthResponse,
   Project,
@@ -30,6 +31,7 @@ export const api = {
   health: () => fetchJson<HealthResponse>('/health'),
 
   getDay: (date: string) => fetchJson<DayRead>(`/days/${date}`),
+  chronicleMonth: (month?: string) => fetchJson<ChronicleMonth>(`/days/chronicle${month ? `?month=${month}` : ''}`),
 
   getSettings: () => fetchJson<SettingsRead>('/settings'),
 

@@ -82,6 +82,7 @@ fun ChronicleScreen(
     trendsContent: @Composable () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
+    val canNextMonth = YearMonth.from(state.monthStart) < YearMonth.from(state.today)
 
     when {
         state.view == ChronicleView.Calendar && state.loading && state.archived.isEmpty() && state.highlightedDays.isEmpty() -> {
@@ -144,7 +145,8 @@ fun ChronicleScreen(
                 icon = Icons.Outlined.ChevronRight,
                 contentDescription = "Next month",
                 onClick = onNextMonth,
-                tint = colors.on,
+                enabled = canNextMonth,
+                tint = if (canNextMonth) colors.on else colors.onVariant.copy(alpha = 0.4f),
                 diameter = 36.dp,
                 background = colors.low,
                 iconSize = 19.dp,
@@ -213,6 +215,7 @@ private fun ChronicleMonthPager(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val displayedMonth = YearMonth.from(state.monthStart)
+    val canNextMonth = displayedMonth < YearMonth.from(state.today)
 
     BoxWithConstraints(
         modifier = modifier
@@ -255,7 +258,7 @@ private fun ChronicleMonthPager(
                         onDragCancel = { settle(null) },
                         onDragEnd = {
                             val monthDelta = when {
-                                dragOffsetPx < -thresholdPx -> 1L
+                                canNextMonth && dragOffsetPx < -thresholdPx -> 1L
                                 dragOffsetPx > thresholdPx -> -1L
                                 else -> null
                             }
@@ -265,7 +268,7 @@ private fun ChronicleMonthPager(
                             if (!isSettling.value) {
                                 change.consume()
                                 dragOffsetPx = (dragOffsetPx + amount)
-                                    .coerceIn(-pageWidthPx, pageWidthPx)
+                                    .coerceIn(if (canNextMonth) -pageWidthPx else 0f, pageWidthPx)
                             }
                         },
                     )
@@ -340,7 +343,7 @@ private fun ChronicleMonthPage(
                         inMonth = inMonth,
                         isToday = date == state.today,
                         archived = archived != null,
-                        windowLabel = state.highlightedDays[date.toString()]?.let(::trendDuration) ?: archived?.windowLabel,
+                        windowLabel = state.highlightedDays[date.toString()]?.let(::trendDuration) ?: archived?.summaryLabel,
                         actualIdentity = if (date.toString() in state.highlightedDays) state.highlightedType else archived?.actualBlocks?.firstOrNull()?.identityText(),
                         highlighted = date.toString() in state.highlightedDays,
                         onClick = { onOpenDay(date) },
@@ -353,7 +356,7 @@ private fun ChronicleMonthPage(
 
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Days you have opened appear in the archive. Any day opens in Day.",
+            text = "Planned, recorded, and completed days appear here. Any date opens in Day.",
             style = TimeboxTheme.type.bodySmall,
             color = colors.onVariant,
         )
@@ -366,7 +369,7 @@ private fun DayCell(
     inMonth: Boolean,
     isToday: Boolean,
     archived: Boolean,
-    /** Null for a day with nothing in it, so empty cells stay bare. */
+    /** Null when the date has no planned, recorded, or completed activity. */
     windowLabel: String?,
     actualIdentity: String?,
     highlighted: Boolean = false,

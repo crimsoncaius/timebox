@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import com.timebox.android.data.remote.TrendsDto
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -41,16 +42,28 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     private val _state = MutableStateFlow(ChronicleUiState())
     val state: StateFlow<ChronicleUiState> = _state.asStateFlow()
     private var trendsJob: Job? = null
+    private var calendarJob: Job? = null
+    private var calendarInitialized = false
+
+    fun open() {
+        calendarInitialized = false
+        load()
+    }
 
     fun load() {
         if (_state.value.view == ChronicleView.Trends) loadTrends()
-        _state.update { it.copy(loading = it.archived.isEmpty(), error = null) }
-        viewModelScope.launch {
-            repository.listArchivedDays().fold(
-                onSuccess = { days ->
+        calendarJob?.cancel()
+        val requestedMonth = if (calendarInitialized) YearMonth.from(_state.value.monthStart).toString() else null
+        _state.update { it.copy(loading = true, archived = emptyMap(), error = null) }
+        calendarJob = viewModelScope.launch {
+            repository.chronicleMonth(requestedMonth).fold(
+                onSuccess = { result ->
+                    calendarInitialized = true
                     _state.update { current ->
                         current.copy(
-                            archived = days.associateBy { it.date },
+                            monthStart = if (requestedMonth == null) result.today.withDayOfMonth(1) else current.monthStart,
+                            today = result.today,
+                            archived = result.days.associateBy { it.date },
                             loading = false,
                             error = null,
                         )
@@ -66,8 +79,11 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     /** Keeps today's marker honest even if the device sat open past midnight. */
     fun setToday(today: LocalDate) = _state.update { it.copy(today = today) }
 
-    fun shiftMonth(months: Long) = _state.update {
-        it.copy(monthStart = it.monthStart.plusMonths(months))
+    fun shiftMonth(months: Long) {
+        val next = _state.value.monthStart.plusMonths(months)
+        if (next.isAfter(_state.value.today.withDayOfMonth(1))) return
+        _state.update { it.copy(monthStart = next) }
+        load()
     }
 
     fun selectView(view: ChronicleView) {
@@ -116,11 +132,13 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     fun showContributingDays(path: String, days: Map<String, Double>) {
         val latest = days.keys.maxOrNull()?.let(LocalDate::parse) ?: return
         _state.update { it.copy(view = ChronicleView.Calendar, monthStart = latest.withDayOfMonth(1), highlightedDays = days, highlightedType = path) }
+        load()
     }
 
     fun clearHighlights() = _state.update { it.copy(highlightedDays = emptyMap(), highlightedType = null) }
 
-    fun goToThisMonth() = _state.update {
-        it.copy(monthStart = it.today.withDayOfMonth(1))
+    fun goToThisMonth() {
+        _state.update { it.copy(monthStart = it.today.withDayOfMonth(1)) }
+        load()
     }
 }

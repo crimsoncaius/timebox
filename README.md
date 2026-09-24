@@ -120,7 +120,7 @@ The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and b
 ## Product surfaces
 
 - **Day:** Planned and actual lanes, Ready to Plan scheduling, linked completions, notes, and overlap validation.
-- **Chronicle:** Browse and open recorded days.
+- **Chronicle:** Browse dates through Today with plans, recorded activity, or Task Completion.
 - **Battle Plan:** Projects and admin tasks, subtasks, status and priority metadata, deadlines, reminders, manual ordering, archive, and trash.
 - **Recurring:** Scheduled and quota-based templates with preview, pause, resume, end, and deletion workflows.
 - **Task types:** Reusable hierarchical slash-path categories shared by blocks, tasks, and recurring templates.
@@ -132,7 +132,7 @@ The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and b
 - **Auth and readiness:** The application is single-user. Setting `API_KEY` turns on a shared-secret `X-API-Key` check for every application route, including days, settings, task types, projects, tasks, reminders, and recurring templates. `/health` and `/ready` stay open. `/ready` returns HTTP 200 only when the database responds and its Alembic revision matches the repository head. The Android client sends the key; the web frontend does not, so leave it unset while relying on the browser UI.
 - **Day summary:** `GET /days/{date}/summary` returns planned/actual totals plus per-task-type minutes without creating the day. The old Android Day Review UI was removed while reporting is reconsidered; this endpoint remains as a possible reporting primitive.
 - **Day preview:** `GET /days/{date}/preview` returns renderable day data without creating a missing day. The Android client uses it for adjacent pages during an interactive swipe.
-- **Day list:** `GET /days` rows carry `block_count`. Simply opening a date creates the day, so the archive is mostly empty rows; the count is how a calendar tells those from days with real entries.
+- **Day and Chronicle reads:** `GET /days/{date}` renders missing dates without saving a Day row. `GET /days/chronicle?month=YYYY-MM` returns qualifying dates for the requested month, defaulting to the current month in the Reporting Time Zone. Empty saved Day rows stay stored but do not appear in Chronicle.
 - **E2E / SQLite:** Setting `AUTO_CREATE_TABLES=1` lets the API create tables on startup (used by Playwright). Do **not** use this for production Postgres; use Alembic instead.
 - **Day window:** Configure the visible hours under **Settings** (`GET`/`PATCH /settings`); changes apply to all days.
 - **Task types:** Manage reusable **path** categories under **Task types** (`GET`/`POST`/`PATCH`/`DELETE /task-types`). Names are canonical lowercase slash paths (e.g. `coding`, `coding/ai`, `exercise/cardio`); creating a deep path materializes ancestors; renames cascade to descendants. Every stored Block references a Task Type. Planned Block creation may omit `task_type_id`: the backend uses a linked Task's type when available or atomically materializes `unspecified`. Planned Blocks may also include an optional 500-character Block Name and a separate optional `note`. See the [Task Type path decisions](docs/adr/0005-task-type-copied-then-independent.md), especially [path matching and canonicalization](docs/adr/0007-task-type-path-matching-and-canonicalization.md).

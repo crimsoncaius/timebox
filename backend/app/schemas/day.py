@@ -26,15 +26,17 @@ class DayMeta(BaseModel):
 
 
 class DayRead(BaseModel):
+    """A renderable Day; persistence fields are null for an unsaved date."""
+
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: int | None
     date: date
     start_hour: int = Field(..., ge=0, le=23)
     end_hour: int = Field(..., ge=0, le=24)
     show_full_day: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime | None
+    updated_at: datetime | None
     time_blocks: list[TimeBlockRead]
     planned_blocks: list[PlannedBlockRead] = Field(default_factory=list)
     actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)
@@ -88,6 +90,20 @@ class DayListItem(BaseModel):
     end_hour: int
     show_full_day: bool
     updated_at: datetime
-    #: How many blocks the day holds — lets a client tell an opened-but-empty day apart.
+    #: How many blocks this saved Day holds.
     block_count: int
     actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)
+
+
+class ChronicleDayRead(BaseModel):
+    date: date
+    planned_count: int = 0
+    actual_count: int = 0
+    has_completion: bool = False
+    actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)
+
+
+class ChronicleMonthRead(BaseModel):
+    month: str
+    today: date
+    days: list[ChronicleDayRead]

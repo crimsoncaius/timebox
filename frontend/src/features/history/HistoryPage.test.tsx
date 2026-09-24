@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DayListItem } from '../../lib/api'
+import type { ChronicleDay } from '../../lib/api'
 import { HistoryPage } from './HistoryPage'
 
 function response(data: unknown) {
@@ -14,7 +14,7 @@ function response(data: unknown) {
 
 describe('HistoryPage', () => {
   const originalFetch = globalThis.fetch
-  let days: DayListItem[]
+  let days: ChronicleDay[]
 
   beforeEach(() => {
     localStorage.clear()
@@ -25,7 +25,10 @@ describe('HistoryPage', () => {
         return response({ status: 'ok', today: '1980-02-27', timezone: 'Pacific/Kiritimati' })
       }
       if (url.includes('/trends?')) return response({ start: '1980-02-25', end: '1980-03-02', today: '1980-02-27', timezone: 'Pacific/Kiritimati', captured_at: '1980-02-27T00:00:00Z', duration_seconds: 0, types: [] })
-      if (url.includes('/days?limit=500')) return response(days)
+      if (url.includes('/days/chronicle')) {
+        const month = new URL(url, 'http://localhost').searchParams.get('month') ?? '1980-02'
+        return response({ month, today: '1980-02-27', days: days.filter(day => day.date.startsWith(month)) })
+      }
       throw new Error(`Unexpected request: GET ${url}`)
     }) as typeof fetch
   })
@@ -54,38 +57,31 @@ describe('HistoryPage', () => {
     expect(await screen.findByText('No recorded time in this range.')).toBeInTheDocument()
   })
 
-  it('uses the application month when the Chronicle has no archived days', async () => {
+  it('uses the reporting month when the Chronicle has no activity', async () => {
     render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
 
     expect(await screen.findByTestId('chronicle-month-heading')).toHaveTextContent('February 1980')
   })
 
-  it('returns to the application month from an archived month', async () => {
+  it('returns to the reporting month from an older month and cannot browse ahead', async () => {
     days = [{
-      id: 1,
-      date: '2026-06-12',
-      start_hour: 8,
-      end_hour: 18,
-      show_full_day: false,
-      updated_at: '2026-06-12T10:00:00Z',
+      date: '1980-01-12', planned_count: 1, actual_count: 0, has_completion: false, actual_blocks: [],
     }]
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)
 
-    expect(await screen.findByTestId('chronicle-month-heading')).toHaveTextContent('June 2026')
+    expect(await screen.findByTestId('chronicle-month-heading')).toHaveTextContent('February 1980')
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Previous month' }))
+    expect(await screen.findByTestId('chronicle-month-heading')).toHaveTextContent('January 1980')
     await user.click(screen.getByRole('button', { name: 'This month' }))
     expect(screen.getByTestId('chronicle-month-heading')).toHaveTextContent('February 1980')
   })
 
   it('shows a standalone Actual Block Name in Chronicle without unspecified noise', async () => {
     days = [{
-      id: 2,
       date: '1980-02-12',
-      start_hour: 8,
-      end_hour: 18,
-      show_full_day: false,
-      block_count: 1,
-      updated_at: '1980-02-12T10:00:00Z',
+      planned_count: 0, actual_count: 1, has_completion: false,
       actual_blocks: [{
         date: '1980-02-12',
         start_minute: 600,
@@ -115,13 +111,8 @@ describe('HistoryPage', () => {
 
   it('shows a task-backed Actual Block Name ahead of its linked task in Chronicle', async () => {
     days = [{
-      id: 3,
       date: '1980-02-13',
-      start_hour: 8,
-      end_hour: 18,
-      show_full_day: false,
-      block_count: 1,
-      updated_at: '1980-02-13T10:00:00Z',
+      planned_count: 0, actual_count: 1, has_completion: false,
       actual_blocks: [{
         date: '1980-02-13',
         start_minute: 600,
@@ -147,6 +138,6 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText('Outline session · Deep work')).toBeInTheDocument()
     expect(screen.queryByText('Prepare launch')).not.toBeInTheDocument()
-    expect(screen.getByLabelText(/1980-02-13, archived day, Outline session/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/1980-02-13, 0 planned blocks, 1 actual block, Outline session/)).toBeInTheDocument()
   })
 })

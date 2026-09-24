@@ -1,22 +1,18 @@
 import { Link } from "react-router-dom";
-import type { DayListItem } from "../../lib/api";
+import type { ChronicleDay } from "../../lib/api";
 import { blockIdentityText } from "../../lib/blockIdentity";
 import { buildMonthGridUTC, formatMonthYearUTC } from "./historyCalendar";
 import { trendDuration } from './trends';
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
-function windowLabel(item: DayListItem): string {
-  const end = item.end_hour === 24 ? "24" : `${item.end_hour}:00`;
-  return `${item.start_hour}:00–${end}${item.show_full_day ? " · full" : ""}`;
-}
-
 type ChronicleMonthGridProps = {
   year: number;
   month: number;
-  byDate: Map<string, DayListItem>;
+  byDate: Map<string, ChronicleDay>;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  canNextMonth: boolean;
   onThisMonth: () => void;
   highlightedDays?: Record<string, number>;
   highlightedType?: string;
@@ -28,6 +24,7 @@ export function ChronicleMonthGrid({
   byDate,
   onPrevMonth,
   onNextMonth,
+  canNextMonth,
   onThisMonth,
   highlightedDays,
   highlightedType,
@@ -68,7 +65,8 @@ export function ChronicleMonthGrid({
           <button
             type="button"
             onClick={onNextMonth}
-            className="rounded-xl bg-surface-container-low px-4 py-2 font-headline text-sm font-light tracking-tight text-on-surface transition-colors hover:bg-surface-container-high"
+            disabled={!canNextMonth}
+            className="rounded-xl bg-surface-container-low px-4 py-2 font-headline text-sm font-light tracking-tight text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Next month"
           >
             <span
@@ -99,7 +97,7 @@ export function ChronicleMonthGrid({
         {cells.map((cell) => {
           const item = byDate.get(cell.iso);
           const contribution = highlightedDays?.[cell.iso];
-          const hasArchive = item != null;
+          const hasActivity = item != null;
           const actualIdentity = item?.actual_blocks?.[0]
             ? blockIdentityText(item.actual_blocks[0].actual_block)
             : null;
@@ -108,13 +106,13 @@ export function ChronicleMonthGrid({
             "flex min-h-[5.5rem] flex-col rounded-xl p-3 transition-colors md:min-h-[6rem] " +
             (muted
               ? "bg-surface/80 text-on-surface-variant/50 "
-              : hasArchive
+              : hasActivity
                 ? "bg-surface-container-low text-on-surface hover:bg-surface-container-high "
                 : "bg-surface-container-low/50 text-on-surface-variant hover:bg-surface-container-low ");
 
-          const label = hasArchive
-            ? `${cell.iso}, archived day${actualIdentity ? `, ${actualIdentity}` : ""}, window ${windowLabel(item!)}`
-            : `${cell.iso}, open day`;
+          const label = hasActivity
+            ? `${cell.iso}, ${item!.planned_count} planned ${item!.planned_count === 1 ? 'block' : 'blocks'}, ${item!.actual_count} actual ${item!.actual_count === 1 ? 'block' : 'blocks'}${item!.has_completion ? ', Task completed' : ''}${actualIdentity ? `, ${actualIdentity}` : ''}`
+            : `${cell.iso}, no Chronicle activity, open Day`;
 
           return (
             <Link
@@ -126,12 +124,12 @@ export function ChronicleMonthGrid({
             >
               <span
                 className={`font-headline text-lg font-light tabular-nums ${
-                  muted ? "opacity-60" : hasArchive ? "" : "opacity-90"
+                  muted ? "opacity-60" : hasActivity ? "" : "opacity-90"
                 }`}
               >
                 {cell.dayOfMonth}
               </span>
-              {contribution !== undefined ? <span className="mt-auto pt-2 text-xs">{highlightedType}<br />{trendDuration(contribution)}</span> : hasArchive && (
+              {contribution !== undefined ? <span className="mt-auto pt-2 text-xs">{highlightedType}<br />{trendDuration(contribution)}</span> : hasActivity && (
                 <span className="mt-auto min-w-0 pt-2 text-on-surface-variant/90">
                   {actualIdentity ? (
                     <span className="block truncate font-body text-[10px] leading-snug normal-case tracking-normal text-on-surface">
@@ -139,7 +137,7 @@ export function ChronicleMonthGrid({
                     </span>
                   ) : null}
                   <span className="block font-label text-[10px] uppercase leading-snug tracking-wider">
-                    {windowLabel(item!)}
+                    {[item!.planned_count > 0 ? `${item!.planned_count} planned` : null, item!.actual_count > 0 ? `${item!.actual_count} actual` : null, item!.has_completion ? 'Completed' : null].filter(Boolean).join(' · ')}
                   </span>
                 </span>
               )}

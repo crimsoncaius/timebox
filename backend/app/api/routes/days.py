@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import day_date
 from app.api.errors import domain_http_error
 from app.core.config import Settings, get_settings
+from app.core.time import today_in_tz
 from app.db.session import get_db
 from app.schemas.day import (
+    ChronicleMonthRead,
     DayListItem,
     DayPreviewRead,
     DayRead,
@@ -18,7 +20,7 @@ from app.schemas.day import (
     PlanningCommitRead,
 )
 from app.schemas.time_block import PlannedBlockCreate, TimeBlockPatch
-from app.services import activity_service, day_service
+from app.services import activity_service, chronicle_service, day_service
 
 router = APIRouter(prefix="/days", tags=["days"])
 
@@ -59,14 +61,30 @@ def list_days(
     return [day_service.to_day_list_item(db, d, count, settings) for d, count in rows]
 
 
+@router.get("/chronicle", response_model=ChronicleMonthRead)
+def chronicle_month(
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_reporting_settings),
+) -> ChronicleMonthRead:
+    if month is None:
+        first = today_in_tz(settings.app_timezone).replace(day=1)
+    else:
+        try:
+            first = dt.date.fromisoformat(f"{month}-01")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid Chronicle month") from exc
+    return chronicle_service.read_month(db, first, settings)
+
+
 @router.get("/{date}", response_model=DayRead)
 def get_day(
     d: dt.date = Depends(day_date),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_reporting_settings),
 ) -> DayRead:
-    day = day_service.get_or_create_day(db, d)
-    return day_service.to_day_read(db, day, settings)
+    day = day_service.get_day_by_date(db, d)
+    return day_service.read_day(db, day, d, settings)
 
 
 @router.get("/{date}/preview", response_model=DayPreviewRead)

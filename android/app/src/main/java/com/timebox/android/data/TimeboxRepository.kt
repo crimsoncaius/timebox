@@ -161,8 +161,8 @@ class TimeboxRepository private constructor(
     suspend fun getDaySummary(date: LocalDate): Result<DaySummary> =
         call { api().getDaySummary(date.toString()).toModel() }
 
-    suspend fun listArchivedDays(): Result<List<ArchivedDay>> =
-        call { api().listDays().map { it.toModel() } }
+    suspend fun chronicleMonth(month: String? = null): Result<ChronicleMonth> =
+        call { api().chronicleMonth(month).toModel() }
 
     suspend fun trends(period: String, anchor: LocalDate?, start: LocalDate?, end: LocalDate?): Result<com.timebox.android.data.remote.TrendsDto> =
         call { api().trends(period, anchor?.toString(), start?.toString(), end?.toString()) }

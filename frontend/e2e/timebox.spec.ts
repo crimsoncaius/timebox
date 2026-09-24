@@ -124,13 +124,14 @@ test('plan blocks and history', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/day\/2026-06-10$/)
   await expect(page.getByTestId('day-date')).toHaveText('2026-06-10')
 
-  const chronicleDate = '2099-12-31'
+  const chronicleDate = ((await (await request.get(`${base}/health`)).json()) as { today: string }).today
   const chronicleDay = await request.get(`${base}/days/${chronicleDate}`)
   expect(chronicleDay.ok()).toBeTruthy()
   await page.getByRole('link', { name: 'Chronicle' }).click()
   await expect(page.getByRole('heading', { name: /Chronicle of focus/i })).toBeVisible()
   await expect(page.getByTestId('chronicle-calendar')).toBeVisible()
-  await expect(page.getByTestId('chronicle-month-heading')).toContainText(/December 2099/i)
+  const currentMonth = new Date(`${chronicleDate}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  await expect(page.getByTestId('chronicle-month-heading')).toHaveText(currentMonth)
   await page.getByTestId(`chronicle-day-${chronicleDate}`).click()
   await expect(page).toHaveURL(new RegExp(`/day/${chronicleDate}$`))
 
@@ -719,6 +720,12 @@ test('derived Actual snapshots the Planned name and stays independently editable
   await expect(page.locator(`[data-block-id="${actualId}"]`).getByText('Dinner that happened')).toBeVisible()
 
   await page.getByRole('link', { name: 'Chronicle' }).click()
+  const reportingToday = ((await (await request.get(`${base}/health`)).json()) as { today: string }).today
+  const targetMonth = Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7))
+  const currentMonth = Number(reportingToday.slice(0, 4)) * 12 + Number(reportingToday.slice(5, 7))
+  for (let month = currentMonth; month > targetMonth; month--) {
+    await page.getByRole('button', { name: 'Previous month' }).click()
+  }
   await expect(page.getByTestId(`chronicle-day-${date}`).getByText('Dinner that happened')).toBeVisible()
   await expect(page.getByTestId(`chronicle-day-${date}`).getByText('Planned dinner')).toHaveCount(0)
 })

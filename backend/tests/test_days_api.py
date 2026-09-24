@@ -70,7 +70,7 @@ def test_ready_rejects_schema_mismatch(client, stamp_database):
     }
 
 
-def test_get_day_creates_empty_blocks(client):
+def test_get_day_renders_empty_blocks_without_saving(client):
     r = client.get("/days/2026-04-13")
     assert r.status_code == 200
     data = r.json()
@@ -78,6 +78,8 @@ def test_get_day_creates_empty_blocks(client):
     assert data["time_blocks"] == []
     assert "summary" not in data
     assert data["meta"]["timezone"] == "UTC"
+    assert data["id"] is None
+    assert client.get("/days").json() == []
 
 
 def test_preview_missing_day_does_not_create_archive_row(client):
@@ -259,8 +261,13 @@ def test_task_backed_planned_block_contract_accepts_name_without_deriving_one(cl
 
 
 def test_list_days(client):
-    client.get("/days/2026-04-10")
-    client.get("/days/2026-04-11")
+    tid = _tid(client, "Listed plan")
+    for date in ("2026-04-10", "2026-04-11"):
+        response = client.post(
+            f"/days/{date}/blocks",
+            json={"lane": "planned", "task_type_id": tid, "start_minute": 540, "end_minute": 600},
+        )
+        assert response.status_code == 200
     r = client.get("/days?limit=10")
     assert r.status_code == 200
     rows = r.json()

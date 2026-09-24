@@ -323,6 +323,7 @@ fun RoundIconButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     tint: Color = TimeboxTheme.colors.onVariant,
     diameter: Dp = 40.dp,
@@ -336,7 +337,7 @@ fun RoundIconButton(
             .clip(CircleShape)
             .background(background)
             .then(if (border != null) Modifier.border(1.dp, border, CircleShape) else Modifier)
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

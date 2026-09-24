@@ -95,6 +95,18 @@ class ChronicleScreenTest {
     }
 
     @Test
+    fun currentMonthDoesNotSwipeIntoFuture() {
+        val shifts = mutableListOf<Long>()
+        showChronicle(onPrevMonth = {}, onNextMonth = { shifts += 1L }, today = LocalDate.of(2026, 8, 25))
+
+        compose.onNodeWithContentDescription("Chronicle month content")
+            .performTouchInput { swipeLeft() }
+
+        compose.runOnIdle { assertTrue(shifts.isEmpty()) }
+        compose.onNodeWithContentDescription("Chronicle August 2026").assertIsDisplayed()
+    }
+
+    @Test
     fun namedStandaloneActualIsIdentifiedInChronicleWithoutUnspecifiedNoise() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
@@ -105,10 +117,9 @@ class ChronicleScreenTest {
                         archived = mapOf(
                             LocalDate.of(2026, 8, 20) to ArchivedDay(
                                 date = LocalDate.of(2026, 8, 20),
-                                startHour = 8,
-                                endHour = 20,
-                                showFullDay = false,
-                                blockCount = 1,
+                                plannedCount = 0,
+                                actualCount = 1,
+                                hasCompletion = false,
                                 actualBlocks = listOf(
                                     ActualBlock(
                                         id = 4,
@@ -159,10 +170,9 @@ class ChronicleScreenTest {
                         archived = mapOf(
                             LocalDate.of(2026, 8, 21) to ArchivedDay(
                                 date = LocalDate.of(2026, 8, 21),
-                                startHour = 8,
-                                endHour = 20,
-                                showFullDay = false,
-                                blockCount = 1,
+                                plannedCount = 0,
+                                actualCount = 1,
+                                hasCompletion = false,
                                 actualBlocks = listOf(
                                     ActualBlock(
                                         id = 5,
@@ -219,6 +229,7 @@ class ChronicleScreenTest {
         onNextMonth: () -> Unit,
         view: ChronicleView = ChronicleView.Calendar,
         onSelectView: (ChronicleView) -> Unit = {},
+        today: LocalDate = LocalDate.of(2026, 9, 25),
     ) {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
@@ -228,7 +239,7 @@ class ChronicleScreenTest {
                     state = ChronicleUiState(
                         view = view,
                         monthStart = LocalDate.of(2026, 8, 1),
-                        today = LocalDate.of(2026, 8, 25),
+                        today = today,
                         loading = false,
                     ),
                     onPrevMonth = onPrevMonth,
