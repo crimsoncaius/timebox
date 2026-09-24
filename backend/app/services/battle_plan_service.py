@@ -30,6 +30,7 @@ from app.services.battle_plan.tasks import (
     reorder_tasks,
     restore_task,
     task_type_counts,
+    task_type_counts_by_state,
     trash_task,
     unarchive_task,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "reorder_tasks",
     "restore_task",
     "task_type_counts",
+    "task_type_counts_by_state",
     "trash_task",
     "unarchive_task",
 ]

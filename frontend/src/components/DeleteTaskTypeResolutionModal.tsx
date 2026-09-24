@@ -6,6 +6,8 @@ export function DeleteTaskTypeResolutionModal({
   taskTypeName,
   blockUsageCount,
   taskUsageCount,
+  archivedTaskUsageCount,
+  trashedTaskUsageCount,
   seriesUsageCount,
   migrateTargets,
   busy,
@@ -17,6 +19,8 @@ export function DeleteTaskTypeResolutionModal({
   taskTypeName: string
   blockUsageCount: number
   taskUsageCount: number
+  archivedTaskUsageCount: number
+  trashedTaskUsageCount: number
   seriesUsageCount: number
   migrateTargets: TaskType[]
   busy: boolean
@@ -41,6 +45,7 @@ export function DeleteTaskTypeResolutionModal({
     ? migrateToId
     : (migrateTargets[0]?.id ?? null)
   const canMigrate = selectedMigrateToId != null
+  const activeTaskUsageCount = taskUsageCount - archivedTaskUsageCount - trashedTaskUsageCount
 
   return (
     <dialog
@@ -60,10 +65,12 @@ export function DeleteTaskTypeResolutionModal({
           <span className="text-on-surface dark:text-dark-on-surface">{taskTypeName}</span> is used by{' '}
           {[
             blockUsageCount > 0 && `${blockUsageCount} time block${blockUsageCount === 1 ? '' : 's'}`,
-            taskUsageCount > 0 && `${taskUsageCount} Battle Plan item${taskUsageCount === 1 ? '' : 's'}`,
+            taskUsageCount > 0 && `${activeTaskUsageCount} active task${activeTaskUsageCount === 1 ? '' : 's'}, ${archivedTaskUsageCount} archived task${archivedTaskUsageCount === 1 ? '' : 's'}, and ${trashedTaskUsageCount} trashed task${trashedTaskUsageCount === 1 ? '' : 's'}`,
             seriesUsageCount > 0 && `${seriesUsageCount} Recurring Task Series`,
           ].filter(Boolean).join(' and ')}.
-          {' '}Choose how to proceed.
+          {' '}Choose how to proceed. This cannot be undone.
+          {taskUsageCount > 0 && ' All affected tasks will become Unset. Restoring archived or trashed tasks will not restore their type.'}
+          {blockUsageCount > 0 && ' Blocks are classified independently of tasks; only blocks using this type are affected.'}
         </p>
       </div>
       <div className="flex flex-col gap-3 px-5 py-4">
@@ -78,7 +85,7 @@ export function DeleteTaskTypeResolutionModal({
           </span>
           <span className="mt-1 block text-xs text-on-surface-variant dark:text-dark-on-surface-variant">
             {blockUsageCount > 0 ? 'Permanently removes every planned or actual block that uses it. ' : ''}
-            {taskUsageCount > 0 ? 'Battle Plan items remain, with their task type cleared. ' : ''}
+            {taskUsageCount > 0 ? 'Tasks remain, with their task type cleared. ' : ''}
             {seriesUsageCount > 0 ? 'Recurring Task Series remain, with their task type cleared.' : ''}
           </span>
         </button>
@@ -96,7 +103,7 @@ export function DeleteTaskTypeResolutionModal({
           </span>
           <p className="mt-1 font-body text-xs font-light text-on-surface-variant dark:text-dark-on-surface-variant">
             All time blocks that use this type will point to the type you pick below.
-            {taskUsageCount > 0 ? ' Battle Plan items remain, with their task type cleared.' : ''}
+            {taskUsageCount > 0 ? ' Tasks remain, with their task type cleared.' : ''}
             {seriesUsageCount > 0 ? ' Recurring Task Series remain, with their task type cleared.' : ''}
           </p>
           {canMigrate ? (

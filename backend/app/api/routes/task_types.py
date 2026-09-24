@@ -19,14 +19,17 @@ router = APIRouter(prefix="/task-types", tags=["task-types"])
 def list_task_types(db: Session = Depends(get_db)) -> list[TaskTypeListItem]:
     rows = task_type_service.list_task_types(db)
     counts = task_type_service.block_counts_by_task_type(db)
-    task_counts = battle_plan_service.task_type_counts(db)
+    task_counts = battle_plan_service.task_type_counts_by_state(db)
     from app.services import recurrence_service
     template_counts = recurrence_service.template_type_counts(db)
     return [
         TaskTypeListItem(
             **TaskTypeRead.model_validate(r).model_dump(),
             usage_count=counts.get(r.id, 0),
-            task_usage_count=task_counts.get(r.id, 0),
+            task_usage_count=sum(task_counts.get(r.id, {}).values()),
+            active_task_usage_count=task_counts.get(r.id, {}).get("active", 0),
+            archived_task_usage_count=task_counts.get(r.id, {}).get("archived", 0),
+            trashed_task_usage_count=task_counts.get(r.id, {}).get("trash", 0),
             recurring_template_usage_count=template_counts.get(r.id, 0),
         )
         for r in rows

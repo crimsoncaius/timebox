@@ -9,6 +9,8 @@ data class TaskTypeDto(
     val name: String,
     @SerialName("usage_count") val usageCount: Int = 0,
     @SerialName("task_usage_count") val taskUsageCount: Int = 0,
+    @SerialName("archived_task_usage_count") val archivedTaskUsageCount: Int = 0,
+    @SerialName("trashed_task_usage_count") val trashedTaskUsageCount: Int = 0,
     @SerialName("recurring_template_usage_count") val recurringTemplateUsageCount: Int = 0,
 )
 

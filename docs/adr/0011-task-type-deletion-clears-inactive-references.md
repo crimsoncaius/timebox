@@ -1,0 +1,7 @@
+# Task Type deletion clears inactive references
+
+Approved in [issue #264](https://github.com/crimsoncaius/timebox/issues/264): deleting a Task Type with reference clearing makes all referencing Tasks and Recurring Task Series Unset, including archived and trashed Tasks. Restoring or unarchiving a Task does not recover its deleted classification. Explicit disclosure was chosen over blocking deletion on inactive references or retaining tombstoned types, so users can clean up their categories without first finding inactive work.
+
+Usage includes all Tasks, regardless of completion or recurrence origin. Confirmation separates active, archived, and trashed counts (Trash takes precedence over an archive timestamp), and also shows independent Block and Recurring Task Series counts. It warns that clearing is irreversible and restoration does not restore the type. Counts refer to the selected type, not its descendants; existing descendant deletion restrictions remain.
+
+Unlike ordinary edits in ADR-0005, deleting the category requires explicit resolution of every reference. Existing Block choices remain explicit: delete the referencing Blocks, or move them to another type (including `unspecified` when available). Blocks with other classifications remain unchanged even when linked to affected Tasks. Task and Series clearing, Block resolution, and type deletion succeed or roll back together; existing activity-tracking restrictions still apply.

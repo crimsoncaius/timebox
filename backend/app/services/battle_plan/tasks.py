@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
@@ -452,6 +452,24 @@ def permanently_delete_task(db: Session, task_id: int) -> None:
 def task_type_counts(db: Session) -> dict[int, int]:
     stmt = select(Task.task_type_id, func.count(Task.id)).where(Task.task_type_id.is_not(None)).group_by(Task.task_type_id)
     return {type_id: count for type_id, count in db.execute(stmt).all()}
+
+
+def task_type_counts_by_state(db: Session) -> dict[int, dict[str, int]]:
+    # Trash takes precedence: trashed Tasks may retain their archive timestamp.
+    state = case(
+        (Task.deleted_at.is_not(None), "trash"),
+        (Task.archived_at.is_not(None), "archived"),
+        else_="active",
+    )
+    rows = db.execute(
+        select(Task.task_type_id, state, func.count(Task.id))
+        .where(Task.task_type_id.is_not(None))
+        .group_by(Task.task_type_id, state)
+    )
+    counts: dict[int, dict[str, int]] = {}
+    for type_id, task_state, count in rows:
+        counts.setdefault(type_id, {})[task_state] = count
+    return counts
 
 
 def clear_task_type_references(db: Session, task_type_id: int) -> None:
