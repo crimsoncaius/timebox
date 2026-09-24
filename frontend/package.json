@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prototype:assistant": "vite --host=127.0.0.1 --port=12056 --strictPort",
     "dev": "vite",
     "dev:review": "vite --mode review --host=127.0.0.1 --port=5176",
     "build": "tsc -b && vite build",

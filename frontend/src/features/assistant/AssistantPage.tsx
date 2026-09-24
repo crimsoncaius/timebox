@@ -1,7 +1,9 @@
 import { Layout } from '../../components/Layout'
+import { AssistantPanelPrototype } from './AssistantPanel.prototype'
 
 /** Placeholder home for the Assistant until its conversations land (#9). */
 export function AssistantPage() {
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('variant')) return <AssistantPanelPrototype />
   return (
     <Layout>
       <section className="mb-10 max-w-2xl">
