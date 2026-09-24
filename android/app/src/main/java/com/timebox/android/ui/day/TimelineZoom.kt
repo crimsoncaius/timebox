@@ -22,6 +22,11 @@ internal class TimelineZoom(initial: Float = 1f) {
     var scale by mutableFloatStateOf(initial)
         private set
     fun set(value: Float) { if (value.isFinite()) scale = value.coerceIn(MIN_TIMELINE_ZOOM, MAX_TIMELINE_ZOOM) }
+    var resetPosition: (() -> Unit)? = null
+    fun reset() {
+        resetPosition?.invoke()
+        set(1f)
+    }
     companion object {
         val Saver = Saver<TimelineZoom, Float>(save = { it.scale }, restore = { TimelineZoom(it) })
     }
@@ -36,9 +41,24 @@ internal fun zoomScrollOffset(scroll: Int, anchor: Float, before: Float, after: 
     ((scroll + anchor) * after / before - anchor).toInt().coerceAtLeast(0)
 
 /** Two fingers claim the gesture before block/pager handlers; one finger keeps normal behavior. */
-internal fun Modifier.timelinePinch(scroll: ScrollState): Modifier = composed {
+internal fun Modifier.timelinePinch(scroll: ScrollState, active: Boolean = true): Modifier = composed {
     val zoom = LocalTimelineZoom.current
     val scope = rememberCoroutineScope()
+    DisposableEffect(zoom, scroll, active) {
+        val reset: () -> Unit = {
+            val target = zoomScrollOffset(scroll.value, scroll.viewportSize / 2f, zoom?.scale ?: 1f, 1f)
+            scope.launch {
+                // Wait for the scale change to be measured before ScrollState clamps the target.
+                withFrameNanos { }
+                withFrameNanos { }
+                scroll.scrollTo(target)
+            }
+        }
+        if (active && zoom != null) zoom.resetPosition = reset
+        onDispose {
+            if (zoom?.resetPosition === reset) zoom.resetPosition = null
+        }
+    }
     if (zoom == null) this else pointerInput(zoom, scroll) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false)

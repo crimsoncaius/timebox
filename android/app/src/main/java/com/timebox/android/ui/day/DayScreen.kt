@@ -121,7 +121,7 @@ fun DayScreen(
     val zoom = rememberSaveable(saver = TimelineZoom.Saver) { TimelineZoom() }
     if (viewOpen) DayViewOptionsDialog(
         calendar = calendarVisible, tracking = trackingVisible,
-        zoomScale = zoom.scale, onResetZoom = { zoom.set(1f) },
+        zoomScale = zoom.scale, onResetZoom = { zoom.reset() },
         onCalendar = { setVisible(com.timebox.android.data.DayViewSection.Calendar, it) }, onTracking = { setVisible(com.timebox.android.data.DayViewSection.Tracking, it) },
         onDismiss = { viewOpen = false },
     )
@@ -369,6 +369,7 @@ private fun InteractiveDayPager(
                             date = date,
                             page = state.page(date),
                             scrollState = if (pagePosition == 0) timelineScroll else previewScroll,
+                            active = pagePosition == 0,
                             autoScrollToNow = pagePosition == 0 && date == state.today && !state.skipScrollToNow,
                             scrollToNowRequest = state.scrollToNowRequest,
                             selectedBlockId = if (interactive) state.selectedBlockId else null,
@@ -397,6 +398,7 @@ private fun DayPage(
     date: LocalDate,
     page: DayPageState,
     scrollState: ScrollState,
+    active: Boolean,
     autoScrollToNow: Boolean,
     scrollToNowRequest: Int,
     selectedBlockId: Int?,
@@ -441,7 +443,7 @@ private fun DayPage(
                     .weight(1f)
                     .onSizeChanged { viewportHeightPx = it.height }
                     .onGloballyPositioned { viewportBounds = it.boundsInRoot() }
-                    .timelinePinch(scrollState)
+                    .timelinePinch(scrollState, active = active)
                     .verticalScroll(scrollState)
                     .padding(horizontal = TimeboxDimens.screenPadding)
                     .padding(bottom = TimeboxDimens.bottomInset),
