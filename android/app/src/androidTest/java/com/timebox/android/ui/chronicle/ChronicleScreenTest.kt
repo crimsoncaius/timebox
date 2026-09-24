@@ -107,7 +107,7 @@ class ChronicleScreenTest {
     }
 
     @Test
-    fun namedStandaloneActualIsIdentifiedInChronicleWithoutUnspecifiedNoise() {
+    fun standaloneRecordingShowsDotWithoutActivityText() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 ChronicleScreen(
@@ -147,12 +147,13 @@ class ChronicleScreenTest {
             }
         }
 
-        compose.onNodeWithText("Evening walk").assertIsDisplayed()
+        compose.onNodeWithTag("chronicle-recorded-2026-08-20", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue(compose.onAllNodesWithText("Evening walk").fetchSemanticsNodes().isEmpty())
         assertTrue(compose.onAllNodesWithText("unspecified").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
-    fun namedTaskBackedActualUsesBlockNameInChronicle() {
+    fun taskBackedRecordingShowsDotWithoutActivityText() {
         val task = LinkedTask(
             id = 9,
             title = "Prepare launch",
@@ -168,6 +169,12 @@ class ChronicleScreenTest {
                         monthStart = LocalDate.of(2026, 8, 1),
                         today = LocalDate.of(2026, 8, 25),
                         archived = mapOf(
+                            LocalDate.of(2026, 8, 22) to ArchivedDay(
+                                date = LocalDate.of(2026, 8, 22),
+                                plannedCount = 12,
+                                actualCount = 0,
+                                hasCompletion = true,
+                            ),
                             LocalDate.of(2026, 8, 21) to ArchivedDay(
                                 date = LocalDate.of(2026, 8, 21),
                                 plannedCount = 0,
@@ -200,8 +207,11 @@ class ChronicleScreenTest {
             }
         }
 
-        compose.onNodeWithText("Outline session").assertIsDisplayed()
+        compose.onNodeWithTag("chronicle-recorded-2026-08-21", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue(compose.onAllNodesWithText("Outline session").fetchSemanticsNodes().isEmpty())
         assertTrue(compose.onAllNodesWithText("Prepare launch").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithTag("chronicle-recorded-2026-08-22", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("2026-08-22, no time recorded").assertIsDisplayed()
     }
 
     @Test

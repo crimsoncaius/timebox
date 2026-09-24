@@ -173,3 +173,5 @@ The accepted creation design is variant A with typed Task Type suggestions. Its
 throwaway source is preserved on `codex/log-time-prototype` at `bec3f15`; only the
 native implementation is included here. This implements the creation portion of
 issue #163; the existing recorded-block detail flow remains separate.
+
+The Chronicle Calendar uses fixed-height date boxes and a single dot for recorded time. Plans and Task Completion alone do not add a dot. The accepted visual study is A on `codex/chronicle-calendar-prototype` at `f00fed6d`, with the existing production boxes retained.

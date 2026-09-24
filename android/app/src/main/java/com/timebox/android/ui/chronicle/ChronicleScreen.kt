@@ -15,7 +15,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -54,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.RoundIconButton
-import com.timebox.android.data.identityText
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -343,8 +343,8 @@ private fun ChronicleMonthPage(
                         inMonth = inMonth,
                         isToday = date == state.today,
                         archived = archived != null,
-                        windowLabel = state.highlightedDays[date.toString()]?.let(::trendDuration) ?: archived?.summaryLabel,
-                        actualIdentity = if (date.toString() in state.highlightedDays) state.highlightedType else archived?.actualBlocks?.firstOrNull()?.identityText(),
+                        recorded = (archived?.actualCount ?: 0) > 0 ||
+                            (state.highlightedDays[date.toString()] ?: 0.0) > 0.0,
                         highlighted = date.toString() in state.highlightedDays,
                         onClick = { onOpenDay(date) },
                         enabled = interactive,
@@ -356,7 +356,7 @@ private fun ChronicleMonthPage(
 
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Planned, recorded, and completed days appear here. Any date opens in Day.",
+            text = "A dot means time was recorded. Tap any date to open Day.",
             style = TimeboxTheme.type.bodySmall,
             color = colors.onVariant,
         )
@@ -369,9 +369,7 @@ private fun DayCell(
     inMonth: Boolean,
     isToday: Boolean,
     archived: Boolean,
-    /** Null when the date has no planned, recorded, or completed activity. */
-    windowLabel: String?,
-    actualIdentity: String?,
+    recorded: Boolean,
     highlighted: Boolean = false,
     onClick: () -> Unit,
     enabled: Boolean,
@@ -386,7 +384,7 @@ private fun DayCell(
     }
     Column(
         modifier = modifier
-            .heightIn(min = 52.dp)
+            .height(52.dp)
             .clip(TimeboxShapes.cell)
             .background(background)
             .then(
@@ -396,6 +394,9 @@ private fun DayCell(
                     Modifier
                 }
             )
+            .semantics {
+                contentDescription = "$date${if (isToday) ", today" else ""}, ${if (recorded) "time recorded" else "no time recorded"}"
+            }
             .clickable(enabled = enabled, onClick = onClick)
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 5.dp),
     ) {
@@ -407,20 +408,14 @@ private fun DayCell(
             ),
             color = chronicleDateTextColor(colors, isToday, inMonth),
         )
-        if (windowLabel != null && inMonth) {
+        if (recorded && inMonth) {
             Spacer(Modifier.weight(1f))
-            if (actualIdentity != null) {
-                Text(
-                    text = actualIdentity,
-                    style = TimeboxTheme.type.bodySmall.copy(fontSize = 7.5.sp),
-                    color = colors.on,
-                    maxLines = 1,
-                )
-            }
-            Text(
-                text = windowLabel,
-                style = TimeboxTheme.type.monoSmall.copy(fontSize = 7.5.sp),
-                color = colors.onVariant,
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(5.dp)
+                    .background(colors.on, CircleShape)
+                    .testTag("chronicle-recorded-$date"),
             )
         }
     }
