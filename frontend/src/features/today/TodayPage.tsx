@@ -466,17 +466,22 @@ export function TodayPage() {
           if (patch.task_type_id !== undefined) actualPatch.task_type_id = patch.task_type_id
           if (patch.name !== undefined) actualPatch.name = patch.name
           if (patch.note !== undefined) actualPatch.note = patch.note
+          const projection = day.actual_blocks.find(p => p.actual_block.id === blockId)
+          if (!projection) throw new Error('That activity is no longer available')
+          const neighbors = day.actual_blocks.filter(p => p.actual_block.id !== blockId)
+          // Displayed minutes are lossy: unchanged edges keep their canonical instant,
+          // while contact with a neighbor uses that neighbor's exact boundary.
           if (patch.start_minute !== undefined) {
-            actualPatch.start_at = zonedLocalDateTimeToIso(
-              localDateTimeAtMinute(date, patch.start_minute),
-              day.meta.timezone,
-            )
+            actualPatch.start_at = patch.start_minute === projection.start_minute
+              ? projection.actual_block.start_at
+              : neighbors.find(p => p.end_minute === patch.start_minute)?.actual_block.end_at
+                ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, patch.start_minute), day.meta.timezone)
           }
           if (patch.end_minute !== undefined) {
-            actualPatch.end_at = zonedLocalDateTimeToIso(
-              localDateTimeAtMinute(date, patch.end_minute),
-              day.meta.timezone,
-            )
+            actualPatch.end_at = patch.end_minute === projection.end_minute
+              ? projection.actual_block.end_at ?? undefined
+              : neighbors.find(p => p.start_minute === patch.end_minute)?.actual_block.start_at
+                ?? zonedLocalDateTimeToIso(localDateTimeAtMinute(date, patch.end_minute), day.meta.timezone)
           }
           const repo = getActivityRepository()
           if (!await repo.correct('edit', blockId, actualPatch)) throw new Error(repo.state.error ?? 'Could not save correction')

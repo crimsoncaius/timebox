@@ -701,8 +701,16 @@ class DayViewModel(
         val actualPatch = if (block.lane == Lane.Actual) {
             val actualBlockId = block.actualBlockId ?: return
             val zone = runCatching { ZoneId.of(day.timezone) }.getOrDefault(ZoneId.of("UTC"))
-            val startAt = resolveActualMinute(current.date, startMinute, zone)
-            val endAt = resolveActualMinute(current.date, endMinute, zone)
+            val original = day.actualBlocks.firstOrNull { it.actualBlock.id == actualBlockId }?.actualBlock ?: return
+            val neighbors = day.actualBlocks.filter { it.actualBlock.id != actualBlockId }
+            // Minute values are only a timeline projection. Keep untouched instants,
+            // and recover exact timestamps when a dragged edge meets a neighbor.
+            val startAt = if (startMinute == block.startMinute) original.startAt else
+                neighbors.filter { it.endMinute == startMinute }.mapNotNull { it.actualBlock.endAt }.maxOrNull()
+                    ?: resolveActualMinute(current.date, startMinute, zone)
+            val endAt = if (endMinute == block.endMinute) original.endAt else
+                neighbors.filter { it.startMinute == endMinute }.minOfOrNull { it.actualBlock.startAt }
+                    ?: resolveActualMinute(current.date, endMinute, zone)
             if (startAt == null || endAt == null) {
                 _state.update { it.copy(message = "That local time does not exist or occurs twice in ${day.timezone}. Choose an unambiguous time.") }
                 return
