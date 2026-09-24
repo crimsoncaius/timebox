@@ -120,6 +120,7 @@ data class BattleTask(
     val isBlocked: Boolean = false,
     val blockingReason: String? = null,
     val outstandingOccurrenceCount: Int = 1,
+    val reminderSkippedAt: Instant? = null,
 )
 
 internal fun List<BattleTask>.flattenBattleTasks(): List<BattleTask> =
@@ -323,6 +324,7 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         urgency = urgency?.let(PriorityLevel::fromWire), importance = importance?.let(PriorityLevel::fromWire),
         deadlineDate = deadlineDate?.let(LocalDate::parse), deadlineAt = deadlineAt?.let(::parseInstant),
         reminderAt = reminderAt?.let(::parseInstant), reminderDeliveredAt = reminderDeliveredAt?.let(::parseInstant),
+        reminderSkippedAt = reminderSkippedAt?.let(::parseInstant),
         position = position, archivedAt = archivedAt?.let(::parseInstant), deletedAt = deletedAt?.let(::parseInstant),
         createdAt = parseInstant(createdAt), updatedAt = parseInstant(updatedAt), overdue = overdue,
         plannedDates = plannedDates.mapNotNull { value -> runCatching { LocalDate.parse(value) }.getOrNull() }

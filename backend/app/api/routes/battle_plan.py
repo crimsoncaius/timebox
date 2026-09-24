@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import utc_clock_seam
@@ -15,6 +15,9 @@ from app.schemas.battle_plan import (
     ProjectPatch,
     ProjectRead,
     ProjectReorder,
+    ReminderClaimAction,
+    ReminderClaimRead,
+    ReminderClaimRequest,
     ReminderRead,
     SubtaskRead,
     TaskCompletionRead,
@@ -244,10 +247,24 @@ def due_reminders(
     return service.due_reminders(db, settings)
 
 
-@router.post("/reminders/{task_id}/delivered", status_code=204)
-def delivered_reminder(task_id: int, db: Session = Depends(get_db)) -> Response:
+@router.post("/reminders/{task_id}/claim", response_model=ReminderClaimRead)
+def claim_reminder(task_id: int, body: ReminderClaimRequest, db: Session = Depends(get_db)) -> ReminderClaimRead:
     try:
-        service.acknowledge_reminder(db, task_id)
+        return ReminderClaimRead(token=service.claim_reminder(db, task_id, body.reminder_at))
     except ValueError as exc:
-        raise domain_http_error(exc) from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/reminders/{task_id}/delivered", status_code=204)
+def delivered_reminder(task_id: int, body: ReminderClaimAction, db: Session = Depends(get_db)) -> Response:
+    try:
+        service.acknowledge_reminder(db, task_id, body.reminder_at, body.token)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/reminders/{task_id}/release", status_code=204)
+def release_reminder(task_id: int, body: ReminderClaimAction, db: Session = Depends(get_db)) -> Response:
+    service.release_reminder(db, task_id, body.reminder_at, body.token)
     return Response(status_code=204)

@@ -8,7 +8,8 @@ type Toast = DueReminder & { key: number }
 export function ReminderWatcher() {
   const navigate = useNavigate()
   const [toasts, setToasts] = useState<Toast[]>([])
-  const seen = useRef(new Set<number>())
+  const seen = useRef(new Set<string>())
+  const inFlight = useRef(new Set<string>())
   const nextKey = useRef(0)
 
   const dismiss = useCallback((key: number) => {
@@ -17,24 +18,45 @@ export function ReminderWatcher() {
 
   const deliver = useCallback(
     async (reminder: DueReminder) => {
-      if (seen.current.has(reminder.id)) return
-      seen.current.add(reminder.id)
-      const key = nextKey.current++
-      setToasts((current) => [...current, { ...reminder, key }])
-      window.setTimeout(() => dismiss(key), 12_000)
-
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const notification = new Notification('Battle Plan reminder', { body: reminder.title })
-        notification.onclick = () => {
-          window.focus()
-          navigate(`/battle-plan?task=${reminder.id}`)
-          notification.close()
-        }
+      const occurrence = `${reminder.id}:${reminder.reminder_at}`
+      if (seen.current.has(occurrence) || inFlight.current.has(occurrence)) return
+      const browserNotificationsAllowed = 'Notification' in window && Notification.permission === 'granted'
+      if (document.visibilityState !== 'visible' && !browserNotificationsAllowed) return
+      inFlight.current.add(occurrence)
+      let token: string
+      try {
+        token = (await api.claimReminder(reminder.id, reminder.reminder_at)).token
+      } catch {
+        inFlight.current.delete(occurrence)
+        return
       }
       try {
-        await api.acknowledgeReminder(reminder.id)
+        if (document.visibilityState === 'visible') {
+          const key = nextKey.current++
+          setToasts((current) => [...current, { ...reminder, key }])
+          window.setTimeout(() => dismiss(key), 12_000)
+        } else if (browserNotificationsAllowed) {
+          const notification = new Notification('Battle Plan reminder', { body: reminder.title })
+          notification.onclick = () => {
+            window.focus()
+            navigate(`/battle-plan?task=${reminder.id}`)
+            notification.close()
+          }
+        } else {
+          await api.releaseReminder(reminder.id, reminder.reminder_at, token)
+          return
+        }
       } catch {
-        // Keep the local guard for this app session; the API can retry next time the app opens.
+        try { await api.releaseReminder(reminder.id, reminder.reminder_at, token) } catch { /* Claim expires. */ }
+        return
+      } finally {
+        inFlight.current.delete(occurrence)
+      }
+      seen.current.add(occurrence)
+      try {
+        await api.acknowledgeReminder(reminder.id, reminder.reminder_at, token)
+      } catch {
+        // Handoff already happened. Avoid another display in this tab session.
       }
     },
     [dismiss, navigate],
@@ -52,9 +74,12 @@ export function ReminderWatcher() {
     }
     void poll()
     const timer = window.setInterval(() => void poll(), 60_000)
+    const onVisible = () => { if (document.visibilityState === 'visible') void poll() }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       active = false
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [deliver])
 

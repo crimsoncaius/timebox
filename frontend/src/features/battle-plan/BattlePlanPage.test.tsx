@@ -38,6 +38,7 @@ function task(overrides: Partial<BattleTask> = {}): BattleTask {
     deadline_at: null,
     reminder_at: null,
     reminder_delivered_at: null,
+    reminder_skipped_at: null,
     position: 0,
     archived_at: null,
     deleted_at: null,
@@ -576,7 +577,7 @@ describe('BattlePlanPage', () => {
     ))
   })
 
-  it('blocks a new past reminder but preserves an unchanged past reminder precisely', async () => {
+  it('hides an expired reminder control, preserves its timestamp, and blocks a new past reminder', async () => {
     activeTasks = [task({ deadline_date: null, reminder_at: '2000-01-01T12:00:42Z' })]
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/battle-plan']}><BattlePlanPage /></MemoryRouter>)
@@ -588,6 +589,8 @@ describe('BattlePlanPage', () => {
       expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"reminder_at":"2000-01-01T12:00:42Z"') }),
     ))
     await user.click(await screen.findByText('Draft launch brief edited'))
+    expect(screen.getByLabelText('Reminder')).not.toBeChecked()
+    await user.click(screen.getByLabelText('Reminder'))
     fireEvent.change(screen.getByLabelText('Reminder date and time'), { target: { value: '2001-01-01T09:00' } })
     expect(screen.getByRole('alert')).toHaveTextContent('Reminder must be in the future')
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()

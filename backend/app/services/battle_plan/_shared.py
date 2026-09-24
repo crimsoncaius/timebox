@@ -180,6 +180,7 @@ def _to_read(
         deadline_at=task.deadline_at,
         reminder_at=task.reminder_at,
         reminder_delivered_at=task.reminder_delivered_at,
+        reminder_skipped_at=task.reminder_skipped_at,
         position=task.position,
         archived_at=task.archived_at,
         deleted_at=task.deleted_at,

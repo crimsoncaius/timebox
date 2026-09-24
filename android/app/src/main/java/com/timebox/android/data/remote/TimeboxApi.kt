@@ -185,8 +185,14 @@ interface TimeboxApi {
     @GET("reminders/due")
     suspend fun listDueReminders(): List<DueReminderDto>
 
+    @POST("reminders/{taskId}/claim")
+    suspend fun claimReminder(@Path("taskId") taskId: Int, @Body body: ReminderClaimRequestDto): ReminderClaimDto
+
     @POST("reminders/{taskId}/delivered")
-    suspend fun acknowledgeReminder(@Path("taskId") taskId: Int)
+    suspend fun acknowledgeReminder(@Path("taskId") taskId: Int, @Body body: ReminderClaimActionDto)
+
+    @POST("reminders/{taskId}/release")
+    suspend fun releaseReminder(@Path("taskId") taskId: Int, @Body body: ReminderClaimActionDto)
 
     @POST("recurring-templates/preview")
     suspend fun previewRecurrence(@Body body: RecurrenceRuleDto): RecurrencePreviewDto

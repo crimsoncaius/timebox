@@ -31,6 +31,7 @@ function battleTask(overrides: Partial<BattleTask> = {}): BattleTask {
     deadline_at: null,
     reminder_at: null,
     reminder_delivered_at: null,
+    reminder_skipped_at: null,
     position: 0,
     archived_at: null,
     deleted_at: null,

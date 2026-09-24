@@ -11,6 +11,7 @@ import com.timebox.android.data.remote.PatchField
 import com.timebox.android.data.remote.ProjectDto
 import com.timebox.android.data.remote.PlanningCommitResponseDto
 import com.timebox.android.data.remote.RecurrencePreviewDto
+import com.timebox.android.data.remote.ReminderClaimDto
 import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
 import com.timebox.android.data.remote.TimeboxApi
@@ -70,7 +71,10 @@ class BattlePlanRepositoryTest {
         repository.deleteActualBlock(44).getOrThrow()
 
         repository.listDueReminders().getOrThrow()
-        repository.acknowledgeReminder(10).getOrThrow()
+        val reminderAt = Instant.parse("2026-08-17T01:00:00Z")
+        val claim = repository.claimReminder(10, reminderAt).getOrThrow()
+        repository.acknowledgeReminder(10, reminderAt, claim).getOrThrow()
+        repository.releaseReminder(10, reminderAt, claim).getOrThrow()
 
         val rule = RecurrenceRule(
             RecurrenceMode.Scheduled,
@@ -98,14 +102,15 @@ class BattlePlanRepositoryTest {
                 "commitPlan",
                 "startActualBlock", "createActualBlock", "getActualBlock", "getActiveActualBlock",
                 "patchActualBlock", "finishActualBlock", "deleteActualBlock",
-                "acknowledgeReminder", "previewRecurrence", "listRecurringTemplates",
+                "claimReminder", "acknowledgeReminder", "releaseReminder",
+                "previewRecurrence", "listRecurringTemplates",
                 "createRecurringTemplate", "getRecurringTemplate", "patchRecurringTemplate",
                 "pauseRecurringTemplate", "resumeRecurringTemplate", "endRecurringTemplate",
                 "deleteRecurringTemplate",
             ),
             calls.toSet(),
         )
-        assertEquals(37, calls.size)
+        assertEquals(39, calls.size)
     }
 
     @Test
@@ -240,6 +245,7 @@ class BattlePlanRepositoryTest {
                 "listDueReminders" -> listOf(
                     DueReminderDto(10, "Task", null, "2026-08-18T10:00:00+08:00", "2026-08-17T09:00:00+08:00")
                 )
+                "claimReminder" -> ReminderClaimDto("token")
                 "previewRecurrence" -> RecurrencePreviewDto(emptyList(), 0, 0)
                 "listRecurringTemplates" -> listOf(template)
                 "createRecurringTemplate", "getRecurringTemplate", "patchRecurringTemplate",

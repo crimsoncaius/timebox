@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
     private var notificationsAllowed by mutableStateOf(false)
     private var exactAlarmsAllowed by mutableStateOf(true)
-    private val shownReminderIds: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+    private val shownReminderIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { notificationsAllowed = canDisplayNotifications() }
@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
                         repository = app.repository,
                         notifier = app.reminderNotifier,
                         shownInProcess = shownReminderIds,
+                        suppressions = app.reminderSuppressions,
                     )
                     delay(60_000)
                 }

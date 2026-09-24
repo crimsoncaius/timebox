@@ -193,8 +193,20 @@ export const api = {
 
   dueReminders: () => fetchJson<DueReminder[]>('/reminders/due'),
 
-  acknowledgeReminder: (id: number) =>
-    fetchVoid(`/reminders/${id}/delivered`, { method: 'POST' }),
+  claimReminder: (id: number, reminderAt: string) =>
+    fetchJson<{ token: string }>(`/reminders/${id}/claim`, {
+      method: 'POST', body: JSON.stringify({ reminder_at: reminderAt }),
+    }),
+
+  acknowledgeReminder: (id: number, reminderAt: string, token: string) =>
+    fetchVoid(`/reminders/${id}/delivered`, {
+      method: 'POST', body: JSON.stringify({ reminder_at: reminderAt, token }),
+    }),
+
+  releaseReminder: (id: number, reminderAt: string, token: string) =>
+    fetchVoid(`/reminders/${id}/release`, {
+      method: 'POST', body: JSON.stringify({ reminder_at: reminderAt, token }),
+    }),
 
   previewRecurrence: (body: RecurrenceRuleWrite) =>
     fetchJson<RecurrencePreview>('/recurring-templates/preview', {
