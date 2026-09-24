@@ -34,8 +34,23 @@ backend or protocol changes and no changes to Planned Blocks on Day.
 - The full instrumentation APK has an unrelated compile failure in
   `BattlePlanScreenTest.kt`, which references removed Trash undo classes. An ignored
   local Gradle init script excludes that file when building the focused Assistant suite.
-- Device execution and native review are pending: a new emulator could not boot with
-  about 1 GB free on C:. The failed reservations were released. The user has been asked
-  to assign the earlier Assistant review device or free space for a new emulator.
+- After the user freed emulator disk space, both focused Assistant device tests passed
+  on a fresh managed emulator. The first attempt crashed during Android/Google Play
+  first-boot initialization before running tests; the settled-device run passed both.
+- The plan expansion, editable follow-up and reset case also passed at 1.5x system
+  font scale in dark mode. Native screenshots confirm the plan and composer remain
+  readable. The review device was restored to normal text size and light theme.
+
+## Native review
+
+- Device: `emulator-5642` (`timebox-agent-32`), retained for user review.
+- Reservation: `cd421fba690c494cb3fd7ac5a882e6b1`.
+- Installed APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
+- The actual application is open on Assistant. Its default backend is port 8001.
+- Local screenshots: `artifacts/assistant-a.png` (app welcome),
+  `artifacts/assistant-a-plan.png` (native sample plan), and
+  `artifacts/assistant-a-dark-large-plan.png` (native large-text dark sample plan).
+  Plan screenshots use deterministic instrumentation fixtures; the application
+  itself uses its ordinary backend and contains no mock response data.
 
 Changes remain on `codex/assistant-panel-a`; no merge is authorized yet.
