@@ -54,3 +54,19 @@ backend or protocol changes and no changes to Planned Blocks on Day.
   itself uses its ordinary backend and contains no mock response data.
 
 Changes remain on `codex/assistant-panel-a`; no merge is authorized yet.
+
+## Review correction: keep navigation while drafting
+
+The user reported that Assistant filled the screen and its bottom navigation
+disappeared after using the composer. Native inspection confirmed the navigation
+nodes were absent while Android reported the input method as active, including
+the floating handwriting toolbar. The shared keyboard policy hid the entire bar.
+
+Assistant now keeps bottom navigation visible with input active. The surrounding
+layout continues to apply keyboard insets, keeping the composer and navigation
+above a docked keyboard. Other screens retain their existing keyboard policy.
+
+The full-app `assistantKeepsNavigationWhenInputMethodIsVisible` device regression
+failed on the original rule at the navigation visibility assertion, then passed
+after the fix. It also verifies the composer action remains visible and navigation
+back to Day works. The focused AppRoutes unit tests and debug build pass.
