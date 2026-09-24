@@ -1,6 +1,8 @@
 package com.timebox.android.ui
 
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -49,6 +51,37 @@ import org.junit.Test
 class TimeboxAppReadyToPlanTest {
     @get:Rule val compose = createComposeRule()
     private val readinessScopes = mutableListOf<CoroutineScope>()
+
+    @Test
+    fun assistantKeepsNavigationWhenInputMethodIsVisible() {
+        val transport = ControllableTimeboxApi()
+        val repository = TimeboxRepository(transport.proxy())
+        val readinessCoordinator = testReadyToPlanCoordinator(repository)
+        val imeVisible = mutableStateOf(false)
+        compose.setContent {
+            TimeboxApp(
+                isDark = false,
+                onToggleDark = {},
+                notificationsAllowed = true,
+                onRequestNotificationPermission = {},
+                onOpenNotificationSettings = {},
+                repository = repository,
+                taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository)),
+                readinessCoordinator = readinessCoordinator,
+                imeVisibleOverride = imeVisible.value,
+            )
+        }
+        compose.onNodeWithContentDescription("Assistant").performClick()
+        compose.onNodeWithContentDescription("Message Assistant").assertIsDisplayed()
+        compose.runOnIdle { imeVisible.value = true }
+        listOf("Day", "Chronicle", "Battle Plan", "Settings").forEach { destination ->
+            compose.onNodeWithContentDescription(destination).assertIsDisplayed()
+        }
+        compose.onNodeWithContentDescription("Send").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Day").performClick()
+        compose.runOnIdle { imeVisible.value = false }
+        compose.onNodeWithContentDescription("Assistant").assertIsDisplayed()
+    }
 
     @After
     fun cancelReadinessScopes() {

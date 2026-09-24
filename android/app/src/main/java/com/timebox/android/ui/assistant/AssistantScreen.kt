@@ -1,6 +1,12 @@
 package com.timebox.android.ui.assistant
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -8,10 +14,17 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.NorthEast
+import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
@@ -19,9 +32,14 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.timebox.android.TimeboxApplication
+import com.timebox.android.ui.theme.TimeboxTheme
+import com.timebox.android.ui.theme.TimeboxShapes
+import java.time.LocalDate
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
@@ -32,7 +50,8 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
     var contextOpen by rememberSaveable { mutableStateOf(false) }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val largeText = LocalDensity.current.fontScale > 1.3f
+    val composerFocus = remember { FocusRequester() }
+    val colors = TimeboxTheme.colors
     var follow by remember { mutableStateOf(true) }
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress to list.canScrollForward }.collect { (scrolling, more) ->
@@ -45,33 +64,32 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
     }
     fun reset() { controller.newConversation(); draft = ""; follow = true }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Assistant", Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
-            if (largeText) IconButton(onClick = ::reset) { Icon(Icons.Outlined.Add, contentDescription = "New conversation") }
-            else OutlinedButton(onClick = ::reset) { Text("New conversation") }
-        }
-        TextButton(onClick = { contextOpen = !contextOpen }, modifier = Modifier.padding(horizontal = 6.dp)) {
-            Text(if (contextOpen) "▾ Temporary conversation" else "▸ Temporary conversation", style = MaterialTheme.typography.labelMedium)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Assistant", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
+                TextButton(onClick = { contextOpen = !contextOpen }, contentPadding = PaddingValues(0.dp)) {
+                    Text(if (contextOpen) "▾ Temporary conversation" else "▸ Temporary conversation", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                }
+            }
+            OutlinedIconButton(onClick = ::reset, shape = CircleShape, colors = IconButtonDefaults.outlinedIconButtonColors(containerColor = colors.card), border = BorderStroke(1.dp, colors.hairline)) {
+                Icon(Icons.Outlined.Add, contentDescription = "New conversation")
+            }
         }
         if (contextOpen) Text("60 minutes of inactivity · up to 20 completed exchanges. New conversation or an app restart clears this view and Assistant memory.", Modifier.padding(horizontal = 18.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
-        HorizontalDivider()
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        HorizontalDivider(color = colors.hairline)
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             if (state.exchanges.isEmpty()) item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Spacer(Modifier.height(24.dp))
-                    Text("A little clarity for today", style = MaterialTheme.typography.headlineMedium)
-                    Text("Ask about your Planned Blocks. Assistant can read your plan, but can’t change it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    listOf("Show today’s plan", "Do I have a 30-minute gap?", "Help me think through my morning").forEach { prompt ->
-                        FilledTonalButton(onClick = { draft = prompt }, modifier = Modifier.fillMaxWidth()) { Text(prompt) }
-                    }
-                }
+                AssistantWelcome { draft = it; composerFocus.requestFocus() }
             }
             itemsIndexed(state.exchanges) { index, exchange ->
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Surface(Modifier.padding(start = 36.dp).fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.large) {
-                        Text(exchange.question, Modifier.padding(14.dp).semantics { contentDescription = "You: ${exchange.question}" })
+                    Surface(Modifier.padding(start = 36.dp).align(Alignment.End), color = colors.card, shape = RoundedCornerShape(16.dp, 16.dp, 3.dp, 16.dp), border = BorderStroke(1.dp, colors.hairline)) {
+                        Text(exchange.question, Modifier.padding(horizontal = 14.dp, vertical = 11.dp).semantics { contentDescription = "You: ${exchange.question}" }, style = TimeboxTheme.type.body)
                     }
-                    Text("ASSISTANT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = colors.onVariant)
+                        Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    }
                     exchange.plan?.let { PlanCard(it) }
                     if (exchange.answer.isNotEmpty()) SelectionContainer { AnswerText(exchange.answer) }
                     if (index == state.exchanges.lastIndex && state.busy) Text(
@@ -85,6 +103,13 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
                             if (index == state.exchanges.lastIndex && !state.busy && state.ended == null) TextButton(onClick = { follow = true; controller.retry() }) { Text("Retry response") }
                         }
                     }
+                    if (index == state.exchanges.lastIndex && exchange.status == "Complete" && !state.busy && state.ended == null) {
+                        OutlinedButton(onClick = { draft = "Help me think through my morning"; composerFocus.requestFocus() }, border = BorderStroke(1.dp, colors.hairline)) {
+                            Text("Think through my morning", Modifier.weight(1f, fill = false), style = TimeboxTheme.type.bodySmall)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Outlined.NorthEast, null, Modifier.size(16.dp))
+                        }
+                    }
                 }
             }
             state.ended?.let { reason -> item { Text(reason, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) } }
@@ -92,12 +117,53 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
         }
         if (state.exchanges.isNotEmpty() && list.canScrollForward) TextButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount - 1) } }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("↓ Jump to latest") }
         if (state.ended != null) Button(onClick = ::reset, modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("New conversation") }
-        else Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-            OutlinedTextField(value = draft, onValueChange = { if (it.length <= 4000) draft = it },
-                modifier = Modifier.weight(1f).semantics { contentDescription = "Message Assistant" }, placeholder = { Text("Ask Assistant") }, label = { Text("Message") }, maxLines = 5,
-                shape = MaterialTheme.shapes.large, supportingText = if (draft.length >= 3600) ({ Text("${draft.length}/4000") }) else null)
-            if (state.busy) FilledTonalButton(onClick = controller::stop) { Text("Stop") }
-            else Button(enabled = draft.isNotBlank(), onClick = { follow = true; controller.send(draft); draft = "" }) { Text("Send") }
+        else AssistantComposer(draft, { if (it.length <= 4000) draft = it }, composerFocus, state.busy,
+            if (state.exchanges.isEmpty()) "What’s on your mind?" else "Ask a follow-up…",
+            controller::stop, { follow = true; controller.send(draft); draft = "" })
+    }
+}
+
+@Composable
+private fun AssistantWelcome(onPrompt: (String) -> Unit) {
+    val colors = TimeboxTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Spacer(Modifier.height(8.dp))
+        Surface(shape = CircleShape, border = BorderStroke(1.dp, colors.hairline), color = colors.bg) {
+            Icon(Icons.Outlined.AutoAwesome, null, Modifier.padding(12.dp).size(24.dp), tint = colors.onVariant)
+        }
+        Text("A LITTLE CLARITY", style = TimeboxTheme.type.kicker, color = colors.onVariant)
+        Text("Make room\nfor your day.", style = TimeboxTheme.type.display, color = colors.on)
+        Text("Think through your Planned Blocks.\nAssistant can read your plan, but can’t change it.", style = TimeboxTheme.type.body, color = colors.onVariant)
+        Column(Modifier.padding(top = 8.dp)) {
+            listOf("Show today’s plan", "Do I have a 30-minute gap?", "Help me think through my morning").forEachIndexed { index, prompt ->
+                HorizontalDivider(color = colors.hairline)
+                Row(Modifier.fillMaxWidth().clickable(onClickLabel = "Use prompt", onClick = { onPrompt(prompt) }).heightIn(min = 56.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("0${index + 1}", style = TimeboxTheme.type.mono, color = colors.onVariant)
+                    Text(prompt, Modifier.weight(1f), style = TimeboxTheme.type.body, color = colors.on)
+                    Icon(Icons.Outlined.NorthEast, null, Modifier.size(18.dp), tint = colors.onVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistantComposer(draft: String, onDraft: (String) -> Unit, focus: FocusRequester, busy: Boolean, placeholder: String, onStop: () -> Unit, onSend: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), color = colors.field, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, colors.hairline)) {
+        Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                BasicTextField(value = draft, onValueChange = onDraft,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp).focusRequester(focus).semantics { contentDescription = "Message Assistant" },
+                    textStyle = TimeboxTheme.type.body.copy(color = colors.on), cursorBrush = SolidColor(colors.on), maxLines = 5,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    decorationBox = { field -> Box { if (draft.isEmpty()) Text(placeholder, style = TimeboxTheme.type.body, color = colors.onVariant); field() } })
+                if (draft.length >= 3600) Text("${draft.length}/4000", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            }
+            FilledIconButton(onClick = if (busy) onStop else onSend, enabled = busy || draft.isNotBlank(), modifier = Modifier.size(48.dp), shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.on, contentColor = colors.bg, disabledContainerColor = colors.disabledContainer, disabledContentColor = colors.disabledContent)) {
+                Icon(if (busy) Icons.Outlined.Stop else Icons.Outlined.ArrowUpward, contentDescription = if (busy) "Stop" else "Send")
+            }
         }
     }
 }
@@ -106,31 +172,44 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
 private fun PlanCard(plan: AssistantPlan) {
     var expanded by rememberSaveable(plan.id) { mutableStateOf(false) }
     val largeText = LocalDensity.current.fontScale > 1.3f
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Plan · ${plan.date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
-            Text("${plan.rows.size} Planned Blocks", style = MaterialTheme.typography.bodySmall)
-            Text("Read at ${plan.readAt.atZone(plan.zone).format(DateTimeFormatter.ofPattern("HH:mm"))} · ${plan.zone.id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (plan.rows.isEmpty()) Text("No Planned Blocks for this date.")
+    val colors = TimeboxTheme.colors
+    Surface(color = colors.field, shape = TimeboxShapes.card, border = BorderStroke(1.dp, colors.hairline)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val title = if (plan.date == LocalDate.now(plan.zone)) "Today’s plan" else "Plan"
+            if (largeText) {
+                Text(title, Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
+                Text("${plan.rows.size} Planned Blocks", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
+                Text("${plan.rows.size} blocks", Modifier.semantics { contentDescription = "${plan.rows.size} Planned Blocks" }, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            }
+            Text("${plan.date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))} · Read ${plan.readAt.atZone(plan.zone).format(DateTimeFormatter.ofPattern("HH:mm"))} · ${plan.zone.id}", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            if (plan.rows.isEmpty()) Text("No Planned Blocks for this date.", style = TimeboxTheme.type.body)
             (if (expanded) plan.rows else plan.rows.take(3)).forEach { row ->
-                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.hairline)
                 if (largeText) Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("${clock(row.start)}–${clock(row.end)}", style = MaterialTheme.typography.labelMedium)
+                    Text("${clock(row.start)}–${clock(row.end)}", style = TimeboxTheme.type.mono.copy(fontSize = 12.sp), color = colors.planned)
                     PlanRowTitle(row)
                 } else Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("${clock(row.start)}–${clock(row.end)}", Modifier.width(92.dp), style = MaterialTheme.typography.labelMedium)
+                    Column(Modifier.width(48.dp)) {
+                        Text(clock(row.start), style = TimeboxTheme.type.mono.copy(fontSize = 12.sp), color = colors.planned)
+                        Text(clock(row.end), style = TimeboxTheme.type.mono.copy(fontSize = 11.sp), color = colors.onVariant)
+                    }
                     Column(Modifier.weight(1f)) { PlanRowTitle(row) }
                 }
             }
-            if (plan.rows.size > 3) TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Show fewer" else "Show all ${plan.rows.size} blocks") }
+            if (plan.rows.size > 3) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
+                Text(if (expanded) "Show fewer" else "Show all ${plan.rows.size} blocks", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                Text(if (expanded) "−" else "+", color = colors.onVariant)
+            }
         }
     }
 }
 
 @Composable
 private fun PlanRowTitle(row: AssistantPlanRow) {
-    Text(row.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-    Text(row.taskType, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(row.title, style = TimeboxTheme.type.body, fontWeight = FontWeight.Medium)
+    Text(row.taskType, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
 }
 
 private fun clock(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
@@ -153,5 +232,5 @@ private fun AnswerText(text: String) {
             append(line.substring(offset))
         }
     } }
-    Text(annotated, style = MaterialTheme.typography.bodyLarge)
+    Text(annotated, style = TimeboxTheme.type.body.copy(fontSize = 15.sp, lineHeight = 25.sp))
 }
