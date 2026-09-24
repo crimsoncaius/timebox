@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prototype:jev": "vite --mode jev-picker-prototype --host=127.0.0.1 --port=12059 --strictPort --open=/battle-plan?task=11",
     "dev": "vite",
     "dev:review": "vite --mode review --host=127.0.0.1 --port=5176",
     "build": "tsc -b && vite build",

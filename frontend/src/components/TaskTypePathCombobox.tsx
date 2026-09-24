@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { TaskType } from '../lib/api'
 import { useTaskTypeRecommendation } from './useTaskTypeRecommendation'
+import { PrototypePicker } from './prototype-jev-picker/PrototypePicker'
 import {
   buildTaskTypeSuggestions,
   createAncestorHint,
@@ -9,7 +10,12 @@ import {
 
 const UNSPECIFIED = 'unspecified'
 
-export function TaskTypePathCombobox({
+export function TaskTypePathCombobox(props: Parameters<typeof ProductionTaskTypePathCombobox>[0]) {
+  if (import.meta.env.DEV && import.meta.env.MODE === 'jev-picker-prototype') return <PrototypePicker {...props} />
+  return <ProductionTaskTypePathCombobox {...props} />
+}
+
+function ProductionTaskTypePathCombobox({
   label,
   taskTypes,
   valueTaskTypeId,
