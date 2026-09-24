@@ -78,6 +78,8 @@ class Project(Base):
 class RecurringTemplate(Base):
     __tablename__ = "recurring_templates"
 
+    preplanning_mode: Mapped[str] = mapped_column(Text, nullable=False, default="none", server_default="none")
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_type_id: Mapped[int | None] = mapped_column(
         ForeignKey("task_types.id", ondelete="SET NULL"), nullable=True, index=True

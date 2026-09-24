@@ -12,7 +12,7 @@ internal fun routineDraftSaver(base: RecurringEditorUiState) = listSaver<Recurri
         draft.importance?.name.orEmpty(), draft.urgency?.name.orEmpty(), draft.mode.name,
         draft.frequency.name, draft.interval, draft.weekdays.sorted().joinToString(","), draft.monthDay,
         draft.quotaCount, draft.startDate, draft.endMode.name, draft.endDate, draft.cycleLimit,
-        draft.checklistText, draft.keepUnfinishedOverdue.toString(),
+        draft.checklistText, draft.keepUnfinishedOverdue.toString(), draft.queuePreplanning.toString(),
     ) + draft.preplanningSlots.flatMap { listOf(it.key.orEmpty(), it.weekday?.toString().orEmpty(), it.start, it.end) } },
     restore = { values -> base.copy(
         title = values[0], description = values[1], taskTypeId = values[2].toIntOrNull(),
@@ -23,6 +23,7 @@ internal fun routineDraftSaver(base: RecurringEditorUiState) = listSaver<Recurri
         monthDay = values[9], quotaCount = values[10], startDate = values[11],
         endMode = RecurrenceEndMode.valueOf(values[12]), endDate = values[13], cycleLimit = values[14],
         checklistText = values[15], keepUnfinishedOverdue = values[16].toBoolean(),
-        preplanningSlots = values.drop(17).chunked(4).map { RecurringPreplanningSlotDraft(it[0].ifEmpty { null }, it[1].toIntOrNull(), it[2], it[3]) },
+        queuePreplanning = values[17].toBoolean(),
+        preplanningSlots = values.drop(18).chunked(4).map { RecurringPreplanningSlotDraft(it[0].ifEmpty { null }, it[1].toIntOrNull(), it[2], it[3]) },
     ) },
 )

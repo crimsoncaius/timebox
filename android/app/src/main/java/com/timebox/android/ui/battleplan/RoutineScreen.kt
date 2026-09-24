@@ -82,7 +82,7 @@ fun RoutineScreen(
                     RecurrenceEndMode.CycleLimit -> " · ${state.cycleLimit} cycles"
                 }, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 if (state.mode == RecurrenceMode.Scheduled) TaskSheetRow(Icons.Outlined.EventAvailable,
-                    if (state.preplanningSlots.isEmpty()) "Not set" else "${state.preplanningSlots.size} planned slots", "Pre-planning", editable) { open("Pre-planning") }
+                    if (state.queuePreplanning) "Ready to Plan" else if (state.preplanningSlots.isEmpty()) "No pre-planning" else "Planned time · ${state.preplanningSlots.size} slots", "Pre-planning", editable) { open("Pre-planning") }
                 template?.preplanningSchedule?.unavailableSlots?.forEach { slot ->
                     Text("Unavailable on ${slot.date}: ${com.timebox.android.ui.formatMinuteLabel24(slot.startMinute)}–${com.timebox.android.ui.formatMinuteLabel24(slot.endMinute)}", color = colors.error, style = TimeboxTheme.type.bodySmall)
                 }
@@ -168,9 +168,23 @@ fun RoutineScreen(
 @Composable
 internal fun RoutinePreplanningFields(state: RecurringEditorUiState, onChange: (RecurringEditorUiState) -> Unit) {
     fun slot(index: Int, change: (RecurringPreplanningSlotDraft) -> RecurringPreplanningSlotDraft) = onChange(state.copy(preplanningSlots = state.preplanningSlots.mapIndexed { i, value -> if (i == index) change(value) else value }))
+    RecurrenceMenu("Pre-planning", when (state.preplanningDestination()) {
+        "ready_to_plan" -> "Ready to Plan"
+        "planned_time" -> "Planned time"
+        else -> "No pre-planning"
+    }, listOf("No pre-planning" to "none", "Ready to Plan" to "ready_to_plan", "Planned time" to "planned_time")) { destination ->
+        onChange(state.copy(
+            queuePreplanning = destination == "ready_to_plan",
+            preplanningSlots = if (destination == "planned_time") state.preplanningSlots.ifEmpty {
+                listOf(RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull()))
+            } else emptyList(),
+        ))
+    }
+    if (state.queuePreplanning) Text("Add each occurrence to Ready to Plan on its date, without assigning a time.", style = TimeboxTheme.type.bodySmall)
+    if (state.preplanningDestination() != "planned_time") return
     RecurringPreplanningScheduleEditor(state,
         { onChange(state.copy(preplanningSlots = if (it) listOf(RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull())) else emptyList())) },
         { onChange(state.copy(preplanningSlots = state.preplanningSlots + RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull()))) },
         { index -> onChange(state.copy(preplanningSlots = state.preplanningSlots.filterIndexed { i, _ -> i != index })) },
-        { i, value -> slot(i) { it.copy(start = value) } }, { i, value -> slot(i) { it.copy(end = value) } }, { i, value -> slot(i) { it.copy(weekday = value) } })
+        { i, value -> slot(i) { it.copy(start = value) } }, { i, value -> slot(i) { it.copy(end = value) } }, { i, value -> slot(i) { it.copy(weekday = value) } }, showEnabledSwitch = false)
 }

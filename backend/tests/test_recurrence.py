@@ -88,6 +88,130 @@ def _daily_body(today: str, **changes):
     return body
 
 
+def test_queue_preplanning_admits_today_not_future_and_honors_manual_removal(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    created = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(), preplanning_mode="ready_to_plan",
+    ))
+    assert created.status_code == 201, created.text
+    template = created.json()
+    assert template["preplanning_mode"] == "ready_to_plan"
+    assert template["preplanning_schedule"] is None
+    current = _task_for_planning_date(client, today, template["id"])
+    future = _task_for_planning_date(client, today + dt.timedelta(days=1), template["id"])
+    assert current["ready_to_plan"] is True
+    assert future["ready_to_plan"] is False
+    assert client.get(f"/days/{today}").json()["planned_blocks"] == []
+    assert client.patch(f"/tasks/{current['id']}", json={"ready_to_plan": False}).status_code == 200
+    assert _task_for_planning_date(client, today, template["id"])["ready_to_plan"] is False
+    with Session(get_engine()) as db:
+        synchronize(db, get_settings(), today=today + dt.timedelta(days=1))
+        assert db.get(Task, current["id"]).ready_to_plan is False
+        assert db.get(Task, future["id"]).ready_to_plan is True
+
+
+def test_queue_preplanning_consumed_by_scheduling_even_after_block_deleted(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(), preplanning_mode="ready_to_plan",
+    )).json()
+    current = _task_for_planning_date(client, today, template["id"])
+    kind = client.post("/task-types", json={"name": "Queue test"}).json()
+    block = _planned_block(client, today, current, kind["id"])
+    assert _task_for_planning_date(client, today, template["id"])["ready_to_plan"] is False
+    assert client.delete(f"/days/{today}/blocks/{block['id']}").status_code == 200
+    assert _task_for_planning_date(client, today, template["id"])["ready_to_plan"] is False
+
+
+@pytest.mark.parametrize("customized", [False, True])
+def test_switch_timed_preplanning_to_queue_preserves_customized_blocks(client, customized):
+    today, template, block = _generated_preplanning_case(client)
+    if customized:
+        assert client.patch(f"/days/{today}/blocks/{block['id']}", json={
+            "start_minute": 660, "end_minute": 720,
+        }).status_code == 200
+    response = client.patch(f"/recurring-templates/{template['id']}", json={
+        "preplanning_mode": "ready_to_plan",
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["preplanning_schedule"] is None
+    blocks = client.get(f"/days/{today}").json()["planned_blocks"]
+    assert len(blocks) == int(customized)
+    assert _task_for_planning_date(client, today, template["id"])["ready_to_plan"] is (not customized)
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+@pytest.mark.parametrize("destination", ["none", "planned_time"])
+def test_leaving_queue_preplanning_preserves_explicit_readiness(client, explicit, destination):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(), preplanning_mode="ready_to_plan",
+    )).json()
+    current = _task_for_planning_date(client, today, template["id"])
+    if explicit:
+        assert client.patch(f"/tasks/{current['id']}", json={"ready_to_plan": True}).status_code == 200
+    patch = {"preplanning_mode": destination}
+    if destination == "planned_time":
+        patch["preplanning_schedule"] = {"slots": [{"start_minute": 540, "end_minute": 600}]}
+    response = client.patch(f"/recurring-templates/{template['id']}", json=patch)
+    assert response.status_code == 200, response.text
+    assert _task_for_planning_date(client, today, template["id"])["ready_to_plan"] is explicit
+    assert len(client.get(f"/days/{today}").json()["planned_blocks"]) == int(destination == "planned_time")
+
+
+@pytest.mark.parametrize("keep_overdue", [False, True])
+def test_queue_preplanning_retains_existing_expiry_rules(client, keep_overdue):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(
+        today.isoformat(), preplanning_mode="ready_to_plan", keep_unfinished_overdue=keep_overdue,
+    )).json()
+    current = _task_for_planning_date(client, today, template["id"])
+    with Session(get_engine()) as db:
+        synchronize(db, get_settings(), today=today + dt.timedelta(days=1))
+        assert db.get(Task, current["id"]).ready_to_plan is keep_overdue
+        occurrence = db.execute(select(RecurrenceOccurrence).where(
+            RecurrenceOccurrence.task_id == current["id"],
+        )).scalar_one()
+        assert occurrence.skipped is (not keep_overdue)
+
+
+def test_enabling_queue_does_not_admit_historical_or_completed_occurrences(client):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(
+        (today - dt.timedelta(days=1)).isoformat(), confirm_backfill=True, keep_unfinished_overdue=True,
+    )).json()
+    current = _task_for_planning_date(client, today, template["id"])
+    assert client.post(f"/tasks/{current['id']}/complete").status_code == 200
+    response = client.patch(f"/recurring-templates/{template['id']}", json={"preplanning_mode": "ready_to_plan"})
+    assert response.status_code == 200, response.text
+    with Session(get_engine()) as db:
+        assert not any(task.ready_to_plan for task in db.execute(select(Task)).scalars())
+
+
+def test_queue_preplanning_rejects_quota_and_conflicting_schedule(client):
+    today = client.get("/health").json()["today"]
+    for changes in [
+        {"mode": "quota", "quota_count": 3},
+        {"preplanning_schedule": {"slots": [{"start_minute": 540, "end_minute": 600}]}},
+    ]:
+        response = client.post("/recurring-templates", json=_daily_body(
+            today, preplanning_mode="ready_to_plan", **changes,
+        ))
+        assert response.status_code == 422, response.text
+
+
+@pytest.mark.parametrize("manual_removal", [False, True])
+def test_enabling_queue_midday_admits_only_occurrences_without_explicit_removal(client, manual_removal):
+    today = dt.date.fromisoformat(client.get("/health").json()["today"])
+    template = client.post("/recurring-templates", json=_daily_body(today.isoformat())).json()
+    current = _task_for_planning_date(client, today, template["id"])
+    if manual_removal:
+        assert client.patch(f"/tasks/{current['id']}", json={"ready_to_plan": False}).status_code == 200
+    response = client.patch(f"/recurring-templates/{template['id']}", json={"preplanning_mode": "ready_to_plan"})
+    assert response.status_code == 200, response.text
+    assert _task_for_planning_date(client, today, template["id"])["ready_to_plan"] is (not manual_removal)
+
+
 def _planned_block(client, date: dt.date, task: dict, task_type_id: int) -> dict:
     response = client.post(f"/days/{date.isoformat()}/blocks", json={
         "lane": "planned",

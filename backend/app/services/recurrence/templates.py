@@ -34,6 +34,7 @@ from app.schemas.battle_plan import (
     RecurringTemplateCreate,
     RecurringTemplatePatch,
     RecurringTemplateRead,
+    validate_preplanning_mode,
     validate_preplanning_schedule,
 )
 from app.services.recurrence.cadence import _cadence
@@ -90,6 +91,7 @@ def create_template(
         end_date=body.end_date,
         cycle_limit=body.cycle_limit,
         keep_unfinished_overdue=body.keep_unfinished_overdue,
+        preplanning_mode=body.preplanning_mode,
         position=_next_position(db),
     )
     db.add(row)
@@ -252,14 +254,22 @@ def patch_template(
         if "preplanning_schedule" in fields
         else active_schedule
     )
+    if "preplanning_mode" in fields and row.preplanning_mode != "planned_time":
+        if "preplanning_schedule" in fields and body.preplanning_schedule is not None:
+            raise ValueError("Only Planned time accepts a pre-planning schedule")
+        next_preplanning_schedule = None
+    elif "preplanning_mode" not in fields and "preplanning_schedule" in fields:
+        # Older clients express the destination through their optional schedule.
+        row.preplanning_mode = "planned_time" if next_preplanning_schedule else "none"
+    validate_preplanning_mode(row.mode, row.preplanning_mode, next_preplanning_schedule)
     validate_preplanning_schedule(
         row.mode,
         row.frequency,
         _json_list(row.weekdays_json),
         next_preplanning_schedule,
     )
-    if "preplanning_schedule" in fields:
-        _replace_preplanning_schedule(db, row, body.preplanning_schedule)
+    if fields & {"preplanning_schedule", "preplanning_mode"}:
+        _replace_preplanning_schedule(db, row, next_preplanning_schedule)
     if cadence_changed:
         # New cadence starts now. Protected old-cadence occurrences coexist as
         # exceptions; they must never push the new generation window forward.
@@ -473,6 +483,7 @@ def to_read(
         end_date=row.end_date,
         cycle_limit=row.cycle_limit,
         keep_unfinished_overdue=row.keep_unfinished_overdue,
+        preplanning_mode=row.preplanning_mode,
         preplanning_schedule=(
             RecurringPreplanningScheduleRead(
                 slots=[

@@ -60,6 +60,7 @@ data class RecurringEditorUiState(
     val cycleLimit: String = "",
     val checklistText: String = "",
     val keepUnfinishedOverdue: Boolean = false,
+    val queuePreplanning: Boolean = false,
     val preplanningSlots: List<RecurringPreplanningSlotDraft> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
     val preview: RecurrencePreview? = null,
@@ -234,6 +235,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                         confirmBackfill = confirmBackfill,
                         keepUnfinishedOverdue = current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue,
                         preplanningSchedule = current.toPreplanningSchedule(),
+                        preplanningMode = current.preplanningDestination(),
                     )
                 )
             } else {
@@ -317,7 +319,7 @@ internal fun validateRecurrenceDraft(state: RecurringEditorUiState, requireTitle
         if (state.frequency == RecurrenceFrequency.Monthly && state.monthDay.toIntOrNull() !in 1..31) {
             return "Month day must be between 1 and 31."
         }
-        val schedule = state.preplanningSlots
+        val schedule = if (state.queuePreplanning) emptyList() else state.preplanningSlots
         schedule.forEach { slot ->
             val startMinute = parseTimeMinute(slot.start)
                 ?: return "Use HH:MM for the Planned Block start."
@@ -374,7 +376,7 @@ private fun parseTimeMinute(value: String, endOfDay: Boolean = false): Int? {
 }
 
 internal fun RecurringEditorUiState.toPreplanningSchedule(): RecurringPreplanningSchedule? {
-    if (mode != RecurrenceMode.Scheduled) return null
+    if (mode != RecurrenceMode.Scheduled || queuePreplanning) return null
     if (preplanningSlots.isEmpty()) return null
     return RecurringPreplanningSchedule(preplanningSlots.mapIndexed { position, slot ->
         RecurringPreplanningSlot(
@@ -431,6 +433,7 @@ internal fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = Recurr
     cycleLimit = cycleLimit?.toString().orEmpty(),
     checklistText = checklistItems.sortedBy { it.position }.joinToString("\n") { it.title },
     keepUnfinishedOverdue = keepUnfinishedOverdue,
+    queuePreplanning = preplanningMode == "ready_to_plan",
     preplanningSlots = preplanningSchedule?.slots?.sortedBy { it.position }?.map { slot ->
         RecurringPreplanningSlotDraft(
             key = slot.key,
@@ -461,6 +464,14 @@ internal fun recurringDraftPatch(before: RecurringEditorUiState, after: Recurrin
         checklistTitles = changed(before.checklistTitles(), after.checklistTitles()),
         keepUnfinishedOverdue = changed(before.keepUnfinishedOverdue, after.keepUnfinishedOverdue),
         preplanningSchedule = changed(before.toPreplanningSchedule(), after.toPreplanningSchedule()),
+        preplanningMode = changed(before.preplanningDestination(), after.preplanningDestination()),
         confirmBackfill = PatchField.of(confirmBackfill),
     )
+}
+
+internal fun RecurringEditorUiState.preplanningDestination(): String = when {
+    mode != RecurrenceMode.Scheduled -> "none"
+    queuePreplanning -> "ready_to_plan"
+    preplanningSlots.isNotEmpty() -> "planned_time"
+    else -> "none"
 }

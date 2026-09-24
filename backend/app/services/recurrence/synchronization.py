@@ -93,8 +93,9 @@ def _set_period_availability(
     planning_date: dt.date | None = None,
 ) -> None:
     rows = db.execute(
-        select(RecurrenceOccurrence, Task)
+        select(RecurrenceOccurrence, Task, RecurringTemplate)
         .join(Task, Task.id == RecurrenceOccurrence.task_id)
+        .join(RecurringTemplate, RecurringTemplate.id == RecurrenceOccurrence.template_id)
         .where(
             RecurrenceOccurrence.template_id.is_not(None),
             RecurrenceOccurrence.skipped.is_(False),
@@ -103,8 +104,22 @@ def _set_period_availability(
             Task.status != TaskStatus.completed,
         )
     ).all()
-    for occurrence, task in rows:
-        _clear_implicit_occurrence_ready(db, task)
+    for occurrence, task, template in rows:
+        if occurrence.cycle_end >= today:
+            if (
+                template.preplanning_mode == "ready_to_plan"
+                and template.mode == RecurrenceMode.scheduled
+                and template.status == RecurrenceStatus.active
+                and occurrence.cycle_start <= today
+            ):
+                if "ready_to_plan" not in _json_list(task.recurrence_overrides_json):
+                    has_plan = db.execute(select(TimeBlock.id).where(
+                        TimeBlock.task_id == task.id,
+                        TimeBlock.lane == BlockLane.planned,
+                    ).limit(1)).scalar_one_or_none() is not None
+                    task.ready_to_plan = not has_plan
+            else:
+                _clear_implicit_occurrence_ready(db, task)
         requested = (
             planning_date is not None
             and occurrence.cycle_start <= planning_date <= occurrence.cycle_end
@@ -121,6 +136,8 @@ def _materialize_preplanning(
     window,
 ) -> None:
     if template.mode != RecurrenceMode.scheduled:
+        return
+    if task.status == TaskStatus.completed or task.deleted_at is not None or task.archived_at is not None or occurrence.skipped:
         return
     from app.services import day_service
 

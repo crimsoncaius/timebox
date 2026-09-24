@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -337,6 +338,20 @@ def validate_preplanning_schedule(
                 raise ValueError("Recurring Pre-planning Schedule slots cannot overlap")
 
 
+PreplanningMode = Literal["none", "ready_to_plan", "planned_time"]
+
+
+def validate_preplanning_mode(
+    mode: RecurrenceMode,
+    destination: PreplanningMode,
+    schedule: RecurringPreplanningScheduleWrite | None,
+) -> None:
+    if mode == RecurrenceMode.quota and destination != "none":
+        raise ValueError("Pre-planning requires a scheduled Recurring Task Series")
+    if (destination == "planned_time") != (schedule is not None):
+        raise ValueError("Only Planned time requires a pre-planning schedule")
+
+
 class RecurringTemplateCreate(RecurrenceRuleFields):
     model_config = ConfigDict(extra="forbid")
 
@@ -349,9 +364,13 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool = False
     preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
+    preplanning_mode: PreplanningMode = "none"
 
     @model_validator(mode="after")
     def validate_carry_over(self):
+        if "preplanning_mode" not in self.model_fields_set and self.preplanning_schedule is not None:
+            self.preplanning_mode = "planned_time"
+        validate_preplanning_mode(self.mode, self.preplanning_mode, self.preplanning_schedule)
         if self.mode == RecurrenceMode.quota and self.keep_unfinished_overdue:
             raise ValueError("Quota shortfalls cannot carry into the next period")
         validate_preplanning_schedule(
@@ -380,6 +399,7 @@ class RecurringTemplatePatch(BaseModel):
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool | None = None
     preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
+    preplanning_mode: PreplanningMode = "none"
 
 
 class RecurrencePreviewRequest(RecurrenceRuleFields):
@@ -431,6 +451,7 @@ class RecurringTemplateRead(BaseModel):
     cycle_limit: int | None
     keep_unfinished_overdue: bool
     preplanning_schedule: RecurringPreplanningScheduleRead | None = None
+    preplanning_mode: PreplanningMode = "none"
     urgency: PriorityLevel | None
     importance: PriorityLevel | None
     paused_at: datetime | None

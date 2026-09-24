@@ -25,7 +25,7 @@ def test_monday_week_migration_drops_saved_sunday_preference(tmp_path: Path, mon
         ))
     monkeypatch.setattr(get_settings(), "database_url", database_url)
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    command.upgrade(config, "head")
+    command.upgrade(config, "031_monday_weeks")
 
     assert "week_start" not in {column["name"] for column in inspect(engine).get_columns("app_settings")}
     with engine.connect() as connection:

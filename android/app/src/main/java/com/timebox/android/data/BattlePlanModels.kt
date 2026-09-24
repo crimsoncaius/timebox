@@ -207,6 +207,7 @@ data class RecurringTemplate(
     val nextOccurrence: LocalDate?,
     val keepUnfinishedOverdue: Boolean = false,
     val preplanningSchedule: RecurringPreplanningSchedule? = null,
+    val preplanningMode: String = if (preplanningSchedule == null) "none" else "planned_time",
 )
 
 data class ProjectCreate(
@@ -281,6 +282,7 @@ data class RecurringTemplateCreate(
     val confirmBackfill: Boolean = false,
     val keepUnfinishedOverdue: Boolean = false,
     val preplanningSchedule: RecurringPreplanningSchedule? = null,
+    val preplanningMode: String = if (preplanningSchedule == null) "none" else "planned_time",
 )
 
 data class RecurringTemplatePatch(
@@ -301,6 +303,7 @@ data class RecurringTemplatePatch(
     val confirmBackfill: PatchField<Boolean> = PatchField.Absent,
     val keepUnfinishedOverdue: PatchField<Boolean> = PatchField.Absent,
     val preplanningSchedule: PatchField<RecurringPreplanningSchedule> = PatchField.Absent,
+    val preplanningMode: PatchField<String> = PatchField.Absent,
 )
 
 internal fun ProjectDto.toModel() = Project(
@@ -410,6 +413,7 @@ internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
     nextOccurrence = nextOccurrence?.let(LocalDate::parse),
     keepUnfinishedOverdue = keepUnfinishedOverdue,
     preplanningSchedule = preplanningSchedule?.toModel(),
+    preplanningMode = preplanningMode ?: if (preplanningSchedule == null) "none" else "planned_time",
 )
 
 data class RoutineCalendarCompletion(val id: Int, val title: String, val date: LocalDate)
