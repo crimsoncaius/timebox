@@ -39,6 +39,10 @@ def prepare_legacy_schema():
     def prepare(engine, revision: str) -> None:
         Base.metadata.create_all(engine)
         with engine.begin() as connection:
+            # Historical revisions predate the Monday-only settings migration.
+            connection.execute(text(
+                "ALTER TABLE app_settings ADD COLUMN week_start TEXT NOT NULL DEFAULT 'monday'"
+            ))
             connection.execute(text("DROP INDEX IF EXISTS uq_time_blocks_legacy_correspondence"))
             connection.execute(text("ALTER TABLE time_blocks DROP COLUMN activity_source"))
             connection.execute(text("DROP TABLE IF EXISTS activity_operations"))

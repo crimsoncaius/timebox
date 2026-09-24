@@ -39,9 +39,8 @@ def _json_list(value: str) -> list:
         return []
 
 
-def _week_boundary(value: dt.date, week_start: str) -> dt.date:
-    first = 6 if week_start == "sunday" else 0
-    return value - dt.timedelta(days=(value.weekday() - first) % 7)
+def _week_boundary(value: dt.date) -> dt.date:
+    return value - dt.timedelta(days=value.weekday())
 
 
 def _month_date(year: int, month: int, day: int) -> dt.date:

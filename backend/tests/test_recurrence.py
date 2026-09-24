@@ -61,20 +61,18 @@ def test_calendar_rules_cover_intervals_weekdays_month_fallback_and_limits():
     ]
 
 
-def test_quota_week_boundaries_follow_setting():
+def test_quota_week_boundaries_are_monday_based():
     quota = rule(
         mode=RecurrenceMode.quota,
         frequency=RecurrenceFrequency.weekly,
         quota_count=3,
         start_date=dt.date(2025, 1, 8),
     )
-    monday = iter_windows(quota, dt.date(2025, 1, 20), "monday")
-    sunday = iter_windows(quota, dt.date(2025, 1, 20), "sunday")
-    assert monday[0].start == dt.date(2025, 1, 8)
-    assert monday[0].end == dt.date(2025, 1, 12)
-    assert sunday[0].end == dt.date(2025, 1, 11)
-    assert monday[1].start == dt.date(2025, 1, 13)
-    assert sunday[1].start == dt.date(2025, 1, 12)
+    windows = iter_windows(quota, dt.date(2025, 1, 20))
+    assert [(window.start, window.end) for window in windows[:2]] == [
+        (dt.date(2025, 1, 8), dt.date(2025, 1, 12)),
+        (dt.date(2025, 1, 13), dt.date(2025, 1, 19)),
+    ]
 
 
 def _daily_body(today: str, **changes):

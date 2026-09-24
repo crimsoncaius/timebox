@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addMonthsIso,
   firstOfMonthIso,
   monthGridForIso,
   monthYearLabelForIso,
-  WEEKDAY_LABELS_SUN_FIRST,
+  WEEKDAY_LABELS_MON_FIRST,
 } from "../lib/time";
 
 function formatTriggerDate(iso: string): string {
@@ -26,28 +27,46 @@ function dayCellLabel(iso: string): string {
   return String(dt.getUTCDate());
 }
 
+function PortalOrInline({ portal, children }: { portal: boolean; children: React.ReactNode }) {
+  return portal ? createPortal(children, document.body) : children;
+}
+
 export function DayCalendarPopover({
   value,
   todayIso,
   onSelect,
+  minIso,
+  maxIso,
+  triggerLabel = "Jump to date",
+  triggerClassName,
+  iconOnly = false,
+  alignRight = false,
+  portal = false,
 }: {
   value: string;
-  todayIso: string;
+  todayIso?: string;
   onSelect: (iso: string) => void;
+  minIso?: string;
+  maxIso?: string;
+  triggerLabel?: string;
+  triggerClassName?: string;
+  iconOnly?: boolean;
+  alignRight?: boolean;
+  portal?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [visibleMonthIso, setVisibleMonthIso] = useState(() =>
-    firstOfMonthIso(value),
-  );
+  const [openAbove, setOpenAbove] = useState(false);
+  const [portalPosition, setPortalPosition] = useState<{ left: number; top?: number; bottom?: number }>({ left: 16 });
+  const monthSelectionKey = value || todayIso || new Date().toISOString().slice(0, 10);
+  const [monthOverride, setMonthOverride] = useState<{ key: string; month: string } | null>(null);
+  const visibleMonthIso = monthOverride?.key === monthSelectionKey
+    ? monthOverride.month
+    : firstOfMonthIso(monthSelectionKey);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
   const dialogId = useId();
-
-  useEffect(() => {
-    setVisibleMonthIso(firstOfMonthIso(value));
-  }, [value]);
 
   useEffect(() => {
     if (!open) return;
@@ -56,12 +75,13 @@ export function DayCalendarPopover({
     if (!dialog) return;
     const buttons = () => Array.from(dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
     const focusInitial = () => {
-      (dialog.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? buttons()[0])?.focus();
+      (dialog.querySelector<HTMLButtonElement>('button[aria-pressed="true"]:not(:disabled)') ?? buttons()[0])?.focus();
     };
     focusInitial();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         setOpen(false);
       } else if (e.key === "Tab") {
         const items = buttons();
@@ -79,10 +99,10 @@ export function DayCalendarPopover({
     const onFocus = (e: FocusEvent) => {
       if (e.target instanceof Node && !dialog.contains(e.target)) focusInitial();
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     document.addEventListener("focusin", onFocus);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("focusin", onFocus);
       if (trigger?.isConnected) trigger.focus();
     };
@@ -93,7 +113,7 @@ export function DayCalendarPopover({
     const onPointerDown = (e: PointerEvent) => {
       const el = containerRef.current;
       if (!el || !(e.target instanceof Node)) return;
-      if (!el.contains(e.target)) setOpen(false);
+      if (!el.contains(e.target) && !dialogRef.current?.contains(e.target)) setOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () =>
@@ -120,11 +140,27 @@ export function DayCalendarPopover({
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-controls={open ? dialogId : undefined}
-        className="inline-flex min-w-38 items-center justify-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low/80 px-3 py-1.5 font-headline text-sm tabular-nums text-on-surface shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-sm transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:bg-dark-surface-container/50 dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
-        aria-label="Jump to date"
-        onClick={() => setOpen((o) => !o)}
+        className={triggerClassName ?? "inline-flex min-w-38 items-center justify-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low/80 px-3 py-1.5 font-headline text-sm tabular-nums text-on-surface shadow-[0_0_40px_rgba(45,52,53,0.04)] backdrop-blur-sm transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:bg-dark-surface-container/50 dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"}
+        aria-label={triggerLabel}
+        onClick={() => {
+          if (!open && triggerRef.current) {
+            const bounds = triggerRef.current.getBoundingClientRect();
+            const roomBelow = window.innerHeight - bounds.bottom;
+            const above = roomBelow < 420 && bounds.top > roomBelow;
+            setOpenAbove(above);
+            if (portal) {
+              const width = Math.min(window.innerWidth - 32, 320);
+              const preferredLeft = alignRight ? bounds.right - width : bounds.left;
+              const left = Math.max(16, Math.min(preferredLeft, window.innerWidth - width - 16));
+              setPortalPosition(above
+                ? { left, bottom: window.innerHeight - bounds.top + 8 }
+                : { left, top: bounds.bottom + 8 });
+            }
+          }
+          setOpen((current) => !current);
+        }}
       >
-        <span>{formatTriggerDate(value)}</span>
+        {!iconOnly && <span>{value ? formatTriggerDate(value) : triggerLabel}</span>}
         <span
           className="material-symbols-outlined text-[18px] text-on-surface-variant"
           aria-hidden
@@ -133,7 +169,7 @@ export function DayCalendarPopover({
         </span>
       </button>
 
-      {open ? (
+      {open ? <PortalOrInline portal={portal}>
         <div
           ref={dialogRef}
           id={dialogId}
@@ -141,7 +177,8 @@ export function DayCalendarPopover({
           role="dialog"
           aria-modal="true"
           aria-labelledby={headingId}
-          className="absolute left-0 top-full z-70 mt-2 w-[min(100vw-2rem,20rem)] rounded-2xl border border-outline-variant/15 bg-surface-container-lowest/85 p-4 shadow-[0_0_40px_rgba(45,52,53,0.06)] backdrop-blur-[20px] dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]"
+          className={`${portal ? "fixed z-120" : `absolute ${alignRight ? "right-0" : "left-0"} ${openAbove ? "bottom-full mb-2" : "top-full mt-2"} z-70`} max-h-[calc(100vh-2rem)] w-[min(100vw-2rem,20rem)] overflow-y-auto rounded-2xl border border-outline-variant/15 bg-surface-container-lowest/85 p-4 shadow-[0_0_40px_rgba(45,52,53,0.06)] backdrop-blur-[20px] dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/85 dark:shadow-[0_0_40px_rgba(0,0,0,0.25)]`}
+          style={portal ? portalPosition : undefined}
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2
@@ -155,7 +192,7 @@ export function DayCalendarPopover({
                 type="button"
                 className="rounded-lg px-2 py-1 font-headline text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container-high"
                 aria-label="Previous month"
-                onClick={() => setVisibleMonthIso((v) => addMonthsIso(v, -1))}
+                onClick={() => setMonthOverride({ key: monthSelectionKey, month: addMonthsIso(visibleMonthIso, -1) })}
               >
                 <span aria-hidden>↑</span>
               </button>
@@ -163,7 +200,7 @@ export function DayCalendarPopover({
                 type="button"
                 className="rounded-lg px-2 py-1 font-headline text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container-high"
                 aria-label="Next month"
-                onClick={() => setVisibleMonthIso((v) => addMonthsIso(v, 1))}
+                onClick={() => setMonthOverride({ key: monthSelectionKey, month: addMonthsIso(visibleMonthIso, 1) })}
               >
                 <span aria-hidden>↓</span>
               </button>
@@ -171,7 +208,7 @@ export function DayCalendarPopover({
           </div>
 
           <div className="mb-2 grid grid-cols-7 gap-y-1 text-center font-headline text-[10px] font-medium uppercase tracking-wider text-on-surface-variant">
-            {WEEKDAY_LABELS_SUN_FIRST.map((w) => (
+            {WEEKDAY_LABELS_MON_FIRST.map((w) => (
               <div key={w} className="py-1">
                 {w}
               </div>
@@ -199,6 +236,7 @@ export function DayCalendarPopover({
                   ].join(" ")}
                   aria-pressed={selected}
                   aria-label={cell.iso}
+                  disabled={Boolean((minIso && cell.iso < minIso) || (maxIso && cell.iso > maxIso))}
                   onClick={() => pickDay(cell.iso)}
                 >
                   {dayCellLabel(cell.iso)}
@@ -207,7 +245,7 @@ export function DayCalendarPopover({
             })}
           </div>
 
-          <div className="mt-4 flex justify-end rounded-xl bg-surface-container-low/50 px-2 py-2 dark:bg-dark-surface-container-low/60">
+          {todayIso && <div className="mt-4 flex justify-end rounded-xl bg-surface-container-low/50 px-2 py-2 dark:bg-dark-surface-container-low/60">
             <button
               type="button"
               className="font-headline text-sm font-medium text-primary transition-colors hover:text-primary-dim dark:text-dark-on-surface-variant dark:hover:text-dark-on-surface"
@@ -215,9 +253,9 @@ export function DayCalendarPopover({
             >
               Today
             </button>
-          </div>
+          </div>}
         </div>
-      ) : null}
+      </PortalOrInline> : null}
     </div>
   );
 }

@@ -15,11 +15,11 @@ function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
 const inputClassName =
   'min-w-[4.5rem] rounded-lg border border-outline-variant/15 bg-surface-container-lowest px-3 py-2 text-right font-body text-sm tabular-nums text-on-surface shadow-inner shadow-black/5 transition-[border-color,box-shadow] placeholder:text-outline focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/80 dark:text-dark-on-surface dark:shadow-black/20 dark:focus:border-dark-outline'
 
-type SettingsPatch = Partial<Pick<SettingsRead, 'start_hour' | 'end_hour' | 'show_full_day' | 'week_start'>>
+type SettingsPatch = Partial<Pick<SettingsRead, 'start_hour' | 'end_hour' | 'show_full_day'>>
 type SettingsField = keyof SettingsPatch
 type AcceptedSetting = { requestId: number; value: SettingsRead[SettingsField] }
 
-const settingsFields: SettingsField[] = ['start_hour', 'end_hour', 'show_full_day', 'week_start']
+const settingsFields: SettingsField[] = ['start_hour', 'end_hour', 'show_full_day']
 
 function hasSetting(patch: SettingsPatch, field: SettingsField) {
   return Object.prototype.hasOwnProperty.call(patch, field)
@@ -295,21 +295,6 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <section className="mt-6 max-w-3xl overflow-hidden rounded-2xl bg-surface-container-low/70 dark:bg-dark-surface-container/35" aria-labelledby="settings-week-heading">
-        <header className="px-5 py-4">
-          <h2 id="settings-week-heading" className="font-headline text-base font-light tracking-tight text-on-surface dark:text-dark-on-surface">Week boundaries</h2>
-          <p className="mt-1 max-w-lg text-sm leading-relaxed text-on-surface-variant">Controls weekly recurrence quota periods across the app.</p>
-        </header>
-        <div className="px-3 pb-3">
-          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
-            <div><label htmlFor="settings-week-start" className="font-headline text-sm font-medium">Week starts on</label><p className="mt-0.5 text-sm text-on-surface-variant">Future pristine weekly quota periods are recalculated when this changes.</p></div>
-            <select id="settings-week-start" value={settings.week_start ?? 'monday'} onChange={(event) => void patchSettings({ week_start: event.target.value as 'monday' | 'sunday' })} className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest">
-              <option value="monday">Monday</option>
-              <option value="sunday">Sunday</option>
-            </select>
-          </div>
-        </div>
-      </section>
     </Layout>
   )
 }

@@ -7,8 +7,8 @@ from app.schemas.battle_plan import RecurrencePreviewRead, RecurrencePreviewRequ
 from app.services.recurrence.windows import _windows_for_preview
 
 
-def preview(rule: RecurrencePreviewRequest, today: dt.date, week_start: str) -> RecurrencePreviewRead:
-    past, upcoming = _windows_for_preview(rule, today, week_start)
+def preview(rule: RecurrencePreviewRequest, today: dt.date) -> RecurrencePreviewRead:
+    past, upcoming = _windows_for_preview(rule, today)
     tasks_per_cycle = rule.quota_count if rule.mode == RecurrenceMode.quota else 1
     return RecurrencePreviewRead(
         upcoming=[RecurrenceWindow(key=w.key, start=w.start, end=w.end) for w in upcoming],

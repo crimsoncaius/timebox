@@ -22,6 +22,15 @@ def test_health(client):
     assert data["timezone"] == "UTC"
 
 
+def test_week_start_is_not_configurable(client):
+    settings = client.get("/settings")
+    assert settings.status_code == 200
+    assert "week_start" not in settings.json()
+
+    response = client.patch("/settings", json={"week_start": "sunday"})
+    assert response.status_code == 422
+
+
 @pytest.fixture
 def stamp_database():
     def stamp(revision: str) -> None:

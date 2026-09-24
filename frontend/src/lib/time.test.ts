@@ -209,17 +209,17 @@ describe('time helpers', () => {
     expect(addMonthsIso('2026-12-15', 1)).toBe('2027-01-01')
   })
 
-  it('monthGridForIso returns 42 Sunday-first cells with inMonth flags', () => {
+  it('monthGridForIso returns 42 Monday-first cells with inMonth flags', () => {
     const grid = monthGridForIso('2026-04-22')
     expect(grid).toHaveLength(42)
-    // April 2026: 1st is Wednesday (UTC) → grid starts Sunday 2026-03-29
-    expect(grid[0].iso).toBe('2026-03-29')
+    // April 2026: 1st is Wednesday (UTC) → grid starts Monday 2026-03-30
+    expect(grid[0].iso).toBe('2026-03-30')
     expect(grid[0].inMonth).toBe(false)
-    expect(grid[3].iso).toBe('2026-04-01')
-    expect(grid[3].inMonth).toBe(true)
-    expect(grid[24].iso).toBe('2026-04-22')
-    expect(grid[24].inMonth).toBe(true)
-    expect(grid[41].iso).toBe('2026-05-09')
+    expect(grid[2].iso).toBe('2026-04-01')
+    expect(grid[2].inMonth).toBe(true)
+    expect(grid[23].iso).toBe('2026-04-22')
+    expect(grid[23].inMonth).toBe(true)
+    expect(grid[41].iso).toBe('2026-05-10')
   })
 
   it('monthYearLabelForIso uses UTC', () => {

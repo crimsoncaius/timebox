@@ -18,7 +18,6 @@ from app.schemas.battle_plan import (
     RecurringTemplateRead,
     RoutineCalendarRead,
 )
-from app.services import day_service
 from app.services import recurrence_service as service
 from app.services.recurrence.calendar import read_calendar
 
@@ -41,11 +40,9 @@ def _error(exc: ValueError) -> HTTPException:
 @router.post("/preview", response_model=RecurrencePreviewRead)
 def preview_rule(
     body: RecurrencePreviewRequest,
-    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> RecurrencePreviewRead:
-    app_settings = day_service.get_or_create_app_settings(db)
-    return service.preview(body, today_in_tz(settings.app_timezone), app_settings.week_start)
+    return service.preview(body, today_in_tz(settings.app_timezone))
 
 
 @router.get("", response_model=list[RecurringTemplateRead])

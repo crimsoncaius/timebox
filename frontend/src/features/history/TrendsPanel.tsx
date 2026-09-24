@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { canAdvanceTrendRange, shiftTrendRange, trendDuration, type TrendNode, type TrendsReport } from './trends'
 import { errorMessage } from '../../lib/errors'
+import { CalendarDateField } from '../../components/CalendarDateField'
 
 type Period = 'day' | 'week' | 'month' | 'custom'
 type Drill = (name: string, days: Record<string, number>) => void
@@ -66,8 +67,8 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
       {(['day', 'week', 'month', 'custom'] as const).map(option => <button key={option} type="button" aria-pressed={period === option} disabled={option === 'custom' && !report && !custom.start} onClick={() => select(option)} className={`${control} ${period === option ? 'ring-2 ring-current' : ''}`}>{option[0].toUpperCase() + option.slice(1)}</button>)}
     </div>
     {period === 'custom' ? <div className="flex flex-wrap gap-4">
-      <label className="text-sm">From <input aria-label="Range start" type="date" value={custom.start} max={today || undefined} className={control} onChange={e => { setReport(null); setCustom(value => ({ ...value, start: e.target.value })) }} /></label>
-      <label className="text-sm">To (inclusive) <input aria-label="Range end" type="date" value={custom.end} max={today || undefined} className={control} onChange={e => { setReport(null); setCustom(value => ({ ...value, end: e.target.value })) }} /></label>
+      <label className="text-sm">From <CalendarDateField label="Range start" value={custom.start} maxIso={today || undefined} className={control} onChange={start => { setReport(null); setCustom(value => ({ ...value, start })) }} /></label>
+      <label className="text-sm">To (inclusive) <CalendarDateField label="Range end" value={custom.end} maxIso={today || undefined} className={control} onChange={end => { setReport(null); setCustom(value => ({ ...value, end })) }} /></label>
     </div> : <div className="flex items-center justify-between gap-3">
       <button className={control} aria-label={`Previous ${period}`} disabled={!report} onClick={() => shift(-1)}>‹</button>
       <div className="text-center"><p className="text-sm tabular-nums">{report ? report.start === report.end ? report.start : `${report.start} – ${report.end}` : '…'}</p><button className="mt-1 text-sm text-on-surface-variant" onClick={() => { setAnchor(''); setReport(null); setRetry(x => x + 1) }}>{period === 'day' ? 'Today' : `This ${period}`}</button></div>

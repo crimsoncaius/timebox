@@ -1,6 +1,5 @@
 package com.timebox.android.ui.day
 
-import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -9,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.timebox.android.ui.theme.TimeboxTheme
+import com.timebox.android.ui.showMondayDatePicker
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalContext
 import com.timebox.android.data.ReportingTime
@@ -37,7 +37,9 @@ fun ActivityTimeField(label: String, value: ActivityTimeValue, zone: ZoneId, com
     Column {
         val chooseDate = {
             val selected = local ?: LocalDateTime.now(zone)
-            DatePickerDialog(context, { _, year, month, day -> onChange(ActivityTimeValue(java.time.LocalDate.of(year, month + 1, day).atTime(selected.toLocalTime()).toString())) }, selected.year, selected.monthValue - 1, selected.dayOfMonth).show()
+            showMondayDatePicker(context, selected.toLocalDate()) { date ->
+                onChange(ActivityTimeValue(date.atTime(selected.toLocalTime()).toString()))
+            }
         }
         val chooseTime = {
             val selected = local ?: LocalDateTime.now(zone)

@@ -11,6 +11,7 @@ import type {
   TaskType,
 } from '../../lib/api'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
+import { DayCalendarPopover } from '../../components/DayCalendarPopover'
 import { addDaysIso, calendarIsoDateInTimeZone, zonedLocalToIso } from '../../lib/time'
 
 type Picker = 'due' | 'urgency' | 'impact'
@@ -54,7 +55,6 @@ export function TaskComposer({
   const [deadlineAt, setDeadlineAt] = useState('')
   const [openPicker, setOpenPicker] = useState<Picker | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
-  const dateInputRef = useRef<HTMLInputElement>(null)
 
   const today = calendarIsoDateInTimeZone(serverNowIso, timezone)
   const tomorrow = addDaysIso(today, 1)
@@ -121,23 +121,6 @@ export function TaskComposer({
     setDeadlineDate(value)
     setDeadlineAt('')
     setOpenPicker(null)
-  }
-
-  const showDatePicker = () => {
-    setOpenPicker(null)
-    const input = dateInputRef.current
-    if (!input) return
-    input.focus()
-    const pickerInput = input as HTMLInputElement & { showPicker?: () => void }
-    if (typeof pickerInput.showPicker === 'function') {
-      try {
-        pickerInput.showPicker()
-      } catch {
-        input.click()
-      }
-    } else {
-      input.click()
-    }
   }
 
   if (!open) {
@@ -231,8 +214,14 @@ export function TaskComposer({
             { label: 'Today', icon: 'today', active: deadlineDate === today, onSelect: () => setDueDate(today) },
             { label: 'Tomorrow', icon: 'event', active: deadlineDate === tomorrow, onSelect: () => setDueDate(tomorrow) },
             { label: 'Next week', icon: 'date_range', active: deadlineDate === nextWeek, onSelect: () => setDueDate(nextWeek) },
-            { label: 'Pick a date…', icon: 'calendar_month', active: Boolean(deadlineDate) && ![today, tomorrow, nextWeek].includes(deadlineDate), onSelect: showDatePicker },
-          ]} />
+          ]} extra={<DayCalendarPopover
+            value={deadlineDate}
+            todayIso={today}
+            onSelect={setDueDate}
+            triggerLabel="Pick a date"
+            triggerClassName="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13px] text-on-surface hover:bg-surface-container-low"
+            portal
+          />} />
         </AttributeChip>
 
         <AttributeChip
@@ -268,16 +257,6 @@ export function TaskComposer({
           onCreateTaskTypePath={onCreateTaskTypePath}
         />
       </div>
-
-      <input
-        ref={dateInputRef}
-        aria-label="New task deadline date"
-        type="date"
-        value={deadlineDate}
-        onChange={(event) => setDueDate(event.target.value)}
-        className="sr-only"
-        tabIndex={-1}
-      />
 
       <div className="mt-3 flex items-center justify-end gap-1.5">
         <button
@@ -367,9 +346,10 @@ function PriorityMenu({ label, value, onSelect }: { label: string; value: Priori
   )
 }
 
-function ChipMenu({ label, options }: {
+function ChipMenu({ label, options, extra }: {
   label: string
   options: Array<{ label: string; icon: string; active: boolean; onSelect: () => void }>
+  extra?: React.ReactNode
 }) {
   return (
     <div role="menu" aria-label={label} className="absolute left-0 top-[38px] z-30 min-w-[196px] rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 shadow-[0_18px_40px_rgba(45,52,53,0.16)]">
@@ -387,6 +367,7 @@ function ChipMenu({ label, options }: {
           <span className={`text-xs text-primary ${option.active ? 'opacity-100' : 'opacity-0'}`} aria-hidden>✓</span>
         </button>
       ))}
+      {extra}
     </div>
   )
 }

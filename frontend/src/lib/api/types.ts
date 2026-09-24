@@ -234,7 +234,6 @@ export interface SettingsRead {
   start_hour: number
   end_hour: number
   show_full_day: boolean
-  week_start?: 'monday' | 'sunday'
   created_at: string
   updated_at: string
 }
