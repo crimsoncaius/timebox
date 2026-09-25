@@ -164,4 +164,30 @@ class AssistantControllerTest {
         assertEquals(2, api.acks)
         assertEquals(2, api.streams)
     }
+
+    @Test fun `save failure retains visible answer and never acknowledges it`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("First"); runCurrent()
+        api.emit("text_delta", "Visible answer"); runCurrent()
+        api.emit("failed", "The response could not be saved. Please retry."); runCurrent()
+        val exchange = controller.state.value.exchanges.single()
+        assertEquals("Visible answer", exchange.answer)
+        assertEquals("Interrupted", exchange.status)
+        assertEquals("The response could not be saved. Please retry.", exchange.error)
+        controller.send("Next"); runCurrent()
+        assertEquals(0, api.acks)
+    }
+
+    @Test fun `new process controller starts fresh without restoring previous conversation`() = runTest {
+        val api = Fake()
+        val first = AssistantController(backgroundScope) { api }
+        first.send("First"); runCurrent()
+        api.emit("text_delta", "Answer"); api.emit("completed"); api.emit("eof"); runCurrent()
+        val restarted = AssistantController(backgroundScope) { api }
+        assertTrue(restarted.state.value.exchanges.isEmpty())
+        restarted.send("Fresh"); runCurrent()
+        assertEquals(2, api.creates)
+        assertEquals(0, api.acks)
+    }
 }

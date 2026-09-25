@@ -47,7 +47,6 @@ import java.time.format.DateTimeFormatter
 fun AssistantScreen(controller: AssistantController = (LocalContext.current.applicationContext as TimeboxApplication).assistant) {
     val state by controller.state.collectAsState()
     var draft by rememberSaveable { mutableStateOf("") }
-    var contextOpen by rememberSaveable { mutableStateOf(false) }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val composerFocus = remember { FocusRequester() }
@@ -67,15 +66,11 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Assistant", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
-                TextButton(onClick = { contextOpen = !contextOpen }, contentPadding = PaddingValues(0.dp)) {
-                    Text(if (contextOpen) "▾ Temporary conversation" else "▸ Temporary conversation", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                }
             }
             OutlinedIconButton(onClick = ::reset, shape = CircleShape, colors = IconButtonDefaults.outlinedIconButtonColors(containerColor = colors.card), border = BorderStroke(1.dp, colors.hairline)) {
                 Icon(Icons.Outlined.Add, contentDescription = "New conversation")
             }
         }
-        if (contextOpen) Text("60 minutes of inactivity · up to 20 completed exchanges. New conversation or an app restart clears this view and Assistant memory.", Modifier.padding(horizontal = 18.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
         HorizontalDivider(color = colors.hairline)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             if (state.exchanges.isEmpty()) item {

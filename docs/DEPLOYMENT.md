@@ -82,7 +82,10 @@ The API exports asynchronously to
 `ASSISTANT_TRACE_API_KEY`, a Phoenix system API key sent as Bearer authorization.
 The `timebox-assistant` project keeps full messages and tool results for seven
 days (`PHOENIX_DEFAULT_RETENTION_POLICY_DAYS=7`); expired data is removed by the
-scheduled retention sweep. Keep one API worker: conversations are held in memory.
+scheduled retention sweep. Keep one API worker for active Assistant response
+coordination. Conversation capture is stored separately in the application database
+without automatic expiry; it survives API restarts and Phoenix trace cleanup.
+Apply Alembic revision `033_assistant_conversations` before starting the updated API.
 
 To disable export during recovery, remove `ASSISTANT_TRACE_ENDPOINT` from the
 API service and redeploy it. Preserve the Phoenix database and volume. To rotate

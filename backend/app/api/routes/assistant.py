@@ -6,16 +6,17 @@ import time
 from contextlib import suppress
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import get_settings
+from app.services import assistant_storage
 from app.services.assistant_agent import MODEL, agent_events
-from app.services.assistant_sessions import conversations
 from app.services.assistant_presentation import PlanSnapshot, text_schedule
+from app.services.assistant_sessions import conversations
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 RESPONSE_TIMEOUT = 120
@@ -59,6 +60,8 @@ async def acknowledge(conversation_id: str, run_id: str):
 
 
 def public_error(error):
+    if isinstance(error, assistant_storage.CaptureError):
+        return str(error)
     status = getattr(error, "status_code", None)
     if status == 401 or status == 403:
         return "OpenRouter authentication failed. Check the backend API key."
@@ -73,10 +76,20 @@ def public_error(error):
 
 @router.post("/conversations/{conversation_id}/messages")
 async def send(conversation_id: str, body: MessageRequest):
-    if not get_settings().openrouter_api_key:
-        raise HTTPException(503, "Set OPENROUTER_API_KEY on the backend to use Assistant.")
     run_id = str(body.run_id)
     conversation = conversations.reserve(conversation_id, run_id)
+    try:
+        assistant_storage.begin(conversation_id, run_id, body.message, MODEL)
+        if not get_settings().openrouter_api_key:
+            message = "Set OPENROUTER_API_KEY on the backend to use Assistant."
+            assistant_storage.capture(run_id, "", {}, None, "interrupted", message)
+            raise HTTPException(503, message)
+    except assistant_storage.CaptureError as error:
+        conversation.run_id = None
+        raise HTTPException(503, str(error)) from None
+    except Exception:
+        conversation.run_id = None
+        raise
     queue = asyncio.Queue()
 
     async def produce():
@@ -102,13 +115,15 @@ async def send(conversation_id: str, body: MessageRequest):
                         if kind == "snapshot_read":
                             validated = PlanSnapshot.model_validate(data).model_dump()
                             reads[validated["snapshot_id"]] = validated
+                            assistant_storage.capture(run_id, output, reads, card)
                             continue
                         if kind == "plan_card":
                             if card is not None or output:
                                 raise RuntimeError("Invalid card order")
-                            card = PlanSnapshot.model_validate(data).model_dump()
-                            if {**conversation.snapshots, **reads}.get(card["snapshot_id"]) != card:
+                            candidate = PlanSnapshot.model_validate(data).model_dump()
+                            if {**conversation.snapshots, **reads}.get(candidate["snapshot_id"]) != candidate:
                                 raise RuntimeError("Unknown snapshot")
+                            card = candidate
                             if "plan_card_v1" not in conversation.capabilities:
                                 kind, data = "text_delta", {"text": text_schedule(card)}
                         if kind == "text_delta":
@@ -116,19 +131,28 @@ async def send(conversation_id: str, body: MessageRequest):
                                 span.set_attribute("assistant.first_text_ms", (time.monotonic() - started) * 1000)
                             output += data["text"]
                         queue.put_nowait((kind, data))
+                        if kind in ("plan_card", "text_delta"):
+                            assistant_storage.capture(run_id, output, reads, card)
                     if not output.strip() and card is None:
                         raise RuntimeError("Empty response")
-                    # Commit only after Android confirms receiving the terminal event.
-                    memory_answer = output + ("\n[Displayed plan snapshot: " + card["snapshot_id"] + "]" if card else "")
-                    conversation.pending = (run_id, [HumanMessage(body.message), AIMessage(memory_answer)], reads)
+                    # Capture completion now; context eligibility still requires acknowledgement.
+                    assistant_storage.capture(run_id, output, reads, card, "completed")
                     outcome = "completed"
                     span.set_status(trace.Status(trace.StatusCode.OK))
                     queue.put_nowait(("completed", {}))
             except asyncio.CancelledError:
                 outcome = "stopped"
+                try:
+                    assistant_storage.capture(run_id, output, reads, card, "stopped")
+                except assistant_storage.CaptureError as error:
+                    queue.put_nowait(("failed", {"message": str(error)}))
                 queue.put_nowait(("stopped", {}))
             except Exception as error:
                 message = public_error(error)
+                try:
+                    assistant_storage.capture(run_id, output, reads, card, "interrupted", message)
+                except assistant_storage.CaptureError as save_error:
+                    message = str(save_error)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, message))
                 queue.put_nowait(("failed", {"message": message}))
             finally:
@@ -144,6 +168,10 @@ async def send(conversation_id: str, body: MessageRequest):
     def release_unstarted(done):
         # Cancellation can arrive before the producer enters its try/finally.
         if conversation.task is done:
+            try:
+                assistant_storage.capture(run_id, "", {}, None, "stopped")
+            except assistant_storage.CaptureError:
+                queue.put_nowait(("failed", {"message": "The response could not be saved. Please retry."}))
             conversation.task = None
             conversation.run_id = None
             conversation.touched = time.monotonic()

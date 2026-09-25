@@ -196,6 +196,10 @@ _Avoid_: Actual session, work session, completed block
 An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks.
 _Avoid_: Time completion, session completion
 
+**Assistant Conversation**:
+A sequence of submitted messages and Assistant response attempts, including incomplete attempts and any displayed plan cards. Its retained record is distinct from the context used to generate a response.
+_Avoid_: Temporary conversation, Assistant memory
+
 ### Surfaces
 
 **Day**:

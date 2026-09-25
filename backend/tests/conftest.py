@@ -39,6 +39,8 @@ def prepare_legacy_schema():
     def prepare(engine, revision: str) -> None:
         Base.metadata.create_all(engine)
         with engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS assistant_attempts"))
+            connection.execute(text("DROP TABLE IF EXISTS assistant_conversations"))
             connection.execute(text("ALTER TABLE recurring_templates DROP COLUMN preplanning_mode"))
             # Historical revisions predate the Monday-only settings migration.
             connection.execute(text(

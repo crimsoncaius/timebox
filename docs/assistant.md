@@ -1,10 +1,12 @@
-# Android Assistant experiment
+# Android Assistant
 
-Android streams a temporary conversation from the existing FastAPI backend.
+Android streams a conversation from the existing FastAPI backend. Conversations
+and response attempts are captured in the application's database without
+automatic expiry. There is no conversation-history interface yet.
 The LangGraph graph makes at most two model calls and one read-only Today tool
 call per response. LangChain's OpenRouter adapter uses `z-ai/glm-5.3-flash`;
 there is no model fallback or automatic retry. A response has a 120-second
-deadline. Only explicitly acknowledged completed exchanges enter later context.
+deadline. Only the latest 20 explicitly acknowledged completed exchanges enter later context.
 Android acknowledges the previous completed response before sending the next
 message. A lost acknowledgement can be repeated without regenerating an answer.
 
@@ -22,12 +24,11 @@ first tool-capable call, discarding preliminary prose when a read is requested.
 Only the final tool-free call streams answer text incrementally. Snapshot IDs,
 read times, dates, time zones and rows come from the server. Reading a plan does
 not force a card. Completed reads, including undisplayed reads, join temporary
-context only on acknowledgement; stopped and interrupted attempts never do.
+response context only on acknowledgement; stopped and interrupted attempts never do.
 
 Android uses the approved Conversation layout with a dated inline card, three
-initial rows and expansion for longer plans. Retry appends an attempt. Expired
-or capped conversations retain their displayed transcript and offer New
-conversation. Malformed or out-of-order card events cannot become completed
+initial rows and expansion for longer plans. Retry appends an attempt. Idle time
+and exchange count do not end a conversation. Malformed or out-of-order card events cannot become completed
 context. Card-only answers require a valid selector and confirmed completion.
 
 The implementation handoff is in `docs/specs/assistant-redesign-handoff.md`.
@@ -69,11 +70,28 @@ under `artifacts/assistant/`; its debug APK points to `http://10.0.2.2:12023/`.
 Provider credentials belong only on the backend. Android's optional Timebox API
 key is a separate existing setting.
 
-This experiment requires **one API worker**. Conversation state is in memory:
-restarting the backend expires it; restarting the Android process begins fresh.
-There are 20 completed exchanges per conversation, 4,000 characters per input,
-one active response per conversation, and a 60-minute idle expiry. At most 100
-unexpired conversations are retained. New conversation cancels the old run.
+Run `uv run alembic upgrade head` before starting the updated backend; revision
+`033_assistant_conversations` adds `assistant_conversations` and `assistant_attempts`.
+This implementation still requires **one API worker** for active-run coordination.
+Restarting the backend retains captured conversations and marks unfinished runs
+interrupted. Restarting the Android process begins with a fresh view and context.
+New conversation cancels the old run and closes its conversation without deleting
+the captured record (the existing DELETE endpoint now means close).
+
+Each attempt stores the submitted message, model, timestamps, accumulated answer,
+read snapshots, displayed plan, completion status, safe error message and receipt
+acknowledgement. Messages are saved before generation; response text and plan
+events are checkpointed as they stream, including partial and stopped attempts.
+If saving the message fails, generation does not start. A response-save failure
+is reported in the stream, keeping any visible answer and excluding it from later
+context. Messages that never reach the server cannot be captured. A process crash
+can lose output since the most recent successful checkpoint.
+
+There are 4,000 characters per input and one active response per conversation.
+Only the most recent 20 acknowledged completed exchanges and their associated
+snapshots are used for later answers; older records remain stored and visible in
+the active Android session. Idle context can be evicted from the bounded RAM cache
+and reloaded from the database. There is no cross-conversation memory or summary.
 Stop closes the upstream stream where supported; provider billing cancellation
 is not guaranteed. Retry is always explicit.
 
@@ -96,7 +114,8 @@ block a response. Omitting the trace endpoint disables tracing.
 
 Phoenix persists SQLite in the Compose `traces` volume. Its default retention
 policy is seven days; cleanup follows Phoenix's scheduled retention sweep.
-New conversation does not remove traces. To explicitly clear the Assistant
+New conversation does not remove traces or captured conversations. Clearing traces
+does not delete the conversation records in the application database. To clear the Assistant
 project's traces, run from `backend/`:
 
 ```powershell
@@ -136,3 +155,22 @@ and sends message/tool content to OpenRouter.
   the test traces. Resetting a conversation preserved historical traces.
 - The Android debug review uses the isolated review API and seeded data, not the
   main Timebox database. Phoenix and the review API must stay running for review.
+
+### Durable capture verified on 2026-09-25
+
+- 54 focused backend tests passed, covering durable records, database reopen,
+  startup recovery, rolling context and snapshot eviction, historical cards,
+  partial/cancelled attempts, duplicate runs and storage failures. The new
+  migration was tested against a file-backed SQLite database.
+- The full backend suite had 471 passes and six skips. Two recurrence tests failed
+  because their fixed 01:00 UTC Actual Block start was still in the future; both
+  failures reproduced on the unchanged `df4c0ec1` baseline.
+- All 327 Android unit tests passed, including fresh-process state and visible
+  answer retention after a save failure. Instrumentation compilation was blocked
+  by unrelated unresolved trash-undo references in `BattlePlanScreenTest`.
+- A real Android request through the updated backend displayed a plan card and
+  answer. The database retained both before acknowledgement; New conversation
+  reset the screen, closed the conversation and preserved the completed attempt.
+- The isolated review API is `http://127.0.0.1:12063/`, with database
+  `artifacts/assistant-review/review-current.sqlite`. The review APK points to
+  `http://10.0.2.2:12063/`. No production database was changed.
