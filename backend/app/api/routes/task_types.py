@@ -7,10 +7,12 @@ from app.db.session import get_db
 from app.schemas.task_type import (
     TaskTypeCreate,
     TaskTypeListItem,
+    TaskTypeMergePreview,
+    TaskTypeMergeRequest,
     TaskTypePatch,
     TaskTypeRead,
 )
-from app.services import battle_plan_service, task_type_service
+from app.services import battle_plan_service, task_type_merge, task_type_service
 
 router = APIRouter(prefix="/task-types", tags=["task-types"])
 
@@ -120,3 +122,24 @@ def delete_task_type(
     except Exception:
         db.rollback()
         raise
+
+@router.post("/{task_type_id}/merge-preview", response_model=TaskTypeMergePreview)
+def preview_merge(task_type_id: int, body: TaskTypeMergeRequest, db: Session = Depends(get_db)):
+    try:
+        return task_type_merge.preview(db, task_type_id, body.target_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.post("/{task_type_id}/merge", response_model=TaskTypeMergePreview)
+def merge_types(task_type_id: int, body: TaskTypeMergeRequest, db: Session = Depends(get_db)):
+    try:
+        result = task_type_merge.merge(db, task_type_id, body.target_id, body.preview_token)
+        db.commit()
+        return result
+    except task_type_merge.StaleMergePreview as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(e)) from e

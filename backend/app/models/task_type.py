@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import DateTime, Index, Integer, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,6 +15,8 @@ class TaskType(Base):
     __table_args__ = (Index("uq_task_types_name", "name", unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    is_merged: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    merged_into_id: Mapped[int | None] = mapped_column(ForeignKey("task_types.id", name="fk_task_type_merge_target", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

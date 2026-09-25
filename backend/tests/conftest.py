@@ -42,6 +42,12 @@ def prepare_legacy_schema():
             connection.execute(text("DROP TABLE IF EXISTS assistant_attempts"))
             connection.execute(text("DROP TABLE IF EXISTS assistant_conversations"))
             connection.execute(text("ALTER TABLE recurring_templates DROP COLUMN preplanning_mode"))
+            from alembic.migration import MigrationContext
+            from alembic.operations import Operations
+            with Operations(MigrationContext.configure(connection)).batch_alter_table("task_types") as batch:
+                batch.drop_constraint("fk_task_type_merge_target", type_="foreignkey")
+                batch.drop_column("merged_into_id")
+                batch.drop_column("is_merged")
             # Historical revisions predate the Monday-only settings migration.
             connection.execute(text(
                 "ALTER TABLE app_settings ADD COLUMN week_start TEXT NOT NULL DEFAULT 'monday'"

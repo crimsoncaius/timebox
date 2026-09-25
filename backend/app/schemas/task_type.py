@@ -31,3 +31,30 @@ class TaskTypeCreate(BaseModel):
 
 class TaskTypePatch(BaseModel):
     name: str | None = Field(None, min_length=1)
+
+class TaskTypeMergeRequest(BaseModel):
+    target_id: int
+    preview_token: str | None = None
+
+
+class TaskTypeMergeChange(BaseModel):
+    source_id: int
+    source_name: str
+    target_name: str
+    action: str
+
+
+class TaskTypeMergePreview(BaseModel):
+    source_id: int
+    source_name: str
+    target_id: int
+    target_name: str
+    preview_token: str
+    changes: list[TaskTypeMergeChange]
+    task_count: int
+    completed_task_count: int
+    archived_task_count: int
+    trashed_task_count: int
+    planned_block_count: int
+    actual_block_count: int
+    recurring_series_count: int

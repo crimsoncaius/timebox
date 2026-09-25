@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from functools import lru_cache
 
+from fastapi import Request
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -90,7 +91,22 @@ def _session_factory():
     return sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db(request: Request) -> Generator[Session, None, None]:
     from app.db.activity_admission import admission
-    with admission(get_engine()) as connection, Session(bind=connection, autoflush=False) as db:
+    with admission(get_engine(), exclusive=request.method == "POST" and request.url.path.startswith("/task-types/") and request.url.path.endswith("/merge")) as connection, Session(bind=connection, autoflush=False) as db:
         yield db
+
+
+@event.listens_for(Session, "before_flush")
+def _resolve_merged_task_type_references(db, _flush_context, _instances):
+    from app.models.battle_plan import RecurringTemplate, Task
+    from app.models.time_block import TimeBlock
+    from app.services.task_type_service import get_task_type
+    for row in db.new | db.dirty:
+        if isinstance(row, (Task, RecurringTemplate, TimeBlock)) and row.task_type_id is not None:
+            target = get_task_type(db, row.task_type_id)
+            if target is None:
+                raise ValueError("Task type not found")
+            if target.id != row.task_type_id:
+                row.task_type_id = target.id
+                row.task_type = target

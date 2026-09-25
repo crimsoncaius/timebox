@@ -138,6 +138,7 @@ def resolve_origin_item(
     planned_block_id: int | None,
     retrospective_end: dt.datetime | None = None,
 ) -> tuple[int, int | None, str | None]:
+    task_type_id = task_type_service.resolve_task_type_id(db, task_type_id)
     if planned_block_id is None:
         if task_type_id is None:
             if task_id is not None:
@@ -358,7 +359,7 @@ def patch_actual_block(
 
     snapshot = _load_actual(db, actual_block_id)
     data = body.model_dump(exclude_unset=True)
-    target_task_type_id = data.get("task_type_id", snapshot.task_type_id)
+    target_task_type_id = task_type_service.resolve_task_type_id(db, data.get("task_type_id", snapshot.task_type_id))
     target_task_id = data.get("task_id", snapshot.task_id)
     if target_task_type_id is None:
         raise ValueError("task_type_id is required for Actual")

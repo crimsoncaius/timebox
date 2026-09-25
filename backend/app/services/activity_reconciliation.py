@@ -147,7 +147,8 @@ def prepare(db, state, body, operations, timezone="UTC"):
     data = None
     if body.kind not in {"stop", "delete"}:
         data = dict(target["data"]) if target and body.kind == "edit" else {}
-        type_id = body.task_type_id or data.get("task_type_id")
+        from app.services.task_type_service import resolve_task_type_id
+        type_id = resolve_task_type_id(db, body.task_type_id or data.get("task_type_id"))
         if not historical:
             from app.services.activity_selection import resolve
             selected = resolve(db, body, start, timezone)

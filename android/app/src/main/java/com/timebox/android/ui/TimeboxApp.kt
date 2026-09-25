@@ -196,6 +196,13 @@ fun TimeboxApp(
     LaunchedEffect(typesState.message) {
         typesState.message?.let { snackbarHostState.showSnackbar(it); typesViewModel.consumeMessage() }
     }
+    LaunchedEffect(typesState.mergeRevision) {
+        if (typesState.mergeRevision > 0) {
+            battlePlanViewModel.load(showSpinner = false)
+            dayViewModel.load(showSpinner = false)
+            dayViewModel.refreshTaskTypes()
+        }
+    }
     LaunchedEffect(settingsState.message) {
         settingsState.message?.let { snackbarHostState.showSnackbar(it); settingsViewModel.consumeMessage() }
     }

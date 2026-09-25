@@ -391,6 +391,7 @@ export function TaskTypesPage() {
         error={renameError}
         onClose={() => setEditingId(null)}
         onSave={(name) => void rename(editingId!, name)}
+        onMerged={() => { setEditingId(null); setSaveState('saved'); void load() }}
       />}
       <DeleteTaskTypeResolutionModal
         open={resolveDelete !== null}

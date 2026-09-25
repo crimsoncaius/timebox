@@ -52,7 +52,7 @@ def get_or_create_unspecified(db: Session) -> TaskType:
 
 
 def list_task_types(db: Session) -> list[TaskType]:
-    stmt = select(TaskType).order_by(func.lower(TaskType.name), TaskType.id)
+    stmt = select(TaskType).where(TaskType.is_merged.is_(False)).order_by(func.lower(TaskType.name), TaskType.id)
     return list(db.execute(stmt).scalars().all())
 
 
@@ -65,7 +65,23 @@ def block_counts_by_task_type(db: Session) -> dict[int, int]:
 
 
 def get_task_type(db: Session, task_type_id: int) -> TaskType | None:
-    return db.get(TaskType, task_type_id)
+    row = db.get(TaskType, task_type_id)
+    seen = set()
+    while row is not None and row.is_merged:
+        if row.id in seen or row.merged_into_id is None:
+            return None
+        seen.add(row.id)
+        row = db.get(TaskType, row.merged_into_id)
+    return row
+
+
+def resolve_task_type_id(db: Session, task_type_id: int | None) -> int | None:
+    if task_type_id is None:
+        return None
+    row = get_task_type(db, task_type_id)
+    if row is None:
+        raise ValueError("Task type not found")
+    return row.id
 
 
 def create_task_type(db: Session, body: TaskTypeCreate) -> TaskType:
@@ -91,8 +107,8 @@ def create_task_type(db: Session, body: TaskTypeCreate) -> TaskType:
 
 
 def patch_task_type(db: Session, task_type_id: int, body: TaskTypePatch) -> TaskType:
-    row = get_task_type(db, task_type_id)
-    if row is None:
+    row = db.get(TaskType, task_type_id)
+    if row is None or row.is_merged:
         raise ValueError("Task type not found")
     if body.name is None:
         return row
@@ -164,8 +180,8 @@ def delete_task_type(
     if cascade_blocks and migrate_blocks_to is not None:
         raise ValueError("Cannot use cascade_blocks and migrate_blocks_to together")
 
-    row = get_task_type(db, task_type_id)
-    if row is None:
+    row = db.get(TaskType, task_type_id)
+    if row is None or row.is_merged:
         raise ValueError("Task type not found")
     if row.name == UNSPECIFIED_TASK_TYPE:
         raise ValueError("The unspecified task type cannot be deleted")
@@ -177,10 +193,12 @@ def delete_task_type(
         raise ValueError("TASK_TYPE_HAS_DESCENDANTS")
 
     if migrate_blocks_to is not None:
+        target = get_task_type(db, migrate_blocks_to)
+        if target is None:
+            raise ValueError("Migrate target task type not found")
+        migrate_blocks_to = target.id
         if migrate_blocks_to == task_type_id:
             raise ValueError("Cannot migrate blocks to the same task type")
-        if get_task_type(db, migrate_blocks_to) is None:
-            raise ValueError("Migrate target task type not found")
 
     in_use = db.execute(
         select(TimeBlock.id).where(TimeBlock.task_type_id == task_type_id).limit(1)

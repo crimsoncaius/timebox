@@ -58,7 +58,7 @@ def _snapshot(
         cursor=state.cursor, server_at=utc_now(),
         reporting_timezone=timezone, reporting_timezone_initialized=state.reporting_timezone is not None, records=records,
         plans=activity_selection.plans(db, timezone),
-        task_types=list(db.scalars(select(TaskType))),
+        task_types=list(db.scalars(select(TaskType).where(TaskType.is_merged.is_(False)))),
         current=current,
         acknowledgement=acknowledgement,
         tombstones=reconciliation_state.get("tombstones", []),

@@ -500,6 +500,8 @@ private fun NavGraphBuilder.typesRoute(dependencies: TimeboxNavigationDependenci
                             onRename = typesViewModel::beginRename,
                             onRenameChange = typesViewModel::changeRename,
                             onSaveRename = typesViewModel::saveRename,
+                            onConfirmMerge = typesViewModel::confirmMerge,
+                            onBackFromMerge = typesViewModel::backFromMerge,
                             onCancelRename = typesViewModel::cancelRename,
                         )
                     }

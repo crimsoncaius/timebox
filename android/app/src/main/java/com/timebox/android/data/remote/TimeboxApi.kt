@@ -114,6 +114,12 @@ interface TimeboxApi {
     @PATCH("task-types/{id}")
     suspend fun renameTaskType(@Path("id") id: Int, @Body body: TaskTypeCreateDto): TaskTypeDto
 
+    @POST("task-types/{id}/merge-preview")
+    suspend fun previewTaskTypeMerge(@Path("id") id: Int, @Body body: TaskTypeMergeRequest): TaskTypeMergePreview
+
+    @POST("task-types/{id}/merge")
+    suspend fun mergeTaskType(@Path("id") id: Int, @Body body: TaskTypeMergeRequest): TaskTypeMergePreview
+
     @DELETE("task-types/{id}")
     suspend fun deleteTaskType(
         @Path("id") id: Int,
