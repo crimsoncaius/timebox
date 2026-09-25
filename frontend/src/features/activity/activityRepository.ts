@@ -24,6 +24,7 @@ export interface ActivitySnapshot {
   reporting_timezone_initialized?: boolean
   plans?: ActivityPlan[]
   offline_ready?: boolean
+  switch_history_ready?: boolean
   operation_outcomes?: Record<string, { device_id: string; outcome: string }>
   coverage?: { start: string; end: string | null; record_id: number | null; order: [string, string, number, string] }[]
   acknowledgement?: { operation_id: string; outcome: string } | null
@@ -34,10 +35,20 @@ interface Command {
   calibration: { server_at: string; offset_ms: number }; base_cursor: number
   effective: { mode: 'server_now' | 'instant' | 'range'; at?: string; end?: string }; target_id: number | null
   selection_snapshot?: boolean; task_id?: number | null; planned_block_id?: number | null; note?: string | null
-  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'add' | 'edit' | 'delete' | 'check_in'; check_in?: CheckInEvent; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
+  undo_operation_id?: string
+  predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'add' | 'edit' | 'delete' | 'check_in' | 'undo_switch'; check_in?: CheckInEvent; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
+}
+interface SwitchRestore { start: string; records: ActualBlock[]; provenance: Record<string, string> }
+export interface ActivitySwitchUndo { operationId: string; name: string; at: string }
+function switchScope(snapshot: ActivitySnapshot, start: string) {
+  return JSON.stringify(snapshot.records.filter(r => !r.end_at || Date.parse(r.end_at) > Date.parse(start)).map(r => [
+    snapshot.provenance?.[r.id] ?? `baseline:${r.id}`, Date.parse(r.start_at), r.end_at ? Date.parse(r.end_at) : null,
+    r.task_type_id, r.task_id ?? null, r.planned_block_id ?? null, r.name ?? null, r.note ?? null,
+  ]))
 }
 export interface CheckInPreferences { enabled: boolean; thresholdMinutes: number }
 interface Journal {
+  undoRestorations?: Record<string, SwitchRestore>
   notificationAttempts?: string[]
   checkInPreferences?: CheckInPreferences
   device: string; sequence: number; lastAction: number; pending: Command | null
@@ -51,6 +62,9 @@ const browserExclusive: Exclusive = (work) => {
   return navigator.locks.request(storageKey, work)
 }
 export class ActivityRepository {
+  private switchListeners = new Set<(undo: ActivitySwitchUndo) => void>()
+  subscribeSwitch = (listener: (undo: ActivitySwitchUndo) => void) => { this.switchListeners.add(listener); return () => { this.switchListeners.delete(listener) } }
+  private switchUndo: (ActivitySwitchUndo & { restore: SwitchRestore; fingerprint: string }) | null = null
   bootstrappedThisRun = false
   private startListeners = new Set<() => void>()
   subscribeTrackingStart = (listener: () => void) => { this.startListeners.add(listener); return () => { this.startListeners.delete(listener) } }
@@ -90,7 +104,7 @@ export class ActivityRepository {
         if (Date.parse(event.coverage_end) - start >= (event.threshold_minutes ?? 60) * 60000) snapshot.check_in = { ...prompt, question: { id: `${prompt.generation}:${prompt.rearm}`, created_at: command.action_at, candidate_device: command.device_id, candidate_operation_id: command.operation_id, delivery: null } }
       }
       if (event?.action === 'confirm' && event.question_id === snapshot.check_in.question?.id) snapshot.check_in = { ...snapshot.check_in, question: null, rearm: snapshot.check_in.rearm + 1, armed_at: command.action_at }
-      if (['start', 'switch', 'stop'].includes(command.kind)) snapshot.check_in = { ...snapshot.check_in, question: null, generation: `pending:${command.operation_id}`, rearm: 0, armed_at: command.action_at }
+      if (['start', 'switch', 'stop', 'undo_switch'].includes(command.kind)) snapshot.check_in = { ...snapshot.check_in, question: null, generation: `pending:${command.operation_id}`, rearm: 0, armed_at: command.action_at }
     }
     if (this.journal.outbox.length) return this.projectRanges(snapshot)
     return snapshot
@@ -122,6 +136,20 @@ export class ActivityRepository {
       const target = pieces.find(p => p.row && (command.target_source ? (snapshot.provenance?.[p.row.id] ?? `baseline:${p.row.id}`) === command.target_source && p.start === instant(command.target_start_at!) : p.row.id === command.target_id))?.row ?? pieces.find(p => p.row?.id === command.target_id)?.row
       const historical = command.effective.mode === 'range'
       const order: Piece['order'] = [instant(command.action_at), command.device_id, command.sequence, command.operation_id]
+      if (command.kind === 'undo_switch') {
+        const restore = this.journal.undoRestorations?.[command.operation_id]
+        if (!restore) continue
+        const from = instant(restore.start)
+        const boundaries = [...new Set([from, infinity, ...pieces.flatMap(p => [p.start, p.end]), ...restore.records.flatMap(r => [instant(r.start_at), r.end_at ? instant(r.end_at) : infinity])])].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
+        pieces = boundaries.slice(0, -1).flatMap((a, i): Piece[] => {
+          const old = pieces.find(p => p.start <= a && p.end > a)
+          if (a >= from && (!old || compare(order, old.order) > 0)) return [{ start: a, end: boundaries[i + 1], order,
+            row: restore.records.find(r => instant(r.start_at) <= a && (!r.end_at || instant(r.end_at) > a)) ?? null }]
+          return old ? [{ ...old, start: a, end: boundaries[i + 1] }] : []
+        })
+        snapshot.provenance = { ...snapshot.provenance, ...restore.provenance }
+        continue
+      }
       const type = snapshot.task_types?.find(t => t.id === command.task_type_id) ?? { id: command.task_type_id ?? 0, name: 'unspecified', created_at: at, updated_at: at }
       const row: ActualBlock | null = ['stop', 'delete'].includes(command.kind) ? null : { ...target, id: (command.kind === 'edit') ? target?.id ?? command.target_id! : -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: historical ? target?.task ?? null : null, name: command.name ?? null, note: command.note ?? null, planned_block_id: (command.kind === 'edit') && target?.task_type_id === command.task_type_id && target?.task_id === command.task_id ? target?.planned_block_id ?? null : command.planned_block_id ?? null, start_at: at, end_at: historical ? command.effective.end! : null, created_at: target?.created_at ?? at, updated_at: command.action_at }
       if (row) snapshot.provenance = { ...snapshot.provenance, [row.id]: (command.kind === 'edit') ? command.target_source! : command.operation_id }
@@ -203,6 +231,7 @@ export class ActivityRepository {
       this.noteReconciliation(response)
       // Receipt removal and canonical state advance are one durable write.
       this.save({ ...this.journal, snapshot: this.newer(response) ? response : this.journal.snapshot,
+        undoRestorations: Object.fromEntries(Object.entries(this.journal.undoRestorations ?? {}).filter(([id]) => applied && id !== command.operation_id)),
         outbox: applied ? this.journal.outbox.slice(1) : [], rejected: applied ? this.journal.rejected : this.retainRejected(this.journal.outbox) })
       this.offline = false
       if (!applied) throw new Error('Activity changed on another device. Pending changes were retained for review.')
@@ -315,8 +344,8 @@ export class ActivityRepository {
         const latest = projected.records.reduce((value, row) => Math.max(value, Date.parse(row.end_at ?? row.start_at)), 0)
         const action = Math.max(this.journal.lastAction + 1, latest + 1, requestedAt)
         const at = new Date(action).toISOString()
-        if (timing && (timing.targetId !== projected.current?.id || (timing.at != null && (Date.parse(timing.at) < Date.parse(projected.current.start_at) || Date.parse(timing.at) > requestedAt)))) throw new Error('Choose a time after the current activity started and no later than now. Review the current activity if it changed.')
-        const predecessor = this.journal.outbox.findLast(c => ['start', 'switch', 'stop'].includes(c.kind)) ?? (observed.predecessor && ['start', 'switch', 'stop'].includes(observed.predecessor.kind) ? observed.predecessor : undefined)
+        if (timing && (timing.targetId !== projected.current?.id || (timing.at != null && (!Number.isFinite(Date.parse(timing.at)) || ((kind !== 'switch' || !projected.switch_history_ready) && Date.parse(timing.at) < Date.parse(projected.current.start_at)) || Date.parse(timing.at) > requestedAt)))) throw new Error('Choose a valid time no later than now. Review the current activity if it changed.')
+        const predecessor = this.journal.outbox.findLast(c => ['start', 'switch', 'stop', 'undo_switch'].includes(c.kind)) ?? (observed.predecessor && ['start', 'switch', 'stop', 'undo_switch'].includes(observed.predecessor.kind) ? observed.predecessor : undefined)
         const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence: this.journal.sequence + 1,
           action_at: at, calibration: observed.calibration ?? this.journal.calibration, base_cursor: observed.snapshot?.cursor ?? this.journal.snapshot.cursor,
           effective: { mode: 'instant', at: timing?.at ?? at }, target_id: predecessor ? null : observed.current?.id ?? null,
@@ -324,12 +353,35 @@ export class ActivityRepository {
           selection_snapshot: true, ...selection,
           ...(taskTypeId == null ? {} : { task_type_id: taskTypeId }), ...(name ? { name } : {}) }
         this.save({ ...this.journal, sequence: command.sequence, lastAction: action, outbox: [...this.journal.outbox, command] })
+        this.switchUndo = null
+        if (kind === 'switch' && projected.switch_history_ready) {
+          const start = new Date(Math.min(Date.parse(command.effective.at!), ...projected.records.filter(r => !r.end_at || Date.parse(r.end_at) > Date.parse(command.effective.at!)).map(r => Date.parse(r.start_at)))).toISOString()
+          const restore = { start, records: projected.records.filter(r => !r.end_at || Date.parse(r.end_at) > Date.parse(start)), provenance: projected.provenance ?? {} }
+          this.switchUndo = { operationId: command.operation_id, name: name || projected.task_types?.find(t => t.id === taskTypeId)?.name || 'activity', at: command.effective.at!, restore, fingerprint: switchScope(this.project()!, start) }
+          this.switchListeners.forEach(listener => listener(this.switchUndo!))
+        }
         saved = true
         this.publish()
       })
     } catch (error) { this.publish(errorMessage(error, 'Could not save activity')); return false }
     if (saved) void this.refresh()
     return saved
+  }
+  async undoSwitch(operationId: string) {
+    await this.exclusive(async () => {
+      this.journal = this.readJournal()
+      const opportunity = this.switchUndo
+      const snapshot = this.project()
+      if (!opportunity || opportunity.operationId !== operationId || !snapshot || switchScope(snapshot, opportunity.restore.start) !== opportunity.fingerprint || snapshot.operation_outcomes?.[operationId]?.outcome === 'superseded') throw new ApiHttpError(409, 'The affected activity changed. Undo is no longer available.')
+      const action = Math.max(this.now(), this.journal.lastAction + 1)
+      const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence: this.journal.sequence + 1,
+        action_at: new Date(action).toISOString(), calibration: this.journal.calibration!, base_cursor: this.journal.snapshot!.cursor,
+        effective: { mode: 'instant', at: new Date(action).toISOString() }, kind: 'undo_switch', target_id: snapshot.current?.id ?? null, undo_operation_id: operationId }
+      this.save({ ...this.journal, sequence: command.sequence, lastAction: action, outbox: [...this.journal.outbox, command], undoRestorations: { ...this.journal.undoRestorations, [command.operation_id]: opportunity.restore } })
+      this.switchUndo = null
+      this.publish()
+    })
+    void this.refresh()
   }
   async correct(kind: 'add' | 'edit' | 'delete', targetId: number | null, patch: ActivityCorrection = {}) {
     try {

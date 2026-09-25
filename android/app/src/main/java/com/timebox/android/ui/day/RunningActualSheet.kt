@@ -121,7 +121,7 @@ internal fun RunningActualSheet(actual: ActualBlockDto, repository: ActivityRepo
             enabled, busy || state.busy, error, { if (!busy) { action = null; error = null } }, {
                 nextTypeId?.let { id -> submit({ repository.command(ActivityKind.Switch, id, nextName,
                     effectiveAt = timing?.resolve(zone), observedTargetId = actual.id) }, onDismiss) }
-            }, onCreateType = createType, loadPlanTitles = loadPlanTitles)
+            }, onCreateType = createType, loadPlanTitles = loadPlanTitles, allowHistory = state.snapshot?.switchHistoryReady == true)
         return
     }
     if (action == "stop") {

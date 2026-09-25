@@ -19,7 +19,7 @@ export function FocusHost({ children }: { children: ReactNode }) {
   const activity = useSyncExternalStore(repository.subscribe, repository.getSnapshot)
   const visible = state.active && !state.planning && !!activity.snapshot?.current
   const [wakeMessage, setWakeMessage] = useState('')
-  useEffect(() => { if (visible) window.dispatchEvent(new Event('timebox:focus-open')) }, [visible])
+  useEffect(() => { window.dispatchEvent(new Event(visible ? 'timebox:focus-open' : 'timebox:focus-close')) }, [visible])
   useEffect(() => controller.reconcile(repository), [controller, repository, activity.snapshot])
   useEffect(() => {
     if (!visible) return

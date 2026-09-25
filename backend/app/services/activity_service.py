@@ -107,7 +107,7 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
             operation_id=str(body.operation_id), outcome=outcome, effective_at=None))
         db.commit()
         return result
-    if body.effective.mode != "server_now" or state.reconciliation is not None or body.selection_snapshot or body.task_id is not None or body.planned_block_id is not None:
+    if body.kind == "undo_switch" or body.effective.mode != "server_now" or state.reconciliation is not None or body.selection_snapshot or body.task_id is not None or body.planned_block_id is not None:
         reconciliation.initialize(db, state)
         operations = list(db.scalars(select(ActivityOperation)))
         intent, effective_at = reconciliation.prepare(db, state, body, operations, timezone)

@@ -15,6 +15,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,6 +29,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.sign
 
 @Composable
 internal fun SwitchActivityTimeline(
@@ -34,12 +37,19 @@ internal fun SwitchActivityTimeline(
     taskTypes: List<TaskType>, nextActivity: String?, selected: Instant, now: Instant, zone: ZoneId,
     enabled: Boolean, onSelect: (Instant?) -> Unit,
     loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { emptyMap() },
+    allowHistory: Boolean = false,
 ) {
     val stopping = nextActivity == null
     val tag = if (stopping) "stop" else "switch"
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
     var window by remember(currentId) { mutableStateOf(SwitchTimelineWindow.around(selected)) }
+    val earliest = if (allowHistory && !stopping) Instant.MIN else start
+    var dragY by remember(currentId) { mutableStateOf<Float?>(null) }
+    var handle by remember(currentId) { mutableFloatStateOf(0f) }
+    val pixels = with(LocalDensity.current) { 240.dp.toPx() }
+    val edge = with(LocalDensity.current) { 42.dp.toPx() }
+    val inset = with(LocalDensity.current) { 14.dp.toPx() }
     val visiblePlans = remember(plans, window) {
         plans.filter { parseActivityInstant(it.startAt) < window.end && parseActivityInstant(it.endAt) > window.start }
     }
@@ -56,13 +66,29 @@ internal fun SwitchActivityTimeline(
             records.flatMap { listOfNotNull(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant)) } + start).distinct()
     }
     val selectFraction by rememberUpdatedState<(Float) -> Unit> { fraction ->
-        val at = window.select(fraction, start, now, boundaries)
+        val at = window.select(fraction, earliest, now, boundaries)
         onSelect(if (at >= now) null else at)
     }
     val label = switchTimeLabel(selected, zone)
+    val latestNow by rememberUpdatedState(now)
+    LaunchedEffect(dragY != null, enabled) {
+        if (!enabled || dragY == null) return@LaunchedEffect
+        var previous = withFrameNanos { it }
+        while (dragY != null) withFrameNanos { frame ->
+            val dt = ((frame - previous) / 1_000_000.0).coerceAtMost(50.0); previous = frame
+            val y = dragY?.coerceIn(0f, pixels) ?: return@withFrameNanos
+            val speed = when { y < edge -> -(edge - y) / edge; y > pixels - edge -> (y - pixels + edge) / edge; else -> 0f }
+            val lower = if (allowHistory && !stopping) Instant.MIN else start.minusSeconds(3600)
+            window = SwitchTimelineWindow(window.start.plusMillis((sign(speed) * speed * speed * dt * 8100).toLong())
+                .coerceIn(lower, maxOf(lower, SwitchTimelineWindow.around(latestNow).start)))
+            val minimum = if (earliest == Instant.MIN) 0f else window.fraction(earliest).coerceIn(0f, 1f)
+            handle = (y.coerceIn(inset, pixels - inset) / pixels).coerceIn(minimum, maxOf(minimum, window.fraction(latestNow).coerceIn(0f, 1f)))
+            selectFraction(handle)
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { window = window.shift(-2) }, enabled = enabled && window.start > start.minusSeconds(3600),
+            TextButton(onClick = { window = window.shift(-2) }, enabled = enabled && (allowHistory && !stopping || window.start > start.minusSeconds(3600)),
                 modifier = Modifier.semantics { contentDescription = "Earlier context" }, contentPadding = PaddingValues(4.dp)) { Text("‹", style = type.sectionTitle) }
             Column(Modifier.weight(1f)) {
                 val dates = if (window.start.atZone(zone).toLocalDate() == window.end.atZone(zone).toLocalDate())
@@ -77,25 +103,25 @@ internal fun SwitchActivityTimeline(
         }
         Row(Modifier.fillMaxWidth().padding(start = 52.dp)) {
             Text("PLANNED", Modifier.weight(1f).testTag("$tag-planned-header"), style = type.laneLabel, color = colors.planned)
-            Text("RECORDED", Modifier.weight(1f).testTag("$tag-recorded-header"), style = type.laneLabel, color = colors.actual)
+            Text(if (stopping) "RECORDED" else "AFTER SWITCH", Modifier.weight(1f).testTag("$tag-recorded-header"), style = type.laneLabel, color = colors.actual)
         }
         BoxWithConstraints(Modifier.fillMaxWidth().height(264.dp)) {
             val width = maxWidth
             val height = 240.dp
             val lane = (width - 58.dp) / 2
-            val gesture = if (enabled) Modifier.pointerInput(window) {
+            val gesture = if (enabled) Modifier.pointerInput(currentId) {
                 detectTapGestures { selectFraction(it.y / size.height) }
-            }.pointerInput(window) {
-                detectDragGestures { change, _ -> change.consume(); selectFraction(change.position.y / size.height) }
+            }.pointerInput(currentId) {
+                detectDragGestures(onDragStart = { dragY = it.y; handle = (it.y / size.height).coerceIn(0f, 1f) }, onDragEnd = { dragY = null }, onDragCancel = { dragY = null }) { change, _ -> change.consume(); dragY = change.position.y }
             } else Modifier
-            Box(Modifier.fillMaxWidth().height(height).testTag("$tag-timeline").then(gesture).semantics {
+            Box(Modifier.fillMaxWidth().height(height).clipToBounds().testTag("$tag-timeline").then(gesture).semantics {
                 contentDescription = if (stopping) "Stop time timeline" else "Switch time timeline"
                 stateDescription = label
                 if (enabled) {
                     progressBarRangeInfo = ProgressBarRangeInfo(window.fraction(selected).coerceIn(0f, 1f), 0f..1f)
                     setProgress { selectFraction(it); true }
                     customActions = listOf(
-                        CustomAccessibilityAction("One minute earlier") { onSelect(selected.minusSeconds(60).coerceAtLeast(start)); true },
+                        CustomAccessibilityAction("One minute earlier") { onSelect(selected.minusSeconds(60).coerceAtLeast(earliest)); true },
                         CustomAccessibilityAction("One minute later") { onSelect(selected.plusSeconds(60).coerceAtMost(now)); true },
                     )
                 } else disabled()
@@ -124,7 +150,7 @@ internal fun SwitchActivityTimeline(
                 visiblePlans.forEach { plan -> block(parseActivityInstant(plan.startAt), parseActivityInstant(plan.endAt),
                     planTitle(plan), true) }
                 records.forEach { record -> block(parseActivityInstant(record.startAt),
-                    if (record.id == currentId) selected else record.endAt?.let(::parseActivityInstant) ?: now,
+                    if (!stopping && allowHistory) minOf(selected, record.endAt?.let(::parseActivityInstant) ?: now) else if (record.id == currentId) selected else record.endAt?.let(::parseActivityInstant) ?: now,
                     record.identityText(), false) }
                 // Stopping leaves the recorded lane empty from the selected end onward.
                 // Extend through the visible future so "Now" still previews the unrecorded state.
@@ -132,8 +158,8 @@ internal fun SwitchActivityTimeline(
                     nextActivity ?: "Unrecorded", false, preview = true, unrecorded = stopping)
                 val nowFraction = window.fraction(now)
                 if (nowFraction in 0f..1f) HorizontalDivider(Modifier.offset(x = 50.dp, y = height * nowFraction).width(width - 50.dp), color = colors.now)
-                val fraction = window.fraction(selected)
-                if (fraction in 0f..1f) {
+                val fraction = if (dragY != null) handle else window.fraction(selected)
+                if (dragY != null || fraction in 0f..1f) {
                     HorizontalDivider(Modifier.offset(x = 50.dp, y = height * fraction).width(width - 50.dp), thickness = 2.dp, color = colors.primary)
                     Surface(color = colors.primary, contentColor = colors.onPrimary, shape = TimeboxShapes.chip,
                         modifier = Modifier.align(Alignment.TopEnd).offset(y = height * fraction - 12.dp)) {
@@ -147,7 +173,7 @@ internal fun SwitchActivityTimeline(
         val shortcuts = visiblePlans.flatMap { plan ->
             val title = planTitle(plan)
             listOf(parseActivityInstant(plan.startAt) to "$title starts", parseActivityInstant(plan.endAt) to "$title ends")
-        }.filter { (at, _) -> at >= start && at <= now && at >= window.start && at <= window.end }
+        }.filter { (at, _) -> at >= earliest && at <= now && at >= window.start && at <= window.end }
             .sortedBy { java.time.Duration.between(selected, it.first).abs() }.distinctBy { it.first }.take(2)
         shortcuts.forEach { (at, title) ->
             SuggestionChip(onClick = { onSelect(at) }, enabled = enabled, label = {

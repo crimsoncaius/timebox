@@ -52,7 +52,8 @@ class ActivityCommand(BaseModel):
     clear_fields: list[Literal["name", "note"]] = []
     target_source: str | None = None
     target_start_at: AwareDatetime | None = None
-    kind: Literal["start", "switch", "stop", "add", "edit", "delete", "check_in"]
+    kind: Literal["start", "switch", "stop", "add", "edit", "delete", "check_in", "undo_switch"]
+    undo_operation_id: UUID | None = None
     check_in: CheckInEvent | None = None
     selection_snapshot: bool = False
     task_type_id: int | None = None
@@ -71,6 +72,7 @@ class ActivityAcknowledgement(BaseModel):
 class ActivitySnapshot(BaseModel):
     protocol: Literal["activity-online-v1"] = "activity-online-v1"
     offline_ready: bool = True
+    switch_history_ready: bool = True
     cursor: int
     server_at: AwareDatetime
     reporting_timezone_initialized: bool = False

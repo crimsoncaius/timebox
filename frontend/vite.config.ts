@@ -9,20 +9,7 @@ export default defineConfig(({ mode }) => {
   const defaultProxyTarget = mode === 'review' ? 'http://127.0.0.1:8001' : 'http://127.0.0.1:8000'
 
   return {
-    plugins: [react(), tailwindcss(), ...(mode === 'switch-prototype' ? [{
-      name: 'throwaway-switch-prototype-isolation',
-      configureServer(server: import('vite').ViteDevServer) {
-        server.middlewares.use('/api', (request, response) => {
-          response.setHeader('Content-Type', 'application/json')
-          if (request.method === 'GET' && request.url === '/health') {
-            response.end(JSON.stringify({ today: '2026-09-25' }))
-          } else {
-            response.statusCode = 403
-            response.end(JSON.stringify({ detail: 'Prototype uses in-memory sample data only.' }))
-          }
-        })
-      },
-    }] : [])],
+    plugins: [react(), tailwindcss()],
     server: {
       port: 5174,
       strictPort: true,

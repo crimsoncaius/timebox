@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "prototype:switch": "vite --mode switch-prototype --host 127.0.0.1 --port 12064 --strictPort",
     "dev": "vite",
     "dev:review": "vite --mode review --host=127.0.0.1 --port=5176",
     "build": "tsc -b && vite build",

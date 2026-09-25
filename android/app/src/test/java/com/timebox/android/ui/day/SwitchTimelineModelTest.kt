@@ -27,6 +27,13 @@ class SwitchTimelineModelTest {
         assertEquals(midnight, midnight.shift(-2).shift(2))
     }
 
+    @Test fun scrollingWindowStillSelectsWholeMinutesAwayFromBoundaries() {
+        val scrolling = SwitchTimelineWindow(window.start.plusMillis(18421))
+        val selected = scrolling.select(.25f, Instant.MIN, now, emptyList())
+        assertEquals(0, selected.nano)
+        assertEquals(0L, selected.epochSecond % 60)
+    }
+
     @Test fun repeatedLocalTimesRemainDifferentInstantsAndHaveDistinctLabels() {
         val zone = ZoneId.of("America/New_York")
         val earlier = Instant.parse("2025-11-02T05:30:00Z")

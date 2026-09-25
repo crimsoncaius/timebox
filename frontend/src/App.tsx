@@ -12,23 +12,16 @@ import { BattlePlanPage } from './features/battle-plan/BattlePlanPage'
 import { ReminderWatcher } from './components/ReminderWatcher'
 import { ReadinessProvider } from './features/readiness/ReadinessProvider'
 import { UndoFailureHost } from './components/UndoFailureHost'
+import { ActivitySwitchUndoHost } from './features/activity/ActivitySwitchUndoHost'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
-const ActivitySwitchPrototype = import.meta.env.DEV && import.meta.env.MODE === 'switch-prototype'
-  ? lazy(() => import('./features/activity/ActivitySwitchPrototype')) : null
 
 export function AppRoutes() {
-  // Throwaway, isolated Day presentation: never mount repositories or mutation hosts.
-  if (ActivitySwitchPrototype) {
-    return <Suspense fallback={<p>Loading prototype…</p>}><Routes>
-      <Route path="/day/:date" element={<ActivitySwitchPrototype />} />
-      <Route path="*" element={<Navigate to="/day/2026-09-25?variant=A" replace />} />
-    </Routes></Suspense>
-  }
   return (
     <ReadinessProvider>
       <BrowserCheckInHost />
       <UndoFailureHost />
+      <ActivitySwitchUndoHost />
       <FocusHost><AppRouteContent /><ReminderWatcher /></FocusHost>
     </ReadinessProvider>
   )
