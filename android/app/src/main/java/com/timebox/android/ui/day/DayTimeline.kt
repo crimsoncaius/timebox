@@ -693,7 +693,7 @@ private fun PlanningDraftCard(
     val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
     val slotsTall = (endMinute - startMinute).toFloat() / SLOT_MINUTES
     val height = max(slotHeight.value * slotsTall, 1f).dp
-    val grooves = height >= 64.dp || resizePreview != null
+    val grooves = height >= TimeboxDimens.resizeHandleMinHeight || resizePreview != null
     val innerHeight = height - if (grooves) TimeboxDimens.grooveHeight * 2 else 0.dp
     val animatedTop by animateDpAsState(
         targetValue = top,
@@ -864,7 +864,7 @@ private fun BlockCard(
     val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
     val slotsTall = (endMinute - startMinute).toFloat() / SLOT_MINUTES
     val height = max(slotHeight.value * slotsTall, 1f).dp
-    val grooves = resizeEnabled && (height >= 64.dp || dragging)
+    val grooves = resizeEnabled && (height >= TimeboxDimens.resizeHandleMinHeight || dragging)
     val innerHeight = height - if (grooves) TimeboxDimens.grooveHeight * 2 else 0.dp
     val cardTopInRoot = remember(block.id) { mutableFloatStateOf(0f) }
     var resolvedDrag by remember(block.id) { mutableStateOf<DragState?>(null) }

@@ -26,8 +26,8 @@ object TimeboxShapes {
 
 /** Fixed measurements the timeline and chrome depend on. */
 object TimeboxDimens {
-    /** Height of one 30-minute slot. `--slotHeight` in the design, default 34. */
-    val slotHeight = 34.dp
+    /** Default height of one 30-minute slot, leaving room for both resize grips. */
+    val slotHeight = 48.dp
     /**
      * Wider than the design's 38: the labels fall back to the platform sans face,
      * which sets `10 AM` a few dp broader than Inter does. Leaves room up to a
@@ -40,6 +40,8 @@ object TimeboxDimens {
     val screenPadding = 12.dp
     /** Space under the scroll content so the nav bar never covers the last block. */
     val bottomInset = 24.dp
+    /** Minimum card height that leaves a readable body between the resize grips. */
+    val resizeHandleMinHeight = 40.dp
     val grooveHeight = 8.dp
     val touchTarget = 44.dp
 }
