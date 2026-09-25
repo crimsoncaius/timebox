@@ -118,6 +118,16 @@ fun DayScreen(
         activityState.rejectedRecovery != null || activityState.legacyRecovery != null -> "Recovery available"
         else -> null
     }
+    val handoff = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication).trackingHandoff
+    val landing by handoff.landing.collectAsState()
+    val landingRecord = landing?.let { l -> activityState.snapshot?.let(l.record::find) }
+    val emphasis = landingRecord?.let { BlockEmphasis(it.id, landing!!.label) }
+    // A running block is found at the Now Line; a finished one is scrolled to.
+    val landingTarget = landingRecord?.takeIf { it.endAt != null }?.let { record ->
+        val zone = java.time.ZoneId.of(activityState.snapshot!!.reportingTimezone)
+        val start = com.timebox.android.data.parseActivityInstant(record.startAt).atZone(zone)
+        LandingTarget(landing!!.id, start.toLocalDate(), start.hour * 60 + start.minute)
+    }
     val zoom = rememberSaveable(saver = TimelineZoom.Saver) { TimelineZoom() }
     if (viewOpen) DayViewOptionsDialog(
         calendar = calendarVisible, tracking = trackingVisible,
@@ -131,8 +141,17 @@ fun DayScreen(
         if (!state.saving && !state.planning.saving) onCancelPlanningMode()
     }
 
-    CompositionLocalProvider(LocalTimelineZoom provides zoom) {
-        Column(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalTimelineZoom provides zoom, LocalBlockEmphasis provides emphasis) {
+        Column(Modifier.fillMaxSize().pointerInput(landing?.id) {
+            val id = landing?.id ?: return@pointerInput
+            // The first touch anywhere in Day ends the landing mark; the touch still reaches Day.
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    if (event.changes.any { it.pressed }) { handoff.clearLanding(id); break }
+                }
+            }
+        }) {
             DayCalendarHeader(
                 showCalendar = calendarVisible,
                 compactDate = true,
@@ -184,6 +203,7 @@ fun DayScreen(
                         onTapSlot = onTapSlot,
                         onSelectBlock = onSelectBlock,
                         onCommitMove = onCommitMove,
+                        landingTarget = landingTarget,
                     )
                 }
             }
@@ -287,6 +307,7 @@ private fun InteractiveDayPager(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    landingTarget: LandingTarget? = null,
 ) {
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf(false) }
@@ -348,7 +369,7 @@ private fun InteractiveDayPager(
                 },
         ) {
             (-1..1).forEach { pagePosition ->
-                val date = state.date.plusDays(pagePosition.toLong())
+                val date: LocalDate = state.date.plusDays(pagePosition.toLong())
                 val interactive = pagePosition == 0 && !settling
                 key(date) {
                     val previewScroll = rememberScrollState(timelineScroll.value)
@@ -372,6 +393,7 @@ private fun InteractiveDayPager(
                             active = pagePosition == 0,
                             autoScrollToNow = pagePosition == 0 && date == state.today && !state.skipScrollToNow,
                             scrollToNowRequest = state.scrollToNowRequest,
+                            landing = landingTarget?.takeIf { pagePosition == 0 && it.date == date },
                             selectedBlockId = if (interactive) state.selectedBlockId else null,
                             draft = if (interactive) state.draft else null,
                             onRetry = { onRetry(date) },
@@ -401,6 +423,7 @@ private fun DayPage(
     active: Boolean,
     autoScrollToNow: Boolean,
     scrollToNowRequest: Int,
+    landing: LandingTarget?,
     selectedBlockId: Int?,
     draft: Draft?,
     onRetry: () -> Unit,
@@ -473,6 +496,7 @@ private fun DayPage(
                     scrollState = scrollState,
                     viewportHeightPx = viewportHeightPx,
                     scrollToNowRequest = scrollToNowRequest,
+                    landing = landing,
                 )
             }
         }
@@ -505,7 +529,10 @@ private fun SavedPlannedBlockDragEdgeScroll(
     }
 }
 
-/** Scroll once per date so the now line sits one-third down the visible timeline. */
+/** A finished block Day was opened on, placed where the Now Line would be. */
+internal data class LandingTarget(val key: String, val date: LocalDate, val minute: Int)
+
+/** Scroll once per date (or landing) so the now line, or the landing, sits one-third down the visible timeline. */
 @Composable
 internal fun AutoScrollTimelineToNowOnce(
     day: Day,
@@ -513,8 +540,9 @@ internal fun AutoScrollTimelineToNowOnce(
     scrollState: ScrollState,
     viewportHeightPx: Int,
     scrollToNowRequest: Int = 0,
+    landing: LandingTarget? = null,
 ) {
-    var completed by remember(day.date, scrollToNowRequest) { mutableStateOf(false) }
+    var completed by remember(day.date, scrollToNowRequest, landing?.key) { mutableStateOf(false) }
     val slotHeight = timelineSlotHeight()
     val slotHeightPx = with(LocalDensity.current) { slotHeight.toPx() }
     val maxScroll = scrollState.maxValue
@@ -525,9 +553,10 @@ internal fun AutoScrollTimelineToNowOnce(
         viewportHeightPx,
         maxScroll,
         scrollToNowRequest,
+        landing?.key,
     ) {
-        if (!enabled || completed || viewportHeightPx <= 0) return@LaunchedEffect
-        val nowMinute = day.nowMinuteAt()
+        if (!(enabled || landing != null) || completed || viewportHeightPx <= 0) return@LaunchedEffect
+        val nowMinute = landing?.minute ?: day.nowMinuteAt()
         if (nowMinute == null || nowMinute !in day.visibleStart until day.visibleEnd) {
             completed = true
             return@LaunchedEffect

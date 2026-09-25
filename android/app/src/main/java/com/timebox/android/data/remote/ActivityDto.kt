@@ -64,6 +64,8 @@ import kotlinx.serialization.Serializable
     @SerialName("task_types") val taskTypes: List<TaskTypeDto> = emptyList(),
     @SerialName("offline_ready") val offlineReady: Boolean = false,
     @SerialName("switch_history_ready") val switchHistoryReady: Boolean = false,
+    /** Start may take effect from an earlier instant, replacing time like a switch, with the same Undo. */
+    @SerialName("start_history_ready") val startHistoryReady: Boolean = false,
     @SerialName("operation_outcomes") val operationOutcomes: Map<String, ActivityOperationOutcomeDto> = emptyMap(),
     val plans: List<ActivityPlanDto> = emptyList(),
     val provenance: Map<String, String> = emptyMap(),

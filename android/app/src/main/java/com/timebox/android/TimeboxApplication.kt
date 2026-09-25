@@ -35,6 +35,8 @@ class TimeboxApplication : Application() {
         ) { com.timebox.android.ui.assistant.HttpAssistantTransport(repository.settings.first()) }
     }
     val focusController by lazy { com.timebox.android.ui.focus.FocusController(com.timebox.android.ui.focus.AndroidFocusStorage(this)) }
+    /** Assistant ↔ Day: prefilled tracking sheets, their results, and View in Day landings. */
+    val trackingHandoff by lazy { com.timebox.android.ui.day.TrackingHandoff() }
     val checkIns by lazy { com.timebox.android.checkin.AndroidCheckIns(this, activityRepository) }
     val activityRepository by lazy {
         com.timebox.android.data.ActivityRepository(
@@ -96,6 +98,13 @@ class TimeboxApplication : Application() {
         com.timebox.android.checkin.CheckInWorker.schedule(this)
         applicationScope.launch {
             activityRepository.state.collect { checkIns.reconcileNotification(it.snapshot?.checkIn?.question?.id) }
+        }
+        // Tracking Proposal cards follow changes made elsewhere: a prefilled sheet on Day, or Undo.
+        applicationScope.launch(Dispatchers.Main) {
+            trackingHandoff.applied.collect { (proposal, record) -> assistant.proposalApplied(proposal, record, record.source) }
+        }
+        applicationScope.launch(Dispatchers.Main) {
+            activityRepository.undoneOperations.collect(assistant::operationUndone)
         }
         plannedBlockReminders = PlannedBlockReminders(this, activityRepository, preferences.plannedBlockReminders)
             .also { it.createChannel() }

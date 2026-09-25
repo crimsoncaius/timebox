@@ -6,8 +6,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null, val plan: AssistantPlan? = null)
-data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), val busy: Boolean = false, val readingPlan: Boolean = false, val ended: String? = null)
+data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null, val plan: AssistantPlan? = null,
+                             val proposal: TrackingProposal? = null)
+data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), val busy: Boolean = false, val readingPlan: Boolean = false, val ended: String? = null,
+                          /** Tracking Proposal card states by proposal id, retained with the conversation. */
+                          val proposals: Map<String, ProposalState> = emptyMap())
 
 /** Process-owned: tab navigation and activity recreation do not cancel a response. */
 class AssistantController(
@@ -61,11 +64,18 @@ class AssistantController(
                             val plan = AssistantPlan.parse(event.data)
                             updateLast { it.copy(plan = plan) }
                         }
+                        "tracking_proposal" -> {
+                            check(api.supportsTrackingProposals) { "Unnegotiated tracking proposal" }
+                            check(state.value.exchanges.last().let { it.plan == null && it.proposal == null && it.answer.isEmpty() }) { "Invalid card order" }
+                            val proposal = TrackingProposal.parse(event.data)
+                            updateLast { it.copy(proposal = proposal) }
+                            mutableState.value = state.value.let { it.copy(proposals = it.proposals + (proposal.id to ProposalState())) }
+                        }
                         "text_delta" -> updateLast { it.copy(answer = it.answer + event.data.getValue("text").jsonPrimitive.content) }
                         "tool_started" -> mutableState.value = state.value.copy(readingPlan = true)
                         "tool_completed" -> mutableState.value = state.value.copy(readingPlan = false)
                         "completed" -> {
-                            check(state.value.exchanges.last().let { it.answer.isNotBlank() || it.plan != null }) { "Empty response" }
+                            check(state.value.exchanges.last().let { it.answer.isNotBlank() || it.plan != null || it.proposal != null }) { "Empty response" }
                             completed = true
                         }
                         "failed" -> throw java.io.IOException(event.data.getValue("message").jsonPrimitive.content)
@@ -92,6 +102,20 @@ class AssistantController(
             }
         }
     }
+
+    private fun updateProposal(id: String, change: (ProposalState) -> ProposalState) {
+        val current = state.value.proposals[id] ?: return
+        mutableState.value = state.value.copy(proposals = state.value.proposals + (id to change(current)))
+    }
+
+    /** A choice chip fills the card; confirming it is still a separate tap. */
+    fun chooseProposal(id: String, taskTypeId: Int) = updateProposal(id) { if (it.status == ProposalStatus.Pending) it.copy(chosen = taskTypeId) else it }
+    fun dismissProposal(id: String) = updateProposal(id) { if (it.status == ProposalStatus.Pending) it.copy(status = ProposalStatus.Dismissed) else it }
+    fun proposalApplied(id: String, record: com.timebox.android.ui.day.RecordRef, operationId: String?, stopped: Boolean = false) =
+        updateProposal(id) { it.copy(status = ProposalStatus.Applied, record = record, operationId = operationId, stopped = stopped) }
+    /** Undo means the change never happened: the card may be confirmed again until it expires. */
+    fun operationUndone(operationId: String) = state.value.proposals.filterValues { it.operationId == operationId }.keys
+        .forEach { id -> updateProposal(id) { it.copy(status = ProposalStatus.Pending, record = null, operationId = null) } }
 
     fun stop() {
         if (!state.value.busy || state.value.exchanges.lastOrNull()?.status == "Complete") return

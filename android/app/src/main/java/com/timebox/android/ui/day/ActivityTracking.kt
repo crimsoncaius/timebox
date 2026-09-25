@@ -97,7 +97,31 @@ fun ActivityTracking(
     // Without a covering Planned Block, starting waits for an explicit Task Type.
     fun start() {
         if (plan != null) scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) }
-        else { selectedType = null; name = ""; typeQuery = ""; startError = null; starting = true }
+        else { selectedType = null; name = ""; typeQuery = ""; startError = null; timing = null; starting = true }
+    }
+    val handoff = (context.applicationContext as? TimeboxApplication)?.trackingHandoff
+    val sheetRequest = handoff?.sheet?.collectAsState()?.value
+    // The proposal a prefilled sheet came from; its card follows whatever the sheet applies.
+    var proposalId by remember { mutableStateOf<String?>(null) }
+    val zone = runCatching { ZoneId.of(state.snapshot!!.reportingTimezone) }.getOrDefault(ZoneId.of("UTC"))
+    LaunchedEffect(sheetRequest, state.snapshot != null, controlsVisible) {
+        if (sheetRequest == null || state.snapshot == null || focus || !controlsVisible) return@LaunchedEffect
+        val request = handoff.consumeSheet() ?: return@LaunchedEffect
+        selectedType = state.snapshot?.taskTypes?.find { it.id == request.taskTypeId }?.let { TaskType(it.id, it.name, 0) }
+        typeQuery = selectedType?.name.orEmpty(); typeError = null; timingError = null; startError = null
+        name = request.name.orEmpty()
+        timing = request.at?.let { ActivityTimeValue.from(it, zone) }
+        proposalId = request.proposalId
+        val running = state.snapshot?.current
+        if (running == null) starting = true else { targetId = running.id; switching = true }
+    }
+    fun reportApplied(operationId: String?, at: Instant?) {
+        val id = proposalId ?: return
+        proposalId = null
+        val snapshot = repository.state.value.snapshot ?: return
+        val record = operationId?.let { op -> snapshot.records.find { snapshot.provenance[it.id.toString()] == op } }
+            ?: snapshot.current ?: return
+        handoff?.reportApplied(id, RecordRef.of(record, snapshot).let { ref -> at?.let { ref.copy(start = it) } ?: ref })
     }
     val enabled = !state.busy && state.snapshot != null
     val statusFlags = StatusFlags(
@@ -248,19 +272,31 @@ fun ActivityTracking(
         onDismiss = { notesTargetId = null },
     )
     if (starting && current == null) StartTrackingSheet(
+        history = if (state.snapshot?.startHistoryReady == true) StartHistory(
+            records = state.snapshot?.records.orEmpty(), plans = state.snapshot?.plans.orEmpty(), now = now, zone = zone,
+            timing = timing, onTimingChange = { timing = it; startError = null },
+            loadPlanTitles = { date ->
+                (context.applicationContext as TimeboxApplication).repository.getDayPreview(date).getOrNull()
+                    ?.blocks?.filter { it.lane == com.timebox.android.data.Lane.Planned }
+                    ?.associate { it.id to it.primaryIdentity() }.orEmpty()
+            },
+        ) else null,
         taskTypes = availableTypes, selectedType = selectedType, onTypeChange = { selectedType = it; typeQuery = it.name; typeError = null },
         name = name, onNameChange = { name = it },
         enabled = enabled, busy = startSaving || state.busy, error = startError,
-        onDismiss = { if (!startSaving) starting = false },
+        onDismiss = { if (!startSaving) { starting = false; proposalId = null } },
         onConfirm = {
             if (!startSaving) {
                 startSaving = true
                 val typeId = selectedType!!.id
+                val at = timing?.resolve(zone)?.takeIf { it < now }
                 scope.launch {
                     try {
-                        if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Start, typeId, name.trim().ifBlank { null }) }) {
-                            starting = false; selectedType = null; name = ""; typeQuery = ""
-                        } else startError = "Could not start tracking."
+                        var operation: String? = null
+                        if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Start, typeId, name.trim().ifBlank { null }, effectiveAt = at, onOperation = { operation = it }) }) {
+                            reportApplied(operation, at)
+                            starting = false; selectedType = null; name = ""; typeQuery = ""; timing = null
+                        } else startError = repository.state.value.error ?: "Could not start tracking."
                     } finally { startSaving = false }
                 }
             }
@@ -285,12 +321,14 @@ fun ActivityTracking(
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
         enabled = enabled && switchTarget != null && current?.id == targetId, busy = state.busy,
         error = if (current?.id != targetId) "The current activity changed. Close this sheet and review it before switching." else timingError,
-        onDismiss = { switching = false },
+        onDismiss = { switching = false; proposalId = null },
         onConfirm = {
             scope.launch {
                 try {
                     val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
-                    if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId) }) {
+                    var operation: String? = null
+                    if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it }) }) {
+                        reportApplied(operation, at)
                         switching = false; selectedType = null; name = ""; typeQuery = ""
                     } else timingError = repository.state.value.error
                 } catch (error: Exception) { timingError = error.message }

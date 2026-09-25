@@ -170,7 +170,8 @@ def prepare(db, state, body, operations, timezone="UTC"):
         end = INF
         if body.effective.mode == "range" or body.effective.end is not None:
             raise ValueError("Tracking transitions require an instant")
-        if body.effective.mode == "instant" and (start > body.action_at or (body.kind == "start" and start != body.action_at)):
+        # Start and switch may take effect from an earlier instant, replacing recorded time from it onward.
+        if body.effective.mode == "instant" and start > body.action_at:
             raise ValueError("Effective time must be within the current interval and action time")
         current = next((p for p in known if p["data"] and p["end"] is None), None)
         if not body.predecessor_id:
@@ -178,7 +179,7 @@ def prepare(db, state, body, operations, timezone="UTC"):
                 raise ValueError("Transition does not match the observed activity")
         if body.kind != "switch" and current and start < instant(current["start"]):
             raise ValueError("Transition must follow the observed activity start")
-        if body.kind != "switch" and any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
+        if body.kind == "stop" and any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
             raise ValueError("Activity instant overlaps known history")
     data = None
     if body.kind not in {"stop", "delete"}:
@@ -225,7 +226,7 @@ def prepare(db, state, body, operations, timezone="UTC"):
         ranges.append({"start": target["start"], "end": target["end"], "data": None})
     ranges.append({"start": stamp(start), "end": None if end == INF else stamp(end), "data": data})
     intent = {"ranges": ranges}
-    if body.kind == "switch":
+    if body.kind in {"switch", "start"}:
         affected = [p for p in known if (instant(p["end"]) if p["end"] else INF) > start]
         restore_start = min([start, *[instant(p["start"]) for p in affected if p["data"]]])
         restore = [{"start": stamp(restore_start), "end": None, "data": None}]

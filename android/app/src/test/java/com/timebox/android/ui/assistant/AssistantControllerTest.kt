@@ -11,6 +11,7 @@ import org.junit.Test
 class AssistantControllerTest {
     private class Fake : AssistantTransport {
         override val supportsPlanCards = true
+        override var supportsTrackingProposals = true
         val events = MutableSharedFlow<AssistantEvent>()
         var run = ""
         var sequence = 0
@@ -46,6 +47,48 @@ class AssistantControllerTest {
             put("reporting_timezone", "Asia/Singapore"); put("read_at", "2026-09-21T01:41:00Z")
             putJsonArray("planned_blocks") {}
         }))
+    }
+
+    private suspend fun Fake.proposal(id: String = "p1") {
+        events.emit(AssistantEvent("tracking_proposal", buildJsonObject {
+            put("run_id", run); put("sequence", ++sequence); put("schema_version", 1); put("proposal_id", id); put("action", "track")
+            putJsonArray("task_types") { addJsonObject { put("id", 2); put("path", "Exercise/Gym") }; addJsonObject { put("id", 3); put("path", "Exercise/Running") } }
+            put("block_name", JsonNull); put("at", JsonNull); put("reporting_timezone", "UTC")
+            put("proposed_at", "2026-09-25T12:50:00Z"); put("expires_at", "2026-09-25T13:05:00Z")
+        }))
+    }
+
+    @Test fun `tracking proposal precedes text and its card state is retained`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("switch to exercise"); runCurrent()
+        api.proposal(); api.emit("text_delta", "Which kind?"); api.emit("completed"); api.emit("eof"); runCurrent()
+        val exchange = controller.state.value.exchanges.single()
+        assertEquals("Complete", exchange.status)
+        assertEquals(2, exchange.proposal!!.taskTypes.size)
+        assertEquals(ProposalStatus.Pending, controller.state.value.proposals.getValue("p1").status)
+        controller.chooseProposal("p1", 3)
+        assertEquals(3, controller.state.value.proposals.getValue("p1").chosen)
+        val record = com.timebox.android.ui.day.RecordRef("op-1", java.time.Instant.parse("2026-09-25T12:50:00Z"))
+        controller.proposalApplied("p1", record, "op-1")
+        controller.chooseProposal("p1", 2)
+        assertEquals("an applied card no longer changes its choice", 3, controller.state.value.proposals.getValue("p1").chosen)
+        controller.operationUndone("op-1")
+        assertEquals(ProposalStatus.Pending, controller.state.value.proposals.getValue("p1").status)
+        controller.dismissProposal("p1")
+        assertEquals(ProposalStatus.Dismissed, controller.state.value.proposals.getValue("p1").status)
+    }
+
+    @Test fun `unnegotiated or late proposal interrupts the response`() = runTest {
+        val api = Fake().apply { supportsTrackingProposals = false }
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("eating"); runCurrent()
+        api.proposal(); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.single().status)
+        api.supportsTrackingProposals = true
+        controller.retry(); runCurrent()
+        api.emit("text_delta", "Sure"); api.proposal("p2"); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.last().status)
     }
 
     @Test fun `card only completes and acknowledgement is atomic`() = runTest {

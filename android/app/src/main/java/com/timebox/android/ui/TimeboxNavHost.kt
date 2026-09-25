@@ -515,7 +515,7 @@ private fun NavGraphBuilder.assistantRoute(dependencies: TimeboxNavigationDepend
     with(dependencies) {
         with(models) {
             composable(AppRoutes.Assistant) {
-                AssistantScreen()
+                AssistantScreen(onOpenDay = { navController.navigate(AppRoutes.day(it)) })
             }
         }
     }

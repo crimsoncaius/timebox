@@ -880,6 +880,7 @@ private fun BlockCard(
             .onGloballyPositioned { cardTopInRoot.floatValue = it.positionInRoot().y }
             .testTag("day-block-${block.id}")
             .then(if (dragging) Modifier.graphicsLayer { rotationZ = -1f }.shadow(16.dp, TimeboxShapes.block, clip = false) else Modifier)
+            .blockEmphasis(block.id, spaceAbove = top)
             .clipInPlace(TimeboxShapes.block)
             .background(
                 when {
