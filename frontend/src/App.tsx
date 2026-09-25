@@ -12,6 +12,7 @@ import { BattlePlanPage } from './features/battle-plan/BattlePlanPage'
 import { ReminderWatcher } from './components/ReminderWatcher'
 import { ReadinessProvider } from './features/readiness/ReadinessProvider'
 import { UndoFailureHost } from './components/UndoFailureHost'
+import { TaskTypeMergePrototype } from './features/task-types/TaskTypeMergePrototype'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
 
@@ -30,12 +31,18 @@ function AppRouteContent() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/day/:date" element={<TodayPage />} />
         <Route path="/history" element={<HistoryPage />} />
-        <Route path="/task-types" element={<TaskTypesPage />} />
+        <Route path="/task-types" element={<TaskTypesRoute />} />
         <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/battle-plan" element={<BattlePlanRoute />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+}
+
+function TaskTypesRoute() {
+  const [params] = useSearchParams()
+  return import.meta.env.DEV && params.get('prototype') === 'merge'
+    ? <TaskTypeMergePrototype /> : <TaskTypesPage />
 }
 
 function BattlePlanRoute() {

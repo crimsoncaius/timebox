@@ -52,6 +52,10 @@ _Avoid_: tag, folder, category tree
 A change to an existing Task Type's name that preserves its identity and associated work, including historical Planned Blocks and Actual Blocks, which display the new name. Renaming a Task Type Path also renames its descendants and may move the branch under another parent.
 _Avoid_: Reclassification, Task Type replacement
 
+**Task Type Merge**:
+The permanent consolidation of one Task Type branch into an existing Task Type branch: matching descendants combine and unmatched descendants move under the surviving branch. All associated work, including historical records, follows the surviving Task Types, and reporting combines that work.
+_Avoid_: Task Type Rename, Task deletion
+
 **Block Name**:
 An optional user-defined identity for one Planned Block or Actual Block, distinct from its reusable Task Type and supporting Note. It remains the Block's own identity regardless of Battle Plan Task linkage.
 _Avoid_: Label, title, tag, Task Type
