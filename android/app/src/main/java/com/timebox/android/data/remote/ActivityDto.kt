@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
     @SerialName("check_in") CheckIn,
     @SerialName("start") Start,
     @SerialName("switch") Switch,
+    @SerialName("undo_switch") UndoSwitch,
     @SerialName("stop") Stop,
     @SerialName("add") Add,
     @SerialName("edit") Edit,
@@ -44,6 +45,7 @@ import kotlinx.serialization.Serializable
     @SerialName("check_in") val checkIn: CheckInEventDto? = null,
     val clear_fields: List<String> = emptyList(),
     @SerialName("predecessor_id") val predecessorId: String? = null,
+    @SerialName("undo_operation_id") val undoOperationId: String? = null,
 )
 @Serializable data class ActivityAcknowledgementDto(
     @SerialName("operation_id") val operationId: String,
@@ -61,6 +63,7 @@ import kotlinx.serialization.Serializable
     val acknowledgement: ActivityAcknowledgementDto? = null,
     @SerialName("task_types") val taskTypes: List<TaskTypeDto> = emptyList(),
     @SerialName("offline_ready") val offlineReady: Boolean = false,
+    @SerialName("switch_history_ready") val switchHistoryReady: Boolean = false,
     @SerialName("operation_outcomes") val operationOutcomes: Map<String, ActivityOperationOutcomeDto> = emptyMap(),
     val plans: List<ActivityPlanDto> = emptyList(),
     val provenance: Map<String, String> = emptyMap(),

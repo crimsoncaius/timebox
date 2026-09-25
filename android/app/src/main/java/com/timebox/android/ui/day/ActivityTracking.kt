@@ -270,6 +270,7 @@ fun ActivityTracking(
     )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(
+        allowHistory = state.snapshot?.switchHistoryReady == true,
         currentActivity = switchTarget?.identityText().orEmpty(),
         currentId = targetId ?: 0, start = switchTarget?.startAt?.let(::parseActivityInstant) ?: now,
         loadPlanTitles = { date ->

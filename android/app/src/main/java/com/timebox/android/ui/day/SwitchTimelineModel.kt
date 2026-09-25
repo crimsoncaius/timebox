@@ -14,7 +14,7 @@ internal data class SwitchTimelineWindow(val start: Instant) {
     fun fraction(at: Instant) = Duration.between(start, at).toMillis().toFloat() / (3 * 3600 * 1000)
 
     fun select(fraction: Float, earliest: Instant, now: Instant, boundaries: List<Instant>): Instant {
-        val raw = start.plusSeconds((fraction.coerceIn(0f, 1f) * 180).roundToLong() * 60)
+        val raw = Instant.ofEpochSecond(((start.toEpochMilli() / 60000.0) + fraction.coerceIn(0f, 1f) * 180).roundToLong() * 60)
         val bounded = raw.coerceIn(earliest, maxOf(earliest, now))
         // Preserve the actual instant (including seconds and DST occurrence) at a nearby boundary.
         return boundaries.filter { it >= earliest && it <= now }

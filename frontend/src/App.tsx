@@ -12,6 +12,7 @@ import { BattlePlanPage } from './features/battle-plan/BattlePlanPage'
 import { ReminderWatcher } from './components/ReminderWatcher'
 import { ReadinessProvider } from './features/readiness/ReadinessProvider'
 import { UndoFailureHost } from './components/UndoFailureHost'
+import { ActivitySwitchUndoHost } from './features/activity/ActivitySwitchUndoHost'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
 
@@ -20,6 +21,7 @@ export function AppRoutes() {
     <ReadinessProvider>
       <BrowserCheckInHost />
       <UndoFailureHost />
+      <ActivitySwitchUndoHost />
       <FocusHost><AppRouteContent /><ReminderWatcher /></FocusHost>
     </ReadinessProvider>
   )

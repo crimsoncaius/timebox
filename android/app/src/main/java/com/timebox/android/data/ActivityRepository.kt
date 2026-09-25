@@ -6,6 +6,8 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,6 +42,7 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     }
 }
 @Serializable private data class ActivityJournal(
+    val undoRestorations: Map<String, SwitchRestore> = emptyMap(),
     val device: String = UUID.randomUUID().toString(), val sequence: Int = 0,
     val checkInPreferences: CheckInPreferences = CheckInPreferences(),
     val dismissedQuestions: Set<String> = emptySet(),
@@ -52,6 +55,14 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     val rejectedRecoveryReviewed: Boolean = false,
     val calibration: ActivityCalibrationDto? = null,
 )
+@Serializable private data class SwitchRestore(val start: String, val records: List<ActualBlockDto>, val provenance: Map<String, String>)
+data class ActivitySwitchUndo(val operationId: String, val name: String, val at: String)
+private data class SwitchOpportunity(val offer: ActivitySwitchUndo, val restore: SwitchRestore, val fingerprint: String)
+private fun switchScope(snapshot: ActivitySnapshotDto, start: String): String = snapshot.records
+    .filter { it.endAt == null || parseActivityInstant(it.endAt) > parseActivityInstant(start) }
+    .joinToString("\n") { row -> ApiFactory.json.encodeToString(listOf(snapshot.provenance[row.id.toString()] ?: "baseline:${row.id}",
+        parseActivityInstant(row.startAt).toString(), row.endAt?.let { parseActivityInstant(it).toString() }, row.taskTypeId.toString(),
+        row.taskId?.toString(), row.plannedBlockId?.toString(), row.name, row.note)) }
 data class ActivityUiState(
     val snapshot: ActivitySnapshotDto? = null, val pending: Boolean = false,
     val busy: Boolean = false, val error: String? = null, val offline: Boolean = false,
@@ -64,6 +75,9 @@ data class ActivityUiState(
 class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage,
                          private val wallTime: () -> Long = System::currentTimeMillis,
                          private val monotonicTime: () -> Long = System::nanoTime) {
+    private var switchOpportunity: SwitchOpportunity? = null
+    private val switchOffers = MutableSharedFlow<ActivitySwitchUndo>(extraBufferCapacity = 1)
+    val switchUndoOffers = switchOffers.asSharedFlow()
     var bootstrappedThisRun = false
         private set
     private var legacyRecovery: String? = null
@@ -128,7 +142,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             }
             if (event?.action == "confirm" && event.questionId == checkIn.question?.id)
                 snapshot = snapshot.copy(checkIn = checkIn.copy(question = null, rearm = checkIn.rearm + 1, armedAt = command.actionAt))
-            if (command.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop)) snapshot = snapshot.copy(checkIn = checkIn.copy(question = null, generation = "pending:${command.operationId}", rearm = 0, armedAt = command.actionAt))
+            if (command.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop, ActivityKind.UndoSwitch)) snapshot = snapshot.copy(checkIn = checkIn.copy(question = null, generation = "pending:${command.operationId}", rearm = 0, armedAt = command.actionAt))
         }
         return if (journal.outbox.isNotEmpty()) projectRanges(snapshot.copy(serverAt = now().toString())) else snapshot
     }
@@ -150,6 +164,19 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             val target = pieces.find { p -> p.row != null && command.targetSource != null && (provenance[p.row.id.toString()] ?: "baseline:${p.row.id}") == command.targetSource && p.start == command.targetStartAt?.let(::parseActivityInstant) }?.row
                 ?: pieces.find { it.row?.id == command.targetId }?.row
             val order = Order(parseActivityInstant(command.actionAt), command.deviceId, command.sequence, command.operationId)
+            if (command.kind == ActivityKind.UndoSwitch) {
+                val restore = journal.undoRestorations[command.operationId] ?: return@forEach
+                val from = parseActivityInstant(restore.start)
+                val boundaries = (pieces.flatMap { listOf(it.start, it.end) } + from + Instant.MAX + restore.records.flatMap { listOf(parseActivityInstant(it.startAt), it.endAt?.let(::parseActivityInstant) ?: Instant.MAX) }).distinct().sorted()
+                pieces = boundaries.zipWithNext().mapNotNull { (a, b) ->
+                    val previous = pieces.find { it.start <= a && it.end > a }
+                    if (a >= from && (previous == null || order > previous.order)) Piece(a, b,
+                        restore.records.find { parseActivityInstant(it.startAt) <= a && (it.endAt == null || parseActivityInstant(it.endAt) > a) }, order)
+                    else previous?.copy(start = a, end = b)
+                }
+                provenance.putAll(restore.provenance)
+                return@forEach
+            }
             val type = snapshot.taskTypes.find { it.id == command.taskTypeId } ?: TaskTypeDto(command.taskTypeId ?: 0, "unspecified")
             val row = if (command.kind == ActivityKind.Stop || command.kind == ActivityKind.Delete) null else ActualBlockDto(
                 if (command.kind == ActivityKind.Edit) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
@@ -240,6 +267,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             val applied = ack.outcome == ActivityOutcome.Applied || ack.outcome == ActivityOutcome.Superseded
             noteReconciliation(response)
             save(journal.copy(snapshot = if (newer(response)) response else journal.snapshot,
+                undoRestorations = if (applied) journal.undoRestorations - command.operationId else emptyMap(),
                 outbox = if (applied) journal.outbox.drop(1) else emptyList(),
                 rejectedOutbox = if (applied) journal.rejectedOutbox else journal.rejectedOutbox + journal.outbox,
                 rejectedRecoveryReviewed = applied && journal.rejectedRecoveryReviewed))
@@ -330,15 +358,25 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 val latest = project()?.records?.maxOfOrNull { parseActivityInstant(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
                 val action = maxOf(journal.lastAction + 1, latest + 1, requestedAt)
                 val at = Instant.ofEpochMilli(action).toString()
-                if (observedTargetId != null) check(current != null && observedTargetId == current.id && (effectiveAt == null || (effectiveAt >= parseActivityInstant(current.startAt) && effectiveAt.toEpochMilli() <= requestedAt))) { "Choose a time after the current activity started and no later than now. Review the current activity if it changed." }
-                val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) } ?: observed.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop) }
+                if (observedTargetId != null) check(current != null && observedTargetId == current.id && (effectiveAt == null || (((kind == ActivityKind.Switch && snapshot.switchHistoryReady) || effectiveAt >= parseActivityInstant(current.startAt)) && effectiveAt.toEpochMilli() <= requestedAt))) { "Choose a valid time no later than now. Review the current activity if it changed." }
+                val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop, ActivityKind.UndoSwitch) } ?: observed.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop, ActivityKind.UndoSwitch) }
                 val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
                     at, observed.calibration ?: calibration, observed.snapshot?.cursor ?: snapshot.cursor,
                     ActivityEffectiveDto("instant", effectiveAt?.toString() ?: at), if (predecessor == null) observedCurrent?.id else null,
                     kind, selectedType, selectedName?.trim()?.ifEmpty { null },
                     taskId = selectedPlan?.taskId ?: taskId, plannedBlockId = selectedPlan?.id,
                     note = selectedPlan?.note, selectionSnapshot = true, predecessorId = predecessor?.operationId)
+                val before = checkNotNull(project())
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command))
+                switchOpportunity = null
+                if (kind == ActivityKind.Switch && before.switchHistoryReady) {
+                    val from = parseActivityInstant(command.effective.at!!)
+                    val start = minOf(from, before.records.filter { it.endAt == null || parseActivityInstant(it.endAt) > from }.minOfOrNull { parseActivityInstant(it.startAt) } ?: from).toString()
+                    val restore = SwitchRestore(start, before.records.filter { it.endAt == null || parseActivityInstant(it.endAt) > parseActivityInstant(start) }, before.provenance)
+                    val offer = ActivitySwitchUndo(command.operationId, command.name ?: before.taskTypes.find { it.id == command.taskTypeId }?.name ?: "activity", command.effective.at)
+                    switchOpportunity = SwitchOpportunity(offer, restore, switchScope(checkNotNull(project()), start))
+                    switchOffers.tryEmit(offer)
+                }
                 publish()
                 true
             } catch (error: Exception) { publish(errorDetail(error) ?: "Could not save activity"); false }
@@ -346,6 +384,29 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         // The durable projection is already observable while transport is pending.
         if (saved) { onPersisted(); refresh() }
         return saved
+    }
+    suspend fun undoSwitch(operationId: String): Result<Unit> {
+        val result = runCatching {
+            mutex.withLock {
+                checkEndpoint()
+                val opportunity = switchOpportunity
+                val snapshot = project()
+                if (opportunity == null || opportunity.offer.operationId != operationId || snapshot == null ||
+                    switchScope(snapshot, opportunity.restore.start) != opportunity.fingerprint || snapshot.operationOutcomes[operationId]?.outcome == ActivityOutcome.Superseded) {
+                    throw apiErrorException(409, "{\"detail\":\"The affected activity changed. Undo is no longer available.\"}")
+                }
+                val action = maxOf(now().toEpochMilli(), journal.lastAction + 1)
+                val at = Instant.ofEpochMilli(action).toString()
+                val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
+                    at, checkNotNull(journal.calibration), checkNotNull(journal.snapshot).cursor, ActivityEffectiveDto("instant", at), snapshot.current?.id,
+                    ActivityKind.UndoSwitch, undoOperationId = operationId)
+                save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command,
+                    undoRestorations = journal.undoRestorations + (command.operationId to opportunity.restore)))
+                switchOpportunity = null
+                publish()
+            }
+        }
+        return result
     }
     suspend fun correct(kind: ActivityKind, targetId: Int? = null, startAt: String? = null, endAt: String? = null,
                         taskTypeId: Int? = null, name: String? = null, note: String? = null, taskId: Int? = null,

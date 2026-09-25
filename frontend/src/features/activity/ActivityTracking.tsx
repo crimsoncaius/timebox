@@ -2,6 +2,8 @@ import { blockPrimaryIdentity, blockSecondaryIdentity, blockIdentityText } from 
 import { formatDuration } from '../../lib/duration'
 import { getFocusController } from './focusController'
 import { ActivityTimeField } from './ActivityTimeField'
+import { SwitchActivityTimeline } from './SwitchActivityTimeline'
+import { ActivitySwitchDialog } from './ActivitySwitchDialog'
 import { activityTimeValue, resolveActivityTime, type ActivityTimeValue } from './activityTime'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { api, type TaskType } from '../../lib/api'
@@ -46,7 +48,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const shortcutAt = repository.now() - 15 * 60000
   const shortcutReason = !current || current.id !== targetId
     ? 'The Current Activity changed. Reopen Switch or Stop to choose a time.'
-    : shortcutAt < Date.parse(current.start_at)
+    : shortcutAt < Date.parse(current.start_at) && (stopping || !state.snapshot?.switch_history_ready)
       ? '15 min ago is before the Current Activity started. Choose Now or a later time.'
       : null
   const plan = repository.currentPlan()
@@ -57,6 +59,9 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const availableTypes = state.snapshot?.task_types ?? taskTypes
   const planIdentity = plan ? { name: plan.name, task: plan.task_title ? { title: plan.task_title } : null, task_type: availableTypes.find(t => t.id === plan.task_type_id) } : null
   const nextIdentity = { name, task_type: availableTypes.find(t => t.id === Number(typeId)) }
+  const zone = state.snapshot?.reporting_timezone ?? 'UTC'
+  let selectedAt = now
+  try { if (timing) selectedAt = Date.parse(resolveActivityTime(timing, zone)) } catch { /* The field keeps invalid local-time input for correction. */ }
   const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
   // Without a covering Planned Block, starting waits for an explicit Task Type.
   const start = (then: 'track' | 'focus') => {
@@ -108,7 +113,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       {startError ? <p role="alert">{startError}</p> : null}
       <div className="flex justify-end gap-4"><button type="button" onClick={() => setStarting(null)}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || !typeId}>Start</button></div>
     </form> : null}
-    {switching || stopping ? <form aria-label={stopping ? "Stop tracking" : "Switch activity"} className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {
+    {switching || stopping ? <ActivitySwitchDialog open={switching} onClose={() => setSwitching(false)}><form aria-label={stopping ? "Stop tracking" : "Switch activity"} className={switching ? "space-y-3" : "ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container"} onSubmit={async (event) => {
       event.preventDefault()
       try {
         const at = timing ? resolveActivityTime(timing, state.snapshot?.reporting_timezone ?? 'UTC') : undefined
@@ -120,11 +125,12 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       <p>When did this {stopping ? "stop" : "change"} happen?</p>
       <div className="flex gap-4"><button type="button" onClick={() => setTiming(null)}>Now</button><button type="button" disabled={Boolean(shortcutReason)} title={shortcutReason ?? undefined} className="disabled:opacity-40" onClick={() => setTiming(activityTimeValue(new Date(shortcutAt).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>15 min ago</button><button type="button" onClick={() => setTiming(activityTimeValue(new Date(now).toISOString(), state.snapshot?.reporting_timezone ?? "UTC"))}>Choose time</button></div>
       {shortcutReason ? <p>{shortcutReason}</p> : null}
-      {timing ? <ActivityTimeField label="Change time" value={timing} onChange={setTiming} timezone={state.snapshot?.reporting_timezone ?? "UTC"} /> : <p>Now</p>}
-      <section aria-label="After this change"><h3>After this change</h3><p>{current ? blockIdentityText(current) : "Unnamed activity"} ends {timing?.local.replace("T", " ") ?? "now"}.</p><p>{stopping ? "Time after this is unrecorded." : `${blockIdentityText(nextIdentity)} starts at the same time and continues.`}</p></section>
+      {timing || switching ? <ActivityTimeField label="Change time" value={timing ?? activityTimeValue(new Date(now).toISOString(), zone)} onChange={setTiming} timezone={zone} /> : <p>Now</p>}
+      {!stopping && state.snapshot?.switch_history_ready && current ? <SwitchActivityTimeline key={targetId} records={state.snapshot.records} plans={state.snapshot.plans ?? []} selected={selectedAt} now={now} zone={zone} nextActivity={blockIdentityText(nextIdentity)} currentStart={Date.parse(current.start_at)} enabled={!disabled && current.id === targetId} onSelect={at => { setTiming(at == null || at >= now ? null : activityTimeValue(new Date(at).toISOString(), zone)); setTimingError(null) }} /> :
+        <section aria-label="After this change"><h3>After this change</h3><p>{current ? blockIdentityText(current) : "Unnamed activity"} ends {timing?.local.replace("T", " ") ?? "now"}.</p><p>{stopping ? "Time after this is unrecorded." : `${blockIdentityText(nextIdentity)} starts at the same time and continues.`}</p></section>}
       {timingError ? <p role="alert">{timingError}</p> : null}
       <div className="flex justify-end gap-4"><button type="button" onClick={() => { setSwitching(false); setStopping(false) }}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || (!stopping && !typeId)}>{stopping ? "Stop tracking" : "Switch activity"}</button></div>
-    </form> : null}
+    </form></ActivitySwitchDialog> : null}
   </div>
 }
 

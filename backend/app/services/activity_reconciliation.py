@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 
 from sqlalchemy import select
 
@@ -50,10 +51,22 @@ def paint(pieces, start, end, data, owner):
     return sorted(result, key=lambda p: p["start"])
 
 
-def replay(baseline, operations):
+def scope_digest(pieces, start):
+    """Include owners and metadata, but not time elapsed on an open interval."""
+    scoped = [{**p, "start": stamp(max(instant(p["start"]), instant(start)))} for p in pieces
+              if (instant(p["end"]) if p["end"] else INF) > instant(start)]
+    return hashlib.sha256(json.dumps(scoped, sort_keys=True).encode()).hexdigest()
+
+
+def replay(baseline, operations, invalid_undos=None):
     pieces = baseline
     for operation in sorted(operations, key=order):
         if not operation.intent:
+            continue
+        guard = operation.intent.get("undo_guard")
+        if guard and scope_digest(pieces, guard["start"]) != guard["digest"]:
+            if invalid_undos is not None:
+                invalid_undos.add(operation.operation_id)
             continue
         for part in operation.intent["ranges"]:
             pieces = paint(pieces, instant(part["start"]), instant(part["end"]) if part["end"] else INF,
@@ -111,6 +124,29 @@ def prepare(db, state, body, operations, timezone="UTC"):
     if start > dt.datetime.now(dt.UTC) + dt.timedelta(seconds=5):
         raise ValueError("Activity instant is in the future; check the device clock")
     known = replay(state.reconciliation["baseline"], [op for op in operations if op.cursor <= body.base_cursor or (op.device_id == body.device_id and op.sequence < body.sequence)])
+    if body.kind == "undo_switch":
+        if body.effective.mode != "instant" or body.effective.end is not None or start > body.action_at:
+            raise ValueError("Undo requires an explicit action instant")
+        original = next((op for op in operations if op.operation_id == str(body.undo_operation_id)), None)
+        saved = original.intent.get("switch_undo") if original and original.intent else None
+        if not saved or original.device_id != body.device_id or original.sequence >= body.sequence:
+            raise ValueError("Undo is no longer available for this activity switch")
+        if any(op.device_id == body.device_id and original.sequence < op.sequence < body.sequence and
+               op.envelope.get("kind") in {"start", "switch", "stop", "undo_switch"} for op in operations):
+            raise ValueError("Only the latest activity switch can be undone")
+        actual = replay(state.reconciliation["baseline"], operations)
+        if scope_digest(actual, saved["start"]) != saved["digest"]:
+            raise ValueError("Undo is unavailable because the affected activity changed")
+        # References may have been removed outside the activity journal.
+        from app.models.battle_plan import Task
+        from app.models.task_type import TaskType
+        for part in saved["ranges"]:
+            data = part["data"]
+            if data and (db.get(TaskType, data["task_type_id"]) is None or
+                         (data.get("task_id") and db.get(Task, data["task_id"]) is None) or
+                         (data.get("planned_block_id") and db.get(TimeBlock, data["planned_block_id"]) is None)):
+                raise ValueError("Undo is unavailable because a referenced item was removed")
+        return {"ranges": saved["ranges"], "undo_guard": {"start": saved["start"], "digest": saved["digest"]}}, start
     target = next((p for p in known if p["data"] and identity(p) == body.target_id), None)
     if body.target_source is not None:
         target = next((p for p in known if p["data"] and p["data"]["source"] == body.target_source and instant(p["start"]) == body.target_start_at), None)
@@ -140,9 +176,9 @@ def prepare(db, state, body, operations, timezone="UTC"):
         if not body.predecessor_id:
             if (body.kind == "start") == (current is not None) or body.target_id != (identity(current) if current else None):
                 raise ValueError("Transition does not match the observed activity")
-        if current and start < instant(current["start"]):
+        if body.kind != "switch" and current and start < instant(current["start"]):
             raise ValueError("Transition must follow the observed activity start")
-        if any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
+        if body.kind != "switch" and any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
             raise ValueError("Activity instant overlaps known history")
     data = None
     if body.kind not in {"stop", "delete"}:
@@ -188,11 +224,22 @@ def prepare(db, state, body, operations, timezone="UTC"):
     if body.kind == "edit":
         ranges.append({"start": target["start"], "end": target["end"], "data": None})
     ranges.append({"start": stamp(start), "end": None if end == INF else stamp(end), "data": data})
-    return {"ranges": ranges}, start
+    intent = {"ranges": ranges}
+    if body.kind == "switch":
+        affected = [p for p in known if (instant(p["end"]) if p["end"] else INF) > start]
+        restore_start = min([start, *[instant(p["start"]) for p in affected if p["data"]]])
+        restore = [{"start": stamp(restore_start), "end": None, "data": None}]
+        restore += [{**p, "start": stamp(max(restore_start, instant(p["start"])))} for p in known
+                    if (instant(p["end"]) if p["end"] else INF) > restore_start]
+        after = paint(known, start, INF, data, str(body.operation_id))
+        intent["switch_undo"] = {"start": stamp(restore_start), "ranges": restore,
+                                 "digest": scope_digest(after, restore_start)}
+    return intent, start
 
 
 def materialize(db, state, operations):
-    pieces = replay(state.reconciliation["baseline"], operations)
+    invalid_undos = set()
+    pieces = replay(state.reconciliation["baseline"], operations, invalid_undos)
     devices = {op.operation_id: op.device_id for op in operations}
     desired = {}
     provenance = {}
@@ -242,8 +289,16 @@ def materialize(db, state, operations):
     for operation in operations:
         if not operation.intent:
             continue
+        if operation.operation_id in invalid_undos:
+            operation.outcome = "superseded"
+            continue
         # Any replaced portion (including empty intent) is reported as superseded.
-        own = replay([], [operation])
+        # Compute the operation's footprint without its conditional replay guard:
+        # that guard was already checked against the real timeline above.
+        own = []
+        for part in operation.intent["ranges"]:
+            own = paint(own, instant(part["start"]), instant(part["end"]) if part["end"] else INF,
+                        part["data"], operation.operation_id)
         operation.outcome = "applied"
         for p in own:
             start, end = instant(p["start"]), instant(p["end"]) if p["end"] else INF

@@ -321,6 +321,17 @@ fun TimeboxApp(
     LaunchedEffect(undoContext, appResumed, recommendedUndoTimeoutMillis) {
         undoLifecycle.setExposure(undoContext, appResumed, recommendedUndoTimeoutMillis)
     }
+    LaunchedEffect(activityRepository, undoContext) {
+        activityRepository.switchUndoOffers.collect { offer ->
+            undoContext?.let { context ->
+                undoLifecycle.offer(context, "activity switch", "Switched to ${offer.name}", undo = {
+                    activityRepository.undoSwitch(offer.operationId).also { result ->
+                        if (result.isSuccess) launch { activityRepository.refresh() }
+                    }
+                })
+            }
+        }
+    }
 
     val screenModels = remember(
         dayViewModel, chronicleViewModel, typesViewModel, settingsViewModel,
