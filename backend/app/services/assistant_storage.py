@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
 from app.models.assistant import AssistantAttempt, AssistantConversation
+from app.services.assistant_tracking import context_line
 
 
 class CaptureError(Exception):
@@ -43,6 +44,8 @@ def load(key):
                     plan = attempt.displayed_plan
                     snapshots[plan["snapshot_id"]] = plan
                     answer += "\n[Displayed plan snapshot: " + plan["snapshot_id"] + "]"
+                if attempt.tracking_proposal:
+                    answer += context_line(attempt.tracking_proposal)
                 snapshots.update(attempt.snapshots)
                 messages.extend([HumanMessage(attempt.question), AIMessage(answer)])
             return row.capabilities, messages, snapshots
@@ -61,11 +64,11 @@ def begin(key, run_id, question, model):
         raise HTTPException(503, "Your message could not be saved. Please retry.") from None
 
 
-def capture(run_id, answer, reads, card, status="running", error=None):
+def capture(run_id, answer, reads, card, status="running", error=None, proposal=None):
     try:
         with Session(get_engine()) as db:
             db.execute(update(AssistantAttempt).where(AssistantAttempt.run_id == run_id).values(
-                answer=answer, snapshots=reads, displayed_plan=card, status=status, error=error,
+                answer=answer, snapshots=reads, displayed_plan=card, tracking_proposal=proposal, status=status, error=error,
             ))
             db.commit()
     except SQLAlchemyError:

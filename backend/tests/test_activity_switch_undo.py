@@ -104,3 +104,52 @@ def test_undo_without_a_switch_cannot_enter_legacy_start_path(tracking):
                    effective={'mode': 'server_now'})
     assert tracking.post('/activity/commands', json=request).status_code == 422
     assert tracking.get('/activity').json()['records'] == []
+
+
+def earlier_start(client, base, hour, minute=0, sequence=4):
+    type_id = client.post('/task-types', json={'name': 'reading'}).json()['id']
+    return make(base, 'start', hour, minute, sequence=sequence, action_at=at(13), task_type_id=type_id, name='R', target_id=None)
+
+
+def stopped_history(client):
+    base = send(client, make(client.get('/activity').json(), 'start', 8, name='A'))
+    base = send(client, make(base, 'stop', 10, sequence=2))
+    base = send(client, make(base, 'start', 11, sequence=3, name='B'))
+    return send(client, make(base, 'stop', 12, sequence=4))
+
+
+def test_snapshot_advertises_start_history(tracking):
+    assert tracking.get('/activity').json()['start_history_ready'] is True
+
+
+def test_earlier_start_replaces_history_and_gaps_undo_restores_exact_records(tracking):
+    before = stopped_history(tracking)
+    request = earlier_start(tracking, before, 9, 30, sequence=5)
+    after = send(tracking, request)
+    assert ranges(after) == [('A', '2026-09-10T08:00:00Z', '2026-09-10T09:30:00Z'), ('R', '2026-09-10T09:30:00Z', None)]
+    assert after['current']['start_at'] == '2026-09-10T09:30:00Z'
+    restored = send(tracking, make(after, 'undo_switch', 14, sequence=6, undo_operation_id=request['operation_id']))
+    assert restored['records'] == before['records']
+    assert restored['current'] is None
+
+
+def test_earlier_start_into_gap_only_fills_unrecorded_time(tracking):
+    before = stopped_history(tracking)
+    after = send(tracking, earlier_start(tracking, before, 12, 30, sequence=5))
+    assert ranges(after)[-1] == ('R', '2026-09-10T12:30:00Z', None)
+    assert ranges(after)[:-1] == ranges(before)
+
+
+def test_offline_earlier_start_undo_chains_on_predecessor(tracking):
+    before = stopped_history(tracking)
+    request = earlier_start(tracking, before, 11, 30, sequence=5)
+    send(tracking, request)
+    undo_request = make(before, 'undo_switch', 14, sequence=6, undo_operation_id=request['operation_id'],
+                        predecessor_id=request['operation_id'], target_id=None)
+    assert send(tracking, undo_request)['records'] == before['records']
+
+
+def test_start_still_rejects_future_instant(tracking):
+    before = stopped_history(tracking)
+    future = earlier_start(tracking, before, 13, 30, sequence=5)
+    assert tracking.post('/activity/commands', json=future).status_code == 422

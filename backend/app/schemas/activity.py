@@ -73,6 +73,8 @@ class ActivitySnapshot(BaseModel):
     protocol: Literal["activity-online-v1"] = "activity-online-v1"
     offline_ready: bool = True
     switch_history_ready: bool = True
+    # Start accepts an earlier instant with switch-style replacement and Undo.
+    start_history_ready: bool = True
     cursor: int
     server_at: AwareDatetime
     reporting_timezone_initialized: bool = False

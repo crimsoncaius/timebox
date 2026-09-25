@@ -171,15 +171,22 @@ def test_restart_recovery_keeps_partial_output_and_does_not_acknowledge():
     assert Conversations().get(key).messages == []
 
 
-def test_migration_can_store_records_and_survive_engine_reopen(tmp_path, monkeypatch):
-    path = Path(__file__).parents[1] / "alembic/versions/033_assistant_conversations.py"
-    spec = importlib.util.spec_from_file_location("assistant_migration", path)
+def load_migration(name):
+    path = Path(__file__).parents[1] / f"alembic/versions/{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
+    return migration
+
+
+def test_migration_can_store_records_and_survive_engine_reopen(tmp_path, monkeypatch):
+    migration = load_migration("033_assistant_conversations")
+    proposals = load_migration("035_assistant_tracking_proposal")
     url = "sqlite:///" + str(tmp_path / "assistant.db")
     engine = create_engine(url)
     with engine.begin() as connection, Operations.context(MigrationContext.configure(connection)):
         migration.upgrade()
+        proposals.upgrade()
     monkeypatch.setattr(assistant_storage, "get_engine", lambda: engine)
     key = Conversations().create(["plan_card_v1"])
     run = str(uuid4())
@@ -192,6 +199,8 @@ def test_migration_can_store_records_and_survive_engine_reopen(tmp_path, monkeyp
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(AssistantAttempt)) == 1
     with engine.begin() as connection, Operations.context(MigrationContext.configure(connection)):
+        proposals.downgrade()
+        assert "tracking_proposal" not in {c["name"] for c in inspect(connection).get_columns("assistant_attempts")}
         migration.downgrade()
         assert "assistant_attempts" not in inspect(connection).get_table_names()
     engine.dispose()
