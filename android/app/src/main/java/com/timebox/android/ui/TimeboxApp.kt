@@ -316,6 +316,8 @@ fun TimeboxApp(
         focused -> "focus"
         withinBattlePlan -> "battle-plan"
         route == AppRoutes.DayPattern -> "day:${routeDate ?: dayState.date}"
+        // Tracking Proposals are confirmed here; their Undo appears in the same notice.
+        route == AppRoutes.Assistant -> "assistant"
         else -> null
     }
     LaunchedEffect(undoContext, appResumed, recommendedUndoTimeoutMillis) {
@@ -324,7 +326,9 @@ fun TimeboxApp(
     LaunchedEffect(activityRepository, undoContext) {
         activityRepository.switchUndoOffers.collect { offer ->
             undoContext?.let { context ->
-                undoLifecycle.offer(context, "activity switch", "Switched to ${offer.name}", undo = {
+                val started = offer.kind == com.timebox.android.data.remote.ActivityKind.Start
+                undoLifecycle.offer(context, if (started) "activity start" else "activity switch",
+                    if (started) "Started ${offer.name}" else "Switched to ${offer.name}", undo = {
                     activityRepository.undoSwitch(offer.operationId).also { result ->
                         if (result.isSuccess) launch { activityRepository.refresh() }
                     }

@@ -16,7 +16,7 @@ from opentelemetry import trace
 from app.core.config import get_settings
 from app.services.assistant_plan import read_today_plan
 from app.services.assistant_presentation import PresentationParser, snapshot
-from app.services.assistant_tracking import ProposeTrackingArgs, propose
+from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, propose
 
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported. You can only read Today's stored
@@ -42,14 +42,19 @@ If you request the read tool, omit preliminary prose. Do not display control syn
 
 TRACKING_PROMPT = """
 You can also propose Activity Tracking changes with propose_tracking. The user confirms them in the app, so never
-say a change has been made; you cannot change tracking yourself. Use action "track" when the user says what they are
+say a change has been made; you cannot change tracking yourself. Whenever the user says what they are doing, are
+switching to, or have stopped, you MUST call propose_tracking in this response, unless the time is in the future or no
+Task Type Path fits. Never say you proposed anything unless you called propose_tracking in this response. Use action "track" when the user says what they are
 doing or switching to, optionally since when, and action "stop" when they stopped. Never decide or mention whether a
 track starts or switches; the app decides. Choose task_type_paths only from the provided Task Type Paths: exactly
 one when clear, two to four candidates when genuinely ambiguous. Never invent a path; if none fits, do not call the
-tool and ask which existing Task Type to use. Set block_name only when the user names something more specific.
-Times: omit time for now; use minutes_ago for relative times ("10 minutes ago", "for 10 min"); use hour and minute
-for clock times, adding meridiem only when the user said am or pm. Never propose a future time: say tracking can only
-start or stop now or earlier, and do not call the tool. At most one proposal per response. After proposing, begin
+tool; say none of their Task Types fits and ask which existing one to use. Set block_name only when the user names something more specific.
+Times: omit them for now; use minutes_ago for relative times ("10 minutes ago", "for 10 min"); use hour and minute
+for clock times, adding meridiem only when the user said am or pm. Stop takes no task_type_paths. Never propose a future time: say tracking can only
+start or stop now or earlier, and do not call the tool. At most one proposal per response.
+Examples: "switch to work" -> action track, the work path, no time. "I've been eating for 10 min" -> track, meals path,
+minutes_ago 10. "reading since 3" -> track, reading path, hour 3. "stop" -> action stop. "I stopped working 5 minutes
+ago" -> stop, minutes_ago 5. "done for today at 5:30pm" -> stop, hour 5, minute 30, meridiem pm. After proposing, begin
 with {"presentation":"none"} and reply in one short sentence, e.g. what the user can confirm."""
 
 
@@ -107,12 +112,14 @@ async def call_model(model, messages):
 def propose_tracking_tool(sent_at, context):
     """Bound per message: stated times resolve against the instant the message was sent."""
 
-    @tool("propose_tracking", args_schema=ProposeTrackingArgs)
-    async def propose_tracking(action, task_type_paths=(), block_name=None, time=None) -> dict:
+    @tool("propose_tracking", args_schema=arguments_schema(context))
+    async def propose_tracking(**arguments) -> dict:
         """Propose tracking an activity (optionally from an earlier time) or stopping. The user must confirm it."""
-        args = ProposeTrackingArgs(action=action, task_type_paths=list(task_type_paths), block_name=block_name, time=time)
-        return propose(args, sent_at, context)
+        return propose(ProposeTrackingArgs.model_validate(arguments), sent_at, context)
 
+    # Malformed arguments reach the model as an explanation instead of ending the response.
+    propose_tracking.handle_validation_error = lambda error: json.dumps(
+        {"error": "Invalid propose_tracking arguments: " + "; ".join(e["msg"] for e in error.errors())})
     return propose_tracking
 
 
@@ -189,8 +196,9 @@ async def translate_events(events, snapshots=None):
             value = json.loads(result.content) if hasattr(result, "content") else result
             if event.get("name") == "propose_tracking":
                 # An invalid request reaches only the model, which explains it; no card.
-                if "proposal" in value:
+                if isinstance(value, dict) and "proposal" in value:
                     yield "tracking_proposal", value["proposal"]
+                    parser.expect_text_only()
             else:
                 eligible[value["snapshot_id"]] = value
                 yield "snapshot_read", value

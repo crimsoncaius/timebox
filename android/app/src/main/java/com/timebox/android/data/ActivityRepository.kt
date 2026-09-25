@@ -56,7 +56,7 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     val calibration: ActivityCalibrationDto? = null,
 )
 @Serializable private data class SwitchRestore(val start: String, val records: List<ActualBlockDto>, val provenance: Map<String, String>)
-data class ActivitySwitchUndo(val operationId: String, val name: String, val at: String)
+data class ActivitySwitchUndo(val operationId: String, val name: String, val at: String, val kind: ActivityKind = ActivityKind.Switch)
 private data class SwitchOpportunity(val offer: ActivitySwitchUndo, val restore: SwitchRestore, val fingerprint: String)
 private fun switchScope(snapshot: ActivitySnapshotDto, start: String): String = snapshot.records
     .filter { it.endAt == null || parseActivityInstant(it.endAt) > parseActivityInstant(start) }
@@ -78,6 +78,9 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     private var switchOpportunity: SwitchOpportunity? = null
     private val switchOffers = MutableSharedFlow<ActivitySwitchUndo>(extraBufferCapacity = 1)
     val switchUndoOffers = switchOffers.asSharedFlow()
+    private val undone = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Operations whose Undo was saved; the change is treated as never having happened. */
+    val undoneOperations = undone.asSharedFlow()
     var bootstrappedThisRun = false
         private set
     private var legacyRecovery: String? = null
@@ -337,7 +340,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (monotonicTime() - monotonicAnchor) / 1_000_000) }
         ?: Instant.ofEpochMilli(wallTime() + (journal.calibration?.offsetMs ?: 0))
-    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false, taskId: Int? = null, plan: ActivityPlanDto? = null, effectiveAt: Instant? = null, observedTargetId: Int? = null, onPersisted: () -> Unit = {}): Boolean {
+    suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false, taskId: Int? = null, plan: ActivityPlanDto? = null, effectiveAt: Instant? = null, observedTargetId: Int? = null, onPersisted: () -> Unit = {}, onOperation: (String) -> Unit = {}): Boolean {
         if (retryOnly) { refresh(); return !state.value.pending && state.value.error == null }
         val requestedAt = now().toEpochMilli()
         val selectedPlan = plan ?: if (kind == ActivityKind.Start && taskId == null && taskTypeId == null && name == null) currentPlan() else null
@@ -358,6 +361,10 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 val latest = project()?.records?.maxOfOrNull { parseActivityInstant(it.endAt ?: it.startAt).toEpochMilli() } ?: 0L
                 val action = maxOf(journal.lastAction + 1, latest + 1, requestedAt)
                 val at = Instant.ofEpochMilli(action).toString()
+                // An earlier Start replaces time from that instant onward, exactly as a switch does.
+                if (kind == ActivityKind.Start && effectiveAt != null) check(snapshot.startHistoryReady && effectiveAt.toEpochMilli() <= requestedAt) {
+                    if (snapshot.startHistoryReady) "Choose a time no later than now." else "Update the server to start from an earlier time."
+                }
                 if (observedTargetId != null) check(current != null && observedTargetId == current.id && (effectiveAt == null || (((kind == ActivityKind.Switch && snapshot.switchHistoryReady) || effectiveAt >= parseActivityInstant(current.startAt)) && effectiveAt.toEpochMilli() <= requestedAt))) { "Choose a valid time no later than now. Review the current activity if it changed." }
                 val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop, ActivityKind.UndoSwitch) } ?: observed.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop, ActivityKind.UndoSwitch) }
                 val command = ActivityCommandDto(UUID.randomUUID().toString(), journal.device, journal.sequence + 1,
@@ -369,11 +376,12 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 val before = checkNotNull(project())
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command))
                 switchOpportunity = null
-                if (kind == ActivityKind.Switch && before.switchHistoryReady) {
+                onOperation(command.operationId)
+                if ((kind == ActivityKind.Switch && before.switchHistoryReady) || (kind == ActivityKind.Start && effectiveAt != null && before.startHistoryReady)) {
                     val from = parseActivityInstant(command.effective.at!!)
                     val start = minOf(from, before.records.filter { it.endAt == null || parseActivityInstant(it.endAt) > from }.minOfOrNull { parseActivityInstant(it.startAt) } ?: from).toString()
                     val restore = SwitchRestore(start, before.records.filter { it.endAt == null || parseActivityInstant(it.endAt) > parseActivityInstant(start) }, before.provenance)
-                    val offer = ActivitySwitchUndo(command.operationId, command.name ?: before.taskTypes.find { it.id == command.taskTypeId }?.name ?: "activity", command.effective.at)
+                    val offer = ActivitySwitchUndo(command.operationId, command.name ?: before.taskTypes.find { it.id == command.taskTypeId }?.name ?: "activity", command.effective.at, kind)
                     switchOpportunity = SwitchOpportunity(offer, restore, switchScope(checkNotNull(project()), start))
                     switchOffers.tryEmit(offer)
                 }
@@ -403,6 +411,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command,
                     undoRestorations = journal.undoRestorations + (command.operationId to opportunity.restore)))
                 switchOpportunity = null
+                undone.tryEmit(operationId)
                 publish()
             }
         }

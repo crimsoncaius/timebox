@@ -53,8 +53,13 @@ def test_proposal_keeps_existing_paths_and_never_creates_task_types():
     assert "proposal" not in missing and "cannot create" in missing["error"]
 
 
+def test_nested_time_from_the_model_is_not_dropped():
+    args = ProposeTrackingArgs.model_validate({"action": "track", "task_type_paths": ["Meals"], "time": {"minutes_ago": 10}})
+    assert args.stated_time() == StatedTime(minutes_ago=10)
+
+
 def test_proposal_is_fixed_at_sending_and_expires_after_fifteen_minutes():
-    result = propose(ProposeTrackingArgs(action="stop", time=StatedTime(minutes_ago=5)), sgt(25, 12, 50), CONTEXT)["proposal"]
+    result = propose(ProposeTrackingArgs(action="stop", minutes_ago=5, task_type_paths=["Meals"]), sgt(25, 12, 50), CONTEXT)["proposal"]
     assert result["action"] == "stop" and result["task_types"] == []
     assert result["at"] == "2026-09-25T04:45:00Z"
     assert result["proposed_at"] == "2026-09-25T04:50:00Z"
@@ -105,7 +110,7 @@ async def events_for(model, tracking):
 
 def test_graph_calls_propose_tracking_and_emits_card_before_text():
     tracking = {"sent_at": sgt(25, 12, 50), "context": CONTEXT}
-    model = proposal_turn({"action": "track", "task_type_paths": ["Meals"], "time": {"minutes_ago": 10}}, "Confirm below.")
+    model = proposal_turn({"action": "track", "task_type_paths": ["Meals"], "minutes_ago": 10}, "Confirm below.")
     events = asyncio.run(events_for(model, tracking))
     kinds = [k for k, _ in events]
     assert kinds.index("tracking_proposal") < kinds.index("text_delta")
@@ -113,11 +118,25 @@ def test_graph_calls_propose_tracking_and_emits_card_before_text():
     assert proposal["at"] == "2026-09-25T04:40:00Z" and proposal["task_types"] == [{"id": 1, "path": "Meals"}]
 
 
-def test_invalid_proposal_reaches_only_the_model():
+@pytest.mark.parametrize("args", [{"action": "track", "task_type_paths": ["Yoga"]},  # not an existing path
+                                  {"action": "track"},                                 # no path at all
+                                  {"action": "stop", "minutes_ago": 5, "hour": 3}])     # two time forms
+def test_invalid_proposal_reaches_only_the_model(args):
     tracking = {"sent_at": sgt(25, 12, 50), "context": CONTEXT}
-    model = proposal_turn({"action": "track", "task_type_paths": ["Yoga"]}, "Which Task Type should I use?")
+    model = proposal_turn(args, "Which Task Type should I use?")
     kinds = [k for k, _ in asyncio.run(events_for(model, tracking))]
     assert "tracking_proposal" not in kinds and "text_delta" in kinds
+
+
+def test_text_after_a_proposal_tolerates_a_missing_or_glued_selector():
+    tracking = {"sent_at": sgt(25, 12, 50), "context": CONTEXT}
+    for answer in ["Confirm below.", '{"presentation":"none"}Confirm below.', '{"presentation": "none"}\nConfirm below.']:
+        model = scripted(
+            AIMessage(content="", tool_calls=[{"id": "c", "name": "propose_tracking", "args": {"action": "stop"}}],
+                      response_metadata={"finish_reason": "tool_calls"}),
+            AIMessage(content=answer, response_metadata={"finish_reason": "stop"}))
+        events = asyncio.run(events_for(model, tracking))
+        assert "".join(d["text"] for k, d in events if k == "text_delta") == "Confirm below."
 
 
 def test_tool_is_unavailable_without_the_capability():

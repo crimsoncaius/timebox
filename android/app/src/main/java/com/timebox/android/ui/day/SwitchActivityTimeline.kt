@@ -38,6 +38,7 @@ internal fun SwitchActivityTimeline(
     enabled: Boolean, onSelect: (Instant?) -> Unit,
     loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { emptyMap() },
     allowHistory: Boolean = false,
+    afterLabel: String = "AFTER SWITCH",
 ) {
     val stopping = nextActivity == null
     val tag = if (stopping) "stop" else "switch"
@@ -103,7 +104,7 @@ internal fun SwitchActivityTimeline(
         }
         Row(Modifier.fillMaxWidth().padding(start = 52.dp)) {
             Text("PLANNED", Modifier.weight(1f).testTag("$tag-planned-header"), style = type.laneLabel, color = colors.planned)
-            Text(if (stopping) "RECORDED" else "AFTER SWITCH", Modifier.weight(1f).testTag("$tag-recorded-header"), style = type.laneLabel, color = colors.actual)
+            Text(if (stopping) "RECORDED" else afterLabel, Modifier.weight(1f).testTag("$tag-recorded-header"), style = type.laneLabel, color = colors.actual)
         }
         BoxWithConstraints(Modifier.fillMaxWidth().height(264.dp)) {
             val width = maxWidth

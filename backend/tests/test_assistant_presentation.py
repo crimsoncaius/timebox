@@ -178,3 +178,9 @@ def test_interrupted_card_never_commits_snapshot(client, monkeypatch):
     client.post(f'/assistant/conversations/{key}/runs/{run}/ack')
     assert conversations.get(key).snapshots == {}
     assert conversations.get(key).exchange_count == 0
+
+
+def test_none_selector_glued_to_text_is_plain_text():
+    parser = PresentationParser({})
+    events = parser.feed('{"presentation":"none"}Tracking can only start now.')
+    assert events == [("text_delta", {"text": "Tracking can only start now."})]

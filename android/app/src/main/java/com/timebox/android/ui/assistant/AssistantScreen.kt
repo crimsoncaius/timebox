@@ -44,8 +44,12 @@ import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun AssistantScreen(controller: AssistantController = (LocalContext.current.applicationContext as TimeboxApplication).assistant) {
+fun AssistantScreen(
+    controller: AssistantController = (LocalContext.current.applicationContext as TimeboxApplication).assistant,
+    onOpenDay: (LocalDate) -> Unit = {},
+) {
     val state by controller.state.collectAsState()
+    val tracking = rememberProposalTracking(controller, state, onOpenDay)
     var draft by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -86,6 +90,7 @@ fun AssistantScreen(controller: AssistantController = (LocalContext.current.appl
                         Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                     }
                     exchange.plan?.let { PlanCard(it) }
+                    exchange.proposal?.let { proposal -> tracking?.Card(proposal) }
                     if (exchange.answer.isNotEmpty()) SelectionContainer { AnswerText(exchange.answer) }
                     if (index == state.exchanges.lastIndex && state.busy) Text(
                         if (state.readingPlan) "Reading today’s plan…" else if (exchange.answer.isEmpty() && exchange.plan == null) "Thinking…" else "Writing response…",
@@ -128,7 +133,7 @@ private fun AssistantWelcome(onPrompt: (String) -> Unit) {
         }
         Text("A LITTLE CLARITY", style = TimeboxTheme.type.kicker, color = colors.onVariant)
         Text("Make room\nfor your day.", style = TimeboxTheme.type.display, color = colors.on)
-        Text("Think through your Planned Blocks.\nAssistant can read your plan, but can’t change it.", style = TimeboxTheme.type.body, color = colors.onVariant)
+        Text("Think through your Planned Blocks, or say what you’re doing.\nAssistant reads your plan and suggests tracking changes for you to confirm.", style = TimeboxTheme.type.body, color = colors.onVariant)
         Column(Modifier.padding(top = 8.dp)) {
             listOf("Show today’s plan", "Do I have a 30-minute gap?", "Help me think through my morning").forEachIndexed { index, prompt ->
                 HorizontalDivider(color = colors.hairline)

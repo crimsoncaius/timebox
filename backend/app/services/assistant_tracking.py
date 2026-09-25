@@ -11,7 +11,7 @@ from typing import Literal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -42,19 +42,39 @@ class StatedTime(BaseModel):
 
 
 class ProposeTrackingArgs(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    action: Literal["track", "stop"]
-    task_type_paths: list[str] = Field(default_factory=list, max_length=4)
-    block_name: str | None = Field(default=None, max_length=500)
-    time: StatedTime | None = None
+    """The model's request, kept flat for reliability. Shape problems are explained back by propose(), not raised."""
 
-    @model_validator(mode="after")
-    def shape(self):
-        if self.action == "track" and not self.task_type_paths:
-            raise ValueError("Track needs one to four Task Type Paths")
-        if self.action == "stop" and (self.task_type_paths or self.block_name):
-            raise ValueError("Stop takes only an optional time")
-        return self
+    model_config = ConfigDict(extra="ignore")
+    action: Literal["track", "stop"]
+    task_type_paths: list[str] = Field(default_factory=list, max_length=4,
+                                       description="For track only: one existing Task Type Path, or 2-4 when ambiguous.")
+    block_name: str | None = Field(default=None, max_length=500, description="For track only, when the user names something specific.")
+    minutes_ago: int | None = Field(default=None, ge=0, le=1440, description="Relative time, e.g. 10 for '10 minutes ago'.")
+    hour: int | None = Field(default=None, ge=0, le=23, description="Clock time hour, e.g. 3 for 'since 3'.")
+    minute: int = Field(default=0, ge=0, le=59)
+    meridiem: Literal["am", "pm"] | None = Field(default=None, description="Only when the user said am or pm.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def flatten_time(cls, value):
+        # Models sometimes nest the time fields; never let them be dropped as "now".
+        if isinstance(value, dict) and isinstance(value.get("time"), dict):
+            value = {**value.pop("time"), **{k: v for k, v in value.items() if k != "time"}}
+        return value
+
+    def stated_time(self) -> StatedTime | None:
+        if self.minutes_ago is None and self.hour is None:
+            return None
+        return StatedTime(minutes_ago=self.minutes_ago, hour=self.hour, minute=self.minute, meridiem=self.meridiem)
+
+
+def arguments_schema(context: dict) -> type[ProposeTrackingArgs]:
+    """Offer the existing Task Type Paths as the only allowed values, so the model cannot invent one."""
+    paths = tuple(t["path"] for t in context["task_types"])
+    if not paths:
+        return ProposeTrackingArgs
+    return create_model("ProposeTrackingArgs", __base__=ProposeTrackingArgs,
+                        task_type_paths=(list[Literal[paths]], Field(default_factory=list, max_length=4)))
 
 
 class ProposalTaskType(BaseModel):
@@ -121,11 +141,20 @@ def resolve_time(stated: StatedTime | None, sent_at: dt.datetime, zone: str) -> 
 
 
 def stamp(value: dt.datetime) -> str:
-    return value.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+    return value.astimezone(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def propose(args: ProposeTrackingArgs, sent_at: dt.datetime, context: dict) -> dict:
     """Return {"proposal": ...} or {"error": ...} for the model; never persists."""
+    if args.action == "track" and not args.task_type_paths:
+        return {"error": "Choose one to four task_type_paths from the Task Type Paths, or ask the user which to use."}
+    if args.action == "stop":
+        # Stop ends whatever is running; a named activity adds nothing.
+        args = args.model_copy(update={"task_type_paths": [], "block_name": None})
+    try:
+        stated = args.stated_time()
+    except ValueError:
+        return {"error": "Give either minutes_ago or hour (with optional minute and meridiem), not both."}
     known = {t["path"].lower(): t for t in context["task_types"]}
     chosen, missing = [], []
     for path in args.task_type_paths:
@@ -137,7 +166,7 @@ def propose(args: ProposeTrackingArgs, sent_at: dt.datetime, context: dict) -> d
     if args.action == "track" and not chosen:
         return {"error": f"No existing Task Type matches {', '.join(missing)}. Ask the user which existing Task Type "
                          "to use; you cannot create Task Types."}
-    at = resolve_time(args.time, sent_at, context["reporting_timezone"])
+    at = resolve_time(stated, sent_at, context["reporting_timezone"])
     if at is not None and at > sent_at:
         return {"error": "That time is in the future. Tracking can only start or stop now or earlier."}
     proposal = TrackingProposal(

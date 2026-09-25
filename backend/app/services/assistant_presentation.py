@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -80,16 +81,40 @@ def unique_object(pairs):
     return result
 
 
+GLUED_NONE = re.compile(r'\s*\{\s*"presentation"\s*:\s*"none"\s*\}(?=\S)')
+NONE_HEADER = re.compile(r'\s*\{\s*"presentation"\s*:\s*"none"\s*\}[ \t]*\r?\n?')
+
+
 class PresentationParser:
     def __init__(self, snapshots: dict[str, dict]):
         self.snapshots = snapshots
         self.buffer = ""
         self.selected = False
+        self.text_only = False
+
+    def expect_text_only(self):
+        """After a Tracking Proposal the answer is plain text; a leading none-selector is tolerated and removed."""
+        self.text_only = True
 
     def feed(self, text: str) -> list[tuple[str, dict]]:
         if self.selected:
             return [("text_delta", {"text": text})] if text else []
         self.buffer += text
+        if self.text_only:
+            # Wait while the text could still be the none-selector; otherwise strip it if present.
+            if '{"presentation":"none"}'.startswith(re.sub(r"\s", "", self.buffer)) and "\n" not in self.buffer.lstrip():
+                return []
+            match = NONE_HEADER.match(self.buffer)
+            rest = self.buffer[match.end():] if match else self.buffer
+            self.selected = True
+            self.buffer = ""
+            return [("text_delta", {"text": rest})] if rest else []
+        glued = GLUED_NONE.match(self.buffer)
+        if glued:
+            # A none-selector followed directly by text on the same line selects nothing either way.
+            self.selected = True
+            rest, self.buffer = self.buffer[glued.end():], ""
+            return [("text_delta", {"text": rest})]
         line, separator, rest = self.buffer.partition("\n")
         header = line.removesuffix("\r")
         if len(header.encode("utf-8")) > 512:
@@ -118,6 +143,12 @@ class PresentationParser:
     def finish(self, *, successful_terminal: bool = False) -> list[tuple[str, dict]]:
         if self.selected:
             return []
+        if self.text_only and successful_terminal:
+            # Only a bare none-selector (or nothing) remains: the card is the whole answer.
+            self.selected = True
+            match = NONE_HEADER.match(self.buffer)
+            rest = self.buffer[match.end():] if match else self.buffer
+            return [("text_delta", {"text": rest})] if rest.strip() else []
         # Only a confirmed normal model terminal may delimit a card-only selector.
         # EOF, cancellation, truncation, or a closing brace during streaming cannot.
         if successful_terminal:
