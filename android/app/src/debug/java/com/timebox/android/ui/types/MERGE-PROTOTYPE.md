@@ -15,4 +15,7 @@ launch `com.timebox.android/.ui.types.TaskTypeMergePrototypeActivity` through th
 The activity is debug-only. Reset restores the original sample categories.
 
 Source is retained on codex/prototype-task-type-merge; the native design verdict is pending.
-`nAndroid confirmation refinement: 1 Summary (expandable branch details), 2 Branch map, and 3 Guided (two steps). Bottom arrows switch layouts. The opaque sheet and fixed action area address the original low hierarchy and background bleed-through. The activity opens directly to the sample confirmation; Back to rename exercises the entry flow. Layout verdict pending.
+
+Android confirmation refinement: 1 Summary (expandable branch details), 2 Branch map, and 3 Guided (two steps). Bottom arrows switch layouts. The opaque sheet and fixed action area address the original low hierarchy and background bleed-through. The activity opens directly to the sample confirmation; Back to rename exercises the entry flow. Layout verdict pending.
+
+All three layouts refined: compact fixed footer, fewer repeated headings, summary count tiles, hierarchical branch rows with Combine/Move labels, and guided progress indicator. Verified on emulator-5656; layout choice remains open.

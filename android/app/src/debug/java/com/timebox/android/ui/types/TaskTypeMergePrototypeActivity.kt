@@ -119,60 +119,104 @@ private fun MergePrototype() {
     }
 }
 
-/** Three confirmation layouts; entry point remains the selected rename flow. */
+/** Three throwaway layouts of the same rename-triggered confirmation. */
 @Composable
 private fun ImprovedMergeReview(source: String, target: String, affected: List<String>, names: List<String>, onBack: () -> Unit, onMerge: () -> Unit) {
     val colors = TimeboxTheme.colors
     var variant by remember { mutableStateOf(0) }
     var details by remember { mutableStateOf(false) }
     var step by remember { mutableStateOf(0) }
-    val labels = listOf("1 · Summary", "2 · Branch map", "3 · Guided")
+    val scroll = rememberScrollState()
+    LaunchedEffect(variant, step) { scroll.scrollTo(0) }
+    val combined = affected.count { target + it.removePrefix(source) in names }
+    val moved = affected.size - combined
+    val labels = listOf("Summary", "Branch map", "Guided")
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.93f)) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text(if (variant == 2) "${step + 1} of 2 · Review merge" else "Merge task types", style = MaterialTheme.typography.headlineSmall)
-            Text("Keep $target", style = MaterialTheme.typography.titleLarge)
-            Text("$source will be combined with this category.", style = MaterialTheme.typography.bodyMedium, color = colors.onVariant)
-            if (variant == 0) {
-                Row(Modifier.fillMaxWidth().background(colors.low, TimeboxShapes.card).padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column { Text("FROM", style = MaterialTheme.typography.labelSmall); Text(source, style = MaterialTheme.typography.titleMedium) }
-                    Text("→", style = MaterialTheme.typography.titleLarge)
-                    Column { Text("KEEP", style = MaterialTheme.typography.labelSmall); Text(target, style = MaterialTheme.typography.titleMedium) }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(if (variant == 2) "Review your merge" else "Merge task types", style = MaterialTheme.typography.headlineSmall)
+            Text("$source → $target", style = MaterialTheme.typography.titleMedium, color = colors.onVariant)
+            if (variant == 2) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("1  Branch changes", "2  Affected work").forEachIndexed { index, title ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(title, style = MaterialTheme.typography.labelMedium, color = if (step == index) colors.on else colors.onVariant)
+                        Box(Modifier.fillMaxWidth().height(3.dp).background(if (step == index) colors.on else colors.hairline))
+                    }
                 }
-                Text("2 types combine · 1 type moves", style = MaterialTheme.typography.titleMedium)
-                TextButton(onClick = { details = !details }) { Text(if (details) "Hide branch changes ↑" else "See branch changes ↓") }
-                if (details) MergeBranchRows(source, target, affected, names)
-                MergeWorkSummary()
-            } else if (variant == 1 || step == 0) {
-                Text("Your combined branch", style = MaterialTheme.typography.titleMedium)
-                MergeBranchRows(source, target, affected, names)
-                if (variant == 1) MergeWorkSummary()
-            } else {
-                MergeWorkSummary()
             }
-            if (variant != 2 || step == 1) {
-                Text("History moves with your work. Task and Block links stay intact; other categories stay unchanged.", style = MaterialTheme.typography.bodyMedium, color = colors.onVariant)
-                Text("Activity tracking keeps running.", style = MaterialTheme.typography.bodyMedium)
+        }
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            when (variant) {
+                0 -> {
+                    Surface(color = colors.low, shape = TimeboxShapes.card) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("CATEGORY TO KEEP", style = MaterialTheme.typography.labelSmall, color = colors.onVariant)
+                            Text(target, style = MaterialTheme.typography.titleLarge)
+                            Text("All work from $source joins this branch.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    MergeWorkSummary(cards = true)
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column { Text("Branch changes", style = MaterialTheme.typography.titleMedium); Text("$combined combine · $moved move", style = MaterialTheme.typography.bodySmall, color = colors.onVariant) }
+                            TextButton(onClick = { details = !details }) { Text(if (details) "Hide ↑" else "View ↓") }
+                        }
+                        if (details) { Spacer(Modifier.height(12.dp)); MergeBranchRows(source, target, affected, names) }
+                    }
+                    MergePreservationNote()
+                }
+                1 -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("The resulting branch", style = MaterialTheme.typography.titleMedium)
+                        Text("$combined types combine; $moved moves into $target.", style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+                    }
+                    MergeBranchRows(source, target, affected, names)
+                    HorizontalDivider(color = colors.hairline)
+                    MergeWorkSummary(cards = false)
+                    MergePreservationNote()
+                }
+                else -> if (step == 0) {
+                    Text("Keep the destination. Bring the work across.", style = MaterialTheme.typography.titleLarge)
+                    Text("Existing matches combine. Other types move into the branch without losing their work.", style = MaterialTheme.typography.bodyMedium, color = colors.onVariant)
+                    MergeBranchRows(source, target, affected, names)
+                    Surface(color = colors.low, shape = TimeboxShapes.card) {
+                        Text("Nothing changes until you confirm on the next step.", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+                    }
+                } else {
+                    Text("Everything stays connected", style = MaterialTheme.typography.titleLarge)
+                    Text("These records will use $target and its matching descendants.", style = MaterialTheme.typography.bodyMedium, color = colors.onVariant)
+                    MergeWorkSummary(cards = true)
+                    MergePreservationNote()
+                }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
         }
         HorizontalDivider(color = colors.hairline)
         Column(Modifier.fillMaxWidth().background(colors.sheet.copy(alpha = 1f)).padding(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (variant != 2 || step == 1) {
-                Text("Permanent merge · No undo", style = MaterialTheme.typography.labelLarge)
-                Text("$source disappears. Its work stays in $target.", style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("!", style = MaterialTheme.typography.titleMedium, color = colors.error)
+                    Column {
+                        Text("Permanent merge. No undo.", style = MaterialTheme.typography.labelLarge)
+                        Text("$source disappears; its work is preserved.", style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+                    }
+                }
             }
-            Button(onClick = { if (variant == 2 && step == 0) step = 1 else onMerge() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text(if (variant == 2 && step == 0) "Continue · Review affected work" else "Confirm merge", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                TextButton(onClick = { if (variant == 2 && step == 1) step = 0 else onBack() }) { Text("Back") }
+                Button(onClick = { if (variant == 2 && step == 0) step = 1 else onMerge() }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                    Text(if (variant == 2 && step == 0) "Review affected work →" else "Confirm merge")
+                }
             }
-            TextButton(onClick = { if (variant == 2 && step == 1) step = 0 else onBack() }, modifier = Modifier.fillMaxWidth()) { Text(if (variant == 2 && step == 1) "Back to branch changes" else "Back to rename") }
             Surface(color = colors.inverseSurface, contentColor = colors.inverseOnSurface, shape = TimeboxShapes.chip) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     TextButton(onClick = { variant = (variant + 2) % 3; details = false; step = 0 }) { Text("←", color = colors.inverseOnSurface) }
-                    Text(labels[variant], style = MaterialTheme.typography.labelMedium)
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text("${variant + 1} / 3 · ${labels[variant]}", style = MaterialTheme.typography.labelMedium)
+                        Text("PROTOTYPE · SAMPLE DATA", style = MaterialTheme.typography.labelSmall, color = colors.inverseOnSurface.copy(alpha = 0.7f))
+                    }
                     TextButton(onClick = { variant = (variant + 1) % 3; details = false; step = 0 }) { Text("→", color = colors.inverseOnSurface) }
                 }
             }
-            Text("PROTOTYPE · Sample data · Layout ${variant + 1}${if (variant == 2) " / step ${step + 1}" else ""}", style = MaterialTheme.typography.labelSmall, color = colors.onVariant)
         }
     }
 }
@@ -180,28 +224,59 @@ private fun ImprovedMergeReview(source: String, target: String, affected: List<S
 @Composable
 private fun MergeBranchRows(source: String, target: String, affected: List<String>, names: List<String>) {
     val colors = TimeboxTheme.colors
-    Column(Modifier.fillMaxWidth().background(colors.low, TimeboxShapes.card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        affected.forEach { old ->
+    Column(Modifier.fillMaxWidth().background(colors.low, TimeboxShapes.card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        affected.forEachIndexed { index, old ->
             val next = target + old.removePrefix(source)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(next, style = MaterialTheme.typography.titleSmall)
-                Text("${if (next in names) "Combines" else "Moves"} $old", style = MaterialTheme.typography.bodyMedium, color = colors.onVariant)
+            val combines = next in names
+            if (index > 0) HorizontalDivider(color = colors.hairline)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.Top) {
+                if (old != source) Text("↳", style = MaterialTheme.typography.titleMedium, color = colors.onVariant)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(if (old == source) target else next.removePrefix("$target/"), style = MaterialTheme.typography.titleMedium)
+                    Text("From $old", style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+                }
+                Surface(color = if (combines) colors.secondaryContainer else colors.tertiaryContainer, shape = TimeboxShapes.chip) {
+                    Text(if (combines) "Combine" else "Move", Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = if (combines) colors.onSecondaryContainer else colors.onTertiaryContainer)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun MergeWorkSummary() {
+private fun MergeWorkSummary(cards: Boolean) {
     val colors = TimeboxTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Work that moves", style = MaterialTheme.typography.titleMedium)
-        listOf("Tasks" to "8", "Planned Blocks" to "12", "Actual Blocks" to "34", "Recurring Task Series" to "2").forEach { (label, count) ->
+    val counts = listOf("Tasks" to "8", "Planned Blocks" to "12", "Actual Blocks" to "34", "Recurring Task Series" to "2")
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Affected work", style = MaterialTheme.typography.titleMedium)
+        if (cards) counts.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { (label, count) ->
+                    Column(Modifier.weight(1f).background(colors.low, TimeboxShapes.card).padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(count, style = MaterialTheme.typography.headlineSmall)
+                        Text(label, style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+                    }
+                }
+            }
+        } else counts.forEach { (label, count) ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(label, style = MaterialTheme.typography.bodyMedium)
                 Text(count, style = MaterialTheme.typography.titleSmall)
             }
         }
         Text("Includes 2 completed, 1 archived and 1 trashed Task.", style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+    }
+}
+
+@Composable
+private fun MergePreservationNote() {
+    val colors = TimeboxTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Your work is preserved", style = MaterialTheme.typography.titleSmall)
+        Text("History combines. Task and Block links stay intact. Other classifications stay unchanged.", style = MaterialTheme.typography.bodySmall, color = colors.onVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Box(Modifier.size(6.dp).background(colors.tertiary, androidx.compose.foundation.shape.CircleShape))
+            Text("Activity tracking continues", style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
