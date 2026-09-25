@@ -8,4 +8,4 @@ Only separate branches may merge; merging a type into itself, an ancestor, or a 
 
 Merging requires a connection and succeeds or rolls back as one operation. If branch structure or the destination changes after preview, the preview refreshes and requires confirmation again; newly assigned work is included without requiring another confirmation. Offline work arriving later with a merged source identity resolves to its surviving Task Type, so removing the source from the category list must not lose that identity mapping.
 
-These semantics are accepted during design; implementation has not begun. The entry point remains open for prototyping.
+These semantics are accepted during design; production implementation has not begun. The user selected prototype A: offer a merge when renaming to an existing Task Type Path, then show an explicit merge preview and confirmation. Android is being prototyped with the same entry point; a separate merge action is outside the selected flow.
