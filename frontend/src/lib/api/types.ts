@@ -358,3 +358,10 @@ export interface PlannedRecordingResult {
   actual_block: ActualBlock | null
   undo_token: string | null
 }
+
+export type TaskTypeMergePreview = {
+  source_id: number; source_name: string; target_id: number; target_name: string; preview_token: string
+  changes: { source_id: number; source_name: string; target_name: string; action: 'combine' | 'move' }[]
+  task_count: number; completed_task_count: number; archived_task_count: number; trashed_task_count: number
+  planned_block_count: number; actual_block_count: number; recurring_series_count: number
+}

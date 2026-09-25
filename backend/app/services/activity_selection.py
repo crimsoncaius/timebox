@@ -57,6 +57,7 @@ def resolve(
                      if dt.datetime.fromisoformat(p["start_at"]) <= start < dt.datetime.fromisoformat(p["end_at"])), None)
         if plan:
             plan_id, type_id, task_id, name, note = (plan[k] for k in ("id", "task_type_id", "task_id", "name", "note"))
+    type_id = task_type_service.resolve_task_type_id(db, type_id)
     if plan_id is not None:
         plan = db.get(TimeBlock, plan_id)
         if body.selection_snapshot:

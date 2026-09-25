@@ -30,6 +30,8 @@ data class TypesUiState(
     val renaming: TaskType? = null,
     val renameInput: String = "",
     val renameError: String? = null,
+    val mergePreview: com.timebox.android.data.remote.TaskTypeMergePreview? = null,
+    val mergeRevision: Long = 0,
 )
 
 class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
@@ -55,13 +57,13 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     fun beginRename(type: TaskType) {
         if (type.name == "unspecified" || _state.value.saving) return
-        _state.update { it.copy(renaming = type, renameInput = type.name, renameError = null) }
+        _state.update { it.copy(renaming = type, renameInput = type.name, renameError = null, mergePreview = null) }
     }
 
-    fun changeRename(value: String) = _state.update { it.copy(renameInput = value, renameError = null) }
+    fun changeRename(value: String) = _state.update { it.copy(renameInput = value, renameError = null, mergePreview = null) }
 
     fun cancelRename() {
-        if (!_state.value.saving) _state.update { it.copy(renaming = null, renameError = null) }
+        if (!_state.value.saving) _state.update { it.copy(renaming = null, renameError = null, mergePreview = null) }
     }
 
     fun saveRename() {
@@ -73,6 +75,8 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
             _state.update { it.copy(renameError = "Enter a path with no empty segments.") }
             return
         }
+        val target = state.groups.flatMap { it.items }.firstOrNull { it.name == name && it.id != type.id }
+        if (target != null) { previewMerge(target.id); return }
         _state.update { it.copy(saving = true, renameError = null) }
         viewModelScope.launch {
             repository.renameTaskType(type.id, name).fold(
@@ -87,6 +91,43 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
                     load()
                 },
                 onFailure = { e -> _state.update { it.copy(saving = false, renameError = e.apiError.message) } },
+            )
+        }
+    }
+
+    private fun previewMerge(targetId: Int) {
+        val type = _state.value.renaming ?: return
+        _state.update { it.copy(saving = true, renameError = null) }
+        viewModelScope.launch {
+            repository.previewTaskTypeMerge(type.id, targetId).fold(
+                onSuccess = { preview -> _state.update { it.copy(saving = false, mergePreview = preview) } },
+                onFailure = { e -> _state.update { it.copy(saving = false, renameError = e.apiError.message) } },
+            )
+        }
+    }
+
+    fun backFromMerge() {
+        if (!_state.value.saving) _state.update { it.copy(mergePreview = null, renameError = null) }
+    }
+
+    fun confirmMerge() {
+        val preview = _state.value.mergePreview ?: return
+        if (_state.value.saving) return
+        _state.update { it.copy(saving = true, renameError = null) }
+        viewModelScope.launch {
+            repository.mergeTaskType(preview).fold(
+                onSuccess = {
+                    _state.update { it.copy(saving = false, renaming = null, mergePreview = null, mergeRevision = it.mergeRevision + 1, message = "Merged ${preview.sourceName} into ${preview.targetName}") }
+                    load()
+                },
+                onFailure = { e ->
+                    if (e.apiError.statusCode == 409) {
+                        repository.previewTaskTypeMerge(preview.sourceId, preview.targetId).fold(
+                            onSuccess = { refreshed -> _state.update { it.copy(saving = false, mergePreview = refreshed, renameError = "The branches changed. Review the refreshed changes and confirm again.") } },
+                            onFailure = { _state.update { it.copy(saving = false, mergePreview = null, renameError = "The branches are no longer available. Close and reopen Task Types to refresh.") } },
+                        )
+                    } else _state.update { it.copy(saving = false, renameError = e.apiError.message) }
+                },
             )
         }
     }

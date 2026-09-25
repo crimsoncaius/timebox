@@ -682,7 +682,7 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         _validate_minutes(start, end)
         _assert_no_overlap(target_day, block.lane, start, end, exclude_id=block.id)
     if "task_type_id" in data:
-        tid = data["task_type_id"]
+        tid = task_type_service.resolve_task_type_id(db, data["task_type_id"])
         if task_type_service.get_task_type(db, tid) is None:
             raise ValueError("Task type not found")
         block.task_type_id = tid

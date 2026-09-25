@@ -181,6 +181,12 @@ class TimeboxRepository private constructor(
     suspend fun renameTaskType(id: Int, name: String): Result<TaskType> =
         call { api().renameTaskType(id, TaskTypeCreateDto(name)).toModel() }
 
+    suspend fun previewTaskTypeMerge(id: Int, targetId: Int): Result<com.timebox.android.data.remote.TaskTypeMergePreview> =
+        call { api().previewTaskTypeMerge(id, com.timebox.android.data.remote.TaskTypeMergeRequest(targetId)) }
+
+    suspend fun mergeTaskType(preview: com.timebox.android.data.remote.TaskTypeMergePreview): Result<com.timebox.android.data.remote.TaskTypeMergePreview> =
+        call { api().mergeTaskType(preview.sourceId, com.timebox.android.data.remote.TaskTypeMergeRequest(preview.targetId, preview.previewToken)) }
+
     suspend fun deleteTaskType(
         id: Int,
         cascadeBlocks: Boolean = false,

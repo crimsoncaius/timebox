@@ -67,6 +67,8 @@ fun TypesScreen(
     onRenameChange: (String) -> Unit = {},
     onSaveRename: () -> Unit = {},
     onCancelRename: () -> Unit = {},
+    onConfirmMerge: () -> Unit = {},
+    onBackFromMerge: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
 
@@ -169,7 +171,7 @@ fun TypesScreen(
     }
 
     if (state.renaming != null) {
-        RenameTaskTypeSheet(state, onRenameChange, onSaveRename, onCancelRename)
+        RenameTaskTypeSheet(state, onRenameChange, onSaveRename, onCancelRename, onConfirmMerge, onBackFromMerge)
     }
     val pending = state.pendingCascade
     if (pending != null) {

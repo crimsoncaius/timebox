@@ -22,6 +22,7 @@ import type {
   TaskCompletionResult,
   TaskStatus,
   TaskType,
+  TaskTypeMergePreview,
   Subtask,
 } from './types'
 
@@ -41,6 +42,8 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  previewTaskTypeMerge: (id: number, targetId: number) => fetchJson<TaskTypeMergePreview>(`/task-types/${id}/merge-preview`, { method: 'POST', body: JSON.stringify({ target_id: targetId }) }),
+  mergeTaskType: (preview: TaskTypeMergePreview) => fetchJson<TaskTypeMergePreview>(`/task-types/${preview.source_id}/merge`, { method: 'POST', body: JSON.stringify({ target_id: preview.target_id, preview_token: preview.preview_token }) }),
   listTaskTypes: () => fetchJson<TaskType[]>('/task-types'),
 
   createTaskType: (body: { name: string }) =>
