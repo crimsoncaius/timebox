@@ -77,7 +77,7 @@ The legacy execution surface that combines plan-following time recording with an
 _Avoid_: Task detail, Task status, timer mode
 
 **Activity Tracking**:
-Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Starting takes its Task Type from the Planned Block covering the current instant, or otherwise from an explicit choice; it never defaults to `unspecified`. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
+Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Starting takes its Task Type from the Planned Block covering the current instant, or otherwise from an explicit choice; it never defaults to `unspecified`. Starting or switching may take effect from an earlier instant, replacing recorded time from that instant onward. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
 _Avoid_: Work Mode, Focus session
 
 **Offline**:
@@ -201,8 +201,12 @@ An explicit statement that no work remains for a Battle Plan Task. It is indepen
 _Avoid_: Time completion, session completion
 
 **Assistant Conversation**:
-A sequence of submitted messages and Assistant response attempts, including incomplete attempts and any displayed plan cards. Its retained record is distinct from the context used to generate a response.
+A sequence of submitted messages and Assistant response attempts, including incomplete attempts and any displayed plan cards or Tracking Proposals. Its retained record is distinct from the context used to generate a response.
 _Avoid_: Temporary conversation, Assistant memory
+
+**Tracking Proposal**:
+An Assistant-suggested change to Activity Tracking: either tracking an activity from a given instant or stopping at a given instant. It takes effect only when the user confirms it. Whether it starts or switches is determined at confirmation, not by the Assistant. It expires fifteen minutes after it is proposed.
+_Avoid_: Switch Proposal, tracking command, suggestion card
 
 ### Surfaces
 
