@@ -43,4 +43,12 @@ Try the long-activity/gap and overnight scenarios. Drag the line and hold near a
 
 Verification: production build; browser interaction checks for held-edge autoscroll beyond the initial window, historical replacement, gap fill, exact metadata restoration and running continuity after elapsed time; all three variants; desktop and 390px layouts. Offline is a local simulation, not a persistence or reconciliation test. This is a responsive browser prototype, not an Android build.
 
-Verdict: pending user review. A is the initial recommendation because it keeps one confirmation while showing the effect during dragging. No variant has been selected or promoted to production.
+Verdict: the user selected A, with its action row kept in normal document flow below the preview. Cancel and Switch activity must not float over or obscure the timeline. Edge scrolling should be faster and the dragged line must remain steady without flashing. The prototype uses a gradual speed increase toward the edge, reaching three times the original maximum speed, and anchors the drag handle independently from time snapping. Production implementation has not started.
+
+## Native Android prototype A
+
+The debug-only `SwitchHistoryPrototypeActivity` implements A with native Compose gestures, Timebox's theme, and its existing `UndoLifecycle` and `UndoNoticeHost`. It starts with the switch sheet open, uses in-memory sample records, and offers daytime and midnight scenarios. The action row scrolls below the preview. It does not implement production synchronization or persistence.
+
+Build with `./scripts/android-gradle.ps1 :app:assembleDebug '-PreviewApplicationIdSuffix=.switchprototype' '-PreviewApiBaseUrl=http://10.0.2.2:12064/api/'`. The separate package is `com.timebox.android.switchprototype`; launch component `com.timebox.android.switchprototype/com.timebox.android.ui.day.prototype.SwitchHistoryPrototypeActivity` through the emulator reservation helper. Its configured API target is the browser prototype's rejecting middleware, isolating background app services from real data.
+
+Built and installed successfully. Native device checks exercised dragging before the current start, held-edge scrolling back to 09:40, switching, and Undo restoring the three original records and running activity. Review is retained on `emulator-5652`, reservation `62e18fe2b40345719edbb57297adf71a`, with the sheet open. Screenshot: `artifacts/android-switch-final.png`.

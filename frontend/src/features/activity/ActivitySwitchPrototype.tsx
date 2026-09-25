@@ -137,6 +137,7 @@ function ImpactList({ records, now, selected, name }: EditorProps) {
 function Timeline({ records, preview, now, selected, onSelect, mode }: EditorProps & { mode: 'after' | 'before' | 'compare' }) {
   const [start, setStart] = useState(now - 150)
   const [dragging, setDragging] = useState(false)
+  const [dragPercent, setDragPercent] = useState(0)
   const frame = useRef<HTMLDivElement>(null)
   const dragY = useRef<number | null>(null)
   const live = useRef({ start, now, onSelect, records })
@@ -156,10 +157,14 @@ function Timeline({ records, preview, now, selected, onSelect, mode }: EditorPro
         const edge = 42
         const speed = y < edge ? -(edge - y) / edge : y > rect.height - edge ? (y - rect.height + edge) / edge : 0
         const value = live.current
-        const nextStart = Math.min(value.now - 150, value.start + speed * delta * 0.045)
+        // Ease into scrolling; the extreme edge moves three times faster than before.
+        const nextStart = Math.min(value.now - 150, value.start + Math.sign(speed) * speed * speed * delta * 0.135)
         live.current.start = nextStart
         if (speed !== 0) setStart(nextStart)
-        const raw = Math.min(value.now, Math.round(nextStart + y / rect.height * 180))
+        // Keep the handle on screen and independent of minute/boundary snapping.
+        const pointerFraction = Math.max(14, Math.min(rect.height - 14, y)) / rect.height
+        setDragPercent(Math.min(pointerFraction, (value.now - nextStart) / 180) * 100)
+        const raw = Math.min(value.now, Math.round(nextStart + pointerFraction * 180))
         const boundary = value.records.flatMap(record => [record.start, record.end]).find(at => at !== null && Math.abs(at - raw) <= 2)
         value.onSelect(Math.min(value.now, boundary ?? raw))
       }
@@ -181,15 +186,15 @@ function Timeline({ records, preview, now, selected, onSelect, mode }: EditorPro
     <div className="sp-timeline-nav"><button aria-label="Earlier time" onClick={() => setStart(value => value - 120)}>↑ Earlier</button><strong>{dateLabel(start)}{dateLabel(start) !== dateLabel(end) ? ` → ${dateLabel(end)}` : ''}</strong><button aria-label="Later time" disabled={start >= now - 150} onClick={() => setStart(value => Math.min(now - 150, value + 120))}>Later ↓</button></div>
     <div className="sp-lane-labels"><span>{mode === 'compare' ? 'RECORDED' : 'PLANNED'}</span><span>{mode === 'before' ? 'RECORDED' : 'AFTER SWITCH'}</span></div>
     <div ref={frame} className={`sp-timeline ${dragging ? 'sp-dragging' : ''}`} data-testid="switch-timeline" onWheel={event => setStart(value => Math.min(now - 150, value + event.deltaY / 7))}
-      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); dragY.current = event.clientY; const rect = event.currentTarget.getBoundingClientRect(); onSelect(Math.min(now, Math.round(start + (event.clientY - rect.top) / rect.height * 180))); setDragging(true) }}
+      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); dragY.current = event.clientY; const rect = event.currentTarget.getBoundingClientRect(); const pointerFraction = Math.max(14, Math.min(rect.height - 14, event.clientY - rect.top)) / rect.height; setDragPercent(Math.min(pointerFraction, (now - start) / 180) * 100); onSelect(Math.min(now, Math.round(start + pointerFraction * 180))); setDragging(true) }}
       onPointerMove={event => { if (dragY.current !== null) dragY.current = event.clientY }}
       onPointerUp={() => { dragY.current = null; setDragging(false) }} onPointerCancel={() => { dragY.current = null; setDragging(false) }}>
       {Array.from({ length: 7 }, (_, i) => Math.ceil(start / 30) * 30 + i * 30).filter(at => at <= end).map(at => <div key={at} className={`sp-tick ${at % 1440 === 0 ? 'sp-midnight' : ''}`} style={{ top: `${fraction(at)}%` }}><span>{at % 1440 === 0 ? dateLabel(at) : time(at)}</span></div>)}
       {mode === 'compare' ? records.map(record => block(record, 'left', false)) : <div className="sp-plan-block" style={{ top: `${Math.max(0, fraction(now - 120))}%`, bottom: `${Math.max(0, 100 - fraction(now))}%` }}><strong>Design exploration</strong><span>Planned</span></div>}
       {(mode === 'before' ? records : preview).map(record => block(record, 'right', mode !== 'before' && record.id === preview.at(-1)!.id))}
       {now >= start && now <= end && <div className="sp-now-line" style={{ top: `${fraction(now)}%` }}><span>NOW</span></div>}
-      {selected >= start && selected <= end && <div className="sp-selection" role="slider" aria-label="Switch time" aria-valuemin={Math.floor(start)} aria-valuemax={now} aria-valuenow={selected} aria-valuetext={stamp(selected)} tabIndex={0}
-        onKeyDown={event => { if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); onSelect(Math.min(now, selected + (event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1))) } }} style={{ top: `${fraction(selected)}%` }}><span>↕ {time(selected)}</span></div>}
+      {(dragging || (selected >= start && selected <= end)) && <div className="sp-selection" role="slider" aria-label="Switch time" aria-valuemin={Math.floor(start)} aria-valuemax={now} aria-valuenow={selected} aria-valuetext={stamp(selected)} tabIndex={0}
+        onKeyDown={event => { if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); onSelect(Math.min(now, selected + (event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1))) } }} style={{ top: `${dragging ? dragPercent : fraction(selected)}%` }}><span>↕ {time(selected)}</span></div>}
     </div>
     <p className="sp-drag-hint">Drag the white line. Hold near an edge to keep scrolling.</p>
   </div>

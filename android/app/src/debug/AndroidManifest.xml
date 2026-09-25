@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name=".ui.day.prototype.SwitchHistoryPrototypeActivity"
+            android:exported="true" android:label="Switch activity prototype"
+            android:theme="@style/Theme.Timebox" />
         <activity
             android:name=".ui.day.prototype.DayHeaderPrototypeActivity"
             android:exported="true"
