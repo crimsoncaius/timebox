@@ -31,6 +31,7 @@ from app.db.session import get_db, get_engine, repair_sqlite_actual_record_opera
 from app.models.app_settings import AppSettings
 from app.readiness import readiness_details
 from app.services.activity_service import reporting_settings
+from app.services.assistant_storage import recover_interrupted
 from app.services.assistant_tracing import setup_tracing
 from app.services.day_service import validate_timezone
 
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=get_engine())
         _ensure_app_settings_table()
     repair_sqlite_actual_record_operation_references(get_engine())
+    recover_interrupted()
     tracing = setup_tracing()
     try:
         yield
@@ -92,7 +94,7 @@ app.include_router(recurring.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
 app.include_router(activity.router, dependencies=_protected)
-# Assistant has no Timebox mutation endpoints. Do not hold the legacy write
+# Assistant writes its own conversation records only. Do not hold the legacy write
 # admission/database dependency open over an SSE response (Stop must run concurrently).
 app.include_router(assistant.router, dependencies=[Depends(require_api_key)])
 app.include_router(trends.router, dependencies=_protected)

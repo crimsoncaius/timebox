@@ -120,7 +120,7 @@ def test_timeout_and_stop_release_session(client, monkeypatch):
     assert conversations.get(key).messages == []
 
 
-def test_limits_and_expiry(client):
+def test_input_limits_without_idle_expiry_or_exchange_cap(client):
     store = Conversations()
     key = store.create()
     item = store.reserve(key, "first")
@@ -129,10 +129,13 @@ def test_limits_and_expiry(client):
     assert error.value.status_code == 409
     item.run_id = None
     item.exchange_count = 20
-    with pytest.raises(HTTPException): store.reserve(key, "third")
+    assert store.reserve(key, "third") is item
+    item.run_id = None
     item.touched = time.monotonic() - 3601
-    with pytest.raises(HTTPException) as error: store.get(key)
-    assert error.value.status_code == 410
+    assert store.get(key) is item
+    store.prune()
+    assert key not in store.items
+    assert store.get(key).messages == []
     key = client.post("/assistant/conversations").json()["conversation_id"]
     for message in ["", "   ", "x" * 4001]:
         assert client.post(f"/assistant/conversations/{key}/messages", json={"message": message, "run_id": str(uuid4())}).status_code == 422
