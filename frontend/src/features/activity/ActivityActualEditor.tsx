@@ -1,3 +1,4 @@
+import { HelperText } from '../../components/HelperText'
 import { useEffect, useState } from 'react'
 import type { ActualBlock, BlockDraftPlacement, DayRead, TaskType } from '../../lib/api'
 import { addDaysIso } from '../../lib/time'
@@ -39,7 +40,7 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
     <h2>{actual ? 'Actual Block' : 'New Actual Block'}</h2>
     {actual?.end_at ? <p className="font-mono text-xs">{formatBlockDuration((Date.parse(actual.end_at) - Date.parse(actual.start_at)) / 60_000)}</p> : null}
     <p className="text-xs">Reporting Time Zone: {zone}</p>
-    {running ? <p>Use Switch or Stop above the Day timeline to correct the Current Activity.</p> : <>
+    {running ? <HelperText>Use Switch or Stop above the Day timeline to correct the Current Activity.</HelperText> : <>
       <ActivityTimeField label="Start" value={start} onChange={setStart} timezone={zone} />
       <ActivityTimeField label="End" value={end} onChange={setEnd} timezone={zone} />
       <TaskTypePathCombobox

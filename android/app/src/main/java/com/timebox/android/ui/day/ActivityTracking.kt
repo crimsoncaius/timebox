@@ -26,6 +26,8 @@ import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.remote.ActivityKind
+import com.timebox.android.ui.components.DiagnosticText
+import com.timebox.android.ui.components.HelperText
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
 import java.time.Instant
@@ -191,7 +193,7 @@ fun ActivityTracking(
             )
             state.error?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.bodySmall) }
             if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
-            if (!focus && expanded && planning) Text("Finish or cancel planning to enter Focus.")
+            if (!focus && expanded && planning) HelperText("Finish or cancel planning to enter Focus.", Modifier.fillMaxWidth().padding(bottom = 8.dp))
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
                 PlannedBlockSuggestion(
                     name = activityIdentityText(plan.name, plan.taskTitle, availableTypes.find { it.id == plan.taskTypeId }?.name),
@@ -204,21 +206,21 @@ fun ActivityTracking(
             if (!focus && state.rejectedRecovery != null) {
                 TextButton(onClick = { reviewingRejected = !reviewingRejected }) { Text("Review rejected changes") }
                 if (reviewingRejected) {
-                    Text("These changes were not replayed. Use Day add/edit to correct the saved timeline.")
+                    HelperText("These changes were not replayed. Use Day add/edit to correct the saved timeline.")
                     TextButton(onClick = {
                         scope.launch(Dispatchers.IO) {
                             if (repository.dismissRejectedRecovery()) withContext(Dispatchers.Main) { reviewingRejected = false }
                         }
                     }) { Text("Dismiss reviewed changes") }
-                    Text("Dismissing hides this notice. Recovery data stays saved on this device.")
-                    Text(state.rejectedRecovery!!)
+                    HelperText("Dismissing hides this notice. Recovery data stays saved on this device.")
+                    DiagnosticText(state.rejectedRecovery!!)
                 }
             }
             if (!focus && state.legacyRecovery != null) {
                 TextButton(onClick = { reviewingLegacy = !reviewingLegacy }) { Text("Review old Work Mode data") }
                 if (reviewingLegacy) {
-                    Text("Saved device observations, not recorded time. Use Day add/edit for corrections.")
-                    Text(state.legacyRecovery!!)
+                    HelperText("Saved device observations, not recorded time. Use Day add/edit for corrections.")
+                    DiagnosticText(state.legacyRecovery!!)
                 }
             }
         }
@@ -263,7 +265,7 @@ fun ActivityTracking(
             current.secondaryIdentity()?.let { Text(it) }
             Button(modifier = Modifier.fillMaxWidth(), onClick = { scope.launch { if (repository.checkIn(com.timebox.android.data.remote.CheckInEventDto("confirm", questionId = question.id))) checkInOpen = false } }) { Text("Yes, still doing this") }
             OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { dismissCheckIn(); targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch activity") }
-            Text("Recording continues while you decide.")
+            HelperText("Recording continues while you decide.")
         }
     }
     val notesTarget = state.snapshot?.records?.find { it.id == notesTargetId }

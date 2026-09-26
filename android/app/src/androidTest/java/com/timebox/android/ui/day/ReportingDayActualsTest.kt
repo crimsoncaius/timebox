@@ -20,8 +20,8 @@ class ReportingDayActualsTest {
         var selected = 0
         compose.setContent { TimeboxTheme(darkTheme = false) { ReportingDayActuals(day) { selected = it } } }
         compose.onNodeWithText("20 mins on this day", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("-04:00", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("-05:00", substring = true).performClick()
+        compose.onNodeWithText("GMT-4", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("GMT-5", substring = true).performClick()
         compose.runOnIdle { assertEquals(-42, selected) }
     }
 }

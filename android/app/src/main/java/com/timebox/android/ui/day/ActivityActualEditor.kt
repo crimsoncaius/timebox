@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.HelperText
 import com.timebox.android.ui.elapsedDuration
 
 import com.timebox.android.data.parseActivityInstant
@@ -198,7 +199,7 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
         } else {
             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Current Activity", style = TimeboxTheme.type.screenTitle)
-                Text("Use Switch or Stop above the Day timeline to correct the Current Activity.")
+                HelperText("Use Switch or Stop above the Day timeline to correct the Current Activity.")
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
         }
