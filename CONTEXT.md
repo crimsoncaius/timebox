@@ -165,16 +165,24 @@ A Battle Plan Task representing one instance of a Recurring Task Series, with it
 _Avoid_: Recurring series, Quota Tracker
 
 **Skipped Task Occurrence**:
-A Task Occurrence whose recurrence period ended without a recorded Task Completion. It is historical rather than current work and is not created by a manual skip action.
+A Task Occurrence whose recurrence period ended without a Task Completion dated within it. It is historical rather than current work and is not created by a manual skip action; a Task Completion later recorded with a date inside that period reverses it.
 _Avoid_: Deleted occurrence, missed occurrence
 
 **Quota Tracker**:
-A generated progress aggregate for a recurring quota, expressed as completed Session Tasks out of required Session Tasks. It is derived rather than explicitly completed and does not belong to a Project.
+A generated progress aggregate for a recurring quota, expressed as completed Session Tasks out of required Session Tasks. Completed Session Tasks may exceed the requirement, and a surplus never carries into the next period. It is derived rather than explicitly completed and does not belong to a Project.
 _Avoid_: Recurring Task Series, Parent Task, completable task
 
 **Session Task**:
-An individually completable unit of work that contributes to a Quota Tracker. It does not belong to a Project.
+An individually completable unit of work that contributes to a Quota Tracker. It does not belong to a Project. Session Tasks beyond the requirement exist only once recorded as done.
 _Avoid_: Actual Block, Task Occurrence, work session
+
+**Habit**:
+A Recurring Task Series opted into habit tracking. It has no identity or lifecycle of its own, and every Task Completion of its Task Occurrences or Session Tasks counts toward it, including those recorded before it was opted in.
+_Avoid_: Goal, Streak task, Habit tracker
+
+**Habit Period**:
+The span over which a Habit is judged: one Task Occurrence's recurrence period for a scheduled Habit, or one quota period for a quota Habit. Its outcome is Met, Missed, Open while it has not ended, or Excused while its series is paused or not yet started. A scheduled Habit Period is Met once its Task Occurrence has a Task Completion, whatever that completion's date; there is no late outcome.
+_Avoid_: Streak day, check-in
 
 **Blocked**:
 A condition indicating that an incomplete Battle Plan Task cannot currently progress. It is not a completion status and is cleared when the task completes.
@@ -197,7 +205,7 @@ A record of time that occurred. It may link to a Planned Block or stand alone an
 _Avoid_: Actual session, work session, completed block
 
 **Task Completion**:
-An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks.
+An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks. It is dated when the work was done, which may be earlier than when it was recorded.
 _Avoid_: Time completion, session completion
 
 **Assistant Conversation**:
@@ -215,12 +223,16 @@ The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planni
 _Avoid_: Today view, timeline page
 
 **Chronicle**:
-The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. It has two views, Calendar (one month at a time) and Trends.
+The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. It has three views, Calendar (one month at a time), Trends, and Habits.
 _Avoid_: History, Analytics tab
 
 **Trends**:
 The Chronicle view that presents activity by Task Type over a selected preset or custom time frame. It describes activity without judging it against goals.
 _Avoid_: Analytics, Insights, Reports
+
+**Habits**:
+The Chronicle view that presents each Habit's Habit Periods across one Calendar Week at a time. A Habit appears only in weeks where its series was active. Unlike Trends, it judges activity against the Habit's recurrence.
+_Avoid_: Habit tracker, Streaks
 
 **Battle Plan**:
 The surface for Battle Plan Tasks, Projects and Recurring Task Series, and the home of Task Types management.

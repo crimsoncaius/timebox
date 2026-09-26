@@ -7,6 +7,7 @@ import androidx.navigation.navDeepLink
 import com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype
 import com.timebox.android.ui.battleplan.RoutineSheetPrototype
 import com.timebox.android.ui.battleplan.TaskSheetPrototype
+import com.timebox.android.ui.chronicle.HabitsPrototype
 
 /**
  * Design-study destinations, reachable by deep link in debug builds only.
@@ -50,5 +51,18 @@ fun NavGraphBuilder.prototypeRoutes() {
                 initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
             )
         }
+    }
+    composable(
+        "prototype/habits?total={total}&scenario={scenario}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/habits?total={total}&scenario={scenario}" }),
+        arguments = listOf(
+            navArgument("total") { defaultValue = "labeled" },
+            navArgument("scenario") { defaultValue = "sample" },
+        ),
+    ) { entry ->
+        HabitsPrototype(
+            entry.arguments?.getString("total") ?: "labeled",
+            entry.arguments?.getString("scenario") ?: "sample",
+        )
     }
 }
