@@ -80,3 +80,10 @@ Keeping navigation visible while typing crowds the chat instead. Assistant now f
 the shared keyboard policy: bottom navigation shows when the keyboard is hidden and
 hides while it is up. The device regression is now
 `assistantShowsNavigationOnlyWhileKeyboardIsHidden`.
+
+## Review correction: one-line composer
+
+The composer now starts as a one-line pill and grows with the draft up to five
+lines, with Send pinned to the bottom edge. Chosen from four variants (current,
+slim pill, pill with larger text, roomy with Send outside); the prototype is kept
+on `prototype/assistant-composer-variants`. The slim pill keeps body text size.
