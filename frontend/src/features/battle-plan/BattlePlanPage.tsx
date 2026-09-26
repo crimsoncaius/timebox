@@ -26,6 +26,8 @@ import {
   type TaskType,
 } from '../../lib/api'
 import { MoveProjectDialog } from './MoveProjectDialog'
+import { TaskTypeFilterMenu } from './TaskTypeFilterMenu'
+import { taskTypeFilterCoverage } from './taskTypeFilter'
 import { BattlePlanCard } from './BattlePlanCard'
 import { useAppClock } from '../../lib/useAppClock'
 import { BattlePlanSidebar } from './BattlePlanSidebar'
@@ -225,13 +227,14 @@ export function BattlePlanPage() {
   const visibleTasks = useMemo(() => {
     const matchesNullable = (selected: NullableFilter[], value: PriorityLevel | null) =>
       selected.length === 0 || selected.includes(value ?? 'unset')
+    const taskTypeCoverage = preferences.taskTypes.length > 0 ? taskTypeFilterCoverage(preferences.taskTypes, taskTypes) : null
     const rows = scopeFiltered.filter((task) => {
       if (preferences.hideCompleted && task.status === 'completed') return false
       if (!matchesNullable(preferences.urgency, task.urgency)) return false
       if (!matchesNullable(preferences.importance, task.importance)) return false
-      if (preferences.taskTypes.length > 0) {
+      if (taskTypeCoverage) {
         const key = task.task_type_id == null ? 'unset' : String(task.task_type_id)
-        if (!preferences.taskTypes.includes(key)) return false
+        if (!taskTypeCoverage.has(key)) return false
       }
       return true
     })
@@ -241,7 +244,7 @@ export function BattlePlanPage() {
       if (preferences.sort === 'importance') return priorityRank(right.importance) - priorityRank(left.importance) || left.position - right.position
       return left.position - right.position
     })
-  }, [preferences, scopeFiltered])
+  }, [preferences, scopeFiltered, taskTypes])
 
   const columns = useMemo(() => Object.fromEntries(
     TASK_STATUSES.map((status) => [status, visibleTasks.filter((task) => taskColumn(task) === status)]),
@@ -457,7 +460,7 @@ export function BattlePlanPage() {
           {error && loadedCollection === collection ? <div role="alert" className="mb-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
           {loadedCollection !== collection ? <p className="text-on-surface-variant">Loading Battle Plan…</p> : collection === 'active' ? (
             <>
-              <TaskFilters preferences={preferences} taskTypes={taskTypes} onChange={setPrefs} />
+              <TaskFilters preferences={preferences} taskTypes={taskTypes} tasks={scopeFiltered} onChange={setPrefs} />
               <DragDropProvider onDragEnd={(event) => void handleDragEnd(event)}>
                 <div data-testid="battle-plan-board" className="mt-6 overflow-x-auto pb-2">
                   <div className="grid min-w-[64rem] grid-cols-4 gap-4">
@@ -636,25 +639,13 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
   )
 }
 
-function TaskFilters({ preferences, taskTypes, onChange }: { preferences: Preferences; taskTypes: TaskType[]; onChange: (change: Partial<Preferences>) => void }) {
+function TaskFilters({ preferences, taskTypes, tasks, onChange }: { preferences: Preferences; taskTypes: TaskType[]; tasks: BattleTask[]; onChange: (change: Partial<Preferences>) => void }) {
   const toggle = <T,>(values: T[], value: T) => values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
   return (
     <div className="flex flex-wrap items-start gap-3 rounded-2xl bg-surface-container-low/70 p-3 dark:bg-dark-surface-container-low/70">
       <FilterGroup label="Urgency" values={[...PRIORITY_LEVELS, 'unset']} selected={preferences.urgency} onToggle={(value) => onChange({ urgency: toggle(preferences.urgency, value as NullableFilter) })} />
       <FilterGroup label="Importance" values={[...PRIORITY_LEVELS, 'unset']} selected={preferences.importance} onToggle={(value) => onChange({ importance: toggle(preferences.importance, value as NullableFilter) })} />
-      <details className="relative">
-        <summary className="cursor-pointer list-none rounded-full bg-surface-container-lowest px-3 py-2 text-xs dark:bg-dark-surface-container">
-          Task types{preferences.taskTypes.length ? ` · ${preferences.taskTypes.length}` : ''}
-        </summary>
-        <div className="absolute left-0 top-11 z-40 max-h-72 w-64 overflow-y-auto rounded-2xl bg-surface-container-lowest p-3 shadow-xl dark:bg-dark-surface-container-high">
-          {[{ id: 'unset', name: 'Unset' }, ...taskTypes.map((taskType) => ({ id: String(taskType.id), name: taskType.name }))].map((item) => (
-            <label key={item.id} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-surface-container-low dark:hover:bg-dark-surface-container">
-              <input type="checkbox" checked={preferences.taskTypes.includes(item.id)} onChange={() => onChange({ taskTypes: toggle(preferences.taskTypes, item.id) })} />
-              <span className="min-w-0 truncate">{item.name}</span>
-            </label>
-          ))}
-        </div>
-      </details>
+      <TaskTypeFilterMenu taskTypes={taskTypes} tasks={tasks} selected={preferences.taskTypes} onChange={(next) => onChange({ taskTypes: next })} />
       {(preferences.urgency.length || preferences.importance.length || preferences.taskTypes.length) ? <button type="button" className="px-2 py-2 text-xs text-on-surface-variant" onClick={() => onChange({ urgency: [], importance: [], taskTypes: [] })}>Clear filters</button> : null}
     </div>
   )
