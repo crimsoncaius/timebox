@@ -89,6 +89,7 @@ fun ChronicleScreen(
     onSelectView: (ChronicleView) -> Unit = {},
     onClearHighlights: () -> Unit = {},
     trendsContent: @Composable () -> Unit = {},
+    habitsContent: @Composable () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     val canNextMonth = YearMonth.from(state.monthStart) < YearMonth.from(state.today)
@@ -112,6 +113,10 @@ fun ChronicleScreen(
 
         if (state.view == ChronicleView.Trends) {
             trendsContent()
+            return@Column
+        }
+        if (state.view == ChronicleView.Habits) {
+            habitsContent()
             return@Column
         }
 
@@ -244,7 +249,7 @@ internal fun chronicleHighlightSummary(days: Map<String, Double>, range: TrendHi
     return " on $count of $rangeDays ${if (rangeDays == 1L) "day" else "days"}, $total in total."
 }
 
-/** Full-width underline tabs switching between Chronicle's Calendar and Trends views. */
+/** Full-width underline tabs switching between Chronicle's views. */
 @Composable
 private fun ChronicleViewTabs(selected: ChronicleView, onSelect: (ChronicleView) -> Unit) {
     val colors = TimeboxTheme.colors

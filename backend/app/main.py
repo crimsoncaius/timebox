@@ -18,6 +18,7 @@ from app.api.routes import (
     assistant,
     battle_plan,
     days,
+    habits,
     recurring,
     settings,
     task_type_recommendations,
@@ -91,6 +92,7 @@ app.include_router(task_types.router, dependencies=_protected)
 app.include_router(task_type_recommendations.router, dependencies=[Depends(require_api_key)])
 app.include_router(battle_plan.router, dependencies=_protected)
 app.include_router(recurring.router, dependencies=_protected)
+app.include_router(habits.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
 app.include_router(activity.router, dependencies=_protected)

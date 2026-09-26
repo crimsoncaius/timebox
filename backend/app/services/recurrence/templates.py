@@ -91,6 +91,7 @@ def create_template(
         end_date=body.end_date,
         cycle_limit=body.cycle_limit,
         keep_unfinished_overdue=body.keep_unfinished_overdue,
+        track_as_habit=body.track_as_habit,
         preplanning_mode=body.preplanning_mode,
         position=_next_position(db),
     )
@@ -200,6 +201,8 @@ def patch_template(
     )
     if next_keep_overdue is None:
         raise ValueError("Keep unfinished overdue must be true or false")
+    if "track_as_habit" in fields and body.track_as_habit is None:
+        raise ValueError("Track as habit must be true or false")
     if next_mode == RecurrenceMode.quota and next_keep_overdue:
         raise ValueError("Quota shortfalls cannot carry into the next period")
 
@@ -483,6 +486,7 @@ def to_read(
         end_date=row.end_date,
         cycle_limit=row.cycle_limit,
         keep_unfinished_overdue=row.keep_unfinished_overdue,
+        track_as_habit=row.track_as_habit,
         preplanning_mode=row.preplanning_mode,
         preplanning_schedule=(
             RecurringPreplanningScheduleRead(

@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.*
@@ -53,11 +55,19 @@ fun RoutineScreen(
     }
     fun closeField() { if (draft != state) discardField = true else editor = null }
     val template = state.template
+    // The sheet state is remembered against its confirm callback, so that callback must stay
+    // the same instance across saves; otherwise every save re-creates and re-animates the sheet.
+    val latestBusy by rememberUpdatedState(busy)
+    val latestDirty by rememberUpdatedState(state.dirty)
+    val confirmSheetChange = remember {
+        { value: SheetValue ->
+            if (value == SheetValue.Hidden && (latestBusy || latestDirty)) { if (!latestBusy) discard = true; false } else true
+        }
+    }
     ModalBottomSheet(onDismissRequest = ::close,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { value ->
-            if (value == SheetValue.Hidden && (busy || state.dirty)) { if (!busy) discard = true; false } else true
-        }), containerColor = colors.sheet.copy(alpha = 1f)) {
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = confirmSheetChange),
+        containerColor = colors.sheet.copy(alpha = 1f)) {
         TaskSheetBackHandler(busy, ::close)
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f).imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -83,6 +93,15 @@ fun RoutineScreen(
                     if (state.queuePreplanning) "Ready to Plan" else if (state.preplanningSlots.isEmpty()) "No pre-planning" else "Planned time · ${state.preplanningSlots.size} slots", "Pre-planning", editable) { open("Pre-planning") }
                 template?.preplanningSchedule?.unavailableSlots?.forEach { slot ->
                     Text("Unavailable on ${slot.date}: ${com.timebox.android.ui.formatMinuteLabel24(slot.startMinute)}–${com.timebox.android.ui.formatMinuteLabel24(slot.endMinute)}", color = colors.error, style = TimeboxTheme.type.bodySmall)
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.TaskAlt, null, tint = colors.onVariant)
+                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                        Text("Track as habit", color = colors.on)
+                        Text("Show in Chronicle › Habits", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    }
+                    Switch(state.trackAsHabit, { commit(state.copy(trackAsHabit = it)) }, enabled = editable,
+                        modifier = Modifier.semantics { contentDescription = "Track as habit" })
                 }
                 HorizontalDivider(color = colors.hairline)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

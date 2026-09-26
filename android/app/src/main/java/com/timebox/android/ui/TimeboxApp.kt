@@ -386,7 +386,11 @@ fun TimeboxApp(
                     title = routeTitle(
                         surfaceRoute,
                         formatFullDate(dayState.date),
-                        if (chronicleState.view == ChronicleView.Trends) "Trends" else formatMonthTitle(chronicleState.monthStart),
+                        when (chronicleState.view) {
+                            ChronicleView.Trends -> "Trends"
+                            ChronicleView.Habits -> "Habits"
+                            ChronicleView.Calendar -> formatMonthTitle(chronicleState.monthStart)
+                        },
                     ),
                 )
             }

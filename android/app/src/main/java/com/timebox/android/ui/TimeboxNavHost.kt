@@ -48,6 +48,11 @@ import com.timebox.android.ui.battleplan.TaskNavigationMenu
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.chronicle.TrendsScreen
+import com.timebox.android.ui.chronicle.HabitsScreen
+import com.timebox.android.ui.chronicle.HabitsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.timebox.android.ui.components.TransientFeedback
 import com.timebox.android.ui.day.DayScreen
 import com.timebox.android.ui.day.DayViewModel
@@ -192,6 +197,16 @@ private fun NavGraphBuilder.chronicleRoute(dependencies: TimeboxNavigationDepend
                     onSelectView = chronicleViewModel::selectView,
                     onClearHighlights = chronicleViewModel::clearHighlights,
                     trendsContent = { TrendsScreen(chronicleState, chronicleViewModel) },
+                    habitsContent = {
+                        val repository = rememberRepository()
+                        val habitsViewModel: HabitsViewModel = viewModel(
+                            factory = viewModelFactory { initializer { HabitsViewModel(repository) } },
+                        )
+                        val habitsState by habitsViewModel.state.collectAsState()
+                        HabitsScreen(habitsViewModel, habitsState) { templateId ->
+                            navController.navigate(AppRoutes.recurringDetail(templateId))
+                        }
+                    },
                     onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                     onRetry = chronicleViewModel::load,
                 )

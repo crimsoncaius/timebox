@@ -389,11 +389,21 @@ class TimeboxRepository private constructor(
                 checklistTitles = request.checklistTitles,
                 confirmBackfill = request.confirmBackfill,
                 keepUnfinishedOverdue = request.keepUnfinishedOverdue,
+                trackAsHabit = request.trackAsHabit,
                 preplanningSchedule = request.preplanningSchedule?.toWriteDto(),
                 preplanningMode = request.preplanningMode,
             )
         ).toModel()
     }
+
+    suspend fun habitsWeek(week: LocalDate?): Result<HabitsWeek> =
+        call { api().habitsWeek(week?.toString()).toModel() }
+
+    suspend fun tickHabit(templateId: Int, day: LocalDate): Result<HabitsWeek> =
+        call { api().tickHabit(templateId, day.toString()).toModel() }
+
+    suspend fun untickHabit(templateId: Int, day: LocalDate): Result<HabitsWeek> =
+        call { api().untickHabit(templateId, day.toString()).toModel() }
 
     suspend fun getRoutineCalendar(templateId: Int, month: java.time.YearMonth?): Result<RoutineCalendar> =
         call { api().getRoutineCalendar(templateId, month?.atDay(1)?.toString()).toModel() }

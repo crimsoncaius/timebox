@@ -363,6 +363,7 @@ class RecurringTemplateCreate(RecurrenceRuleFields):
     checklist_titles: list[str] = Field(default_factory=list)
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool = False
+    track_as_habit: bool = False
     preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
     preplanning_mode: PreplanningMode = "none"
 
@@ -398,6 +399,7 @@ class RecurringTemplatePatch(BaseModel):
     checklist_titles: list[str] | None = None
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool | None = None
+    track_as_habit: bool | None = None
     preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
     preplanning_mode: PreplanningMode = "none"
 
@@ -450,6 +452,7 @@ class RecurringTemplateRead(BaseModel):
     end_date: date | None
     cycle_limit: int | None
     keep_unfinished_overdue: bool
+    track_as_habit: bool = False
     preplanning_schedule: RecurringPreplanningScheduleRead | None = None
     preplanning_mode: PreplanningMode = "none"
     urgency: PriorityLevel | None
@@ -468,6 +471,53 @@ class RoutineCalendarCompletion(BaseModel):
     id: int
     title: str
     date: date
+
+
+HabitDayState = Literal[
+    "not_due", "excused", "upcoming", "open", "met", "missed", "partial", "count", "empty"
+]
+
+
+class HabitDayRead(BaseModel):
+    """One day of a Habit row. ``count`` is completed sessions for quota Habits."""
+
+    date: date
+    state: HabitDayState
+    count: int = 0
+    target: int | None = None
+    tickable: bool = False
+
+
+class HabitTotalRead(BaseModel):
+    """``done`` out of ``target``: days for scheduled and daily quotas, sessions for
+    weekly quotas, and month-to-date sessions (``month``) for monthly quotas."""
+
+    done: int
+    target: int
+    unit: Literal["days", "sessions", "month"]
+    month: date | None = None
+    tone: Literal["met", "missed", "open"]
+
+
+class HabitRead(BaseModel):
+    template_id: int
+    title: str
+    mode: RecurrenceMode
+    status: RecurrenceStatus
+    frequency: RecurrenceFrequency
+    interval: int
+    weekdays: list[int]
+    month_day: int | None
+    quota_count: int | None
+    days: list[HabitDayRead]
+    total: HabitTotalRead
+
+
+class HabitsWeekRead(BaseModel):
+    today: date
+    week_start: date
+    earliest_week_start: date
+    habits: list[HabitRead]
 
 
 class RoutineCalendarRead(BaseModel):

@@ -238,6 +238,7 @@ data class RecurringTemplateDto(
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("cycle_limit") val cycleLimit: Int? = null,
     @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
+    @SerialName("track_as_habit") val trackAsHabit: Boolean = false,
     @SerialName("preplanning_mode") val preplanningMode: String? = null,
     @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleDto? = null,
     val urgency: String? = null,
@@ -272,6 +273,7 @@ data class RecurringTemplateCreateDto(
     @SerialName("checklist_titles") val checklistTitles: List<String> = emptyList(),
     @SerialName("confirm_backfill") val confirmBackfill: Boolean = false,
     @SerialName("keep_unfinished_overdue") val keepUnfinishedOverdue: Boolean = false,
+    @SerialName("track_as_habit") val trackAsHabit: Boolean = false,
     @SerialName("preplanning_mode") val preplanningMode: String? = null,
     @SerialName("preplanning_schedule") val preplanningSchedule: RecurringPreplanningScheduleWriteDto? = null,
 )

@@ -108,6 +108,10 @@ class RecurringTemplate(Base):
     keep_unfinished_overdue: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Opt-in to habit tracking. A Habit has no lifecycle of its own (CONTEXT.md).
+    track_as_habit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     urgency: Mapped[PriorityLevel | None] = mapped_column(
         Enum(PriorityLevel, name="recurring_urgency", native_enum=False, length=16), nullable=True

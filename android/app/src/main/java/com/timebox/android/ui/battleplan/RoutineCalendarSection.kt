@@ -48,7 +48,8 @@ fun RoutineCalendarSection(
         loading = false
     }
     Text("Calendar", style = TimeboxTheme.type.sectionTitle)
-    if (loading) {
+    // A refresh after a routine edit keeps the shown month in place instead of collapsing it.
+    if (loading && calendar == null) {
         LinearProgressIndicator(Modifier.fillMaxWidth())
         return
     }

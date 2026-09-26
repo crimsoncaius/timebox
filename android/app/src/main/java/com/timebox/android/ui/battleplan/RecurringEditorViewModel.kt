@@ -60,6 +60,7 @@ data class RecurringEditorUiState(
     val cycleLimit: String = "",
     val checklistText: String = "",
     val keepUnfinishedOverdue: Boolean = false,
+    val trackAsHabit: Boolean = false,
     val queuePreplanning: Boolean = false,
     val preplanningSlots: List<RecurringPreplanningSlotDraft> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
@@ -234,6 +235,7 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
                         checklistTitles = current.checklistTitles(),
                         confirmBackfill = confirmBackfill,
                         keepUnfinishedOverdue = current.mode == RecurrenceMode.Scheduled && current.keepUnfinishedOverdue,
+                        trackAsHabit = current.trackAsHabit,
                         preplanningSchedule = current.toPreplanningSchedule(),
                         preplanningMode = current.preplanningDestination(),
                     )
@@ -433,6 +435,7 @@ internal fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = Recurr
     cycleLimit = cycleLimit?.toString().orEmpty(),
     checklistText = checklistItems.sortedBy { it.position }.joinToString("\n") { it.title },
     keepUnfinishedOverdue = keepUnfinishedOverdue,
+    trackAsHabit = trackAsHabit,
     queuePreplanning = preplanningMode == "ready_to_plan",
     preplanningSlots = preplanningSchedule?.slots?.sortedBy { it.position }?.map { slot ->
         RecurringPreplanningSlotDraft(
@@ -463,6 +466,7 @@ internal fun recurringDraftPatch(before: RecurringEditorUiState, after: Recurrin
         endDate = changed(oldRule.endDate, rule.endDate), cycleLimit = changed(oldRule.cycleLimit, rule.cycleLimit),
         checklistTitles = changed(before.checklistTitles(), after.checklistTitles()),
         keepUnfinishedOverdue = changed(before.keepUnfinishedOverdue, after.keepUnfinishedOverdue),
+        trackAsHabit = changed(before.trackAsHabit, after.trackAsHabit),
         preplanningSchedule = changed(before.toPreplanningSchedule(), after.toPreplanningSchedule()),
         preplanningMode = changed(before.preplanningDestination(), after.preplanningDestination()),
         confirmBackfill = PatchField.of(confirmBackfill),
