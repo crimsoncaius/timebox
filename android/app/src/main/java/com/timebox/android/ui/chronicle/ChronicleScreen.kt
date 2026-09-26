@@ -221,7 +221,7 @@ private fun ChronicleHighlight(
                     modifier = Modifier.weight(1f),
                 )
                 androidx.compose.material3.TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text("Show all", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    Text("Clear", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 }
             }
             Text(summary, color = colors.on, fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Light)

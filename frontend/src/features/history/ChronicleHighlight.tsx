@@ -23,7 +23,7 @@ export function ChronicleHighlight({ highlight, onBack, onClear }: { highlight: 
           <span className="tabular-nums">{trendDuration(total)}</span> in total.
         </p>
       </div>
-      <button type="button" onClick={onClear} className="shrink-0 rounded-full px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface">Show all activity</button>
+      <button type="button" onClick={onClear} className="shrink-0 rounded-full px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface">Clear</button>
     </div>
   )
 }

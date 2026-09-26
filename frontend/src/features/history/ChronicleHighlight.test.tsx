@@ -15,7 +15,7 @@ it('summarises contributing days against the drilled range and links back to Tre
   expect(screen.getByTestId('chronicle-highlight')).toHaveTextContent('work / meetings on 2 of 7 days, 2h 5m in total.')
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Trends' }))
-  await user.click(screen.getByRole('button', { name: 'Show all activity' }))
+  await user.click(screen.getByRole('button', { name: 'Clear' }))
   expect(onBack).toHaveBeenCalledOnce()
   expect(onClear).toHaveBeenCalledOnce()
 })
