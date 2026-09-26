@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TrendsPanel } from './TrendsPanel'
-import { canAdvanceTrendRange, shiftTrendRange, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, trendRangeDayCount, trendRangeLabel, type TrendsReport } from './trends'
 import { api } from '../../lib/api'
 
 const report: TrendsReport = {
@@ -25,7 +25,31 @@ it('expands child totals on the range scale and drills direct time separately', 
   expect(screen.getByText('75.0%')).toBeInTheDocument()
   expect(screen.getByText('25.0%')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Show contributing days for Directly under work' }))
-  expect(onDrill).toHaveBeenCalledWith('Directly under work', { '2026-09-18': 1800 })
+  expect(onDrill).toHaveBeenCalledWith('Directly under work', { '2026-09-18': 1800 }, { period: 'week', start: '2026-09-14', end: '2026-09-20' })
+})
+
+it('offers no drill-through for a Day range', async () => {
+  vi.spyOn(api, 'trends').mockResolvedValue({ ...report, start: '2026-09-18', end: '2026-09-18' })
+  const onDrill = vi.fn()
+  render(<TrendsPanel active onDrill={onDrill} />)
+  const user = userEvent.setup()
+  await screen.findByTestId('trends-total')
+  await user.click(screen.getByRole('button', { name: 'Day' }))
+  await screen.findByTestId('trends-total')
+  expect(screen.queryByRole('button', { name: /Show contributing days/ })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'work' }))
+  expect(screen.getByText('coding')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'coding' })).not.toBeInTheDocument()
+  expect(onDrill).not.toHaveBeenCalled()
+})
+
+it('labels the drilled range and counts its days', () => {
+  expect(trendRangeLabel({ period: 'week', start: '2026-09-21', end: '2026-09-27' })).toBe('Week · Sep 21 – 27')
+  expect(trendRangeLabel({ period: 'week', start: '2026-09-28', end: '2026-10-04' })).toBe('Week · Sep 28 – Oct 4')
+  expect(trendRangeLabel({ period: 'month', start: '2026-09-01', end: '2026-09-30' })).toBe('Month · September 2026')
+  expect(trendRangeLabel({ period: 'custom', start: '2025-12-29', end: '2026-01-04' })).toBe('Custom range · Dec 29, 2025 – Jan 4, 2026')
+  expect(trendRangeDayCount({ period: 'week', start: '2026-09-21', end: '2026-09-27' })).toBe(7)
+  expect(trendRangeDayCount({ period: 'month', start: '2026-02-01', end: '2026-02-28' })).toBe(28)
 })
 
 it('uses server date boundaries for navigation and inclusive custom ranges', async () => {

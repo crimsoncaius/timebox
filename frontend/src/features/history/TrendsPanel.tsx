@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { canAdvanceTrendRange, shiftTrendRange, trendDuration, type TrendNode, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, trendDuration, type TrendNode, type TrendRange, type TrendsReport } from './trends'
 import { errorMessage } from '../../lib/errors'
 import { CalendarDateField } from '../../components/CalendarDateField'
 
 type Period = 'day' | 'week' | 'month' | 'custom'
-type Drill = (name: string, days: Record<string, number>) => void
+type Drill = (name: string, days: Record<string, number>, range: TrendRange) => void
+// A Day range always has exactly one contributing day, so it offers no drill-through.
+type NodeDrill = ((name: string, days: Record<string, number>) => void) | null
 const control = 'rounded-full bg-surface-container-low px-4 py-2 text-sm text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface'
 
 export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Drill }) {
@@ -81,13 +83,13 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
       <div><p className="font-headline text-5xl font-extralight tracking-tight" data-testid="trends-total">{trendDuration(report.duration_seconds)}</p><p className="mt-2 text-sm text-on-surface-variant">Recorded time · {report.timezone}</p></div>
       {report.types.length === 0 ? <p>No recorded time in this range.</p> : <>
         <h2 className="text-xs uppercase tracking-widest text-on-surface-variant">By Task Type</h2>
-        <div className="space-y-5">{report.types.map(node => <TypeNode key={node.path} node={node} total={report.duration_seconds} depth={0} onDrill={onDrill} />)}</div>
+        <div className="space-y-5">{report.types.map(node => <TypeNode key={node.path} node={node} total={report.duration_seconds} depth={0} onDrill={period === 'day' ? null : (name, days) => onDrill(name, days, { period, start: report.start, end: report.end })} />)}</div>
       </>}
     </>}
   </section>
 }
 
-function TypeNode({ node, total, depth, onDrill }: { node: TrendNode; total: number; depth: number; onDrill: Drill }) {
+function TypeNode({ node, total, depth, onDrill }: { node: TrendNode; total: number; depth: number; onDrill: NodeDrill }) {
   const [expanded, setExpanded] = useState(false)
   const children = [...node.children]
   if (node.direct_seconds > 0 && node.children.length) children.push({ ...node, path: `${node.path}/`, name: `Directly under ${node.name}`, duration_seconds: node.direct_seconds, days: node.direct_days, children: [] })
@@ -96,15 +98,19 @@ function TypeNode({ node, total, depth, onDrill }: { node: TrendNode; total: num
   return <div className="space-y-4">
     <div>
       <div className="flex items-center justify-between gap-3 py-2">
-        <button style={{ paddingLeft: `${Math.min(depth, 4) * 18}px` }} className="min-w-0 flex-1 py-2 text-left" aria-expanded={node.children.length ? expanded : undefined} onClick={() => node.children.length ? setExpanded(!expanded) : onDrill(node.name, node.days)}>
+        {node.children.length || onDrill ? <button style={{ paddingLeft: `${Math.min(depth, 4) * 18}px` }} className="min-w-0 flex-1 py-2 text-left" aria-expanded={node.children.length ? expanded : undefined} onClick={() => node.children.length ? setExpanded(!expanded) : onDrill?.(node.name, node.days)}>
           {node.children.length > 0 && <span aria-hidden>{expanded ? '▾' : '▸'} </span>}{node.name}
-        </button>
-        <button className="shrink-0 py-2 text-right tabular-nums" aria-label={`Show contributing days for ${node.name}`} onClick={() => onDrill(node.path.endsWith('/') ? node.name : node.path, node.days)}>
-          <span className="block text-sm">{trendDuration(node.duration_seconds)}</span><span className="block text-xs text-on-surface-variant">{percentage.toFixed(1)}%</span>
-        </button>
+        </button> : <span style={{ paddingLeft: `${Math.min(depth, 4) * 18}px` }} className="min-w-0 flex-1 py-2">{node.name}</span>}
+        {onDrill ? <button className="shrink-0 py-2 text-right tabular-nums" aria-label={`Show contributing days for ${node.name}`} onClick={() => onDrill(node.path.endsWith('/') ? node.name : node.path, node.days)}>
+          <TypeTotal seconds={node.duration_seconds} percentage={percentage} />
+        </button> : <div className="shrink-0 py-2 text-right tabular-nums"><TypeTotal seconds={node.duration_seconds} percentage={percentage} /></div>}
       </div>
       <div className={`${depth ? 'h-1' : 'h-1.5'} overflow-hidden rounded-full bg-surface-container-low dark:bg-dark-surface-container`}><div className={`h-full ${depth ? 'bg-outline' : 'bg-on-surface-variant'}`} style={{ width: `${percentage}%` }} /></div>
     </div>
     {expanded && children.map(child => <TypeNode key={child.path} node={child} total={total} depth={depth + 1} onDrill={onDrill} />)}
   </div>
+}
+
+function TypeTotal({ seconds, percentage }: { seconds: number; percentage: number }) {
+  return <><span className="block text-sm">{trendDuration(seconds)}</span><span className="block text-xs text-on-surface-variant">{percentage.toFixed(1)}%</span></>
 }
