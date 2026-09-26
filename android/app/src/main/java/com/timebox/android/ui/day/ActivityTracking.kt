@@ -56,6 +56,7 @@ fun ActivityTracking(
     var startSaving by remember { mutableStateOf(false) }
     var startError by remember { mutableStateOf<String?>(null) }
     var stopSaving by remember { mutableStateOf(false) }
+    var switchSaving by remember { mutableStateOf(false) }
     var notesTargetId by remember { mutableStateOf<Int?>(null) }
     var targetId by remember { mutableStateOf<Int?>(null) }
     var timing by remember { mutableStateOf<ActivityTimeValue?>(null) }
@@ -91,7 +92,8 @@ fun ActivityTracking(
     }
     fun dismissCheckIn() { checkInOpen = false; question?.let { scope.launch { repository.dismissCheckIn(it.id) } } }
 
-    LaunchedEffect(current?.id) { selectedType = null; typeQuery = ""; typeError = null }
+    // An open sheet owns its draft: its own commit changes the current activity before it closes.
+    LaunchedEffect(current?.id) { if (!starting && !switching) { selectedType = null; typeQuery = ""; typeError = null } }
     LaunchedEffect(starting, switching) { typeError = null }
     val plan = repository.currentPlan()
     // Without a covering Planned Block, starting waits for an explicit Task Type.
@@ -319,19 +321,22 @@ fun ActivityTracking(
         name = name, onNameChange = { name = it }, timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
-        enabled = enabled && switchTarget != null && current?.id == targetId, busy = state.busy,
-        error = if (current?.id != targetId) "The current activity changed. Close this sheet and review it before switching." else timingError,
+        enabled = enabled && switchTarget != null && (switchSaving || current?.id == targetId), busy = state.busy || switchSaving,
+        error = if (!switchSaving && current?.id != targetId) "The current activity changed. Close this sheet and review it before switching." else timingError,
         onDismiss = { switching = false; proposalId = null },
         onConfirm = {
-            scope.launch {
-                try {
-                    val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
-                    var operation: String? = null
-                    if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it }) }) {
-                        reportApplied(operation, at)
-                        switching = false; selectedType = null; name = ""; typeQuery = ""
-                    } else timingError = repository.state.value.error
-                } catch (error: Exception) { timingError = error.message }
+            if (!switchSaving) {
+                switchSaving = true
+                scope.launch {
+                    try {
+                        val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
+                        var operation: String? = null
+                        if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it }) }) {
+                            reportApplied(operation, at)
+                            switching = false; selectedType = null; name = ""; typeQuery = ""
+                        } else timingError = repository.state.value.error
+                    } catch (error: Exception) { timingError = error.message } finally { switchSaving = false }
+                }
             }
         },
         onCreateType = createType, typeError = typeError,

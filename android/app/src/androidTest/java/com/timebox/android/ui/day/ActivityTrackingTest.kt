@@ -280,4 +280,44 @@ class ActivityTrackingTest {
         assertEquals(1, commands[0].taskTypeId)
         assertNull(commands[1].name)
     }
+
+    @Test fun switchSheetKeepsChosenTypeWhileTheSwitchIsConfirmed() {
+        var journal: String? = null
+        val storage = object : ActivityStorage {
+            override fun load() = journal
+            override fun save(value: String) { journal = value }
+        }
+        val running = ActualBlockDto(id = 1, taskTypeId = 1, taskType = TaskTypeDto(1, "writing"),
+            startAt = "2026-09-11T09:00:00Z", createdAt = "2026-09-11T09:00:00Z", updatedAt = "2026-09-11T09:00:00Z")
+        var saved = ActivitySnapshotDto(offlineReady = true, cursor = 0, serverAt = "2026-09-11T10:00:00Z", reportingTimezone = "UTC", current = running, records = listOf(running))
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val transport = object : ActivityTransport {
+            override suspend fun read() = saved
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                gate.await()
+                val next = ActualBlockDto(id = 2, taskTypeId = 2, taskType = TaskTypeDto(2, "reading"),
+                    startAt = saved.serverAt, createdAt = saved.serverAt, updatedAt = saved.serverAt)
+                saved = saved.copy(cursor = 1, current = next, records = listOf(running.copy(endAt = saved.serverAt), next),
+                    acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+                return saved
+            }
+        }
+        val repository = ActivityRepository(transport, storage)
+        compose.setContent { TimeboxTheme(darkTheme = false) {
+            ActivityTracking(listOf(TaskType(1, "writing", 0), TaskType(2, "reading", 0)), {}, repository)
+        } }
+        compose.waitUntil(5000) { repository.state.value.snapshot != null }
+        compose.onNodeWithText("Current activity").performClick()
+        compose.onNodeWithText("Switch activity").performClick()
+        chooseTaskType("read", "reading")
+        compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
+        // The local projection moves to the next activity while the server round trip is pending.
+        compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
+        compose.onNodeWithText("Unset").assertDoesNotExist()
+        compose.onNodeWithText("The current activity changed", substring = true).assertDoesNotExist()
+        assertTrue(compose.onAllNodesWithText("reading", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        gate.complete(Unit)
+        compose.waitUntil(5000) { compose.onAllNodes(hasText("Switching…")).fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText("Unset").assertDoesNotExist()
+    }
 }
