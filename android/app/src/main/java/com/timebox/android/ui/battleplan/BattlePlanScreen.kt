@@ -165,6 +165,9 @@ import kotlin.math.roundToInt
 private data class CardCompletionActions(val saving: Boolean = false, val move: (BattleTask, TaskStatus) -> Unit = { _, _ -> })
 private val LocalCardCompletion = androidx.compose.runtime.staticCompositionLocalOf { CardCompletionActions() }
 
+/** PROTOTYPE (task type filter study): a debug route swaps the filter sheet's Task type section. */
+internal val LocalPrototypeTaskTypeFilter = androidx.compose.runtime.staticCompositionLocalOf<(@Composable () -> Unit)?> { null }
+
 @Composable
 internal fun BattlePlanScreen(
     state: BattlePlanUiState,
@@ -769,7 +772,14 @@ private fun BattlePlanFilterSheetContent(
             modifier = Modifier.padding(top = 16.dp),
         )
 
-        Column(Modifier.fillMaxWidth().padding(start = 20.dp, top = 16.dp, end = 20.dp)) {
+        val prototypeTaskTypeSection = LocalPrototypeTaskTypeFilter.current
+        if (prototypeTaskTypeSection != null) {
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, top = 16.dp, end = 20.dp)) {
+                FilterSectionLabel("Task type")
+                Spacer(Modifier.height(9.dp))
+                prototypeTaskTypeSection()
+            }
+        } else Column(Modifier.fillMaxWidth().padding(start = 20.dp, top = 16.dp, end = 20.dp)) {
             FilterSectionLabel("Task type")
             Spacer(Modifier.height(9.dp))
             FlowRow(

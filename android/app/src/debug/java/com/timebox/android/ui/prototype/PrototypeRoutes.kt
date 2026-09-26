@@ -7,6 +7,7 @@ import androidx.navigation.navDeepLink
 import com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype
 import com.timebox.android.ui.battleplan.RoutineSheetPrototype
 import com.timebox.android.ui.battleplan.TaskSheetPrototype
+import com.timebox.android.ui.battleplan.TaskTypeFilterPrototype
 
 /**
  * Design-study destinations, reachable by deep link in debug builds only.
@@ -50,5 +51,18 @@ fun NavGraphBuilder.prototypeRoutes() {
                 initialScenario = entry.arguments?.getString("mode") ?: "scheduled",
             )
         }
+    }
+    composable(
+        "prototype/type-filter?variant={variant}&data={data}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/type-filter?variant={variant}&data={data}" }),
+        arguments = listOf(
+            navArgument("variant") { defaultValue = "inline" },
+            navArgument("data") { defaultValue = "many" },
+        ),
+    ) { entry ->
+        TaskTypeFilterPrototype(
+            entry.arguments?.getString("variant") ?: "inline",
+            entry.arguments?.getString("data") ?: "many",
+        )
     }
 }
