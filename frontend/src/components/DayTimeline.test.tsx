@@ -115,6 +115,11 @@ describe('DayTimeline draft resize', () => {
     expect(screen.getByRole('button', { name: 'Move draft actual block' })).toBeInTheDocument()
   })
 
+  it('shows the draft Block Duration alongside its range', () => {
+    renderTimeline(vi.fn())
+    expect(screen.getByRole('button', { name: 'Move draft planned block' })).toHaveTextContent('8 – 8:30am · 30m')
+  })
+
   it('resizes a draft exactly to a neighboring off-grid boundary', () => {
     const changed = vi.fn()
     const neighbor = { id: 1, lane: 'planned' as const, start_minute: 547, end_minute: 600,
@@ -371,11 +376,36 @@ describe('DayTimeline authoritative clock', () => {
       onLaneSlotClick={vi.fn()} onPatchBlock={onPatchBlock} /></DragDropProvider>)
     expect(screen.getByText('9 – 10:23am')).toBeInTheDocument()
     const block = screen.getByRole('button', { name: 'Edit actual block' })
-    expect(block).toHaveAccessibleDescription('Work, 9 – 10:23am')
+    expect(block).toHaveAccessibleDescription('Work, 9 – 10:23am, 1h 23m')
     expect(parseFloat(block.parentElement!.style.height)).toBeCloseTo((623.35 - 540) / 30 * 46)
     const line = screen.getByTestId('day-now-line').firstElementChild as HTMLElement
     expect(parseFloat(line.style.top)).toBeCloseTo((623.35 - 480) / 30 * 46)
     expect(onPatchBlock).not.toHaveBeenCalled()
+  })
+
+  it('shows the whole Block Duration of an Actual Block that began the previous day', () => {
+    const now = () => Date.parse('2026-06-01T12:00:00Z')
+    render(<DragDropProvider><DayTimeline now={now} day={{ ...day, actual_blocks: [{
+      date: day.date, start_minute: 0, end_minute: 90, duration_minutes: 90,
+      actual_block: { id: 1, task_type_id: 1, task_type: { id: 1, name: 'Work', created_at: '', updated_at: '' },
+        task_id: null, task: null, name: null, note: null, planned_block_id: null,
+        start_at: '2026-05-31T23:00:00Z', end_at: '2026-06-01T01:30:00Z', created_at: '', updated_at: '' },
+    }] }} readOnly={false} draft={null} selectedBlockId={null}
+      onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} /></DragDropProvider>)
+    const block = screen.getByRole('button', { name: 'Edit actual block' })
+    expect(block).toHaveAccessibleDescription('Work, 12 – 1:30am, 2h 30m')
+  })
+
+  it('shows the Block Duration beside a Planned Block range', () => {
+    const now = () => Date.parse('2026-06-01T12:00:00Z')
+    render(<DragDropProvider><DayTimeline now={now} day={{ ...day, time_blocks: [{
+      id: 7, lane: 'planned', task_type_id: 1, task_type: { id: 1, name: 'Work', created_at: '', updated_at: '' },
+      note: null, start_minute: 540, end_minute: 630, created_at: '', updated_at: '',
+    }] }} readOnly={false} draft={null} selectedBlockId={null}
+      onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} /></DragDropProvider>)
+    const block = screen.getByRole('button', { name: 'Edit planned block' })
+    expect(block).toHaveAccessibleDescription('Work, 9 – 10:30am, 1h 30m')
+    expect(block.querySelector('[data-block-duration]')).toHaveTextContent('1h 30m')
   })
 
   it('positions the line and running range from the same live instant', () => {
