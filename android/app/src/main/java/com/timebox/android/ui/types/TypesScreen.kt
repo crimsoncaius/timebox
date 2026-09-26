@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -257,20 +258,36 @@ private fun TypeRow(type: TaskType, onDelete: () -> Unit, onRename: () -> Unit) 
             color = colors.onVariant,
         )
         if (type.name != "unspecified") {
-            TextButton(onClick = onRename) { Text("Rename", color = colors.on) }
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onDelete),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = "Delete ${type.name}",
-                    tint = colors.error,
-                    modifier = Modifier.size(18.dp),
-                )
+            // The row's 10dp gap reads too wide between these two icons.
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onRename),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Rename ${type.name}",
+                        tint = colors.on,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onDelete),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Delete ${type.name}",
+                        tint = colors.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }
