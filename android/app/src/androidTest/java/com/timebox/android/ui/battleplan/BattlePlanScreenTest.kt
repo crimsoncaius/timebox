@@ -590,7 +590,10 @@ class BattlePlanScreenTest {
                 BattlePlanScreen(
                     state = BattlePlanUiState(
                         loading = false,
-                        taskTypes = listOf(TaskType(id = 7, name = "Work / Focus", usageCount = 0)),
+                        taskTypes = listOf(
+                            TaskType(id = 7, name = "work/focus", usageCount = 0),
+                            TaskType(id = 8, name = "writing", usageCount = 0),
+                        ),
                     ),
                     onRetry = {},
                     filterActions = BattlePlanFilterActions(
@@ -610,11 +613,48 @@ class BattlePlanScreenTest {
         compose.onNodeWithText("Show 0 tasks").fetchSemanticsNode()
 
         compose.onAllNodesWithText("High")[0].performClick()
-        compose.onNodeWithText("Work / Focus").performClick()
+        compose.onNodeWithText("work / focus").performScrollTo().performClick()
         compose.runOnIdle {
             check(urgencyTapped == "high")
             check(taskTypeTapped == "7")
         }
+    }
+
+    @Test
+    fun taskTypeFilterSearchesExistingTypesShowsChosenChipsAndNeverOffersCreate() {
+        val filter = mutableStateOf(setOf("1"))
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                BattlePlanScreen(
+                    state = BattlePlanUiState(
+                        loading = false,
+                        taskTypes = listOf(
+                            TaskType(id = 1, name = "coding", usageCount = 3),
+                            TaskType(id = 2, name = "coding/ai", usageCount = 2),
+                            TaskType(id = 3, name = "writing", usageCount = 1),
+                        ),
+                        taskTypeFilter = filter.value,
+                    ),
+                    onRetry = {},
+                    filterActions = BattlePlanFilterActions(
+                        toggleTaskType = { id -> filter.value = toggleTaskTypeFilter(filter.value, id, emptyList()) },
+                    ),
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Filter tasks").performClick()
+        compose.onNodeWithContentDescription("coding and 1 sub-types").fetchSemanticsNode()
+        compose.onNodeWithText("Included via coding").performScrollTo()
+
+        compose.onNode(hasSetTextAction()).performTextInput("writ")
+        check(compose.onAllNodesWithText("coding / ai").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("writing").performClick()
+        compose.runOnIdle { check(filter.value == setOf("1", "3")) }
+
+        compose.onNode(hasSetTextAction()).performTextInput("zz")
+        compose.onNodeWithText("No type matches that path.").fetchSemanticsNode()
+        check(compose.onAllNodesWithText("Create", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
     @Test

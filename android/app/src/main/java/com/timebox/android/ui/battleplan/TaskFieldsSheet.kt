@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -349,47 +350,80 @@ internal fun TaskFieldChip(icon: ImageVector, label: String, enabled: Boolean, o
     }
 }
 
+private val scheduleTimeFormat = DateTimeFormatter.ofPattern("HH:mm")
+private val scheduleDateFormat = DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH)
+
+/** The picked date, or null while the deadline or reminder is unset. */
+internal fun scheduleDate(draft: TaskDetailDraft, reminder: Boolean): LocalDate? = when {
+    reminder && !draft.reminderEnabled -> null
+    !reminder && draft.deadlineMode == TaskDeadlineMode.None -> null
+    else -> runCatching { LocalDate.parse(if (reminder) draft.reminderDate else draft.deadlineDate) }.getOrNull()
+}
+
+/** The picked time, or null when unset; a date-only deadline has no time. */
+internal fun scheduleTime(draft: TaskDetailDraft, reminder: Boolean): LocalTime? = when {
+    scheduleDate(draft, reminder) == null -> null
+    reminder -> runCatching { LocalTime.parse(draft.reminderTime) }.getOrNull()
+    draft.deadlineMode == TaskDeadlineMode.DateTime -> runCatching { LocalTime.parse(draft.deadlineTime) }.getOrNull()
+    else -> null
+}
+
+/**
+ * Picking a date is what sets a deadline or reminder. A deadline keeps any time already chosen;
+ * a new reminder starts at the suggested time on the suggested day, otherwise 09:00.
+ */
+internal fun withScheduleDate(draft: TaskDetailDraft, reminder: Boolean, date: LocalDate, suggestedReminder: java.time.ZonedDateTime): TaskDetailDraft {
+    val time = scheduleTime(draft, reminder)
+    return if (reminder) draft.copy(reminderEnabled = true, reminderDate = date.toString(), reminderTime = (time
+        ?: if (date == suggestedReminder.toLocalDate()) suggestedReminder.toLocalTime() else LocalTime.of(9, 0)).format(scheduleTimeFormat))
+    else draft.copy(deadlineMode = if (time == null) TaskDeadlineMode.DateOnly else TaskDeadlineMode.DateTime, deadlineDate = date.toString())
+}
+
+/** Choosing a time needs a date first; without one the draft is unchanged. */
+internal fun withScheduleTime(draft: TaskDetailDraft, reminder: Boolean, time: LocalTime): TaskDetailDraft = when {
+    scheduleDate(draft, reminder) == null -> draft
+    reminder -> draft.copy(reminderTime = time.format(scheduleTimeFormat))
+    else -> draft.copy(deadlineMode = TaskDeadlineMode.DateTime, deadlineTime = time.format(scheduleTimeFormat))
+}
+
+internal fun withoutDeadlineTime(draft: TaskDetailDraft): TaskDetailDraft =
+    if (draft.deadlineMode == TaskDeadlineMode.DateTime) draft.copy(deadlineMode = TaskDeadlineMode.DateOnly) else draft
+
+internal fun withoutSchedule(draft: TaskDetailDraft, reminder: Boolean): TaskDetailDraft =
+    if (reminder) draft.copy(reminderEnabled = false) else draft.copy(deadlineMode = TaskDeadlineMode.None)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TaskScheduleEditor(draft: TaskDetailDraft, reminder: Boolean, timezone: String, today: LocalDate, enabled: Boolean,
     notificationsAllowed: Boolean, requestPermission: () -> Unit, onChange: (TaskDetailDraft) -> Unit) {
     val context = LocalContext.current
-    val active = if (reminder) draft.reminderEnabled else draft.deadlineMode != TaskDeadlineMode.None
-    val fallback = runCatching { LocalDate.parse(draft.deadlineDate) }.getOrDefault(today)
-    val date = runCatching { LocalDate.parse(if (reminder) draft.reminderDate else draft.deadlineDate) }.getOrDefault(fallback)
-    val time = runCatching { LocalTime.parse(if (reminder) draft.reminderTime else draft.deadlineTime) }.getOrDefault(LocalTime.of(9, 0))
-    fun setDate(value: LocalDate) = onChange(if (reminder) draft.copy(reminderDate = value.toString()) else draft.copy(deadlineDate = value.toString()))
-    fun setTime(value: LocalTime) {
-        val text = value.format(DateTimeFormatter.ofPattern("HH:mm"))
-        onChange(if (reminder) draft.copy(reminderTime = text) else draft.copy(deadlineTime = text))
+    val date = scheduleDate(draft, reminder)
+    val time = scheduleTime(draft, reminder)
+    fun setDate(value: LocalDate) {
+        if (reminder && date == null && !notificationsAllowed) requestPermission()
+        onChange(withScheduleDate(draft, reminder, value, suggestedReminderStart(java.time.Instant.now(), ZoneId.of(timezone))))
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(if (reminder) "Remind me" else "Set a deadline", Modifier.weight(1f))
-        Switch(active, { checked ->
-            if (reminder) {
-                if (checked && !notificationsAllowed) requestPermission()
-                val suggested = suggestedReminderStart(java.time.Instant.now(), ZoneId.of(timezone))
-                onChange(draft.copy(reminderEnabled = checked, reminderDate = suggested.toLocalDate().toString(), reminderTime = suggested.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))))
-            } else onChange(draft.copy(deadlineMode = if (checked) TaskDeadlineMode.DateOnly else TaskDeadlineMode.None, deadlineDate = date.toString()))
-        }, enabled = enabled)
+    fun pickTime() = TimePickerDialog(context, { _, h, m -> onChange(withScheduleTime(draft, reminder, LocalTime.of(h, m))) },
+        (time ?: LocalTime.of(if (reminder) 9 else 17, 0)).hour, time?.minute ?: 0, true).show()
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("Today" to today, "Tomorrow" to today.plusDays(1), "Next week" to today.plusWeeks(1)).forEach { (label, day) ->
+            FilterChip(selected = date == day, onClick = { setDate(day) }, enabled = enabled, label = { Text(label) })
+        }
     }
-    if (active) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today" to today, "Tomorrow" to today.plusDays(1), "Next week" to today.plusWeeks(1)).forEach { (label, day) ->
-                FilterChip(selected = date == day, onClick = { setDate(day) }, enabled = enabled, label = { Text(label) })
-            }
-        }
-        TaskSheetRow(Icons.Outlined.CalendarToday, date.toString(), "Choose date", enabled) {
-            showMondayDatePicker(context, date) { selected -> setDate(selected) }
-        }
-        if (!reminder) Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Include a time", Modifier.weight(1f))
-            Switch(draft.deadlineMode == TaskDeadlineMode.DateTime, { onChange(draft.copy(deadlineMode = if (it) TaskDeadlineMode.DateTime else TaskDeadlineMode.DateOnly, deadlineTime = time.format(DateTimeFormatter.ofPattern("HH:mm")))) }, enabled = enabled)
-        }
-        if (reminder || draft.deadlineMode == TaskDeadlineMode.DateTime) TaskSheetRow(Icons.Outlined.Schedule, time.toString(), "Choose time", enabled) {
-            TimePickerDialog(context, { _, h, m -> setTime(LocalTime.of(h, m)) }, time.hour, time.minute, true).show()
-        }
-        Text(timezone, color = TimeboxTheme.colors.onVariant, fontSize = 12.sp)
+    TaskSheetRow(Icons.Outlined.CalendarToday, date?.format(scheduleDateFormat) ?: "Choose date", "Choose date", enabled) {
+        showMondayDatePicker(context, date ?: today) { selected -> setDate(selected) }
     }
+    // The time row stays visible but muted until a date is picked.
+    if (!reminder && time != null) Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { TaskSheetRow(Icons.Outlined.Schedule, time.format(scheduleTimeFormat), "Change time", enabled, ::pickTime) }
+        IconButton(onClick = { onChange(withoutDeadlineTime(draft)) }, enabled = enabled) { Icon(Icons.Outlined.Close, "Remove time") }
+    } else Box(Modifier.alpha(if (date == null) 0.38f else 1f)) {
+        TaskSheetRow(Icons.Outlined.Schedule, time?.format(scheduleTimeFormat) ?: "Add time",
+            if (date == null) "Pick a date first" else if (reminder) "Choose time" else "Optional", enabled && date != null, ::pickTime)
+    }
+    if (date != null) TextButton(onClick = { onChange(withoutSchedule(draft, reminder)) }, enabled = enabled) {
+        Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (reminder) "Clear reminder" else "Clear deadline")
+    }
+    Text(timezone, color = TimeboxTheme.colors.onVariant, fontSize = 12.sp)
     if (reminder && !notificationsAllowed) Text("Reminders are saved, but notifications are disabled on this device.", color = TimeboxTheme.colors.error)
 }

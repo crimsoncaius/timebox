@@ -67,6 +67,7 @@ import com.timebox.android.data.BattleTask
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.SLOT_MINUTES
+import com.timebox.android.ui.durationShort
 import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.planning.PlanningDraftPlacement
 import com.timebox.android.ui.planning.PlanningEditResult
@@ -336,6 +337,7 @@ internal fun PlanningWorkspace(
                 height = blockHeight,
                 invalid = noSpace,
                 timeRange = resolvedStart?.let { "${hhmm(it)}–${hhmm(it + dragDuration)}" },
+                duration = durationShort(dragDuration),
                 modifier = Modifier.offset {
                     val local = active.pointerRoot - rootPosition
                     IntOffset(
@@ -603,6 +605,7 @@ private fun DragGhost(
     height: Dp,
     invalid: Boolean,
     timeRange: String?,
+    duration: String,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -639,7 +642,7 @@ private fun DragGhost(
                 overflow = TextOverflow.Ellipsis,
             )
             if (timeRange != null) {
-                Text(timeRange, style = TimeboxTheme.type.monoSmall, color = colors.on, maxLines = 1)
+                TimeRangeWithDuration(timeRange, duration, style = TimeboxTheme.type.monoSmall, color = colors.on)
             }
         }
     }

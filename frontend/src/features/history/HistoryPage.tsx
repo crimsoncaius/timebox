@@ -4,6 +4,7 @@ import { Layout } from '../../components/Layout'
 import { api, type ChronicleDay } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
 import { TrendsPanel } from './TrendsPanel'
+import { ChronicleHighlight, type Highlight } from './ChronicleHighlight'
 import { daysByDate, shiftMonth } from './historyCalendar'
 import { errorMessage } from '../../lib/errors'
 
@@ -21,7 +22,7 @@ export function HistoryPage() {
   const view: ChronicleView = searchParams.get('view') === 'trends' ? 'trends' : 'calendar'
   const selectView = (next: ChronicleView) =>
     setSearchParams(next === 'trends' ? { view: 'trends' } : {}, { replace: true })
-  const [highlight, setHighlight] = useState<{ name: string; days: Record<string, number> } | null>(null)
+  const [highlight, setHighlight] = useState<Highlight | null>(null)
   const [rows, setRows] = useState<ChronicleDay[]>([])
   const [applicationMonth, setApplicationMonth] = useState<CalendarMonth | null>(null)
   const [viewMonth, setViewMonth] = useState<CalendarMonth | null>(null)
@@ -102,16 +103,16 @@ export function HistoryPage() {
       </div>
 
       <div hidden={view !== 'trends'}>
-        <TrendsPanel active={view === 'trends'} onDrill={(name, days) => {
+        <TrendsPanel active={view === 'trends'} onDrill={(name, days, range) => {
           const latest = Object.keys(days).sort().at(-1)
           if (!latest) return
-          setHighlight({ name, days })
+          setHighlight({ name, days, range })
           showMonth(calendarMonthFromIso(latest))
           selectView('calendar')
         }} />
       </div>
       {view === 'calendar' && <>
-      {highlight && <div className="mb-4 flex items-center gap-4"><p>{highlight.name} · {Object.keys(highlight.days).length} contributing days</p><button onClick={() => setHighlight(null)}>Clear</button><button onClick={() => selectView('trends')}>Back to Trends</button></div>}
+      {highlight && <ChronicleHighlight highlight={highlight} onBack={() => selectView('trends')} onClear={() => setHighlight(null)} />}
       {error && (
         <div className="mb-6 rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
           {error}

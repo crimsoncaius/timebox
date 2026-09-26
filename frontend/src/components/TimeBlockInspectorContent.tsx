@@ -1,5 +1,5 @@
 import { BlockTimeFields } from './BlockTimeFields'
-import { formatDuration } from '../lib/duration'
+import { formatBlockDuration, formatDuration } from '../lib/duration'
 import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
 import { type ActivityCorrection } from '../features/activity/activityRepository'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -291,10 +291,7 @@ function LegacyTimeBlockInspectorContent({
   const startLabel = formatMinuteLabel24(startMinute)
   const endLabel = formatMinuteLabel24(endMinute)
 
-  const durationTotal = endMinute - startMinute
-  const durationH = Math.floor(durationTotal / 60)
-  const durationM = durationTotal % 60
-  const durationLabel = `${durationH}h ${String(durationM).padStart(2, '0')}m`
+  const durationLabel = formatBlockDuration(endMinute - startMinute)
 
   const lanePillColors =
     lane === 'planned'

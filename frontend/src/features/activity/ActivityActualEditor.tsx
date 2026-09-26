@@ -6,6 +6,7 @@ import { activityTimeValue, resolveActivityTime } from './activityTime'
 import type { ActivityCorrection } from './activityRepository'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 import { errorMessage } from '../../lib/errors'
+import { formatBlockDuration } from '../../lib/duration'
 
 /** The Actual form inside the existing Day inspector rail / sheet. */
 export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, onCreate, onDelete, onClose, onDirtyChange, onCreateTaskTypePath }: {
@@ -36,6 +37,7 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
     } catch (cause) { setError(errorMessage(cause, 'Could not save correction')) } finally { setSaving(false) }
   }}>
     <h2>{actual ? 'Actual Block' : 'New Actual Block'}</h2>
+    {actual?.end_at ? <p className="font-mono text-xs">{formatBlockDuration((Date.parse(actual.end_at) - Date.parse(actual.start_at)) / 60_000)}</p> : null}
     <p className="text-xs">Reporting Time Zone: {zone}</p>
     {running ? <p>Use Switch or Stop above the Day timeline to correct the Current Activity.</p> : <>
       <ActivityTimeField label="Start" value={start} onChange={setStart} timezone={zone} />

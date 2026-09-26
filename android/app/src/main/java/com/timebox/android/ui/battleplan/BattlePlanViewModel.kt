@@ -147,12 +147,15 @@ data class BattlePlanUiState(
         get() = listOf(BattlePlanScope.All, BattlePlanScope.Admin) + projects.map(BattlePlanScope::project)
 
     val filteredTasks: List<BattleTask>
-        get() = tasks.inScope(selectedScope).filter { task ->
-            (!hideCompleted || task.status != TaskStatus.Completed) &&
-                urgencyFilter.matches(task.urgency?.wire) &&
-                importanceFilter.matches(task.importance?.wire) &&
-                taskTypeFilter.matches(task.taskTypeId?.toString())
-        }.sortedBy { it.position }
+        get() {
+            val taskTypeCoverage = taskTypeFilterCoverage(taskTypeFilter, taskTypes)
+            return tasks.inScope(selectedScope).filter { task ->
+                (!hideCompleted || task.status != TaskStatus.Completed) &&
+                    urgencyFilter.matches(task.urgency?.wire) &&
+                    importanceFilter.matches(task.importance?.wire) &&
+                    taskTypeCoverage.matches(task.taskTypeId?.toString())
+            }.sortedBy { it.position }
+        }
 
     val visibleTasks: List<BattleTask>
         get() = if (collection == TaskCollection.Active) filteredTasks.filter { it.status == selectedStatus }
@@ -391,7 +394,7 @@ class BattlePlanViewModel internal constructor(
     fun setHideCompleted(value: Boolean) { _state.update { it.copy(hideCompleted = value) }; persistView() }
     fun toggleUrgency(value: String) { _state.update { it.copy(urgencyFilter = it.urgencyFilter.toggle(value)) }; persistView() }
     fun toggleImportance(value: String) { _state.update { it.copy(importanceFilter = it.importanceFilter.toggle(value)) }; persistView() }
-    fun toggleTaskType(value: String) { _state.update { it.copy(taskTypeFilter = it.taskTypeFilter.toggle(value)) }; persistView() }
+    fun toggleTaskType(value: String) { _state.update { it.copy(taskTypeFilter = toggleTaskTypeFilter(it.taskTypeFilter, value, it.taskTypes)) }; persistView() }
     fun clearFilters() { _state.update { it.copy(urgencyFilter = emptySet(), importanceFilter = emptySet(), taskTypeFilter = emptySet()) }; persistView() }
     fun setComposerVisible(visible: Boolean) {
         if (!visible) {

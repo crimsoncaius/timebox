@@ -109,7 +109,8 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
             else {
                 Text("BY TASK TYPE", color = colors.onVariant, fontSize = 11.sp, letterSpacing = 1.sp)
                 report.types.forEach { node -> key(node.path) {
-                    TrendNode(node, report.durationSeconds, 0, viewModel::showContributingDays)
+                    // A Day range always has exactly one contributing day, so it offers no drill-through.
+                    TrendNode(node, report.durationSeconds, 0, if (state.period == "day") null else viewModel::showContributingDays)
                 } }
             }
         }
@@ -118,17 +119,17 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
 }
 
 @Composable
-private fun TrendNode(node: TrendNodeDto, total: Double, depth: Int, onDays: (String, Map<String, Double>) -> Unit) {
+private fun TrendNode(node: TrendNodeDto, total: Double, depth: Int, onDays: ((String, Map<String, Double>) -> Unit)?) {
     var expanded by rememberSaveable(node.path) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TrendRow(node.name, node.durationSeconds, total, depth,
             expandable = node.children.isNotEmpty(), expanded = expanded,
-            onExpand = { expanded = !expanded }, onDays = { onDays(node.path, node.days) })
+            onExpand = { expanded = !expanded }, onDays = onDays?.let { drill -> { drill(node.path, node.days) } })
         if (expanded) {
             // Direct time participates in the same ranking as immediate children.
             val direct = if (node.directSeconds > 0) listOf(TrendNodeDto("${node.path}/", "Directly under ${node.name}", node.directSeconds, node.directSeconds, node.directDays, node.directDays)) else emptyList()
             (node.children + direct).sortedWith(compareByDescending<TrendNodeDto> { it.durationSeconds }.thenBy { it.path }).forEach { child -> key(child.path) {
-                if (child.path.endsWith('/')) TrendRow(child.name, child.durationSeconds, total, depth + 1, onDays = { onDays(child.name, child.days) })
+                if (child.path.endsWith('/')) TrendRow(child.name, child.durationSeconds, total, depth + 1, onDays = onDays?.let { drill -> { drill(child.name, child.days) } })
                 else TrendNode(child, total, depth + 1, onDays)
             } }
         }
@@ -136,15 +137,15 @@ private fun TrendNode(node: TrendNodeDto, total: Double, depth: Int, onDays: (St
 }
 
 @Composable
-private fun TrendRow(name: String, seconds: Double, total: Double, depth: Int, expandable: Boolean = false, expanded: Boolean = false, onExpand: () -> Unit = {}, onDays: () -> Unit) {
+private fun TrendRow(name: String, seconds: Double, total: Double, depth: Int, expandable: Boolean = false, expanded: Boolean = false, onExpand: () -> Unit = {}, onDays: (() -> Unit)?) {
     val colors = TimeboxTheme.colors
     val fraction = (seconds / total).coerceIn(0.0, 1.0)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text((if (expandable) if (expanded) "▾  " else "▸  " else "") + name,
                 color = if (depth == 0) colors.on else colors.onVariant, fontSize = if (depth == 0) 15.sp else 13.sp,
-                modifier = Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = if (expandable) if (expanded) "Collapse $name" else "Expand $name" else "Show contributing days") { if (expandable) onExpand() else onDays() }.padding(start = (depth.coerceAtMost(4) * 18).dp, top = 12.dp, bottom = 12.dp))
-            Column(Modifier.clickable(role = Role.Button, onClickLabel = "Show contributing days for $name", onClick = onDays).padding(start = 8.dp, top = 8.dp, bottom = 8.dp), horizontalAlignment = Alignment.End) {
+                modifier = Modifier.weight(1f).clickable(enabled = expandable || onDays != null, role = Role.Button, onClickLabel = if (expandable) if (expanded) "Collapse $name" else "Expand $name" else "Show contributing days") { if (expandable) onExpand() else onDays?.invoke() }.padding(start = (depth.coerceAtMost(4) * 18).dp, top = 12.dp, bottom = 12.dp))
+            Column((if (onDays != null) Modifier.clickable(role = Role.Button, onClickLabel = "Show contributing days for $name", onClick = onDays) else Modifier).padding(start = 8.dp, top = 8.dp, bottom = 8.dp), horizontalAlignment = Alignment.End) {
                 Text(trendDuration(seconds), color = colors.on, fontSize = 14.sp)
                 Text(String.format(Locale.getDefault(), "%.1f%%", fraction * 100), color = colors.onVariant, fontSize = 11.sp)
             }

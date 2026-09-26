@@ -63,6 +63,7 @@ import com.timebox.android.data.TimeBlock
 import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.secondaryIdentity
 import com.timebox.android.ui.gutterLabel
+import com.timebox.android.ui.durationShort
 import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.planning.PlanningDraftPlacement
 import com.timebox.android.ui.theme.TimeboxDimens
@@ -414,6 +415,7 @@ private fun LaneColumn(
                 selected = selectedBlockId == block.id,
                 dragging = live != null,
                 invalid = live?.valid == false,
+                durationMinutes = blockDurationMinutes(block, day, previewStart, previewEnd, dragging = live != null),
                 moveEnabled = timeEditable,
                 resizeEnabled = timeEditable,
                 onTap = { onSelectBlock(block.id) },
@@ -825,11 +827,11 @@ private fun PlanningDraftCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (innerHeight >= 30.dp) {
-                    Text(
-                        "${hhmm(startMinute)} – ${hhmm(endMinute)}",
+                    TimeRangeWithDuration(
+                        range = "${hhmm(startMinute)} – ${hhmm(endMinute)}",
+                        duration = durationShort(endMinute - startMinute),
                         style = TimeboxTheme.type.monoSmall,
                         color = colors.planned,
-                        maxLines = 1,
                     )
                 }
             }
@@ -850,6 +852,7 @@ private fun BlockCard(
     selected: Boolean,
     dragging: Boolean,
     invalid: Boolean = false,
+    durationMinutes: Int,
     moveEnabled: Boolean,
     resizeEnabled: Boolean,
     onTap: () -> Unit,
@@ -891,7 +894,7 @@ private fun BlockCard(
                 }
             )
             .semantics {
-                contentDescription = "${block.primaryIdentity()}, ${hhmm(startMinute)} to ${hhmm(endMinute)}"
+                contentDescription = "${block.primaryIdentity()}, ${hhmm(startMinute)} to ${hhmm(endMinute)}, ${durationShort(durationMinutes)}"
                 customActions = onAccessibleMove?.let { move ->
                     listOf(
                         CustomAccessibilityAction("Move 5 minutes earlier") {
@@ -979,7 +982,7 @@ private fun BlockCard(
                 val secondary = if (invalid) {
                     NO_NEARBY_BLOCK_SPACE
                 } else if (dragging) {
-                    "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}"
+                    null
                 } else {
                     block.secondaryIdentity()
                 }
@@ -992,12 +995,11 @@ private fun BlockCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 } else if (innerHeight >= 30.dp) {
-                    Text(
-                        text = "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}",
+                    TimeRangeWithDuration(
+                        range = "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}",
+                        duration = durationShort(durationMinutes),
                         style = TimeboxTheme.type.monoSmall,
                         color = colors.onVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 val note = block.note
