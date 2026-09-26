@@ -150,19 +150,20 @@ private fun AssistantWelcome(onPrompt: (String) -> Unit) {
 @Composable
 private fun AssistantComposer(draft: String, onDraft: (String) -> Unit, focus: FocusRequester, busy: Boolean, placeholder: String, onStop: () -> Unit, onSend: () -> Unit) {
     val colors = TimeboxTheme.colors
-    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), color = colors.field, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, colors.hairline)) {
-        Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+    // Starts as a one-line pill; the field grows with the draft while Send stays at the bottom.
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), color = colors.field, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, colors.hairline)) {
+        Row(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f).heightIn(min = 36.dp), verticalArrangement = Arrangement.Center) {
                 BasicTextField(value = draft, onValueChange = onDraft,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp).focusRequester(focus).semantics { contentDescription = "Message Assistant" },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus).semantics { contentDescription = "Message Assistant" },
                     textStyle = TimeboxTheme.type.body.copy(color = colors.on), cursorBrush = SolidColor(colors.on), maxLines = 5,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    decorationBox = { field -> Box { if (draft.isEmpty()) Text(placeholder, style = TimeboxTheme.type.body, color = colors.onVariant); field() } })
-                if (draft.length >= 3600) Text("${draft.length}/4000", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    decorationBox = { field -> Box { if (draft.isEmpty()) Text(placeholder, style = TimeboxTheme.type.body, color = colors.onVariant, maxLines = 1); field() } })
+                if (draft.length >= 3600) Text("${draft.length}/4000", Modifier.padding(bottom = 6.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
-            FilledIconButton(onClick = if (busy) onStop else onSend, enabled = busy || draft.isNotBlank(), modifier = Modifier.size(48.dp), shape = CircleShape,
+            FilledIconButton(onClick = if (busy) onStop else onSend, enabled = busy || draft.isNotBlank(), modifier = Modifier.size(36.dp), shape = CircleShape,
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.on, contentColor = colors.bg, disabledContainerColor = colors.disabledContainer, disabledContentColor = colors.disabledContent)) {
-                Icon(if (busy) Icons.Outlined.Stop else Icons.Outlined.ArrowUpward, contentDescription = if (busy) "Stop" else "Send")
+                Icon(if (busy) Icons.Outlined.Stop else Icons.Outlined.ArrowUpward, contentDescription = if (busy) "Stop" else "Send", Modifier.size(18.dp))
             }
         }
     }

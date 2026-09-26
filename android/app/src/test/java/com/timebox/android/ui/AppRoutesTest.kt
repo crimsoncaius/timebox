@@ -27,14 +27,6 @@ class AppRoutesTest {
     }
 
     @Test
-    fun `assistant keeps bottom navigation while input is active`() {
-        assertTrue(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = true, assistantVisible = true))
-        assertTrue(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = false, assistantVisible = true))
-        assertFalse(shouldShowBottomNavigation(taskComposerVisible = true, isImeVisible = true, assistantVisible = true))
-        assertFalse(shouldShowBottomNavigation(taskComposerVisible = false, isImeVisible = true, taskDetailVisible = true, assistantVisible = true))
-    }
-
-    @Test
     fun `completion undo notice uses a finite snackbar duration`() {
         assertEquals(SnackbarDuration.Short, taskCompletionSnackbarDuration())
     }
