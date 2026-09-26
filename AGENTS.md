@@ -29,7 +29,3 @@ Before using an Android emulator, recovering a reservation, or completing an And
 The instrumentation suite does not pass. `docs/agents/android-instrumentation-baseline.md`
 records which cases already fail on `master` and which are flaky, so a run can be read
 against a known baseline rather than treated as a regression.
-
-### Worktree lifecycle
-
-After a worktree branch is merged into the repository's primary branch (`master` here), remove the clean merged worktree and prune stale worktree metadata. The merge is not complete until the removed worktree no longer appears in `git worktree list`; preserve any dirty or unmerged worktree.
