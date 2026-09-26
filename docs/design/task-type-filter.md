@@ -33,8 +33,9 @@ the Android filter sheet (`TaskTypeFilterSection.kt`, rules in `TaskTypeFilter.k
 - No Unset row: the existing filter sheet deliberately omits Unset.
 - The prototype route was removed; it remains in commit `ec70964b`.
 
-Web still matches the exact chosen type only; the saved view's `taskTypes` ids are shared,
-so a parent saved on Android covers fewer tasks on web until web adopts branch matching.
+Web matches Android (issue #290): the same branch coverage and inline search, in the
+filter bar's Task types popover (`frontend/src/features/battle-plan/TaskTypeFilterMenu.tsx`).
+Web keeps its Unset row, which Android's sheet omits.
 
 ## Final review
 
