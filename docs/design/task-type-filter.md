@@ -24,4 +24,11 @@ All state is local; nothing writes to the repository or the saved view.
 
 - Which structure? Should a parent include its sub-types (provisional: yes)?
 - Empty-query order: Block usage (picker, ADR-0006) vs task count on the board.
-- Large text, dark theme and Few-types behaviour are not reviewed yet.
+- With few types (Few types data), search plus a list is heavier than the old chips.
+  Consider chips below a type-count threshold and the search pattern above it.
+
+## Coverage checked
+
+- Many types (39, three levels) and Few types (5 roots), light and dark theme,
+  font scale 1.3, keyboard open while searching in the filter sheet.
+- The prototype switcher chips clip at 1.3 font scale; they are review controls only.
