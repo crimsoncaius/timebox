@@ -15,7 +15,7 @@ Validation: Android debug build and two instrumented tests pass (concurrent pref
 
 Review uses sample data: API `127.0.0.1:12015`, Android emulator `emulator-5580`, web `http://127.0.0.1:12017/day/2026-09-14`. Start the web from `frontend` with `VITE_API_PROXY_TARGET=http://127.0.0.1:12015` and `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 12017 --strictPort`. The native build uses the existing debug API override described below. Sample mutations are limited; this is not a full backend environment.
 
-Final native evidence: [dialog](day-visibility-172/implemented-default-options.png), [Day view](day-visibility-172/implemented-defaults.png). Historical visual checks include small phones and light/dark themes. The retained native review instance uses the approved defaults.
+Final native evidence: [dialog](day-visibility-172/implemented-default-options.png), [Day view](day-visibility-172/implemented-defaults.png). Historical visual checks include small phones and light/dark themes. The historical native review used the approved defaults; its device was retired on 2026-09-26.
 
 ## Historical exploration
 
@@ -90,4 +90,4 @@ The user selected “per device” when asked whether visibility choices should 
 
 Preview: [refined dialog](day-visibility-172/dialog-refined.png). Original: [round-one dialog](day-visibility-172/small-controls.png). Implementation is isolated in `DayViewOptionsDialog.kt` on the same prototype branch.
 
-Verification: final APK builds and was installed from this worktree. Calendar and Zoom were switched off independently; Activity Tracking was toggled off and back on through its row. Done dismisses the dialog and reopening preserves those choices. Visually checked at the standard profile and at 360×720 dp in both [light](day-visibility-172/dialog-refined-small.png) and [dark](day-visibility-172/dialog-refined-dark.png) themes. Standard display size and light mode were restored for review. Emulator-5580 is retained with the refined dialog open; Calendar and Zoom are hidden, Activity Tracking is visible, matching the user's reference state. Awaiting visual feedback.
+Verification: final APK builds and was installed from this worktree. Calendar and Zoom were switched off independently; Activity Tracking was toggled off and back on through its row. Done dismisses the dialog and reopening preserves those choices. Visually checked at the standard profile and at 360×720 dp in both [light](day-visibility-172/dialog-refined-small.png) and [dark](day-visibility-172/dialog-refined-dark.png) themes. Standard display size and light mode were restored for review. The historical emulator-5580 review left the refined dialog open with Calendar and Zoom hidden and Activity Tracking visible, matching the user's reference state. Acquire a fresh managed device to reproduce it.

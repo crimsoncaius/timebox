@@ -59,8 +59,8 @@ minute precision, validates ordering, the sample window, and same-lane overlaps.
 The running sample remains read-only. This experiment does not settle whether
 production needs seconds-level corrections.
 
-Built and relaunched on emulator-5584, retained for user review under token
-`f1d1a00af63d469fa413a18c8dc87710`. Verified opening the one-minute Actual Block,
+Built and relaunched on emulator-5584 (retired during the 2026-09-26 cleanup).
+Acquire a fresh managed device to reproduce this review. Verified opening the one-minute Actual Block,
 changing its interval from 10:50–10:51 to 10:49–10:51, saving, and reopening
 with the two-minute duration. Samples reset afterward. Pinch and handle comfort
 still need user review; the precise editor's keyboard layout needs further

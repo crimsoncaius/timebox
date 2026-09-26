@@ -43,10 +43,10 @@ backend or protocol changes and no changes to Planned Blocks on Day.
 
 ## Native review
 
-- Device: `emulator-5642` (`timebox-agent-32`), retained for user review.
-- Reservation: `cd421fba690c494cb3fd7ac5a882e6b1`.
+- Historical device: `emulator-5642` (`timebox-agent-32`), retired on 2026-09-26.
+- Acquire a fresh managed reservation to reproduce this review.
 - Installed APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
-- The actual application is open on Assistant. Its default backend is port 8001.
+- The application was verified on Assistant. Its default backend is port 8001.
 - Local screenshots: `artifacts/assistant-panel-a/assistant-a.png` (app welcome),
   `artifacts/assistant-panel-a/assistant-a-plan.png` (native sample plan), and
   `artifacts/assistant-panel-a/assistant-a-dark-large-plan.png` (native large-text dark sample plan).

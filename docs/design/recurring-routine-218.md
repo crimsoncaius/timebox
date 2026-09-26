@@ -27,7 +27,7 @@ Route: `timebox://prototype/recurring-details?flow=details&layout=routine&mode=s
 
 Debug APK build and diff whitespace check passed. Installed and launched on emulator-5596. Visually inspected the routine sheet; changed Repeat to Monday and Tuesday and verified the saved summary; switched to Quota and verified its weekly summary and session progress. Reset to the scheduled sample for user review.
 
-Retained review token: `63443f6c1bfc48b69a10cd26d44ef737`. Screenshots/UI dumps: `artifacts/routine-218/`. No backend needed for sample edits.
+The historical review device was retired on 2026-09-26. Screenshots/UI dumps: `artifacts/routine-218/`. No backend needed for sample edits; acquire a fresh managed device to reproduce them.
 
 ## Round 2 — express schedule and quota
 
@@ -52,4 +52,4 @@ Existing routines save each focused edit with a minimal PATCH. Successful respon
 
 Validation: 14 focused unit tests passed (recurrence rules, partial PATCH semantics, failed-save retry and baseline replacement). Debug APK build passed. On the isolated API, changed the scheduled sample from Monday to Monday/Thursday, verified its persisted API state and reopened it; created a weekly quota of three sessions through the UI; paused and resumed the scheduled routine. Inspected the real details layout. Full app regression suite and process-death recovery were not exercised.
 
-Review uses emulator-5596, token `63443f6c1bfc48b69a10cd26d44ef737`, and isolated SQLite API on port 12031. Keep this API running for review. Build command: `./scripts/android-gradle.ps1 :app:assembleDebug -PreviewApiBaseUrl=http://10.0.2.2:12031/`. Ordinary builds still use the configured default API. Review data lives under ignored `artifacts/routine-218/`.
+The historical review used emulator-5596 and an isolated SQLite API on port 12031. Reproduce it with a fresh managed device and that API. Build command: `./scripts/android-gradle.ps1 :app:assembleDebug -PreviewApiBaseUrl=http://10.0.2.2:12031/`. Ordinary builds still use the configured default API. Review data lives under ignored `artifacts/routine-218/`.

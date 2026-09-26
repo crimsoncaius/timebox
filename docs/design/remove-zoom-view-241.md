@@ -21,6 +21,6 @@ Changes remain on `codex/241-remove-zoom-view` pending user review and explicit 
 
 - Web: http://127.0.0.1:12043/day/2026-09-21
 - Isolated review API: http://127.0.0.1:12042, using `.out-of-scope/zoom-review.sqlite`.
-- Android: `emulator-5610`, retained for user review with View open. Reservation token: `fb12464e3a5a46bdb23168e48fba5fb3`.
+- Android: verified on `emulator-5610` with View open. That device was retired on 2026-09-26; acquire a fresh managed device to reproduce the review.
 - Android review build uses `-PreviewApiBaseUrl=http://10.0.2.2:12042/`.
 

@@ -33,7 +33,7 @@ The connected walkthrough found that exact-repeat feedback was hidden behind the
 
 Validation: five timeline-model tests cover spanning, multiple, running, empty/stale and subsecond cross-midnight intervals; recording ViewModel tests cover confirmation, the frozen endpoint, cancellation and Undo. Native replacement created the expected linked Actual; a repeat kept the same ID; Undo restored the pre-review record's exact times, name, note and link. The existing API/recording tests cover underway eligibility and frozen-time behavior. The user accepted the connected Android flow (“it's good”).
 
-Current launch uses the command below with `-PrecordingPrototype=false`. The retained emulator opens the real overlap preview for September 13 → Write chapter. Its current Earlier draft is 10:11–10:41 (the review data was edited after the original screenshot), so this case shows full replacement rather than splitting. Historical comparison screenshots and the opt-in experiment remain available below.
+Reproduction uses the command below with `-PrecordingPrototype=false`. The historical review opened the real overlap preview for September 13 → Write chapter. Its Earlier draft was 10:11–10:41 (the review data was edited after the original screenshot), so this case showed full replacement rather than splitting. That device was retired on 2026-09-26. Historical comparison screenshots and the opt-in experiment remain available below.
 
 ## Web integration
 
@@ -56,7 +56,7 @@ $env:ANDROID_HOME=Join-Path $env:LOCALAPPDATA 'Android\Sdk'
 ./scripts/android-gradle.ps1 :app:assembleDebug -PrecordingPrototype=true -PreviewApiBaseUrl=http://10.0.2.2:12018/ -PreviewApplicationIdSuffix=.issue173
 ```
 
-The retained review is on `emulator-5586`, package `com.timebox.android.issue173`, isolated API port 12018. Navigate Day → September 13, 2026 → Write chapter → Record Actual as planned. With an owned reservation, each presentation is directly selectable (substitute the reservation token; change `timeline` to `summary`):
+The historical review used `emulator-5586`, package `com.timebox.android.issue173`, isolated API port 12018. Acquire a fresh managed device and start the isolated API to reproduce it. Navigate Day → September 13, 2026 → Write chapter → Record Actual as planned. With an owned reservation, each presentation is directly selectable (substitute the reservation token; change `timeline` to `summary`):
 
 ```powershell
 python scripts/android-emulator.py adb TOKEN shell am start -f 0x20000000 -n com.timebox.android.issue173/com.timebox.android.MainActivity --es recording_preview_variant timeline

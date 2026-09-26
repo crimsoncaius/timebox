@@ -47,7 +47,7 @@ The debug-only `SwitchHistoryPrototypeActivity` implements A with native Compose
 
 Build with `./scripts/android-gradle.ps1 :app:assembleDebug '-PreviewApplicationIdSuffix=.switchprototype' '-PreviewApiBaseUrl=http://10.0.2.2:12064/api/'`. The separate package is `com.timebox.android.switchprototype`; launch component `com.timebox.android.switchprototype/com.timebox.android.ui.day.prototype.SwitchHistoryPrototypeActivity` through the emulator reservation helper. Its configured API target is the browser prototype's rejecting middleware, isolating background app services from real data.
 
-Built and installed successfully. Native prototype checks exercised dragging before the current start, held-edge scrolling back to 09:40, switching, and Undo restoring the three original records and running activity. Prototype screenshot: `artifacts/android-switch-final.png`. The retained emulator now runs the production review build described below.
+Built and installed successfully. Native prototype checks exercised dragging before the current start, held-edge scrolling back to 09:40, switching, and Undo restoring the three original records and running activity. Prototype screenshot: `artifacts/android-switch-final.png`. The historical device was retired during the 2026-09-26 cleanup; acquire a fresh managed device for reproduction.
 
 ## Production implementation
 
@@ -57,6 +57,6 @@ Web uses the existing Undo notice and native Android uses the app-wide Undo life
 
 The real web review runs on port 12064 and an isolated API/database on 12065 (`artifacts/switch-history-review.sqlite`). Start web with `VITE_API_PROXY_TARGET=http://127.0.0.1:12065` and Vite `--host 127.0.0.1 --port 12064 --strictPort`. Start the API with that SQLite path, `AUTO_CREATE_TABLES=1`, `ACTIVITY_TRACKING_DEV=true`, and `APP_TIMEZONE=Asia/Singapore`.
 
-Android review package: `com.timebox.android.switchreview`, built using `'-PreviewApplicationIdSuffix=.switchreview' '-PreviewApiBaseUrl=http://10.0.2.2:12065/'`. Review device: `emulator-5652`, reservation `62e18fe2b40345719edbb57297adf71a`.
+Android review package: `com.timebox.android.switchreview`, built using `'-PreviewApplicationIdSuffix=.switchreview' '-PreviewApiBaseUrl=http://10.0.2.2:12065/'`. Historical review device: `emulator-5652` (since retired).
 
 Validation includes backend reconciliation, planning, reporting and check-in tests; web activity/Undo tests and production build; Android unit tests and debug APK build. Live browser and native checks verified historical switching and exact restoration after server acknowledgement. A live browser offline switch → Undo → reload → reconnect also restored the exact original records. Edge-drag sampling kept the white line at a constant screen position while advancing through hours of history. Backend regression tests cover overnight replacement, notes, gaps, idempotence, offline command chains, and remote conflicts arriving before or after Undo. PostgreSQL-only tests were skipped in the local SQLite environment.

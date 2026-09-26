@@ -22,7 +22,7 @@ After implementation and validation, leave the changes on their branch with the 
 
 ### Android emulator ownership
 
-Before installing, launching, testing, capturing, or interacting with an Android emulator, read `docs/agents/android-emulators.md` and acquire an exclusive reservation through `scripts/android-emulator.py`. Use the helper for device commands. Acquire as many managed devices as the work needs. Release temporary devices automatically; retain devices explicitly for user review. Existing unregistered emulators and physical devices require explicit user assignment.
+Before using an Android emulator, recovering a reservation, or completing an Android review or merge, follow `docs/agents/android-emulators.md`. Use its helper for device commands and storage cleanup. Existing unregistered emulators and physical devices require explicit user assignment.
 
 ### Android instrumentation baseline
 

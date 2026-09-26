@@ -63,9 +63,8 @@ the APK through the reservation helper, then use the helper to run
   explicit Complete task action.
 - Inspected entry and details screenshots; made the sheet opaque after observing
   background text bleed-through. Images and UI dumps are in `artifacts/task-sheet-97/`.
-- Retained for user review under token `ceaf5ddd397f4bf0acf17166ff548726`.
-  Resume this reservation when the user requests changes; release with
-  `--review-done` only when they finish reviewing.
+- This historical review device was retired during the 2026-09-26 emulator cleanup.
+  Acquire a fresh managed device to reproduce the recorded checks.
 
 ## Round 2: focused editors from the additional references
 
@@ -185,8 +184,8 @@ Captured the deadline sheet and retained emulator-5582 with that sheet open.
 
 The user reviewed the date/reminder prototype and said “reviewed, it's good”.
 Accept the deadline and reminder sheet design alongside the already accepted
-per-field saving and separate Importance/Urgency sheets. The review is complete;
-release the retained emulator reservation. This approves the prototype direction,
+per-field saving and separate Importance/Urgency sheets. That review is complete
+and its emulator has been retired. This approves the prototype direction,
 not production persistence, notification delivery, or the remaining coverage gaps.
 
 Remaining work: resolve compact versus full task creation if needed, exercise
@@ -234,8 +233,7 @@ project/title, expands the description, and scrolls through the last Subtask whi
 the project header remains visible. Parent completion/reopening and larger font
 scales were not exercised in this round. git diff --check passed.
 
-Review is retained on emulator-5582, reservation
-`bda82bbb262d4cfa87214a8bd9197ee8`, with empty compact creation open. The user can
+The historical emulator-5582 review opened empty compact creation. A fresh device can
 compare Full form or select Try details followed by Long content. Await the entry
 layout preference before removing the experimental comparison controls.
 
@@ -308,8 +306,8 @@ graphics-composer/RenderThread kernel activity. After restarting the app, openin
 the same task and opening/closing Importance succeeded. The cause of that isolated
 ANR is not established; retain it as a review observation.
 
-The implemented task sheet is retained on emulator-5580 for user review, reservation
-`19cfea1e23574083ae2a7b2420cf8485`. It uses isolated review data served on host port
+The implemented task sheet was reviewed on emulator-5580 (since retired).
+Reproduction uses isolated review data served on host port
 12015, with the Android build override
-`-PreviewApiBaseUrl=http://10.0.2.2:12015/`. Keep that API running for review.
+`-PreviewApiBaseUrl=http://10.0.2.2:12015/`. Start that API when reproducing the review.
 The normal project API configuration is unchanged.

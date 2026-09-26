@@ -2,6 +2,7 @@
   "capacity": 2,
   "first_port": 5580,
   "lease_seconds": 1800,
+  "min_free_space_gib": 20,
   "image": "system-images/android-36/google_apis_playstore/x86_64",
   "width": 1080,
   "height": 2424,

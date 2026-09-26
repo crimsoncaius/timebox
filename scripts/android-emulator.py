@@ -4,14 +4,124 @@ import contextlib
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import socket
 import sqlite3
+import stat
 import subprocess
 import sys
 import time
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def free_space(path):
+    while not path.exists():
+        path = path.parent
+    return shutil.disk_usage(path).free
+
+
+def check_managed_path(root, path):
+    if is_link(root):
+        raise RuntimeError(f"Unexpected link at pool root: {root}")
+    resolved_root = root.resolve()
+    if path.resolve() == resolved_root or not path.resolve().is_relative_to(resolved_root):
+        raise RuntimeError(f"Deletion target is outside managed storage: {path}")
+    for component in (path, *path.parents):
+        if component == root:
+            break
+        if is_link(component):
+            raise RuntimeError(f"Unexpected link in managed storage: {component}")
+
+
+def disk_usage(root):
+    logical = allocated = 0
+    if not root.exists():
+        return logical, allocated
+    if os.name == "nt":
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCompressedFileSizeW.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_uint32)]
+        kernel.GetCompressedFileSizeW.restype = ctypes.c_uint32
+        sectors, sector_bytes, free_clusters, total_clusters = [ctypes.c_uint32() for _ in range(4)]
+        kernel.GetDiskFreeSpaceW.argtypes = [ctypes.c_wchar_p, *([ctypes.POINTER(ctypes.c_uint32)] * 4)]
+        if not kernel.GetDiskFreeSpaceW(str(root.resolve().anchor), ctypes.byref(sectors), ctypes.byref(sector_bytes),
+                                       ctypes.byref(free_clusters), ctypes.byref(total_clusters)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        cluster_bytes = sectors.value * sector_bytes.value
+    for base, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = [name for name in dirs if not is_link(Path(base) / name)]
+        for name in files:
+            path = Path(base) / name
+            if is_link(path):
+                continue
+            try:
+                info = path.stat()
+                if os.name == "nt":
+                    high = ctypes.c_uint32()
+                    ctypes.set_last_error(0)
+                    low = kernel.GetCompressedFileSizeW(str(path), ctypes.byref(high))
+                    if low == 0xffffffff and ctypes.get_last_error():
+                        raise ctypes.WinError(ctypes.get_last_error())
+                    size = (high.value << 32) | low
+                    size = (size + cluster_bytes - 1) // cluster_bytes * cluster_bytes
+                else:
+                    size = info.st_blocks * 512
+                logical += info.st_size
+                allocated += size
+            except FileNotFoundError:
+                pass  # A release can finish while status is scanning.
+    return logical, allocated
+
+
+def is_link(path):
+    return path.is_symlink() or (os.name == "nt" and path.exists() and
+                                bool(path.lstat().st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT))
+
+
+def emulator_processes():
+    """Read process identity independently of ADB, including offline emulators."""
+    if os.name == "nt":
+        script = """$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process -Filter "Name = 'emulator.exe' OR Name LIKE 'qemu-system-%'" | ForEach-Object {
+            if (-not $_.CommandLine -or -not $_.CreationDate) { throw 'Cannot identify emulator process' }
+            [pscustomobject]@{pid=$_.ProcessId; parent=$_.ParentProcessId; started=$_.CreationDate.ToUniversalTime().ToFileTimeUtc().ToString(); command=$_.CommandLine}
+        }) | ConvertTo-Json -Compress"""
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                                check=True, capture_output=True, text=True, timeout=30,
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+        value = json.loads(result.stdout or "[]")
+        processes = value if isinstance(value, list) else [value]
+        for item in processes:
+            item["started"] = str(int(item["started"]) // 10000)
+        return processes
+    result = subprocess.run(["ps", "-axo", "pid=,ppid=,lstart=,args="],
+                            check=True, capture_output=True, text=True, timeout=10)
+    processes = []
+    for line in result.stdout.splitlines():
+        parts = line.split(None, 7)
+        if len(parts) == 8 and re.search(r"(?:^|/)(?:emulator|qemu-system-[^ /]+)(?:\s|$)", parts[7]):
+            processes.append({"pid": int(parts[0]), "parent": int(parts[1]),
+                              "started": " ".join(parts[2:7]), "command": parts[7]})
+    return processes
+
+
+def launch_identity(process):
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        stamps = [wintypes.FILETIME() for _ in range(4)]
+        kernel.GetProcessTimes.argtypes = [wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4)]
+        if not kernel.GetProcessTimes(int(process._handle), *(ctypes.byref(t) for t in stamps)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        started = str(((stamps[0].dwHighDateTime << 32) | stamps[0].dwLowDateTime) // 10000)
+        return {"pid": process.pid, "started": started}
+    for current in emulator_processes():
+        if current["pid"] == process.pid:
+            return {"pid": current["pid"], "started": current["started"]}
+    raise RuntimeError("Cannot establish emulator launch identity; inspect startup before recovery.")
 
 
 @contextlib.contextmanager
@@ -45,10 +155,21 @@ def exclusive(path):
 
 
 class Pool:
-    def __init__(self, home=None):
-        self.home = Path(home or Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Timebox" / "emulators")
-        self.home.mkdir(parents=True, exist_ok=True)
+    def __init__(self, home=None, readonly=False):
+        self.home = Path(home) if home is not None else Path.home() / "TimeboxRuntime" / "emulators"
         self.config = json.loads((ROOT / "scripts/android-emulator.json").read_text())
+        self.db = None
+        if readonly:
+            database = self.home / "registry.sqlite"
+            if database.exists():
+                self.db = sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True, timeout=30)
+                self.db.row_factory = sqlite3.Row
+                existing = self.db.execute("SELECT config FROM settings WHERE id=1").fetchone()
+                if existing:
+                    self.config = json.loads(existing[0])
+            return
+        self.home.mkdir(parents=True, exist_ok=True)
+        self.home = self.home.resolve()
         self.db = sqlite3.connect(self.home / "registry.sqlite", timeout=30)
         self.db.row_factory = sqlite3.Row
         self.db.execute("CREATE TABLE IF NOT EXISTS slots (id INTEGER PRIMARY KEY, token TEXT, owner TEXT, worktree TEXT, state TEXT, touched REAL)")
@@ -56,6 +177,10 @@ class Pool:
         self.db.execute("CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, config TEXT)")
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
+            columns = {row[1] for row in self.db.execute("PRAGMA table_info(slots)")}
+            for column in ("cleanup_error", "launch"):
+                if column not in columns:
+                    self.db.execute(f"ALTER TABLE slots ADD COLUMN {column} TEXT")
             existing = self.db.execute("SELECT config FROM settings WHERE id=1").fetchone()
             serialized = json.dumps(self.config, sort_keys=True)
             conflict = existing and existing[0] != serialized and self.db.execute("SELECT 1 FROM slots WHERE state != 'free'").fetchone()
@@ -66,13 +191,29 @@ class Pool:
             raise RuntimeError("Pool configuration differs from active reservations. Use the configuration that created them.")
 
     def rows(self):
-        return [dict(r) for r in self.db.execute("SELECT * FROM slots ORDER BY id")]
+        return [dict(r) for r in self.db.execute("SELECT * FROM slots ORDER BY id")] if self.db else []
+
+    def summary(self):
+        rows = self.rows()
+        counts = {state: sum(r["state"] == state for r in rows)
+                  for state in ("free", "active", "review", "cleanup_pending")}
+        logical, allocated = disk_usage(self.home)
+        return {"root": str(self.home.resolve()), "free_bytes": free_space(self.home),
+                "file_length_bytes": logical, "allocated_bytes": allocated,
+                "reservation_counts": counts,
+                "cleanup_errors": [{"token": r["token"], "owner": r["owner"],
+                                    "error": r["cleanup_error"]} for r in rows if r.get("cleanup_error")]}
 
     def claim(self, owner, extra=False):
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             if self.db.execute("SELECT config FROM settings WHERE id=1").fetchone()[0] != json.dumps(self.config, sort_keys=True):
                 raise RuntimeError("Pool configuration changed; restart the helper.")
+            required = self.config["min_free_space_gib"] * 1024**3
+            available = free_space(self.home)
+            if available < required:
+                raise RuntimeError(f"Low disk space: {available / 1024**3:.1f} GiB free; "
+                                   f"at least {required / 1024**3:g} GiB required. Inspect status --summary and release completed reviews.")
             capacity = self.config["capacity"]
             highest = self.db.execute("SELECT COALESCE(MAX(id), 0) FROM slots").fetchone()[0]
             if extra:
@@ -84,7 +225,7 @@ class Pool:
                 row = self.db.execute("SELECT * FROM slots WHERE id=?", (slot,)).fetchone()
                 if row is None or row["state"] == "free":
                     token = uuid.uuid4().hex
-                    self.db.execute("INSERT OR REPLACE INTO slots VALUES (?, ?, ?, ?, 'active', ?)",
+                    self.db.execute("INSERT OR REPLACE INTO slots (id, token, owner, worktree, state, touched) VALUES (?, ?, ?, ?, 'active', ?)",
                                     (slot, token, owner, str(ROOT), time.time()))
                     return self.get(token)
         raise RuntimeError("Pool full. Use status to see active tasks and pending reviews; retry when a device is released.")
@@ -96,7 +237,9 @@ class Pool:
         return dict(row)
 
     def touch(self, token, state=None):
-        self.get(token)
+        row = self.get(token)
+        if row["state"] == "cleanup_pending" and state not in (None, "cleanup_pending", "free"):
+            raise RuntimeError("Cleanup pending; release or recover this reservation first.")
         with self.db:
             self.db.execute("UPDATE slots SET touched=?, state=COALESCE(?, state) WHERE token=?", (time.time(), state, token))
 
@@ -108,6 +251,41 @@ class Pool:
 
     def serial(self, row):
         return f"emulator-{self.config['first_port'] + (row['id'] - 1) * 2}"
+
+    def update(self, token, **values):
+        with self.db:
+            self.db.execute("UPDATE slots SET " + ", ".join(f"{key}=?" for key in values) + " WHERE token=?",
+                            (*values.values(), token))
+
+    def device_paths(self, row):
+        name = self.name(row)
+        return [self.home / "avds" / (name + ".avd"),
+                self.home / "avds" / (name + ".ini"), self.home / (name + ".log")]
+
+    def delete_device(self, row):
+        paths = self.device_paths(row)
+        # Validate the complete tree before deleting anything; never follow a junction.
+        for path in paths:
+            check_managed_path(self.home, path)
+            if path.is_dir():
+                for base, dirs, files in os.walk(path, followlinks=False):
+                    for name in dirs + files:
+                        check_managed_path(self.home, Path(base) / name)
+        for path in paths:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    if path.is_dir():
+                        shutil.rmtree(path)
+                    else:
+                        path.unlink(missing_ok=True)
+                    break
+                except OSError as error:
+                    # The SDK's short-lived shutdown helper can retain the log handle.
+                    if getattr(error, "winerror", None) != 32 or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(1)
+                    check_managed_path(self.home, path)
 
     def sdk(self):
         value = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
@@ -131,16 +309,50 @@ class Pool:
             raise RuntimeError("Reserved port belongs to an unmanaged emulator; leaving it untouched.")
         return True
 
+    def owned_processes(self, row):
+        record = json.loads(row["launch"]) if row.get("launch") else None
+        if record and record["phase"] == "starting":
+            raise RuntimeError("Uncertain emulator startup; inspect launch and descendants before recovery.")
+        processes = emulator_processes()
+        name_pattern = rf'(?:^|\s)-avd\s+"?{re.escape(self.name(row))}"?(?:\s|$)'
+        port_pattern = rf'(?:^|\s)-port\s+{self.serial(row).split("-")[1]}(?:\s|$)'
+        candidates = [p for p in processes if re.search(name_pattern, p["command"]) or re.search(port_pattern, p["command"])]
+        known = record["processes"] if record else []
+        identities = {(p["pid"], p["started"]) for p in known}
+        # Existing identities also catch a process whose command line no longer matches.
+        live = [p for p in processes if (p["pid"], p["started"]) in identities]
+        for candidate in candidates:
+            if not re.search(name_pattern, candidate["command"]) or not re.search(port_pattern, candidate["command"]):
+                raise RuntimeError("Emulator name/port belongs to another launch; leaving it untouched.")
+        remaining = [p for p in candidates if (p["pid"], p["started"]) not in identities]
+        while remaining:
+            children = [p for p in remaining if any(parent["pid"] == p["parent"] for parent in live)]
+            if not children:
+                raise RuntimeError("Unrecorded emulator process; ownership is uncertain, leaving it untouched.")
+            for child in children:
+                identities.add((child["pid"], child["started"]))
+                known.append({"pid": child["pid"], "started": child["started"]})
+                live.append(child)
+                remaining.remove(child)
+        if record:
+            self.update(row["token"], launch=json.dumps(record))
+        return live
+
     def stop(self, row):
-        if self.identity(row):
+        live = self.owned_processes(row)
+        online = self.identity(row)
+        if online and not row.get("launch"):
+            raise RuntimeError("Emulator has no recorded launch; leaving it untouched.")
+        if online:
             self.adb(row, ["emu", "kill"], check=True, capture_output=True, timeout=15)
-            for _ in range(30):
-                if not self.identity(row) and self.ports_free(row):
-                    return
-                time.sleep(1)
-            raise RuntimeError("Emulator did not stop; reservation retained.")
-        if not self.ports_free(row):
-            raise RuntimeError("Device is offline or its ports are occupied; reservation retained until its process stops.")
+        elif live:
+            raise RuntimeError("Recorded emulator is still running but ADB is offline; retry cleanup after it exits.")
+        for _ in range(30):
+            current = self.get(row["token"])
+            if not self.owned_processes(current) and self.ports_free(row):
+                return
+            time.sleep(1)
+        raise RuntimeError("Emulator process or ports remain in use; cleanup pending.")
 
     def ports_free(self, row):
         port = int(self.serial(row).split("-")[1])
@@ -164,6 +376,10 @@ class Pool:
             raise RuntimeError(f"Install the configured Android system image: {image}")
         avds = self.home / "avds"
         avd = avds / (self.name(row) + ".avd")
+        for path in self.device_paths(row):
+            check_managed_path(self.home, path)
+            if path.exists():
+                raise RuntimeError(f"Unexpected device files in a free slot: {path}; inspect before reuse.")
         avd.mkdir(parents=True, exist_ok=True)
         (avds / (self.name(row) + ".ini")).write_text(f"avd.ini.encoding=UTF-8\npath={avd}\ntarget=android-36\n")
         settings = {
@@ -179,12 +395,19 @@ class Pool:
         exe = self.sdk() / "emulator" / ("emulator.exe" if os.name == "nt" else "emulator")
         env = dict(os.environ, ANDROID_AVD_HOME=str(avds))
         with (self.home / f"{self.name(row)}.log").open("w") as log:
-            process = subprocess.Popen([str(exe), "-avd", self.name(row), "-port", str(port),
-                                        "-no-snapshot", "-wipe-data", "-no-boot-anim"],
-                                       env=env, stdout=log, stderr=log,
-                                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+            self.update(row["token"], launch=json.dumps({"phase": "starting", "processes": []}))
+            try:
+                process = subprocess.Popen([str(exe), "-avd", self.name(row), "-port", str(port),
+                                            "-no-snapshot", "-wipe-data", "-no-boot-anim"],
+                                           env=env, stdout=log, stderr=log,
+                                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+            except OSError:
+                self.update(row["token"], launch=None)
+                raise
+            self.update(row["token"], launch=json.dumps({"phase": "running", "processes": [launch_identity(process)]}))
         deadline = time.time() + 240
         while time.time() < deadline:
+            self.owned_processes(self.get(row["token"]))
             result = self.adb(row, ["shell", "getprop", "sys.boot_completed"], capture_output=True, text=True, timeout=10)
             if result.returncode == 0 and result.stdout.strip() == "1" and self.identity(row):
                 self.adb(row, ["shell", "settings", "put", "system", "font_scale", "1.0"], check=True)
@@ -197,9 +420,19 @@ class Pool:
 
     def acquire(self, owner, extra=False):
         row = self.claim(owner, extra=extra)
-        with self.lock(row):
-            self.boot(row)
-        return row
+        try:
+            with self.lock(row):
+                self.boot(self.get(row["token"]))
+        except BaseException as error:
+            self.release_after_failure(row["token"], error)
+            raise
+        return self.get(row["token"])
+
+    def release_after_failure(self, token, error):
+        try:
+            self.release(token)
+        except BaseException as cleanup:
+            raise RuntimeError(f"{error}; cleanup also failed for {token}: {cleanup}") from error
 
     def release(self, token, review_done=False, recover=False):
         row = self.get(token)
@@ -207,7 +440,7 @@ class Pool:
             row = self.get(token)
             if row["state"] == "review" and not review_done:
                 raise RuntimeError("User review is pending. Release only after the user finishes or replaces it.")
-            if recover and (row["state"] == "review" or time.time() - row["touched"] < self.config["lease_seconds"]):
+            if recover and row["state"] != "cleanup_pending" and (row["state"] == "review" or time.time() - row["touched"] < self.config["lease_seconds"]):
                 raise RuntimeError("Only expired non-review reservations can be recovered.")
             marker = self.home / f"operation-{row['id']}.json"
             if marker.exists():
@@ -238,14 +471,22 @@ class Pool:
                 if running:
                     raise RuntimeError(f"Host command {pid} still exists; reservation retained.")
                 marker.unlink()
-            # Stop first: this terminates orphaned on-device instrumentation before reuse.
-            self.stop(row)
+            self.touch(token, "cleanup_pending")
+            try:
+                self.stop(self.get(token))
+                self.delete_device(row)
+            except BaseException as error:
+                self.update(token, cleanup_error=f"{type(error).__name__}: {error}")
+                raise
+            self.update(token, cleanup_error=None, launch=None)
             self.touch(token, "free")
 
     def operation(self, token, kind, args):
         row = self.get(token)
         with self.lock(row):
             row = self.get(token)
+            if row["state"] == "cleanup_pending":
+                raise RuntimeError("Cleanup pending; release or recover this reservation first.")
             if row["state"] == "review":
                 raise RuntimeError("Resume the review reservation before changing its device.")
             if not self.identity(row):
@@ -285,7 +526,7 @@ class Pool:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="action", required=True)
-    subs.add_parser("status")
+    subs.add_parser("status").add_argument("--summary", action="store_true")
     for action in ("acquire", "test"):
         p = subs.add_parser(action)
         p.add_argument("--owner", required=True, help="Task id or descriptive unique session name")
@@ -301,8 +542,11 @@ def main():
         if action == "release":
             p.add_argument("--review-done", action="store_true")
     args = parser.parse_args()
-    pool = Pool()
+    pool = Pool(readonly=args.action == "status")
     if args.action == "status":
+        if args.summary:
+            print(json.dumps(pool.summary(), indent=2))
+            return 0
         rows = pool.rows()
         for row in rows:
             row["serial"] = pool.serial(row)
@@ -313,9 +557,12 @@ def main():
         print(json.dumps(dict(row, serial=pool.serial(row))), flush=True)
         if args.action == "test":
             try:
-                return pool.operation(row["token"], "gradle", args.args or ["connectedDebugAndroidTest"])
-            finally:
-                pool.release(row["token"])
+                result = pool.operation(row["token"], "gradle", args.args or ["connectedDebugAndroidTest"])
+            except BaseException as error:
+                pool.release_after_failure(row["token"], error)
+                raise
+            pool.release_after_failure(row["token"], RuntimeError(f"Tests exited with code {result}"))
+            return result
     elif args.action in ("release", "recover"):
         pool.release(args.token, getattr(args, "review_done", False), args.action == "recover")
     elif args.action in ("adb", "gradle"):
