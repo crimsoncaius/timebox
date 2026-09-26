@@ -47,8 +47,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,10 +116,13 @@ fun ChronicleScreen(
         }
 
         state.highlightedType?.let { name ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("$name · ${state.highlightedDays.size} contributing days", color = colors.on, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                androidx.compose.material3.TextButton(onClick = onClearHighlights) { Text("Clear") }
-            }
+            ChronicleHighlight(
+                name = name,
+                days = state.highlightedDays,
+                range = state.highlightedRange,
+                onBack = { onSelectView(ChronicleView.Trends) },
+                onClear = onClearHighlights,
+            )
         }
 
         Row(
@@ -161,6 +173,75 @@ fun ChronicleScreen(
             modifier = Modifier.weight(1f),
         )
     }
+}
+
+/** Calendar header while Trends contributing days are highlighted: a breadcrumb back to the range and a one-line summary. */
+@Composable
+private fun ChronicleHighlight(
+    name: String,
+    days: Map<String, Double>,
+    range: TrendHighlightRange?,
+    onBack: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    val segments = name.split('/').filter { it.isNotEmpty() }
+    val leaf = segments.lastOrNull() ?: name
+    val summary = buildAnnotatedString {
+        segments.dropLast(1).forEach { parent -> withStyle(SpanStyle(color = colors.onVariant)) { append("$parent / ") } }
+        withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(leaf) }
+        append(chronicleHighlightSummary(days, range))
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TimeboxDimens.screenPadding)
+            .padding(bottom = 12.dp)
+            .height(IntrinsicSize.Min)
+            .testTag("chronicle-highlight"),
+    ) {
+        Box(Modifier.width(2.dp).fillMaxHeight().background(colors.actual))
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Trends",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = colors.onVariant,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier
+                        .clickable(role = Role.Button, onClickLabel = "Back to Trends", onClick = onBack)
+                        .padding(vertical = 10.dp),
+                )
+                Text(
+                    range?.let { "  ›  ${chronicleHighlightRangeLabel(it)}" } ?: "",
+                    style = TimeboxTheme.type.bodySmall,
+                    color = colors.onVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    Text("Clear", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                }
+            }
+            Text(summary, color = colors.on, fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Light)
+        }
+    }
+}
+
+/** "Week · 21–27 Sep 2026", using the same date label Trends shows for the range. */
+internal fun chronicleHighlightRangeLabel(range: TrendHighlightRange): String {
+    val kind = if (range.period == "custom") "Custom range" else range.period.replaceFirstChar { it.uppercase() }
+    return "$kind · ${trendRangeLabel(range.period, range.start, range.end)}"
+}
+
+/** The sentence after the Task Type name: " on 2 of 7 days, 2h 5m in total." */
+internal fun chronicleHighlightSummary(days: Map<String, Double>, range: TrendHighlightRange?): String {
+    val total = trendDuration(days.values.sum())
+    val count = days.size
+    if (range == null) return " on $count ${if (count == 1) "day" else "days"}, $total in total."
+    val rangeDays = java.time.temporal.ChronoUnit.DAYS.between(range.start, range.end) + 1
+    return " on $count of $rangeDays ${if (rangeDays == 1L) "day" else "days"}, $total in total."
 }
 
 /** Full-width underline tabs switching between Chronicle's Calendar and Trends views. */

@@ -56,7 +56,11 @@ data class ChronicleUiState(
     val customEnd: LocalDate? = null,
     val highlightedDays: Map<String, Double> = emptyMap(),
     val highlightedType: String? = null,
+    val highlightedRange: TrendHighlightRange? = null,
 )
+
+/** The Trends range a Calendar highlight was drilled from. */
+data class TrendHighlightRange(val period: String, val start: LocalDate, val end: LocalDate)
 
 class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
@@ -159,11 +163,14 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
 
     fun showContributingDays(path: String, days: Map<String, Double>) {
         val latest = days.keys.maxOrNull()?.let(LocalDate::parse) ?: return
-        _state.update { it.copy(view = ChronicleView.Calendar, monthStart = latest.withDayOfMonth(1), highlightedDays = days, highlightedType = path) }
+        _state.update {
+            val range = it.trends?.let { report -> TrendHighlightRange(it.period, LocalDate.parse(report.start), LocalDate.parse(report.end)) }
+            it.copy(view = ChronicleView.Calendar, monthStart = latest.withDayOfMonth(1), highlightedDays = days, highlightedType = path, highlightedRange = range)
+        }
         load()
     }
 
-    fun clearHighlights() = _state.update { it.copy(highlightedDays = emptyMap(), highlightedType = null) }
+    fun clearHighlights() = _state.update { it.copy(highlightedDays = emptyMap(), highlightedType = null, highlightedRange = null) }
 
     fun goToThisMonth() {
         _state.update { it.copy(monthStart = it.today.withDayOfMonth(1)) }
