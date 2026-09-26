@@ -1,5 +1,9 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.undo.UndoNoticeHost
+import com.timebox.android.ui.undo.UndoNotice
+import com.timebox.android.ui.undo.UndoPhase
+
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1103,8 +1107,8 @@ class BattlePlanScreenTest {
     fun trashUndoNoticeNamesTheTaskAndExposesAccessibleActions() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                BattlePlanTrashUndoNotice(
-                    notice = TrashUndoNotice(1, 7, "Draft launch brief"),
+                UndoNoticeHost(
+                    notice = UndoNotice(1, "battle_plan", "Draft launch brief", "Draft launch brief moved to Trash"),
                     onUndo = {},
                     onDismiss = {},
                     onExpiryFinished = {},
@@ -1121,12 +1125,14 @@ class BattlePlanScreenTest {
     fun trashUndoFailureOffersRetryAndDismiss() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                BattlePlanTrashUndoNotice(
-                    notice = TrashUndoNotice(
-                        noticeId = 1,
-                        taskId = 7,
+                UndoNoticeHost(
+                    notice = UndoNotice(
+                        id = 1,
+                        context = "battle_plan",
+                        message = "Draft launch brief moved to Trash",
+                        targetId = 7,
                         title = "Draft launch brief",
-                        phase = TrashUndoPhase.Failed,
+                        phase = UndoPhase.Failed,
                         error = "Restore unavailable",
                     ),
                     onUndo = {},
@@ -1136,7 +1142,7 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Could not restore Draft launch brief").fetchSemanticsNode()
+        compose.onNodeWithText("Could not undo Draft launch brief").fetchSemanticsNode()
         compose.onNodeWithText("Restore unavailable").fetchSemanticsNode()
         compose.onNodeWithText("Retry").assertIsEnabled()
         compose.onNodeWithContentDescription("Dismiss").assertIsEnabled()
@@ -1146,8 +1152,8 @@ class BattlePlanScreenTest {
     fun trashUndoProgressDisablesItsActions() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                BattlePlanTrashUndoNotice(
-                    notice = TrashUndoNotice(1, 7, "Draft launch brief", TrashUndoPhase.Restoring),
+                UndoNoticeHost(
+                    notice = UndoNotice(1, "battle_plan", "Draft launch brief", "Draft launch brief moved to Trash", phase = UndoPhase.Running),
                     onUndo = {},
                     onDismiss = {},
                     onExpiryFinished = {},
@@ -1155,8 +1161,8 @@ class BattlePlanScreenTest {
             }
         }
 
-        compose.onNodeWithText("Restoring Draft launch brief").fetchSemanticsNode()
-        compose.onNodeWithText("Restoring…").assertIsNotEnabled()
+        compose.onNodeWithText("Undoing Draft launch brief…").fetchSemanticsNode()
+        compose.onNodeWithText("Undoing…").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Dismiss").assertIsNotEnabled()
     }
 
@@ -1166,8 +1172,8 @@ class BattlePlanScreenTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                BattlePlanTrashUndoNotice(
-                    notice = TrashUndoNotice(1, 7, "Draft launch brief", TrashUndoPhase.Expiring),
+                UndoNoticeHost(
+                    notice = UndoNotice(1, "battle_plan", "Draft launch brief", "Draft launch brief moved to Trash", phase = UndoPhase.Expiring),
                     onUndo = {},
                     onDismiss = {},
                     onExpiryFinished = { finished = true },
@@ -1187,8 +1193,8 @@ class BattlePlanScreenTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                BattlePlanTrashUndoNotice(
-                    notice = TrashUndoNotice(1, 7, "Draft launch brief", TrashUndoPhase.Expiring),
+                UndoNoticeHost(
+                    notice = UndoNotice(1, "battle_plan", "Draft launch brief", "Draft launch brief moved to Trash", phase = UndoPhase.Expiring),
                     reducedMotion = true,
                     onUndo = {},
                     onDismiss = {},

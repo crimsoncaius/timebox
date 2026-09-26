@@ -1,6 +1,5 @@
 package com.timebox.android.ui.battleplan
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,24 +16,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
-import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,15 +36,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,20 +53,17 @@ import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrenceStatus
 import com.timebox.android.data.RecurringTemplate
-import com.timebox.android.ui.formatMinuteLabel24
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.EmptyStateCard
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.SectionCard
-import com.timebox.android.ui.components.SectionHeader
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.util.Locale
 
 @Composable
@@ -275,318 +260,6 @@ internal fun RecurringDeleteDialog(
 }
 
 @Composable
-fun RecurringDetailScreen(
-    state: RecurringUiState,
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
-    onEdit: (Int) -> Unit,
-    onOpenTask: (Int) -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onEnd: () -> Unit,
-    onRequestDelete: () -> Unit,
-    onDismissDelete: () -> Unit,
-    onConfirmDelete: () -> Unit,
-) {
-    var confirmEnd by remember(state.selectedTemplate?.id) { mutableStateOf(false) }
-    BackHandler(onBack = onBack)
-    when {
-        state.detailLoading -> LoadingState()
-        state.selectedTemplate == null -> ErrorState(state.error ?: "Recurring template not found.", onRetry)
-        else -> RecurringDetailContent(
-            template = state.selectedTemplate,
-            busy = state.actionInProgress,
-            onBack = onBack,
-            onEdit = onEdit,
-            onOpenTask = onOpenTask,
-            onPause = onPause,
-            onResume = onResume,
-            onEnd = { confirmEnd = true },
-            onRequestDelete = onRequestDelete,
-        )
-    }
-    if (confirmEnd && state.selectedTemplate?.status != RecurrenceStatus.Ended) {
-        AlertDialog(
-            onDismissRequest = { confirmEnd = false },
-            title = { Text("End recurring template?") },
-            text = {
-                Text(
-                    "Ending this template may remove today's and future generated tasks that are still pristine. " +
-                        "Customized or completed tasks are preserved.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmEnd = false
-                    onEnd()
-                }) { Text("End template", color = TimeboxTheme.colors.error) }
-            },
-            dismissButton = { TextButton(onClick = { confirmEnd = false }) { Text("Cancel") } },
-        )
-    }
-    state.pendingDelete?.let { template ->
-        RecurringDeleteDialog(template, onDismissDelete, onConfirmDelete)
-    }
-}
-
-@Composable
-private fun RecurringDetailContent(
-    template: RecurringTemplate,
-    busy: Boolean,
-    onBack: () -> Unit,
-    onEdit: (Int) -> Unit,
-    onOpenTask: (Int) -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onEnd: () -> Unit,
-    onRequestDelete: () -> Unit,
-) {
-    val colors = TimeboxTheme.colors
-    val quota = template.mode == RecurrenceMode.Quota
-    val formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-    val extras = listOfNotNull(
-        template.description.takeIf { it.isNotBlank() },
-        template.taskType?.name,
-        template.urgency?.label?.let { "$it urgency" },
-        template.importance?.label?.let { "$it importance" },
-    )
-    Column(
-        Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        TextButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, null)
-            Spacer(Modifier.width(5.dp))
-            Text("Recurring")
-        }
-        Text(template.status.label.uppercase(), style = TimeboxTheme.type.kicker, color = colors.onVariant)
-        Text(template.title, style = TimeboxTheme.type.screenTitle, color = colors.on)
-        Text("${template.cadence} · from ${template.startDate.format(formatter)}", style = TimeboxTheme.type.body, color = colors.onVariant)
-        SectionCard {
-            SectionHeader(
-                if (quota) "This period's Session Tasks" else "Current Task Occurrence",
-                if (quota) "Independently completable work that counts toward this Quota Tracker."
-                else "This Recurring Task Series's current work.",
-            )
-            if (template.currentTasks.isEmpty()) {
-                Text("No current tasks", Modifier.padding(16.dp), color = colors.onVariant)
-            } else {
-                template.currentTasks.forEach { task ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onOpenTask(task.id) }.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(task.title, modifier = Modifier.weight(1f), color = colors.on)
-                        Text(
-                            if (task.overdue) "Overdue" else task.deadlineDate?.format(formatter) ?: "Open",
-                            style = TimeboxTheme.type.bodySmall,
-                            color = if (task.overdue) colors.error else colors.onVariant,
-                        )
-                    }
-                }
-            }
-        }
-        SectionCard {
-            SectionHeader("Upcoming")
-            if (template.upcoming.isEmpty()) Text("No upcoming windows", Modifier.padding(16.dp), color = colors.onVariant)
-            template.upcoming.forEach { window ->
-                Text(
-                    if (window.start == window.end) window.start.format(formatter) else "${window.start.format(formatter)} – ${window.end.format(formatter)}",
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = TimeboxTheme.type.bodySmall,
-                    color = colors.on,
-                )
-            }
-        }
-        Text("Series settings", style = TimeboxTheme.type.kicker, color = colors.onVariant)
-        SectionCard {
-            SectionHeader("Subtasks")
-            val items = template.checklistItems.sortedBy { it.position }
-            if (items.isEmpty()) {
-                Text("No subtasks", Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-            } else {
-                items.forEach {
-                    Text(it.title, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), color = colors.on)
-                }
-        }
-        }
-        template.preplanningSchedule?.let { schedule ->
-            SectionCard(Modifier.semantics { contentDescription = "Recurring Pre-planning Schedule" }) {
-                SectionHeader("Recurring Pre-planning Schedule")
-                schedule.slots.sortedBy { it.position }.forEach { slot ->
-                    val weekday = slot.weekday?.let { preplanningWeekdayLabel(it) }
-                    val times = "${formatMinuteLabel24(slot.startMinute)}–${formatMinuteLabel24(slot.endMinute)}"
-                    Text(
-                        listOfNotNull(weekday, times).joinToString(" · "),
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = TimeboxTheme.type.bodySmall,
-                        color = colors.on,
-                    )
-                }
-                if (schedule.unavailableSlots.isNotEmpty()) {
-                    Text(
-                        "Unavailable configured slots",
-                        Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
-                        style = TimeboxTheme.type.bodySmall,
-                        color = colors.error,
-                    )
-                    schedule.unavailableSlots.forEach { slot ->
-                        val times = "${formatMinuteLabel24(slot.startMinute)}–${formatMinuteLabel24(slot.endMinute)}"
-                        Text(
-                            "Unavailable on ${slot.date}, $times",
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .semantics {
-                                    contentDescription = "Unavailable configured slot on ${slot.date}, $times"
-                                },
-                            style = TimeboxTheme.type.bodySmall,
-                            color = colors.error,
-                        )
-                    }
-                }
-            }
-        }
-        SectionCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
-            SectionHeader("Notes & more")
-            Column(Modifier.padding(start = 2.dp, end = 2.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (template.description.isNotBlank()) Text(template.description, style = TimeboxTheme.type.body, color = colors.onVariant)
-                DetailLine("Mode", template.mode.label)
-                DetailLine("Ends", template.endDate?.format(formatter) ?: template.cycleLimit?.let { "$it cycles" } ?: "Never")
-                extras.filterNot { it == template.description }.takeIf { it.isNotEmpty() }?.let {
-                    Text(it.joinToString(" · "), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                }
-            }
-        }
-        PrimaryButton("Edit series", { onEdit(template.id) }, Modifier.fillMaxWidth(), enabled = !busy, leading = {
-            Icon(Icons.Outlined.Edit, null, Modifier.size(18.dp), tint = colors.onAction)
-        })
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (template.status == RecurrenceStatus.Active) LifecycleButton("Pause", Icons.Outlined.Pause, onPause, busy)
-            if (template.status == RecurrenceStatus.Paused) LifecycleButton("Resume", Icons.Outlined.PlayArrow, onResume, busy)
-            if (template.status != RecurrenceStatus.Ended) LifecycleButton("End", Icons.Outlined.StopCircle, onEnd, busy)
-            if (template.status == RecurrenceStatus.Ended) LifecycleButton("Delete", Icons.Outlined.DeleteForever, onRequestDelete, busy, destructive = true)
-        }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-private fun preplanningWeekdayLabel(weekday: Int): String =
-    listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").getOrElse(weekday) { "" }
-
-@Composable
-private fun DetailLine(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant, modifier = Modifier.width(100.dp))
-        Text(value, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.on, modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun LifecycleButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    busy: Boolean,
-    destructive: Boolean = false,
-) {
-    TextButton(onClick = onClick, enabled = !busy) {
-        Icon(icon, null, Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(label, color = if (destructive) TimeboxTheme.colors.error else TimeboxTheme.colors.on)
-    }
-}
-
-@Composable
-fun RecurringEditorScreen(
-    state: RecurringEditorUiState,
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
-    onTitle: (String) -> Unit,
-    onDescription: (String) -> Unit,
-    onTaskType: (Int?) -> Unit,
-    onCreateTaskType: (String) -> Unit = {},
-    onUrgency: (PriorityLevel?) -> Unit,
-    onImportance: (PriorityLevel?) -> Unit,
-    onMode: (RecurrenceMode) -> Unit,
-    onFrequency: (RecurrenceFrequency) -> Unit,
-    onInterval: (String) -> Unit,
-    onToggleWeekday: (Int) -> Unit,
-    onMonthDay: (String) -> Unit,
-    onQuotaCount: (String) -> Unit,
-    onStartDate: (String) -> Unit,
-    onEndMode: (RecurrenceEndMode) -> Unit,
-    onEndDate: (String) -> Unit,
-    onCycleLimit: (String) -> Unit,
-    onChecklist: (String) -> Unit,
-    onKeepUnfinishedOverdue: (Boolean) -> Unit = {},
-    onPreplanningEnabled: (Boolean) -> Unit = {},
-    onAddPreplanningSlot: () -> Unit = {},
-    onRemovePreplanningSlot: (Int) -> Unit = {},
-    onPreplanningStart: (Int, String) -> Unit = { _, _ -> },
-    onPreplanningEnd: (Int, String) -> Unit = { _, _ -> },
-    onPreplanningWeekday: (Int, Int) -> Unit = { _, _ -> },
-    onRefreshPreview: () -> Unit,
-    onSave: () -> Unit,
-    onConfirmBackfill: () -> Unit,
-    onDismissBackfill: () -> Unit,
-) {
-    var confirmDiscard by remember { mutableStateOf(false) }
-    val requestBack = { if (state.dirty && !state.saving) confirmDiscard = true else onBack() }
-    BackHandler(onBack = requestBack)
-    when {
-        state.loading -> LoadingState()
-        state.error != null -> ErrorState(state.error, onRetry)
-        else -> RecurringCreationContent(
-                state = state,
-                onBack = requestBack,
-                onTitle = onTitle,
-                onDescription = onDescription,
-                onTaskType = onTaskType,
-                onCreateTaskType = onCreateTaskType,
-                onUrgency = onUrgency,
-                onImportance = onImportance,
-                onMode = onMode,
-                onFrequency = onFrequency,
-                onInterval = onInterval,
-                onToggleWeekday = onToggleWeekday,
-                onMonthDay = onMonthDay,
-                onQuotaCount = onQuotaCount,
-                onStartDate = onStartDate,
-                onEndMode = onEndMode,
-                onEndDate = onEndDate,
-                onCycleLimit = onCycleLimit,
-                onChecklist = onChecklist,
-                onKeepUnfinishedOverdue = onKeepUnfinishedOverdue,
-                onPreplanningEnabled = onPreplanningEnabled,
-                onAddPreplanningSlot = onAddPreplanningSlot,
-                onRemovePreplanningSlot = onRemovePreplanningSlot,
-                onPreplanningStart = onPreplanningStart,
-                onPreplanningEnd = onPreplanningEnd,
-                onPreplanningWeekday = onPreplanningWeekday,
-                onRefreshPreview = onRefreshPreview,
-                onSave = onSave,
-        )
-    }
-    state.pendingBackfill?.let { detail ->
-        AlertDialog(
-            onDismissRequest = onDismissBackfill,
-            title = { Text("Create past occurrences?") },
-            text = { Text("This change will backfill ${detail.pastCycles} past cycles and create ${detail.pastTasks} tasks. These tasks are generated by the server.") },
-            confirmButton = { TextButton(onClick = onConfirmBackfill) { Text("Backfill and save") } },
-            dismissButton = { TextButton(onClick = onDismissBackfill) { Text("Cancel") } },
-        )
-    }
-    if (confirmDiscard) AlertDialog(
-        onDismissRequest = { confirmDiscard = false },
-        title = { Text("Discard changes?") },
-        text = { Text("Your recurring template changes have not been saved.") },
-        confirmButton = { TextButton(onClick = onBack) { Text("Discard") } },
-        dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
-    )
-}
-
-@Composable
 internal fun PreviewCard(state: RecurringEditorUiState, onRefresh: () -> Unit) {
     val colors = TimeboxTheme.colors
     SectionCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
@@ -659,7 +332,6 @@ internal fun recurringListTimingFact(template: RecurringTemplate): String {
 }
 
 private val RecurrenceStatus.label: String get() = wire.replaceFirstChar(Char::uppercase)
-private val RecurrenceMode.label: String get() = wire.replaceFirstChar(Char::uppercase)
 internal val RecurrenceFrequency.label: String get() = wire.replaceFirstChar(Char::uppercase)
 internal val PriorityLevel.label: String get() = wire.replaceFirstChar(Char::uppercase)
 internal val RecurrenceEndMode.label: String get() = when (this) {

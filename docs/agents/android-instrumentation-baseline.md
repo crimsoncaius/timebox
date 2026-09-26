@@ -93,3 +93,12 @@ Final focused verification after these corrections: all 55 cases in
 passed on `timebox-agent-13` (`emulator-5604`). This includes a new regression for
 Plan remaining disabled before the first successful day load. The other historical
 baseline failures were not reclassified or retested by this focused run.
+
+The Ponytail cleanup replaced tests of the retired recurring screens with six
+`RoutineScreenTest` cases and retargeted the stale recurring screenshot to
+`DarkThemeScreenshotTest#routineCreationUsesFocusedFields`. Five Trash undo tests
+in `BattlePlanScreenTest` also needed retargeting to `UndoNoticeHost`: their old
+classes no longer existed, preventing instrumentation compilation. All 12 focused
+cases passed on `timebox-agent-02` (`emulator-5582`). The first attempt ended with
+an instrumentation process crash during fresh emulator startup; the rerun passed.
+The historical recurring screenshot failure above no longer applies.

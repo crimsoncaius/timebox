@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import type { DayRead, TaskType, TimeBlock } from '../lib/api'
-import { TimeBlockModal } from './TimeBlockModal'
 import { TimeBlockInspectorContent } from './TimeBlockInspectorContent'
 
 // This suite covers the legacy form; ActivityActualEditor is tested separately.
@@ -45,7 +44,7 @@ const emptyDay: DayRead = {
   meta: { timezone: 'UTC', today: '2026-06-01', server_now_iso: '2026-06-01T12:00:00Z' },
 }
 
-describe('TimeBlockModal', () => {
+describe('TimeBlockInspectorContent', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -53,8 +52,7 @@ describe('TimeBlockModal', () => {
   it('shows read-only start and end as HH:MM', () => {
     render(
       <MemoryRouter>
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={makeBlock()}
         draft={null}
         day={emptyDay}
@@ -73,8 +71,7 @@ describe('TimeBlockModal', () => {
 
   it('keeps the note field tall enough to show its placeholder', () => {
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={makeBlock()}
         draft={null}
         day={emptyDay}
@@ -126,8 +123,7 @@ describe('TimeBlockModal', () => {
     const user = userEvent.setup()
     const onSave = vi.fn().mockResolvedValue(undefined)
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={makeBlock({ note: 'old' })}
         draft={null}
         day={emptyDay}
@@ -146,7 +142,7 @@ describe('TimeBlockModal', () => {
     })
   })
 
-  it('creates a missing task type path from the modal and saves only task_type_id', async () => {
+  it('creates a missing task type path from the inspector and saves only task_type_id', async () => {
     const user = userEvent.setup()
     const onCreateTaskTypePath = vi.fn().mockResolvedValue({
       id: 7,
@@ -156,8 +152,7 @@ describe('TimeBlockModal', () => {
     })
     const onSave = vi.fn().mockResolvedValue(undefined)
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={makeBlock()}
         draft={null}
         day={emptyDay}
@@ -221,8 +216,7 @@ describe('TimeBlockModal', () => {
     const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
     const draft = { lane: 'planned' as const, start_minute: 480, end_minute: 510 }
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={null}
         draft={draft}
         day={emptyDay}
@@ -248,8 +242,7 @@ describe('TimeBlockModal', () => {
     const user = userEvent.setup()
     const onCreateFromDraft = vi.fn().mockResolvedValue(undefined)
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={null}
         draft={{ lane: 'planned', start_minute: 480, end_minute: 510 }}
         day={emptyDay}
@@ -290,7 +283,6 @@ describe('TimeBlockModal', () => {
         planned_block_id: null,
       })
       const props = {
-        open: true,
         draft: null,
         day: emptyDay,
         taskTypes,
@@ -300,7 +292,7 @@ describe('TimeBlockModal', () => {
         onCreateTaskTypePath: noopCreate,
       }
       const view = render(
-        <MemoryRouter><TimeBlockModal block={linked} {...props} /></MemoryRouter>,
+        <MemoryRouter><TimeBlockInspectorContent variant="sheet" block={linked} {...props} /></MemoryRouter>,
       )
 
       expect(screen.getByText('Prepare launch')).toBeVisible()
@@ -311,7 +303,7 @@ describe('TimeBlockModal', () => {
       expect(onSave).not.toHaveBeenCalledWith(expect.objectContaining({ task_type_id: expect.anything() }))
 
       view.rerender(
-        <MemoryRouter><TimeBlockModal block={{ ...linked, name: 'Review session' }} {...props} /></MemoryRouter>,
+        <MemoryRouter><TimeBlockInspectorContent variant="sheet" block={{ ...linked, name: 'Review session' }} {...props} /></MemoryRouter>,
       )
       expect(screen.getByLabelText('Name')).toHaveValue('Review session')
       expect(screen.getByLabelText('Note')).toHaveValue('Keep me')
@@ -321,8 +313,7 @@ describe('TimeBlockModal', () => {
 
   it('draft mode hides Delete and Complete', () => {
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={null}
         draft={{ lane: 'planned', start_minute: 480, end_minute: 510 }}
         day={emptyDay}
@@ -348,8 +339,7 @@ describe('TimeBlockModal', () => {
     })
     render(
       <MemoryRouter>
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={planned}
         draft={null}
         day={{ ...emptyDay, time_blocks: [planned] }}
@@ -375,8 +365,7 @@ describe('TimeBlockModal', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
 
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={makeBlock()}
         draft={null}
         day={emptyDay}
@@ -404,8 +393,7 @@ describe('TimeBlockModal', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(
-      <TimeBlockModal
-        open
+      <TimeBlockInspectorContent variant="sheet"
         block={makeBlock()}
         draft={null}
         day={emptyDay}

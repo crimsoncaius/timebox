@@ -3,7 +3,6 @@ package com.timebox.android.ui.battleplan
 import com.timebox.android.ui.components.HelperText
 import androidx.compose.material3.CircularProgressIndicator
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -13,7 +12,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,12 +35,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -50,14 +46,10 @@ import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Event
-import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Folder
@@ -66,11 +58,8 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.NotificationsNone
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.foundation.selection.selectable
@@ -83,14 +72,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,7 +87,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -145,15 +133,12 @@ import com.timebox.android.data.Project
 import com.timebox.android.data.Subtask
 import com.timebox.android.data.TaskCollection
 import com.timebox.android.data.TaskStatus
-import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.Hairline
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.PrimaryButton
-import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.components.TimeboxChip
 import com.timebox.android.ui.components.TimeboxSwitch
-import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.readiness.ReadyToPlanFailureNotice
 import com.timebox.android.ui.theme.TimeboxColors
 import com.timebox.android.ui.theme.TimeboxDimens
@@ -269,75 +254,6 @@ internal fun BattlePlanScreen(
                 text = { Text("This removes the task and its subtasks permanently. This cannot be undone.") },
                 confirmButton = { TextButton(onClick = removalActions.confirmPermanentDelete) { Text("Delete permanently") } },
                 dismissButton = { TextButton(onClick = removalActions.dismissPermanentDelete) { Text("Cancel") } },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ScopeSelector(
-    scopes: List<BattlePlanScope>,
-    selected: BattlePlanScope,
-    onSelect: (BattlePlanScope) -> Unit,
-    onNewProject: () -> Unit,
-    onReorderProjects: () -> Unit,
-    onOpenRecurring: () -> Unit,
-) {
-    val colors = TimeboxTheme.colors
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        scopes.forEach { scope ->
-            val active = scope.preferenceKey == selected.preferenceKey
-            Text(
-                text = scope.label,
-                style = TimeboxTheme.type.label,
-                color = if (active) colors.bg else colors.on,
-                modifier = Modifier.clip(RoundedCornerShape(18.dp))
-                    .background(if (active) colors.on else colors.low)
-                    .clickable { onSelect(scope) }
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-            )
-        }
-        Text(
-            text = "Recurring Tasks",
-            style = TimeboxTheme.type.label,
-            color = colors.on,
-            modifier = Modifier.clip(RoundedCornerShape(18.dp))
-                .background(colors.low)
-                .clickable(onClick = onOpenRecurring)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-        )
-        TextButton(onClick = onReorderProjects) { Text("Reorder projects") }
-        RoundIconButton(
-            icon = Icons.Outlined.Add,
-            contentDescription = "Create project",
-            onClick = onNewProject,
-            background = colors.low,
-        )
-    }
-}
-
-@Composable
-private fun StatusTabs(state: BattlePlanUiState, onSelectStatus: (TaskStatus) -> Unit) {
-    val colors = TimeboxTheme.colors
-    ScrollableTabRow(
-        selectedTabIndex = battlePlanStatuses.indexOf(state.selectedStatus).coerceAtLeast(0),
-        edgePadding = 8.dp,
-        containerColor = colors.bg,
-        contentColor = colors.on,
-        divider = {},
-    ) {
-        battlePlanStatuses.forEach { status ->
-            Tab(
-                selected = state.selectedStatus == status,
-                onClick = { onSelectStatus(status) },
-                modifier = Modifier.semantics {
-                    contentDescription = "${status.label}, ${state.count(status)} tasks"
-                },
-                text = { Text("${status.label}  ${state.count(status)}", maxLines = 1) },
             )
         }
     }

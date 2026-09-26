@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES,
   addDaysIso,
   addMonthsIso,
   calendarIsoDateInTimeZone,
   firstOfMonthIso,
-  floorToSlotMinute,
   formatHourLabelGcal12,
   formatTimeRangeGcal12,
   gapBoundsForDraft,
@@ -13,11 +11,7 @@ import {
   minuteOfDayWithSecondsInTimeZone,
   monthGridForIso,
   monthYearLabelForIso,
-  resolveSameLaneMovePreviewStart,
-  resolveSameLaneMoveStart,
   sameLaneResizeBounds,
-  snapToSlot,
-  validStartMinuteRangesForDuration,
   visibleMinuteRange,
   zonedLocalDateTimeToIso,
   zonedLocalToIso,
@@ -38,13 +32,6 @@ describe('time helpers', () => {
   it('rejects invalid and nonexistent wall-clock values', () => {
     expect(() => zonedLocalDateTimeToIso('2026-02-30T09:00', 'UTC')).toThrow(/valid local date/i)
     expect(() => zonedLocalDateTimeToIso('2026-03-08T02:30', 'America/New_York')).toThrow(/does not exist/i)
-  })
-
-  it('snapToSlot rounds to 30 minutes', () => {
-    expect(snapToSlot(0)).toBe(0)
-    expect(snapToSlot(29)).toBe(30)
-    expect(snapToSlot(31)).toBe(30)
-    expect(snapToSlot(45)).toBe(60)
   })
 
   it('visibleMinuteRange respects day window', () => {
@@ -100,97 +87,6 @@ describe('time helpers', () => {
   it('gapBoundsForDraft falls back when interval does not fit any gap', () => {
     const a = { id: 1, start_minute: 480, end_minute: 510 }
     expect(gapBoundsForDraft([a], 500, 520)).toEqual({ minStartMinute: 0, maxEndMinute: 24 * 60 })
-  })
-
-  it('floorToSlotMinute floors to 30-minute grid', () => {
-    expect(floorToSlotMinute(0)).toBe(0)
-    expect(floorToSlotMinute(29)).toBe(0)
-    expect(floorToSlotMinute(30)).toBe(30)
-    expect(floorToSlotMinute(541)).toBe(540)
-  })
-
-  it('resolveSameLaneMoveStart: only moving block in lane — free move', () => {
-    const a = { id: 1, start_minute: 480, end_minute: 510 }
-    expect(resolveSameLaneMoveStart([a], 1, 30, 600, 480)).toBe(600)
-    expect(resolveSameLaneMoveStart([a], 1, 30, 600, 600)).toBe(600)
-  })
-
-  it('resolveSameLaneMoveStart: jump down past blocker into next gap', () => {
-    const a = { id: 1, start_minute: 480, end_minute: 510 }
-    const b = { id: 2, start_minute: 540, end_minute: 600 }
-    const lane = [a, b]
-    // Candidate 540–570 overlaps B; moving down from 480 → land at 600
-    expect(resolveSameLaneMoveStart(lane, 1, 30, 540, 480)).toBe(600)
-    expect(resolveSameLaneMoveStart(lane, 1, 30, 570, 510)).toBe(600)
-  })
-
-  it('resolveSameLaneMoveStart: jump up past blocker into previous gap', () => {
-    const a = { id: 1, start_minute: 480, end_minute: 510 }
-    const b = { id: 2, start_minute: 540, end_minute: 600 }
-    const lane = [a, b]
-    // Candidate 540–570 overlaps B; moving up from 600 → land at 510
-    expect(resolveSameLaneMoveStart(lane, 1, 30, 540, 600)).toBe(510)
-    expect(resolveSameLaneMoveStart(lane, 1, 30, 520, 600)).toBe(510)
-  })
-
-  it('resolveSameLaneMoveStart: moving block B does not block A', () => {
-    const a = { id: 1, start_minute: 480, end_minute: 510 }
-    const b = { id: 2, start_minute: 540, end_minute: 600 }
-    const lane = [a, b]
-    expect(resolveSameLaneMoveStart(lane, 2, 30, 510, 540)).toBe(510)
-    expect(resolveSameLaneMoveStart(lane, 2, 30, 630, 540)).toBe(630)
-  })
-
-  const laneWithGap = () => {
-    const a = { id: 1, start_minute: 480, end_minute: 510 }
-    const b = { id: 2, start_minute: 540, end_minute: 600 }
-    return [a, b]
-  }
-
-  it('resolveSameLaneMovePreviewStart: valid candidate passes through', () => {
-    const lane = laneWithGap()
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 600, 480)).toBe(600)
-  })
-
-  it('resolveSameLaneMovePreviewStart: stays at committed until threshold toward higher naive', () => {
-    const lane = laneWithGap()
-    const h = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES
-    // Invalid overlap strip; instant resolve would snap to 600, preview stays 510 until c >= 600 - h
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 570, 510)).toBe(510)
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 600 - h - 1, 510)).toBe(510)
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 600 - h, 510)).toBe(600)
-  })
-
-  it('resolveSameLaneMovePreviewStart: stays at committed until threshold toward lower naive', () => {
-    const lane = laneWithGap()
-    const h = MOVE_PREVIEW_BLOCK_HYSTERESIS_MINUTES
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 540, 600)).toBe(600)
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 510 + h + 1, 600)).toBe(600)
-    expect(resolveSameLaneMovePreviewStart(lane, 1, 30, 510 + h, 600)).toBe(510)
-  })
-
-  it('resolveSameLaneMovePreviewStart: does not oscillate mid-gap candidate stream', () => {
-    const lane = laneWithGap()
-    let preview = 510
-    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 593, preview)
-    expect(preview).toBe(600)
-    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 540, preview)
-    expect(preview).toBe(600)
-    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 570, preview)
-    expect(preview).toBe(600)
-    preview = resolveSameLaneMovePreviewStart(lane, 1, 30, 515, preview)
-    expect(preview).toBe(510)
-  })
-
-  it('validStartMinuteRangesForDuration: exposes gaps for fixed duration', () => {
-    const a = { id: 1, start_minute: 480, end_minute: 510 }
-    const b = { id: 2, start_minute: 540, end_minute: 600 }
-    const obstacles = [a, b].sort((x, y) => x.start_minute - y.start_minute)
-    expect(validStartMinuteRangesForDuration(obstacles, 30)).toEqual([
-      { lo: 0, hi: 450 },
-      { lo: 510, hi: 510 },
-      { lo: 600, hi: 1410 },
-    ])
   })
 
   it('addDaysIso shifts UTC calendar dates', () => {

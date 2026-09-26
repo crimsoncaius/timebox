@@ -27,7 +27,9 @@ import com.timebox.android.ui.battleplan.BattlePlanScreen
 import com.timebox.android.ui.battleplan.BattlePlanUiState
 import com.timebox.android.ui.battleplan.TaskDetailScreen
 import com.timebox.android.ui.battleplan.TaskDetailUiState
-import com.timebox.android.ui.battleplan.RecurringEditorScreen
+import com.timebox.android.ui.battleplan.RoutineScreen
+import com.timebox.android.ui.battleplan.RecurringEditorViewModel
+import com.timebox.android.ui.battleplan.RoutineTestApi
 import com.timebox.android.ui.battleplan.RecurringEditorUiState
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleUiState
@@ -219,29 +221,25 @@ class DarkThemeScreenshotTest {
     }
 
     @Test
-    fun recurringEditorUsesGroupedSectionsAndQuietSelections() {
+    fun routineCreationUsesFocusedFields() {
         compose.setContent {
             DarkFrame {
-                RecurringEditorScreen(
+                RoutineScreen(
                     state = RecurringEditorUiState(
                         title = "Weekly product review",
                         description = "A deterministic grouped-editor fixture.",
                         startDate = "2026-08-31",
                         checklistText = "Review outcomes\nChoose next focus",
                     ),
-                    onBack = {}, onRetry = {}, onTitle = {}, onDescription = {},
-                    onTaskType = {}, onUrgency = {}, onImportance = {},
-                    onMode = {}, onFrequency = {}, onInterval = {}, onToggleWeekday = {},
-                    onMonthDay = {}, onQuotaCount = {}, onStartDate = {}, onEndMode = {},
-                    onEndDate = {}, onCycleLimit = {}, onChecklist = {}, onRefreshPreview = {},
-                    onSave = {}, onConfirmBackfill = {}, onDismissBackfill = {},
+                    viewModel = RecurringEditorViewModel(RoutineTestApi().repository()),
+                    onBack = {},
                 )
             }
         }
 
-        saveScreenshot("dark-recurring-editor-grouped-top")
-        compose.onNodeWithText("Server preview").performScrollTo()
-        saveScreenshot("dark-recurring-editor-grouped-lower")
+        saveScreenshot("dark-routine-creation-top")
+        compose.onNodeWithText("Upcoming").performScrollTo()
+        saveScreenshot("dark-routine-creation-lower")
     }
 
     @Test
