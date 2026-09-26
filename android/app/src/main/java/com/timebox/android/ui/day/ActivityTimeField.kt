@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.HelperText
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -61,13 +62,13 @@ fun ActivityTimeField(label: String, value: ActivityTimeValue, zone: ZoneId, com
             }
         }
         if (candidates.size > 1) {
-            Text("This time occurs twice. Choose an occurrence.")
+            HelperText("This time occurs twice. Choose an occurrence.")
             ReportingTime.Occurrence.entries.forEach { occurrence ->
                 Row {
                     RadioButton(value.occurrence == occurrence, enabled = enabled, onClick = { onChange(value.copy(occurrence = occurrence, original = null)) })
                     TextButton(enabled = enabled, onClick = { onChange(value.copy(occurrence = occurrence, original = null)) }) { Text("${occurrence.name} · ${if (occurrence == ReportingTime.Occurrence.Earlier) candidates.first() else candidates.last()}") }
                 }
             }
-        } else if (local != null && candidates.isEmpty()) Text("That local time does not exist in $zone.")
+        } else if (local != null && candidates.isEmpty()) HelperText("That local time does not exist in $zone.", error = true)
     }
 }

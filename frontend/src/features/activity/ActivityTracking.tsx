@@ -1,3 +1,4 @@
+import { HelperText, DiagnosticText } from '../../components/HelperText'
 import { blockPrimaryIdentity, blockSecondaryIdentity, blockIdentityText } from '../../lib/blockIdentity'
 import { formatDuration } from '../../lib/duration'
 import { getFocusController } from './focusController'
@@ -89,16 +90,16 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{blockPrimaryIdentity(current)}</p>{blockSecondaryIdentity(current) && <p>{blockSecondaryIdentity(current)}</p>}
       <div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 text-on-primary" onClick={() => void repository.checkIn({ action: 'confirm', question_id: state.snapshot!.check_in!.question!.id })}>Yes, still doing this</button>
       <button className="rounded-xl border px-5 py-3" onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch activity</button></div>
-      <p className="mt-3 text-sm">Recording continues while you decide.</p>
+      <HelperText className="mt-3">Recording continues while you decide.</HelperText>
     </section>}
     <div hidden={!controlsVisible && !focus}>
     {controlRow}
-    {!focus && focusState.planning && <p className="text-right">Finish or cancel planning to enter Focus.</p>}
-    {!focus && focusState.error && <p role="status">{focusState.error}</p>}
-    {!focus && focusState.recovery && <details><summary>Review old Work Mode data</summary><p>These are saved device observations, not recorded time. Use Day add/edit for any correction.</p><pre className="whitespace-pre-wrap break-all">{focusState.recovery}</pre></details>}
-    {!focus && repository.recoveryData() && <details><summary>Review rejected changes</summary><p>These changes were not replayed. Use Day add/edit to correct the saved timeline.</p><pre className="whitespace-pre-wrap break-all">{repository.recoveryData()}</pre></details>}
+    {!focus && focusState.planning && <HelperText className="mt-1 text-right">Finish or cancel planning to enter Focus.</HelperText>}
+    {!focus && focusState.error && <HelperText role="status">{focusState.error}</HelperText>}
+    {!focus && focusState.recovery && <details><summary>Review old Work Mode data</summary><HelperText>These are saved device observations, not recorded time. Use Day add/edit for any correction.</HelperText><DiagnosticText>{focusState.recovery}</DiagnosticText></details>}
+    {!focus && repository.recoveryData() && <details><summary>Review rejected changes</summary><HelperText>These changes were not replayed. Use Day add/edit to correct the saved timeline.</HelperText><DiagnosticText>{repository.recoveryData()}</DiagnosticText></details>}
     {current && plan && current.planned_block_id !== plan.id ? <p className="text-right">Planned now: {blockIdentityText(planIdentity!)} <button disabled={disabled} className="underline py-2" onClick={() => void repository.adoptPlan(plan)}>Switch to planned activity</button></p> : null}
-    {current?.planned_block_id ? <p className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</p> : null}
+    {current?.planned_block_id ? <HelperText className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</HelperText> : null}
     </div>
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
     {starting && !current ? <form aria-label="Start tracking" className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {

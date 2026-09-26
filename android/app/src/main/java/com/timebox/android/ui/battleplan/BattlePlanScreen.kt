@@ -1,5 +1,6 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.HelperText
 import androidx.compose.material3.CircularProgressIndicator
 
 import androidx.activity.compose.BackHandler
@@ -1692,7 +1693,7 @@ fun TaskDetailScreen(
                 ReadyToPlanFailureNotice(it)
             }
             if (state.task?.recurrenceKind == "quota_parent") {
-                Text("Quota progress: ${state.task.quotaCompleted ?: 0} / ${state.task.expectedSessions ?: 0}")
+                HelperText("Quota progress: ${state.task.quotaCompleted ?: 0} / ${state.task.expectedSessions ?: 0}")
                 state.task.sessionTasks.forEach { session ->
                     TextButton(onClick = { onOpenTask(session.id) }) { Text("${session.title} · ${session.status.label}") }
                 }

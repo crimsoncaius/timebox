@@ -1,3 +1,4 @@
+import { HelperText } from '../../components/HelperText'
 import { blockPrimaryIdentity, blockSecondaryIdentity } from '../../lib/blockIdentity'
 import { formatDuration } from '../../lib/duration'
 import type { DayRead } from '../../lib/api'
@@ -5,7 +6,7 @@ import type { DayRead } from '../../lib/api'
 export function ReportingDayActuals({ day, onSelect }: { day: DayRead; onSelect: (id: number) => void }) {
   const format = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: day.meta.timezone, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'shortOffset' }).format(new Date(iso))
   return <section aria-label="Actual time on clock-change day" className="mb-4 space-y-2">
-    <p className="text-sm">Actual time · {day.meta.timezone}. This day includes a clock change; elapsed daily shares are shown below.</p>
+    <HelperText>Actual time · {day.meta.timezone}. This day includes a clock change; elapsed daily shares are shown below.</HelperText>
     {day.actual_blocks.map(p => <button key={p.actual_block.id} className="block w-full rounded-lg bg-actual-surface p-3 text-left dark:bg-actual-dark-surface" onClick={() => onSelect(p.actual_block.id)}>
       <strong>{blockPrimaryIdentity(p.actual_block)}</strong> · {formatDuration(p.duration_minutes)} on this day
       {blockSecondaryIdentity(p.actual_block) && <span className="block text-sm">{blockSecondaryIdentity(p.actual_block)}</span>}

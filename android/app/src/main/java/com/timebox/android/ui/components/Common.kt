@@ -6,6 +6,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -357,5 +360,33 @@ fun Hairline(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(1.dp)
             .background(TimeboxTheme.colors.hairline),
+    )
+}
+
+/** Muted supporting copy under a control: hints, notices, empty states and inline problems. */
+@Composable
+fun HelperText(text: String, modifier: Modifier = Modifier, error: Boolean = false) {
+    Text(
+        text,
+        modifier = modifier,
+        color = if (error) TimeboxTheme.colors.error else TimeboxTheme.colors.onVariant,
+        style = TimeboxTheme.type.bodySmall,
+    )
+}
+
+/** Saved raw data shown for review: legible, bounded, and visibly secondary to the notice it supports. */
+@Composable
+fun DiagnosticText(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(TimeboxShapes.field)
+            .background(TimeboxTheme.colors.low)
+            .heightIn(max = 180.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(12.dp),
+        color = TimeboxTheme.colors.onVariant,
+        style = TimeboxTheme.type.monoSmall.copy(lineHeight = 15.sp),
     )
 }

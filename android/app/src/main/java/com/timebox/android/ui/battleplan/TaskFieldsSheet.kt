@@ -1,5 +1,6 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.HelperText
 import android.app.TimePickerDialog
 import com.timebox.android.ui.showMondayDatePicker
 import androidx.activity.compose.BackHandler
@@ -260,7 +261,7 @@ internal fun TaskFieldsSheet(
                         val choices = listOf("Admin" to null) + projects.map { it.name to it.id }
                         val matches = choices.filter { it.first.contains(search.trim(), true) }
                         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (matches.isEmpty()) Text("No matches. Try another search.")
+                            if (matches.isEmpty()) HelperText("No matches. Try another search.", Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                             matches.forEach { (label, id) ->
                                 val selected = id == draft.projectId
                                 Surface(selected = selected, onClick = { commit(edited.copy(projectId = id)) }, enabled = !saving,
