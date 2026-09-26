@@ -196,6 +196,10 @@ _Avoid_: Planned timebox, Task, appointment
 A record of time that occurred. It may link to a Planned Block or stand alone and is authoritative for actual time.
 _Avoid_: Actual session, work session, completed block
 
+**Block Duration**:
+The whole-minute length of one Planned Block or Actual Block, from its start to its end. An Actual Block's duration covers its whole record even where it extends beyond the Day shown, and a running one counts up to now.
+_Avoid_: Block length, elapsed time
+
 **Task Completion**:
 An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks.
 _Avoid_: Time completion, session completion

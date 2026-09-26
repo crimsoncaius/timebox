@@ -9,3 +9,12 @@ export function formatDuration(minutes: number): string {
     .map(([value, unit]) => `${value} ${unit}${value === 1 ? '' : 's'}`)
     .join(' ') || '0 mins'
 }
+
+/** Compact Block Duration label, e.g. "45m", "2h", "1h 30m"; whole minutes, rounded down. */
+export function formatBlockDuration(minutes: number): string {
+  const total = Math.max(0, Math.floor(minutes))
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  if (h === 0) return `${m}m`
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}

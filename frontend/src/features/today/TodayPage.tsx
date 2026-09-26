@@ -18,6 +18,7 @@ import { Layout } from '../../components/Layout'
 import { TimeBlockInspectorContent } from '../../components/TimeBlockInspectorContent'
 import { api, type BattleTask, type BlockDraftPlacement, type BlockLane, type DayRead, type TaskType } from '../../lib/api'
 import { actualPlacementEnd, nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../../lib/blockPlacement'
+import { formatBlockDuration } from '../../lib/duration'
 import { captureTimelineCentre, needsElapsedDayView } from '../../lib/dayView'
 import { ActivityTracking } from '../activity/ActivityTracking'
 import { getActivityRepository, type ActivityCorrection } from '../activity/activityRepository'
@@ -789,7 +790,7 @@ export function TodayPage() {
           {readyTaskDragging && readyDropPreview && (
             <div role="status" className="fixed bottom-4 left-1/2 z-80 -translate-x-1/2 rounded-lg bg-surface p-3 shadow-lg">
               {readyDropPreview.start === null ? NO_NEARBY_BLOCK_SPACE
-                : formatTimeRangeGcal12(readyDropPreview.start, readyDropPreview.start + SLOT_MINUTES)}
+                : `${formatTimeRangeGcal12(readyDropPreview.start, readyDropPreview.start + SLOT_MINUTES)} · ${formatBlockDuration(SLOT_MINUTES)}`}
             </div>
           )}
           <ActivityTracking controlsVisible={trackingVisible} taskTypes={taskTypes} onChanged={() => {

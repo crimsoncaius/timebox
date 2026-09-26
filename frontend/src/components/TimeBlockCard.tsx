@@ -7,6 +7,7 @@ import {
 import { nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../lib/blockPlacement'
 import type { TimeBlockLike } from '../lib/time'
 import { blockPrimaryIdentity, blockSecondaryIdentity } from '../lib/blockIdentity'
+import { formatBlockDuration } from '../lib/duration'
 
 /** Ignore tiny jitter before moving a block. */
 const SWIPE_AXIS_DEAD_ZONE_PX = 8
@@ -32,6 +33,7 @@ export function TimeBlockCard({
   onDragSessionChange,
   isSelected = false,
   onPlacementError,
+  recordDurationMinutes,
 }: {
   block: TimeBlock
   lane: BlockLane
@@ -59,6 +61,8 @@ export function TimeBlockCard({
   onPlacementError?: (message: string) => void
   /** True when this block is the active editor target (matches `selectedBlockId` on the day). */
   isSelected?: boolean
+  /** Whole-record length of an Actual Block, which may extend beyond this Day. */
+  recordDurationMinutes?: number
 }) {
   const [drag, setDrag] = useState<DragState | null>(null)
   const [pendingLayout, setPendingLayout] = useState<{
@@ -336,6 +340,8 @@ export function TimeBlockCard({
   const displayLabel = blockPrimaryIdentity(block)
   const secondaryLabel = blockSecondaryIdentity(block)
   const timeRangeLabel = drag?.kind === 'move' && drag.invalid ? NO_NEARBY_BLOCK_SPACE : formatTimeRangeGcal12(displayStart, displayEnd)
+  const durationLabel = drag?.kind === 'move' && drag.invalid ? null : formatBlockDuration(
+    drag || pendingLayout ? Math.floor(displayEnd) - Math.floor(displayStart) : recordDurationMinutes ?? Math.floor(displayEnd) - Math.floor(displayStart))
   const compactContent = heightPx < 64
   const showText = heightPx >= 22
   const showGrooves = heightPx >= 64 || drag?.kind === 'resize'
@@ -403,6 +409,7 @@ export function TimeBlockCard({
             compact={compactContent}
             displayLabel={displayLabel}
             timeRangeLabel={timeRangeLabel}
+            durationLabel={durationLabel}
             note={block.note}
             secondaryLabel={secondaryLabel}
             laneStripeColor={laneStripeColor}
@@ -413,7 +420,7 @@ export function TimeBlockCard({
         <button
           type="button"
           aria-label={`Edit ${lane} block`}
-          aria-description={`${[displayLabel, secondaryLabel].filter(Boolean).join(", ")}, ${timeRangeLabel}`}
+          aria-description={`${[displayLabel, secondaryLabel].filter(Boolean).join(", ")}, ${[timeRangeLabel, durationLabel].filter(Boolean).join(", ")}`}
           className={`relative flex min-h-0 min-w-0 flex-1 touch-none overflow-hidden border-0 bg-transparent text-left select-none ${
             drag?.kind === 'move' ? 'cursor-grabbing' : 'cursor-grab'
           }`}
@@ -438,6 +445,7 @@ export function TimeBlockCard({
             compact={compactContent}
             displayLabel={displayLabel}
             timeRangeLabel={timeRangeLabel}
+            durationLabel={durationLabel}
             note={block.note}
             secondaryLabel={secondaryLabel}
             laneStripeColor={laneStripeColor}
@@ -471,6 +479,7 @@ function CardContent({
   compact,
   displayLabel,
   timeRangeLabel,
+  durationLabel,
   note,
   secondaryLabel,
   laneStripeColor,
@@ -479,6 +488,7 @@ function CardContent({
   compact: boolean
   displayLabel: string
   timeRangeLabel: string
+  durationLabel: string | null
   note: string | null
   secondaryLabel: string | null
   laneStripeColor: string
@@ -498,7 +508,7 @@ function CardContent({
       />
       <span
         data-block-content
-        className={`flex min-h-0 min-w-0 flex-1 overflow-hidden px-3 py-0 ${
+        className={`@container flex min-h-0 min-w-0 flex-1 overflow-hidden px-3 py-0 ${
           compact
             ? 'flex-row items-center gap-1.5'
             : 'flex-col items-stretch justify-center gap-0.5'
@@ -506,7 +516,23 @@ function CardContent({
       >
         <span data-block-title className={titleClassName}>{displayLabel}</span>
         {compact ? <span aria-hidden className="shrink-0 text-on-surface-variant">·</span> : null}
-        <span data-block-time className={timeClassName}>{timeRangeLabel}</span>
+        {compact ? (
+          <span data-block-time className={timeClassName}>
+            {timeRangeLabel}
+            {durationLabel ? (
+              // Block Duration is the first thing to go when a one-line card is too narrow.
+              <span data-block-duration className="hidden @[15rem]:inline">{' · '}{durationLabel}</span>
+            ) : null}
+          </span>
+        ) : (
+          // Taller cards wrap Block Duration beneath the range when the card is narrow.
+          <span data-block-time className={timeClassName}>
+            <span className="flex flex-wrap gap-x-1">
+              <span>{timeRangeLabel}</span>
+              {durationLabel ? <span data-block-duration>· {durationLabel}</span> : null}
+            </span>
+          </span>
+        )}
         {secondaryLabel ? (
           <span data-block-context className="min-h-0 truncate font-body text-[9px] leading-tight text-on-surface-variant">
             {secondaryLabel}

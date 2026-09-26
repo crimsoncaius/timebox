@@ -2,6 +2,7 @@ import { useDroppable } from '@dnd-kit/react'
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import type { BlockDraftPlacement, BlockLane, DayRead, TimeBlock } from '../lib/api'
 import { nowLineScrollDelta } from '../lib/dayView'
+import { formatBlockDuration } from '../lib/duration'
 import {
   calendarIsoDateInTimeZone,
   formatHourLabelGcal12,
@@ -220,6 +221,7 @@ export const DayTimeline = forwardRef<
       end_minute: actual.end_at == null && isTodayInTz ? Math.max(start_minute, Math.min(visibleEndMin, nowMinuteOfDay)) : end_minute,
       start_at: actual.start_at,
       end_at: actual.end_at,
+      record_duration_minutes: Math.floor((Date.parse(actual.end_at ?? currentInstant.toISOString()) - Date.parse(actual.start_at)) / 60_000),
       created_at: actual.created_at,
       updated_at: actual.updated_at,
     })).sort((a, b) => a.start_minute - b.start_minute)
@@ -564,7 +566,7 @@ function DraftBlockOverlay({
       {<button type="button" className="min-h-0 flex-1 text-xs touch-none"
         aria-label={`Move draft ${lane} block`} disabled={readOnly}
         onPointerDown={e => startDraftDrag('move', e)}>
-        {drag?.invalid ? NO_NEARBY_BLOCK_SPACE : formatTimeRangeGcal12(displayStart, displayEnd)}
+        {drag?.invalid ? NO_NEARBY_BLOCK_SPACE : `${formatTimeRangeGcal12(displayStart, displayEnd)} · ${formatBlockDuration(displayEnd - displayStart)}`}
       </button>}
       {!readOnly && onDraftTimeChange && (
         <button
@@ -609,7 +611,7 @@ function Lane({
   slotCount: number
   visibleStartMin: number
   visibleEndMin: number
-  blocks: (TimeBlock & { end_at?: string | null })[]
+  blocks: (TimeBlock & { end_at?: string | null; record_duration_minutes?: number })[]
   draft: BlockDraftPlacement | null
   readOnly: boolean
   onLaneClick: (e: React.MouseEvent<HTMLDivElement>) => void
@@ -686,6 +688,7 @@ function Lane({
             slotHeightPx={slotHeightPx}
             readOnly={readOnly}
             timeEditingDisabled={runningBlockIds.includes(b.id)}
+            recordDurationMinutes={b.record_duration_minutes}
             sameLaneBlocks={collisionBlocks}
             onPlacementError={onPlacementError}
             resizeMinStartMinute={minStartMinute}
@@ -728,7 +731,7 @@ function Lane({
         <div data-testid="planned-placement-preview" className="pointer-events-none absolute inset-x-1 z-40 border border-planned bg-planned-surface/80 p-1 text-xs"
           style={{ top: (placementPreview.start - visibleStartMin) / SLOT_MINUTES * slotHeightPx,
             height: (placementPreview.end - placementPreview.start) / SLOT_MINUTES * slotHeightPx }}>
-          {formatTimeRangeGcal12(placementPreview.start, placementPreview.end)}
+          {formatTimeRangeGcal12(placementPreview.start, placementPreview.end)} · {formatBlockDuration(placementPreview.end - placementPreview.start)}
         </div>
       )}
       {placementSelected && (
