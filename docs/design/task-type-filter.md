@@ -36,6 +36,13 @@ the Android filter sheet (`TaskTypeFilterSection.kt`, rules in `TaskTypeFilter.k
 Web still matches the exact chosen type only; the saved view's `taskTypes` ids are shared,
 so a parent saved on Android covers fewer tasks on web until web adopts branch matching.
 
+## Final review
+
+On 2026-09-26 the user reviewed the production filter sheet against nested sample data
+(39 Task Types, 23 tasks) and accepted every default: branch coverage for chosen parents,
+picker (Block usage) ordering, no Unset row, and no chip fallback for few types.
+Web parity is tracked in issue #290. The earlier questions below are resolved.
+
 ## Earlier open questions
 
 - Which structure? Should a parent include its sub-types (provisional: yes)?
