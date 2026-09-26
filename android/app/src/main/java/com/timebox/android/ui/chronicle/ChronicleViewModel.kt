@@ -16,8 +16,8 @@ import com.timebox.android.data.remote.TrendsDto
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 
-/** Chronicle's two views: one past day at a time, or Trends across many days. */
-enum class ChronicleView { Calendar, Trends }
+/** Chronicle's views: one past day at a time, Trends across many days, or Habits by week. */
+enum class ChronicleView { Calendar, Trends, Habits }
 
 internal fun canAdvanceTrendRange(report: TrendsDto, period: String): Boolean {
     val start = LocalDate.parse(report.start)

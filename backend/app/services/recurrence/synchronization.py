@@ -434,7 +434,8 @@ def _derive_quota_parents(db: Session) -> None:
         progressed = completed > 0 or any(
             child.deleted_at is None and child.status != TaskStatus.open for child in children
         )
-        if completed == (parent.expected_sessions or 0) and (parent.expected_sessions or 0) > 0:
+        # Extra Session Tasks may push completion past the requirement.
+        if completed >= (parent.expected_sessions or 0) and (parent.expected_sessions or 0) > 0:
             parent.status = TaskStatus.completed
         elif progressed:
             parent.status = TaskStatus.in_progress

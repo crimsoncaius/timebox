@@ -215,6 +215,15 @@ interface TimeboxApi {
     @GET("recurring-templates/{templateId}")
     suspend fun getRecurringTemplate(@Path("templateId") templateId: Int): RecurringTemplateDto
 
+    @GET("habits")
+    suspend fun habitsWeek(@Query("week") week: String?): HabitsWeekDto
+
+    @POST("habits/{templateId}/days/{day}")
+    suspend fun tickHabit(@Path("templateId") templateId: Int, @Path("day") day: String): HabitsWeekDto
+
+    @DELETE("habits/{templateId}/days/{day}")
+    suspend fun untickHabit(@Path("templateId") templateId: Int, @Path("day") day: String): HabitsWeekDto
+
     @GET("recurring-templates/{templateId}/calendar")
     suspend fun getRoutineCalendar(@Path("templateId") templateId: Int, @Query("month") month: String?): RoutineCalendarDto
 

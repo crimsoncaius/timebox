@@ -45,6 +45,7 @@ internal fun RecurringTemplatePatch.toJson(): JsonObject = patchBody {
     strings("checklist_titles", checklistTitles)
     boolean("confirm_backfill", confirmBackfill)
     boolean("keep_unfinished_overdue", keepUnfinishedOverdue)
+    boolean("track_as_habit", trackAsHabit)
     string("preplanning_mode", preplanningMode)
     json("preplanning_schedule", preplanningSchedule.map { it.toPatchJson() })
 }

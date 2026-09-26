@@ -320,6 +320,39 @@ def _completion_operation(
     )
 
 
+def _mark_completed(db: Session, row: Task, completed_at: dt.datetime) -> None:
+    row.last_non_completed_status = row.status
+    protect_task_occurrence(db, row)
+    row.status = TaskStatus.completed
+    row.completed_at = completed_at
+    row.ready_to_plan = False
+    row.is_blocked = False
+    row.blocking_reason = None
+    row.reminder_at = None
+    row.reminder_delivered_at = None
+    row.reminder_skipped_at = None
+    row.reminder_claim_token = None
+    row.reminder_claim_until = None
+
+
+def record_dated_completion(db: Session, task_id: int, completed_at: dt.datetime) -> Task:
+    """Record a Task Completion for work done earlier (ADR 0015).
+
+    Unlike :func:`complete_task`, it leaves running tracking and Planned Blocks
+    alone and records no Undo operation: the completion describes the past.
+    """
+
+    row = _load_completable_task(db, task_id)
+    try:
+        _mark_completed(db, row, as_utc(completed_at))
+        _derive_quota(db, row)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return _load_task(db, task_id)
+
+
 def complete_task(
     db: Session,
     task_id: int,
@@ -355,18 +388,7 @@ def complete_task(
                 raise ValueError("Actual Block end must be after its start")
             active.end_at = completed_at
 
-        row.last_non_completed_status = row.status
-        protect_task_occurrence(db, row)
-        row.status = TaskStatus.completed
-        row.completed_at = completed_at
-        row.ready_to_plan = False
-        row.is_blocked = False
-        row.blocking_reason = None
-        row.reminder_at = None
-        row.reminder_delivered_at = None
-        row.reminder_skipped_at = None
-        row.reminder_claim_token = None
-        row.reminder_claim_until = None
+        _mark_completed(db, row, completed_at)
 
         for block in removable:
             linked_actual = ended_actuals.get(block.id)

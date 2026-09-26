@@ -208,6 +208,7 @@ data class RecurringTemplate(
     val keepUnfinishedOverdue: Boolean = false,
     val preplanningSchedule: RecurringPreplanningSchedule? = null,
     val preplanningMode: String = if (preplanningSchedule == null) "none" else "planned_time",
+    val trackAsHabit: Boolean = false,
 )
 
 data class ProjectCreate(
@@ -281,6 +282,7 @@ data class RecurringTemplateCreate(
     val checklistTitles: List<String> = emptyList(),
     val confirmBackfill: Boolean = false,
     val keepUnfinishedOverdue: Boolean = false,
+    val trackAsHabit: Boolean = false,
     val preplanningSchedule: RecurringPreplanningSchedule? = null,
     val preplanningMode: String = if (preplanningSchedule == null) "none" else "planned_time",
 )
@@ -302,6 +304,7 @@ data class RecurringTemplatePatch(
     val checklistTitles: PatchField<List<String>> = PatchField.Absent,
     val confirmBackfill: PatchField<Boolean> = PatchField.Absent,
     val keepUnfinishedOverdue: PatchField<Boolean> = PatchField.Absent,
+    val trackAsHabit: PatchField<Boolean> = PatchField.Absent,
     val preplanningSchedule: PatchField<RecurringPreplanningSchedule> = PatchField.Absent,
     val preplanningMode: PatchField<String> = PatchField.Absent,
 )
@@ -414,6 +417,7 @@ internal fun RecurringTemplateDto.toModel() = RecurringTemplate(
     keepUnfinishedOverdue = keepUnfinishedOverdue,
     preplanningSchedule = preplanningSchedule?.toModel(),
     preplanningMode = preplanningMode ?: if (preplanningSchedule == null) "none" else "planned_time",
+    trackAsHabit = trackAsHabit,
 )
 
 data class RoutineCalendarCompletion(val id: Int, val title: String, val date: LocalDate)
