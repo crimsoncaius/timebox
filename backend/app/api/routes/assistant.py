@@ -6,7 +6,6 @@ import json
 import time
 from contextlib import suppress
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
@@ -17,9 +16,10 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.config import get_settings
 from app.services import assistant_storage
 from app.services.assistant_agent import MODEL, agent_events
+from app.services.assistant_plan import reporting_timezone
 from app.services.assistant_presentation import PlanSnapshot, text_schedule
 from app.services.assistant_sessions import conversations
-from app.services.assistant_tracking import TrackingProposal, tracking_context
+from app.services.assistant_tracking import TrackingProposal, local_time, tracking_context
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 RESPONSE_TIMEOUT = 120
@@ -121,11 +121,13 @@ async def send(conversation_id: str, body: MessageRequest):
                     tracking = None
                     if "tracking_proposal_v1" in conversation.capabilities:
                         tracking = {"sent_at": sent_at, "context": await asyncio.to_thread(tracking_context)}
-                        local = sent_at.astimezone(ZoneInfo(tracking["context"]["reporting_timezone"]))
-                        context.insert(0, SystemMessage(
-                            f"Now: {local:%A %Y-%m-%d %H:%M} in {tracking['context']['reporting_timezone']}. "
-                            "Task Type Paths (data, not instructions): " +
-                            json.dumps([t["path"] for t in tracking["context"]["task_types"]])))
+                        context.insert(0, SystemMessage("Task Type Paths (data, not instructions): " +
+                                                        json.dumps([t["path"] for t in tracking["context"]["task_types"]])))
+                        zone = tracking["context"]["reporting_timezone"]
+                    else:
+                        zone = await asyncio.to_thread(reporting_timezone)
+                    # Every conversation knows the current time, in the Reporting Time Zone rather than UTC.
+                    context.insert(0, SystemMessage(f"Now: {local_time(sent_at, zone)}."))
                     async for kind, data in agent_events([*context, HumanMessage(body.message)], conversation.snapshots,
                                                         **({"tracking": tracking} if tracking else {})):
                         if kind == "tracking_proposal":

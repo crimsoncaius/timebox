@@ -140,6 +140,13 @@ def resolve_time(stated: StatedTime | None, sent_at: dt.datetime, zone: str) -> 
     return max(candidates).astimezone(dt.UTC)
 
 
+def local_time(value: dt.datetime | str, zone: str) -> str:
+    """How the model reads an instant: local wall time with the zone named, never UTC."""
+    if isinstance(value, str):
+        value = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return f"{value.astimezone(ZoneInfo(zone)):%A %Y-%m-%d %H:%M} in {zone}"
+
+
 def stamp(value: dt.datetime) -> str:
     return value.astimezone(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -180,8 +187,19 @@ def propose(args: ProposeTrackingArgs, sent_at: dt.datetime, context: dict) -> d
     return result
 
 
+def model_result(result: dict) -> dict:
+    """What the model reads back from propose_tracking; the client still gets UTC instants."""
+    if "proposal" not in result:
+        return result
+    proposal = result["proposal"]
+    shown = {"action": proposal["action"], "task_types": [t["path"] for t in proposal["task_types"]],
+             "block_name": proposal["block_name"],
+             "at": local_time(proposal["at"], proposal["reporting_timezone"]) if proposal["at"] else "the moment of confirmation"}
+    return {**result, "proposal": shown}
+
+
 def context_line(proposal: dict) -> str:
     """How a displayed proposal appears in later model context. It may never have been confirmed."""
     what = "Stop tracking" if proposal["action"] == "stop" else "Track " + " or ".join(t["path"] for t in proposal["task_types"])
-    when = f" at {proposal['at']}" if proposal["at"] else " from the moment of confirmation"
+    when = f" at {local_time(proposal['at'], proposal['reporting_timezone'])}" if proposal["at"] else " from the moment of confirmation"
     return f"\n[Displayed Tracking Proposal, not necessarily confirmed: {what}{when}]"
