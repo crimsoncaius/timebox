@@ -75,7 +75,7 @@ def test_rolling_context_preserves_full_record_and_bounds_snapshots(client, monk
     assert item.messages[0].content == "Question 3"
     assert set(item.snapshots) == {plan["snapshot_id"] for plan in plans[-20:]}
     assert len(seen[-1][1]) == 20
-    assert seen[-1][0][1].content == "Question 2"  # after historical-snapshots system message
+    assert seen[-1][0][2].content == "Question 2"  # after the Now and historical-snapshots system messages
 
 
 def test_historical_card_stays_available_when_original_read_leaves_window(client, monkeypatch):

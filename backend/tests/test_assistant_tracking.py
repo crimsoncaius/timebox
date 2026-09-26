@@ -1,6 +1,7 @@
 import asyncio
 import datetime as dt
 import json
+import re
 from uuid import uuid4
 
 import pytest
@@ -118,6 +119,26 @@ def test_graph_calls_propose_tracking_and_emits_card_before_text():
     assert proposal["at"] == "2026-09-25T04:40:00Z" and proposal["task_types"] == [{"id": 1, "path": "Meals"}]
 
 
+def test_model_reads_proposal_times_in_the_reporting_time_zone():
+    tracking = {"sent_at": sgt(25, 12, 50), "context": CONTEXT}
+    model = proposal_turn({"action": "track", "task_type_paths": ["Meals"], "minutes_ago": 10}, "Confirm below.")
+
+    async def tool_outputs():
+        graph = build_agent(model, tracking)
+        return [e["data"]["output"] async for e in graph.astream_events({"messages": [HumanMessage("x")]}, version="v2")
+                if e["event"] == "on_tool_end"]
+
+    [output] = asyncio.run(tool_outputs())
+    assert json.loads(output.content)["proposal"]["at"] == "Friday 2026-09-25 12:40 in Asia/Singapore"
+    assert "04:40" not in output.content
+    assert output.artifact["proposal"]["at"] == "2026-09-25T04:40:00Z"  # the card still gets the UTC instant
+
+
+def test_recalled_proposal_names_local_time():
+    proposal = propose(ProposeTrackingArgs(action="stop", minutes_ago=10), sgt(25, 12, 50), CONTEXT)["proposal"]
+    assert assistant_tracking.context_line(proposal).endswith("Stop tracking at Friday 2026-09-25 12:40 in Asia/Singapore]")
+
+
 @pytest.mark.parametrize("args", [{"action": "track", "task_type_paths": ["Yoga"]},  # not an existing path
                                   {"action": "track"},                                 # no path at all
                                   {"action": "stop", "minutes_ago": 5, "hour": 3}])     # two time forms
@@ -159,17 +180,20 @@ def test_route_negotiates_stores_and_recalls_proposal(client, monkeypatch, capab
 
     monkeypatch.setattr(assistant, "agent_events", fake)
     monkeypatch.setattr(assistant, "tracking_context", lambda: CONTEXT)
+    monkeypatch.setattr(assistant, "reporting_timezone", lambda: SGT)
     body = {"capabilities": ["plan_card_v1", "tracking_proposal_v1"]} if capable else {}
     created = client.post("/assistant/conversations", json=body).json()
     assert ("tracking_proposal_v1" in created["capabilities"]) == capable
     key, run = created["conversation_id"], str(uuid4())
     events = decode(client.post(f"/assistant/conversations/{key}/messages", json={"message": "eating", "run_id": run}))
     kinds = [k for k, _ in events]
+    # Every conversation knows the current time in the Reporting Time Zone, not only proposal-capable ones.
+    assert re.fullmatch(r"Now: \w+day \d{4}-\d\d-\d\d \d\d:\d\d in Asia/Singapore\.", seen["messages"][0].content)
     if not capable:
         assert seen["tracking"] is None and "tracking_proposal" not in kinds
         return
     assert kinds == ["started", "tracking_proposal", "text_delta", "completed"]
-    assert "Task Type Paths" in seen["messages"][0].content and "Meals" in seen["messages"][0].content
+    assert "Task Type Paths" in seen["messages"][1].content and "Meals" in seen["messages"][1].content
     client.post(f"/assistant/conversations/{key}/runs/{run}/ack")
     conversations.items.clear()
     remembered = conversations.get(key).messages[-1].content

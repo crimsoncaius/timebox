@@ -15,6 +15,11 @@ from app.models.time_block import BlockLane, TimeBlock
 from app.services.activity_service import reporting_settings
 
 
+def reporting_timezone() -> str:
+    with Session(get_engine(), autoflush=False) as db:
+        return reporting_settings(db, get_settings()).app_timezone
+
+
 def read_today_plan() -> dict:
     with Session(get_engine(), autoflush=False) as db:
         settings = reporting_settings(db, get_settings())

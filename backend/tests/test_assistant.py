@@ -92,7 +92,7 @@ def test_stream_context_committed_only_after_ack(client, monkeypatch):
     client.post(f"/assistant/conversations/{key}/runs/{run}/ack")
     client.post(f"/assistant/conversations/{key}/runs/{run}/ack")
     send(client, key)
-    assert len(seen[1]) == 3
+    assert len(seen[1]) == 4  # Now, the acknowledged exchange, and the new question
 
 
 @pytest.mark.parametrize("error", [RuntimeError("SECRET PROVIDER ERROR"), TimeoutError()])

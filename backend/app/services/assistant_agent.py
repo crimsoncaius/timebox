@@ -16,7 +16,7 @@ from opentelemetry import trace
 from app.core.config import get_settings
 from app.services.assistant_plan import read_today_plan
 from app.services.assistant_presentation import PresentationParser, snapshot
-from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, propose
+from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, model_result, propose
 
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported. You can only read Today's stored
@@ -112,10 +112,12 @@ async def call_model(model, messages):
 def propose_tracking_tool(sent_at, context):
     """Bound per message: stated times resolve against the instant the message was sent."""
 
-    @tool("propose_tracking", args_schema=arguments_schema(context))
-    async def propose_tracking(**arguments) -> dict:
+    @tool("propose_tracking", args_schema=arguments_schema(context), response_format="content_and_artifact")
+    async def propose_tracking(**arguments) -> tuple[str, dict]:
         """Propose tracking an activity (optionally from an earlier time) or stopping. The user must confirm it."""
-        return propose(ProposeTrackingArgs.model_validate(arguments), sent_at, context)
+        result = propose(ProposeTrackingArgs.model_validate(arguments), sent_at, context)
+        # The model reads local times; the card keeps the UTC instants.
+        return json.dumps(model_result(result)), result
 
     # Malformed arguments reach the model as an explanation instead of ending the response.
     propose_tracking.handle_validation_error = lambda error: json.dumps(
@@ -195,6 +197,7 @@ async def translate_events(events, snapshots=None):
             result = event["data"]["output"]
             value = json.loads(result.content) if hasattr(result, "content") else result
             if event.get("name") == "propose_tracking":
+                value = getattr(result, "artifact", None)
                 # An invalid request reaches only the model, which explains it; no card.
                 if isinstance(value, dict) and "proposal" in value:
                     yield "tracking_proposal", value["proposal"]
