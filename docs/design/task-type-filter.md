@@ -20,7 +20,23 @@ rows show two-tone paths and branch task counts; an Unset row ends the list.
 Route: `timebox://prototype/type-filter?variant=inline|drill|tree|current&data=many|few`.
 All state is local; nothing writes to the repository or the saved view.
 
-## Open questions
+## Decision
+
+The user chose **Inline search**, and it is now the production Task type section of
+the Android filter sheet (`TaskTypeFilterSection.kt`, rules in `TaskTypeFilter.kt`).
+
+- Filtering only narrows existing types; there is no create row.
+- A chosen parent covers its branch. Choosing a parent absorbs its individually chosen
+  descendants; covered rows show "Included via …" and cannot be toggled on their own.
+- Empty-query order follows the Task Type picker (ADR-0006); rows show branch task counts
+  within the current scope, before other filters.
+- No Unset row: the existing filter sheet deliberately omits Unset.
+- The prototype route was removed; it remains in commit `ec70964b`.
+
+Web still matches the exact chosen type only; the saved view's `taskTypes` ids are shared,
+so a parent saved on Android covers fewer tasks on web until web adopts branch matching.
+
+## Earlier open questions
 
 - Which structure? Should a parent include its sub-types (provisional: yes)?
 - Empty-query order: Block usage (picker, ADR-0006) vs task count on the board.
