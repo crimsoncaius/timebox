@@ -71,3 +71,12 @@ failed on the original rule at the navigation visibility assertion, then passed
 after the fix. It also verifies the composer action remains visible and navigation
 back to Day works. The focused AppRoutes unit tests and debug build pass.
 
+
+## Review correction: hide navigation while the keyboard is up
+
+The previous correction misread the report. The actual problem was that the Assistant
+tab showed no bottom navigation even without the keyboard, and that was already fixed.
+Keeping navigation visible while typing crowds the chat instead. Assistant now follows
+the shared keyboard policy: bottom navigation shows when the keyboard is hidden and
+hides while it is up. The device regression is now
+`assistantShowsNavigationOnlyWhileKeyboardIsHidden`.

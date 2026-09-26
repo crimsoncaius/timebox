@@ -399,7 +399,6 @@ fun TimeboxApp(
                     battlePlanState.showComposer,
                     isImeVisible,
                     route == AppRoutes.TaskDetailPattern,
-                    assistantVisible = surfaceRoute == AppRoutes.Assistant,
                 )) {
                 TimeboxBottomNav(selectedTab) { tab ->
                     val target = when (tab) {
@@ -454,8 +453,7 @@ internal fun shouldShowBottomNavigation(
     taskComposerVisible: Boolean,
     isImeVisible: Boolean,
     taskDetailVisible: Boolean = false,
-    assistantVisible: Boolean = false,
-): Boolean = !taskComposerVisible && !taskDetailVisible && (!isImeVisible || assistantVisible)
+): Boolean = !taskComposerVisible && !taskDetailVisible && !isImeVisible
 
 /** Completion feedback must dismiss even when it offers Undo. */
 internal fun taskCompletionSnackbarDuration(): SnackbarDuration = SnackbarDuration.Short

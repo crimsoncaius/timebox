@@ -53,7 +53,7 @@ class TimeboxAppReadyToPlanTest {
     private val readinessScopes = mutableListOf<CoroutineScope>()
 
     @Test
-    fun assistantKeepsNavigationWhenInputMethodIsVisible() {
+    fun assistantShowsNavigationOnlyWhileKeyboardIsHidden() {
         val transport = ControllableTimeboxApi()
         val repository = TimeboxRepository(transport.proxy())
         val readinessCoordinator = testReadyToPlanCoordinator(repository)
@@ -73,13 +73,16 @@ class TimeboxAppReadyToPlanTest {
         }
         compose.onNodeWithContentDescription("Assistant").performClick()
         compose.onNodeWithContentDescription("Message Assistant").assertIsDisplayed()
-        compose.runOnIdle { imeVisible.value = true }
         listOf("Day", "Chronicle", "Battle Plan", "Settings").forEach { destination ->
             compose.onNodeWithContentDescription(destination).assertIsDisplayed()
         }
+        compose.runOnIdle { imeVisible.value = true }
+        listOf("Day", "Chronicle", "Battle Plan", "Settings").forEach { destination ->
+            compose.onNodeWithContentDescription(destination).assertDoesNotExist()
+        }
         compose.onNodeWithContentDescription("Send").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Day").performClick()
         compose.runOnIdle { imeVisible.value = false }
+        compose.onNodeWithContentDescription("Day").performClick()
         compose.onNodeWithContentDescription("Assistant").assertIsDisplayed()
     }
 
