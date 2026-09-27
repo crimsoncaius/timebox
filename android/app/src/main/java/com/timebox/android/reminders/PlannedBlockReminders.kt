@@ -18,7 +18,15 @@ data class PlannedBlockReminderSettings(val enabled: Boolean = false, val leadMi
 fun plannedBlockLeadLabel(minutes: Int): String = if (minutes == 0) "At start" else "$minutes min before"
 
 /** The facts a reminder needs about one Planned Block. */
-data class ReminderBlock(val id: Int, val start: Instant, val end: Instant, val title: String)
+data class ReminderBlock(val id: Int, val start: Instant, val end: Instant, val title: String,
+                         val taskTypeId: Int? = null, val taskId: Int? = null)
+
+/** The Current Activity, as far as Planned Block Reminders care. */
+data class TrackedActivity(val plannedBlockId: Int?, val taskTypeId: Int, val taskId: Int?)
+
+/** Adopted, or already recording the same Task Type and Task, so reminding would ask for a no-op switch. */
+fun TrackedActivity?.alreadyTracks(block: ReminderBlock): Boolean = this != null &&
+    (plannedBlockId == block.id || (block.taskTypeId != null && taskTypeId == block.taskTypeId && taskId == block.taskId))
 
 /** A block is reminded at most once per start time, so moving a block re-arms its reminder. */
 fun plannedBlockReminderKey(blockId: Int, start: Instant): String = "$blockId@$start"
@@ -73,26 +81,26 @@ sealed interface PlannedBlockReminderDecision {
 fun decidePlannedBlockReminder(
     key: String,
     block: ReminderBlock?,
-    currentPlannedBlockId: Int?,
+    current: TrackedActivity?,
     now: Instant,
 ): PlannedBlockReminderDecision = when {
     block == null || block.reminderKey != key -> PlannedBlockReminderDecision.Stale
-    currentPlannedBlockId == block.id -> PlannedBlockReminderDecision.AlreadyTracking
+    current.alreadyTracks(block) -> PlannedBlockReminderDecision.AlreadyTracking
     now >= block.end -> PlannedBlockReminderDecision.Ended
     else -> PlannedBlockReminderDecision.Deliver
 }
 
-/** Delivered reminders to remove silently: adopted, ended, or moved/deleted blocks. */
+/** Delivered reminders to remove silently: already tracked, ended, or moved/deleted blocks. */
 fun plannedBlockRemindersToWithdraw(
     delivered: Set<String>,
     blocks: List<ReminderBlock>,
-    currentPlannedBlockId: Int?,
+    current: TrackedActivity?,
     now: Instant,
 ): Set<String> {
     val byKey = blocks.associateBy { it.reminderKey }
     return delivered.filterTo(mutableSetOf()) { key ->
         val block = byKey[key]
-        block == null || block.id == currentPlannedBlockId || now >= block.end
+        block == null || current.alreadyTracks(block) || now >= block.end
     }
 }
 

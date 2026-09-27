@@ -11,6 +11,7 @@ class PlannedBlockRemindersTest {
     private fun at(time: String) = Instant.parse("2026-09-19T${time}:00Z")
     private fun block(id: Int, start: String, end: String, title: String = "Deep work") = ReminderBlock(id, at(start), at(end), title)
     private val on = PlannedBlockReminderSettings(enabled = true, leadMinutes = 5)
+    private fun tracking(planId: Int?, typeId: Int = 99, taskId: Int? = null) = TrackedActivity(planId, typeId, taskId)
 
     @Test fun remindsLeadMinutesBeforeStart() {
         val plan = planPlannedBlockReminders(listOf(block(1, "09:00", "10:00")), on, emptySet(), emptySet(), at("08:30"))
@@ -54,11 +55,22 @@ class PlannedBlockRemindersTest {
         val deepWork = block(1, "09:00", "10:00")
         val key = deepWork.reminderKey
         assertEquals(PlannedBlockReminderDecision.Deliver, decidePlannedBlockReminder(key, deepWork, null, at("08:55")))
-        assertEquals(PlannedBlockReminderDecision.Deliver, decidePlannedBlockReminder(key, deepWork, 7, at("08:55")))
-        assertEquals(PlannedBlockReminderDecision.AlreadyTracking, decidePlannedBlockReminder(key, deepWork, 1, at("08:55")))
+        assertEquals(PlannedBlockReminderDecision.Deliver, decidePlannedBlockReminder(key, deepWork, tracking(7), at("08:55")))
+        assertEquals(PlannedBlockReminderDecision.AlreadyTracking, decidePlannedBlockReminder(key, deepWork, tracking(1), at("08:55")))
         assertEquals(PlannedBlockReminderDecision.Ended, decidePlannedBlockReminder(key, deepWork, null, at("10:00")))
         assertEquals(PlannedBlockReminderDecision.Stale, decidePlannedBlockReminder(key, null, null, at("08:55")))
         assertEquals(PlannedBlockReminderDecision.Stale, decidePlannedBlockReminder(key, block(1, "10:00", "11:00"), null, at("08:55")))
+    }
+
+    @Test fun matchingCurrentActivityCountsAsAlreadyTracking() {
+        val exercise = block(1, "09:00", "10:00", "Exercise").copy(taskTypeId = 3)
+        val key = exercise.reminderKey
+        assertEquals(PlannedBlockReminderDecision.AlreadyTracking, decidePlannedBlockReminder(key, exercise, tracking(null, typeId = 3), at("08:55")))
+        assertEquals(PlannedBlockReminderDecision.Deliver, decidePlannedBlockReminder(key, exercise, tracking(null, typeId = 4), at("08:55")))
+        assertEquals(PlannedBlockReminderDecision.Deliver, decidePlannedBlockReminder(key, exercise, tracking(null, typeId = 3, taskId = 8), at("08:55")))
+        val session = exercise.copy(taskId = 8)
+        assertEquals(PlannedBlockReminderDecision.AlreadyTracking, decidePlannedBlockReminder(key, session, tracking(null, typeId = 3, taskId = 8), at("08:55")))
+        assertEquals(setOf(key), plannedBlockRemindersToWithdraw(setOf(key), listOf(exercise), tracking(null, typeId = 3), at("09:01")))
     }
 
     @Test fun withdrawsAdoptedEndedMovedAndDeletedReminders() {
@@ -68,7 +80,7 @@ class PlannedBlockRemindersTest {
         val movedFrom = block(4, "09:00", "09:30")
         val deleted = block(5, "09:00", "09:30")
         val delivered = setOf(adopted, ended, waiting, movedFrom, deleted).map { it.reminderKey }.toSet()
-        val withdraw = plannedBlockRemindersToWithdraw(delivered, listOf(adopted, ended, waiting, block(4, "11:00", "11:30")), 1, at("09:01"))
+        val withdraw = plannedBlockRemindersToWithdraw(delivered, listOf(adopted, ended, waiting, block(4, "11:00", "11:30")), tracking(1), at("09:01"))
         assertEquals(setOf(adopted, ended, movedFrom, deleted).map { it.reminderKey }.toSet(), withdraw)
     }
 

@@ -6,6 +6,9 @@ export interface ActivityPlan {
   task_title?: string | null
   id: number; task_type_id: number; task_id: number | null; name: string | null; note: string | null; start_at: string; end_at: string
 }
+// A Current Activity that already matches its Planned Block can count toward it without switching.
+export const matchesPlan = (current: Pick<ActualBlock, 'task_type_id' | 'task_id'>, plan: ActivityPlan) =>
+  current.task_type_id === plan.task_type_id && (current.task_id ?? null) === (plan.task_id ?? null)
 export interface ActivitySelection { task_id?: number | null; planned_block_id?: number | null; note?: string | null }
 export interface CheckInState {
   enabled: boolean; threshold_minutes: number; generation: string; rearm: number; armed_at: string | null; active_at?: string | null
@@ -151,7 +154,7 @@ export class ActivityRepository {
         continue
       }
       const type = snapshot.task_types?.find(t => t.id === command.task_type_id) ?? { id: command.task_type_id ?? 0, name: 'unspecified', created_at: at, updated_at: at }
-      const row: ActualBlock | null = ['stop', 'delete'].includes(command.kind) ? null : { ...target, id: (command.kind === 'edit') ? target?.id ?? command.target_id! : -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: historical ? target?.task ?? null : null, name: command.name ?? null, note: command.note ?? null, planned_block_id: (command.kind === 'edit') && target?.task_type_id === command.task_type_id && target?.task_id === command.task_id ? target?.planned_block_id ?? null : command.planned_block_id ?? null, start_at: at, end_at: historical ? command.effective.end! : null, created_at: target?.created_at ?? at, updated_at: command.action_at }
+      const row: ActualBlock | null = ['stop', 'delete'].includes(command.kind) ? null : { ...target, id: (command.kind === 'edit') ? target?.id ?? command.target_id! : -command.sequence, task_type_id: type.id, task_type: type, task_id: command.task_id ?? null, task: historical ? target?.task ?? null : null, name: command.name ?? null, note: command.note ?? null, planned_block_id: (command.kind === 'edit') && command.planned_block_id == null && target?.task_type_id === command.task_type_id && target?.task_id === command.task_id ? target?.planned_block_id ?? null : command.planned_block_id ?? null, start_at: at, end_at: historical ? command.effective.end! : null, created_at: target?.created_at ?? at, updated_at: command.action_at }
       if (row) snapshot.provenance = { ...snapshot.provenance, [row.id]: (command.kind === 'edit') ? command.target_source! : command.operation_id }
       const oldStart = target ? instant(target.start_at) : start
       const oldEnd = target?.end_at ? instant(target.end_at) : end
@@ -411,6 +414,30 @@ export class ActivityRepository {
       void this.refresh()
       return true
     } catch (error) { this.publish(errorMessage(error, 'Could not save correction')); return false }
+  }
+  async countTowardPlan(plan: ActivityPlan) {
+    try {
+      await this.exclusive(async () => {
+        this.journal = this.readJournal()
+        const snapshot = this.project()
+        if (this.storageError) throw new Error(this.storageError)
+        if (!snapshot?.offline_ready || !this.journal.calibration) throw new Error('Connect once to initialize Activity Tracking.')
+        const current = snapshot.current
+        if (!current || !matchesPlan(current, plan)) throw new Error('Activity changed. Review the current activity.')
+        const action = Math.max(this.now(), this.journal.lastAction + 1)
+        const localOrigin = this.journal.outbox.find(c => -c.sequence === current.id)
+        const priorEdit = this.journal.outbox.findLast(c => c.kind === 'edit' && c.target_id === current.id)
+        const command: Command = { operation_id: crypto.randomUUID(), device_id: this.journal.device, sequence: this.journal.sequence + 1,
+          action_at: new Date(action).toISOString(), calibration: this.journal.calibration, base_cursor: this.journal.snapshot!.cursor,
+          kind: 'edit', effective: { mode: 'range', at: current.start_at }, target_id: current.id,
+          target_source: priorEdit?.target_source ?? localOrigin?.operation_id ?? snapshot.provenance?.[current.id] ?? `baseline:${current.id}`, target_start_at: current.start_at,
+          task_type_id: current.task_type_id, task_id: current.task_id ?? null, name: current.name ?? null, note: current.note ?? null, planned_block_id: plan.id }
+        this.save({ ...this.journal, sequence: command.sequence, lastAction: action, outbox: [...this.journal.outbox, command] })
+        this.publish()
+      })
+      void this.refresh()
+      return true
+    } catch (error) { this.publish(errorMessage(error, 'Could not count this activity toward the plan')); return false }
   }
   currentPlan = () => this.state.snapshot?.plans?.find(p => Date.parse(p.start_at) <= this.now() && this.now() < Date.parse(p.end_at))
   async trackTask(task: { id: number; title: string; task_type_id: number | null; recurrence_kind?: string | null; status: string }) {
