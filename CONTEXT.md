@@ -208,6 +208,10 @@ _Avoid_: Actual session, work session, completed block
 The whole-minute length of one Planned Block or Actual Block, from its start to its end. An Actual Block's duration covers its whole record even where it extends beyond the Day shown, and a running one counts up to now.
 _Avoid_: Block length, elapsed time
 
+**Running Time**:
+How long the Current Activity has been running, from the running Actual Block's start to now, counted to the second. It is a live reading shown while tracking, not recorded time; recorded time is always expressed as Block Duration.
+_Avoid_: Elapsed time, Block Duration, timer
+
 **Task Completion**:
 An explicit statement that no work remains for a Battle Plan Task. It is independent of recording or ending an Actual Block and is not inferred from Subtask checks. It is dated when the work was done, which may be earlier than when it was recorded.
 _Avoid_: Time completion, session completion

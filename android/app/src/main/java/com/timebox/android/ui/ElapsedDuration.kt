@@ -5,6 +5,9 @@ fun elapsedDuration(minutes: Long): String = durationUnits(minutes * 60, false)
 
 fun elapsedDurationSeconds(seconds: Long): String = durationUnits(seconds, true)
 
+/** Compact Running Time: seconds until the first whole minute, then whole minutes. */
+fun runningTime(seconds: Long): String = seconds.coerceAtLeast(0).let { durationUnits(it, it < 60) }
+
 private fun durationUnits(seconds: Long, includeSeconds: Boolean): String {
     val units = listOf(
         seconds / 86400 to "day",
