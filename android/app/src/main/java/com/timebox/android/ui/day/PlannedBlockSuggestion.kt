@@ -36,7 +36,7 @@ internal fun plannedSuggestionTiming(plan: ActivityPlanDto, now: Instant, zone: 
 
 /** Suggests switching the Current Activity onto the Planned Block that covers now. */
 @Composable
-internal fun PlannedBlockSuggestion(name: String, timing: String, enabled: Boolean, focus: Boolean, onSwitch: () -> Unit) {
+internal fun PlannedBlockSuggestion(name: String, timing: String, enabled: Boolean, focus: Boolean, onSwitch: () -> Unit, actionLabel: String = "Switch") {
     val colors = TimeboxTheme.colors
     val shape = RoundedCornerShape(12.dp)
     Row(
@@ -56,6 +56,6 @@ internal fun PlannedBlockSuggestion(name: String, timing: String, enabled: Boole
             enabled = enabled, onClick = onSwitch, modifier = Modifier.padding(end = 10.dp),
             colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.planned, contentColor = colors.plannedSurface),
             contentPadding = PaddingValues(horizontal = 14.dp),
-        ) { Text("Switch", style = TimeboxTheme.type.button) }
+        ) { Text(actionLabel, style = TimeboxTheme.type.button, maxLines = 1) }
     }
 }

@@ -155,6 +155,30 @@ class ActivityRepositoryTest {
         assertNull(current.endAt)
         assertEquals(1, restored.state.value.snapshot!!.records.size)
     }
+    @Test fun countTowardPlanLinksMatchingCurrentActivityWithoutSplitting() = runTest {
+        val at = "2026-09-11T10:00:00Z"
+        val type = TaskTypeDto(1, "Exercise")
+        val row = ActualBlockDto(1, 1, type, name = "Run", startAt = at, endAt = null, createdAt = at, updatedAt = at)
+        val plan = ActivityPlanDto(4, taskTypeId = 1, startAt = "2026-09-11T13:30:00Z", endAt = "2026-09-11T15:00:00Z")
+        val other = ActivityPlanDto(5, taskTypeId = 2, startAt = "2026-09-11T13:30:00Z", endAt = "2026-09-11T15:00:00Z")
+        val initial = ActivitySnapshotDto(cursor = 1, serverAt = "2026-09-11T14:00:00Z", reportingTimezone = "UTC", offlineReady = true,
+            current = row, records = listOf(row), taskTypes = listOf(type), plans = listOf(plan, other))
+        var durable: String? = null
+        val store = object : ActivityStorage { override fun load() = durable; override fun save(value: String) { durable = value } }
+        val transport = object : ActivityTransport { override suspend fun read() = initial; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto = error("Offline") }
+        val repository = ActivityRepository(transport, store)
+        repository.refresh()
+        assertFalse(repository.countTowardPlan(other))
+        assertTrue(repository.countTowardPlan(plan))
+        val restored = ActivityRepository(transport, store)
+        val current = restored.state.value.snapshot!!.current!!
+        assertEquals(4, current.plannedBlockId)
+        assertEquals("Run", current.name)
+        assertEquals(at, current.startAt)
+        assertNull(current.endAt)
+        assertEquals(1, restored.state.value.snapshot!!.records.size)
+        assertTrue(durable!!.contains("\"planned_block_id\":4"))
+    }
     @Test fun upgradeResponsePreservesDetailWithoutClaimingOffline() = runTest {
         val transport = object : ActivityTransport {
             override suspend fun read(): ActivitySnapshotDto = throw retrofit2.HttpException(

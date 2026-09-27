@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { canAdvanceTrendRange, shiftTrendRange, trendDuration, type TrendNode, type TrendRange, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, showsCurrentTrendRange, trendDuration, trendRangeHeading, type TrendNode, type TrendRange, type TrendsReport } from './trends'
 import { errorMessage } from '../../lib/errors'
 import { CalendarDateField } from '../../components/CalendarDateField'
 
@@ -8,6 +8,7 @@ type Period = 'day' | 'week' | 'month' | 'custom'
 type Drill = (name: string, days: Record<string, number>, range: TrendRange) => void
 // A Day range always has exactly one contributing day, so it offers no drill-through.
 type NodeDrill = ((name: string, days: Record<string, number>) => void) | null
+const arrow = 'grid size-9 shrink-0 place-items-center rounded-full text-xl text-on-surface hover:bg-surface-container disabled:opacity-30 dark:text-dark-on-surface dark:hover:bg-dark-surface-container'
 const control = 'rounded-full bg-surface-container-low px-4 py-2 text-sm text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface'
 
 export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Drill }) {
@@ -49,6 +50,9 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
     return () => { current = false; controller.abort(); clearInterval(timer); window.removeEventListener('focus', focus) }
   }, [active, period, anchor, custom.start, custom.end, customError, retry])
 
+  const current = showsCurrentTrendRange(period, anchor, today)
+  const currentLabel = period === 'day' ? 'Today' : `This ${period}`
+
   function select(next: Period) {
     if (next === period) return
     if (next === 'custom' && (!custom.start || !custom.end)) {
@@ -65,16 +69,27 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
     setReport(null)
   }
   return <section className="max-w-2xl space-y-6 pb-10" aria-label="Recorded time by Task Type">
-    <div className="flex flex-wrap gap-2" aria-label="Time range">
-      {(['day', 'week', 'month', 'custom'] as const).map(option => <button key={option} type="button" aria-pressed={period === option} disabled={option === 'custom' && !report && !custom.start} onClick={() => select(option)} className={`${control} ${period === option ? 'ring-2 ring-current' : ''}`}>{option[0].toUpperCase() + option.slice(1)}</button>)}
+    <div className="flex flex-col gap-3 border-b border-outline-variant/30 pb-4 dark:border-dark-outline-variant md:flex-row md:items-center">
+      {period !== 'custom' && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 min-[480px]:flex-nowrap">
+        {/* One width in both states so the arrows never move. Below 480px the heading takes its own line above them. */}
+        <button type="button" onClick={() => { setAnchor(''); setReport(null); setRetry(x => x + 1) }} className={`inline-flex h-10 w-[10.5rem] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm ${current
+          ? 'border border-planned-border bg-planned-surface text-on-surface dark:border-planned-dark-border dark:bg-planned-dark-surface dark:text-dark-on-surface'
+          : 'bg-planned text-surface-container-lowest dark:bg-planned-dark'}`}>
+          <span aria-hidden className="material-symbols-outlined text-[16px]">{current ? 'check' : 'calendar_today'}</span>
+          {current ? currentLabel : `Go to ${currentLabel.toLowerCase()}`}
+        </button>
+        <button className={arrow} aria-label={`Previous ${period}`} disabled={!report} onClick={() => shift(-1)}>‹</button>
+        <button className={arrow} aria-label={`Next ${period}`} disabled={!report || !canAdvanceTrendRange(report.start, period, report.today)} onClick={() => shift(1)}>›</button>
+        <p className="order-first mb-1 min-w-0 basis-full truncate font-headline min-[480px]:order-none min-[480px]:mb-0 min-[480px]:ml-1 min-[480px]:basis-auto text-xl font-light tracking-tight tabular-nums">{report ? trendRangeHeading(period, report.start, report.end, report.today) : '…'}</p>
+      </div>}
+      <div role="group" aria-label="Time range" className="flex shrink-0 rounded-full bg-surface-container-low p-1 dark:bg-dark-surface-container md:ml-auto">
+        {(['day', 'week', 'month', 'custom'] as const).map(option => <button key={option} type="button" aria-pressed={period === option} disabled={option === 'custom' && !report && !custom.start} onClick={() => select(option)}
+          className={`flex-1 rounded-full px-2.5 py-1.5 text-sm disabled:opacity-40 ${period === option ? 'bg-surface-container-lowest text-on-surface shadow-sm dark:bg-dark-surface-container-highest dark:text-dark-on-surface' : 'text-on-surface-variant dark:text-dark-on-surface-variant'}`}>{option[0].toUpperCase() + option.slice(1)}</button>)}
+      </div>
     </div>
-    {period === 'custom' ? <div className="flex flex-wrap gap-4">
+    {period === 'custom' && <div className="flex flex-wrap gap-4">
       <label className="text-sm">From <CalendarDateField label="Range start" value={custom.start} maxIso={today || undefined} className={control} onChange={start => { setReport(null); setCustom(value => ({ ...value, start })) }} /></label>
       <label className="text-sm">To (inclusive) <CalendarDateField label="Range end" value={custom.end} maxIso={today || undefined} className={control} onChange={end => { setReport(null); setCustom(value => ({ ...value, end })) }} /></label>
-    </div> : <div className="flex items-center justify-between gap-3">
-      <button className={control} aria-label={`Previous ${period}`} disabled={!report} onClick={() => shift(-1)}>‹</button>
-      <div className="text-center"><p className="text-sm tabular-nums">{report ? report.start === report.end ? report.start : `${report.start} – ${report.end}` : '…'}</p><button className="mt-1 text-sm text-on-surface-variant" onClick={() => { setAnchor(''); setReport(null); setRetry(x => x + 1) }}>{period === 'day' ? 'Today' : `This ${period}`}</button></div>
-      <button className={control} aria-label={`Next ${period}`} disabled={!report || !canAdvanceTrendRange(report.start, period, report.today)} onClick={() => shift(1)}>›</button>
     </div>}
     {customError && <p role="alert" className="text-sm text-on-error-container">{customError}</p>}
     {loading && <p role="status" className="text-sm text-on-surface-variant">Updating recorded time…</p>}

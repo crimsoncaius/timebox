@@ -77,7 +77,7 @@ The legacy execution surface that combines plan-following time recording with an
 _Avoid_: Task detail, Task status, timer mode
 
 **Activity Tracking**:
-Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Starting takes its Task Type from the Planned Block covering the current instant, or otherwise from an explicit choice; it never defaults to `unspecified`. Starting or switching may take effect from an earlier instant, replacing recorded time from that instant onward. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded.
+Continuous recording of time in Actual Blocks while enabled, independently of Focus Mode or a Planned Block. Starting takes its Task Type from the Planned Block covering the current instant, or otherwise from an explicit choice; it never defaults to `unspecified`. Starting or switching may take effect from an earlier instant, replacing recorded time from that instant onward. Switching activities continues the record; stopping tracking leaves subsequent time unrecorded. A Current Activity that already has the covering Planned Block's Task Type and Task can count toward that Planned Block without switching, remaining one continuous Actual Block.
 _Avoid_: Work Mode, Focus session
 
 **Offline**:
@@ -145,7 +145,7 @@ A Task Reminder that passed its delivery window without Task Reminder Delivery. 
 _Avoid_: Delivered reminder, overdue Task
 
 **Planned Block Reminder**:
-An optional, device-local notification a chosen lead time before a Planned Block starts, offering to adopt that Planned Block. It creates no work record; a missed reminder is skipped, and a delivered one is withdrawn once the Planned Block is adopted, ends, moves, or is deleted.
+An optional, device-local notification a chosen lead time before a Planned Block starts, offering to adopt that Planned Block. It creates no work record; a missed reminder is skipped, and it is not delivered, and a delivered one is withdrawn, once the Planned Block is adopted or the Current Activity already has its Task Type and Task, ends, moves, or is deleted.
 _Avoid_: Daily Reminder, Task Reminder, block alarm
 
 **Recurring Task Series**:

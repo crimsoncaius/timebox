@@ -17,6 +17,7 @@ Approved first implementation for GitHub issue #10, based on the reviewed Androi
 
 ## Reporting and interaction rules
 
+- The range header is a toolbar: a current-range control, previous/next arrows, and a readable range heading ("Sep 21 – 27", "September 2026"; ranges outside the current year add it), with Day/Week/Month/Custom as a segmented control. On web it sits beside the toolbar when there is room; on Android it sits beneath. The current-range control is the Day header's Today pill: "✓ This week" as a quiet badge while the current range is shown, and a filled "Go to this week" (or "Go to today" / "Go to this month") after navigating away. It keeps one width in both states so the arrows never move. Custom ranges show no toolbar.
 - Open on the current Monday-based week. Keep the chosen range while switching Calendar/Trends; a new application session starts on the current week. Calendar month navigation remains independent.
 - Rank siblings by recorded duration descending, with path order breaking ties. Direct parent time participates in the child ranking. Support any depth of Task Type path; unrecorded categories are omitted and `unspecified` is an ordinary category.
 - Sum authoritative Actual Block intervals, clipped to the selected range and the server's captured current instant. Running Actual Blocks contribute through that instant. Split contributing days at zoned midnight using elapsed instants, including daylight-saving transitions. Refresh while Trends is visible, approximately once per minute; reports use server-confirmed data.
