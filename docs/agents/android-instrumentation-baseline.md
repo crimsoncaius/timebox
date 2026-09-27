@@ -102,3 +102,7 @@ classes no longer existed, preventing instrumentation compilation. All 12 focuse
 cases passed on `timebox-agent-02` (`emulator-5582`). The first attempt ended with
 an instrumentation process crash during fresh emulator startup; the rerun passed.
 The historical recurring screenshot failure above no longer applies.
+
+The Settings reorganization aligned `SettingsNotificationTest` with the current
+notification copy and grouped layout; it now passes. The historical failure above
+no longer applies.

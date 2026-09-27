@@ -124,7 +124,7 @@ The visual source of truth is [DESIGN.md](DESIGN.md). Native Android setup and b
 - **Battle Plan:** Projects and admin tasks, subtasks, status and priority metadata, deadlines, reminders, manual ordering, archive, and trash.
 - **Recurring:** Scheduled and quota-based templates with preview, pause, resume, end, and deletion workflows.
 - **Task types:** Reusable hierarchical slash-path categories shared by blocks, tasks, and recurring templates.
-- **Settings:** Global day window and client appearance preferences.
+- **Settings:** One page grouped the same way on web and Android: Day & time (day window and Reporting Time Zone, shared by all devices), then device-only Focus & check-ins, reminders and notifications, appearance, and (Android) server connection.
 
 ## API assumptions
 

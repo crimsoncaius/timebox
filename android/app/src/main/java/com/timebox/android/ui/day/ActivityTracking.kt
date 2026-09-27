@@ -251,7 +251,7 @@ fun ActivityTracking(
     if (focusOptions) ModalBottomSheet(onDismissRequest = { focusOptions = false }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Focus options", style = TimeboxTheme.type.screenTitle, color = colors.on)
-            com.timebox.android.ui.focus.FocusWakeSettings()
+            com.timebox.android.ui.focus.FocusWakeSettingRow()
             if (state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
                 HorizontalDivider(color = colors.hairline)
                 Text("Screen-off detection", style = TimeboxTheme.type.sectionTitle, color = colors.on)

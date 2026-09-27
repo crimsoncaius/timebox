@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -36,6 +36,38 @@ describe('SettingsPage', () => {
     render(<MemoryRouter><SettingsPage /></MemoryRouter>)
     await screen.findByLabelText('Start hour')
     expect(screen.queryByLabelText('Week starts on')).not.toBeInTheDocument()
+  })
+
+  it('groups settings by where they apply and pauses the hour fields during full-day view', async () => {
+    const settings = {
+      id: 1, start_hour: 8, end_hour: 20, show_full_day: true,
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    }
+    globalThis.fetch = vi.fn(async () => response(settings)) as typeof fetch
+
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>)
+    expect(await screen.findByLabelText('Start hour')).toBeDisabled()
+    expect(screen.getByLabelText('End hour')).toBeDisabled()
+    const day = screen.getByRole('region', { name: 'Day & time' })
+    expect(within(day).getByText('All devices')).toBeInTheDocument()
+    expect(within(day).getByRole('combobox', { name: 'Reporting Time Zone' })).toBeInTheDocument()
+    const focus = screen.getByRole('region', { name: 'Focus & check-ins' })
+    expect(within(focus).getByText('This device')).toBeInTheDocument()
+    expect(within(focus).getByRole('checkbox', { name: 'Keep display awake in Focus' })).toBeInTheDocument()
+    expect(within(focus).getByLabelText('Check in after')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Notifications' })).toBeInTheDocument()
+  })
+
+  it('keeps the other sections usable when the day window cannot load', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.endsWith('/settings')) return new Response('{"detail":"down"}', { status: 503 })
+      return response({})
+    }) as typeof fetch
+
+    render(<MemoryRouter><SettingsPage /></MemoryRouter>)
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Focus & check-ins' })).toBeInTheDocument()
   })
 
   it('keeps independently accepted field changes when responses resolve out of order', async () => {
