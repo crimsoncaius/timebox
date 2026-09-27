@@ -104,7 +104,7 @@ private fun PendingBody(
     if (p.taskTypes.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         p.taskTypes.forEach { option ->
             FilterChip(selected = chosen == option.id, onClick = { actions.onChoose(p, option.id) }, enabled = !busy,
-                label = { Text(option.path.substringAfterLast('/')) })
+                label = { Text(option.path) })
         }
     }
     if (view.invalid != null) Text(view.invalid, style = type.body, color = colors.onVariant)
