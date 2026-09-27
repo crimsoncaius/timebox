@@ -217,8 +217,20 @@ An explicit statement that no work remains for a Battle Plan Task. It is indepen
 _Avoid_: Time completion, session completion
 
 **Assistant Conversation**:
-A sequence of submitted messages and Assistant response attempts, including incomplete attempts and any displayed plan cards or Tracking Proposals. Its retained record is distinct from the context used to generate a response.
+A sequence of submitted messages and Assistant response attempts, including incomplete attempts and any displayed Assistant Cards or Tracking Proposals. Its retained record is distinct from the context used to generate a response.
 _Avoid_: Temporary conversation, Assistant memory
+
+**Assistant Card**:
+A read-only view of Timebox data shown inside an Assistant Conversation, fixed as of the moment the Assistant read it rather than live. It is either a Day Card or a Range Card, and never shows Supporting Notes or Task Descriptions.
+_Avoid_: Plan card, widget, live view
+
+**Day Card**:
+An Assistant Card for one calendar date's Planned Blocks and Actual Blocks. It includes an Actual Block that crosses into or out of that date in full.
+_Avoid_: Plan card, Day snapshot
+
+**Range Card**:
+An Assistant Card for planned and actual time by Task Type over a range of dates. Actual time in it divides between days exactly as in Trends.
+_Avoid_: Summary Card, Trends card
 
 **Tracking Proposal**:
 An Assistant-suggested change to Activity Tracking: either tracking an activity from a given instant or stopping at a given instant. It takes effect only when the user confirms it. Whether it starts or switches is determined at confirmation, not by the Assistant. It expires fifteen minutes after it is proposed.
