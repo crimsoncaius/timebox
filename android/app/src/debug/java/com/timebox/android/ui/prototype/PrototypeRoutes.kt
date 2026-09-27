@@ -4,6 +4,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import com.timebox.android.ui.assistant.AssistantCardsPrototype
 import com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype
 import com.timebox.android.ui.battleplan.RoutineSheetPrototype
 import com.timebox.android.ui.battleplan.TaskSheetPrototype
@@ -63,6 +64,19 @@ fun NavGraphBuilder.prototypeRoutes() {
         HabitsPrototype(
             entry.arguments?.getString("total") ?: "labeled",
             entry.arguments?.getString("scenario") ?: "sample",
+        )
+    }
+    composable(
+        "prototype/assistant-cards?layout={layout}&scenario={scenario}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-cards?layout={layout}&scenario={scenario}" }),
+        arguments = listOf(
+            navArgument("layout") { defaultValue = "timeline" },
+            navArgument("scenario") { defaultValue = "review" },
+        ),
+    ) { entry ->
+        AssistantCardsPrototype(
+            entry.arguments?.getString("layout") ?: "timeline",
+            entry.arguments?.getString("scenario") ?: "review",
         )
     }
 }
