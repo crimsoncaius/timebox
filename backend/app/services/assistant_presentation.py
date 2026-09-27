@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+from typing import Literal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -55,13 +56,60 @@ class PlanSnapshot(BaseModel):
         return value
 
 
+class BlockRow(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: int
+    lane: Literal["planned", "actual"]
+    start_at: str
+    end_at: str
+    running: bool
+    duration_minutes: int = Field(ge=0)
+    minutes_in_date: int = Field(ge=0)
+    name: str | None
+    task_type: str
+    task_id: int | None
+    task_title: str | None
+    planned_block_id: int | None
+    supporting_note: str | None = Field(default=None, max_length=2000)
+    task_description: str | None = Field(default=None, max_length=2000)
+
+
+class BlockSnapshot(PlanSnapshot):
+    schema_version: Literal[2] = 2
+    planned_blocks: list[PlannedRow] = Field(default_factory=list, exclude=True)
+    group_by: Literal["blocks"]
+    lane: Literal["planned", "actual", "both"]
+    task_type: str | None
+    blocks: list[BlockRow]
+    recurring_not_materialized: bool
+    actual_unavailable_reason: str | None
+
+
+def validate_snapshot(value: dict) -> dict:
+    model = BlockSnapshot if value.get("schema_version") == 2 else PlanSnapshot
+    return model.model_validate(value).model_dump(exclude_none=False)
+
+
 def snapshot(plan: dict) -> dict:
-    return PlanSnapshot.model_validate({**plan, "snapshot_id": str(uuid4()),
-        "read_at": dt.datetime.now(dt.timezone.utc).isoformat(), "schema_version": 1}).model_dump()
+    return validate_snapshot({"read_at": dt.datetime.now(dt.UTC).isoformat(),
+        "schema_version": 1, **plan, "snapshot_id": str(uuid4())})
 
 
 def text_schedule(plan: dict) -> str:
-    clock = lambda minute: f"{minute // 60:02}:{minute % 60:02}"
+    if plan.get("schema_version") == 2:
+        lines = [f"Blocks for {plan['date']} · As of {plan['read_at']} · {plan['reporting_timezone']}"]
+        for row in plan["blocks"]:
+            title = row["name"] or row["task_title"] or row["task_type"]
+            lines.append(f"{row['lane'].title()} · {row['start_at']}–{row['end_at']} · {title} · {row['task_type']} · {row['duration_minutes']} min ({row['minutes_in_date']} min in date)")
+        if not plan["blocks"]:
+            lines.append("No stored Blocks for this selection.")
+        if plan["recurring_not_materialized"]:
+            lines.append("Recurring work is not materialized for this future date.")
+        if plan["actual_unavailable_reason"]:
+            lines.append(plan["actual_unavailable_reason"])
+        return "\n".join(lines) + "\n\n"
+    def clock(minute):
+        return f"{minute // 60:02}:{minute % 60:02}"
     read = dt.datetime.fromisoformat(plan["read_at"].replace("Z", "+00:00")).astimezone(ZoneInfo(plan["reporting_timezone"]))
     lines = [f"Plan for {plan['date']} · Read at {read:%H:%M} · {plan['reporting_timezone']}"]
     for row in plan["planned_blocks"]:
@@ -131,7 +179,7 @@ class PresentationParser:
             key = value["snapshot_id"]
             if not isinstance(key, str) or key not in self.snapshots:
                 raise ValueError("Unknown plan snapshot")
-            events.append(("plan_card", PlanSnapshot.model_validate(self.snapshots[key]).model_dump()))
+            events.append(("plan_card", validate_snapshot(self.snapshots[key])))
         else:
             raise ValueError("Invalid presentation selection")
         self.selected = True

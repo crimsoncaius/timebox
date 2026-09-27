@@ -3,7 +3,7 @@
 Android streams a conversation from the existing FastAPI backend. Conversations
 and response attempts are captured in the application's database without
 automatic expiry. There is no conversation-history interface yet.
-The LangGraph graph makes at most two model calls and one read-only Today tool
+The LangGraph graph makes at most two model calls and one read-only activity tool
 call per response. LangChain's OpenRouter adapter uses `z-ai/glm-5.3-flash`;
 there is no model fallback or automatic retry. A response has a 120-second
 deadline. Only the latest 20 explicitly acknowledged completed exchanges enter later context.
@@ -40,10 +40,28 @@ EOF, cancellation, truncation, malformed selectors or unauthorized references.
 The eight-call smoke budget was exhausted during diagnosis; regression replay
 checks cover the captured output pattern without additional provider calls.
 
-The tool resolves Today in the Reporting Time Zone at execution. It selects
-stored Planned Blocks directly, including times, Block Name, Task Type and linked
-Task ID/title. It does not materialize missing Days or recurring work. Supporting
-Notes and Task Descriptions never enter the tool result.
+`read_activity` replaces `read_today_plan`. Its arguments are `lane` (`planned`,
+`actual`, `both`), `when` (one ISO date, `today` by default, or `yesterday`),
+`group_by: blocks`, optional existing `task_type` subtree, and `include_text`.
+Ranges are rejected for blocks. Task Type Paths match case-insensitively, as in
+Tracking Proposals; unknown paths are rejected.
+
+The tool resolves Today and date boundaries in the Reporting Time Zone at execution.
+It reads stored rows only, never materializing Days or recurring work. Each block
+has a server ID, lane, full start/end, whole-minute Block Duration, minutes inside
+the date, Block Name, Task Type, linked Task ID/title, and linked Planned Block ID.
+Cross-midnight Actual Blocks appear in full; running blocks end at the captured
+read time. Future dates contain stored Planned Blocks only, with an explicit
+recurring-work caveat and explanation when Actual Blocks were requested.
+
+Schema version 2 snapshots retain the server-owned ID and read time. Version 1
+historical plan snapshots remain supported. Until clients support Block Cards,
+version 2 selections render a textual schedule even on plan-card-v1 clients.
+Supporting Notes and Task Descriptions appear only with `include_text`, capped
+at 2,000 characters per field per item. The prompt permits that flag only on an
+explicit request (including follow-ups), treats text as untrusted data, and keeps
+it out of card/textual-schedule rendering. Included text goes to the provider,
+retained snapshots and Phoenix traces, as described in ADR 0018.
 
 ## Run
 

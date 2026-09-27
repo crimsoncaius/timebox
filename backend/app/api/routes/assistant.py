@@ -17,7 +17,7 @@ from app.core.config import get_settings
 from app.services import assistant_storage
 from app.services.assistant_agent import MODEL, agent_events
 from app.services.assistant_plan import reporting_timezone
-from app.services.assistant_presentation import PlanSnapshot, text_schedule
+from app.services.assistant_presentation import text_schedule, validate_snapshot
 from app.services.assistant_sessions import conversations
 from app.services.assistant_tracking import TrackingProposal, local_time, tracking_context
 
@@ -138,18 +138,18 @@ async def send(conversation_id: str, body: MessageRequest):
                             queue.put_nowait((kind, proposal))
                             continue
                         if kind == "snapshot_read":
-                            validated = PlanSnapshot.model_validate(data).model_dump()
+                            validated = validate_snapshot(data)
                             reads[validated["snapshot_id"]] = validated
                             assistant_storage.capture(run_id, output, reads, card, proposal=proposal)
                             continue
                         if kind == "plan_card":
                             if card is not None or proposal is not None or output:
                                 raise RuntimeError("Invalid card order")
-                            candidate = PlanSnapshot.model_validate(data).model_dump()
+                            candidate = validate_snapshot(data)
                             if {**conversation.snapshots, **reads}.get(candidate["snapshot_id"]) != candidate:
                                 raise RuntimeError("Unknown snapshot")
                             card = candidate
-                            if "plan_card_v1" not in conversation.capabilities:
+                            if card["schema_version"] != 1 or "plan_card_v1" not in conversation.capabilities:
                                 kind, data = "text_delta", {"text": text_schedule(card)}
                         if kind == "text_delta":
                             if not output:

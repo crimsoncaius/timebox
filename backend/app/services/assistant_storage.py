@@ -58,7 +58,7 @@ def replay(attempt):
     call_id = "replay-" + attempt.run_id
     for plan in attempt.snapshots.values():
         # The rows reach the model once, through the Historical snapshots context.
-        messages += [AIMessage("", tool_calls=[{"id": call_id, "name": "read_today_plan", "args": {}}]),
+        messages += [AIMessage("", tool_calls=[{"id": call_id, "name": "read_activity" if plan.get("schema_version") == 2 else "read_today_plan", "args": {"lane": plan["lane"], "when": plan["date"]} if plan.get("schema_version") == 2 else {}}]),
                      ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "date": plan["date"],
                                              "rows": "in Historical snapshots"}), tool_call_id=call_id)]
     if attempt.tracking_proposal:
