@@ -18,7 +18,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.timebox.android.ui.components.CurrentRangeState
@@ -29,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.remote.TrendNodeDto
 import com.timebox.android.ui.theme.TimeboxShapes
-import com.timebox.android.ui.showMondayDatePicker
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
@@ -50,20 +48,33 @@ internal fun trendDuration(seconds: Double): String {
 @Composable
 fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
     val colors = TimeboxTheme.colors
-    val context = LocalContext.current
     val report = state.trends
-    val formatter = remember { DateTimeFormatter.ofPattern("d MMM uuuu") }
+    var choosingDays by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) { delay(60_000); viewModel.loadTrends() }
         }
     }
-    fun pick(initial: LocalDate, selected: (LocalDate) -> Unit) {
-        showMondayDatePicker(context, initial, state.today, selected)
-    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (state.period != "custom") {
+        val customStart = state.customStart ?: state.today
+        val customEnd = state.customEnd ?: state.today
+        if (state.period == "custom") {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                ChooseDaysAction(onClick = { choosingDays = true })
+                Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                    Text(
+                        text = trendRangeHeading("custom", customStart, customEnd, state.today),
+                        color = colors.on,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Light,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(dayCountLabel(customStart, customEnd), color = colors.onVariant, fontSize = 12.sp)
+                }
+            }
+        } else {
             // The pill keeps one width in both states so the arrows never move.
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 CurrentRangeAction(
@@ -99,13 +110,14 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
                 }
             }
         }
-        if (state.period == "custom") {
-            val start = state.customStart ?: state.today
-            val end = state.customEnd ?: state.today
-            Column {
-                TextButton(onClick = { pick(start) { viewModel.customRange(it, end) } }) { Text("From ${start.format(formatter)}") }
-                TextButton(onClick = { pick(end) { viewModel.customRange(start, it) } }) { Text("To ${end.format(formatter)} (inclusive)") }
-            }
+        if (choosingDays && state.period == "custom") {
+            CustomRangeSheet(
+                start = customStart,
+                end = customEnd,
+                today = state.today,
+                onDismiss = { choosingDays = false },
+                onShow = { start, end -> choosingDays = false; viewModel.customRange(start, end) },
+            )
         }
 
         if (state.trendsLoading) Text("Updating recorded time…", color = colors.onVariant)
@@ -184,14 +196,18 @@ internal fun showsCurrentTrendRange(state: ChronicleUiState): Boolean {
     }
 }
 
-/** The range heading beside the arrows: "Sun 27 Sep", "21–27 Sep", "September 2026"; other years add the year. */
+/**
+ * The range heading beside the arrows: "Sun 27 Sep", "21–27 Sep", "September 2026"; other years add the year.
+ * A custom range spanning years names both, since it can run longer than a year.
+ */
 internal fun trendRangeHeading(period: String, start: LocalDate, end: LocalDate, today: LocalDate): String {
     val dayMonth = DateTimeFormatter.ofPattern("d MMM")
     val year = if (end.year != today.year) " ${end.year}" else ""
     return when {
         period == "month" -> start.format(DateTimeFormatter.ofPattern("MMMM uuuu"))
         start == end -> start.format(DateTimeFormatter.ofPattern("EEE d MMM")) + year
-        start.month == end.month -> "${start.dayOfMonth}–${end.format(dayMonth)}$year"
+        period == "custom" && start.year != end.year -> DateTimeFormatter.ofPattern("d MMM uuuu").let { "${start.format(it)} – ${end.format(it)}" }
+        start.month == end.month && start.year == end.year -> "${start.dayOfMonth}–${end.format(dayMonth)}$year"
         else -> "${start.format(dayMonth)} – ${end.format(dayMonth)}$year"
     }
 }
