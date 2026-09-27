@@ -50,8 +50,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -78,9 +80,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private val NAME_COLUMN_WIDTH = 92.dp
 private val TOTAL_COLUMN_WIDTH = 50.dp
+private const val SLOW_SAVE_MILLIS = 1_000L
 private val CELL_GAP = 3.dp
 private val HABITS_SWIPE_THRESHOLD = 55.dp
 private val weekRangeFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
@@ -117,6 +121,7 @@ internal fun habitTotalUnit(total: HabitTotal): String = when (total.unit) {
 @Composable
 fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine: (Int) -> Unit) {
     val colors = TimeboxTheme.colors
+    val haptics = LocalHapticFeedback.current
     LaunchedEffect(viewModel) { viewModel.refresh() }
     var sessionSheet by remember { mutableStateOf<Pair<Int, LocalDate>?>(null) }
     var addSheet by remember { mutableStateOf(false) }
@@ -204,6 +209,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                         pending = state.pending,
                         onOpenRoutine = onOpenRoutine,
                         onTap = { day ->
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (habit.mode == RecurrenceMode.Scheduled && day.state == HabitDayState.Met) {
                                 viewModel.untick(habit.templateId, day.date)
                             } else {
@@ -249,7 +255,6 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
             sessionSheet = null
             return@let
         }
-        val busy = HabitCellKey(templateId, date) in state.pending
         ModalBottomSheet(
             onDismissRequest = { sessionSheet = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -260,10 +265,14 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 Text(date.format(sheetDateFormatter), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 Spacer(Modifier.height(20.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    val canRemove = day.count > 0 && !busy
+                    val canRemove = day.count > 0 && day.tickable
                     RoundIconButton(
                         icon = Icons.Outlined.Remove, contentDescription = "Remove one session",
-                        onClick = { viewModel.untick(templateId, date) }, enabled = canRemove,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.untick(templateId, date)
+                        },
+                        enabled = canRemove,
                         tint = if (canRemove) colors.on else colors.onVariant.copy(alpha = 0.4f),
                         diameter = 44.dp, background = colors.low, iconSize = 20.dp,
                     )
@@ -273,7 +282,11 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                     )
                     RoundIconButton(
                         icon = Icons.Outlined.Add, contentDescription = "Add one session",
-                        onClick = { viewModel.tick(templateId, date) }, enabled = !busy && day.tickable,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.tick(templateId, date)
+                        },
+                        enabled = day.tickable,
                         tint = colors.on, diameter = 44.dp, background = colors.low, iconSize = 20.dp,
                     )
                 }
@@ -416,6 +429,15 @@ private fun RowScope.HabitCell(
     val colors = TimeboxTheme.colors
     val onActual = if (colors.actual.luminance() > 0.5f) Color.Black else Color.White
     val daily = habit.mode == RecurrenceMode.Quota && habit.frequency == RecurrenceFrequency.Daily
+    // The tap already shows; only a save that is taking noticeably long dims the cell.
+    var slow by remember { mutableStateOf(false) }
+    LaunchedEffect(pending) {
+        slow = false
+        if (pending) {
+            delay(SLOW_SAVE_MILLIS)
+            slow = true
+        }
+    }
     val label = if (daily) "${day.count}/${day.target ?: habit.quotaCount ?: 0}" else day.count.toString()
     val background = when (day.state) {
         HabitDayState.Met, HabitDayState.Count -> colors.actual
@@ -442,11 +464,15 @@ private fun RowScope.HabitCell(
     Box(
         Modifier.weight(1f).height(40.dp).clip(TimeboxShapes.cell).background(background)
             .then(if (border != null) Modifier.border(border.first, border.second, TimeboxShapes.cell) else Modifier)
-            .alpha(if (pending) 0.5f else 1f)
+            .alpha(if (slow) 0.6f else 1f)
             .semantics { contentDescription = description }
             .testTag("habit-${habit.templateId}-${day.date}")
             .then(
-                if (day.tickable && !pending) Modifier.combinedClickable(
+                // The cell's own change acknowledges a tap; overlapping ripples from quick
+                // repeat taps left the cell's fill undrawn.
+                if (day.tickable) Modifier.combinedClickable(
+                    interactionSource = null,
+                    indication = null,
                     onClick = { onTap(day) },
                     onLongClick = { onLongPress(day) },
                 ) else Modifier,
