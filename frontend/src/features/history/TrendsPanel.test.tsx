@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TrendsPanel } from './TrendsPanel'
-import { canAdvanceTrendRange, shiftTrendRange, trendRangeDayCount, trendRangeLabel, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, trendRangeDayCount, trendRangeHeading, trendRangeLabel, type TrendsReport } from './trends'
 import { api } from '../../lib/api'
 
 const report: TrendsReport = {
@@ -52,6 +52,15 @@ it('labels the drilled range and counts its days', () => {
   expect(trendRangeDayCount({ period: 'month', start: '2026-02-01', end: '2026-02-28' })).toBe(28)
 })
 
+it('headings the range readably and adds the year only outside the current one', () => {
+  expect(trendRangeHeading('day', '2026-09-27', '2026-09-27', '2026-09-27')).toBe('Sun, Sep 27')
+  expect(trendRangeHeading('week', '2026-09-21', '2026-09-27', '2026-09-27')).toBe('Sep 21 – 27')
+  expect(trendRangeHeading('week', '2026-09-28', '2026-10-04', '2026-09-27')).toBe('Sep 28 – Oct 4')
+  expect(trendRangeHeading('month', '2026-09-01', '2026-09-30', '2026-09-27')).toBe('September 2026')
+  expect(trendRangeHeading('week', '2025-09-15', '2025-09-21', '2026-09-27')).toBe('Sep 15 – 21, 2025')
+  expect(trendRangeHeading('week', '2025-12-29', '2026-01-04', '2026-09-27')).toBe('Dec 29 – Jan 4')
+})
+
 it('uses server date boundaries for navigation and inclusive custom ranges', async () => {
   const get = vi.spyOn(api, 'trends').mockImplementation(async query => query.get('anchor') === '2026-09-07'
     ? { ...report, start: '2026-09-07', end: '2026-09-13' }
@@ -63,8 +72,10 @@ it('uses server date boundaries for navigation and inclusive custom ranges', asy
   await user.click(screen.getByRole('button', { name: 'Previous week' }))
   await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('anchor')).toBe('2026-09-07'))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Next week' })).toBeEnabled())
-  await user.click(screen.getByRole('button', { name: 'This week' }))
+  expect(screen.getByText('Sep 7 – 13')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Go to this week' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Next week' })).toBeDisabled())
+  expect(screen.getByRole('button', { name: 'This week' })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Custom' }))
   await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('start')).toBe('2026-09-14'))
   expect(get.mock.calls.at(-1)?.[0].get('end')).toBe('2026-09-19')

@@ -24,7 +24,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -59,6 +58,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.ui.components.Hairline
+import com.timebox.android.ui.components.CurrentRangeAction
+import com.timebox.android.ui.components.CurrentRangeState
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -151,12 +152,14 @@ internal fun DayCalendarHeader(
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TodayAction(
+            CurrentRangeAction(
                 state = when {
-                    today == null -> TodayControlState.Resolving
-                    selectedDate == today -> TodayControlState.Current
-                    else -> TodayControlState.Navigate
+                    today == null -> CurrentRangeState.Resolving
+                    selectedDate == today -> CurrentRangeState.Current
+                    else -> CurrentRangeState.Navigate
                 },
+                currentLabel = "Today",
+                navigateLabel = "Go to today",
                 onClick = { today?.let(onNavigateToday) },
             )
             Spacer(Modifier.weight(1f))
@@ -199,78 +202,6 @@ internal fun DayCalendarHeader(
         Spacer(Modifier.height(24.dp))
         }
         Hairline(Modifier.testTag("day-header-divider"))
-    }
-}
-
-private enum class TodayControlState { Navigate, Current, Resolving }
-
-@Composable
-private fun TodayAction(state: TodayControlState, onClick: () -> Unit) {
-    val colors = TimeboxTheme.colors
-    val shape = RoundedCornerShape(percent = 50)
-    val interaction = when (state) {
-        TodayControlState.Navigate, TodayControlState.Current -> Modifier
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics {
-                contentDescription = if (state == TodayControlState.Current) "Viewing today" else "Go to today"
-            }
-        TodayControlState.Resolving -> Modifier
-            .clickable(enabled = false, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Today unavailable" }
-    }
-    Box(
-        modifier = Modifier
-            .height(48.dp)
-            .clip(shape)
-            .then(interaction),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            modifier = Modifier
-                .height(42.dp)
-                .clip(shape)
-                .background(
-                    when (state) {
-                        TodayControlState.Navigate -> colors.planned
-                        TodayControlState.Current -> colors.plannedSurface
-                        TodayControlState.Resolving -> colors.disabledContainer
-                    },
-                )
-                .then(
-                    if (state == TodayControlState.Current) {
-                        Modifier.border(1.dp, colors.plannedBorder, shape)
-                    } else {
-                        Modifier
-                    },
-                )
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            Icon(
-                imageVector = if (state == TodayControlState.Current) {
-                    Icons.Outlined.Check
-                } else {
-                    Icons.Outlined.CalendarToday
-                },
-                contentDescription = null,
-                tint = when (state) {
-                    TodayControlState.Navigate -> colors.lowest
-                    TodayControlState.Current -> colors.planned
-                    TodayControlState.Resolving -> colors.disabledContent
-                },
-                modifier = Modifier.size(17.dp),
-            )
-            Text(
-                text = if (state == TodayControlState.Navigate) "Go to today" else "Today",
-                style = TimeboxTheme.type.label,
-                color = when (state) {
-                    TodayControlState.Navigate -> colors.lowest
-                    TodayControlState.Current -> colors.on
-                    TodayControlState.Resolving -> colors.disabledContent
-                },
-            )
-        }
     }
 }
 

@@ -48,6 +48,24 @@ class ChronicleTrendsTest {
         assertNull(vm.state.value.highlightedRange)
     }
 
+    @Test fun `range heading is readable and adds the year only outside the current one`() {
+        val today = LocalDate.of(2026, 9, 27)
+        assertEquals("Sun 27 Sep", trendRangeHeading("day", today, today, today))
+        assertEquals("21–27 Sep", trendRangeHeading("week", LocalDate.of(2026, 9, 21), today, today))
+        assertEquals("28 Sep – 4 Oct", trendRangeHeading("week", LocalDate.of(2026, 9, 28), LocalDate.of(2026, 10, 4), today))
+        assertEquals("September 2026", trendRangeHeading("month", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), today))
+        assertEquals("15–21 Sep 2025", trendRangeHeading("week", LocalDate.of(2025, 9, 15), LocalDate.of(2025, 9, 21), today))
+        assertEquals("29 Dec – 4 Jan", trendRangeHeading("week", LocalDate.of(2025, 12, 29), LocalDate.of(2026, 1, 4), today))
+    }
+
+    @Test fun `current range control follows the report, falling back to the anchor while loading`() {
+        val report = TrendsDto("2026-09-21", "2026-09-27", "2026-09-27", "Asia/Singapore", "2026-09-27T00:00:00Z", 0.0, emptyList())
+        assertTrue(showsCurrentTrendRange(ChronicleUiState(trends = report)))
+        assertFalse(showsCurrentTrendRange(ChronicleUiState(trends = report.copy(start = "2026-09-14", end = "2026-09-20"))))
+        assertTrue(showsCurrentTrendRange(ChronicleUiState()))
+        assertFalse(showsCurrentTrendRange(ChronicleUiState(anchor = LocalDate.of(2026, 9, 14))))
+    }
+
     @Test fun `highlight summary counts contributing days against the drilled range`() {
         val week = TrendHighlightRange("week", LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 27))
         assertEquals("Week · 21–27 Sep 2026", chronicleHighlightRangeLabel(week))

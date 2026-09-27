@@ -39,3 +39,15 @@ export function trendRangeLabel(range: TrendRange) {
     : `${SHORT_MONTHS[sm - 1]} ${sd} – ${SHORT_MONTHS[em - 1]} ${ed}`
   return `${kind} · ${dates}`
 }
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** The range heading beside the arrows: "Sun, Sep 27", "Sep 21 – 27", "September 2026"; other years add the year. */
+export function trendRangeHeading(period: string, start: string, end: string, today: string) {
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const year = ey !== Number(today.slice(0, 4)) ? `, ${ey}` : ''
+  if (period === 'month') return `${LONG_MONTHS[sm - 1]} ${sy}`
+  if (start === end) return `${WEEKDAYS[new Date(`${start}T00:00:00Z`).getUTCDay()]}, ${SHORT_MONTHS[sm - 1]} ${sd}${year}`
+  return sm === em ? `${SHORT_MONTHS[sm - 1]} ${sd} – ${ed}${year}` : `${SHORT_MONTHS[sm - 1]} ${sd} – ${SHORT_MONTHS[em - 1]} ${ed}${year}`
+}
