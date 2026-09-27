@@ -432,7 +432,7 @@ it.each([false, true])('shows three-hour activity without total-minute conversio
   await repository.refresh()
   vi.spyOn(repository, 'now').mockReturnValue(Date.parse(now))
   const view = render(<ActivityTracking focus={focus} repository={repository} taskTypes={[]} onChanged={() => {}} />)
-  expect(screen.getByLabelText('Elapsed time')).toHaveTextContent('3 hours')
+  expect(screen.getByLabelText('Running time')).toHaveTextContent(focus ? '3 hours 7 secs' : '3 hours')
   await act(async () => {})
   view.unmount()
 })

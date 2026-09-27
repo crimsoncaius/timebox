@@ -17,4 +17,10 @@ class ElapsedDurationTest {
             90061L to "1 day 1 hour 1 min 1 sec",
         ).forEach { (seconds, expected) -> assertEquals(expected, elapsedDurationSeconds(seconds)) }
     }
+
+    @Test fun `compact running time shows seconds only under a minute`() {
+        listOf(0L to "0 secs", 1L to "1 sec", 59L to "59 secs", 60L to "1 min",
+            61L to "1 min", 3599L to "59 mins", 10807L to "3 hours", -3L to "0 secs",
+        ).forEach { (seconds, expected) -> assertEquals(expected, runningTime(seconds)) }
+    }
 }

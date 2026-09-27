@@ -4,8 +4,8 @@ import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.secondaryIdentity
 import com.timebox.android.data.identityText
 import com.timebox.android.data.activityIdentityText
-import com.timebox.android.ui.elapsedDuration
 import com.timebox.android.ui.elapsedDurationSeconds
+import com.timebox.android.ui.runningTime
 
 import com.timebox.android.data.parseActivityInstant
 
@@ -175,7 +175,7 @@ fun ActivityTracking(
                 CurrentActivityControl(
                     activity = current?.primaryIdentity().orEmpty(),
                     secondary = current?.secondaryIdentity(),
-                    elapsed = current?.let { elapsedDuration(Duration.between(parseActivityInstant(it.startAt), now).toMinutes().coerceAtLeast(0)) }.orEmpty(),
+                    elapsed = current?.let { runningTime(Duration.between(parseActivityInstant(it.startAt), now).seconds) }.orEmpty(),
                     running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
                     onToggle = { expanded = !expanded },
                     onStart = ::start,

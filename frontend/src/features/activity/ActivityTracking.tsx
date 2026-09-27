@@ -1,6 +1,6 @@
 import { HelperText, DiagnosticText } from '../../components/HelperText'
 import { blockPrimaryIdentity, blockSecondaryIdentity, blockIdentityText } from '../../lib/blockIdentity'
-import { formatDuration } from '../../lib/duration'
+import { formatDuration, formatRunningTime } from '../../lib/duration'
 import { getFocusController } from './focusController'
 import { ActivityTimeField } from './ActivityTimeField'
 import { SwitchActivityTimeline } from './SwitchActivityTimeline'
@@ -63,7 +63,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const zone = state.snapshot?.reporting_timezone ?? 'UTC'
   let selectedAt = now
   try { if (timing) selectedAt = Date.parse(resolveActivityTime(timing, zone)) } catch { /* The field keeps invalid local-time input for correction. */ }
-  const elapsed = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 60000)) : 0
+  const runningSeconds = current ? Math.max(0, Math.floor((now - Date.parse(current.start_at)) / 1000)) : 0
   // Without a covering Planned Block, starting waits for an explicit Task Type.
   const start = (then: 'track' | 'focus') => {
     if (plan) void (then === 'focus' ? focusController.enter(repository) : repository.command('start'))
@@ -76,7 +76,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {current ? <>
       <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{blockPrimaryIdentity(current)}</span>
       {blockSecondaryIdentity(current) && <span className="text-sm">{blockSecondaryIdentity(current)}</span>}
-      <span className={focus ? "text-2xl" : undefined} aria-label="Elapsed time">{formatDuration(elapsed)}</span>
+      <span className={focus ? "text-2xl" : undefined} aria-label="Running time">{formatRunningTime(runningSeconds, focus)}</span>
       <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
       {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
     </> : <button className="py-2" disabled={disabled || !!starting} onClick={() => start('track')}>Start tracking</button>}
