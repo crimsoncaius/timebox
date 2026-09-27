@@ -151,6 +151,10 @@ class RecurringChecklistItem(Base):
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # A Checklist Item Habit (ADR 0016); its series' switch sets every item's flag.
+    track_as_habit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     template: Mapped[RecurringTemplate] = relationship("RecurringTemplate", back_populates="checklist_items")
 
 
@@ -284,6 +288,10 @@ class Task(Base):
         ForeignKey("recurring_templates.id", ondelete="SET NULL"), nullable=True, index=True
     )
     occurrence_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The Checklist Item a generated Subtask belongs to, independent of its title.
+    checklist_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recurring_checklist_items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     recurrence_kind: Mapped[str | None] = mapped_column(Text, nullable=True)
     quota_period_start: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     quota_period_end: Mapped[dt.date | None] = mapped_column(Date, nullable=True)

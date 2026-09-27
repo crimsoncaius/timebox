@@ -203,6 +203,9 @@ def patch_template(
         raise ValueError("Keep unfinished overdue must be true or false")
     if "track_as_habit" in fields and body.track_as_habit is None:
         raise ValueError("Track as habit must be true or false")
+    if "habit_checklist_item_ids" in fields and body.habit_checklist_item_ids is None:
+        raise ValueError("Tracked checklist items must be a list")
+    was_tracked = row.track_as_habit
     if next_mode == RecurrenceMode.quota and next_keep_overdue:
         raise ValueError("Quota shortfalls cannot carry into the next period")
 
@@ -233,7 +236,7 @@ def patch_template(
     )
     if cadence_changed:
         _cleanup_future(db, row, today, suppress=False)
-    for field in fields - {"weekdays", "checklist_titles", "preplanning_schedule"}:
+    for field in fields - {"weekdays", "checklist_titles", "preplanning_schedule", "habit_checklist_item_ids"}:
         value = getattr(body, field)
         if field == "title" and value is not None:
             value = value.strip()
@@ -242,6 +245,16 @@ def patch_template(
         row.weekdays_json = json.dumps(sorted(set(body.weekdays or [])))
     if "checklist_titles" in fields:
         _replace_checklist(db, row, body.checklist_titles or [])
+    if row.track_as_habit != was_tracked:
+        # The series switch opts every Checklist Item in or out, clearing individual choices.
+        for item in row.checklist_items:
+            item.track_as_habit = row.track_as_habit
+    if "habit_checklist_item_ids" in fields:
+        tracked = set(body.habit_checklist_item_ids or [])
+        if tracked - {item.id for item in row.checklist_items}:
+            raise ValueError("Checklist item not found")
+        for item in row.checklist_items:
+            item.track_as_habit = item.id in tracked
     active_schedule = RecurringPreplanningScheduleWrite(slots=[
         RecurringPreplanningSlotWrite(
             key=slot.slot_key,
@@ -291,7 +304,7 @@ def patch_template(
     )
     _propagate_template_fields(db, row, today)
     if checklist_changed and row.mode == RecurrenceMode.scheduled:
-        _rebuild_unprotected_subtasks(db, row, today, body.checklist_titles or [])
+        _rebuild_unprotected_subtasks(db, row, today)
     db.commit()
     synchronize(db, settings, today=today)
     return _load_template(db, row.id)
@@ -513,8 +526,10 @@ def to_read(
         created_at=row.created_at,
         updated_at=row.updated_at,
         checklist_items=[
-            RecurringChecklistRead(id=item.id, title=item.title, position=item.position)
-            for item in row.checklist_items
+            RecurringChecklistRead(
+                id=item.id, title=item.title, position=item.position, track_as_habit=item.track_as_habit
+            )
+            for item in sorted(row.checklist_items, key=lambda item: item.position)
         ],
         upcoming=_to_read_windows(windows),
         current_tasks=_to_read_current_tasks(tasks, today),

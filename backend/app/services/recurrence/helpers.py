@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.battle_plan import RecurrenceMode, RecurringChecklistItem, RecurringTemplate, Task, TaskStatus
@@ -28,10 +28,40 @@ def _validate_refs(db: Session, task_type_id: int | None) -> None:
 
 
 def _replace_checklist(db: Session, row: RecurringTemplate, titles: list[str]) -> None:
+    """Reconcile the checklist with edited titles, keeping each Checklist Item's identity.
+
+    Clients edit a checklist as plain lines, so identity is inferred: a title that is
+    still present keeps its item wherever it moved, and an edited line left in the same
+    place is a rename. Other old items are deleted; other new lines are new items, which
+    follow the series' habit switch (CONTEXT.md, Habit).
+    """
+
     cleaned = [title.strip() for title in titles if title.strip()]
-    db.execute(delete(RecurringChecklistItem).where(RecurringChecklistItem.template_id == row.id))
+    unused = sorted(row.checklist_items, key=lambda item: (item.position, item.id or 0))
+    assigned: list[RecurringChecklistItem | None] = [None] * len(cleaned)
+    for index, title in enumerate(cleaned):
+        match = next((item for item in unused if item.title.strip().casefold() == title.casefold()), None)
+        if match is not None:
+            assigned[index] = match
+            unused.remove(match)
+    for index in range(len(cleaned)):
+        match = next((item for item in unused if item.position == index), None)
+        if assigned[index] is None and match is not None:
+            assigned[index] = match
+            unused.remove(match)
+    for item in unused:
+        # Deleting an item ends its Habit; its Subtasks keep their titles but lose the link.
+        row.checklist_items.remove(item)
     for position, title in enumerate(cleaned):
-        db.add(RecurringChecklistItem(template_id=row.id, title=title, position=position))
+        item = assigned[position]
+        if item is None:
+            row.checklist_items.append(
+                RecurringChecklistItem(title=title, position=position, track_as_habit=row.track_as_habit)
+            )
+        else:
+            item.title = title
+            item.position = position
+    db.flush()
 
 
 def _next_position(db: Session, status: TaskStatus = TaskStatus.open) -> int:
