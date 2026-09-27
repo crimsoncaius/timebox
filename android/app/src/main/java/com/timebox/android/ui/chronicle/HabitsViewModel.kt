@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 /** A day of one Habit whose tick or untick is still in flight. */
@@ -30,12 +32,26 @@ data class HabitsUiState(
     val candidatesError: String? = null,
 )
 
-/** Chronicle's Habits view: one Calendar Week of every Habit's Habit Periods. */
+/** A tick or untick shown on the grid before the server has recorded it. */
+private class HabitEdit(val key: HabitCellKey, val tick: Boolean)
+
+/**
+ * Chronicle's Habits view: one Calendar Week of every Habit's Habit Periods.
+ *
+ * Ticks show at once: the shown week is the last week the server returned with every
+ * unconfirmed edit applied on top. Edits are sent one at a time in tap order; each answer
+ * becomes the new base, and a failed edit simply drops out, restoring the cell.
+ */
 class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     private val _state = MutableStateFlow(HabitsUiState())
     val state: StateFlow<HabitsUiState> = _state.asStateFlow()
     private var loadJob: Job? = null
+
+    private var confirmed: HabitsWeek? = null
+    private val edits = mutableListOf<HabitEdit>()
+    private val sending = Mutex()
+    private var confirmations = 0
 
     /** Reloads the shown week, or the current week on first open. */
     fun refresh() = load(_state.value.week?.weekStart)
@@ -43,9 +59,14 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
     fun load(week: LocalDate?) {
         loadJob?.cancel()
         _state.update { it.copy(loading = true, error = null) }
+        val confirmationsBefore = confirmations
         loadJob = viewModelScope.launch {
             repository.habitsWeek(week).fold(
-                onSuccess = { result -> _state.update { it.copy(week = result, loading = false, error = null) } },
+                onSuccess = { result ->
+                    // An edit confirmed while this read was in flight carries the fresher week.
+                    if (confirmations == confirmationsBefore || result.weekStart != confirmed?.weekStart) confirmed = result
+                    publish { it.copy(loading = false, error = null) }
+                },
                 onFailure = { e -> _state.update { it.copy(loading = false, error = e.apiError.message) } },
             )
         }
@@ -60,33 +81,36 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
     fun thisWeek() = load(null)
 
-    fun tick(templateId: Int, date: LocalDate) = record(HabitCellKey(templateId, date)) {
+    fun tick(templateId: Int, date: LocalDate) = record(HabitEdit(HabitCellKey(templateId, date), tick = true)) {
         repository.tickHabit(templateId, date)
     }
 
-    fun untick(templateId: Int, date: LocalDate) = record(HabitCellKey(templateId, date)) {
+    fun untick(templateId: Int, date: LocalDate) = record(HabitEdit(HabitCellKey(templateId, date), tick = false)) {
         repository.untickHabit(templateId, date)
     }
 
-    private fun record(key: HabitCellKey, action: suspend () -> Result<HabitsWeek>) {
-        if (key in _state.value.pending) return
-        _state.update { it.copy(pending = it.pending + key, actionError = null) }
+    private fun record(edit: HabitEdit, action: suspend () -> Result<HabitsWeek>) {
+        edits += edit
+        publish { it.copy(actionError = null) }
         viewModelScope.launch {
-            action().fold(
-                onSuccess = { result ->
-                    _state.update { current ->
-                        // Keep the week the user is looking at if they moved on meanwhile.
-                        val shown = current.week?.weekStart
-                        current.copy(
-                            week = if (shown == null || shown == result.weekStart) result else current.week,
-                            pending = current.pending - key,
-                        )
-                    }
+            val result = sending.withLock { action() }
+            edits.remove(edit)
+            result.fold(
+                onSuccess = { week ->
+                    confirmations++
+                    // Keep the week the user is looking at if they moved on meanwhile.
+                    if (confirmed == null || confirmed?.weekStart == week.weekStart) confirmed = week
+                    publish()
                 },
-                onFailure = { e ->
-                    _state.update { it.copy(pending = it.pending - key, actionError = e.apiError.message) }
-                },
+                onFailure = { e -> publish { it.copy(actionError = e.apiError.message) } },
             )
+        }
+    }
+
+    private fun publish(change: (HabitsUiState) -> HabitsUiState = { it }) {
+        val shown = confirmed?.let { base -> edits.fold(base) { week, edit -> week.withHabitEdit(edit.key, edit.tick) } }
+        _state.update { current ->
+            change(current).copy(week = shown ?: current.week, pending = edits.mapTo(mutableSetOf()) { it.key })
         }
     }
 
