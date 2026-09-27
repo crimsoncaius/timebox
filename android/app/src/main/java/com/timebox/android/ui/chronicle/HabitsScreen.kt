@@ -31,6 +31,9 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -133,9 +136,14 @@ internal fun habitTotalUnit(total: HabitTotal): String = when (total.unit) {
 fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine: (Int) -> Unit) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(viewModel) {
+        viewModel.refresh()
+        while (true) { delay(60_000); viewModel.refresh() }
+    }
     var sessionSheet by remember { mutableStateOf<Pair<Int, LocalDate>?>(null) }
     var addSheet by remember { mutableStateOf(false) }
+    var addMenu by remember { mutableStateOf(false) }
+    var createGoal by remember { mutableStateOf(false) }
     val week = state.week
     val context = LocalContext.current.applicationContext
     val preferences = remember(context) { AppPreferences(context) }
@@ -152,8 +160,9 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
     }
     checkNotNull(week)
     val currentWeek = currentWeekStart(week)
-    val canPrev = week.weekStart.isAfter(week.earliestWeekStart)
-    val canNext = week.weekStart.isBefore(currentWeek)
+    val earliest = minOf(week.earliestWeekStart, state.goals?.earliestWeekStart ?: week.earliestWeekStart)
+    val canPrev = week.weekStart.isAfter(earliest) && !state.offline && !state.goalSaving
+    val canNext = week.weekStart.isBefore(currentWeek) && !state.offline && !state.goalSaving
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -169,7 +178,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
             )
             Box(
                 Modifier.weight(1f).height(36.dp).clip(TimeboxShapes.field).background(colors.low)
-                    .clickable(onClick = viewModel::thisWeek),
+                    .clickable(enabled = !state.offline && !state.goalSaving, onClick = viewModel::thisWeek),
                 contentAlignment = Alignment.Center,
             ) {
                 val label = if (week.weekStart == currentWeek) "This week"
@@ -182,11 +191,26 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 tint = if (canNext) colors.on else colors.onVariant.copy(alpha = 0.4f),
                 diameter = 36.dp, background = colors.low, iconSize = 19.dp,
             )
+            Box {
+                IconButton(onClick = { addMenu = true }, enabled = !state.offline && !state.goalSaving) {
+                    Icon(Icons.Outlined.Add, "Add")
+                }
+                DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                    DropdownMenuItem(text = { Text("Habit") }, onClick = { addMenu = false; addSheet = true; viewModel.loadCandidates() })
+                    DropdownMenuItem(text = { Text("Time Goal") }, onClick = { addMenu = false; createGoal = true })
+                }
+            }
         }
 
-        if (week.habits.isEmpty() && week.weekStart == currentWeek && week.earliestWeekStart == currentWeek) {
-            HabitsEmptyState(onAdd = { addSheet = true; viewModel.loadCandidates() })
-        } else {
+        (state.error ?: if (state.offline) "Offline" else null)?.let { message ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                val updated = state.goals?.let { it.capturedAt.atZone(it.timezone).format(DateTimeFormatter.ofPattern("d MMM, HH:mm")) }
+                Text(if (state.offline) "Offline · last updated $updated\nUnsynced tracked time is not included." else message,
+                    Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                TextButton(onClick = viewModel::refresh) { Text("Retry") }
+            }
+        }
+        run {
             val shiftWeek by rememberUpdatedState(viewModel::shiftWeek)
             val thresholdPx = with(LocalDensity.current) { HABITS_SWIPE_THRESHOLD.toPx() }
             var drag by remember { mutableFloatStateOf(0f) }
@@ -266,17 +290,12 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                         color = colors.onVariant, strokeWidth = 2.dp,
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                TextButton(onClick = { addSheet = true; viewModel.loadCandidates() }) {
-                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Add habit")
-                }
-                Text(
+                if (week.habits.isNotEmpty()) Text(
                     "Tap a day to record it. Long-press a quota day to remove a session.",
                     style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
+                TimeGoalsContent(state, viewModel, createGoal, onDismissCreate = { createGoal = false })
             }
         }
     }

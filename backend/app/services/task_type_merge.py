@@ -17,6 +17,7 @@ from app.models.activity import ActivityOperation, ActivityState, PlannedRecordi
 from app.models.battle_plan import RecurringTemplate, Task, TaskCompletionOperation, TaskStatus
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
+from app.models.time_goal import TimeGoal
 from app.schemas.task_type import TaskTypeMergeChange, TaskTypeMergePreview
 from app.services.task_type_service import _touch_days, list_task_types
 
@@ -72,6 +73,7 @@ def preview(db: Session, source_id: int, target_id: int) -> TaskTypeMergePreview
         planned_block_count=sum(b.lane == BlockLane.planned for b in blocks),
         actual_block_count=sum(b.lane == BlockLane.actual for b in blocks),
         recurring_series_count=len(series),
+        time_goal_count=len(db.scalars(select(TimeGoal.id).where(TimeGoal.task_type_id.in_(ids))).all()),
     )
 
 
@@ -120,7 +122,7 @@ def merge(db: Session, source_id: int, target_id: int, token: str | None) -> Tas
         )
     )
     for old, new in mapping.items():
-        for model in (Task, RecurringTemplate, TimeBlock):
+        for model in (Task, RecurringTemplate, TimeBlock, TimeGoal):
             db.execute(
                 update(model).where(model.task_type_id == old).values(task_type_id=new, updated_at=now)
             )

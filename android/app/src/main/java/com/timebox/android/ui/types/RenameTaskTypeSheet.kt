@@ -81,7 +81,7 @@ internal fun RenameTaskTypeSheet(state: TypesUiState, onChange: (String) -> Unit
 private fun MergeSummary(preview: TaskTypeMergePreview, busy: Boolean, error: String?, onMerge: () -> Unit, onBack: () -> Unit) {
     val colors = TimeboxTheme.colors
     var details by remember(preview.previewToken) { mutableStateOf(preview.changes.size > 1) }
-    val counts = listOf("Tasks" to preview.taskCount, "Planned Blocks" to preview.plannedBlockCount, "Actual Blocks" to preview.actualBlockCount, "Recurring Task Series" to preview.recurringSeriesCount)
+    val counts = listOf("Tasks" to preview.taskCount, "Planned Blocks" to preview.plannedBlockCount, "Actual Blocks" to preview.actualBlockCount, "Recurring Task Series" to preview.recurringSeriesCount, "Time Goals (kept separately)" to preview.timeGoalCount)
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.93f)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Merge task types", style = MaterialTheme.typography.headlineSmall)

@@ -20,8 +20,10 @@ from app.models.battle_plan import (
 from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import ActualBlockRecordOperation, BlockLane, TimeBlock
+from app.models.time_goal import TimeGoal, TimeGoalTarget
 
 __all__ = [
+    "TimeGoal", "TimeGoalTarget",
     "AssistantAttempt", "AssistantConversation",
     "AppSettings", "Day", "TaskType", "TimeBlock", "ActualBlockRecordOperation", "BlockLane",
     "Project", "Task", "TaskCompletionOperation", "TaskStatus", "PriorityLevel",

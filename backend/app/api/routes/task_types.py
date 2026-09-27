@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.time_goal import TimeGoal
 from app.schemas.task_type import (
     TaskTypeCreate,
     TaskTypeListItem,
@@ -24,6 +26,7 @@ def list_task_types(db: Session = Depends(get_db)) -> list[TaskTypeListItem]:
     task_counts = battle_plan_service.task_type_counts_by_state(db)
     from app.services import recurrence_service
     template_counts = recurrence_service.template_type_counts(db)
+    goal_counts = dict(db.execute(select(TimeGoal.task_type_id, func.count()).group_by(TimeGoal.task_type_id)).all())
     return [
         TaskTypeListItem(
             **TaskTypeRead.model_validate(r).model_dump(),
@@ -33,6 +36,7 @@ def list_task_types(db: Session = Depends(get_db)) -> list[TaskTypeListItem]:
             archived_task_usage_count=task_counts.get(r.id, {}).get("archived", 0),
             trashed_task_usage_count=task_counts.get(r.id, {}).get("trash", 0),
             recurring_template_usage_count=template_counts.get(r.id, 0),
+            time_goal_usage_count=goal_counts.get(r.id, 0),
         )
         for r in rows
     ]
@@ -72,6 +76,8 @@ def delete_task_type(
     cascade_blocks: bool = Query(False),
     migrate_blocks_to: int | None = Query(None),
     clear_task_references: bool = Query(False),
+    migrate_goals_to: int | None = Query(None),
+    delete_goals: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> None:
     if cascade_blocks and migrate_blocks_to is not None:
@@ -96,6 +102,8 @@ def delete_task_type(
             task_type_id,
             cascade_blocks=cascade_blocks,
             migrate_blocks_to=migrate_blocks_to,
+            migrate_goals_to=migrate_goals_to,
+            delete_goals=delete_goals,
         )
         db.commit()
     except ValueError as e:

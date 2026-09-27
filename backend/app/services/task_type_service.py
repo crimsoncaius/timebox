@@ -175,6 +175,8 @@ def delete_task_type(
     *,
     cascade_blocks: bool = False,
     migrate_blocks_to: int | None = None,
+    migrate_goals_to: int | None = None,
+    delete_goals: bool = False,
 ) -> None:
     """Delete within the caller-owned transaction, including reference changes."""
     if cascade_blocks and migrate_blocks_to is not None:
@@ -185,6 +187,22 @@ def delete_task_type(
         raise ValueError("Task type not found")
     if row.name == UNSPECIFIED_TASK_TYPE:
         raise ValueError("The unspecified task type cannot be deleted")
+    from app.models.time_goal import TimeGoal
+    goals = db.scalars(select(TimeGoal).where(TimeGoal.task_type_id == task_type_id)).all()
+    if delete_goals and migrate_goals_to is not None:
+        raise ValueError("Choose either deleting or retargeting Time Goals")
+    if migrate_goals_to is not None:
+        target = get_task_type(db, migrate_goals_to)
+        if target is None or target.id == task_type_id:
+            raise ValueError("Choose another Task Type for these Time Goals")
+        for goal in goals:
+            goal.task_type_id = target.id
+    elif delete_goals:
+        for goal in goals:
+            db.delete(goal)
+    elif goals:
+        raise ValueError("Delete or retarget this Task Type's Time Goals before deleting the Task Type")
+    db.flush()
     desc_pat, desc_esc = _descendants_like(row.name)
     has_descendants = db.execute(
         select(TaskType.id).where(TaskType.name.like(desc_pat, escape=desc_esc)).limit(1)

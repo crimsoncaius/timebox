@@ -13,7 +13,8 @@ from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.trends import TrendNode, TrendsRead
 
 
-def report(db: Session, start: dt.date, end: dt.date, timezone: str, now: dt.datetime) -> TrendsRead:
+def actual_segments(db: Session, start: dt.date, end: dt.date, timezone: str, now: dt.datetime):
+    """Yield each Actual Block's credited interval, split at Reporting Time Zone midnight."""
     zone = ZoneInfo(timezone)
     def midnight(date):
         return dt.datetime.combine(date, dt.time(), zone).astimezone(dt.UTC)
@@ -22,7 +23,6 @@ def report(db: Session, start: dt.date, end: dt.date, timezone: str, now: dt.dat
 
     lower = midnight(start)
     upper = min(midnight(end + dt.timedelta(days=1)), now)
-    direct = defaultdict(lambda: defaultdict(float))
     if upper > lower:
         records = db.scalars(select(TimeBlock).options(joinedload(TimeBlock.task_type)).where(
             TimeBlock.lane == BlockLane.actual, TimeBlock.start_at < upper,
@@ -34,9 +34,15 @@ def report(db: Session, start: dt.date, end: dt.date, timezone: str, now: dt.dat
             while left < right:
                 day = left.astimezone(zone).date()
                 boundary = min(midnight(day + dt.timedelta(days=1)), right)
-                direct[record.task_type.name][day] += (boundary - left).total_seconds()
+                yield record, day, left, boundary
                 left = boundary
 
+
+def report(db: Session, start: dt.date, end: dt.date, timezone: str, now: dt.datetime) -> TrendsRead:
+    zone = ZoneInfo(timezone)
+    direct = defaultdict(lambda: defaultdict(float))
+    for record, day, left, right in actual_segments(db, start, end, timezone, now):
+        direct[record.task_type.name][day] += (right - left).total_seconds()
     nodes = {}
     for path, days in direct.items():
         segments = path.split('/')

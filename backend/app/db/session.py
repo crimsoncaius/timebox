@@ -101,9 +101,10 @@ def get_db(request: Request) -> Generator[Session, None, None]:
 def _resolve_merged_task_type_references(db, _flush_context, _instances):
     from app.models.battle_plan import RecurringTemplate, Task
     from app.models.time_block import TimeBlock
+    from app.models.time_goal import TimeGoal
     from app.services.task_type_service import get_task_type
     for row in db.new | db.dirty:
-        if isinstance(row, (Task, RecurringTemplate, TimeBlock)) and row.task_type_id is not None:
+        if isinstance(row, (Task, RecurringTemplate, TimeBlock, TimeGoal)) and row.task_type_id is not None:
             target = get_task_type(db, row.task_type_id)
             if target is None:
                 raise ValueError("Task type not found")

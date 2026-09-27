@@ -184,6 +184,14 @@ _Avoid_: Actual Block, Task Occurrence, work session
 A Recurring Task Series or a Checklist Item opted into habit tracking. It has no identity or lifecycle of its own. A series Habit counts every Task Completion of its Task Occurrences or Session Tasks; a Checklist Item Habit counts every checked Subtask belonging to it. Both include history from before opting in. Opting a series in opts in its Checklist Items, including ones added later, except those opted out individually; opting it out opts them all out, and opting it back in clears those individual opt-outs. A Checklist Item can be a Habit while its series is not.
 _Avoid_: Goal, Streak task, Habit tracker, Sub-habit, Subtask habit
 
+**Time Goal**:
+An independently configured target for Actual Block time attributed to a selected Task Type and all its descendants over a repeating, user-chosen period, presented in Habits without requiring a Recurring Task Series or Task Completion. Separate Time Goals may target a Task Type and its descendants at the same time, with the same recorded time contributing to each applicable goal.
+_Avoid_: Session quota, Planned time target
+
+**Time Goal Period**:
+A fixed repeating span of a user-chosen number of days, weeks, or months over which a Time Goal is judged, with no surplus carried forward; daily cycles anchor to the chosen start date, and weekly or monthly cycles to its Calendar Week or calendar month in the Reporting Time Zone. Progress reflects Actual Blocks through now and later corrections to past records; periods before the goal's chosen start are not judged, and a shortened first period retains its full target.
+_Avoid_: Rolling window, Habit Period
+
 **Habit Period**:
 The span over which a Habit is judged: one Task Occurrence's recurrence period for a scheduled Habit, or one quota period for a quota Habit. Its outcome is Met, Missed, Open while it has not ended, or Excused while its series is paused or not yet started, or, for a Checklist Item Habit, when that Task Occurrence has no Subtask for the item. A scheduled Habit Period is Met once its Task Occurrence has a Task Completion, whatever that completion's date; a Checklist Item Habit Period is Met once that Task Occurrence's Subtask for the item is checked, whenever it was checked. There is no late outcome.
 _Avoid_: Streak day, check-in
@@ -243,7 +251,7 @@ The Chronicle view that presents activity by Task Type over a selected preset or
 _Avoid_: Analytics, Insights, Reports
 
 **Habits**:
-The Chronicle view that presents each Habit's Habit Periods across one Calendar Week at a time. A Habit appears only in weeks where its series was active. Unlike Trends, it judges activity against the Habit's recurrence.
+The Chronicle view that presents Habits and Time Goals across one Calendar Week at a time, judging activity against their recurrence or target. A Habit appears only in weeks where its series was active.
 _Avoid_: Habit tracker, Streaks
 
 **Battle Plan**:

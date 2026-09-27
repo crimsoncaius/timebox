@@ -41,6 +41,7 @@ data class TaskType(
     val recurringTemplateUsageCount: Int = 0,
     val archivedTaskUsageCount: Int = 0,
     val trashedTaskUsageCount: Int = 0,
+    val timeGoalUsageCount: Int = 0,
 ) {
     val root: String get() = name.substringBefore('/')
     val leaf: String get() = name.substringAfterLast('/')
@@ -210,6 +211,7 @@ fun TaskTypeDto.toModel() = TaskType(
     archivedTaskUsageCount = archivedTaskUsageCount,
     trashedTaskUsageCount = trashedTaskUsageCount,
     recurringTemplateUsageCount = recurringTemplateUsageCount,
+    timeGoalUsageCount = timeGoalUsageCount,
 )
 
 data class PlanningCommitPlacement(

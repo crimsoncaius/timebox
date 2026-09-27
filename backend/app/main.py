@@ -23,6 +23,7 @@ from app.api.routes import (
     settings,
     task_type_recommendations,
     task_types,
+    time_goals,
     trends,
 )
 from app.core.config import Settings, get_settings
@@ -93,6 +94,7 @@ app.include_router(task_type_recommendations.router, dependencies=[Depends(requi
 app.include_router(battle_plan.router, dependencies=_protected)
 app.include_router(recurring.router, dependencies=_protected)
 app.include_router(habits.router, dependencies=_protected)
+app.include_router(time_goals.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
 app.include_router(activity.router, dependencies=_protected)
