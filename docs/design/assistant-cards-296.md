@@ -54,3 +54,12 @@ Deep link: `timebox://prototype/assistant-cards?card=type&lane=planned|actual|bo
 - Rows expand into child Task Types. Scenarios cover one date, a partial current week (actual stops at the read time), a future week (plan only), and a Task Type filter.
 
 Limitations: sample data; Sleep has no plan, so its difference is all "+"; the day strip scales per row, not across rows.
+
+Verdict (27 Sep 2026): **Paired bars** for Both; **Total** only. The card never shows per-day detail, and #294's `day`/`week` detail serves the Assistant's text answers only. An unplanned type shows "not planned" instead of a difference.
+Also decided: collapsed Two lanes start at the first Planned Block's hour (not by Task Type name); "Show larger" shows the full range.
+
+## Round 4 — several cards in one conversation
+
+Deep link: `timebox://prototype/assistant-cards?card=conversation`. Four turns: one Block Card (both), one Task Type Card (both), three Actual Block Cards (Tue/Wed/Thu), and a planned Block Card with a Task Type Card.
+
+Question: for a response with 2–3 cards, **Stacked** (all cards in reading order before the answer) or **Swipe between** (one card at a time with labelled tabs and page dots)? A one-card response is identical in both.

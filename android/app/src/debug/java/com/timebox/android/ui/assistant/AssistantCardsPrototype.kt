@@ -1,4 +1,4 @@
-﻿package com.timebox.android.ui.assistant
+package com.timebox.android.ui.assistant
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -55,7 +55,7 @@ import java.util.Locale
 // Issue 296: debug-route experiment for Assistant Cards. Sample data only; nothing reaches the API.
 
 /** Round 2: how a Block Card shows both lanes. Round 1's "Plan, then actual" was dropped with the combined card. */
-private enum class DayLayout(val label: String, val arg: String) {
+internal enum class DayLayout(val label: String, val arg: String) {
     Timeline("List", "timeline"),
     Lanes("Two lanes", "lanes"),
     Paired("Paired", "paired"),
@@ -68,18 +68,18 @@ internal enum class LaneMode(val label: String, val arg: String) {
     Both("Both", "both"),
 }
 
-private enum class DayScenario(val label: String, val arg: String) {
+internal enum class DayScenario(val label: String, val arg: String) {
     Review("Yesterday", "review"),
-    Today("Today Â· running", "today"),
+    Today("Today · running", "today"),
     Future("Tomorrow", "future"),
     Long("Long day", "long"),
     Empty("Empty", "empty"),
 }
 
-private enum class Lane { Planned, Actual }
+internal enum class Lane { Planned, Actual }
 
 /** Minutes are relative to the card date's midnight and may fall outside it; a null end is running. */
-private data class SampleBlock(
+internal data class SampleBlock(
     val id: Int,
     val lane: Lane,
     val start: Int,
@@ -89,7 +89,7 @@ private data class SampleBlock(
     val plannedId: Int? = null,
 )
 
-private data class SampleDay(
+internal data class SampleDay(
     val date: LocalDate,
     val relative: String?,
     val question: String,
@@ -99,9 +99,9 @@ private data class SampleDay(
     val future: Boolean = false,
 )
 
-private val TODAY = LocalDate.of(2026, 9, 27)
+internal val TODAY = LocalDate.of(2026, 9, 27)
 
-private fun sample(scenario: DayScenario): SampleDay = when (scenario) {
+internal fun sample(scenario: DayScenario): SampleDay = when (scenario) {
     DayScenario.Review -> SampleDay(
         TODAY.minusDays(1), "Yesterday", "How did yesterday go against my plan?",
         "You recorded most of what you planned. Deep Work came in 25m short and started late, " +
@@ -170,7 +170,7 @@ private fun sample(scenario: DayScenario): SampleDay = when (scenario) {
             val start = 490 + i * 36
             SampleBlock(100 + i, Lane.Actual, start, start + 34, "$title ${i / 4 + 1}", type, planned.getOrNull(i * 16 / 20)?.id?.takeIf { i % 5 != 4 })
         }
-        SampleDay(TODAY.minusDays(3), null, "Show Thursday.", "A fragmented day: 20 Actual Blocks against 16 planned, mostly in 30â€“40 minute pieces.", 15 * 60 + 2 + 3 * 1440, planned + actual)
+        SampleDay(TODAY.minusDays(3), null, "Show Thursday.", "A fragmented day: 20 Actual Blocks against 16 planned, mostly in 30–40 minute pieces.", 15 * 60 + 2 + 3 * 1440, planned + actual)
     }
     DayScenario.Empty -> SampleDay(TODAY.minusDays(5), null, "What did I do last Tuesday?", "Nothing was planned or recorded on Tuesday 22 Sep.", 15 * 60 + 2 + 5 * 1440, emptyList())
 }
@@ -179,8 +179,11 @@ private fun sample(scenario: DayScenario): SampleDay = when (scenario) {
 @Composable
 internal fun AssistantCardsPrototypeRoot(card: String, layout: String, scenario: String, lane: String, both: String, detail: String) {
     var kind by remember { mutableStateOf(card) }
-    if (kind == "type") TaskTypeCardPrototype(both, detail, scenario, lane) { kind = "block" }
-    else AssistantCardsPrototype(layout, scenario, lane) { kind = "type" }
+    when (kind) {
+        "type" -> TaskTypeCardPrototype(both, detail, scenario, lane) { kind = "conversation" }
+        "conversation" -> CardConversationPrototype(layout) { kind = "block" }
+        else -> AssistantCardsPrototype(layout, scenario, lane) { kind = "type" }
+    }
 }
 
 @Composable
@@ -206,13 +209,13 @@ private fun AssistantCardsPrototype(initialLayout: String, initialScenario: Stri
                 Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
             androidx.compose.runtime.key(layout, scenario, lane) {
-                DayCard(day, lane, layout) { opened = "Would open Day Â· ${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))}" }
+                DayCard(day, lane, layout) { opened = "Would open Day · ${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))}" }
             }
             Text(day.answer, style = TimeboxTheme.type.body.copy(fontSize = 15.sp, lineHeight = 25.sp))
             Spacer(Modifier.height(24.dp))
         }
         Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), color = colors.field, shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, colors.hairline)) {
-            Text("Ask a follow-upâ€¦", Modifier.padding(horizontal = 18.dp, vertical = 14.dp), style = TimeboxTheme.type.body, color = colors.onVariant)
+            Text("Ask a follow-up…", Modifier.padding(horizontal = 18.dp, vertical = 14.dp), style = TimeboxTheme.type.body, color = colors.onVariant)
         }
     }
 }
@@ -222,8 +225,8 @@ private fun ComparisonBar(lane: LaneMode, onLane: (LaneMode) -> Unit, layout: Da
     val ink = Color(0xFF1F1A00)
     Column(Modifier.fillMaxWidth().background(Color(0xFFFFE066)).padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("PROTOTYPE Â· Block Card", Modifier.weight(1f), style = TimeboxTheme.type.kicker, color = ink)
-            Text("â†’ Task Type Card", Modifier.clickable(onClick = onKind).padding(4.dp), style = TimeboxTheme.type.bodySmall, color = ink, fontWeight = FontWeight.Medium)
+            Text("PROTOTYPE · Block Card", Modifier.weight(1f), style = TimeboxTheme.type.kicker, color = ink)
+            Text("→ Task Type Card", Modifier.clickable(onClick = onKind).padding(4.dp), style = TimeboxTheme.type.bodySmall, color = ink, fontWeight = FontWeight.Medium)
         }
         Pills(LaneMode.entries, lane, { "Read: " + it.label }, onLane, ink)
         if (lane == LaneMode.Both) Pills(DayLayout.entries, layout, { "Both as: " + it.label }, onLayout, ink)
@@ -247,7 +250,7 @@ internal fun <T> Pills(options: List<T>, selected: T, label: (T) -> String, onSe
 private const val COLLAPSED_ITEMS = 5
 
 @Composable
-private fun DayCard(source: SampleDay, lane: LaneMode, layout: DayLayout, onOpenDay: () -> Unit) {
+internal fun DayCard(source: SampleDay, lane: LaneMode, layout: DayLayout, onOpenDay: () -> Unit) {
     val colors = TimeboxTheme.colors
     var expanded by remember { mutableStateOf(false) }
     // Future dates have no Actual Blocks; Both behaves like Planned there.
@@ -261,17 +264,17 @@ private fun DayCard(source: SampleDay, lane: LaneMode, layout: DayLayout, onOpen
     Surface(color = colors.field, shape = TimeboxShapes.card, border = BorderStroke(1.dp, colors.hairline)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${day.relative ?: day.date.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH))} Â· $what", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
+                Text("${day.relative ?: day.date.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH))} · $what", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
                 Text(when (shown) {
                     LaneMode.Planned -> "${planned.size} planned"
                     LaneMode.Actual -> "${actual.size} actual"
-                    LaneMode.Both -> "${planned.size} Â· ${actual.size}"
+                    LaneMode.Both -> "${planned.size} · ${actual.size}"
                 }, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
-            Text("${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH))} Â· Read 15:02 Â· Asia/Singapore", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            Text("${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH))} · Read 15:02 · Asia/Singapore", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             if (day.future) Text(
-                if (lane == LaneMode.Planned) "Recurring work you havenâ€™t placed isnâ€™t included for future dates."
-                else "Nothing can be recorded on a future date yet, so this shows the plan. Recurring work you havenâ€™t placed isnâ€™t included.",
+                if (lane == LaneMode.Planned) "Recurring work you haven’t placed isn’t included for future dates."
+                else "Nothing can be recorded on a future date yet, so this shows the plan. Recurring work you haven’t placed isn’t included.",
                 style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             if (day.blocks.isEmpty()) {
                 HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.hairline)
@@ -290,7 +293,7 @@ private fun DayCard(source: SampleDay, lane: LaneMode, layout: DayLayout, onOpen
             if (total > COLLAPSED_ITEMS) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
                 Text(if (expanded) "Show less" else if (shown == LaneMode.Both && layout == DayLayout.Lanes) "Show larger" else "Show all ${day.blocks.size} blocks",
                     Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                Text(if (expanded) "âˆ’" else "+", color = colors.onVariant)
+                Text(if (expanded) "−" else "+", color = colors.onVariant)
             }
             HorizontalDivider(color = colors.hairline)
             Row(Modifier.fillMaxWidth().clickable(onClick = onOpenDay).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -307,7 +310,8 @@ private fun LaneView(day: SampleDay, planned: List<SampleBlock>, actual: List<Sa
     val colors = TimeboxTheme.colors
     val scale = if (expanded) 1.1f else 0.42f
     fun endOf(b: SampleBlock) = b.end ?: day.readMinute
-    val from = (day.blocks.minOf { maxOf(it.start, 0) } / 60) * 60
+    val earliest = if (!expanded && planned.isNotEmpty()) planned.minOf { it.start } else day.blocks.minOf { it.start }
+    val from = (maxOf(earliest, 0) / 60) * 60
     val to = minOf(1440, ((day.blocks.maxOf { minOf(endOf(it), 1440) } + 59) / 60) * 60)
     Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Spacer(Modifier.width(40.dp))
@@ -327,8 +331,8 @@ private fun LaneView(day: SampleDay, planned: List<SampleBlock>, actual: List<Sa
         listOf(planned, actual).forEachIndexed { index, blocks ->
             if (index == 1) Spacer(Modifier.width(6.dp))
             Box(Modifier.weight(1f).fillMaxHeight().background(colors.bg.copy(alpha = 0.5f), RoundedCornerShape(4.dp))) {
-                blocks.forEach { b ->
-                    val top = maxOf(b.start, 0)
+                blocks.filter { minOf(endOf(it), 1440) > from }.forEach { b ->
+                    val top = maxOf(b.start, from)
                     val bottom = minOf(endOf(b), 1440)
                     val h = ((bottom - top) * scale).dp
                     val isPlanned = b.lane == Lane.Planned
@@ -336,7 +340,7 @@ private fun LaneView(day: SampleDay, planned: List<SampleBlock>, actual: List<Sa
                         color = if (isPlanned) colors.plannedSurface else colors.actualSurface, shape = RoundedCornerShape(3.dp),
                         border = BorderStroke(1.dp, if (isPlanned) colors.plannedBorder else colors.actualBorder)) {
                         if (h >= 16.dp) Column(Modifier.padding(horizontal = 5.dp, vertical = 1.dp)) {
-                            Text((if (b.start < 0) "â†‘ " else "") + b.title + if (b.end == null) " Â· now" else "",
+                            Text((if (b.start < from) "↑ " else "") + b.title + if (b.end == null) " · now" else "",
                                 style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp), maxLines = 1, color = colors.on)
                             if (h >= 32.dp) Text(durationShort(endOf(b) - b.start),
                                 style = TimeboxTheme.type.bodySmall.copy(fontSize = 10.sp, lineHeight = 12.sp), maxLines = 1, color = colors.onVariant)
@@ -346,7 +350,7 @@ private fun LaneView(day: SampleDay, planned: List<SampleBlock>, actual: List<Sa
             }
         }
     }
-    return if (to - from > 5 * 60) Int.MAX_VALUE else 0
+    return if (to - from > 5 * 60 || (planned.isNotEmpty() && day.blocks.any { it.start < from })) Int.MAX_VALUE else 0
 }
 
 /** Returns the number of collapsible items so the card can offer expansion. */
@@ -378,7 +382,7 @@ private fun PairedRows(day: SampleDay, planned: List<SampleBlock>, actual: List<
         }
     }
     if (unplanned.isNotEmpty() && (expanded || groups.size < COLLAPSED_ITEMS)) {
-        Text("NOT PLANNED Â· ${unplanned.size}", Modifier.padding(top = 6.dp), style = TimeboxTheme.type.kicker, color = colors.onVariant)
+        Text("NOT PLANNED · ${unplanned.size}", Modifier.padding(top = 6.dp), style = TimeboxTheme.type.kicker, color = colors.onVariant)
         unplanned.forEach { block ->
             HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.hairline)
             BlockRow(day, block)
@@ -401,11 +405,11 @@ private fun BlockRow(day: SampleDay, block: SampleBlock, tag: Boolean = true) {
     val detail = buildList {
         add(block.type)
         when {
-            block.end == null -> add("running Â· ${durationShort(whole)} at read")
-            inside < whole -> add("${durationShort(whole)} total Â· ${durationShort(inside)} this day")
+            block.end == null -> add("running · ${durationShort(whole)} at read")
+            inside < whole -> add("${durationShort(whole)} total · ${durationShort(inside)} this day")
             else -> add(durationShort(whole))
         }
-    }.joinToString(" Â· ")
+    }.joinToString(" · ")
     val lane = if (isPlanned) "Planned" else "Actual"
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) { contentDescription = "$lane: ${block.title}, ${clockOf(block.start)} to ${if (block.end == null) "now" else clockOf(end)}, $detail" }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.width(3.dp).fillMaxHeight().background(if (isPlanned) Color.Transparent else tone, RoundedCornerShape(2.dp))

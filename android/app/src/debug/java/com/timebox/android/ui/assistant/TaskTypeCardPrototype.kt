@@ -51,15 +51,15 @@ import com.timebox.android.ui.theme.TimeboxTheme
 // Issue 296 round 3: Task Type Card. Sample data only; nothing reaches the API.
 
 /** How a Task Type Card shows planned and actual together. */
-private enum class TypeBoth(val label: String, val arg: String) {
+internal enum class TypeBoth(val label: String, val arg: String) {
     PairedBars("Paired bars", "bars"),
     Marker("Actual + plan mark", "marker"),
     Numbers("Numbers", "numbers"),
 }
 
-private enum class TypeDetail(val label: String, val arg: String) { Total("Total", "total"), Day("By day", "day") }
+internal enum class TypeDetail(val label: String, val arg: String) { Total("Total", "total"), Day("By day", "day") }
 
-private enum class TypeScenario(val label: String, val arg: String) {
+internal enum class TypeScenario(val label: String, val arg: String) {
     LastWeek("Last week", "last-week"),
     Yesterday("Yesterday", "yesterday"),
     ThisWeek("This week · so far", "this-week"),
@@ -80,13 +80,13 @@ private val LEAVES = listOf(
     Leaf("Sleep", List(7) { 0 }, listOf(450, 420, 480, 400, 460, 540, 510)),
 )
 
-private data class TypeNode(val path: String, val planned: List<Int>, val actual: List<Int>, val children: List<TypeNode>) {
+internal data class TypeNode(val path: String, val planned: List<Int>, val actual: List<Int>, val children: List<TypeNode>) {
     val name get() = path.substringAfterLast('/')
     val p get() = planned.sum()
     val a get() = actual.sum()
 }
 
-private data class TypeSample(
+internal data class TypeSample(
     val title: String, val range: String, val question: String, val answer: String,
     val days: List<String>, val roots: List<TypeNode>, val future: Boolean = false, val partial: Boolean = false, val filter: String? = null,
 )
@@ -104,7 +104,7 @@ private fun tree(leaves: List<Leaf>, dayCount: Int, transform: (Leaf) -> Leaf = 
 
 private val WEEK = listOf("M", "T", "W", "T", "F", "S", "S")
 
-private fun typeSample(s: TypeScenario): TypeSample = when (s) {
+internal fun typeSample(s: TypeScenario): TypeSample = when (s) {
     TypeScenario.LastWeek -> TypeSample("Last week", "Mon 14 – Sun 20 Sep 2026", "How did last week compare to my plan?",
         "Work came in about 1h short of plan, mostly Deep Work on Wednesday and Friday. Leisure ran 3h 25m over, and you skipped two planned workouts.",
         WEEK, tree(LEAVES, 7))
@@ -136,7 +136,7 @@ internal fun TaskTypeCardPrototype(initialBoth: String, initialDetail: String, i
         Column(Modifier.fillMaxWidth().background(Color(0xFFFFE066)).padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("PROTOTYPE · Task Type Card", Modifier.weight(1f), style = TimeboxTheme.type.kicker, color = ink)
-                Text("→ Block Card", Modifier.clickable(onClick = onKind).padding(4.dp), style = TimeboxTheme.type.bodySmall, color = ink, fontWeight = FontWeight.Medium)
+                Text("→ Conversation", Modifier.clickable(onClick = onKind).padding(4.dp), style = TimeboxTheme.type.bodySmall, color = ink, fontWeight = FontWeight.Medium)
             }
             Pills(LaneMode.entries, lane, { "Read: " + it.label }, { lane = it }, ink)
             if (lane == LaneMode.Both) Pills(TypeBoth.entries, both, { "Both as: " + it.label }, { both = it }, ink)
@@ -169,7 +169,7 @@ internal fun TaskTypeCardPrototype(initialBoth: String, initialDetail: String, i
 }
 
 @Composable
-private fun TypeCard(sample: TypeSample, lane: LaneMode, both: TypeBoth, detail: TypeDetail, onOpen: () -> Unit) {
+internal fun TypeCard(sample: TypeSample, lane: LaneMode, both: TypeBoth, detail: TypeDetail, onOpen: () -> Unit) {
     val colors = TimeboxTheme.colors
     val shown = if (sample.future) LaneMode.Planned else lane
     val open = remember { mutableStateMapOf<String, Boolean>() }
@@ -253,7 +253,7 @@ private fun TypeRow(node: TypeNode, depth: Int, lane: LaneMode, both: TypeBoth, 
     val a = node.a
     val expandable = node.children.isNotEmpty()
     val diff = a - p
-    val diffText = if (diff == 0) "on plan" else if (diff > 0) "+${durationShort(diff)}" else "−${durationShort(-diff)}"
+    val diffText = if (p == 0) "not planned" else if (diff == 0) "on plan" else if (diff > 0) "+${durationShort(diff)}" else "−${durationShort(-diff)}"
     Column(Modifier.fillMaxWidth().then(if (expandable) Modifier.clickable(onClick = onToggle) else Modifier).padding(start = (depth * 16).dp, top = 4.dp, bottom = 4.dp)
         .semantics(mergeDescendants = true) { contentDescription = "${node.path}: planned ${durationShort(p)}, actual ${durationShort(a)}" },
         verticalArrangement = Arrangement.spacedBy(4.dp)) {

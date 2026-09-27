@@ -1,4 +1,4 @@
-﻿package com.timebox.android.ui.prototype
+package com.timebox.android.ui.prototype
 
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
