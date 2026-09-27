@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,7 +41,7 @@ def test_completed_record_survives_cache_loss_and_new_conversation(client, monke
     run = frames[0][1]["run_id"]
     assert client.post(f"/assistant/conversations/{key}/runs/{run}/ack").status_code == 204
     conversations.items.clear()
-    assert conversations.get(key).messages[-1].content == "Saved answer"
+    assert conversations.get(key).messages[-1].content == '{"presentation":"none"}\nSaved answer'
     assert client.delete(f"/assistant/conversations/{key}").status_code == 204
     assert client.delete(f"/assistant/conversations/{key}").status_code == 204
     assert send(client, key).status_code == 410
@@ -71,11 +72,35 @@ def test_rolling_context_preserves_full_record_and_bounds_snapshots(client, monk
     assert len(attempts()) == 23
     conversations.items.clear()
     item = conversations.get(key)
-    assert len(item.messages) == 40
+    assert len(item.messages) == 80  # each exchange replays its read: question, call, result, answer
     assert item.messages[0].content == "Question 3"
     assert set(item.snapshots) == {plan["snapshot_id"] for plan in plans[-20:]}
     assert len(seen[-1][1]) == 20
     assert seen[-1][0][2].content == "Question 2"  # after the Now and historical-snapshots system messages
+
+
+def test_history_replays_plan_read_and_card_as_the_model_produced_them(client, monkeypatch):
+    plan = snapshot({"date": "2026-09-25", "reporting_timezone": "UTC", "planned_blocks": []})
+    async def fake(messages, snapshots=None):
+        yield "snapshot_read", plan
+        yield "plan_card", plan
+        yield "text_delta", {"text": "Nothing planned."}
+    monkeypatch.setattr(assistant, "agent_events", fake)
+    key = client.post("/assistant/conversations", json={"capabilities": ["plan_card_v1"]}).json()["conversation_id"]
+    frames = decode(send(client, key))
+    client.post(f"/assistant/conversations/{key}/runs/{frames[0][1]['run_id']}/ack")
+    conversations.items.clear()
+    human, call, result, answer = conversations.get(key).messages
+    assert human.content == "Today's plan?"
+    [tool_call] = call.tool_calls
+    assert (tool_call["name"], tool_call["args"]) == ("read_today_plan", {})
+    assert result.tool_call_id == tool_call["id"]
+    # The rows travel once, in the Historical snapshots context, not again in every replayed read.
+    assert json.loads(result.content)["snapshot_id"] == plan["snapshot_id"]
+    assert "planned_blocks" not in json.loads(result.content)
+    selector = json.dumps({"presentation": "snapshot", "snapshot_id": plan["snapshot_id"]}, separators=(",", ":"))
+    assert answer.content == selector + "\nNothing planned."
+    assert "[Displayed" not in answer.content
 
 
 def test_historical_card_stays_available_when_original_read_leaves_window(client, monkeypatch):
@@ -195,7 +220,7 @@ def test_migration_can_store_records_and_survive_engine_reopen(tmp_path, monkeyp
     assistant_storage.acknowledge(key, run)
     engine.dispose()
     engine = create_engine(url)
-    assert Conversations().get(key).messages[-1].content == "Durable"
+    assert Conversations().get(key).messages[-1].content == '{"presentation":"none"}\nDurable'
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(AssistantAttempt)) == 1
     with engine.begin() as connection, Operations.context(MigrationContext.configure(connection)):

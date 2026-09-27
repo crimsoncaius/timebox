@@ -1,16 +1,17 @@
 """Durable capture is separate from the bounded, acknowledged model context."""
 
 import datetime as dt
+import json
 
 from fastapi import HTTPException
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
 from app.models.assistant import AssistantAttempt, AssistantConversation
-from app.services.assistant_tracking import context_line
+from app.services.assistant_tracking import replay_proposal
 
 
 class CaptureError(Exception):
@@ -39,18 +40,34 @@ def load(key):
             ).order_by(AssistantAttempt.id.desc()).limit(20)))
             messages, snapshots = [], {}
             for attempt in reversed(attempts):
-                answer = attempt.answer
                 if attempt.displayed_plan:
-                    plan = attempt.displayed_plan
-                    snapshots[plan["snapshot_id"]] = plan
-                    answer += "\n[Displayed plan snapshot: " + plan["snapshot_id"] + "]"
-                if attempt.tracking_proposal:
-                    answer += context_line(attempt.tracking_proposal)
+                    snapshots[attempt.displayed_plan["snapshot_id"]] = attempt.displayed_plan
                 snapshots.update(attempt.snapshots)
-                messages.extend([HumanMessage(attempt.question), AIMessage(answer)])
+                messages.extend(replay(attempt))
             return row.capabilities, messages, snapshots
     except SQLAlchemyError:
         raise HTTPException(503, "Conversation could not be loaded. Please retry.") from None
+
+
+def replay(attempt):
+    """An exchange as the model produced it: its tool call, if any, then the selector-prefixed answer.
+
+    History is the model's strongest example, so it must show the calls and format the prompt asks for.
+    """
+    messages = [HumanMessage(attempt.question)]
+    call_id = "replay-" + attempt.run_id
+    for plan in attempt.snapshots.values():
+        # The rows reach the model once, through the Historical snapshots context.
+        messages += [AIMessage("", tool_calls=[{"id": call_id, "name": "read_today_plan", "args": {}}]),
+                     ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "date": plan["date"],
+                                             "rows": "in Historical snapshots"}), tool_call_id=call_id)]
+    if attempt.tracking_proposal:
+        messages += replay_proposal(attempt.tracking_proposal, call_id)
+    selector = ({"presentation": "snapshot", "snapshot_id": attempt.displayed_plan["snapshot_id"]}
+                if attempt.displayed_plan else {"presentation": "none"})
+    header = json.dumps(selector, separators=(",", ":"))
+    messages.append(AIMessage(header + "\n" + attempt.answer if attempt.answer else header))
+    return messages
 
 
 def begin(key, run_id, question, model):

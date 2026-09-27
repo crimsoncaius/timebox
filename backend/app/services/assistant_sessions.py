@@ -8,8 +8,14 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 
 from fastapi import HTTPException
+from langchain_core.messages import HumanMessage
 
 from app.services import assistant_storage
+
+
+def exchanges(messages) -> int:
+    # Replayed tool calls add messages, so count questions rather than halving.
+    return sum(isinstance(m, HumanMessage) for m in messages)
 
 
 @dataclass
@@ -52,7 +58,7 @@ class Conversations:
             capabilities, messages, snapshots = assistant_storage.load(key)
             self.prune()
             item = Conversation(capabilities=capabilities, messages=messages,
-                                snapshots=snapshots, exchange_count=len(messages) // 2)
+                                snapshots=snapshots, exchange_count=exchanges(messages))
             self.items[key] = item
         return item
 
@@ -74,7 +80,7 @@ class Conversations:
         item = self.get(key)
         assistant_storage.acknowledge(key, run_id)
         _, item.messages, item.snapshots = assistant_storage.load(key)
-        item.exchange_count = len(item.messages) // 2
+        item.exchange_count = exchanges(item.messages)
         item.touched = time.monotonic()
 
     def delete(self, key):
