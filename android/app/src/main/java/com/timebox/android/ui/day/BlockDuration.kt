@@ -29,7 +29,10 @@ internal fun blockDurationMinutes(block: TimeBlock, day: Day, startMinute: Int, 
     return span + Duration.between(record.startAt, dayStart).toMinutes().toInt().coerceAtLeast(0)
 }
 
-/** A time range followed by `· duration`, dropping the duration when the line is too narrow for it. */
+/**
+ * A time range followed by `· duration`. When the line is too narrow for both, the duration
+ * wraps beneath the range if the card has room for a second line, and is dropped otherwise.
+ */
 @Composable
 internal fun TimeRangeWithDuration(range: String, duration: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
     Layout(
@@ -39,15 +42,23 @@ internal fun TimeRangeWithDuration(range: String, duration: String, style: TextS
         },
         modifier = modifier,
     ) { measurables, constraints ->
-        val loose = constraints.copy(minWidth = 0)
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val rangePlaceable = measurables[0].measure(loose)
         val durationPlaceable = measurables[1].measure(loose.copy(maxWidth = Constraints.Infinity))
-        val fits = rangePlaceable.width + durationPlaceable.width <= constraints.maxWidth
-        val width = rangePlaceable.width + if (fits) durationPlaceable.width else 0
-        val height = maxOf(rangePlaceable.height, if (fits) durationPlaceable.height else 0)
-        layout(width.coerceAtLeast(constraints.minWidth), height) {
+        val besideRange = rangePlaceable.width + durationPlaceable.width <= constraints.maxWidth
+        val belowRange = !besideRange && rangePlaceable.height + durationPlaceable.height <= constraints.maxHeight
+        val width = when {
+            besideRange -> rangePlaceable.width + durationPlaceable.width
+            belowRange -> maxOf(rangePlaceable.width, durationPlaceable.width).coerceAtMost(constraints.maxWidth)
+            else -> rangePlaceable.width
+        }
+        val height = rangePlaceable.height + if (belowRange) durationPlaceable.height else 0
+        layout(width.coerceAtLeast(constraints.minWidth), height.coerceAtLeast(constraints.minHeight)) {
             rangePlaceable.place(0, 0)
-            if (fits) durationPlaceable.place(rangePlaceable.width, 0)
+            when {
+                besideRange -> durationPlaceable.place(rangePlaceable.width, 0)
+                belowRange -> durationPlaceable.place(0, rangePlaceable.height)
+            }
         }
     }
 }
