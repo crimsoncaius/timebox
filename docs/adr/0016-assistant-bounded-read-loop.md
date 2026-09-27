@@ -1,6 +1,6 @@
 # The Assistant may make up to three reads per response
 
-A response may now make up to three read-only tool calls, then at most one `propose_tracking`, before a final tool-free answer. This replaces the earlier guarantee of at most two model calls and one tool call. Comparison questions ("this week vs last week", "plan vs actual on Tuesday") and read-then-propose requests ("I've been doing what I planned since 2") need more than one tool. We chose a small bounded loop so the model can combine general-purpose Day and range reads. The alternative, one call with ever-wider tool parameters, would need a new parameter for every new question shape. A response still shows at most one Assistant Card; other reads inform the text.
+A response may now make up to three read-only tool calls, then at most one `propose_tracking`, before a final tool-free answer. This replaces the earlier guarantee of at most two model calls and one tool call. Comparison questions ("this week vs last week", "plan vs actual on Tuesday") and read-then-propose requests ("I've been doing what I planned since 2") need more than one tool. We chose a small bounded loop so the model can combine general-purpose Day and range reads. The alternative, one call with ever-wider tool parameters, would need a new parameter for every new question shape. A response may show up to three Assistant Cards, at most one per read.
 
 ## Consequences
 

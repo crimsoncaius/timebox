@@ -54,11 +54,18 @@ import java.util.Locale
 
 // Issue 296: debug-route experiment for Assistant Cards. Sample data only; nothing reaches the API.
 
-/** Round 1: how a Day Card arranges both lanes. */
+/** Round 2: how a Block Card shows both lanes. Round 1's "Plan, then actual" was dropped with the combined card. */
 private enum class DayLayout(val label: String, val arg: String) {
-    Timeline("One timeline", "timeline"),
-    Sections("Plan, then actual", "sections"),
+    Timeline("List", "timeline"),
+    Lanes("Two lanes", "lanes"),
     Paired("Paired", "paired"),
+}
+
+/** What the read selected; the card shows exactly that. */
+private enum class LaneMode(val label: String, val arg: String) {
+    Planned("Planned", "planned"),
+    Actual("Actual", "actual"),
+    Both("Both", "both"),
 }
 
 private enum class DayScenario(val label: String, val arg: String) {
@@ -169,14 +176,15 @@ private fun sample(scenario: DayScenario): SampleDay = when (scenario) {
 }
 
 @Composable
-internal fun AssistantCardsPrototype(initialLayout: String, initialScenario: String) {
+internal fun AssistantCardsPrototype(initialLayout: String, initialScenario: String, initialLane: String) {
     var layout by remember { mutableStateOf(DayLayout.entries.firstOrNull { it.arg == initialLayout } ?: DayLayout.Timeline) }
+    var lane by remember { mutableStateOf(LaneMode.entries.firstOrNull { it.arg == initialLane } ?: LaneMode.Both) }
     var scenario by remember { mutableStateOf(DayScenario.entries.firstOrNull { it.arg == initialScenario } ?: DayScenario.Review) }
     var opened by remember { mutableStateOf<String?>(null) }
     val colors = TimeboxTheme.colors
     val day = sample(scenario)
     Column(Modifier.fillMaxSize().background(colors.bg).statusBarsPadding()) {
-        ComparisonBar(layout, { layout = it }, scenario, { scenario = it; opened = null }, opened)
+        ComparisonBar(lane, { lane = it }, layout, { layout = it }, scenario, { scenario = it; opened = null }, opened)
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text("Assistant", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
         }
@@ -189,8 +197,8 @@ internal fun AssistantCardsPrototype(initialLayout: String, initialScenario: Str
                 Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = colors.onVariant)
                 Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
-            androidx.compose.runtime.key(layout, scenario) {
-                DayCard(day, layout) { opened = "Would open Day · ${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))}" }
+            androidx.compose.runtime.key(layout, scenario, lane) {
+                DayCard(day, lane, layout) { opened = "Would open Day · ${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))}" }
             }
             Text(day.answer, style = TimeboxTheme.type.body.copy(fontSize = 15.sp, lineHeight = 25.sp))
             Spacer(Modifier.height(24.dp))
@@ -202,11 +210,12 @@ internal fun AssistantCardsPrototype(initialLayout: String, initialScenario: Str
 }
 
 @Composable
-private fun ComparisonBar(layout: DayLayout, onLayout: (DayLayout) -> Unit, scenario: DayScenario, onScenario: (DayScenario) -> Unit, opened: String?) {
+private fun ComparisonBar(lane: LaneMode, onLane: (LaneMode) -> Unit, layout: DayLayout, onLayout: (DayLayout) -> Unit, scenario: DayScenario, onScenario: (DayScenario) -> Unit, opened: String?) {
     val ink = Color(0xFF1F1A00)
     Column(Modifier.fillMaxWidth().background(Color(0xFFFFE066)).padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("PROTOTYPE · Day Card", style = TimeboxTheme.type.kicker, color = ink)
-        Pills(DayLayout.entries, layout, { it.label }, onLayout, ink)
+        Text("PROTOTYPE · Block Card", style = TimeboxTheme.type.kicker, color = ink)
+        Pills(LaneMode.entries, lane, { "Read: " + it.label }, onLane, ink)
+        if (lane == LaneMode.Both) Pills(DayLayout.entries, layout, { "Both as: " + it.label }, onLayout, ink)
         Pills(DayScenario.entries, scenario, { it.label }, onScenario, ink)
         opened?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = ink) }
     }
@@ -227,33 +236,51 @@ private fun <T> Pills(options: List<T>, selected: T, label: (T) -> String, onSel
 private const val COLLAPSED_ITEMS = 5
 
 @Composable
-private fun DayCard(day: SampleDay, layout: DayLayout, onOpenDay: () -> Unit) {
+private fun DayCard(source: SampleDay, lane: LaneMode, layout: DayLayout, onOpenDay: () -> Unit) {
     val colors = TimeboxTheme.colors
     var expanded by remember { mutableStateOf(false) }
+    // Future dates have no Actual Blocks; Both behaves like Planned there.
+    val shown = if (source.future || lane == LaneMode.Planned) LaneMode.Planned else lane
+    val day = source.copy(blocks = source.blocks.filter {
+        shown == LaneMode.Both || (shown == LaneMode.Planned) == (it.lane == Lane.Planned)
+    })
     val planned = day.blocks.filter { it.lane == Lane.Planned }.sortedBy { it.start }
     val actual = day.blocks.filter { it.lane == Lane.Actual }.sortedBy { it.start }
+    val what = when (shown) { LaneMode.Planned -> "Plan"; LaneMode.Actual -> "Actual"; LaneMode.Both -> "Plan and actual" }
     Surface(color = colors.field, shape = TimeboxShapes.card, border = BorderStroke(1.dp, colors.hairline)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(day.relative ?: day.date.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH)), Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
-                Text(if (day.future) "${planned.size} planned" else "${planned.size} planned · ${actual.size} actual", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                Text("${day.relative ?: day.date.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH))} · $what", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
+                Text(when (shown) {
+                    LaneMode.Planned -> "${planned.size} planned"
+                    LaneMode.Actual -> "${actual.size} actual"
+                    LaneMode.Both -> "${planned.size} · ${actual.size}"
+                }, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
             Text("${day.date.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH))} · Read 15:02 · Asia/Singapore", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-            if (day.future) Text("Recurring work you haven't placed isn't included for future dates.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            if (day.future) Text(
+                if (lane == LaneMode.Planned) "Recurring work you haven’t placed isn’t included for future dates."
+                else "Nothing can be recorded on a future date yet, so this shows the plan. Recurring work you haven’t placed isn’t included.",
+                style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             if (day.blocks.isEmpty()) {
                 HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.hairline)
-                Text("Nothing planned or recorded on this date.", style = TimeboxTheme.type.body)
+                Text(when (shown) {
+                    LaneMode.Planned -> "Nothing planned on this date."
+                    LaneMode.Actual -> "Nothing recorded on this date."
+                    LaneMode.Both -> "Nothing planned or recorded on this date."
+                }, style = TimeboxTheme.type.body)
             }
-            val total = when (layout) {
-                DayLayout.Timeline -> TimelineRows(day, expanded)
-                DayLayout.Sections -> SectionRows(day, planned, actual, expanded)
-                DayLayout.Paired -> PairedRows(day, planned, actual, expanded)
+            val total = when {
+                day.blocks.isEmpty() -> 0
+                shown != LaneMode.Both || layout == DayLayout.Timeline -> TimelineRows(day, expanded, tags = shown == LaneMode.Both)
+                layout == DayLayout.Lanes -> LaneView(day, planned, actual, expanded)
+                else -> PairedRows(day, planned, actual, expanded)
             }
             if (total > COLLAPSED_ITEMS) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
-                Text(if (expanded) "Show fewer" else "Show all ${day.blocks.size} blocks", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                Text(if (expanded) "Show less" else if (shown == LaneMode.Both && layout == DayLayout.Lanes) "Show larger" else "Show all ${day.blocks.size} blocks",
+                    Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 Text(if (expanded) "−" else "+", color = colors.onVariant)
             }
-            if (day.blocks.isNotEmpty()) TypeTotals(day)
             HorizontalDivider(color = colors.hairline)
             Row(Modifier.fillMaxWidth().clickable(onClick = onOpenDay).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Open Day", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.on, fontWeight = FontWeight.Medium)
@@ -263,29 +290,63 @@ private fun DayCard(day: SampleDay, layout: DayLayout, onOpenDay: () -> Unit) {
     }
 }
 
+/** A mini Day: planned and actual side by side on one time scale, clipped to the date. */
+@Composable
+private fun LaneView(day: SampleDay, planned: List<SampleBlock>, actual: List<SampleBlock>, expanded: Boolean): Int {
+    val colors = TimeboxTheme.colors
+    val scale = if (expanded) 1.1f else 0.42f
+    fun endOf(b: SampleBlock) = b.end ?: day.readMinute
+    val from = (day.blocks.minOf { maxOf(it.start, 0) } / 60) * 60
+    val to = minOf(1440, ((day.blocks.maxOf { minOf(endOf(it), 1440) } + 59) / 60) * 60)
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Spacer(Modifier.width(40.dp))
+        Text("PLAN", Modifier.weight(1f), style = TimeboxTheme.type.kicker.copy(fontSize = 9.sp), color = colors.planned)
+        Spacer(Modifier.width(6.dp))
+        Text("ACTUAL", Modifier.weight(1f), style = TimeboxTheme.type.kicker.copy(fontSize = 9.sp), color = colors.actual)
+    }
+    Row(Modifier.fillMaxWidth().height(((to - from) * scale).dp)) {
+        Box(Modifier.width(40.dp).fillMaxHeight()) {
+            var hour = from
+            while (hour < to) {
+                if (hour % (if (expanded) 60 else 120) == 0) Text(clockOf(hour), Modifier.padding(top = ((hour - from) * scale).dp),
+                    style = TimeboxTheme.type.mono.copy(fontSize = 9.sp), color = colors.onVariant)
+                hour += 60
+            }
+        }
+        listOf(planned, actual).forEachIndexed { index, blocks ->
+            if (index == 1) Spacer(Modifier.width(6.dp))
+            Box(Modifier.weight(1f).fillMaxHeight().background(colors.bg.copy(alpha = 0.5f), RoundedCornerShape(4.dp))) {
+                blocks.forEach { b ->
+                    val top = maxOf(b.start, 0)
+                    val bottom = minOf(endOf(b), 1440)
+                    val h = ((bottom - top) * scale).dp
+                    val isPlanned = b.lane == Lane.Planned
+                    Surface(Modifier.fillMaxWidth().padding(top = ((top - from) * scale).dp).height(maxOf(h, 3.dp)).padding(vertical = 0.5.dp),
+                        color = if (isPlanned) colors.plannedSurface else colors.actualSurface, shape = RoundedCornerShape(3.dp),
+                        border = BorderStroke(1.dp, if (isPlanned) colors.plannedBorder else colors.actualBorder)) {
+                        if (h >= 16.dp) Column(Modifier.padding(horizontal = 5.dp, vertical = 1.dp)) {
+                            Text((if (b.start < 0) "↑ " else "") + b.title + if (b.end == null) " · now" else "",
+                                style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp), maxLines = 1, color = colors.on)
+                            if (h >= 32.dp) Text(durationShort(endOf(b) - b.start),
+                                style = TimeboxTheme.type.bodySmall.copy(fontSize = 10.sp, lineHeight = 12.sp), maxLines = 1, color = colors.onVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return if (to - from > 5 * 60) Int.MAX_VALUE else 0
+}
+
 /** Returns the number of collapsible items so the card can offer expansion. */
 @Composable
-private fun TimelineRows(day: SampleDay, expanded: Boolean): Int {
+private fun TimelineRows(day: SampleDay, expanded: Boolean, tags: Boolean): Int {
     val rows = day.blocks.sortedWith(compareBy({ it.start }, { it.lane }))
     (if (expanded) rows else rows.take(COLLAPSED_ITEMS)).forEach { block ->
         HorizontalDivider(Modifier.padding(vertical = 4.dp), color = TimeboxTheme.colors.hairline)
-        BlockRow(day, block)
+        BlockRow(day, block, tags)
     }
     return rows.size
-}
-
-@Composable
-private fun SectionRows(day: SampleDay, planned: List<SampleBlock>, actual: List<SampleBlock>, expanded: Boolean): Int {
-    val perSection = 3
-    listOf("PLANNED" to planned, "ACTUAL" to actual).forEach { (label, rows) ->
-        if (rows.isEmpty()) return@forEach
-        Text("$label · ${rows.size}", Modifier.padding(top = 6.dp), style = TimeboxTheme.type.kicker, color = TimeboxTheme.colors.onVariant)
-        (if (expanded) rows else rows.take(perSection)).forEach { block ->
-            HorizontalDivider(Modifier.padding(vertical = 4.dp), color = TimeboxTheme.colors.hairline)
-            BlockRow(day, block)
-        }
-    }
-    return if (planned.size > perSection || actual.size > perSection) Int.MAX_VALUE else 0
 }
 
 @Composable
@@ -300,7 +361,7 @@ private fun PairedRows(day: SampleDay, planned: List<SampleBlock>, actual: List<
         if (!day.future) {
             if (done.isEmpty()) {
                 val ahead = plan.start > day.readMinute
-                Text(if (ahead) "Not yet" else "Not recorded", Modifier.padding(start = 72.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                Text(if (ahead) "Not yet" else "Not recorded", Modifier.padding(start = 90.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
             }
             done.forEach { Box(Modifier.padding(start = 24.dp)) { BlockRow(day, it) } }
         }
@@ -318,7 +379,7 @@ private fun PairedRows(day: SampleDay, planned: List<SampleBlock>, actual: List<
 private fun clockOf(minute: Int): String = Math.floorMod(minute, 1440).let { "%02d:%02d".format(it / 60, it % 60) }
 
 @Composable
-private fun BlockRow(day: SampleDay, block: SampleBlock) {
+private fun BlockRow(day: SampleDay, block: SampleBlock, tag: Boolean = true) {
     val colors = TimeboxTheme.colors
     val isPlanned = block.lane == Lane.Planned
     val tone = if (isPlanned) colors.planned else colors.actual
@@ -338,7 +399,7 @@ private fun BlockRow(day: SampleDay, block: SampleBlock) {
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) { contentDescription = "$lane: ${block.title}, ${clockOf(block.start)} to ${if (block.end == null) "now" else clockOf(end)}, $detail" }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.width(3.dp).fillMaxHeight().background(if (isPlanned) Color.Transparent else tone, RoundedCornerShape(2.dp))
             .then(if (isPlanned) Modifier.background(colors.plannedBorder.copy(alpha = 0.6f), RoundedCornerShape(2.dp)) else Modifier))
-        Column(Modifier.width(52.dp)) {
+        Column(Modifier.width(64.dp)) {
             Text(clockOf(block.start) + if (block.start < 0) " ${dayName(-1)}" else "", style = TimeboxTheme.type.mono.copy(fontSize = 12.sp), color = tone)
             Text(if (block.end == null) "now" else clockOf(end) + if (end > 1440) " ${dayName(1)}" else "", style = TimeboxTheme.type.mono.copy(fontSize = 11.sp), color = colors.onVariant)
         }
@@ -346,39 +407,6 @@ private fun BlockRow(day: SampleDay, block: SampleBlock) {
             Text(block.title, style = TimeboxTheme.type.body, fontWeight = FontWeight.Medium)
             Text(detail, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
         }
-        Text(if (isPlanned) "PLAN" else "DID", style = TimeboxTheme.type.kicker.copy(fontSize = 9.sp), color = tone)
-    }
-}
-
-@Composable
-private fun TypeTotals(day: SampleDay) {
-    val colors = TimeboxTheme.colors
-    var open by remember { mutableStateOf(false) }
-    fun clipped(block: SampleBlock) = (minOf(block.end ?: day.readMinute, 1440) - maxOf(block.start, 0)).coerceAtLeast(0)
-    val types = day.blocks.map { it.type }.distinct().map { type ->
-        val p = day.blocks.filter { it.type == type && it.lane == Lane.Planned }.sumOf(::clipped)
-        val a = day.blocks.filter { it.type == type && it.lane == Lane.Actual }.sumOf(::clipped)
-        Triple(type, p, a)
-    }.sortedByDescending { maxOf(it.second, it.third) }
-    HorizontalDivider(color = colors.hairline)
-    Row(Modifier.fillMaxWidth().clickable { open = !open }.heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("By Task Type", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.on, fontWeight = FontWeight.Medium)
-        Text(if (open) "−" else "+", color = colors.onVariant)
-    }
-    if (open) {
-        Row(Modifier.fillMaxWidth()) {
-            Text("", Modifier.weight(1f))
-            listOf("Plan", "Actual", "Diff").forEach { Text(it, Modifier.width(58.dp), style = TimeboxTheme.type.kicker.copy(fontSize = 9.sp), color = colors.onVariant) }
-        }
-        types.forEach { (type, p, a) ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(type, Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.on)
-                Text(if (p == 0) "—" else durationShort(p), Modifier.width(58.dp), style = TimeboxTheme.type.mono.copy(fontSize = 11.sp), color = colors.planned)
-                Text(if (a == 0) "—" else durationShort(a), Modifier.width(58.dp), style = TimeboxTheme.type.mono.copy(fontSize = 11.sp), color = colors.actual)
-                val diff = a - p
-                Text(when { day.future -> ""; diff == 0 -> "0"; diff > 0 -> "+" + durationShort(diff); else -> "−" + durationShort(-diff) },
-                    Modifier.width(58.dp), style = TimeboxTheme.type.mono.copy(fontSize = 11.sp), color = colors.onVariant)
-            }
-        }
+        if (tag) Text(if (isPlanned) "PLAN" else "DID", style = TimeboxTheme.type.kicker.copy(fontSize = 9.sp), color = tone)
     }
 }

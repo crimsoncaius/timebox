@@ -67,9 +67,10 @@ fun NavGraphBuilder.prototypeRoutes() {
         )
     }
     composable(
-        "prototype/assistant-cards?layout={layout}&scenario={scenario}",
-        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-cards?layout={layout}&scenario={scenario}" }),
+        "prototype/assistant-cards?lane={lane}&layout={layout}&scenario={scenario}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-cards?lane={lane}&layout={layout}&scenario={scenario}" }),
         arguments = listOf(
+            navArgument("lane") { defaultValue = "both" },
             navArgument("layout") { defaultValue = "timeline" },
             navArgument("scenario") { defaultValue = "review" },
         ),
@@ -77,6 +78,7 @@ fun NavGraphBuilder.prototypeRoutes() {
         AssistantCardsPrototype(
             entry.arguments?.getString("layout") ?: "timeline",
             entry.arguments?.getString("scenario") ?: "review",
+            entry.arguments?.getString("lane") ?: "both",
         )
     }
 }
