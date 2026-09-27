@@ -19,8 +19,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
-/** A day of one Habit whose tick or untick is still in flight. */
-data class HabitCellKey(val templateId: Int, val date: LocalDate)
+/** A day of one Habit whose tick or untick is still in flight; [itemId] names a Checklist Item Habit. */
+data class HabitCellKey(val templateId: Int, val date: LocalDate, val itemId: Int? = null)
 
 data class HabitsUiState(
     val week: HabitsWeek? = null,
@@ -89,6 +89,16 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
         repository.untickHabit(templateId, date)
     }
 
+    fun tickItem(templateId: Int, itemId: Int, date: LocalDate) =
+        record(HabitEdit(HabitCellKey(templateId, date, itemId), tick = true)) {
+            repository.tickHabitItem(templateId, itemId, date)
+        }
+
+    fun untickItem(templateId: Int, itemId: Int, date: LocalDate) =
+        record(HabitEdit(HabitCellKey(templateId, date, itemId), tick = false)) {
+            repository.untickHabitItem(templateId, itemId, date)
+        }
+
     private fun record(edit: HabitEdit, action: suspend () -> Result<HabitsWeek>) {
         edits += edit
         publish { it.copy(actionError = null) }
@@ -121,22 +131,34 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
         viewModelScope.launch {
             repository.listRecurringTemplates(RecurrenceStatus.Active).fold(
                 onSuccess = { templates ->
-                    _state.update { state -> state.copy(candidates = templates.filterNot { it.trackAsHabit }) }
+                    _state.update { state -> state.copy(candidates = templates.filter { it.hasHabitCandidate() }) }
                 },
                 onFailure = { e -> _state.update { it.copy(candidatesError = e.apiError.message) } },
             )
         }
     }
 
-    fun addHabit(templateId: Int) {
+    fun addHabit(templateId: Int) = optIn(templateId, RecurringTemplatePatch(trackAsHabit = PatchField.of(true)))
+
+    /** Tracks one Checklist Item without changing its series or its other items. */
+    fun addHabitItem(template: RecurringTemplate, itemId: Int) {
+        val tracked = template.checklistItems.filter { it.trackAsHabit }.map { it.id } + itemId
+        optIn(template.id, RecurringTemplatePatch(habitChecklistItemIds = PatchField.of(tracked.distinct())))
+    }
+
+    private fun optIn(templateId: Int, patch: RecurringTemplatePatch) {
         viewModelScope.launch {
-            repository.patchRecurringTemplate(templateId, RecurringTemplatePatch(trackAsHabit = PatchField.of(true))).fold(
+            repository.patchRecurringTemplate(templateId, patch).fold(
                 onSuccess = { refresh() },
                 onFailure = { e -> _state.update { it.copy(actionError = e.apiError.message) } },
             )
         }
     }
 }
+
+/** A routine offers Add habit something while it or any of its Checklist Items is untracked. */
+internal fun RecurringTemplate.hasHabitCandidate(): Boolean =
+    !trackAsHabit || checklistItems.any { !it.trackAsHabit }
 
 internal fun currentWeekStart(week: HabitsWeek): LocalDate =
     week.today.minusDays((week.today.dayOfWeek.value - 1).toLong())

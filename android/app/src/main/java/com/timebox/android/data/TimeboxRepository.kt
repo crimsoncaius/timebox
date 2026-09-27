@@ -405,6 +405,12 @@ class TimeboxRepository private constructor(
     suspend fun untickHabit(templateId: Int, day: LocalDate): Result<HabitsWeek> =
         call { api().untickHabit(templateId, day.toString()).toModel() }
 
+    suspend fun tickHabitItem(templateId: Int, itemId: Int, day: LocalDate): Result<HabitsWeek> =
+        call { api().tickHabitItem(templateId, itemId, day.toString()).toModel() }
+
+    suspend fun untickHabitItem(templateId: Int, itemId: Int, day: LocalDate): Result<HabitsWeek> =
+        call { api().untickHabitItem(templateId, itemId, day.toString()).toModel() }
+
     suspend fun getRoutineCalendar(templateId: Int, month: java.time.YearMonth?): Result<RoutineCalendar> =
         call { api().getRoutineCalendar(templateId, month?.atDay(1)?.toString()).toModel() }
 

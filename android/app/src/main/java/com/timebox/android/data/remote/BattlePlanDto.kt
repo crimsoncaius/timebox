@@ -174,6 +174,7 @@ data class RecurringChecklistItemDto(
     val id: Int,
     val title: String,
     val position: Int,
+    @SerialName("track_as_habit") val trackAsHabit: Boolean = false,
 )
 
 @Serializable

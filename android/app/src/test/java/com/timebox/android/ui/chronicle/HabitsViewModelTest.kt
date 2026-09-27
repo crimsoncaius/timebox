@@ -3,14 +3,19 @@ package com.timebox.android.ui.chronicle
 import com.timebox.android.data.HabitTotalTone
 import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
+import com.timebox.android.data.RecurrenceStatus
+import com.timebox.android.data.RecurringChecklistItem
+import com.timebox.android.data.RecurringTemplate
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.remote.HabitDayDto
 import com.timebox.android.data.remote.HabitDto
+import com.timebox.android.data.remote.HabitItemDto
 import com.timebox.android.data.remote.HabitTotalDto
 import com.timebox.android.data.remote.HabitsWeekDto
 import com.timebox.android.data.remote.TimeboxApi
 import com.timebox.android.data.toModel
 import java.lang.reflect.Proxy
+import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,9 +25,12 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -242,5 +250,89 @@ class HabitsViewModelTest {
         assertEquals("days", habitTotalUnit(scheduled.total))
         assertEquals("in Sep", habitTotalUnit(scheduled.total.copy(unit = "month", month = LocalDate.of(2026, 9, 1))))
         assertEquals("sessions", habitTotalUnit(scheduled.total.copy(unit = "sessions")))
+    }
+
+    private fun morning(tracked: Boolean, itemState: String = "missed") = HabitDto(
+        templateId = 8, title = "Morning routine", mode = "scheduled", status = "active", frequency = "daily",
+        interval = 1,
+        days = List(7) { HabitDayDto(LocalDate.of(2026, 9, 21).plusDays(it.toLong()).toString(), "missed", tickable = true) },
+        total = HabitTotalDto(0, 7, "days", tone = "open"),
+        tracked = tracked,
+        items = listOf(HabitItemDto(
+            3, "Stretch",
+            List(7) { HabitDayDto(LocalDate.of(2026, 9, 21).plusDays(it.toLong()).toString(), itemState, tickable = true) },
+            HabitTotalDto(if (itemState == "met") 7 else 0, 7, "days", tone = "open"),
+        )),
+    )
+
+    private fun template(tracked: Boolean, vararg items: Pair<Int, Boolean>) = RecurringTemplate(
+        id = 8, title = "Morning routine", description = "", taskTypeId = null, taskType = null,
+        mode = RecurrenceMode.Scheduled, status = RecurrenceStatus.Active, frequency = RecurrenceFrequency.Daily,
+        interval = 1, weekdays = emptyList(), monthDay = null, quotaCount = null,
+        startDate = LocalDate.of(2026, 9, 1), endDate = null, cycleLimit = null, urgency = null, importance = null,
+        pausedAt = null, endedAt = null, createdAt = Instant.EPOCH, updatedAt = Instant.EPOCH,
+        checklistItems = items.mapIndexed { index, (id, on) -> RecurringChecklistItem(id, "Item $id", index, on) },
+        upcoming = emptyList(), currentTasks = emptyList(), cadence = "Daily", nextOccurrence = null,
+        trackAsHabit = tracked,
+    )
+
+    @Test fun `checklist items parse under their series and a heading is untracked`() {
+        val heading = morning(tracked = false).toModel()
+        assertFalse(heading.tracked)
+        assertEquals("Stretch", heading.items.single().title)
+        assertEquals(3, heading.items.single().itemId)
+        assertTrue(gym().toModel().tracked)
+        assertTrue(gym().toModel().items.isEmpty())
+    }
+
+    @Test fun `ticking an item records that item's day`() = runTest(dispatcher) {
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            when (method.name) {
+                "habitsWeek" -> HabitsWeekDto("2026-09-26", "2026-09-21", "2026-09-14", listOf(morning(true)))
+                "tickHabitItem" -> {
+                    assertEquals(listOf<Any?>(8, 3, "2026-09-23"), args!!.take(3))
+                    HabitsWeekDto("2026-09-26", "2026-09-21", "2026-09-14", listOf(morning(true, itemState = "met")))
+                }
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val vm = HabitsViewModel(TimeboxRepository(api, dispatcher))
+        vm.refresh()
+        advanceUntilIdle()
+        vm.tickItem(8, 3, LocalDate.of(2026, 9, 23))
+        assertTrue(HabitCellKey(8, LocalDate.of(2026, 9, 23), 3) in vm.state.value.pending)
+        assertFalse(HabitCellKey(8, LocalDate.of(2026, 9, 23)) in vm.state.value.pending)
+        // The item shows met at once; the series row is untouched.
+        val shown = vm.state.value.week!!.habits.single()
+        assertEquals("met", shown.items.single().days[2].state.wire)
+        assertEquals(1, shown.items.single().total.done)
+        assertEquals("missed", shown.days[2].state.wire)
+        advanceUntilIdle()
+        assertEquals("met", vm.state.value.week!!.habits.single().items.single().days[2].state.wire)
+    }
+
+    @Test fun `adding an item keeps the series' other tracked items`() = runTest(dispatcher) {
+        var patch: JsonObject? = null
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            when (method.name) {
+                "patchRecurringTemplate" -> {
+                    patch = args!![1] as JsonObject
+                    throw IllegalStateException("stop after capturing the patch")
+                }
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val vm = HabitsViewModel(TimeboxRepository(api, dispatcher))
+        vm.addHabitItem(template(false, 1 to true, 2 to false, 3 to false), 3)
+        advanceUntilIdle()
+        assertEquals(setOf("habit_checklist_item_ids"), patch!!.keys)
+        assertEquals(listOf(1, 3), patch!!.getValue("habit_checklist_item_ids").jsonArray.map { it.jsonPrimitive.int })
+    }
+
+    @Test fun `add habit offers untracked routines and routines with untracked items`() {
+        assertTrue(template(false).hasHabitCandidate())
+        assertTrue(template(true, 1 to true, 2 to false).hasHabitCandidate())
+        assertFalse(template(true, 1 to true).hasHabitCandidate())
+        assertFalse(template(true).hasHabitCandidate())
     }
 }

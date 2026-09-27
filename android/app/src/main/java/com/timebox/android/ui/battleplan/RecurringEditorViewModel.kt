@@ -61,6 +61,8 @@ data class RecurringEditorUiState(
     val checklistText: String = "",
     val keepUnfinishedOverdue: Boolean = false,
     val trackAsHabit: Boolean = false,
+    /** Saved Checklist Items tracked as Habits; new items follow [trackAsHabit] on the server. */
+    val trackedChecklistItemIds: Set<Int> = emptySet(),
     val queuePreplanning: Boolean = false,
     val preplanningSlots: List<RecurringPreplanningSlotDraft> = emptyList(),
     val taskTypes: List<TaskType> = emptyList(),
@@ -436,6 +438,7 @@ internal fun RecurringTemplate.toEditorState(taskTypes: List<TaskType>) = Recurr
     checklistText = checklistItems.sortedBy { it.position }.joinToString("\n") { it.title },
     keepUnfinishedOverdue = keepUnfinishedOverdue,
     trackAsHabit = trackAsHabit,
+    trackedChecklistItemIds = checklistItems.filter { it.trackAsHabit }.map { it.id }.toSet(),
     queuePreplanning = preplanningMode == "ready_to_plan",
     preplanningSlots = preplanningSchedule?.slots?.sortedBy { it.position }?.map { slot ->
         RecurringPreplanningSlotDraft(
@@ -467,6 +470,7 @@ internal fun recurringDraftPatch(before: RecurringEditorUiState, after: Recurrin
         checklistTitles = changed(before.checklistTitles(), after.checklistTitles()),
         keepUnfinishedOverdue = changed(before.keepUnfinishedOverdue, after.keepUnfinishedOverdue),
         trackAsHabit = changed(before.trackAsHabit, after.trackAsHabit),
+        habitChecklistItemIds = changed(before.trackedChecklistItemIds.sorted(), after.trackedChecklistItemIds.sorted()),
         preplanningSchedule = changed(before.toPreplanningSchedule(), after.toPreplanningSchedule()),
         preplanningMode = changed(before.preplanningDestination(), after.preplanningDestination()),
         confirmBackfill = PatchField.of(confirmBackfill),

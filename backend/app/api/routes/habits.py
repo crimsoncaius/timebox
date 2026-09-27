@@ -16,7 +16,7 @@ router = APIRouter(prefix="/habits", tags=["habits"])
 
 def _error(exc: ValueError) -> HTTPException:
     message = str(exc)
-    status = 404 if message == "Recurring template not found" else 422
+    status = 404 if message in {"Recurring template not found", habits.ITEM_NOT_FOUND} else 422
     return HTTPException(status_code=status, detail=message)
 
 
@@ -52,6 +52,36 @@ def untick_day(
 ) -> HabitsWeekRead:
     try:
         habits.untick(db, template_id, day, settings)
+    except ValueError as exc:
+        raise _error(exc) from exc
+    return habits.read_week(db, day, settings)
+
+
+@router.post("/{template_id}/items/{item_id}/days/{day}", response_model=HabitsWeekRead)
+def tick_item_day(
+    template_id: int,
+    item_id: int,
+    day: dt.date,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_reporting_settings),
+) -> HabitsWeekRead:
+    try:
+        habits.set_item_checked(db, template_id, item_id, day, True, settings)
+    except ValueError as exc:
+        raise _error(exc) from exc
+    return habits.read_week(db, day, settings)
+
+
+@router.delete("/{template_id}/items/{item_id}/days/{day}", response_model=HabitsWeekRead)
+def untick_item_day(
+    template_id: int,
+    item_id: int,
+    day: dt.date,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_reporting_settings),
+) -> HabitsWeekRead:
+    try:
+        habits.set_item_checked(db, template_id, item_id, day, False, settings)
     except ValueError as exc:
         raise _error(exc) from exc
     return habits.read_week(db, day, settings)

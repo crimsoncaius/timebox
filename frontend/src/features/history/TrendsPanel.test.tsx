@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TrendsPanel } from './TrendsPanel'
-import { canAdvanceTrendRange, shiftTrendRange, showsCurrentTrendRange, trendRangeDayCount, trendRangeHeading, trendRangeLabel, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, nextRangeDraft, shiftTrendRange, showsCurrentTrendRange, trendRangeDayCount, trendRangeHeading, trendRangeLabel, type TrendsReport } from './trends'
 import { api } from '../../lib/api'
 
 const report: TrendsReport = {
@@ -88,14 +88,50 @@ it('uses server date boundaries for navigation and inclusive custom ranges', asy
   await user.click(screen.getByRole('button', { name: 'Custom' }))
   await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('start')).toBe('2026-09-14'))
   expect(get.mock.calls.at(-1)?.[0].get('end')).toBe('2026-09-19')
-  expect(screen.getByLabelText('Range end')).toHaveAttribute('max', '2026-09-19')
+  expect(screen.getByText('Sep 14 – 19')).toBeInTheDocument()
+  expect(screen.getByText('· 6 days')).toBeInTheDocument()
+})
+
+it('chooses custom days on a calendar and shows them only once the last day is picked', async () => {
+  const get = vi.spyOn(api, 'trends').mockResolvedValue(report)
+  render(<TrendsPanel active onDrill={() => {}} />)
+  const user = userEvent.setup()
+  await screen.findByTestId('trends-total')
+  await user.click(screen.getByRole('button', { name: 'Custom' }))
+  await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('end')).toBe('2026-09-19'))
   const callCount = get.mock.calls.length
-  fireEvent.change(screen.getByLabelText('Range end'), { target: { value: '2026-09-20' } })
-  expect(screen.getByRole('alert')).toHaveTextContent('Choose dates on or before Today')
-  expect(screen.getByLabelText('Range end')).toHaveValue('2026-09-20')
+
+  await user.click(screen.getByRole('button', { name: 'Choose days' }))
+  expect(screen.getByRole('button', { name: 'Saturday, September 19, 2026, today, last day' })).toHaveFocus()
+  expect(screen.getByRole('button', { name: /September 20, 2026/ })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: /September 15, 2026/ }))
+  expect(screen.getByRole('button', { name: 'Choose the last day' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Previous month' }))
+  await user.click(screen.getByRole('button', { name: /August 31, 2026/ }))
+  await user.click(screen.getByRole('button', { name: 'Next month' }))
+  await user.click(screen.getByRole('button', { name: /September 17, 2026/ }))
   expect(get).toHaveBeenCalledTimes(callCount)
-  fireEvent.change(screen.getByLabelText('Range end'), { target: { value: '2026-09-19' } })
-  await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(callCount))
+
+  await user.click(screen.getByRole('button', { name: 'Show 18 days' }))
+  await waitFor(() => expect(get.mock.calls.at(-1)?.[0].get('start')).toBe('2026-08-31'))
+  expect(get.mock.calls.at(-1)?.[0].get('end')).toBe('2026-09-17')
+  expect(screen.getByText('Aug 31 – Sep 17')).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Choose days' }))
+  await user.click(screen.getByRole('button', { name: /September 3, 2026/ }))
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.getByText('Aug 31 – Sep 17')).toBeInTheDocument()
+  expect(get.mock.calls.at(-1)?.[0].get('start')).toBe('2026-08-31')
+})
+
+it('picks the first day, then the last, restarting when an earlier day is tapped', () => {
+  expect(nextRangeDraft({ start: '2026-09-14', end: '2026-09-20' }, '2026-09-16')).toEqual({ start: '2026-09-16', end: null })
+  expect(nextRangeDraft({ start: '2026-09-16', end: null }, '2026-09-18')).toEqual({ start: '2026-09-16', end: '2026-09-18' })
+  expect(nextRangeDraft({ start: '2026-09-16', end: null }, '2026-09-16')).toEqual({ start: '2026-09-16', end: '2026-09-16' })
+  expect(nextRangeDraft({ start: '2026-09-16', end: null }, '2026-09-02')).toEqual({ start: '2026-09-02', end: null })
+  expect(trendRangeHeading('custom', '2026-08-24', '2026-09-06', '2026-09-27')).toBe('Aug 24 – Sep 6')
+  expect(trendRangeHeading('custom', '2025-12-29', '2026-01-04', '2026-09-27')).toBe('Dec 29, 2025 – Jan 4, 2026')
 })
 
 it('navigates across leap months and year boundaries without local timezone drift', () => {
