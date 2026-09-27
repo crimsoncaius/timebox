@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TrendsPanel } from './TrendsPanel'
-import { canAdvanceTrendRange, shiftTrendRange, trendRangeDayCount, trendRangeHeading, trendRangeLabel, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, showsCurrentTrendRange, trendRangeDayCount, trendRangeHeading, trendRangeLabel, type TrendsReport } from './trends'
 import { api } from '../../lib/api'
 
 const report: TrendsReport = {
@@ -59,6 +59,15 @@ it('headings the range readably and adds the year only outside the current one',
   expect(trendRangeHeading('month', '2026-09-01', '2026-09-30', '2026-09-27')).toBe('September 2026')
   expect(trendRangeHeading('week', '2025-09-15', '2025-09-21', '2026-09-27')).toBe('Sep 15 – 21, 2025')
   expect(trendRangeHeading('week', '2025-12-29', '2026-01-04', '2026-09-27')).toBe('Dec 29 – Jan 4')
+})
+
+it('decides the current-range pill from the anchor so switching periods never flashes', () => {
+  expect(showsCurrentTrendRange('week', '', '')).toBe(true)
+  expect(showsCurrentTrendRange('week', '2026-09-21', '2026-09-27')).toBe(true)
+  expect(showsCurrentTrendRange('week', '2026-09-20', '2026-09-27')).toBe(false)
+  expect(showsCurrentTrendRange('month', '2026-09-01', '2026-09-27')).toBe(true)
+  expect(showsCurrentTrendRange('month', '2026-08-31', '2026-09-27')).toBe(false)
+  expect(showsCurrentTrendRange('day', '2026-09-26', '2026-09-27')).toBe(false)
 })
 
 it('uses server date boundaries for navigation and inclusive custom ranges', async () => {

@@ -35,7 +35,9 @@ import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -168,9 +170,19 @@ private fun TrendRow(name: String, seconds: Double, total: Double, depth: Int, e
     }
 }
 
-/** Whether Trends shows the range containing Today; before the report arrives, an unset anchor means the current range. */
-internal fun showsCurrentTrendRange(state: ChronicleUiState): Boolean =
-    state.trends?.let { it.start <= it.today && it.today <= it.end } ?: (state.anchor == null)
+/**
+ * Whether Trends shows the range containing Today, decided from the anchor so it holds while a
+ * report is loading: no anchor is the current range; otherwise the anchor's Monday week or month must contain Today.
+ */
+internal fun showsCurrentTrendRange(state: ChronicleUiState): Boolean {
+    val anchor = state.anchor ?: return true
+    return when (state.period) {
+        "day" -> anchor == state.today
+        "week" -> anchor.with(DayOfWeek.MONDAY) == state.today.with(DayOfWeek.MONDAY)
+        "month" -> YearMonth.from(anchor) == YearMonth.from(state.today)
+        else -> false
+    }
+}
 
 /** The range heading beside the arrows: "Sun 27 Sep", "21–27 Sep", "September 2026"; other years add the year. */
 internal fun trendRangeHeading(period: String, start: LocalDate, end: LocalDate, today: LocalDate): String {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { canAdvanceTrendRange, shiftTrendRange, trendDuration, trendRangeHeading, type TrendNode, type TrendRange, type TrendsReport } from './trends'
+import { canAdvanceTrendRange, shiftTrendRange, showsCurrentTrendRange, trendDuration, trendRangeHeading, type TrendNode, type TrendRange, type TrendsReport } from './trends'
 import { errorMessage } from '../../lib/errors'
 import { CalendarDateField } from '../../components/CalendarDateField'
 
@@ -50,8 +50,7 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
     return () => { current = false; controller.abort(); clearInterval(timer); window.removeEventListener('focus', focus) }
   }, [active, period, anchor, custom.start, custom.end, customError, retry])
 
-  // Before the report arrives, an unset anchor means the current range.
-  const current = report ? report.start <= report.today && report.today <= report.end : !anchor
+  const current = showsCurrentTrendRange(period, anchor, today)
   const currentLabel = period === 'day' ? 'Today' : `This ${period}`
 
   function select(next: Period) {

@@ -51,3 +51,21 @@ export function trendRangeHeading(period: string, start: string, end: string, to
   if (start === end) return `${WEEKDAYS[new Date(`${start}T00:00:00Z`).getUTCDay()]}, ${SHORT_MONTHS[sm - 1]} ${sd}${year}`
   return sm === em ? `${SHORT_MONTHS[sm - 1]} ${sd} – ${ed}${year}` : `${SHORT_MONTHS[sm - 1]} ${sd} – ${SHORT_MONTHS[em - 1]} ${ed}${year}`
 }
+
+/**
+ * Whether Trends shows the range containing Today, decided from the anchor so it holds while a report is
+ * loading: no anchor is the current range; otherwise the anchor's Monday week or month must contain Today.
+ */
+export function showsCurrentTrendRange(period: string, anchor: string, today: string) {
+  if (!anchor) return true
+  if (period === 'day') return anchor === today
+  if (period === 'month') return anchor.slice(0, 7) === today.slice(0, 7)
+  if (period === 'week') return mondayOf(anchor) === mondayOf(today)
+  return false
+}
+
+function mondayOf(iso: string) {
+  const date = new Date(`${iso}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7)
+  return date.toISOString().slice(0, 10)
+}
