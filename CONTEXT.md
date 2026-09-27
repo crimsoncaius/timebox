@@ -152,6 +152,10 @@ _Avoid_: Daily Reminder, Task Reminder, block alarm
 A recurrence rule and template that produces Task Occurrences. It represents an ongoing routine and does not belong to a Project.
 _Avoid_: Recurring template, recurring parent task
 
+**Checklist Item**:
+A Subtask title on a Recurring Task Series that each of its Task Occurrences receives as a Subtask. It keeps its identity when renamed or reordered, and a Subtask renamed on one Task Occurrence still belongs to it. A Subtask added to a single Task Occurrence is not a Checklist Item. Ticking a Checklist Item Habit may check or uncheck its Subtask even on a completed Task Occurrence; checking never completes the Task Occurrence nor reverses a Skipped Task Occurrence.
+_Avoid_: Checklist entry, template subtask, recurring subtask
+
 **Recurring Pre-planning**:
 An optional choice on a scheduled Recurring Task Series to place its Task Occurrences into Ready to Plan when their recurrence periods start, or allocate them to specific Planned Block slots. Ready to Plan carries no assigned day or time; quota routines are outside this choice.
 _Avoid_: Automatic scheduling
@@ -177,11 +181,11 @@ An individually completable unit of work that contributes to a Quota Tracker. It
 _Avoid_: Actual Block, Task Occurrence, work session
 
 **Habit**:
-A Recurring Task Series opted into habit tracking. It has no identity or lifecycle of its own, and every Task Completion of its Task Occurrences or Session Tasks counts toward it, including those recorded before it was opted in.
-_Avoid_: Goal, Streak task, Habit tracker
+A Recurring Task Series or a Checklist Item opted into habit tracking. It has no identity or lifecycle of its own. A series Habit counts every Task Completion of its Task Occurrences or Session Tasks; a Checklist Item Habit counts every checked Subtask belonging to it. Both include history from before opting in. Opting a series in opts in its Checklist Items, including ones added later, except those opted out individually; opting it out opts them all out, and opting it back in clears those individual opt-outs. A Checklist Item can be a Habit while its series is not.
+_Avoid_: Goal, Streak task, Habit tracker, Sub-habit, Subtask habit
 
 **Habit Period**:
-The span over which a Habit is judged: one Task Occurrence's recurrence period for a scheduled Habit, or one quota period for a quota Habit. Its outcome is Met, Missed, Open while it has not ended, or Excused while its series is paused or not yet started. A scheduled Habit Period is Met once its Task Occurrence has a Task Completion, whatever that completion's date; there is no late outcome.
+The span over which a Habit is judged: one Task Occurrence's recurrence period for a scheduled Habit, or one quota period for a quota Habit. Its outcome is Met, Missed, Open while it has not ended, or Excused while its series is paused or not yet started, or, for a Checklist Item Habit, when that Task Occurrence has no Subtask for the item. A scheduled Habit Period is Met once its Task Occurrence has a Task Completion, whatever that completion's date; a Checklist Item Habit Period is Met once that Task Occurrence's Subtask for the item is checked, whenever it was checked. There is no late outcome.
 _Avoid_: Streak day, check-in
 
 **Blocked**:
