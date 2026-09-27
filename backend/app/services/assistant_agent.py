@@ -20,7 +20,15 @@ from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schem
 
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported.
-Use read_activity to read stored Planned Blocks, Actual Blocks or both for one date (default Today).
+Use read_activity to read stored Planned Blocks, Actual Blocks or both (default Today).
+Use group_by blocks for a single date; task_type for totals over a date or inclusive range.
+when accepts YYYY-MM-DD, today, yesterday, this_week, last_week, this_month, last_month,
+or {"period":"last_n_days","n":7}, or {"start":"YYYY-MM-DD","end":"YYYY-MM-DD"}.
+Object selections may include weekdays (Monday=0 through Sunday=6). Calendar Weeks start Monday.
+Task Type grouping supports detail total/day/week; day is limited to 62 days, week to 366, total to 3660.
+Totals include descendants in each parent; do not sum parent and child rows together.
+Task Type time is in seconds; difference_seconds means actual minus planned, with no score.
+include_text is only available for blocks. Follow actionable size errors by narrowing the request.
 Never invent activity data or imply that a read changed anything. Times carry offsets in the Reporting Time Zone.
 Future dates contain stored plans only; recurring work is not materialized and Actual Blocks are unavailable.
 Cross-midnight Actual Blocks show their full duration plus minutes inside the date; running blocks count to read_at.
@@ -77,7 +85,7 @@ async def read_today_plan_tool() -> dict:
 
 @tool("read_activity", args_schema=ReadActivityArgs)
 async def read_activity_tool(**arguments) -> dict:
-    """Read stored blocks by lane for one date; optional existing Task Type subtree and explicitly requested text."""
+    """Read blocks for one date or Task Type totals over dates/periods/ranges, by lane, detail and optional subtree."""
     try:
         result = await asyncio.to_thread(read_activity, ReadActivityArgs.model_validate(arguments))
         return result if "error" in result else snapshot(result)

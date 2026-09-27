@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Literal
+from collections import defaultdict
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -22,11 +23,57 @@ from app.services.activity_service import reporting_settings
 TEXT_LIMIT = 2000
 
 
+class ReadWhen(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    period: Literal["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "last_n_days"] | None = None
+    start: dt.date | None = None
+    end: dt.date | None = None
+    n: int | None = Field(default=None, ge=1, le=3660)
+    weekdays: list[Annotated[int, Field(ge=0, le=6)]] | None = Field(default=None, min_length=1, max_length=7, description="Monday=0 through Sunday=6")
+
+    @model_validator(mode="after")
+    def selection(self):
+        if self.period is not None and (self.start is not None or self.end is not None):
+            raise ValueError("Choose a period or start/end dates, not both.")
+        if self.period is None and (self.start is None or self.end is None):
+            raise ValueError("Custom ranges require both start and end dates.")
+        if (self.period == "last_n_days") != (self.n is not None):
+            raise ValueError("Supply n only for last_n_days.")
+        return self
+
+
+def resolve_when(value, today):
+    selection = value if isinstance(value, ReadWhen) else None
+    period = selection.period if selection else value
+    weekdays = selection.weekdays if selection else None
+    monday = today - dt.timedelta(days=today.weekday())
+    month = today.replace(day=1)
+    named = {"today": (today, today), "yesterday": (today-dt.timedelta(days=1), today-dt.timedelta(days=1)),
+             "this_week": (monday, monday+dt.timedelta(days=6)),
+             "last_week": (monday-dt.timedelta(days=7), monday-dt.timedelta(days=1)),
+             "this_month": (month, (month+dt.timedelta(days=32)).replace(day=1)-dt.timedelta(days=1)),
+             "last_month": ((month-dt.timedelta(days=1)).replace(day=1), month-dt.timedelta(days=1))}
+    if selection and period is None:
+        start, end = selection.start, selection.end
+    elif selection and period == "last_n_days":
+        start, end = today-dt.timedelta(days=selection.n-1), today
+    elif period in named:
+        start, end = named[period]
+    else:
+        start = end = dt.date.fromisoformat(period)
+    if end < start:
+        raise ValueError("End must be on or after start.")
+    if end == dt.date.max:
+        raise ValueError("End must be earlier than 9999-12-31.")
+    return start, end, weekdays
+
+
 class ReadActivityArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     lane: Literal["planned", "actual", "both"] = "planned"
-    when: str = "today"
-    group_by: Literal["blocks"] = "blocks"
+    when: str | ReadWhen = "today"
+    group_by: Literal["blocks", "task_type"] = "blocks"
+    detail: Literal["total", "day", "week"] = "total"
     task_type: str | None = None
     include_text: bool = False
 
@@ -37,18 +84,22 @@ def read_activity(args: ReadActivityArgs) -> dict:
     with Session(get_engine(), autoflush=False) as db:
         zone = reporting_settings(db, get_settings()).app_timezone
         today = now.astimezone(ZoneInfo(zone)).date()
-        date = {"today": today, "yesterday": today - dt.timedelta(days=1)}.get(args.when)
-        if date is None:
-            try:
-                date = dt.date.fromisoformat(args.when)
-            except ValueError:
-                return {"error": "Blocks require one date: today, yesterday, or YYYY-MM-DD."}
+        try:
+            date, last, weekdays = resolve_when(args.when, today)
+        except (ValueError, TypeError, OverflowError) as error:
+            return {"error": f"Invalid when selection: {error}. Use a date, named period, or start/end dates."}
+        if args.group_by == "blocks" and (date != last or weekdays is not None or args.detail != "total"):
+            return {"error": "Blocks require one date without weekday filters or detail. Use group_by task_type for ranges."}
+        if args.group_by == "task_type" and args.include_text:
+            return {"error": "include_text is available only with group_by blocks."}
         path = None
         if args.task_type is not None:
             known = db.scalars(select(TaskType.name).where(TaskType.is_merged.is_(False))).all()
             path = next((p for p in known if p.lower() == args.task_type.strip().lower()), None)
             if path is None:
                 return {"error": f"No existing Task Type matches {args.task_type}. Choose an existing Task Type Path."}
+        if args.group_by == "task_type":
+            return read_task_types(db, args, date, last, weekdays, path, zone, now, today)
         start = dt.datetime.combine(date, dt.time(), ZoneInfo(zone)).astimezone(dt.UTC)
         end = dt.datetime.combine(date + dt.timedelta(days=1), dt.time(), ZoneInfo(zone)).astimezone(dt.UTC)
         rows = (select(TimeBlock, TaskType.name, Task).select_from(TimeBlock)
@@ -113,3 +164,56 @@ def read_today_plan() -> dict:
         ).mappings()
         return {"date": today.isoformat(), "reporting_timezone": settings.app_timezone,
                 "planned_blocks": [dict(row) for row in rows]}
+
+
+def read_task_types(db, args, start, end, weekdays, path, zone, now, today):
+    from app.services.trends import report
+
+    limit = {"total": 3660, "day": 62, "week": 366}[args.detail]
+    if (end-start).days+1 > limit:
+        return {"error": f"detail {args.detail} supports at most {limit} calendar days. Shorten the range or use total detail (up to 3660 days)."}
+    # Reuse Trends' exact clipping, midnight splitting and hierarchy rollup.
+    actual = {}
+    def collect(nodes):
+        for node in nodes:
+            actual[node.path] = node.days
+            collect(node.children)
+    if args.lane != "planned":
+        collect(report(db, start, end, zone, now).types)
+    planned = defaultdict(lambda: defaultdict(float))
+    if args.lane != "actual":
+        rows = db.execute(select(TaskType.name, Day.date, TimeBlock.start_minute, TimeBlock.end_minute)
+                          .select_from(TimeBlock).join(TaskType, TaskType.id == TimeBlock.task_type_id)
+                          .join(Day, Day.id == TimeBlock.day_id)
+                          .where(TimeBlock.lane == BlockLane.planned, Day.date.between(start, end)))
+        for kind, day, left, right in rows:
+            segments = kind.split("/")
+            for depth in range(1, len(segments)+1):
+                planned["/".join(segments[:depth])][day] += (right-left)*60
+    rows = []
+    for kind in sorted(planned.keys() | actual.keys()):
+        if path is not None and kind != path and not kind.startswith(path+"/"):
+            continue
+        groups = defaultdict(lambda: [0.0, 0.0])
+        for index, days in enumerate((planned.get(kind, {}), actual.get(kind, {}))):
+            for day, seconds in days.items():
+                if weekdays is not None and day.weekday() not in weekdays:
+                    continue
+                bucket = ("total" if args.detail == "total" else
+                          (day-dt.timedelta(days=day.weekday())).isoformat() if args.detail == "week" else day.isoformat())
+                groups[bucket][index] += seconds
+        for bucket, (plan, done) in sorted(groups.items()):
+            row = {"task_type": kind, "period": bucket}
+            if args.lane != "actual":
+                row["planned_seconds"] = plan
+            if args.lane != "planned":
+                row["actual_seconds"] = done
+            if args.lane == "both":
+                row["difference_seconds"] = done-plan
+            rows.append(row)
+    if len(rows) > 2000:
+        return {"error": "Result exceeds 2000 Task Type rows. Choose a task_type subtree, shorten the range, or use total detail."}
+    return {"schema_version": 3, "date": start.isoformat(), "start": start.isoformat(), "end": end.isoformat(),
+            "reporting_timezone": zone, "read_at": now.isoformat(), "group_by": "task_type", "lane": args.lane,
+            "detail": args.detail, "weekdays": weekdays, "task_type": path, "types": rows,
+            "recurring_not_materialized": end > today}

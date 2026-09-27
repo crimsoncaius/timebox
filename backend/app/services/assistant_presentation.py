@@ -85,8 +85,33 @@ class BlockSnapshot(PlanSnapshot):
     actual_unavailable_reason: str | None
 
 
+class TaskTypeRow(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    task_type: str
+    period: str
+    planned_seconds: float | None = Field(default=None, ge=0)
+    actual_seconds: float | None = Field(default=None, ge=0)
+    difference_seconds: float | None = None
+
+
+class TaskTypeSnapshot(PlanSnapshot):
+    schema_version: Literal[3] = 3
+    planned_blocks: list[PlannedRow] = Field(default_factory=list, exclude=True)
+    group_by: Literal["task_type"]
+    lane: Literal["planned", "actual", "both"]
+    task_type: str | None
+    start: str
+    end: str
+    detail: Literal["total", "day", "week"]
+    weekdays: list[int] | None
+    types: list[TaskTypeRow]
+    recurring_not_materialized: bool
+
+
 def validate_snapshot(value: dict) -> dict:
-    model = BlockSnapshot if value.get("schema_version") == 2 else PlanSnapshot
+    model = {1: PlanSnapshot, 2: BlockSnapshot, 3: TaskTypeSnapshot}.get(value.get("schema_version", 1))
+    if model is None:
+        raise ValueError("Unknown snapshot schema version")
     return model.model_validate(value).model_dump(exclude_none=False)
 
 
@@ -96,6 +121,18 @@ def snapshot(plan: dict) -> dict:
 
 
 def text_schedule(plan: dict) -> str:
+    if plan.get("schema_version") == 3:
+        lines = [f"Time by Task Type for {plan['start']}–{plan['end']} · As of {plan['read_at']} · {plan['reporting_timezone']}"]
+        for row in plan["types"]:
+            values = [f"{label}: {row[key]/60:g} min" for key, label in
+                      (("planned_seconds", "Planned"), ("actual_seconds", "Actual"), ("difference_seconds", "Actual minus planned"))
+                      if row.get(key) is not None]
+            lines.append(f"{row['task_type']} · {row['period']} · " + " · ".join(values))
+        if not plan["types"]:
+            lines.append("No stored time for this selection.")
+        if plan["recurring_not_materialized"]:
+            lines.append("Future recurring work is not materialized; actual time stops at the read time.")
+        return "\n".join(lines) + "\n\n"
     if plan.get("schema_version") == 2:
         lines = [f"Blocks for {plan['date']} · As of {plan['read_at']} · {plan['reporting_timezone']}"]
         for row in plan["blocks"]:

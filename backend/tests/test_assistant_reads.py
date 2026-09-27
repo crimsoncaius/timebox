@@ -99,4 +99,66 @@ def test_read_tool_exposes_only_new_tool_and_rejects_ranges():
     assert result['schema_version'] == 2
     assert result['snapshot_id']
     invalid = asyncio.run(read_activity_tool.ainvoke({'when': {'start':'2026-09-01', 'end':'2026-09-27'}}))
-    assert 'Invalid read_activity arguments' in invalid
+    assert 'Blocks require one date' in invalid['error']
+
+
+def test_task_type_ranges_match_trends_and_roll_up_plans(monkeypatch):
+    from app.services.trends import report
+    now = dt.datetime(2026, 9, 27, 1, 30, tzinfo=dt.UTC)
+    monkeypatch.setattr(reads, 'utc_now', lambda: now)
+    with Session(get_engine()) as db:
+        parent, child = TaskType(name='work'), TaskType(name='work/code')
+        days = [Day(date=dt.date(2026, 9, day)) for day in (26, 27, 28)]
+        db.add_all([parent, child, *days]); db.flush()
+        for day in days:
+            db.add(TimeBlock(day_id=day.id, lane=BlockLane.planned, start_minute=60,
+                             end_minute=120, task_type_id=child.id, note='secret'))
+        db.add(TimeBlock(lane=BlockLane.actual, start_at=now-dt.timedelta(hours=3),
+                         task_type_id=child.id, note='secret'))
+        db.commit()
+        trend = report(db, days[0].date, days[-1].date, 'UTC', now)
+    args = dict(group_by='task_type', lane='both', when={'start':'2026-09-26','end':'2026-09-28'})
+    result = snapshot(reads.read_activity(reads.ReadActivityArgs(**args)))
+    assert result['types'] == [dict(task_type=path, period='total', planned_seconds=10800.0,
+                                    actual_seconds=trend.types[0].duration_seconds, difference_seconds=0.0)
+                               for path in ('work', 'work/code')]
+    assert result['snapshot_id'] and result['read_at'] == now.isoformat()
+    assert result['recurring_not_materialized']
+    assert 'secret' not in json.dumps(result)
+    assert validate_snapshot(result) == result
+    assert 'Time by Task Type' in text_schedule(result)
+    filtered = reads.read_activity(reads.ReadActivityArgs(**{**args, 'task_type':' WORK/CODE ', 'detail':'week',
+                                  'when': {**args['when'], 'weekdays':[6]}}))
+    assert filtered['types'] == [dict(task_type='work/code', period='2026-09-21', planned_seconds=3600.0,
+                                     actual_seconds=5400.0, difference_seconds=1800.0)]
+    daily = reads.read_activity(reads.ReadActivityArgs(**{**args, 'detail':'day'}))
+    assert len(daily['types']) == 6
+    assert daily['types'][0]['actual_seconds'] == 5400
+    assert daily['types'][2]['actual_seconds'] == 0
+    actual = reads.read_activity(reads.ReadActivityArgs(**{**args, 'lane':'actual'}))
+    assert 'planned_seconds' not in actual['types'][0]
+    assert 'error' in reads.read_activity(reads.ReadActivityArgs(**args, include_text=True))
+
+
+def test_range_resolution_limits_and_timezone(monkeypatch):
+    from zoneinfo import ZoneInfo
+    today = dt.date(2026, 9, 27)
+    assert reads.resolve_when('this_week', today)[:2] == (dt.date(2026,9,21), today)
+    assert reads.resolve_when('last_week', today)[:2] == (dt.date(2026,9,14), dt.date(2026,9,20))
+    assert reads.resolve_when(reads.ReadWhen(period='last_n_days', n=3), today)[:2] == (dt.date(2026,9,25),today)
+    for detail, end in [('day','2026-04-01'), ('week','2027-04-01'), ('total','2037-04-01')]:
+        result = reads.read_activity(reads.ReadActivityArgs(group_by='task_type', detail=detail,
+                                    when={'start':'2026-01-01','end':end}))
+        assert 'Shorten the range' in result['error']
+    assert 'error' in reads.read_activity(reads.ReadActivityArgs(group_by='task_type', when={'start':'2026-09-28','end':'2026-09-27'}))
+    now = dt.datetime(2026,11,2,7,tzinfo=dt.UTC)
+    monkeypatch.setattr(reads, 'utc_now', lambda: now)
+    monkeypatch.setattr(reads, 'reporting_settings', lambda db,s: s.model_copy(update={'app_timezone':'America/New_York'}))
+    with Session(get_engine()) as db:
+        kind = TaskType(name='work'); db.add(kind); db.flush()
+        db.add(TimeBlock(lane=BlockLane.actual, task_type_id=kind.id,
+                        start_at=dt.datetime(2026,11,1,4,tzinfo=dt.UTC), end_at=now))
+        db.commit()
+    result = reads.read_activity(reads.ReadActivityArgs(group_by='task_type', when='yesterday',lane='actual'))
+    assert result['types'][0]['actual_seconds'] == 25*3600
+    assert result['start'] == (now.astimezone(ZoneInfo('America/New_York')).date()-dt.timedelta(days=1)).isoformat()
