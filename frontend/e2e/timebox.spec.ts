@@ -141,14 +141,14 @@ test('plan blocks and history', async ({ page, request }) => {
 
   await page.getByRole('link', { name: 'Settings' }).click()
   await expect(page).toHaveURL(/\/settings$/)
-  await expect(page.getByText('Day window', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Day & time' })).toBeVisible()
   await page.getByLabel(/Start hour/i).fill('9')
   await page.getByLabel(/Start hour/i).blur()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 })
 
   await page.getByRole('link', { name: 'Day' }).click()
   await expect(page.getByTestId('day-timeline')).toBeVisible()
-  await expect(page.locator('text=Day window')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Day & time' })).toHaveCount(0)
 
   await request.patch(`${base}/settings`, {
     headers: { 'Content-Type': 'application/json' },
