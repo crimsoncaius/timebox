@@ -1,8 +1,9 @@
 """The Habits view: each Habit's Habit Periods across one Calendar Week.
 
-A Habit is a Recurring Task Series with ``track_as_habit`` set. Everything shown
-here is derived from the occurrence ledger and Task Completions; ticking a day
-records an ordinary Task Completion dated that day (ADR 0015).
+A Habit is a Recurring Task Series or a Checklist Item with ``track_as_habit`` set.
+Everything shown here is derived from the occurrence ledger, Task Completions and
+checked Subtasks. Ticking a series day records an ordinary Task Completion dated that
+day (ADR 0015); ticking an item day checks that occurrence's Subtask (ADR 0016).
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import datetime as dt
 from collections import Counter
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -21,18 +22,27 @@ from app.models.battle_plan import (
     RecurrenceMode,
     RecurrenceOccurrence,
     RecurrenceStatus,
+    RecurringChecklistItem,
     RecurringTemplate,
     Task,
     TaskStatus,
 )
-from app.schemas.battle_plan import HabitDayRead, HabitRead, HabitsWeekRead, HabitTotalRead
+from app.schemas.battle_plan import (
+    HabitDayRead,
+    HabitItemRead,
+    HabitRead,
+    HabitsWeekRead,
+    HabitTotalRead,
+)
 from app.services import task_completion_service
 from app.services.recurrence.common import Window, _date_in_tz, _json_list
 from app.services.recurrence.helpers import _load_template, _task_kwargs
+from app.services.recurrence.protection import protect_task_occurrence
 from app.services.recurrence.synchronization import _derive_quota_parents, synchronize
 from app.services.recurrence.windows import iter_windows
 
 NO_PERIOD = "No Habit Period on this day"
+ITEM_NOT_FOUND = "Checklist item not found"
 
 
 def _monday(day: dt.date) -> dt.date:
@@ -136,6 +146,17 @@ class _Habit:
         if task is None or task.deleted_at is not None or task.archived_at is not None:
             return None
         return task
+
+    def subtask(self, root: Task, item_id: int) -> Task | None:
+        """The occurrence's Subtask for a Checklist Item, if it has one."""
+
+        return next(
+            (
+                task for task in self.tasks.values()
+                if task.parent_id == root.id and task.checklist_item_id == item_id and task.deleted_at is None
+            ),
+            None,
+        )
 
     def completed_sessions(self, tracker: Task | None) -> list[Task]:
         if tracker is None:
@@ -262,7 +283,57 @@ def _quota_row(habit: _Habit, days: list[dt.date]) -> tuple[list[HabitDayRead], 
     )
 
 
-def _to_read(habit: _Habit, week_start: dt.date) -> HabitRead:
+def _item_row(habit: _Habit, item: RecurringChecklistItem, days: list[dt.date]) -> HabitItemRead:
+    """A Checklist Item's Habit Periods follow its series' occurrences (ADR 0016)."""
+
+    today = habit.today
+    by_start = {w.start: w for w in habit.windows}
+    cells: list[HabitDayRead] = []
+    for day in days:
+        window = by_start.get(day)
+        if window is None:
+            cells.append(HabitDayRead(date=day, state="not_due"))
+            continue
+        if habit.excused(day, window):
+            cells.append(HabitDayRead(date=day, state="excused"))
+            continue
+        root = habit.root_task(window)
+        if root is None:
+            # An occurrence not generated yet is still upcoming; a past one has nothing to judge.
+            cells.append(HabitDayRead(date=day, state="upcoming" if day > today else "excused"))
+            continue
+        subtask = habit.subtask(root, item.id)
+        if subtask is None:
+            # The occurrence has no Subtask for this item, so there is nothing to judge.
+            cells.append(HabitDayRead(date=day, state="excused"))
+            continue
+        if subtask.checked:
+            state = "met"
+        elif day > today:
+            state = "upcoming"
+        elif day == today:
+            state = "open"
+        else:
+            state = "missed"
+        cells.append(HabitDayRead(date=day, state=state, tickable=day <= today))
+    return HabitItemRead(
+        item_id=item.id, title=item.title, days=cells, total=_period_total(cells, days[-1] < today)
+    )
+
+
+def _item_rows(habit: _Habit, days: list[dt.date]) -> list[HabitItemRead]:
+    if not habit.scheduled:
+        return []
+    rows = [
+        _item_row(habit, item, days)
+        for item in sorted(habit.template.checklist_items, key=lambda value: value.position)
+        if item.track_as_habit
+    ]
+    # An item row appears only in weeks where some occurrence carries its Subtask.
+    return [row for row in rows if any(cell.state not in {"not_due", "excused"} for cell in row.days)]
+
+
+def _to_read(habit: _Habit, week_start: dt.date, items: list[HabitItemRead]) -> HabitRead:
     days = [week_start + dt.timedelta(days=offset) for offset in range(7)]
     cells, total = (_scheduled_row if habit.scheduled else _quota_row)(habit, days)
     template = habit.template
@@ -278,6 +349,8 @@ def _to_read(habit: _Habit, week_start: dt.date) -> HabitRead:
         quota_count=template.quota_count,
         days=cells,
         total=total,
+        tracked=template.track_as_habit,
+        items=items,
     )
 
 
@@ -287,20 +360,29 @@ def read_week(
     tz = settings.app_timezone
     today = today or today_in_tz(tz)
     synchronize(db, settings, today=today)
+    tracked_item = exists().where(
+        RecurringChecklistItem.template_id == RecurringTemplate.id,
+        RecurringChecklistItem.track_as_habit.is_(True),
+    )
     templates = db.scalars(
         select(RecurringTemplate)
-        .where(RecurringTemplate.track_as_habit.is_(True))
+        .where(or_(RecurringTemplate.track_as_habit.is_(True), tracked_item))
         .order_by(RecurringTemplate.position, RecurringTemplate.id)
     ).all()
     current = _monday(today)
     earliest = min([_monday(_habit_start(t)) for t in templates] + [current])
     week_start = min(max(_monday(week or today), earliest), current)
     through = week_start + dt.timedelta(days=6)
+    days = [week_start + dt.timedelta(days=offset) for offset in range(7)]
     habits = []
     for template in templates:
         habit = _Habit.load(db, template, through, tz, today)
-        if habit.visible_in(week_start):
-            habits.append(_to_read(habit, week_start))
+        if not habit.visible_in(week_start):
+            continue
+        items = _item_rows(habit, days)
+        # A series that is not a Habit only appears to head its tracked items.
+        if template.track_as_habit or items:
+            habits.append(_to_read(habit, week_start, items))
     return HabitsWeekRead(today=today, week_start=week_start, earliest_week_start=earliest, habits=habits)
 
 
@@ -421,3 +503,36 @@ def untick(
                 task_completion_service.reopen_task(db, session.id)
     # An ended period that is no longer met becomes skipped again.
     synchronize(db, settings, today=today)
+
+
+def set_item_checked(
+    db: Session,
+    template_id: int,
+    item_id: int,
+    day: dt.date,
+    checked: bool,
+    settings: Settings,
+    *,
+    today: dt.date | None = None,
+) -> None:
+    """Tick or untick a Checklist Item Habit: check its Subtask on that day's occurrence.
+
+    Unlike a Battle Plan check, this works on a completed occurrence. It never completes
+    the occurrence and never reverses a Skipped Task Occurrence (ADR 0016).
+    """
+
+    today = today or today_in_tz(settings.app_timezone)
+    item = db.get(RecurringChecklistItem, item_id)
+    if item is None or item.template_id != template_id:
+        _load_template(db, template_id)
+        raise ValueError(ITEM_NOT_FOUND)
+    habit, _, root = _recordable(db, template_id, day, settings, today)
+    subtask = habit.subtask(root, item_id) if habit.scheduled else None
+    if subtask is None:
+        raise ValueError(NO_PERIOD)
+    if subtask.checked == checked:
+        return
+    subtask.checked = checked
+    # A checked Subtask customizes its occurrence, so a checklist edit must not rebuild it.
+    protect_task_occurrence(db, subtask)
+    db.commit()

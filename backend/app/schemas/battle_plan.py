@@ -400,6 +400,8 @@ class RecurringTemplatePatch(BaseModel):
     confirm_backfill: bool = False
     keep_unfinished_overdue: bool | None = None
     track_as_habit: bool | None = None
+    # The complete set of this series' Checklist Items tracked as Habits.
+    habit_checklist_item_ids: list[int] | None = None
     preplanning_schedule: RecurringPreplanningScheduleWrite | None = None
     preplanning_mode: PreplanningMode = "none"
 
@@ -424,6 +426,7 @@ class RecurringChecklistRead(BaseModel):
     id: int
     title: str
     position: int
+    track_as_habit: bool = False
 
 
 class RecurringTaskLink(BaseModel):
@@ -499,7 +502,19 @@ class HabitTotalRead(BaseModel):
     tone: Literal["met", "missed", "open"]
 
 
+class HabitItemRead(BaseModel):
+    """A Checklist Item Habit, nested under its series."""
+
+    item_id: int
+    title: str
+    days: list[HabitDayRead]
+    total: HabitTotalRead
+
+
 class HabitRead(BaseModel):
+    """A series' row. When ``tracked`` is false the series is not itself a Habit: it only
+    heads its tracked ``items``, and its ``days`` and ``total`` carry no verdict to show."""
+
     template_id: int
     title: str
     mode: RecurrenceMode
@@ -511,6 +526,8 @@ class HabitRead(BaseModel):
     quota_count: int | None
     days: list[HabitDayRead]
     total: HabitTotalRead
+    tracked: bool = True
+    items: list[HabitItemRead] = Field(default_factory=list)
 
 
 class HabitsWeekRead(BaseModel):

@@ -281,7 +281,7 @@ def _materialize(
                     db.add(Task(
                         **child_kwargs, parent_id=parent.id,
                         ready_to_plan=False, recurrence_kind="checklist",
-                        position=item.position,
+                        checklist_item_id=item.id, position=item.position,
                     ))
             db.flush()
             ledger.task_id = parent.id
@@ -386,7 +386,6 @@ def _rebuild_unprotected_subtasks(
     db: Session,
     template: RecurringTemplate,
     today: dt.date,
-    titles: list[str],
 ) -> None:
     """Replace complete Subtask snapshots without replacing Task Occurrences."""
 
@@ -403,17 +402,18 @@ def _rebuild_unprotected_subtasks(
         )
         .order_by(Task.id)
     ).scalars())
-    cleaned = [title.strip() for title in titles if title.strip()]
+    items = sorted(template.checklist_items, key=lambda value: value.position)
     for task in rows:
         db.execute(delete(Task).where(Task.parent_id == task.id))
-        for position, title in enumerate(cleaned):
+        for position, item in enumerate(items):
             db.add(Task(
                 parent_id=task.id,
+                checklist_item_id=item.id,
                 task_type_id=task.task_type_id,
                 recurring_template_id=task.recurring_template_id,
                 occurrence_key=task.occurrence_key,
                 recurrence_kind="checklist",
-                title=title,
+                title=item.title,
                 description="",
                 ready_to_plan=False,
                 status=TaskStatus.open,

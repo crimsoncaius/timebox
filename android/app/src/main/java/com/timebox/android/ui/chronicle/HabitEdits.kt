@@ -1,7 +1,9 @@
 package com.timebox.android.ui.chronicle
 
 import com.timebox.android.data.Habit
+import com.timebox.android.data.HabitDay
 import com.timebox.android.data.HabitDayState
+import com.timebox.android.data.HabitItem
 import com.timebox.android.data.HabitTotal
 import com.timebox.android.data.HabitTotalTone
 import com.timebox.android.data.HabitsWeek
@@ -20,20 +22,38 @@ internal fun HabitsWeek.withHabitEdit(key: HabitCellKey, tick: Boolean): HabitsW
     val weekEnded = weekStart.plusDays(6).isBefore(today)
     return copy(
         habits = habits.map { habit ->
-            if (habit.templateId == key.templateId) habit.withEdit(key.date, tick, today, weekEnded) else habit
+            when {
+                habit.templateId != key.templateId -> habit
+                key.itemId == null -> habit.withEdit(key.date, tick, today, weekEnded)
+                else -> habit.copy(
+                    items = habit.items.map { item ->
+                        if (item.itemId == key.itemId) item.withEdit(key.date, tick, today, weekEnded) else item
+                    },
+                )
+            }
         },
     )
+}
+
+/** A scheduled day's state after a tick or untick, or null when the tap changes nothing. */
+private fun HabitDay.scheduledEdit(tick: Boolean, today: LocalDate): HabitDay? = when {
+    tick && (state == HabitDayState.Open || state == HabitDayState.Missed) -> copy(state = HabitDayState.Met)
+    !tick && state == HabitDayState.Met -> copy(state = if (date == today) HabitDayState.Open else HabitDayState.Missed)
+    else -> null
+}
+
+/** A Checklist Item's Habit Periods follow its series' occurrences, so it edits like a scheduled row. */
+private fun HabitItem.withEdit(date: LocalDate, tick: Boolean, today: LocalDate, weekEnded: Boolean): HabitItem {
+    val day = days.firstOrNull { it.date == date && it.tickable } ?: return this
+    val edited = day.scheduledEdit(tick, today) ?: return this
+    val edits = days.map { if (it.date == date) edited else it }
+    return copy(days = edits, total = total.copy(done = edits.count { it.state == HabitDayState.Met }).withPeriodTone(weekEnded))
 }
 
 private fun Habit.withEdit(date: LocalDate, tick: Boolean, today: LocalDate, weekEnded: Boolean): Habit {
     val day = days.firstOrNull { it.date == date && it.tickable } ?: return this
     val edited = if (mode == RecurrenceMode.Scheduled) {
-        val state = when {
-            tick && (day.state == HabitDayState.Open || day.state == HabitDayState.Missed) -> HabitDayState.Met
-            !tick && day.state == HabitDayState.Met -> if (date == today) HabitDayState.Open else HabitDayState.Missed
-            else -> return this
-        }
-        day.copy(state = state)
+        day.scheduledEdit(tick, today) ?: return this
     } else {
         val count = day.count + if (tick) 1 else -1
         if (count < 0) return this

@@ -22,6 +22,14 @@ data class HabitTotalDto(
 )
 
 @Serializable
+data class HabitItemDto(
+    @SerialName("item_id") val itemId: Int,
+    val title: String,
+    val days: List<HabitDayDto>,
+    val total: HabitTotalDto,
+)
+
+@Serializable
 data class HabitDto(
     @SerialName("template_id") val templateId: Int,
     val title: String,
@@ -34,6 +42,8 @@ data class HabitDto(
     @SerialName("quota_count") val quotaCount: Int? = null,
     val days: List<HabitDayDto>,
     val total: HabitTotalDto,
+    val tracked: Boolean = true,
+    val items: List<HabitItemDto> = emptyList(),
 )
 
 @Serializable

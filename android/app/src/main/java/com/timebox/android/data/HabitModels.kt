@@ -1,6 +1,9 @@
 package com.timebox.android.data
 
+import com.timebox.android.data.remote.HabitDayDto
 import com.timebox.android.data.remote.HabitDto
+import com.timebox.android.data.remote.HabitItemDto
+import com.timebox.android.data.remote.HabitTotalDto
 import com.timebox.android.data.remote.HabitsWeekDto
 import java.time.LocalDate
 
@@ -33,6 +36,18 @@ data class HabitTotal(
     val tone: HabitTotalTone,
 )
 
+/** A Checklist Item Habit, shown under its series. */
+data class HabitItem(
+    val itemId: Int,
+    val title: String,
+    val days: List<HabitDay>,
+    val total: HabitTotal,
+)
+
+/**
+ * A series' row. When [tracked] is false the series is not itself a Habit and only
+ * heads its tracked [items]; its [days] and [total] are then not shown.
+ */
 data class Habit(
     val templateId: Int,
     val title: String,
@@ -45,6 +60,8 @@ data class Habit(
     val quotaCount: Int?,
     val days: List<HabitDay>,
     val total: HabitTotal,
+    val tracked: Boolean = true,
+    val items: List<HabitItem> = emptyList(),
 )
 
 data class HabitsWeek(
@@ -64,20 +81,32 @@ internal fun HabitDto.toModel() = Habit(
     weekdays = weekdays,
     monthDay = monthDay,
     quotaCount = quotaCount,
-    days = days.map {
-        HabitDay(LocalDate.parse(it.date), HabitDayState.fromWire(it.state), it.count, it.target, it.tickable)
+    days = days.map { it.toModel() },
+    total = total.toModel(),
+    tracked = tracked,
+    items = items.map { it.toModel() },
+)
+
+internal fun HabitItemDto.toModel() = HabitItem(
+    itemId = itemId,
+    title = title,
+    days = days.map { it.toModel() },
+    total = total.toModel(),
+)
+
+private fun HabitDayDto.toModel() =
+    HabitDay(LocalDate.parse(date), HabitDayState.fromWire(state), count, target, tickable)
+
+private fun HabitTotalDto.toModel() = HabitTotal(
+    done = done,
+    target = target,
+    unit = unit,
+    month = month?.let(LocalDate::parse),
+    tone = when (tone) {
+        "met" -> HabitTotalTone.Met
+        "missed" -> HabitTotalTone.Missed
+        else -> HabitTotalTone.Open
     },
-    total = HabitTotal(
-        done = total.done,
-        target = total.target,
-        unit = total.unit,
-        month = total.month?.let(LocalDate::parse),
-        tone = when (total.tone) {
-            "met" -> HabitTotalTone.Met
-            "missed" -> HabitTotalTone.Missed
-            else -> HabitTotalTone.Open
-        },
-    ),
 )
 
 internal fun HabitsWeekDto.toModel() = HabitsWeek(

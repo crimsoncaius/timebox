@@ -151,7 +151,7 @@ data class DueReminder(
     val reminderAt: Instant,
 )
 
-data class RecurringChecklistItem(val id: Int, val title: String, val position: Int)
+data class RecurringChecklistItem(val id: Int, val title: String, val position: Int, val trackAsHabit: Boolean = false)
 data class RecurringTaskLink(val id: Int, val title: String, val deadlineDate: LocalDate?, val overdue: Boolean)
 data class RecurrenceWindow(val key: String, val start: LocalDate, val end: LocalDate)
 data class RecurrencePreview(
@@ -305,6 +305,8 @@ data class RecurringTemplatePatch(
     val confirmBackfill: PatchField<Boolean> = PatchField.Absent,
     val keepUnfinishedOverdue: PatchField<Boolean> = PatchField.Absent,
     val trackAsHabit: PatchField<Boolean> = PatchField.Absent,
+    /** The complete set of Checklist Items tracked as Habits. */
+    val habitChecklistItemIds: PatchField<List<Int>> = PatchField.Absent,
     val preplanningSchedule: PatchField<RecurringPreplanningSchedule> = PatchField.Absent,
     val preplanningMode: PatchField<String> = PatchField.Absent,
 )
@@ -358,7 +360,7 @@ internal fun BattleTaskListDto.toModel() = BattleTaskList(items.map { it.toModel
 internal fun DueReminderDto.toModel() = DueReminder(id, title, deadlineDate?.let(LocalDate::parse), deadlineAt?.let(::parseInstant), parseInstant(reminderAt))
 internal fun RecurrenceWindowDto.toModel() = RecurrenceWindow(key, LocalDate.parse(start), LocalDate.parse(end))
 internal fun RecurrencePreviewDto.toModel() = RecurrencePreview(upcoming.map { it.toModel() }, pastCycles, pastTasks)
-internal fun RecurringChecklistItemDto.toModel() = RecurringChecklistItem(id, title, position)
+internal fun RecurringChecklistItemDto.toModel() = RecurringChecklistItem(id, title, position, trackAsHabit)
 internal fun RecurringTaskLinkDto.toModel() = RecurringTaskLink(id, title, deadlineDate?.let(LocalDate::parse), overdue)
 internal fun RecurringPreplanningSlotDto.toModel() = RecurringPreplanningSlot(
     id = id,
