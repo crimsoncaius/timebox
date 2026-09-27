@@ -8,6 +8,7 @@ import com.timebox.android.reminders.DailyReminderNotifier
 import com.timebox.android.reminders.DailyReminderScheduler
 import com.timebox.android.reminders.PlannedBlockReminders
 import com.timebox.android.reminders.ReminderScheduler
+import com.timebox.android.reminders.trackedActivity
 import com.timebox.android.reminders.AndroidReminderSuppressionStore
 import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
 import com.timebox.android.ui.readiness.createReadyToPlanCoordinator
@@ -109,9 +110,9 @@ class TimeboxApplication : Application() {
         plannedBlockReminders = PlannedBlockReminders(this, activityRepository, preferences.plannedBlockReminders)
             .also { it.createChannel() }
         applicationScope.launch {
-            // Plans, adoption, and settings changes all reschedule or withdraw Planned Block Reminders.
+            // Plans, the Current Activity, and settings changes all reschedule or withdraw Planned Block Reminders.
             combine(
-                activityRepository.state.map { it.snapshot?.let { s -> s.plans to s.current?.plannedBlockId } }.distinctUntilChanged(),
+                activityRepository.state.map { it.snapshot?.let { s -> s.plans to s.trackedActivity() } }.distinctUntilChanged(),
                 preferences.plannedBlockReminders,
             ) { _, _ -> }.collect { plannedBlockReminders.reconcile() }
         }

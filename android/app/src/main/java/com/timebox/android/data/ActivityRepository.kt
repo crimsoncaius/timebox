@@ -185,7 +185,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 if (command.kind == ActivityKind.Edit) target?.id ?: command.targetId!! else -command.sequence, type.id, type,
                 startAt = at, endAt = command.effective.end, createdAt = target?.createdAt ?: at, updatedAt = command.actionAt,
                 name = command.name, taskId = command.taskId, task = target?.task, note = command.note,
-                plannedBlockId = if (command.kind == ActivityKind.Edit && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
+                plannedBlockId = if (command.kind == ActivityKind.Edit && command.plannedBlockId == null && target?.taskTypeId == command.taskTypeId && target?.taskId == command.taskId) target?.plannedBlockId else command.plannedBlockId)
             if (row != null) provenance[row.id.toString()] = if (command.kind == ActivityKind.Edit) command.targetSource!! else command.operationId
             val oldStart = target?.startAt?.let(::parseActivityInstant) ?: start
             val oldEnd = target?.endAt?.let(::parseActivityInstant) ?: end
@@ -419,7 +419,8 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     suspend fun correct(kind: ActivityKind, targetId: Int? = null, startAt: String? = null, endAt: String? = null,
                         taskTypeId: Int? = null, name: String? = null, note: String? = null, taskId: Int? = null,
-                        clearName: Boolean = false, clearNote: Boolean = false, runningOnly: Boolean = false): Boolean {
+                        clearName: Boolean = false, clearNote: Boolean = false, runningOnly: Boolean = false,
+                        countToward: ActivityPlanDto? = null): Boolean {
         val saved = mutex.withLock {
             try {
                 checkEndpoint()
@@ -429,6 +430,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 val target = snapshot.records.find { it.id == targetId }
                 val runningEdit = runningOnly && kind == ActivityKind.Edit && target != null && target.endAt == null && snapshot.current?.id == targetId && endAt == null
                 check(!runningOnly || runningEdit) { "The activity has changed. Close this sheet and review the current activity." }
+                check(countToward == null || (runningEdit && target!!.matchesPlan(countToward))) { "Activity changed. Review the current activity." }
                 check(runningEdit || kind == ActivityKind.Add || target?.endAt != null) { "Select an ended Actual Block. Use Switch or Stop for the Current Activity." }
                 val start = checkNotNull(if (kind == ActivityKind.Delete) target?.startAt else startAt ?: target?.startAt)
                 val end = if (runningEdit) null else checkNotNull(if (kind == ActivityKind.Delete) target?.endAt else endAt ?: target?.endAt)
@@ -443,7 +445,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                     ActivityEffectiveDto("range", start, end), targetId, kind, taskTypeId ?: target?.taskTypeId,
                     if (clearName) null else name ?: target?.name, taskId = taskId ?: target?.taskId,
                     note = if (clearNote) null else note ?: target?.note, targetSource = if (target != null) source else null,
-                    targetStartAt = target?.startAt, clear_fields = listOfNotNull(if (clearName) "name" else null, if (clearNote) "note" else null))
+                    targetStartAt = target?.startAt, plannedBlockId = countToward?.id, clear_fields = listOfNotNull(if (clearName) "name" else null, if (clearNote) "note" else null))
                 save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command)); publish(); true
             } catch (error: Exception) { publish(errorDetail(error) ?: "Could not save correction"); false }
         }
@@ -513,6 +515,11 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
             false
         }
     }
+    /** Links the matching Current Activity to [plan] without switching, so it stays one continuous Actual Block. */
+    suspend fun countTowardPlan(plan: ActivityPlanDto): Boolean {
+        val current = state.value.snapshot?.current ?: return false
+        return correct(ActivityKind.Edit, current.id, current.startAt, runningOnly = true, countToward = plan)
+    }
     fun currentPlan(): ActivityPlanDto? = state.value.snapshot?.plans?.find { parseActivityInstant(it.startAt) <= now() && now() < parseActivityInstant(it.endAt) }
     suspend fun trackTask(task: BattleTask): Boolean {
         if (task.recurrenceKind == "quota_parent" || task.status == TaskStatus.Completed) return false
@@ -524,3 +531,6 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     suspend fun retry() = refresh()
 }
+
+/** A Current Activity that already matches its Planned Block can count toward it without switching. */
+fun ActualBlockDto.matchesPlan(plan: ActivityPlanDto): Boolean = taskTypeId == plan.taskTypeId && taskId == plan.taskId
