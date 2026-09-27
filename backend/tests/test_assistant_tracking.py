@@ -134,11 +134,6 @@ def test_model_reads_proposal_times_in_the_reporting_time_zone():
     assert output.artifact["proposal"]["at"] == "2026-09-25T04:40:00Z"  # the card still gets the UTC instant
 
 
-def test_recalled_proposal_names_local_time():
-    proposal = propose(ProposeTrackingArgs(action="stop", minutes_ago=10), sgt(25, 12, 50), CONTEXT)["proposal"]
-    assert assistant_tracking.context_line(proposal).endswith("Stop tracking at Friday 2026-09-25 12:40 in Asia/Singapore]")
-
-
 @pytest.mark.parametrize("args", [{"action": "track", "task_type_paths": ["Yoga"]},  # not an existing path
                                   {"action": "track"},                                 # no path at all
                                   {"action": "stop", "minutes_ago": 5, "hour": 3}])     # two time forms
@@ -196,8 +191,25 @@ def test_route_negotiates_stores_and_recalls_proposal(client, monkeypatch, capab
     assert "Task Type Paths" in seen["messages"][1].content and "Meals" in seen["messages"][1].content
     client.post(f"/assistant/conversations/{key}/runs/{run}/ack")
     conversations.items.clear()
-    remembered = conversations.get(key).messages[-1].content
-    assert "Displayed Tracking Proposal, not necessarily confirmed: Track Meals" in remembered
+    human, call, result, answer = conversations.get(key).messages
+    assert (human.type, human.content) == ("human", "eating")
+    # Replayed as the tool call it was, never as prose the model could imitate instead of calling the tool.
+    [tool_call] = call.tool_calls
+    assert (tool_call["name"], tool_call["args"]) == ("propose_tracking", {"action": "track", "task_type_paths": ["Meals"]})
+    assert result.tool_call_id == tool_call["id"]
+    recalled = json.loads(result.content)
+    assert recalled["proposal"]["task_types"] == ["Meals"]
+    assert recalled["proposal"]["at"] == "the moment of confirmation"
+    assert "not have been confirmed" in recalled["status"]
+    assert answer.content == '{"presentation":"none"}\nConfirm below.'
+    assert not answer.tool_calls
+
+
+def test_recalled_proposal_replays_a_stated_time_as_minutes_ago():
+    proposal = propose(ProposeTrackingArgs(action="stop", minutes_ago=10), sgt(25, 12, 50), CONTEXT)["proposal"]
+    call, result = assistant_tracking.replay_proposal(proposal, "call-1")
+    assert call.tool_calls[0]["args"] == {"action": "stop", "minutes_ago": 10}
+    assert json.loads(result.content)["proposal"]["at"] == "Friday 2026-09-25 12:40 in Asia/Singapore"
 
 
 def test_real_context_excludes_merged_and_unspecified(client):

@@ -7,10 +7,12 @@ against existing Task Types and resolves stated times in the Reporting Time Zone
 from __future__ import annotations
 
 import datetime as dt
+import json
 from typing import Literal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -198,8 +200,20 @@ def model_result(result: dict) -> dict:
     return {**result, "proposal": shown}
 
 
-def context_line(proposal: dict) -> str:
-    """How a displayed proposal appears in later model context. It may never have been confirmed."""
-    what = "Stop tracking" if proposal["action"] == "stop" else "Track " + " or ".join(t["path"] for t in proposal["task_types"])
-    when = f" at {local_time(proposal['at'], proposal['reporting_timezone'])}" if proposal["at"] else " from the moment of confirmation"
-    return f"\n[Displayed Tracking Proposal, not necessarily confirmed: {what}{when}]"
+def replay_proposal(proposal: dict, call_id: str) -> tuple[AIMessage, ToolMessage]:
+    """How a displayed proposal appears in later model context: as the tool call that made it.
+
+    Prose in its place taught the model to imitate the card instead of calling the tool.
+    """
+    args = {"action": proposal["action"]}
+    if proposal["task_types"]:
+        args["task_type_paths"] = [t["path"] for t in proposal["task_types"]]
+    if proposal["block_name"]:
+        args["block_name"] = proposal["block_name"]
+    if proposal["at"]:
+        # The original stated form is not stored; minutes before sending resolves to the same instant.
+        elapsed = dt.datetime.fromisoformat(proposal["proposed_at"]) - dt.datetime.fromisoformat(proposal["at"])
+        args["minutes_ago"] = round(elapsed.total_seconds() / 60)
+    result = {**model_result({"proposal": proposal}), "status": "Shown to the user; it may not have been confirmed."}
+    return (AIMessage("", tool_calls=[{"id": call_id, "name": "propose_tracking", "args": args}]),
+            ToolMessage(json.dumps(result), tool_call_id=call_id))
