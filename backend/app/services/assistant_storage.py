@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
 from app.models.assistant import AssistantAttempt, AssistantConversation
+from app.services.assistant_limits import MAX_CONTEXT_EXCHANGES, MAX_CONTEXT_READ_BYTES
+from app.services.assistant_presentation import text_schedule
 from app.services.assistant_tracking import replay_proposal
 
 
@@ -37,36 +39,61 @@ def load(key):
                 AssistantAttempt.conversation_id == key,
                 AssistantAttempt.status == "completed",
                 AssistantAttempt.acknowledged.is_(True),
-            ).order_by(AssistantAttempt.id.desc()).limit(20)))
+            ).order_by(AssistantAttempt.id.desc()).limit(MAX_CONTEXT_EXCHANGES)))
             messages, snapshots = [], {}
             for attempt in reversed(attempts):
-                if attempt.displayed_plan:
-                    snapshots[attempt.displayed_plan["snapshot_id"]] = attempt.displayed_plan
                 snapshots.update(attempt.snapshots)
-                messages.extend(replay(attempt))
+                for card in displayed_cards(attempt.displayed_plan):
+                    snapshots.setdefault(card["snapshot_id"], card)
+            # Evict whole reads, oldest first. Durable attempts/cards are untouched.
+            while snapshots and len(json.dumps(snapshots).encode("utf-8")) > MAX_CONTEXT_READ_BYTES:
+                del snapshots[next(iter(snapshots))]
+            for attempt in reversed(attempts):
+                messages.extend(replay(attempt, snapshots))
             return row.capabilities, messages, snapshots
     except SQLAlchemyError:
         raise HTTPException(503, "Conversation could not be loaded. Please retry.") from None
 
 
-def replay(attempt):
+def displayed_cards(value):
+    return value if isinstance(value, list) else [value] if value else []
+
+
+def replay(attempt, snapshots=None):
     """An exchange as the model produced it: its tool call, if any, then the selector-prefixed answer.
 
     History is the model's strongest example, so it must show the calls and format the prompt asks for.
     """
     messages = [HumanMessage(attempt.question)]
     call_id = "replay-" + attempt.run_id
-    for plan in attempt.snapshots.values():
+    for index, plan in enumerate(attempt.snapshots.values()):
+        if snapshots is not None and plan["snapshot_id"] not in snapshots:
+            continue
+        read_id = f"{call_id}-{index}"
+        args = {}
+        if plan.get("schema_version", 1) > 1:
+            args = {"lane": plan["lane"], "group_by": plan["group_by"], "when": plan["date"]}
+            if plan["schema_version"] == 3:
+                args.update(when={"start": plan["start"], "end": plan["end"], "weekdays": plan["weekdays"]}, detail=plan["detail"])
+            if plan["task_type"]:
+                args["task_type"] = plan["task_type"]
         # The rows reach the model once, through the Historical snapshots context.
-        messages += [AIMessage("", tool_calls=[{"id": call_id, "name": "read_activity" if plan.get("schema_version") == 2 else "read_today_plan", "args": {"lane": plan["lane"], "when": plan["date"]} if plan.get("schema_version") == 2 else {}}]),
+        messages += [AIMessage("", tool_calls=[{"id": read_id, "name": "read_activity" if args else "read_today_plan", "args": args}]),
                      ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "date": plan["date"],
-                                             "rows": "in Historical snapshots"}), tool_call_id=call_id)]
+                                             "rows": "in Historical snapshots"}), tool_call_id=read_id)]
     if attempt.tracking_proposal:
         messages += replay_proposal(attempt.tracking_proposal, call_id)
-    selector = ({"presentation": "snapshot", "snapshot_id": attempt.displayed_plan["snapshot_id"]}
-                if attempt.displayed_plan else {"presentation": "none"})
+    keys = [card["snapshot_id"] for card in displayed_cards(attempt.displayed_plan)
+            if snapshots is None or card["snapshot_id"] in snapshots]
+    selector = ({"presentation": "snapshot", "snapshot_id": keys[0]} if len(keys) == 1 else
+                {"presentation": "snapshots", "snapshot_ids": keys} if keys else {"presentation": "none"})
     header = json.dumps(selector, separators=(",", ":"))
-    messages.append(AIMessage(header + "\n" + attempt.answer if attempt.answer else header))
+    answer = attempt.answer
+    # Legacy clients receive card rows as text. Do not smuggle those rows back
+    # into context through the answer after the corresponding read is evicted.
+    for card in displayed_cards(attempt.displayed_plan):
+        answer = answer.removeprefix(text_schedule(card))
+    messages.append(AIMessage(header + "\n" + answer if answer else header))
     return messages
 
 
@@ -82,6 +109,8 @@ def begin(key, run_id, question, model):
 
 
 def capture(run_id, answer, reads, card, status="running", error=None, proposal=None):
+    cards = displayed_cards(card)
+    card = cards[0] if len(cards) == 1 else cards or None
     try:
         with Session(get_engine()) as db:
             db.execute(update(AssistantAttempt).where(AssistantAttempt.run_id == run_id).values(

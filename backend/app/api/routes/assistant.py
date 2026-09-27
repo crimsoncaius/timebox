@@ -16,13 +16,13 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.config import get_settings
 from app.services import assistant_storage
 from app.services.assistant_agent import MODEL, agent_events
+from app.services.assistant_limits import MAX_CARDS, MAX_READ_CALLS, RESPONSE_TIMEOUT
 from app.services.assistant_plan import reporting_timezone
 from app.services.assistant_presentation import text_schedule, validate_snapshot
 from app.services.assistant_sessions import conversations
 from app.services.assistant_tracking import TrackingProposal, local_time, tracking_context
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
-RESPONSE_TIMEOUT = 120
 
 
 class MessageRequest(BaseModel):
@@ -101,7 +101,8 @@ async def send(conversation_id: str, body: MessageRequest):
     async def produce():
         output = ""
         reads = {}
-        card = None
+        cards = []
+        answer_started = False
         proposal = None
         started = time.monotonic()
         with trace.get_tracer(__name__).start_as_current_span("assistant.response", record_exception=False) as span:
@@ -131,51 +132,57 @@ async def send(conversation_id: str, body: MessageRequest):
                     async for kind, data in agent_events([*context, HumanMessage(body.message)], conversation.snapshots,
                                                         **({"tracking": tracking} if tracking else {})):
                         if kind == "tracking_proposal":
-                            if card is not None or proposal is not None or output:
+                            if proposal is not None or answer_started:
                                 raise RuntimeError("Invalid card order")
                             proposal = TrackingProposal.model_validate(data).model_dump()
-                            assistant_storage.capture(run_id, output, reads, card, proposal=proposal)
+                            assistant_storage.capture(run_id, output, reads, cards, proposal=proposal)
                             queue.put_nowait((kind, proposal))
                             continue
                         if kind == "snapshot_read":
+                            if len(reads) >= MAX_READ_CALLS:
+                                raise RuntimeError("Too many reads")
                             validated = validate_snapshot(data)
                             reads[validated["snapshot_id"]] = validated
-                            assistant_storage.capture(run_id, output, reads, card, proposal=proposal)
+                            assistant_storage.capture(run_id, output, reads, cards, proposal=proposal)
                             continue
                         if kind == "plan_card":
-                            if card is not None or proposal is not None or output:
+                            if len(cards) >= MAX_CARDS or answer_started:
                                 raise RuntimeError("Invalid card order")
                             candidate = validate_snapshot(data)
                             if {**conversation.snapshots, **reads}.get(candidate["snapshot_id"]) != candidate:
                                 raise RuntimeError("Unknown snapshot")
-                            card = candidate
-                            if card["schema_version"] != 1 or "plan_card_v1" not in conversation.capabilities:
-                                kind, data = "text_delta", {"text": text_schedule(card)}
+                            if any(card["snapshot_id"] == candidate["snapshot_id"] for card in cards):
+                                raise RuntimeError("Duplicate card")
+                            cards.append(candidate)
+                            if candidate["schema_version"] != 1 or "plan_card_v1" not in conversation.capabilities:
+                                kind, data = "text_delta", {"text": text_schedule(candidate)}
+                        elif kind == "text_delta":
+                            answer_started = True
                         if kind == "text_delta":
                             if not output:
                                 span.set_attribute("assistant.first_text_ms", (time.monotonic() - started) * 1000)
                             output += data["text"]
                         queue.put_nowait((kind, data))
                         if kind in ("plan_card", "text_delta"):
-                            assistant_storage.capture(run_id, output, reads, card, proposal=proposal)
-                    if not output.strip() and card is None and proposal is None:
+                            assistant_storage.capture(run_id, output, reads, cards, proposal=proposal)
+                    if not output.strip() and not cards and proposal is None:
                         raise RuntimeError("Empty response")
                     # Capture completion now; context eligibility still requires acknowledgement.
-                    assistant_storage.capture(run_id, output, reads, card, "completed", proposal=proposal)
+                    assistant_storage.capture(run_id, output, reads, cards, "completed", proposal=proposal)
                     outcome = "completed"
                     span.set_status(trace.Status(trace.StatusCode.OK))
                     queue.put_nowait(("completed", {}))
             except asyncio.CancelledError:
                 outcome = "stopped"
                 try:
-                    assistant_storage.capture(run_id, output, reads, card, "stopped", proposal=proposal)
+                    assistant_storage.capture(run_id, output, reads, cards, "stopped", proposal=proposal)
                 except assistant_storage.CaptureError as error:
                     queue.put_nowait(("failed", {"message": str(error)}))
                 queue.put_nowait(("stopped", {}))
             except Exception as error:
                 message = public_error(error)
                 try:
-                    assistant_storage.capture(run_id, output, reads, card, "interrupted", message, proposal=proposal)
+                    assistant_storage.capture(run_id, output, reads, cards, "interrupted", message, proposal=proposal)
                 except assistant_storage.CaptureError as save_error:
                     message = str(save_error)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, message))

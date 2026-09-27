@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.services.assistant_limits import MAX_CARDS
+
 
 class PlannedRow(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -213,10 +215,9 @@ class PresentationParser:
         if value == {"presentation": "none"}:
             pass
         elif isinstance(value, dict) and set(value) == {"presentation", "snapshot_id"} and value["presentation"] == "snapshot":
-            key = value["snapshot_id"]
-            if not isinstance(key, str) or key not in self.snapshots:
-                raise ValueError("Unknown plan snapshot")
-            events.append(("plan_card", validate_snapshot(self.snapshots[key])))
+            events = self.cards([value["snapshot_id"]])
+        elif isinstance(value, dict) and set(value) == {"presentation", "snapshot_ids"} and value["presentation"] == "snapshots":
+            events = self.cards(value["snapshot_ids"])
         else:
             raise ValueError("Invalid presentation selection")
         self.selected = True
@@ -224,6 +225,13 @@ class PresentationParser:
         if rest:
             events.append(("text_delta", {"text": rest}))
         return events
+
+    def cards(self, keys):
+        if (not isinstance(keys, list) or not 1 <= len(keys) <= MAX_CARDS
+                or any(not isinstance(key, str) or key not in self.snapshots for key in keys)
+                or len(set(keys)) != len(keys)):
+            raise ValueError("Invalid or unknown snapshot selection")
+        return [("plan_card", validate_snapshot(self.snapshots[key])) for key in keys]
 
     def finish(self, *, successful_terminal: bool = False) -> list[tuple[str, dict]]:
         if self.selected:
@@ -238,6 +246,6 @@ class PresentationParser:
         # EOF, cancellation, truncation, or a closing brace during streaming cannot.
         if successful_terminal:
             value = json.loads(self.buffer, object_pairs_hook=unique_object)
-            if isinstance(value, dict) and value.get("presentation") == "snapshot":
+            if isinstance(value, dict) and value.get("presentation") in ("snapshot", "snapshots"):
                 return self.feed("\n")
         raise ValueError("Incomplete presentation header")
