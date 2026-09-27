@@ -145,3 +145,27 @@ def test_later_model_call_still_obeys_stop_and_response_deadline(client, monkeyp
     client.post(f"/assistant/conversations/{key}/runs/{row.run_id}/ack")
     assert conversations.get(key).snapshots == {}
 
+
+
+@pytest.mark.parametrize("capabilities", [[], ["activity_cards_v1"]])
+def test_activity_cards_negotiate_versions_and_multiple_snapshots(client, monkeypatch, capabilities):
+    blocks = {"schema_version": 2, "snapshot_id": "blocks", "date": "2026-09-21",
+              "reporting_timezone": "UTC", "read_at": "2026-09-21T10:00:00Z",
+              "group_by": "blocks", "lane": "actual", "task_type": None,
+              "blocks": [], "recurring_not_materialized": False, "actual_unavailable_reason": None}
+    types = {**blocks, "schema_version": 3, "snapshot_id": "types", "group_by": "task_type",
+             "start": "2026-09-20", "end": "2026-09-21", "detail": "total", "weekdays": None, "types": []}
+    del types["blocks"], types["actual_unavailable_reason"]
+    from app.services.assistant_presentation import validate_snapshot
+    cards = [validate_snapshot(value) for value in (blocks, types)]
+    async def fake(messages, snapshots):
+        for card in cards:
+            yield "snapshot_read", card
+            yield "plan_card", card
+        yield "text_delta", {"text": "Empty reads"}
+    monkeypatch.setattr(assistant, "agent_events", fake)
+    key = client.post("/assistant/conversations", json={"capabilities": capabilities}).json()["conversation_id"]
+    events = decode(send(client, key))
+    assert events[-1][0] == "completed"
+    assert [v["snapshot_id"] for k, v in events if k == "plan_card"] == (["blocks", "types"] if capabilities else [])
+    assert attempts()[0].displayed_plan == cards

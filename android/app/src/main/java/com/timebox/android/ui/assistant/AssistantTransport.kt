@@ -22,6 +22,7 @@ class AssistantEndedException(message: String) : IOException(message)
 
 interface AssistantTransport {
     val supportsPlanCards: Boolean get() = false
+    val supportsActivityCards: Boolean get() = false
     val supportsTrackingProposals: Boolean get() = false
     suspend fun create(): String
     suspend fun delete(conversation: String)
@@ -34,6 +35,8 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     override var supportsPlanCards: Boolean = false
         private set
     override var supportsTrackingProposals: Boolean = false
+        private set
+    override var supportsActivityCards: Boolean = false
         private set
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS).callTimeout(130, TimeUnit.SECONDS)
@@ -76,11 +79,12 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     }
 
     override suspend fun create(): String = execute(request("conversations", body = buildJsonObject {
-        putJsonArray("capabilities") { add("plan_card_v1"); add("tracking_proposal_v1") }
+        putJsonArray("capabilities") { add("activity_cards_v1"); add("plan_card_v1"); add("tracking_proposal_v1") }
     })).use {
         check(it)
         val result = ApiFactory.json.parseToJsonElement(it.body!!.string()).jsonObject
         val granted = result["capabilities"]?.jsonArray?.map { value -> value.jsonPrimitive.content }.orEmpty()
+        supportsActivityCards = "activity_cards_v1" in granted
         supportsPlanCards = "plan_card_v1" in granted
         supportsTrackingProposals = "tracking_proposal_v1" in granted
         result.getValue("conversation_id").jsonPrimitive.content

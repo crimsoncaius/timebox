@@ -75,3 +75,14 @@ Verdict (27 Sep 2026): **Swipe between.** Responses with 2–3 cards show one ca
 ## Limitations and coverage gaps
 
 Not yet exercised: large font scale and TalkBack order across swiped cards, dark theme, empty Task Type ranges, historical cards from stored conversations, and a running block in Two lanes beyond the "· now" label. Carry these into #296's implementation checks.
+
+
+## Production implementation
+
+Android negotiates `activity_cards_v1` for schema 1–3 and up to three ordered cards. Historical schema-1 plan cards retain their renderer. Cards keep their captured read time; neither descriptions nor Supporting Notes enter the Android display model. Task Type cards sum period buckets by path and use the returned hierarchy totals without adding descendants twice.
+
+The collapsed two-lane view starts at the first Planned Block hour and explicitly notes hidden earlier time. Show larger reveals the full date and full textual rows, including tiny and midnight-crossing Blocks. Offscreen carousel pages are excluded from accessibility traversal; date tabs provide an alternative to swiping.
+
+Open Day selects the captured date. Open Trends selects the captured custom range. Trends itself still only accepts dates through Today, so future-containing cards explain this existing destination limitation. Future actual-only reads retain their explicit unavailable state, as returned by the read contract, rather than inventing Planned Blocks that were not read.
+
+Debug review: `timebox://prototype/assistant-card-review` renders deterministic sample snapshots using the production components. Its sample navigation buttons do not change routes; the Assistant's real navigation callbacks are wired in the application graph.

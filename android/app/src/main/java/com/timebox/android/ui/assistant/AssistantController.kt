@@ -7,7 +7,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
 data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null, val plan: AssistantPlan? = null,
-                             val proposal: TrackingProposal? = null)
+                             val proposal: TrackingProposal? = null, val cards: List<AssistantCard> = emptyList())
 data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), val busy: Boolean = false, val readingPlan: Boolean = false, val ended: String? = null,
                           /** Tracking Proposal card states by proposal id, retained with the conversation. */
                           val proposals: Map<String, ProposalState> = emptyMap())
@@ -59,14 +59,16 @@ class AssistantController(
                     when (event.kind) {
                         "started" -> check(sequence == 1) { "Invalid stream start" }
                         "plan_card" -> {
-                            check(api.supportsPlanCards) { "Unnegotiated plan card" }
-                            check(state.value.exchanges.last().let { it.plan == null && it.answer.isEmpty() }) { "Invalid card order" }
-                            val plan = AssistantPlan.parse(event.data)
-                            updateLast { it.copy(plan = plan) }
+                            check(api.supportsPlanCards || api.supportsActivityCards) { "Unnegotiated plan card" }
+                            check(state.value.exchanges.last().let { it.cards.size < (if (api.supportsActivityCards) 3 else 1) && it.answer.isEmpty() }) { "Invalid card order" }
+                            val card = AssistantCard.parse(event.data)
+                            check(api.supportsActivityCards || card.legacy != null) { "Unnegotiated card version" }
+                            check(state.value.exchanges.last().cards.none { it.id == card.id }) { "Duplicate card" }
+                            updateLast { it.copy(plan = it.plan ?: card.legacy, cards = it.cards + card) }
                         }
                         "tracking_proposal" -> {
                             check(api.supportsTrackingProposals) { "Unnegotiated tracking proposal" }
-                            check(state.value.exchanges.last().let { it.plan == null && it.proposal == null && it.answer.isEmpty() }) { "Invalid card order" }
+                            check(state.value.exchanges.last().let { it.cards.isEmpty() && it.proposal == null && it.answer.isEmpty() }) { "Invalid card order" }
                             val proposal = TrackingProposal.parse(event.data)
                             updateLast { it.copy(proposal = proposal) }
                             mutableState.value = state.value.let { it.copy(proposals = it.proposals + (proposal.id to ProposalState())) }
@@ -75,7 +77,7 @@ class AssistantController(
                         "tool_started" -> mutableState.value = state.value.copy(readingPlan = true)
                         "tool_completed" -> mutableState.value = state.value.copy(readingPlan = false)
                         "completed" -> {
-                            check(state.value.exchanges.last().let { it.answer.isNotBlank() || it.plan != null || it.proposal != null }) { "Empty response" }
+                            check(state.value.exchanges.last().let { it.answer.isNotBlank() || it.cards.isNotEmpty() || it.proposal != null }) { "Empty response" }
                             completed = true
                         }
                         "failed" -> throw java.io.IOException(event.data.getValue("message").jsonPrimitive.content)

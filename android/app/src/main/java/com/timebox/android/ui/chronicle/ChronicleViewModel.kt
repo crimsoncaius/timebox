@@ -156,6 +156,11 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
 
     fun currentRange() { _state.update { it.copy(anchor = null, trends = null) }; loadTrends() }
 
+    fun openRange(start: LocalDate, end: LocalDate) {
+        _state.update { it.copy(view = ChronicleView.Trends, period = "custom", customStart = start, customEnd = end, trends = null, highlightedDays = emptyMap(), highlightedType = null, highlightedRange = null) }
+        loadTrends()
+    }
+
     fun customRange(start: LocalDate, end: LocalDate) {
         _state.update { it.copy(customStart = start, customEnd = end, trends = null) }
         loadTrends()

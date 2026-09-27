@@ -17,6 +17,9 @@ import com.timebox.android.ui.chronicle.HabitsPrototype
  * routes nor the screens behind them are compiled into a release APK.
  */
 fun NavGraphBuilder.prototypeRoutes() {
+    composable("prototype/assistant-card-review", deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-card-review" })) {
+        com.timebox.android.ui.assistant.AssistantCardsReview()
+    }
     composable(
         "prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}",
         deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}" }),

@@ -43,7 +43,7 @@ class ConversationRequest(BaseModel):
 
 @router.post("/conversations")
 async def create(body: ConversationRequest | None = Body(default=None)):
-    offered = ("plan_card_v1", "tracking_proposal_v1")
+    offered = ("plan_card_v1", "tracking_proposal_v1", "activity_cards_v1")
     capabilities = [c for c in offered if body and c in body.capabilities]
     return {"conversation_id": conversations.create(capabilities), "capabilities": capabilities}
 
@@ -154,7 +154,7 @@ async def send(conversation_id: str, body: MessageRequest):
                             if any(card["snapshot_id"] == candidate["snapshot_id"] for card in cards):
                                 raise RuntimeError("Duplicate card")
                             cards.append(candidate)
-                            if candidate["schema_version"] != 1 or "plan_card_v1" not in conversation.capabilities:
+                            if "activity_cards_v1" not in conversation.capabilities and (candidate["schema_version"] != 1 or "plan_card_v1" not in conversation.capabilities or len(cards) > 1 or output):
                                 kind, data = "text_delta", {"text": text_schedule(candidate)}
                         elif kind == "text_delta":
                             answer_started = True

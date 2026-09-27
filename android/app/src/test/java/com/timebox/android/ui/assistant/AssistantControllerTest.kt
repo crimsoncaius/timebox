@@ -11,6 +11,7 @@ import org.junit.Test
 class AssistantControllerTest {
     private class Fake : AssistantTransport {
         override val supportsPlanCards = true
+        override var supportsActivityCards = false
         override var supportsTrackingProposals = true
         val events = MutableSharedFlow<AssistantEvent>()
         var run = ""
@@ -40,10 +41,10 @@ class AssistantControllerTest {
         }
     }
 
-    private suspend fun Fake.card() {
+    private suspend fun Fake.card(id: String = "snapshot-1") {
         events.emit(AssistantEvent("plan_card", buildJsonObject {
             put("run_id", run); put("sequence", ++sequence); put("schema_version", 1)
-            put("snapshot_id", "snapshot-1"); put("date", "2026-09-21")
+            put("snapshot_id", id); put("date", "2026-09-21")
             put("reporting_timezone", "Asia/Singapore"); put("read_at", "2026-09-21T01:41:00Z")
             putJsonArray("planned_blocks") {}
         }))
@@ -56,6 +57,17 @@ class AssistantControllerTest {
             put("block_name", JsonNull); put("at", JsonNull); put("reporting_timezone", "UTC")
             put("proposed_at", "2026-09-25T12:50:00Z"); put("expires_at", "2026-09-25T13:05:00Z")
         }))
+    }
+
+    @Test fun `negotiated cards retain order after proposal and reject a fourth card`() = runTest {
+        val api = Fake().apply { supportsActivityCards = true }
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Compare"); runCurrent()
+        api.proposal(); api.card("b"); api.card("a"); api.card("c"); runCurrent()
+        assertEquals(listOf("b", "a", "c"), controller.state.value.exchanges.single().cards.map { it.id })
+        api.card("d"); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.single().status)
+        assertEquals(3, controller.state.value.exchanges.single().cards.size)
     }
 
     @Test fun `tracking proposal precedes text and its card state is retained`() = runTest {
