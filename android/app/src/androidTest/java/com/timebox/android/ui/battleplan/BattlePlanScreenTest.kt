@@ -414,7 +414,8 @@ class BattlePlanScreenTest {
 
         compose.onNodeWithContentDescription("Complete task").performClick()
         compose.onNodeWithText(task.title).performClick()
-        compose.onNodeWithText("Save title").assertExists()
+        compose.onNodeWithText("Edit task").assertExists()
+        compose.onNodeWithText("Save").assertExists()
         check(compose.onAllNodesWithText("Save task").fetchSemanticsNodes().isEmpty())
         check(compose.onAllNodesWithText("Done").fetchSemanticsNodes().isEmpty())
         compose.runOnIdle {
