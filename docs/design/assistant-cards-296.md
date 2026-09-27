@@ -1,6 +1,6 @@
 # Assistant Cards (#296)
 
-Status: prototyping on `claude/prototype-assistant-cards` (debug-only deep link, sample data, nothing reaches the API). Parent: #292.
+Status: design settled 27 Sep 2026; prototype on `claude/prototype-assistant-cards` (debug-only deep link, sample data, nothing reaches the API). Parent: #292.
 
 ## Settled (#292, revised 27 Sep 2026)
 
@@ -63,3 +63,15 @@ Also decided: collapsed Two lanes start at the first Planned Block's hour (not b
 Deep link: `timebox://prototype/assistant-cards?card=conversation`. Four turns: one Block Card (both), one Task Type Card (both), three Actual Block Cards (Tue/Wed/Thu), and a planned Block Card with a Task Type Card.
 
 Question: for a response with 2–3 cards, **Stacked** (all cards in reading order before the answer) or **Swipe between** (one card at a time with labelled tabs and page dots)? A one-card response is identical in both.
+
+Verdict (27 Sep 2026): **Swipe between.** Responses with 2–3 cards show one card at a time with labelled tabs and page dots; the answer text stays close to the question.
+
+## Direction
+
+- **Block Card**: shows exactly the lane read. A single lane is a plain row list (lane-coloured start time, Task Type · duration, "total · this day" for midnight crossings, "running · Xm at read"). Both is **Two lanes**: a mini Day with Plan and Actual columns, collapsed by default and starting at the first Planned Block's hour, with "Show larger" for the full date. Future dates show the plan, with a line saying recurring work isn't included. Open Day.
+- **Task Type Card**: one bar per top-level Task Type, expandable into children, with duration and share of the lane. Both is **Paired bars** (plan outline over actual fill) with "actual / plan · difference", or "not planned". Totals only. Notes for a Task Type filter, a partial current range, and future ranges. Open Trends.
+- **Several cards**: swipeable, with a tab per card labelled by its date or range.
+
+## Limitations and coverage gaps
+
+Not yet exercised: large font scale and TalkBack order across swiped cards, dark theme, empty Task Type ranges, historical cards from stored conversations, and a running block in Two lanes beyond the "· now" label. Carry these into #296's implementation checks.
