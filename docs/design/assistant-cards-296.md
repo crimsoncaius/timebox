@@ -41,3 +41,16 @@ The first bar row picks what the read selected. Planned-only and Actual-only use
 - **Paired**: Planned Blocks with their linked Actual Blocks nested, then "Not planned".
 
 On a future date, Actual and Both fall back to the plan with an explanation.
+
+Verdict (27 Sep 2026): **Two lanes** for Both, collapsed by default. Open: whether to trim the collapsed scale to the waking/planned part of the day (the pre-midnight Sleep stretches it back to 00:00).
+
+## Round 3 — Task Type Card
+
+Deep link: `timebox://prototype/assistant-cards?card=type&lane=planned|actual|both&both=bars|marker|numbers&detail=total|day&scenario=last-week|yesterday|this-week|next-week|filtered`. "→ Block Card" / "→ Task Type Card" in the bar switches study.
+
+- Single lane: one bar per top-level type with duration and share of that lane's total.
+- Both as **Paired bars** (plan outline over actual fill), **Actual + plan mark** (actual fill with a plan tick), or **Numbers** (Plan | Actual | Diff).
+- **Detail**: Total, or By day, which adds a 7-column strip per row. This decides whether the card needs #294's `day` detail.
+- Rows expand into child Task Types. Scenarios cover one date, a partial current week (actual stops at the read time), a future week (plan only), and a Task Type filter.
+
+Limitations: sample data; Sleep has no plan, so its difference is all "+"; the day strip scales per row, not across rows.

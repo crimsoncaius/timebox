@@ -1,10 +1,10 @@
-package com.timebox.android.ui.prototype
+﻿package com.timebox.android.ui.prototype
 
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
-import com.timebox.android.ui.assistant.AssistantCardsPrototype
+import com.timebox.android.ui.assistant.AssistantCardsPrototypeRoot
 import com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype
 import com.timebox.android.ui.battleplan.RoutineSheetPrototype
 import com.timebox.android.ui.battleplan.TaskSheetPrototype
@@ -67,18 +67,25 @@ fun NavGraphBuilder.prototypeRoutes() {
         )
     }
     composable(
-        "prototype/assistant-cards?lane={lane}&layout={layout}&scenario={scenario}",
-        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-cards?lane={lane}&layout={layout}&scenario={scenario}" }),
+        "prototype/assistant-cards?card={card}&lane={lane}&layout={layout}&both={both}&detail={detail}&scenario={scenario}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-cards?card={card}&lane={lane}&layout={layout}&both={both}&detail={detail}&scenario={scenario}" }),
         arguments = listOf(
+            navArgument("card") { defaultValue = "block" },
             navArgument("lane") { defaultValue = "both" },
-            navArgument("layout") { defaultValue = "timeline" },
-            navArgument("scenario") { defaultValue = "review" },
+            navArgument("layout") { defaultValue = "lanes" },
+            navArgument("both") { defaultValue = "bars" },
+            navArgument("detail") { defaultValue = "total" },
+            navArgument("scenario") { defaultValue = "" },
         ),
     ) { entry ->
-        AssistantCardsPrototype(
-            entry.arguments?.getString("layout") ?: "timeline",
-            entry.arguments?.getString("scenario") ?: "review",
-            entry.arguments?.getString("lane") ?: "both",
+        val args = entry.arguments
+        AssistantCardsPrototypeRoot(
+            card = args?.getString("card") ?: "block",
+            layout = args?.getString("layout") ?: "lanes",
+            scenario = args?.getString("scenario") ?: "",
+            lane = args?.getString("lane") ?: "both",
+            both = args?.getString("both") ?: "bars",
+            detail = args?.getString("detail") ?: "total",
         )
     }
 }
