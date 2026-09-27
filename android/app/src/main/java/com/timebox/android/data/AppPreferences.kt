@@ -90,6 +90,7 @@ class AppPreferences(private val context: Context) {
         val battlePlanUrgency = stringPreferencesKey("battle_plan_urgency")
         val battlePlanImportance = stringPreferencesKey("battle_plan_importance")
         val battlePlanTaskTypes = stringPreferencesKey("battle_plan_task_types")
+        val habitsCollapsed = stringPreferencesKey("habits_collapsed_templates")
         val workModeEntryAt = stringPreferencesKey("work_mode_entry_at")
         val workModeLastConfirmedAt = stringPreferencesKey("work_mode_last_confirmed_at")
         val workModeLastObservedAt = stringPreferencesKey("work_mode_last_observed_at")
@@ -193,6 +194,19 @@ class AppPreferences(private val context: Context) {
             prefs[Keys.dayPlanningReminderTime] = value.planning.time.toString()
             prefs[Keys.dayReviewReminderEnabled] = value.review.enabled
             prefs[Keys.dayReviewReminderTime] = value.review.time.toString()
+        }
+    }
+
+    /** Series whose tracked Checklist Items are hidden in Habits; every group starts expanded. */
+    val collapsedHabitGroups: Flow<Set<Int>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.habitsCollapsed].toPreferenceSet().mapNotNull(String::toIntOrNull).toSet()
+    }
+
+    suspend fun setHabitGroupCollapsed(templateId: Int, collapsed: Boolean) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.habitsCollapsed].toPreferenceSet()
+            val id = templateId.toString()
+            prefs[Keys.habitsCollapsed] = (if (collapsed) current + id else current - id).toPreferenceString()
         }
     }
 

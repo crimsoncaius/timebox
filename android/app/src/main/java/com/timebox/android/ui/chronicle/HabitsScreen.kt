@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,10 +40,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -58,11 +63,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.timebox.android.data.AppPreferences
 import com.timebox.android.data.Habit
 import com.timebox.android.data.HabitDay
 import com.timebox.android.data.HabitDayState
+import com.timebox.android.data.HabitItem
 import com.timebox.android.data.HabitTotal
 import com.timebox.android.data.HabitTotalTone
 import com.timebox.android.data.RecurrenceFrequency
@@ -78,8 +86,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private val NAME_COLUMN_WIDTH = 92.dp
+/** Guide line plus its padding, which indents Checklist Item rows under their series. */
+private val ITEM_INDENT = 12.dp
 private val TOTAL_COLUMN_WIDTH = 50.dp
 private val CELL_GAP = 3.dp
 private val HABITS_SWIPE_THRESHOLD = 55.dp
@@ -121,6 +132,10 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
     var sessionSheet by remember { mutableStateOf<Pair<Int, LocalDate>?>(null) }
     var addSheet by remember { mutableStateOf(false) }
     val week = state.week
+    val context = LocalContext.current.applicationContext
+    val preferences = remember(context) { AppPreferences(context) }
+    val collapsed by preferences.collapsedHabitGroups.collectAsState(initial = emptySet())
+    val preferenceScope = rememberCoroutineScope()
 
     when {
         week == null && state.loading -> { LoadingState(Modifier.fillMaxSize()); return }
@@ -199,21 +214,38 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                     )
                 }
                 week.habits.forEach { habit ->
-                    HabitRow(
-                        habit = habit,
-                        pending = state.pending,
-                        onOpenRoutine = onOpenRoutine,
-                        onTap = { day ->
-                            if (habit.mode == RecurrenceMode.Scheduled && day.state == HabitDayState.Met) {
-                                viewModel.untick(habit.templateId, day.date)
-                            } else {
-                                viewModel.tick(habit.templateId, day.date)
-                            }
-                        },
-                        onLongPress = { day ->
-                            if (habit.mode == RecurrenceMode.Quota) sessionSheet = habit.templateId to day.date
-                        },
-                    )
+                    val open = habit.items.isNotEmpty() && habit.templateId !in collapsed
+                    val onToggle = {
+                        preferenceScope.launch { preferences.setHabitGroupCollapsed(habit.templateId, open) }
+                        Unit
+                    }
+                    if (habit.tracked) {
+                        HabitRow(
+                            habit = habit,
+                            open = open,
+                            pending = state.pending,
+                            onOpenRoutine = onOpenRoutine,
+                            onToggle = onToggle,
+                            onTap = { day ->
+                                if (habit.mode == RecurrenceMode.Scheduled && day.state == HabitDayState.Met) {
+                                    viewModel.untick(habit.templateId, day.date)
+                                } else {
+                                    viewModel.tick(habit.templateId, day.date)
+                                }
+                            },
+                            onLongPress = { day ->
+                                if (habit.mode == RecurrenceMode.Quota) sessionSheet = habit.templateId to day.date
+                            },
+                        )
+                    } else {
+                        HabitHeading(habit, open, onOpenRoutine, onToggle)
+                    }
+                    if (open) {
+                        HabitItemRows(habit, state.pending, onOpenRoutine) { item, day ->
+                            if (day.state == HabitDayState.Met) viewModel.untickItem(habit.templateId, item.itemId, day.date)
+                            else viewModel.tickItem(habit.templateId, item.itemId, day.date)
+                        }
+                    }
                 }
                 state.actionError?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -290,7 +322,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
                 Text("Add habit", style = TimeboxTheme.type.sectionTitle, color = colors.on)
                 Text(
-                    "Choose a routine to track. Its past completions count.",
+                    "Choose a routine, or one of its checklist items. Past completions and checks count.",
                     style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -298,19 +330,43 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 when {
                     state.candidatesError != null -> Text(state.candidatesError, color = colors.error)
                     candidates == null -> CircularProgressIndicator(Modifier.size(20.dp), color = colors.onVariant, strokeWidth = 2.dp)
-                    candidates.isEmpty() -> Text("Every active routine is already a habit.", color = colors.onVariant)
-                    else -> candidates.forEach { candidate ->
-                        Row(
-                            Modifier.fillMaxWidth().clip(TimeboxShapes.field)
-                                .clickable { viewModel.addHabit(candidate.id); addSheet = false }
-                                .padding(vertical = 12.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(candidate.title, color = colors.on, style = TimeboxTheme.type.body)
-                                Text(candidate.cadence, color = colors.onVariant, style = TimeboxTheme.type.bodySmall)
+                    candidates.isEmpty() -> Text("Every active routine and checklist item is already a habit.", color = colors.onVariant)
+                    else -> Column(Modifier.verticalScroll(rememberScrollState())) {
+                        candidates.forEach { candidate ->
+                            Row(
+                                Modifier.fillMaxWidth().clip(TimeboxShapes.field)
+                                    .clickable(enabled = !candidate.trackAsHabit) { viewModel.addHabit(candidate.id); addSheet = false }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(candidate.title, color = colors.on, style = TimeboxTheme.type.body)
+                                    Text(
+                                        candidate.cadence + if (candidate.trackAsHabit) " · tracked" else "",
+                                        color = colors.onVariant, style = TimeboxTheme.type.bodySmall,
+                                    )
+                                }
+                                if (!candidate.trackAsHabit) {
+                                    Icon(Icons.Outlined.Add, contentDescription = "Track ${candidate.title} as a habit", tint = colors.onVariant)
+                                }
                             }
-                            Icon(Icons.Outlined.Add, contentDescription = "Track ${candidate.title} as a habit", tint = colors.onVariant)
+                            candidate.checklistItems.sortedBy { it.position }.filterNot { it.trackAsHabit }.forEach { item ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(start = 16.dp).clip(TimeboxShapes.field)
+                                        .clickable { viewModel.addHabitItem(candidate, item.id); addSheet = false }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        item.title, color = colors.on, style = TimeboxTheme.type.bodySmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        Icons.Outlined.Add, contentDescription = "Track ${item.title} as a habit",
+                                        tint = colors.onVariant, modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -372,51 +428,152 @@ private fun WeekdayHeader(weekStart: LocalDate, today: LocalDate) {
     }
 }
 
+/** Cadence, plus the item count while a series' Checklist Items are hidden. */
+private fun habitCaption(habit: Habit, open: Boolean): String {
+    val count = habit.items.size
+    return if (count == 0 || open) habitCadence(habit)
+    else habitCadence(habit) + if (count == 1) " · 1 item" else " · $count items"
+}
+
+@Composable
+private fun GroupChevron(habit: Habit, open: Boolean, onToggle: () -> Unit) {
+    Icon(
+        if (open) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+        contentDescription = if (open) "Hide ${habit.title} items" else "Show ${habit.title} items",
+        tint = TimeboxTheme.colors.onVariant,
+        modifier = Modifier.size(24.dp).clip(CircleShape).clickable(onClick = onToggle).padding(1.dp),
+    )
+}
+
 @Composable
 private fun HabitRow(
     habit: Habit,
+    open: Boolean,
     pending: Set<HabitCellKey>,
     onOpenRoutine: (Int) -> Unit,
+    onToggle: () -> Unit,
     onTap: (HabitDay) -> Unit,
     onLongPress: (HabitDay) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 6.dp),
+        Modifier.fillMaxWidth().padding(bottom = if (open) 4.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
     ) {
+        Row(Modifier.width(NAME_COLUMN_WIDTH - CELL_GAP), verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                Modifier.weight(1f).clip(TimeboxShapes.block)
+                    .clickable { onOpenRoutine(habit.templateId) }
+                    .padding(end = 2.dp, top = 2.dp, bottom = 2.dp),
+            ) {
+                Text(habit.title, style = TimeboxTheme.type.label, color = colors.on, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    habitCaption(habit, open), style = TimeboxTheme.type.bodySmall.copy(fontSize = 10.sp),
+                    color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (habit.items.isNotEmpty()) GroupChevron(habit, open, onToggle)
+        }
+        val daily = habit.mode == RecurrenceMode.Quota && habit.frequency == RecurrenceFrequency.Daily
+        habit.days.forEach { day ->
+            HabitCell(
+                title = habit.title, day = day, daily = daily, quotaCount = habit.quotaCount,
+                pending = HabitCellKey(habit.templateId, day.date) in pending,
+                height = 40.dp, tag = "habit-${habit.templateId}-${day.date}",
+                onTap = onTap, onLongPress = onLongPress,
+            )
+        }
+        HabitTotalView(habit.total, Modifier.width(TOTAL_COLUMN_WIDTH - CELL_GAP))
+    }
+}
+
+/** A series that is not itself a Habit, shown only to head its tracked Checklist Items. */
+@Composable
+private fun HabitHeading(habit: Habit, open: Boolean, onOpenRoutine: (Int) -> Unit, onToggle: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp, bottom = if (open) 4.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(
-            Modifier.width(NAME_COLUMN_WIDTH - CELL_GAP).clip(TimeboxShapes.block)
+            Modifier.weight(1f).clip(TimeboxShapes.block)
                 .clickable { onOpenRoutine(habit.templateId) }
-                .padding(end = 4.dp, top = 2.dp, bottom = 2.dp),
+                .padding(vertical = 2.dp),
         ) {
-            Text(habit.title, style = TimeboxTheme.type.label, color = colors.on, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(habit.title, style = TimeboxTheme.type.label, color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                habitCadence(habit), style = TimeboxTheme.type.bodySmall.copy(fontSize = 10.sp),
+                habitCaption(habit, open) + " · routine not tracked",
+                style = TimeboxTheme.type.bodySmall.copy(fontSize = 10.sp),
                 color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        habit.days.forEach { day ->
-            HabitCell(habit, day, HabitCellKey(habit.templateId, day.date) in pending, onTap, onLongPress)
+        GroupChevron(habit, open, onToggle)
+    }
+}
+
+/** A series' tracked Checklist Items, indented behind a guide line. */
+@Composable
+private fun HabitItemRows(
+    habit: Habit,
+    pending: Set<HabitCellKey>,
+    onOpenRoutine: (Int) -> Unit,
+    onTap: (HabitItem, HabitDay) -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    val rowHeight = 30.dp
+    val rowGap = 4.dp
+    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Box(
+            Modifier.padding(start = 4.dp, end = 6.dp).width(2.dp)
+                .height((rowHeight + rowGap) * habit.items.size - rowGap)
+                .background(colors.outlineVariant),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(rowGap)) {
+            habit.items.forEach { item ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
+                ) {
+                    Text(
+                        item.title,
+                        style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp),
+                        color = colors.onVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(NAME_COLUMN_WIDTH - ITEM_INDENT - CELL_GAP)
+                            .clickable { onOpenRoutine(habit.templateId) },
+                    )
+                    item.days.forEach { day ->
+                        HabitCell(
+                            title = item.title, day = day, daily = false, quotaCount = null,
+                            pending = HabitCellKey(habit.templateId, day.date, item.itemId) in pending,
+                            height = rowHeight, tag = "habit-${habit.templateId}-item-${item.itemId}-${day.date}",
+                            onTap = { onTap(item, it) }, onLongPress = {},
+                        )
+                    }
+                    HabitTotalView(item.total, Modifier.width(TOTAL_COLUMN_WIDTH - CELL_GAP))
+                }
+            }
         }
-        HabitTotalView(habit.total, Modifier.width(TOTAL_COLUMN_WIDTH - CELL_GAP))
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RowScope.HabitCell(
-    habit: Habit,
+    title: String,
     day: HabitDay,
+    daily: Boolean,
+    quotaCount: Int?,
     pending: Boolean,
+    height: Dp,
+    tag: String,
     onTap: (HabitDay) -> Unit,
     onLongPress: (HabitDay) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     val onActual = if (colors.actual.luminance() > 0.5f) Color.Black else Color.White
-    val daily = habit.mode == RecurrenceMode.Quota && habit.frequency == RecurrenceFrequency.Daily
-    val label = if (daily) "${day.count}/${day.target ?: habit.quotaCount ?: 0}" else day.count.toString()
+    val label = if (daily) "${day.count}/${day.target ?: quotaCount ?: 0}" else day.count.toString()
     val background = when (day.state) {
         HabitDayState.Met, HabitDayState.Count -> colors.actual
         HabitDayState.Partial -> colors.actual.copy(alpha = 0.3f)
@@ -428,7 +585,7 @@ private fun RowScope.HabitCell(
         HabitDayState.Upcoming -> 1.dp to colors.outlineVariant
         else -> null
     }
-    val description = "${habit.title}, ${day.date}, " + when (day.state) {
+    val description = "$title, ${day.date}, " + when (day.state) {
         HabitDayState.NotDue -> "not due"
         HabitDayState.Excused -> "excused"
         HabitDayState.Upcoming -> "upcoming"
@@ -440,11 +597,11 @@ private fun RowScope.HabitCell(
         HabitDayState.Empty -> "no sessions"
     }
     Box(
-        Modifier.weight(1f).height(40.dp).clip(TimeboxShapes.cell).background(background)
+        Modifier.weight(1f).height(height).clip(TimeboxShapes.cell).background(background)
             .then(if (border != null) Modifier.border(border.first, border.second, TimeboxShapes.cell) else Modifier)
             .alpha(if (pending) 0.5f else 1f)
             .semantics { contentDescription = description }
-            .testTag("habit-${habit.templateId}-${day.date}")
+            .testTag(tag)
             .then(
                 if (day.tickable && !pending) Modifier.combinedClickable(
                     onClick = { onTap(day) },

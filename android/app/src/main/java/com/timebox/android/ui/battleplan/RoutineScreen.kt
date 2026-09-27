@@ -103,6 +103,12 @@ fun RoutineScreen(
                     Switch(state.trackAsHabit, { commit(state.copy(trackAsHabit = it)) }, enabled = editable,
                         modifier = Modifier.semantics { contentDescription = "Track as habit" })
                 }
+                val savedItems = template?.checklistItems?.sortedBy { it.position }.orEmpty()
+                if (state.mode == RecurrenceMode.Scheduled && savedItems.isNotEmpty()) {
+                    ChecklistHabitSwitches(savedItems, state.trackedChecklistItemIds, editable) { ids ->
+                        commit(state.copy(trackedChecklistItemIds = ids))
+                    }
+                }
                 HorizontalDivider(color = colors.hairline)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TaskFieldChip(Icons.Outlined.Flag, "Importance: ${state.importance?.label ?: "Not set"}", editable) { open("Importance") }
@@ -192,3 +198,34 @@ fun RoutineScreen(
     lifecycle?.pendingDelete?.let { templateToDelete -> RecurringDeleteDialog(templateToDelete, { lifecycleViewModel?.dismissDelete() }, { lifecycleViewModel?.confirmDelete(onBack) }) }
 }
 
+
+/** Which Checklist Items are Habits, kept apart from editing the checklist itself (ADR 0016). */
+@Composable
+private fun ChecklistHabitSwitches(
+    items: List<RecurringChecklistItem>,
+    tracked: Set<Int>,
+    enabled: Boolean,
+    onChange: (Set<Int>) -> Unit,
+) {
+    val colors = TimeboxTheme.colors
+    var open by rememberSaveable { mutableStateOf(false) }
+    val count = items.count { it.id in tracked }
+    Column(Modifier.fillMaxWidth().padding(start = 40.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("$count of ${items.size} checklist items tracked", Modifier.weight(1f),
+                style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            Icon(if (open) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                if (open) "Hide checklist habits" else "Choose checklist habits", tint = colors.onVariant)
+        }
+        if (open) items.forEach { item ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(item.title, Modifier.weight(1f), color = colors.on)
+                Switch(item.id in tracked, { on -> onChange(if (on) tracked + item.id else tracked - item.id) },
+                    enabled = enabled, modifier = Modifier.semantics { contentDescription = "Track ${item.title} as a habit" })
+            }
+        }
+    }
+}

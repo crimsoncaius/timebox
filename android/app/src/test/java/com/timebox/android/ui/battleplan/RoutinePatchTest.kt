@@ -17,6 +17,14 @@ class RoutinePatchTest {
         assertEquals(PatchField.Absent, patch.checklistTitles)
         assertEquals(PatchField.Absent, patch.preplanningSchedule)
     }
+    @Test fun `choosing checklist habits sends the tracked set only when it changes`() {
+        val before = baseline.copy(trackAsHabit = true, trackedChecklistItemIds = setOf(3, 1))
+        assertEquals(PatchField.Absent, recurringDraftPatch(before, before.copy(title = "Renamed"), false).habitChecklistItemIds)
+        val patch = recurringDraftPatch(before, before.copy(trackedChecklistItemIds = setOf(3)), false)
+        assertEquals(PatchField.of(listOf(3)), patch.habitChecklistItemIds)
+        assertEquals(PatchField.Absent, patch.trackAsHabit)
+        assertTrue(patch.toJson().toString().contains("\"habit_checklist_item_ids\":[3]"))
+    }
     @Test fun `clearing optional fields sends null and leaves others absent`() {
         val before = baseline.copy(importance = PriorityLevel.High, taskTypeId = 4)
         val patch = recurringDraftPatch(before, before.copy(importance = null, taskTypeId = null), false)
