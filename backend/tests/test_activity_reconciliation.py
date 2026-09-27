@@ -55,6 +55,38 @@ def test_running_edit_preserves_open_end_and_rejects_overlap(tracking):
     assert tracking.get('/activity').json()['records'] == earlier['records']
 
 
+def test_running_edit_counts_matching_activity_toward_plan_without_splitting(tracking):
+    exercise = tracking.post('/task-types', json={'name': 'exercise'}).json()['id']
+    reading = tracking.post('/task-types', json={'name': 'reading'}).json()['id']
+    day = tracking.post('/days/2026-09-10/blocks', json={'lane': 'planned', 'task_type_id': exercise,
+                         'start_minute': 630, 'end_minute': 720}).json()
+    plan = day['planned_blocks'][0]['id']
+    other = tracking.post('/days/2026-09-10/blocks', json={'lane': 'planned', 'task_type_id': reading,
+                          'start_minute': 780, 'end_minute': 840}).json()['planned_blocks'][1]['id']
+    base = send(tracking, make(tracking.get('/activity').json(), 'start', 10, task_type_id=exercise, name='Run'))
+    running = {'mode': 'range', 'at': at(10), 'end': None}
+    mismatched = make(base, 'edit', 10, sequence=2, action_at=at(11), effective=running,
+        target_id=base['current']['id'], task_type_id=exercise, name='Run', planned_block_id=other)
+    assert tracking.post('/activity/commands', json=mismatched).status_code == 422
+    linked = send(tracking, make(base, 'edit', 10, sequence=2, action_at=at(11), effective=running,
+        target_id=base['current']['id'], task_type_id=exercise, name='Run', planned_block_id=plan))
+    assert linked['current']['planned_block_id'] == plan
+    assert linked['current']['start_at'] == '2026-09-10T10:00:00Z'
+    assert linked['current']['end_at'] is None
+    assert linked['current']['name'] == 'Run'
+    assert len(linked['records']) == 1
+
+
+def test_ended_edit_still_cannot_relink_to_plan(tracking):
+    exercise = tracking.post('/task-types', json={'name': 'exercise'}).json()['id']
+    day = tracking.post('/days/2026-09-10/blocks', json={'lane': 'planned', 'task_type_id': exercise,
+                         'start_minute': 600, 'end_minute': 660}).json()
+    base = send(tracking, correction(tracking.get('/activity').json(), 'add', 10, 11, 12, task_type_id=exercise))
+    relink = correction(base, 'edit', 10, 11, 13, sequence=2, target_id=base['records'][0]['id'],
+                        task_type_id=exercise, planned_block_id=day['planned_blocks'][0]['id'])
+    assert tracking.post('/activity/commands', json=relink).status_code == 422
+
+
 @pytest.mark.parametrize('reverse', [False, True])
 def test_running_edit_does_not_revive_time_after_later_stop(tracking, reverse):
     base = send(tracking, make(tracking.get('/activity').json(), 'start', 10))

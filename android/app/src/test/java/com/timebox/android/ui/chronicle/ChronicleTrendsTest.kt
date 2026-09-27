@@ -48,6 +48,53 @@ class ChronicleTrendsTest {
         assertNull(vm.state.value.highlightedRange)
     }
 
+    @Test fun `range heading is readable and adds the year only outside the current one`() {
+        val today = LocalDate.of(2026, 9, 27)
+        assertEquals("Sun 27 Sep", trendRangeHeading("day", today, today, today))
+        assertEquals("21–27 Sep", trendRangeHeading("week", LocalDate.of(2026, 9, 21), today, today))
+        assertEquals("28 Sep – 4 Oct", trendRangeHeading("week", LocalDate.of(2026, 9, 28), LocalDate.of(2026, 10, 4), today))
+        assertEquals("September 2026", trendRangeHeading("month", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), today))
+        assertEquals("15–21 Sep 2025", trendRangeHeading("week", LocalDate.of(2025, 9, 15), LocalDate.of(2025, 9, 21), today))
+        assertEquals("29 Dec – 4 Jan", trendRangeHeading("week", LocalDate.of(2025, 12, 29), LocalDate.of(2026, 1, 4), today))
+        assertEquals("24 Aug – 6 Sep", trendRangeHeading("custom", LocalDate.of(2026, 8, 24), LocalDate.of(2026, 9, 6), today))
+        assertEquals("14 Sep 2025 – 6 Sep 2026", trendRangeHeading("custom", LocalDate.of(2025, 9, 14), LocalDate.of(2026, 9, 6), today))
+    }
+
+    @Test fun `custom days are picked first day then last, restarting when an earlier day is tapped`() {
+        val draft = RangeDraft(LocalDate.of(2026, 9, 14), LocalDate.of(2026, 9, 20))
+        val started = nextRangeDraft(draft, LocalDate.of(2026, 9, 16))
+        assertEquals(RangeDraft(LocalDate.of(2026, 9, 16), null), started)
+        assertEquals(RangeDraft(LocalDate.of(2026, 9, 16), LocalDate.of(2026, 9, 18)), nextRangeDraft(started, LocalDate.of(2026, 9, 18)))
+        assertEquals(RangeDraft(LocalDate.of(2026, 9, 16), LocalDate.of(2026, 9, 16)), nextRangeDraft(started, LocalDate.of(2026, 9, 16)))
+        assertEquals(RangeDraft(LocalDate.of(2026, 9, 2), null), nextRangeDraft(started, LocalDate.of(2026, 9, 2)))
+        assertEquals("1 day", dayCountLabel(LocalDate.of(2026, 9, 16), LocalDate.of(2026, 9, 16)))
+        assertEquals("14 days", dayCountLabel(LocalDate.of(2026, 8, 24), LocalDate.of(2026, 9, 6)))
+    }
+
+    @Test fun `range calendar lays a month out in Monday-first weeks`() {
+        val september = rangeMonthCells(java.time.YearMonth.of(2026, 9))
+        assertEquals(35, september.size)
+        assertNull(september[0])
+        assertEquals(LocalDate.of(2026, 9, 1), september[1])
+        assertEquals(LocalDate.of(2026, 9, 30), september[30])
+        assertTrue(september.drop(31).all { it == null })
+        val june = rangeMonthCells(java.time.YearMonth.of(2026, 6))
+        assertEquals(LocalDate.of(2026, 6, 1), june[0])
+        assertEquals(35, june.size)
+    }
+
+    @Test fun `current range control is decided from the anchor so switching periods never flashes`() {
+        val today = LocalDate.of(2026, 9, 27)
+        fun current(period: String, anchor: LocalDate?) = showsCurrentTrendRange(ChronicleUiState(period = period, anchor = anchor, today = today))
+        assertTrue(current("week", null))
+        assertTrue(current("week", LocalDate.of(2026, 9, 21)))
+        assertFalse(current("week", LocalDate.of(2026, 9, 20)))
+        assertTrue(current("month", LocalDate.of(2026, 9, 1)))
+        assertFalse(current("month", LocalDate.of(2026, 8, 31)))
+        assertFalse(current("day", LocalDate.of(2026, 9, 26)))
+        assertTrue(current("day", today))
+    }
+
     @Test fun `highlight summary counts contributing days against the drilled range`() {
         val week = TrendHighlightRange("week", LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 27))
         assertEquals("Week · 21–27 Sep 2026", chronicleHighlightRangeLabel(week))

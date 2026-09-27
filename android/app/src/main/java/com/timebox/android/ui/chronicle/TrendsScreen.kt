@@ -18,21 +18,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import com.timebox.android.ui.components.CurrentRangeState
+import com.timebox.android.ui.components.CurrentRangeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.remote.TrendNodeDto
 import com.timebox.android.ui.theme.TimeboxShapes
-import com.timebox.android.ui.showMondayDatePicker
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -45,53 +48,76 @@ internal fun trendDuration(seconds: Double): String {
 @Composable
 fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
     val colors = TimeboxTheme.colors
-    val context = LocalContext.current
     val report = state.trends
-    val formatter = remember { DateTimeFormatter.ofPattern("d MMM uuuu") }
+    var choosingDays by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) { delay(60_000); viewModel.loadTrends() }
         }
     }
-    fun pick(initial: LocalDate, selected: (LocalDate) -> Unit) {
-        showMondayDatePicker(context, initial, state.today, selected)
-    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val customStart = state.customStart ?: state.today
+        val customEnd = state.customEnd ?: state.today
+        if (state.period == "custom") {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                ChooseDaysAction(onClick = { choosingDays = true })
+                Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                    Text(
+                        text = trendRangeHeading("custom", customStart, customEnd, state.today),
+                        color = colors.on,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Light,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(dayCountLabel(customStart, customEnd), color = colors.onVariant, fontSize = 12.sp)
+                }
+            }
+        } else {
+            // The pill keeps one width in both states so the arrows never move.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                CurrentRangeAction(
+                    state = if (showsCurrentTrendRange(state)) CurrentRangeState.Current else CurrentRangeState.Navigate,
+                    currentLabel = if (state.period == "day") "Today" else "This ${state.period}",
+                    navigateLabel = if (state.period == "day") "Go to today" else "Go to this ${state.period}",
+                    onClick = viewModel::currentRange,
+                    width = 156.dp,
+                )
+                IconButton(onClick = { viewModel.shiftRange(-1) }, enabled = report != null, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous ${state.period}", modifier = Modifier.size(24.dp))
+                }
+                IconButton(onClick = { viewModel.shiftRange(1) }, enabled = report != null && canAdvanceTrendRange(report, state.period), modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Rounded.ChevronRight, contentDescription = "Next ${state.period}", modifier = Modifier.size(24.dp))
+                }
+                Text(
+                    text = report?.let { trendRangeHeading(state.period, LocalDate.parse(it.start), LocalDate.parse(it.end), LocalDate.parse(it.today)) } ?: "…",
+                    modifier = Modifier.padding(start = 2.dp).weight(1f),
+                    color = colors.on,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Light,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().clip(TimeboxShapes.chip).background(colors.low).padding(4.dp)) {
             listOf("day", "week", "month", "custom").forEach { period ->
-                Box(Modifier.weight(1f).clip(TimeboxShapes.chip).background(if (state.period == period) colors.on else colors.low)
-                    .selectable(selected = state.period == period, enabled = period != "custom" || report != null || state.customStart != null, role = Role.Tab) { viewModel.setPeriod(period) }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                    Text(period.replaceFirstChar { it.uppercase() }, color = if (state.period == period) colors.bg else colors.on, fontSize = 13.sp)
+                val selected = state.period == period
+                Box(Modifier.weight(1f).height(40.dp).clip(TimeboxShapes.chip).background(if (selected) colors.highest else Color.Transparent)
+                    .selectable(selected = selected, enabled = period != "custom" || report != null || state.customStart != null, role = Role.Tab) { viewModel.setPeriod(period) }, contentAlignment = Alignment.Center) {
+                    Text(period.replaceFirstChar { it.uppercase() }, color = if (selected) colors.on else colors.onVariant, fontSize = 13.sp)
                 }
             }
         }
-        if (state.period == "custom") {
-            val start = state.customStart ?: state.today
-            val end = state.customEnd ?: state.today
-            Column {
-                TextButton(onClick = { pick(start) { viewModel.customRange(it, end) } }) { Text("From ${start.format(formatter)}") }
-                TextButton(onClick = { pick(end) { viewModel.customRange(start, it) } }) { Text("To ${end.format(formatter)} (inclusive)") }
-            }
-        } else {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { viewModel.shiftRange(-1) }, enabled = report != null, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous ${state.period}", modifier = Modifier.size(24.dp))
-                    }
-                    Text(
-                        text = report?.let { trendRangeLabel(state.period, LocalDate.parse(it.start), LocalDate.parse(it.end)) } ?: "…",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        color = colors.on,
-                        fontSize = 15.sp,
-                    )
-                    IconButton(onClick = { viewModel.shiftRange(1) }, enabled = report != null && canAdvanceTrendRange(report, state.period), modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.ChevronRight, contentDescription = "Next ${state.period}", modifier = Modifier.size(24.dp))
-                    }
-                }
-                TextButton(onClick = viewModel::currentRange) { Text(if (state.period == "day") "Today" else "This ${state.period}") }
-            }
+        if (choosingDays && state.period == "custom") {
+            CustomRangeSheet(
+                start = customStart,
+                end = customEnd,
+                today = state.today,
+                onDismiss = { choosingDays = false },
+                onShow = { start, end -> choosingDays = false; viewModel.customRange(start, end) },
+            )
         }
 
         if (state.trendsLoading) Text("Updating recorded time…", color = colors.onVariant)
@@ -153,6 +179,36 @@ private fun TrendRow(name: String, seconds: Double, total: Double, depth: Int, e
         Box(Modifier.fillMaxWidth().height(if (depth == 0) 6.dp else 4.dp).clip(TimeboxShapes.chip).background(colors.low)) {
             Box(Modifier.fillMaxWidth(fraction.toFloat()).fillMaxHeight().background(if (depth == 0) colors.onVariant else colors.outline))
         }
+    }
+}
+
+/**
+ * Whether Trends shows the range containing Today, decided from the anchor so it holds while a
+ * report is loading: no anchor is the current range; otherwise the anchor's Monday week or month must contain Today.
+ */
+internal fun showsCurrentTrendRange(state: ChronicleUiState): Boolean {
+    val anchor = state.anchor ?: return true
+    return when (state.period) {
+        "day" -> anchor == state.today
+        "week" -> anchor.with(DayOfWeek.MONDAY) == state.today.with(DayOfWeek.MONDAY)
+        "month" -> YearMonth.from(anchor) == YearMonth.from(state.today)
+        else -> false
+    }
+}
+
+/**
+ * The range heading beside the arrows: "Sun 27 Sep", "21–27 Sep", "September 2026"; other years add the year.
+ * A custom range spanning years names both, since it can run longer than a year.
+ */
+internal fun trendRangeHeading(period: String, start: LocalDate, end: LocalDate, today: LocalDate): String {
+    val dayMonth = DateTimeFormatter.ofPattern("d MMM")
+    val year = if (end.year != today.year) " ${end.year}" else ""
+    return when {
+        period == "month" -> start.format(DateTimeFormatter.ofPattern("MMMM uuuu"))
+        start == end -> start.format(DateTimeFormatter.ofPattern("EEE d MMM")) + year
+        period == "custom" && start.year != end.year -> DateTimeFormatter.ofPattern("d MMM uuuu").let { "${start.format(it)} – ${end.format(it)}" }
+        start.month == end.month && start.year == end.year -> "${start.dayOfMonth}–${end.format(dayMonth)}$year"
+        else -> "${start.format(dayMonth)} – ${end.format(dayMonth)}$year"
     }
 }
 

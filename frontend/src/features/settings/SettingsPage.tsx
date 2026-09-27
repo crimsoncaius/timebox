@@ -1,8 +1,15 @@
-import { CheckInSettings } from '../activity/CheckInSettings'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BrowserNotificationSettings, CheckInSettings } from '../activity/CheckInSettings'
 import { FocusWakeSettings } from '../activity/FocusMode'
 import { ReportingTimezoneSettings } from '../activity/ReportingTimezoneSettings'
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { Layout } from '../../components/Layout'
+import {
+  SettingsRow,
+  SettingsSection,
+  SettingsToggle,
+  settingsButtonClassName,
+  settingsInputClassName,
+} from '../../components/SettingsControls'
 import { api, type SettingsRead } from '../../lib/api'
 import { errorMessage } from '../../lib/errors'
 
@@ -11,9 +18,6 @@ function saveStatusClass(saveState: 'idle' | 'saving' | 'saved' | 'error') {
   if (saveState === 'saving' || saveState === 'saved') return 'text-tertiary'
   return 'text-on-surface-variant'
 }
-
-const inputClassName =
-  'min-w-[4.5rem] rounded-lg border border-outline-variant/15 bg-surface-container-lowest px-3 py-2 text-right font-body text-sm tabular-nums text-on-surface shadow-inner shadow-black/5 transition-[border-color,box-shadow] placeholder:text-outline focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20 dark:border-dark-outline-variant dark:bg-dark-surface-container-lowest/80 dark:text-dark-on-surface dark:shadow-black/20 dark:focus:border-dark-outline'
 
 type SettingsPatch = Partial<Pick<SettingsRead, 'start_hour' | 'end_hour' | 'show_full_day'>>
 type SettingsField = keyof SettingsPatch
@@ -137,32 +141,15 @@ export function SettingsPage() {
     if (!message) void patchSettings({ [field]: value })
   }
 
-  if (loading) {
-    return (
-      <Layout>
-        <p className="text-on-surface-variant">Loading…</p>
-      </Layout>
-    )
-  }
-
-  if (!settings) {
-    return (
-      <Layout>
-        <p className="text-error">{error ?? 'Failed to load settings.'}</p>
-      </Layout>
-    )
-  }
-
   return (
     <Layout>
-      <ReportingTimezoneSettings /><FocusWakeSettings /><CheckInSettings />
-      <section className="mb-10 flex flex-col gap-4 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
+      <section className="mb-10 flex max-w-3xl flex-col gap-4 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
             Settings
           </h1>
           <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-            Global day window. Changes apply to all days.
+            Shared settings apply on every device. The rest stay on this one.
           </p>
         </div>
         <div
@@ -190,111 +177,105 @@ export function SettingsPage() {
         </div>
       </section>
 
-      {error && (
-        <div className="mb-6 rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
+      {error && settings && (
+        <div className="mb-6 max-w-3xl rounded-xl border border-error-container bg-error-container/20 px-4 py-3 text-sm text-on-error-container">
           {error}
         </div>
       )}
 
-      <section
-        className="max-w-3xl overflow-hidden rounded-2xl bg-surface-container-low/70 dark:bg-dark-surface-container/35"
-        aria-labelledby="settings-day-window-heading"
-      >
-        <header className="px-5 py-4">
-          <h2
-            id="settings-day-window-heading"
-            className="font-headline text-base font-light tracking-tight text-on-surface dark:text-dark-on-surface"
-          >
-            Day window
-          </h2>
-          <p className="mt-1 max-w-lg text-sm leading-relaxed text-on-surface-variant">
-            Visible hours on the timeline. End hour is exclusive (e.g. 8–20 shows 8:00 through 19:59).
-          </p>
-        </header>
+      <div className="max-w-3xl space-y-6">
+        <SettingsSection
+          id="settings-day"
+          title="Day & time"
+          scope="shared"
+          description="How the timeline is framed and how daily totals are grouped."
+        >
+          {settings ? (
+            <>
+              <SettingsRow
+                label="Start hour"
+                htmlFor="settings-start-hour"
+                description="First hour shown on the timeline (0–23)."
+                disabled={settings.show_full_day}
+                footer={hourErrors.start_hour && (
+                  <p id="settings-start-hour-error" role="alert" className="mt-2 text-sm text-error">
+                    {hourErrors.start_hour}
+                  </p>
+                )}
+              >
+                <input
+                  id="settings-start-hour"
+                  type="number"
+                  min={0}
+                  max={23}
+                  className={`${settingsInputClassName} text-right`}
+                  defaultValue={settings.start_hour}
+                  key={`start-${settings.updated_at}`}
+                  required
+                  disabled={settings.show_full_day}
+                  aria-invalid={!!hourErrors.start_hour}
+                  aria-describedby={hourErrors.start_hour ? 'settings-start-hour-error' : undefined}
+                  onBlur={(e) => saveHour('start_hour', e.target.value)}
+                />
+              </SettingsRow>
+              <SettingsRow
+                label="End hour"
+                htmlFor="settings-end-hour"
+                description="Exclusive end (1–24). 8–20 shows 8:00 through 19:59."
+                disabled={settings.show_full_day}
+                footer={hourErrors.end_hour && (
+                  <p id="settings-end-hour-error" role="alert" className="mt-2 text-sm text-error">
+                    {hourErrors.end_hour}
+                  </p>
+                )}
+              >
+                <input
+                  id="settings-end-hour"
+                  type="number"
+                  min={1}
+                  max={24}
+                  className={`${settingsInputClassName} text-right`}
+                  defaultValue={settings.end_hour}
+                  key={`end-${settings.updated_at}`}
+                  required
+                  disabled={settings.show_full_day}
+                  aria-invalid={!!hourErrors.end_hour}
+                  aria-describedby={hourErrors.end_hour ? 'settings-end-hour-error' : undefined}
+                  onBlur={(e) => saveHour('end_hour', e.target.value)}
+                />
+              </SettingsRow>
+              <SettingsRow label="Show full 24 hours" description="Ignore the start and end hours and show the whole day.">
+                <SettingsToggle
+                  label="Show full 24 hours"
+                  checked={settings.show_full_day}
+                  onChange={(checked) => void patchSettings({ show_full_day: checked })}
+                />
+              </SettingsRow>
+            </>
+          ) : (
+            <SettingsRow
+              label="Day window"
+              description={loading ? 'Loading…' : (error ?? 'Could not load the day window.')}
+            >
+              {!loading && (
+                <button className={settingsButtonClassName} onClick={() => void load()}>
+                  Try again
+                </button>
+              )}
+            </SettingsRow>
+          )}
+          <ReportingTimezoneSettings />
+        </SettingsSection>
 
-        <div className="space-y-3 px-3 pb-3">
-          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="settings-start-hour" className="block font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface">
-                Start hour
-              </label>
-              <p className="mt-0.5 text-sm text-on-surface-variant">First hour shown (0–23).</p>
-            </div>
-            <input
-              id="settings-start-hour"
-              type="number"
-              min={0}
-              max={23}
-              className={inputClassName}
-              defaultValue={settings.start_hour}
-              key={`start-${settings.updated_at}`}
-              required
-              aria-invalid={!!hourErrors.start_hour}
-              aria-describedby={hourErrors.start_hour ? 'settings-start-hour-error' : undefined}
-              onBlur={(e) => saveHour('start_hour', e.target.value)}
-            />
-            {hourErrors.start_hour && (
-              <p id="settings-start-hour-error" role="alert" className="text-sm text-error">
-                {hourErrors.start_hour}
-              </p>
-            )}
-          </div>
+        <SettingsSection id="settings-focus" title="Focus & check-ins" scope="device">
+          <FocusWakeSettings />
+          <CheckInSettings />
+        </SettingsSection>
 
-          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="settings-end-hour" className="block font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface">
-                End hour
-              </label>
-              <p className="mt-0.5 text-sm text-on-surface-variant">Exclusive end of the window (1–24).</p>
-            </div>
-            <input
-              id="settings-end-hour"
-              type="number"
-              min={1}
-              max={24}
-              className={inputClassName}
-              defaultValue={settings.end_hour}
-              key={`end-${settings.updated_at}`}
-              required
-              aria-invalid={!!hourErrors.end_hour}
-              aria-describedby={hourErrors.end_hour ? 'settings-end-hour-error' : undefined}
-              onBlur={(e) => saveHour('end_hour', e.target.value)}
-            />
-            {hourErrors.end_hour && (
-              <p id="settings-end-hour-error" role="alert" className="text-sm text-error">
-                {hourErrors.end_hour}
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-xl bg-surface-container-lowest/55 px-2 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8 dark:bg-dark-surface-container-low/60">
-            <div className="min-w-0 flex-1 pt-0.5">
-              <p className="font-headline text-sm font-medium text-on-surface dark:text-dark-on-surface">Show full 24 hours</p>
-              <p className="mt-0.5 text-sm text-on-surface-variant">
-                Ignore start/end and display the full day on the timeline.
-              </p>
-            </div>
-            <label className="relative inline-flex shrink-0 cursor-pointer items-center sm:mt-1">
-              <input
-                type="checkbox"
-                className="peer sr-only"
-                checked={settings.show_full_day}
-                onChange={(e) => void patchSettings({ show_full_day: e.target.checked })}
-                aria-label="Show full 24 hours"
-              />
-              <span
-                className="block h-7 w-12 rounded-full border border-outline-variant/15 bg-outline-variant/25 transition-colors peer-focus-visible:ring-1 peer-focus-visible:ring-primary/30 peer-checked:border-tertiary/50 peer-checked:bg-tertiary dark:border-dark-outline-variant dark:bg-dark-surface-container-high dark:peer-checked:bg-tertiary"
-                aria-hidden
-              />
-              <span
-                className="pointer-events-none absolute left-0.5 top-0.5 z-10 h-6 w-6 rounded-full bg-surface-container-lowest shadow-[0_0_24px_rgba(45,52,53,0.04)] transition-transform peer-checked:translate-x-5 dark:bg-dark-on-surface"
-                aria-hidden
-              />
-            </label>
-          </div>
-        </div>
-      </section>
-
+        <SettingsSection id="settings-notifications" title="Notifications" scope="device">
+          <BrowserNotificationSettings />
+        </SettingsSection>
+      </div>
     </Layout>
   )
 }

@@ -5,13 +5,16 @@ import { ActivityTracking } from './ActivityTracking'
 import { getActivityRepository } from './activityRepository'
 import { getFocusController } from './focusController'
 import { observeFocusWake } from './focusWake'
+import { SettingsRow, SettingsToggle } from '../../components/SettingsControls'
 import { UndoNotice } from '../../components/UndoNotice'
 import { useUndoNotice } from '../../components/useUndoNotice'
 
 export function FocusWakeSettings() {
   const controller = getFocusController()
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-  return <label className="block my-4"><input type="checkbox" checked={state.wake} onChange={e => controller.setWake(e.target.checked)} /> Keep display awake while Focus is visible<p className="text-sm">On this device. Browser and battery policy apply; manual locking still works.</p></label>
+  return <SettingsRow label="Keep display awake in Focus" description="Browser and battery policy apply; manual locking still works.">
+    <SettingsToggle label="Keep display awake in Focus" checked={state.wake} onChange={controller.setWake} />
+  </SettingsRow>
 }
 export function FocusHost({ children }: { children: ReactNode }) {
   const controller = getFocusController(), repository = getActivityRepository()

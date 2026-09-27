@@ -70,9 +70,13 @@ fun ActivitySnapshotDto.reminderBlocks(): List<ReminderBlock> = plans.mapNotNull
             start = parseActivityInstant(plan.startAt),
             end = parseActivityInstant(plan.endAt),
             title = plannedBlockReminderTitle(plan.name, plan.taskTitle, taskTypes.find { it.id == plan.taskTypeId }?.name),
+            taskTypeId = plan.taskTypeId,
+            taskId = plan.taskId,
         )
     }.getOrNull()
 }
+
+fun ActivitySnapshotDto.trackedActivity(): TrackedActivity? = current?.let { TrackedActivity(it.plannedBlockId, it.taskTypeId, it.taskId) }
 
 private fun ActivitySnapshotDto.zone(): ZoneId = runCatching { ZoneId.of(reportingTimezone) }.getOrDefault(ZoneId.systemDefault())
 
@@ -110,8 +114,7 @@ class PlannedBlockReminders(
         val current = settings.first()
         val snapshot = activity.state.value.snapshot
         val blocks = snapshot?.reminderBlocks().orEmpty()
-        val currentPlan = snapshot?.current?.plannedBlockId
-        val withdrawn = plannedBlockRemindersToWithdraw(read(DELIVERED), blocks, currentPlan, now)
+        val withdrawn = plannedBlockRemindersToWithdraw(read(DELIVERED), blocks, snapshot?.trackedActivity(), now)
         withdrawn.forEach { key -> plannedBlockIdOf(key)?.let { notifications.cancel(NOTIFICATION_TAG, it) } }
         val previous = read(SCHEDULED)
         val plan = planPlannedBlockReminders(blocks, current, read(HANDLED), previous, now)
@@ -131,7 +134,7 @@ class PlannedBlockReminders(
             if (!settings.first().enabled) return@withLock
             val snapshot = activity.state.value.snapshot ?: return@withLock
             val block = snapshot.reminderBlocks().find { it.id == plannedBlockIdOf(key) }
-            when (decidePlannedBlockReminder(key, block, snapshot.current?.plannedBlockId, now)) {
+            when (decidePlannedBlockReminder(key, block, snapshot.trackedActivity(), now)) {
                 PlannedBlockReminderDecision.Deliver -> {
                     // A reminder that cannot be shown is missed, not retried.
                     if (show(block!!, now, snapshot.zone())) write(DELIVERED, read(DELIVERED) + key)

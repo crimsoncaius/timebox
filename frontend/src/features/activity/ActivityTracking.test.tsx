@@ -316,6 +316,32 @@ it('snapshots a current plan offline, resumes explicitly, and expires suggestion
   resumedView.unmount()
 })
 
+it('counts a matching Current Activity toward the plan without splitting it', async () => {
+  const at = '2026-09-11T10:00:00Z'
+  const type = { id: 1, name: 'Exercise', created_at: at, updated_at: at }
+  const plan = { id: 4, task_type_id: 1, task_id: null, name: null, note: null, start_at: '2026-09-11T10:30:00Z', end_at: '2026-09-11T11:30:00Z' }
+  const initial = { protocol: 'activity-online-v1', offline_ready: true, cursor: 0, server_at: at, current: null, records: [], task_types: [type], plans: [plan] }
+  let connected = true
+  vi.stubGlobal('fetch', vi.fn(async () => { if (!connected) throw new Error('Offline'); return new Response(JSON.stringify(initial)) }))
+  const repository = new ActivityRepository(localStorage, work => work())
+  await repository.refresh()
+  connected = false
+  const now = vi.spyOn(repository, 'now').mockReturnValue(Date.parse(at))
+  await repository.command('start', 1, 'Run')
+  now.mockReturnValue(Date.parse('2026-09-11T10:40:00Z'))
+  render(<ActivityTracking repository={repository} taskTypes={[type]} onChanged={() => {}} />)
+  expect(await screen.findByText(/Exercise is planned now/)).toBeInTheDocument()
+  expect(screen.queryByText('Switch to planned activity')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Count toward plan' }))
+  await waitFor(() => expect(repository.state.snapshot?.current?.planned_block_id).toBe(4))
+  expect(repository.state.snapshot?.records).toHaveLength(1)
+  expect(repository.state.snapshot?.current).toMatchObject({ name: 'Run', start_at: '2026-09-11T10:00:00.000Z', end_at: null })
+  expect(screen.queryByRole('button', { name: 'Count toward plan' })).not.toBeInTheDocument()
+  const edit = JSON.parse(localStorage.getItem(localStorage.key(0)!)!).outbox.at(-1)
+  expect(edit).toMatchObject({ kind: 'edit', planned_block_id: 4, task_type_id: 1, effective: { mode: 'range', at: '2026-09-11T10:00:00.000Z' } })
+  expect(edit.effective.end).toBeUndefined()
+})
+
 it('records a direct Session Task offline without a plan or completion mutation', async () => {
   const at = '2026-09-11T10:00:00Z'
   let connected = true

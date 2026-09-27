@@ -326,14 +326,14 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithTag("battle-plan-task-10").performTouchInput { click(center.copy(y = center.y / 3f)) }
         compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Close task").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Description").performClick()
-        compose.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextReplacement("Saved notes")
-        compose.onNodeWithText("Save description").performClick()
+        compose.onNodeWithContentDescription("Task description").performTextReplacement("Saved notes")
+        compose.onNodeWithText("Save").performClick()
         awaitNonReadinessPatchRequest(transport)
         compose.runOnIdle {
             assertEquals(setOf("description"), transport.patchBodies.single().keys)
             transport.completePatch(ready = false, version = 2)
         }
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Save description").fetchSemanticsNodes().isEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Edit task").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithContentDescription("Ready to Plan").performClick()
         awaitReadinessRequest(transport)
         compose.runOnIdle { assertEquals(listOf(true), transport.readinessCalls) }

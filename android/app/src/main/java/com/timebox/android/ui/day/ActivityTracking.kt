@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
+import com.timebox.android.data.matchesPlan
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.components.DiagnosticText
@@ -195,11 +196,13 @@ fun ActivityTracking(
             if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
             if (!focus && expanded && planning) HelperText("Finish or cancel planning to enter Focus.", Modifier.fillMaxWidth().padding(bottom = 8.dp))
             if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
+                val counts = current.matchesPlan(plan)
                 PlannedBlockSuggestion(
                     name = activityIdentityText(plan.name, plan.taskTitle, availableTypes.find { it.id == plan.taskTypeId }?.name),
                     timing = plannedSuggestionTiming(plan, now, runCatching { ZoneId.of(state.snapshot!!.reportingTimezone) }.getOrDefault(ZoneId.systemDefault())),
                     enabled = enabled, focus = focus,
-                    onSwitch = { scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Switch, plan = plan) } },
+                    onSwitch = { scope.launch(Dispatchers.IO) { if (counts) repository.countTowardPlan(plan) else repository.command(ActivityKind.Switch, plan = plan) } },
+                    actionLabel = if (counts) "Count toward plan" else "Switch",
                 )
             }
             state.feedback?.let { Text(it, color = colors.onVariant) }
@@ -248,7 +251,7 @@ fun ActivityTracking(
     if (focusOptions) ModalBottomSheet(onDismissRequest = { focusOptions = false }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Focus options", style = TimeboxTheme.type.screenTitle, color = colors.on)
-            com.timebox.android.ui.focus.FocusWakeSettings()
+            com.timebox.android.ui.focus.FocusWakeSettingRow()
             if (state.checkInPreferences.enabled && detectionAccess == com.timebox.android.checkin.DetectionAccess.Denied) {
                 HorizontalDivider(color = colors.hairline)
                 Text("Screen-off detection", style = TimeboxTheme.type.sectionTitle, color = colors.on)

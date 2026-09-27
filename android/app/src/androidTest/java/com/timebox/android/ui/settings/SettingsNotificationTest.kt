@@ -38,9 +38,10 @@ class SettingsNotificationTest {
 
         compose.onNodeWithText("Battle Plan reminders still save to the server", substring = true).fetchSemanticsNode()
         compose.onNodeWithText("Daily Reminder preferences stay saved on this device", substring = true).fetchSemanticsNode()
-        compose.onNodeWithText("this device cannot display either until notifications are enabled", substring = true)
+        compose.onNodeWithText("this device cannot display any reminders until notifications are enabled", substring = true)
             .fetchSemanticsNode()
-        compose.onNodeWithText("Enable notifications").performScrollTo().performClick()
+        compose.onNodeWithText("Off on this device").assertExists()
+        compose.onNodeWithText("Enable").performScrollTo().performClick()
         compose.onNodeWithText("Open notification settings").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(1, requested)

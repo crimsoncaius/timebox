@@ -205,9 +205,16 @@ def prepare(db, state, body, operations, timezone="UTC"):
                 data["planned_block_id"] = None
             data["task_id"] = task_id
             if "planned_block_id" in body.model_fields_set:
-                if body.planned_block_id is not None:
+                if body.planned_block_id is None:
+                    data["planned_block_id"] = None
+                elif running_edit:
+                    # Counting the Current Activity toward a Planned Block keeps it continuous.
+                    plan = db.get(TimeBlock, body.planned_block_id)
+                    if plan is None or plan.lane != BlockLane.planned or (plan.task_type_id, plan.task_id) != (type_id, task_id):
+                        raise ValueError("The Current Activity must match the Planned Block to count toward it")
+                    data["planned_block_id"] = plan.id
+                else:
                     raise ValueError("Explicit relinking is not enabled by this correction command")
-                data["planned_block_id"] = None
         if task_id is not None:
             actuals.protect_task_occurrence(db, task_id)
         source = data.get("source", str(body.operation_id))

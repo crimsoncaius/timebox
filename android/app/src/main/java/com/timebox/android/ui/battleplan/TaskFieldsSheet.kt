@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -36,6 +39,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.platform.LocalWindowInfo
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,8 +67,8 @@ internal fun taskSheetHeightFraction(imeVisible: Boolean): Float = 0.94f
 
 /** Only the open field can change; other values may have advanced while it was open. */
 internal fun mergeTaskField(field: TaskSheetField, current: TaskDetailDraft, edited: TaskDetailDraft): TaskDetailDraft = when (field) {
-    TaskSheetField.Title -> current.copy(title = edited.title)
-    TaskSheetField.Description -> current.copy(description = edited.description)
+    // The text panel edits the title and description together.
+    TaskSheetField.Title, TaskSheetField.Description -> current.copy(title = edited.title, description = edited.description)
     TaskSheetField.Project -> current.copy(projectId = edited.projectId)
     TaskSheetField.TaskType -> current.copy(taskTypeId = edited.taskTypeId)
     TaskSheetField.Importance -> current.copy(importance = edited.importance)
@@ -125,7 +137,8 @@ internal fun TaskFieldsSheet(
         onChange(if (creating) next.copy(title = createTitle) else next)
     }
     fun open(next: TaskSheetField) {
-        focus.clearFocus(); edited = draft; fieldBaseline = draft; field = next
+        val opened = if (creating) draft.copy(title = createTitle) else draft
+        focus.clearFocus(); edited = opened; fieldBaseline = opened; field = next
     }
     fun dismiss() {
         if (saving) return
@@ -217,12 +230,18 @@ internal fun TaskFieldsSheet(
         fun commit(value: TaskDetailDraft, close: Boolean = true) {
             val next = mergeTaskField(active, draft, value)
             edited = value
+            if (creating && (active == TaskSheetField.Title || active == TaskSheetField.Description)) createTitle = value.title
             if (!dirty && next.normalized() == draft.normalized()) { field = null; return }
             publish(next)
             if (creating) { if (close) field = null; fieldBaseline = value }
             else submitted = true
         }
-        ModalBottomSheet(onDismissRequest = ::dismissField,
+        if (active == TaskSheetField.Title || active == TaskSheetField.Description) TaskTextPanel(
+            title = edited.title, description = edited.description, focusDescription = active == TaskSheetField.Description,
+            saving = saving, error = validationMessage ?: error, onTitleChange = { edited = edited.copy(title = it) },
+            onDescriptionChange = { edited = edited.copy(description = it) },
+            onSave = { commit(edited) }, onBack = ::dismissField,
+        ) else ModalBottomSheet(onDismissRequest = ::dismissField,
             properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = {
                 if (it == SheetValue.Hidden) { dismissField(); false } else true
@@ -234,14 +253,7 @@ internal fun TaskFieldsSheet(
                     IconButton(onClick = ::dismissField, enabled = !saving) { Icon(Icons.Outlined.Close, "Close ${active.label}") }
                 }
                 when (active) {
-                    TaskSheetField.Title, TaskSheetField.Description -> {
-                        val inputFocus = remember { FocusRequester() }
-                        OutlinedTextField(
-                        value = if (active == TaskSheetField.Title) edited.title else edited.description,
-                        onValueChange = { edited = if (active == TaskSheetField.Title) edited.copy(title = it) else edited.copy(description = it) },
-                        label = { Text(active.label) }, modifier = Modifier.fillMaxWidth().focusRequester(inputFocus), enabled = !saving, minLines = if (active == TaskSheetField.Description) 3 else 1)
-                        LaunchedEffect(active) { inputFocus.requestFocus() }
-                    }
+                    TaskSheetField.Title, TaskSheetField.Description -> Unit
                     TaskSheetField.Importance, TaskSheetField.Urgency -> {
                         val selected = if (active == TaskSheetField.Importance) draft.importance else draft.urgency
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -293,10 +305,10 @@ internal fun TaskFieldsSheet(
                     TaskSheetField.Deadline, TaskSheetField.Reminder -> TaskScheduleEditor(edited, active == TaskSheetField.Reminder, timezone, today, !saving,
                         notificationsAllowed, onRequestNotificationPermission, { edited = it })
                 }
-                if (active in listOf(TaskSheetField.Title, TaskSheetField.Description, TaskSheetField.Deadline, TaskSheetField.Reminder)) {
+                if (active in listOf(TaskSheetField.Deadline, TaskSheetField.Reminder)) {
                     if (validationMessage != null) Text(validationMessage, color = colors.error)
                     if (error != null) Text(error, color = colors.error)
-                    Button(onClick = { commit(edited) }, enabled = !saving && validationMessage == null && (active != TaskSheetField.Title || edited.title.isNotBlank()), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Button(onClick = { commit(edited) }, enabled = !saving && validationMessage == null, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Text(if (saving) "Saving…" else if (creating) "Apply to draft" else "Save ${active.label.lowercase()}")
                     }
                 } else if (error != null) {
@@ -313,6 +325,81 @@ internal fun TaskFieldsSheet(
         text = { Text(if (creating && fieldsLocked) "The task and saved subtasks are kept. Remaining subtasks will be discarded." else if (creating) "This task has not been created." else "Other saved changes are kept.") },
         confirmButton = { TextButton(onClick = { confirmDiscard = false; onDiscard(); onDismiss() }) { Text("Discard") } },
         dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } })
+}
+
+/** Full-screen editor for the title and description, opened from either one on the task sheet. */
+@Composable
+private fun TaskTextPanel(title: String, description: String, focusDescription: Boolean, saving: Boolean, error: String?,
+    onTitleChange: (String) -> Unit, onDescriptionChange: (String) -> Unit, onSave: () -> Unit, onBack: () -> Unit) {
+    val colors = TimeboxTheme.colors
+    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false)) {
+        val panelColor = colors.low.copy(alpha = 1f)
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect { window?.setDimAmount(0f) }
+        Surface(Modifier.fillMaxSize(), color = panelColor, contentColor = colors.on) {
+            Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack, enabled = !saving) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to task") }
+                    Text("Edit task", Modifier.weight(1f).padding(start = 12.dp), fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                    TextButton(onClick = onSave, enabled = !saving && error == null && title.isNotBlank()) {
+                        Text(if (saving) "Saving…" else "Save", fontWeight = FontWeight.Medium)
+                    }
+                }
+                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    val titleFocus = remember { FocusRequester() }
+                    val descriptionFocus = remember { FocusRequester() }
+                    TaskTextCard(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 4.dp), {
+                        Icon(Icons.Outlined.RadioButtonUnchecked, null, Modifier.size(28.dp), tint = colors.onVariant)
+                    }) {
+                        TaskTextField(title, onTitleChange, "Task name", "Task title", !saving,
+                            TextStyle(color = colors.on, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium),
+                            Modifier.focusRequester(titleFocus), ImeAction.Next) { descriptionFocus.requestFocus() }
+                    }
+                    Spacer(Modifier.height(3.dp))
+                    TaskTextCard(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp), {
+                        Icon(Icons.AutoMirrored.Outlined.Notes, null, Modifier.size(24.dp), tint = colors.onVariant)
+                    }) {
+                        TaskTextField(description, onDescriptionChange, "Description", "Task description", !saving,
+                            TextStyle(color = colors.on, fontSize = 16.sp, lineHeight = 24.sp), Modifier.focusRequester(descriptionFocus))
+                    }
+                    if (error != null) Text(error, color = colors.error, modifier = Modifier.padding(12.dp))
+                    val windowInfo = LocalWindowInfo.current
+                    val keyboard = LocalSoftwareKeyboardController.current
+                    // Focus once the dialog window has it, so the keyboard opens with the panel.
+                    LaunchedEffect(Unit) {
+                        snapshotFlow { windowInfo.isWindowFocused }.first { it }
+                        (if (focusDescription) descriptionFocus else titleFocus).requestFocus()
+                        keyboard?.show()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskTextCard(shape: androidx.compose.ui.graphics.Shape, leading: @Composable () -> Unit, content: @Composable () -> Unit) {
+    Surface(color = TimeboxTheme.colors.surf, shape = shape, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 4.dp, end = 16.dp).heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { leading() }
+            Box(Modifier.weight(1f).padding(start = 8.dp, top = 16.dp, bottom = 16.dp)) { content() }
+        }
+    }
+}
+
+/** Opens with the cursor after the existing text, ready to continue typing. */
+@Composable
+private fun TaskTextField(value: String, onValueChange: (String) -> Unit, placeholder: String, description: String, enabled: Boolean, style: TextStyle,
+    modifier: Modifier = Modifier, imeAction: ImeAction = ImeAction.Default, onNext: () -> Unit = {}) {
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (field.text != value) field = field.copy(text = value)
+    BasicTextField(field, { field = it; if (it.text != value) onValueChange(it.text) }, enabled = enabled, textStyle = style,
+        cursorBrush = SolidColor(TimeboxTheme.colors.on),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onNext = { onNext() }),
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = description },
+        decorationBox = { inner -> if (value.isEmpty()) Text(placeholder, style = style.copy(color = TimeboxTheme.colors.onVariant, fontWeight = FontWeight.Normal)); inner() })
 }
 
 /** Use the sheet window's normal Back dispatcher; Material's overlay callback hides it before draft confirmation. */

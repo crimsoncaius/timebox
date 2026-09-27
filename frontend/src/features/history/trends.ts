@@ -39,3 +39,56 @@ export function trendRangeLabel(range: TrendRange) {
     : `${SHORT_MONTHS[sm - 1]} ${sd} – ${SHORT_MONTHS[em - 1]} ${ed}`
   return `${kind} · ${dates}`
 }
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/**
+ * The range heading beside the arrows: "Sun, Sep 27", "Sep 21 – 27", "September 2026"; other years add the year.
+ * A custom range spanning years names both, since it can run longer than a year.
+ */
+export function trendRangeHeading(period: string, start: string, end: string, today: string) {
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const year = ey !== Number(today.slice(0, 4)) ? `, ${ey}` : ''
+  if (period === 'month') return `${LONG_MONTHS[sm - 1]} ${sy}`
+  if (start === end) return `${WEEKDAYS[new Date(`${start}T00:00:00Z`).getUTCDay()]}, ${SHORT_MONTHS[sm - 1]} ${sd}${year}`
+  if (period === 'custom' && sy !== ey) return `${SHORT_MONTHS[sm - 1]} ${sd}, ${sy} – ${SHORT_MONTHS[em - 1]} ${ed}, ${ey}`
+  return sm === em && sy === ey ? `${SHORT_MONTHS[sm - 1]} ${sd} – ${ed}${year}` : `${SHORT_MONTHS[sm - 1]} ${sd} – ${SHORT_MONTHS[em - 1]} ${ed}${year}`
+}
+
+/** "Sep 14", or "Sep 14, 2025" outside Today's year. */
+export function trendDayLabel(iso: string, today: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${SHORT_MONTHS[m - 1]} ${d}${y !== Number(today.slice(0, 4)) ? `, ${y}` : ''}`
+}
+
+export function dayCountLabel(days: number) {
+  return `${days} ${days === 1 ? 'day' : 'days'}`
+}
+
+/** A custom range being chosen on the calendar: the last day is null until it is picked. */
+export type RangeDraft = { start: string; end: string | null }
+
+/** A tap starts a new range, unless it picks the last day of one already started. */
+export function nextRangeDraft(draft: RangeDraft, iso: string): RangeDraft {
+  if (draft.end !== null || iso < draft.start) return { start: iso, end: null }
+  return { start: draft.start, end: iso }
+}
+
+/**
+ * Whether Trends shows the range containing Today, decided from the anchor so it holds while a report is
+ * loading: no anchor is the current range; otherwise the anchor's Monday week or month must contain Today.
+ */
+export function showsCurrentTrendRange(period: string, anchor: string, today: string) {
+  if (!anchor) return true
+  if (period === 'day') return anchor === today
+  if (period === 'month') return anchor.slice(0, 7) === today.slice(0, 7)
+  if (period === 'week') return mondayOf(anchor) === mondayOf(today)
+  return false
+}
+
+function mondayOf(iso: string) {
+  const date = new Date(`${iso}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7)
+  return date.toISOString().slice(0, 10)
+}

@@ -25,21 +25,18 @@ import com.timebox.android.TimeboxApplication
 import com.timebox.android.ui.day.ActivityTracking
 import com.timebox.android.ui.theme.TimeboxTheme
 
-@Composable fun FocusWakeSettings() {
+/** The Focus row for the Settings "Focus & check-ins" group. */
+@Composable fun FocusWakeSettingRow() {
     val controller = (LocalContext.current.applicationContext as TimeboxApplication).focusController
     val state by controller.state.collectAsState()
-    com.timebox.android.ui.components.SectionCard {
-        com.timebox.android.ui.components.SectionHeader(title = "Focus Mode")
-        Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
-            com.timebox.android.ui.components.SettingRow(
-                title = "Keep display awake",
-                description = "While Focus is visible on this device. Battery policy applies; manual locking still works.",
-            ) {
-                com.timebox.android.ui.components.TimeboxSwitch(checked = state.wake, onCheckedChange = controller::setWake)
-            }
-        }
+    com.timebox.android.ui.components.SettingRow(
+        title = "Keep display awake in Focus",
+        description = "Battery policy applies; manual locking still works.",
+    ) {
+        com.timebox.android.ui.components.TimeboxSwitch(checked = state.wake, onCheckedChange = controller::setWake)
     }
 }
+
 @Composable fun FocusMode(onTaskChanged: () -> Unit = {}) {
     val app = LocalContext.current.applicationContext as TimeboxApplication
     val controller = app.focusController

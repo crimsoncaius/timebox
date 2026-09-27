@@ -10,7 +10,7 @@ import org.junit.Test
 
 class ReportingTimezoneSettingsTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun explicitSharedZoneEditAndSave() {
+    @Test fun explicitSharedZoneChooseAndSave() {
         var state by mutableStateOf(SettingsUiState(timezone = "Asia/Singapore", reportingZoneInput = "Asia/Singapore"))
         var saved = ""
         compose.setContent {
@@ -18,8 +18,13 @@ class ReportingTimezoneSettingsTest {
                 SettingsScreen(state, false, {}, {}, {}, {}, onBaseUrlChange = {}, onApiKeyChange = {}, onSaveConnection = {}, notificationsAllowed = false, onRequestNotificationPermission = {}, onOpenNotificationSettings = {}, onReportingZoneChange = { state = state.copy(reportingZoneInput = it) }, onSaveReportingZone = { saved = state.reportingZoneInput }, onRetry = {})
             }
         }
-        compose.onNode(hasSetTextAction() and hasText("Asia/Singapore")).performTextReplacement("America/New_York")
+        compose.onNodeWithText("Asia/Singapore", substring = true).assertExists()
+        compose.onNodeWithText("Change").performScrollTo().performClick()
+        compose.onNodeWithText("Save time zone").assertIsNotEnabled()
+        compose.onNode(hasSetTextAction() and hasAnyAncestor(isDialog())).performTextInput("new york")
+        compose.onNodeWithText("America/New York").performClick()
         compose.onNodeWithText("Save time zone").performClick()
         compose.runOnIdle { assertEquals("America/New_York", saved) }
+        compose.onNodeWithText("Search time zones").assertDoesNotExist()
     }
 }
