@@ -37,7 +37,7 @@ class UndoLifecycle(
     private var nextId = 1L
     private var activeContext: String? = null
     private var visible = false
-    private var timeoutMillis = 10_000L
+    private var timeoutMillis = 3_000L
     private var exposedMillis = 0L
     private var startedAt: Long? = null
     private var expiry: Job? = null
@@ -68,7 +68,7 @@ class UndoLifecycle(
         if (_notice.value?.context != context) clear()
         activeContext = context
         visible = resumed
-        timeoutMillis = maxOf(10_000L, recommendedTimeoutMillis)
+        timeoutMillis = maxOf(3_000L, recommendedTimeoutMillis)
         schedule()
     }
 

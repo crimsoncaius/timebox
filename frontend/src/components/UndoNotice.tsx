@@ -14,7 +14,7 @@ export function UndoNotice({ notice, onDismiss, onFailure }: {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [visible, setVisible] = useState(document.visibilityState !== 'hidden')
-  const remaining = useRef(10_000)
+  const remaining = useRef(3_000)
   const started = useRef<number | null>(null)
   const inFlight = useRef(false)
   const mounted = useRef(true)
