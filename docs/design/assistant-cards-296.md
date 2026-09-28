@@ -1,6 +1,6 @@
 # Assistant Cards (#296)
 
-Status: design settled 27 Sep 2026; prototype on `claude/prototype-assistant-cards` (debug-only deep link, sample data, nothing reaches the API). Parent: #292.
+Status: design settled 27 Sep 2026; sample routes removed after approval on 28 Sep 2026. Historical prototype on `claude/prototype-assistant-cards` (debug-only deep link, sample data, nothing reaches the API). Parent: #292.
 
 ## Settled (#292, revised 27 Sep 2026)
 
@@ -85,4 +85,4 @@ The collapsed two-lane view starts at the first Planned Block hour and explicitl
 
 Open Day selects the captured date. Open Trends selects the captured custom range. Trends itself still only accepts dates through Today, so future-containing cards explain this existing destination limitation. Future actual-only reads retain their explicit unavailable state, as returned by the read contract, rather than inventing Planned Blocks that were not read.
 
-Debug review: `timebox://prototype/assistant-card-review` renders deterministic sample snapshots using the production components. Its sample navigation buttons do not change routes; the Assistant's real navigation callbacks are wired in the application graph.
+After review approval, both sample destinations and their debug-only fixtures were removed. The production-card regression fixtures live only in `androidTest`; the historical deep links above are design evidence and no longer resolve in the application.
