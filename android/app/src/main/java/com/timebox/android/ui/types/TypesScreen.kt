@@ -72,6 +72,7 @@ fun TypesScreen(
     onBackFromMerge: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
+    val visibleGroups = state.visibleGroups
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -87,7 +88,7 @@ fun TypesScreen(
                 onValueChange = onInputChange,
                 singleLine = true,
                 placeholder = {
-                    Text("coding/ai", style = TimeboxTheme.type.body, color = colors.outlineVariant)
+                    Text("Search or add (e.g. coding/ai)", style = TimeboxTheme.type.body, color = colors.outlineVariant)
                 },
                 textStyle = TimeboxTheme.type.body.copy(color = colors.on, fontSize = 14.sp),
                 shape = TimeboxShapes.field,
@@ -131,6 +132,11 @@ fun TypesScreen(
                 description = "Add a path such as coding/ai to organize Blocks and Tasks.",
                 modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding, vertical = 8.dp),
             )
+            visibleGroups.isEmpty() -> EmptyStateCard(
+                title = "No matching Task Types",
+                description = "Tap + to add ${state.input.trim()} as a new Task Type.",
+                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding, vertical = 8.dp),
+            )
             else -> LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(
@@ -139,7 +145,7 @@ fun TypesScreen(
                     bottom = TimeboxDimens.bottomInset,
                 ),
             ) {
-                state.groups.forEach { group ->
+                visibleGroups.forEach { group ->
                     item(key = "header-${group.root}") {
                         Text(
                             text = group.root.uppercase(),
