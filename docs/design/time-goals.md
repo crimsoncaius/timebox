@@ -1,6 +1,6 @@
 # Time Goals in Chronicle
 
-Status: Time Goals and its separate Chronicle tab are implemented. The creation refinement is on `codex/time-goal-entry`, pending user review and explicit merge instruction. The original design was accepted on 2026-09-27, including B (expandable rows), the connected creation/edit/lifecycle flow and the effective-date distinction between target edits and replacements.
+Status: Time Goals and its separate Chronicle tab are implemented. The creation refinement on `codex/time-goal-entry` was accepted for merge on 28 September 2026. The original design was accepted on 2026-09-27, including B (expandable rows), the connected creation/edit/lifecycle flow and the effective-date distinction between target edits and replacements.
 
 ## Production implementation
 
@@ -36,7 +36,7 @@ The comparison source remains on `codex/prototype-time-goal-entry`, including ac
 
 Validation: debug build and all 388 unit tests passed. Two focused Compose instrumentation tests passed on the managed phone: invalid-minute validation and corrected creation payload (monthly default start), plus draft retention, field-sheet Back and discard confirmation. A real creation against isolated SQLite saved a 2h goal every two weeks and returned the matching calendar period. Light/default and dark/1.3 captures, including a long Task Type Path, are in `.impeccable/review/time-goal-entry-production/`. Independent native finish review returned **ship**; the documenter found no durable system changes. Full instrumentation, tablet, TalkBack and physical-device IME behavior were not covered; the emulator offered handwriting input.
 
-Current creation review: `emulator-5586`, token `3bad67a4fb1b48d6973cf3b14632c726`, storage `C:/Users/Caius/TimeboxRuntime/emulators`. Isolated package `com.timebox.android.goalentry` uses backend `http://127.0.0.1:12077` (Android `http://10.0.2.2:12077/`) and ignored `artifacts/goal-entry/review.db`. Restart the backend with `artifacts/goal-entry/start-backend.ps1`; build with quoted Gradle arguments `'-PreviewApiBaseUrl=http://10.0.2.2:12077/' '-PreviewApplicationIdSuffix=.goalentry'`. Keep the device and backend available until this review is complete; release through the emulator helper afterward.
+Completed creation review: `emulator-5586`, token `3bad67a4fb1b48d6973cf3b14632c726`, storage `C:/Users/Caius/TimeboxRuntime/emulators`. Isolated package `com.timebox.android.goalentry` uses backend `http://127.0.0.1:12077` (Android `http://10.0.2.2:12077/`) and ignored `artifacts/goal-entry/review.db`. Restart the backend with `artifacts/goal-entry/start-backend.ps1`; build with quoted Gradle arguments `'-PreviewApiBaseUrl=http://10.0.2.2:12077/' '-PreviewApplicationIdSuffix=.goalentry'`. The user accepted this review and requested merge on 28 September 2026. Its device is released through the emulator helper; acquire a fresh managed device to reproduce it.
 
 ### Goal rules
 
