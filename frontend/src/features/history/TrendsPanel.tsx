@@ -100,35 +100,53 @@ export function TrendsPanel({ active, onDrill }: { active: boolean; onDrill: Dri
     {report && <>
       <div><p className="font-headline text-5xl font-extralight tracking-tight" data-testid="trends-total">{trendDuration(report.duration_seconds)}</p><p className="mt-2 text-sm text-on-surface-variant">Recorded time · {report.timezone}</p></div>
       {report.types.length === 0 ? <p>No recorded time in this range.</p> : <>
-        <h2 className="text-xs uppercase tracking-widest text-on-surface-variant">By Task Type</h2>
-        <div className="space-y-5">{report.types.map(node => <TypeNode key={node.path} node={node} total={report.duration_seconds} depth={0} onDrill={period === 'day' ? null : (name, days) => onDrill(name, days, { period, start: report.start, end: report.end })} />)}</div>
+        <div>
+          <div className={`flex items-center pb-2 text-xs ${muted}`}>
+            <h2 className="flex-1">Task Type</h2><span className={shareColumn}>Share</span><span className={`${timeColumn} text-right`}>Time</span><span className={`${percentColumn} text-right`}>%</span>
+          </div>
+          <div className="divide-y divide-surface-container-low border-y border-surface-container-low dark:divide-dark-surface-container dark:border-dark-surface-container">
+            {report.types.map(node => <div key={node.path}><TypeNode node={node} total={report.duration_seconds} depth={0} onDrill={period === 'day' ? null : (name, days) => onDrill(name, days, { period, start: report.start, end: report.end })} /></div>)}
+          </div>
+        </div>
       </>}
     </>}
   </section>
 }
 
+const muted = 'text-on-surface-variant dark:text-dark-on-surface-variant'
+const shareColumn = 'w-14 shrink-0 pr-2'
+const timeColumn = 'w-20 shrink-0'
+const percentColumn = 'w-16 shrink-0'
+
+// One ledger row: tree guides and a chevron slot for depth, then fixed Share, Time and % columns.
+// Every bar shares the range-total scale; top-level rows are taller and heavier than their children.
 function TypeNode({ node, total, depth, onDrill }: { node: TrendNode; total: number; depth: number; onDrill: NodeDrill }) {
   const [expanded, setExpanded] = useState(false)
+  const direct = node.path.endsWith('/')
   const children = [...node.children]
   if (node.direct_seconds > 0 && node.children.length) children.push({ ...node, path: `${node.path}/`, name: `Directly under ${node.name}`, duration_seconds: node.direct_seconds, days: node.direct_days, children: [] })
   children.sort((a, b) => b.duration_seconds - a.duration_seconds || a.path.localeCompare(b.path))
   const percentage = node.duration_seconds / total * 100
-  return <div className="space-y-4">
-    <div>
-      <div className="flex items-center justify-between gap-3 py-2">
-        {node.children.length || onDrill ? <button style={{ paddingLeft: `${Math.min(depth, 4) * 18}px` }} className="min-w-0 flex-1 py-2 text-left" aria-expanded={node.children.length ? expanded : undefined} onClick={() => node.children.length ? setExpanded(!expanded) : onDrill?.(node.name, node.days)}>
-          {node.children.length > 0 && <span aria-hidden>{expanded ? '▾' : '▸'} </span>}{node.name}
-        </button> : <span style={{ paddingLeft: `${Math.min(depth, 4) * 18}px` }} className="min-w-0 flex-1 py-2">{node.name}</span>}
-        {onDrill ? <button className="shrink-0 py-2 text-right tabular-nums" aria-label={`Show contributing days for ${node.name}`} onClick={() => onDrill(node.path.endsWith('/') ? node.name : node.path, node.days)}>
-          <TypeTotal seconds={node.duration_seconds} percentage={percentage} />
-        </button> : <div className="shrink-0 py-2 text-right tabular-nums"><TypeTotal seconds={node.duration_seconds} percentage={percentage} /></div>}
-      </div>
-      <div className={`${depth ? 'h-1' : 'h-1.5'} overflow-hidden rounded-full bg-surface-container-low dark:bg-dark-surface-container`}><div className={`h-full ${depth ? 'bg-outline' : 'bg-on-surface-variant'}`} style={{ width: `${percentage}%` }} /></div>
+  const top = depth === 0
+  const label = <>
+    {Array.from({ length: Math.min(depth, 4) }, (_, i) => <span key={i} aria-hidden className="flex w-[18px] shrink-0 justify-center self-stretch"><span className="w-px bg-outline-variant dark:bg-dark-outline-variant" /></span>)}
+    <span aria-hidden className={`material-symbols-outlined w-[22px] shrink-0 text-[18px] ${muted}`}>{node.children.length ? expanded ? 'expand_more' : 'chevron_right' : ''}</span>
+    <span className={`min-w-0 flex-1 truncate ${top ? 'text-[15px] font-medium' : 'text-sm'} ${direct ? `italic ${muted}` : ''}`}>{direct ? '(direct)' : node.name}</span>
+    <span aria-hidden className={shareColumn}><span className={`block ${top ? 'h-2' : 'h-[5px]'} overflow-hidden rounded-full bg-surface-container-low dark:bg-dark-surface-container`}><span className={`block h-full ${top ? 'bg-on-surface dark:bg-dark-on-surface' : 'bg-on-surface-variant dark:bg-dark-on-surface-variant'}`} style={{ width: `${percentage}%` }} /></span></span>
+  </>
+  const totals = <>
+    <span className={`${timeColumn} text-right ${top ? 'text-sm font-medium' : 'text-[13px]'}`}>{trendDuration(node.duration_seconds)}</span>
+    <span className={`${percentColumn} text-right text-xs ${muted}`}>{percentage.toFixed(1)}%</span>
+  </>
+  return <>
+    <div className={`flex items-stretch ${top ? 'min-h-[3.25rem]' : 'min-h-10'}`}>
+      {node.children.length || onDrill ? <button className="flex min-w-0 flex-1 items-center text-left" aria-label={direct ? node.name : undefined} aria-expanded={node.children.length ? expanded : undefined} onClick={() => node.children.length ? setExpanded(!expanded) : onDrill?.(node.name, node.days)}>
+        {label}
+      </button> : <div className="flex min-w-0 flex-1 items-center">{label}</div>}
+      {onDrill ? <button className="flex shrink-0 items-center tabular-nums" aria-label={`Show contributing days for ${node.name}`} onClick={() => onDrill(direct ? node.name : node.path, node.days)}>
+        {totals}
+      </button> : <div className="flex shrink-0 items-center tabular-nums">{totals}</div>}
     </div>
     {expanded && children.map(child => <TypeNode key={child.path} node={child} total={total} depth={depth + 1} onDrill={onDrill} />)}
-  </div>
-}
-
-function TypeTotal({ seconds, percentage }: { seconds: number; percentage: number }) {
-  return <><span className="block text-sm">{trendDuration(seconds)}</span><span className="block text-xs text-on-surface-variant">{percentage.toFixed(1)}%</span></>
+  </>
 }
