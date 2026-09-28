@@ -52,6 +52,7 @@ import java.time.format.DateTimeFormatter
 fun AssistantScreen(
     controller: AssistantController = (LocalContext.current.applicationContext as TimeboxApplication).assistant,
     onOpenDay: (LocalDate) -> Unit = {},
+    onOpenTrends: (LocalDate, LocalDate) -> Unit = { _, _ -> },
 ) {
     val state by controller.state.collectAsState()
     val tracking = rememberProposalTracking(controller, state, onOpenDay)
@@ -107,11 +108,11 @@ fun AssistantScreen(
                         Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = colors.onVariant)
                         Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                     }
-                    exchange.plan?.let { PlanCard(it) }
                     exchange.proposal?.let { proposal -> tracking?.Card(proposal) }
+                    AssistantCards(exchange.cards, onOpenDay, onOpenTrends)
                     if (exchange.answer.isNotEmpty()) SelectionContainer { AnswerText(exchange.answer) }
                     if (index == state.exchanges.lastIndex && state.busy) Text(
-                        if (state.readingPlan) "Reading today’s plan…" else if (exchange.answer.isEmpty() && exchange.plan == null) "Thinking…" else "Writing response…",
+                        if (state.readingPlan) "Reading activity…" else if (exchange.answer.isEmpty() && exchange.cards.isEmpty()) "Thinking…" else "Writing response…",
                         Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (exchange.status in listOf("Stopped", "Interrupted")) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(12.dp)) {
@@ -194,7 +195,7 @@ private fun AssistantComposer(draft: String, onDraft: (String) -> Unit, focus: F
 }
 
 @Composable
-private fun PlanCard(plan: AssistantPlan) {
+internal fun PlanCard(plan: AssistantPlan, onOpenDay: (LocalDate) -> Unit = {}) {
     var expanded by rememberSaveable(plan.id) { mutableStateOf(false) }
     val largeText = LocalDensity.current.fontScale > 1.3f
     val colors = TimeboxTheme.colors
@@ -223,6 +224,7 @@ private fun PlanCard(plan: AssistantPlan) {
                     Column(Modifier.weight(1f)) { PlanRowTitle(row) }
                 }
             }
+            TextButton(onClick = { onOpenDay(plan.date) }) { Text("Open Day") }
             if (plan.rows.size > 3) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
                 Text(if (expanded) "Show fewer" else "Show all ${plan.rows.size} blocks", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 Text(if (expanded) "−" else "+", color = colors.onVariant)

@@ -4,7 +4,6 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
-import com.timebox.android.ui.assistant.AssistantCardsPrototypeRoot
 import com.timebox.android.ui.battleplan.RecurringDetailsHierarchyPrototype
 import com.timebox.android.ui.battleplan.RoutineSheetPrototype
 import com.timebox.android.ui.battleplan.TaskSheetPrototype
@@ -64,28 +63,6 @@ fun NavGraphBuilder.prototypeRoutes() {
         HabitsPrototype(
             entry.arguments?.getString("total") ?: "labeled",
             entry.arguments?.getString("scenario") ?: "sample",
-        )
-    }
-    composable(
-        "prototype/assistant-cards?card={card}&lane={lane}&layout={layout}&both={both}&detail={detail}&scenario={scenario}",
-        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-cards?card={card}&lane={lane}&layout={layout}&both={both}&detail={detail}&scenario={scenario}" }),
-        arguments = listOf(
-            navArgument("card") { defaultValue = "block" },
-            navArgument("lane") { defaultValue = "both" },
-            navArgument("layout") { defaultValue = "lanes" },
-            navArgument("both") { defaultValue = "bars" },
-            navArgument("detail") { defaultValue = "total" },
-            navArgument("scenario") { defaultValue = "" },
-        ),
-    ) { entry ->
-        val args = entry.arguments
-        AssistantCardsPrototypeRoot(
-            card = args?.getString("card") ?: "block",
-            layout = args?.getString("layout") ?: "lanes",
-            scenario = args?.getString("scenario") ?: "",
-            lane = args?.getString("lane") ?: "both",
-            both = args?.getString("both") ?: "bars",
-            detail = args?.getString("detail") ?: "total",
         )
     }
 }

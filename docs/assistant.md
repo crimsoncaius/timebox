@@ -3,8 +3,10 @@
 Android streams a conversation from the existing FastAPI backend. Conversations
 and response attempts are captured in the application's database without
 automatic expiry. There is no conversation-history interface yet.
-The LangGraph graph makes at most two model calls and one read-only Today tool
-call per response. LangChain's OpenRouter adapter uses `z-ai/glm-5.3-flash`;
+The LangGraph graph allows up to three sequential read-only activity calls, then
+at most one `propose_tracking`, then a tool-free answer (at most five model calls).
+No reads can follow a proposal; tool validation failures also consume their call
+allowance. Each call is checked against the remaining tools on the server. LangChain's OpenRouter adapter uses `z-ai/glm-5.3-flash`;
 there is no model fallback or automatic retry. A response has a 120-second
 deadline. Only the latest 20 explicitly acknowledged completed exchanges enter later context.
 Android acknowledges the previous completed response before sending the next
@@ -17,11 +19,16 @@ accepted capabilities. The mode belongs to the conversation. Clients without
 card support get a server-rendered textual schedule; a new client talking to an
 older server also stays in text mode. Roll out the compatible backend first.
 
-The model selects either no card or a server-owned snapshot using a bounded
-512-byte JSON control line. The backend validates and consumes that line before
-emitting a single `plan_card` event followed by any answer text. It buffers the
-first tool-capable call, discarding preliminary prose when a read is requested.
-Only the final tool-free call streams answer text incrementally. Snapshot IDs,
+The model selects no cards, one snapshot, or an ordered list of up to three
+distinct snapshots using a bounded 512-byte JSON control line. The plural selector
+is `{"presentation":"snapshots","snapshot_ids":["id1","id2"]}`; the existing
+singular selector remains valid. Each read contributes at most one card, and the
+model chooses which reads to display and their order. A Tracking Proposal may
+precede these read cards. The backend validates and consumes the header before
+emitting ordered `plan_card` events followed by answer text. It buffers each
+tool-capable model call and discards preliminary prose when a tool is requested.
+The forced final call (no tools remaining) streams answer text incrementally;
+earlier tool-free answers are released after their successful terminal. Snapshot IDs,
 read times, dates, time zones and rows come from the server. Reading a plan does
 not force a card. Completed reads, including undisplayed reads, join temporary
 response context only on acknowledgement; stopped and interrupted attempts never do.
@@ -40,10 +47,28 @@ EOF, cancellation, truncation, malformed selectors or unauthorized references.
 The eight-call smoke budget was exhausted during diagnosis; regression replay
 checks cover the captured output pattern without additional provider calls.
 
-The tool resolves Today in the Reporting Time Zone at execution. It selects
-stored Planned Blocks directly, including times, Block Name, Task Type and linked
-Task ID/title. It does not materialize missing Days or recurring work. Supporting
-Notes and Task Descriptions never enter the tool result.
+`read_activity` replaces `read_today_plan`. Its arguments are `lane` (`planned`,
+`actual`, `both`), `when` (one ISO date, `today` by default, or `yesterday`),
+`group_by: blocks`, optional existing `task_type` subtree, and `include_text`.
+Ranges are rejected for blocks. Task Type Paths match case-insensitively, as in
+Tracking Proposals; unknown paths are rejected.
+
+The tool resolves Today and date boundaries in the Reporting Time Zone at execution.
+It reads stored rows only, never materializing Days or recurring work. Each block
+has a server ID, lane, full start/end, whole-minute Block Duration, minutes inside
+the date, Block Name, Task Type, linked Task ID/title, and linked Planned Block ID.
+Cross-midnight Actual Blocks appear in full; running blocks end at the captured
+read time. Future dates contain stored Planned Blocks only, with an explicit
+recurring-work caveat and explanation when Actual Blocks were requested.
+
+Schema version 2 snapshots retain the server-owned ID and read time. Version 1
+historical plan snapshots remain supported. Until clients support Block Cards,
+version 2 selections render a textual schedule even on plan-card-v1 clients.
+Supporting Notes and Task Descriptions appear only with `include_text`, capped
+at 2,000 characters per field per item. The prompt permits that flag only on an
+explicit request (including follow-ups), treats text as untrusted data, and keeps
+it out of card/textual-schedule rendering. Included text goes to the provider,
+retained snapshots and Phoenix traces, as described in ADR 0018.
 
 ## Run
 
@@ -79,7 +104,7 @@ New conversation cancels the old run and closes its conversation without deletin
 the captured record (the existing DELETE endpoint now means close).
 
 Each attempt stores the submitted message, model, timestamps, accumulated answer,
-read snapshots, displayed plan, completion status, safe error message and receipt
+read snapshots, ordered displayed cards, completion status, safe error message and receipt
 acknowledgement. Messages are saved before generation; response text and plan
 events are checkpointed as they stream, including partial and stopped attempts.
 If saving the message fails, generation does not start. A response-save failure
@@ -88,9 +113,15 @@ context. Messages that never reach the server cannot be captured. A process cras
 can lose output since the most recent successful checkpoint.
 
 There are 4,000 characters per input and one active response per conversation.
-Only the most recent 20 acknowledged completed exchanges and their associated
-snapshots are used for later answers; older records remain stored and visible in
-the active Android session. Idle context can be evicted from the bounded RAM cache
+Only the most recent 20 acknowledged completed exchanges enter later context.
+Their read data is capped at 64 KiB of serialized JSON: whole snapshots drop
+out oldest-first, along with their replayed calls and card selectors. Even a
+single oversized read is excluded from later context. Stored reads and cards
+are never deleted by this pruning and remain available for rendering. The
+legacy `displayed_plan` JSON column stores a dictionary for one card and an
+ordered list for multiple cards; no database migration is required. Response
+call/card counts, context bounds and the 120-second deadline are centralized
+in `backend/app/services/assistant_limits.py`. Idle context can be evicted from the bounded RAM cache
 and reloaded from the database. There is no cross-conversation memory or summary.
 Stop closes the upstream stream where supported; provider billing cancellation
 is not guaranteed. Retry is always explicit.
