@@ -1,6 +1,6 @@
 # Time Goals in Chronicle
 
-Status: implemented on `codex/time-goals`, pending user review and explicit merge instruction. Design accepted on 2026-09-27, including B (expandable rows), the connected creation/edit/lifecycle flow and the effective-date distinction between target edits and replacements.
+Status: Time Goals and its separate Chronicle tab are implemented. The creation refinement on `codex/time-goal-entry` was accepted for merge on 28 September 2026. The original design was accepted on 2026-09-27, including B (expandable rows), the connected creation/edit/lifecycle flow and the effective-date distinction between target edits and replacements.
 
 ## Production implementation
 
@@ -25,6 +25,20 @@ Validation of the navigation split: 383 Android unit tests passed and the debug 
 Primary comparison evidence: local branch `codex/prototype-habits-goals-split`, commit `4845a68a`, including `docs/design/habits-goals-split-prototype.md` and its screenshot set. The debug prototype and its sample data stay on that branch.
 
 ## Accepted behavior
+
+### Creation refinement — 28 September 2026
+
+The user chose C1's underlined sentence, then requested bottom sheets instead of inline controls and authorized implementation. New Time Goal reads “I want to spend [duration] on [Task Type Path] [every N periods].” Each underlined value opens its own native sheet. Duration offers hours/minutes and 30m, 1h, 2h and 4h presets; Task Type reuses the searchable hierarchy picker and creation action; period reuses the calendar cadence controls. The complete Task Type Path wraps rather than truncates.
+
+The start date and first-period deadline remain visible, with period dates and counting rules behind First period. A shortened first period always shows its full-target warning. Default calendar starts, explicit custom starts, input validation, failed-save/offline draft retention and discard confirmation retain their existing semantics. Done, sheet dismissal and Android Back return to the sentence with the current draft. Existing-goal editing retains its target-versus-replacement explanation and save behavior.
+
+The comparison source remains on `codex/prototype-time-goal-entry`, including accepted C1 bottom sheets at `4f02714f`; no prototype switcher, sample data or debug route was promoted. This is a scoped composition using existing Android tokens, not a new design system.
+
+Validation: debug build and all 388 unit tests passed. Two focused Compose instrumentation tests passed on the managed phone: invalid-minute validation and corrected creation payload (monthly default start), plus draft retention, field-sheet Back and discard confirmation. A real creation against isolated SQLite saved a 2h goal every two weeks and returned the matching calendar period. Light/default and dark/1.3 captures, including a long Task Type Path, are in `.impeccable/review/time-goal-entry-production/`. Independent native finish review returned **ship**; the documenter found no durable system changes. Full instrumentation, tablet, TalkBack and physical-device IME behavior were not covered; the emulator offered handwriting input.
+
+Completed creation review: `emulator-5586`, token `3bad67a4fb1b48d6973cf3b14632c726`, storage `C:/Users/Caius/TimeboxRuntime/emulators`. Isolated package `com.timebox.android.goalentry` uses backend `http://127.0.0.1:12077` (Android `http://10.0.2.2:12077/`) and ignored `artifacts/goal-entry/review.db`. Restart the backend with `artifacts/goal-entry/start-backend.ps1`; build with quoted Gradle arguments `'-PreviewApiBaseUrl=http://10.0.2.2:12077/' '-PreviewApplicationIdSuffix=.goalentry'`. The user accepted this review and requested merge on 28 September 2026. Its device is released through the emulator helper; acquire a fresh managed device to reproduce it.
+
+### Goal rules
 
 - Independent Time Goals have their own Chronicle tab beside completion-based Habits; no recurring task is required.
 - A selected Task Type includes its own Actual Blocks and all descendants. Exercise, cardio and strength goals can coexist; cardio time credits both cardio and exercise.
