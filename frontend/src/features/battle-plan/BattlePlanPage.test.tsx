@@ -756,7 +756,7 @@ describe('BattlePlanPage', () => {
     expect(screen.queryByRole('status', { name: 'Task completion undo' })).not.toBeInTheDocument()
   })
 
-  it('consumes the web Undo opportunity after ten seconds and fades for 150 ms', async () => {
+  it('consumes the web Undo opportunity after three seconds and fades for 150 ms', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<MemoryRouter initialEntries={['/battle-plan?task=11']}><BattlePlanPage /></MemoryRouter>)
     const trash = await screen.findByRole('button', { name: 'Move to Trash' })
@@ -768,7 +768,7 @@ describe('BattlePlanPage', () => {
     })
     const notice = screen.getByRole('status', { name: 'Trash undo' })
 
-    await act(async () => { vi.advanceTimersByTime(10_000) })
+    await act(async () => { vi.advanceTimersByTime(3_000) })
     expect(within(notice).getByRole('button', { name: 'Undo' })).toBeDisabled()
     expect(notice).toHaveClass('opacity-0')
 
@@ -789,12 +789,12 @@ describe('BattlePlanPage', () => {
     const notice = screen.getByRole('status', { name: 'Trash undo' })
     const undo = within(notice).getByRole('button', { name: 'Undo' })
 
-    await act(async () => { vi.advanceTimersByTime(4_000) })
+    await act(async () => { vi.advanceTimersByTime(750) })
     fireEvent.mouseEnter(notice)
     await act(async () => { vi.advanceTimersByTime(20_000) })
     expect(undo).toBeEnabled()
     fireEvent.mouseLeave(notice)
-    await act(async () => { vi.advanceTimersByTime(2_000) })
+    await act(async () => { vi.advanceTimersByTime(750) })
 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     fireEvent(document, new Event('visibilitychange'))
@@ -802,13 +802,13 @@ describe('BattlePlanPage', () => {
     expect(undo).toBeEnabled()
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     fireEvent(document, new Event('visibilitychange'))
-    await act(async () => { vi.advanceTimersByTime(2_000) })
+    await act(async () => { vi.advanceTimersByTime(750) })
 
     fireEvent.focus(undo)
     await act(async () => { vi.advanceTimersByTime(20_000) })
     expect(undo).toBeEnabled()
     fireEvent.blur(undo, { relatedTarget: document.body })
-    await act(async () => { vi.advanceTimersByTime(2_000) })
+    await act(async () => { vi.advanceTimersByTime(750) })
     expect(undo).toBeDisabled()
   })
 
@@ -828,7 +828,7 @@ describe('BattlePlanPage', () => {
       await Promise.resolve()
     })
 
-    await act(async () => { vi.advanceTimersByTime(10_000) })
+    await act(async () => { vi.advanceTimersByTime(3_000) })
 
     expect(screen.queryByRole('status', { name: 'Trash undo' })).not.toBeInTheDocument()
   })

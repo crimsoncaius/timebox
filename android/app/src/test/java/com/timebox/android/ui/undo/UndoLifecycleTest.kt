@@ -17,14 +17,14 @@ class UndoLifecycleTest {
     @Test fun `visible exposure pauses in background and new offer consumes old one`() = runTest {
         var elapsed = 0L
         val lifecycle = UndoLifecycle(backgroundScope) { elapsed }
-        lifecycle.setExposure("battle-plan", true, 10_000)
+        lifecycle.setExposure("battle-plan", true, 3_000)
         val first = lifecycle.offer("battle-plan", "First", "First trashed", undo = { Result.success(Unit) })
-        advanceTimeBy(4_000); elapsed += 4_000
-        lifecycle.setExposure("battle-plan", false, 10_000)
+        advanceTimeBy(1_000); elapsed += 1_000
+        lifecycle.setExposure("battle-plan", false, 3_000)
         advanceTimeBy(20_000); elapsed += 20_000
         assertEquals(first, lifecycle.notice.value?.id)
-        lifecycle.setExposure("battle-plan", true, 10_000)
-        advanceTimeBy(6_000); elapsed += 6_000; runCurrent()
+        lifecycle.setExposure("battle-plan", true, 3_000)
+        advanceTimeBy(2_000); elapsed += 2_000; runCurrent()
         assertEquals(UndoPhase.Expiring, lifecycle.notice.value?.phase)
         lifecycle.finishExpiry(first)
         assertNull(lifecycle.notice.value)
@@ -38,7 +38,7 @@ class UndoLifecycleTest {
     @Test fun `late failure leaves newer undo in place and identifies the failed target`() = runTest {
         val deferred = CompletableDeferred<Result<Unit>>()
         val lifecycle = UndoLifecycle(backgroundScope) { 0L }
-        lifecycle.setExposure("battle-plan", true, 10_000)
+        lifecycle.setExposure("battle-plan", true, 3_000)
         val old = lifecycle.offer("battle-plan", "First", "First trashed", undo = { deferred.await() })
         val late = mutableListOf<String>()
         backgroundScope.launch { lifecycle.lateErrors.collect { late += it } }

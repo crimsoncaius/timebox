@@ -299,11 +299,11 @@ fun TimeboxApp(
     val isImeVisible = imeVisibleOverride ?: WindowInsets.isImeVisible
     val accessibilityManager = LocalAccessibilityManager.current
     val recommendedUndoTimeoutMillis = accessibilityManager?.calculateRecommendedTimeoutMillis(
-        originalTimeoutMillis = 10_000L,
+        originalTimeoutMillis = 3_000L,
         containsIcons = false,
         containsText = true,
         containsControls = true,
-    ) ?: 10_000L
+    ) ?: 3_000L
     val trackingScope = rememberCoroutineScope()
     val context = LocalContext.current
     val reducedMotion = Settings.Global.getFloat(
