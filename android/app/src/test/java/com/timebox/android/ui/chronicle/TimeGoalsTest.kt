@@ -31,42 +31,67 @@ class TimeGoalsTest {
     private fun week(start: String) = TimeGoalsWeekDto("2026-09-27", start, "2026-08-31", "Asia/Singapore",
         "2026-09-27T12:00:00Z", listOf(goal(start)))
 
-    @Test fun `goal history extends week navigation and offline retains the whole confirmed week`() = runTest(dispatcher) {
+    @Test fun `goal history bounds navigation and offline retains the confirmed report`() = runTest(dispatcher) {
         var offline = false
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
             if (offline) return@newProxyInstance offline(args)
             val start = args?.get(0) as String? ?: "2026-09-21"
             when (method.name) {
-                "habitsWeek" -> HabitsWeekDto("2026-09-27", start, "2026-09-21", emptyList())
                 "timeGoals" -> week(start)
                 else -> error(method.name)
             }
         } as TimeboxApi
-        val vm = HabitsViewModel(TimeboxRepository(api, dispatcher))
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
         vm.refresh(); advanceUntilIdle()
         vm.shiftWeek(-1); advanceUntilIdle()
-        assertEquals(LocalDate.parse("2026-09-14"), vm.state.value.week!!.weekStart)
+        assertEquals(LocalDate.parse("2026-09-14"), vm.state.value.goals!!.weekStart)
         val confirmed = vm.state.value.goals
         offline = true
         vm.shiftWeek(-1); advanceUntilIdle()
         assertTrue(vm.state.value.offline)
         assertEquals(confirmed, vm.state.value.goals)
-        assertEquals(LocalDate.parse("2026-09-14"), vm.state.value.week!!.weekStart)
+        assertEquals(LocalDate.parse("2026-09-14"), vm.state.value.goals!!.weekStart)
         offline = false
         vm.refresh(); advanceUntilIdle()
         assertFalse(vm.state.value.offline)
     }
 
+    @Test fun `tabs keep independent weeks and goal failure does not block habits`() = runTest(dispatcher) {
+        var failGoals = false
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            val start = args?.get(0) as String? ?: "2026-09-21"
+            when (method.name) {
+                "habitsWeek" -> HabitsWeekDto("2026-09-27", start, "2026-09-07", emptyList())
+                "timeGoals" -> if (failGoals) offline(args) else week(start)
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val repository = TimeboxRepository(api, dispatcher)
+        val habits = HabitsViewModel(repository)
+        val goals = TimeGoalsViewModel(repository)
+        habits.refresh(); goals.refresh(); advanceUntilIdle()
+        goals.shiftWeek(-2); habits.shiftWeek(-1); advanceUntilIdle()
+        habits.refresh(); goals.refresh(); advanceUntilIdle()
+        assertEquals(LocalDate.parse("2026-09-14"), habits.state.value.week!!.weekStart)
+        assertEquals(LocalDate.parse("2026-09-07"), goals.state.value.goals!!.weekStart)
+        failGoals = true
+        goals.refresh(); habits.thisWeek(); advanceUntilIdle()
+        assertTrue(goals.state.value.offline)
+        assertFalse(habits.state.value.offline)
+        assertNull(habits.state.value.error)
+        assertEquals(LocalDate.parse("2026-09-21"), habits.state.value.week!!.weekStart)
+        assertEquals(LocalDate.parse("2026-09-07"), goals.state.value.goals!!.weekStart)
+    }
+
     @Test fun `failed save keeps the editor open and does not change a target`() = runTest(dispatcher) {
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
             when (method.name) {
-                "habitsWeek" -> HabitsWeekDto("2026-09-27", "2026-09-21", "2026-09-21", emptyList())
                 "timeGoals" -> week("2026-09-21")
                 "changeTimeGoalTarget" -> offline(args)
                 else -> error(method.name)
             }
         } as TimeboxApi
-        val vm = HabitsViewModel(TimeboxRepository(api, dispatcher))
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
         vm.refresh(); advanceUntilIdle()
         var closed = false
         vm.saveGoal(1, false, TimeGoalWriteDto(2, "week", 1, 120)) { closed = true }
@@ -90,13 +115,12 @@ class TimeGoalsTest {
         var failPeriod = false
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
             when (method.name) {
-                "habitsWeek" -> HabitsWeekDto("2026-09-27", "2026-09-21", "2026-09-21", emptyList())
                 "timeGoals" -> week("2026-09-21")
                 "timeGoalPeriod" -> if (failPeriod) offline(args) else goal("2026-09-23")
                 else -> error(method.name)
             }
         } as TimeboxApi
-        val vm = HabitsViewModel(TimeboxRepository(api, dispatcher))
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
         vm.refresh(); advanceUntilIdle()
         vm.selectGoalDay(1, LocalDate.parse("2026-09-23")); advanceUntilIdle()
         val selected = vm.state.value.goals

@@ -389,6 +389,7 @@ fun TimeboxApp(
                         when (chronicleState.view) {
                             ChronicleView.Trends -> "Trends"
                             ChronicleView.Habits -> "Habits"
+                            ChronicleView.TimeGoals -> "Time Goals"
                             ChronicleView.Calendar -> formatMonthTitle(chronicleState.monthStart)
                         },
                     ),

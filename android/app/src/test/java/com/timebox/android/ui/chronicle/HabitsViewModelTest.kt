@@ -13,7 +13,6 @@ import com.timebox.android.data.remote.HabitItemDto
 import com.timebox.android.data.remote.HabitTotalDto
 import com.timebox.android.data.remote.HabitsWeekDto
 import com.timebox.android.data.remote.TimeboxApi
-import com.timebox.android.data.remote.TimeGoalsWeekDto
 import com.timebox.android.data.toModel
 import java.lang.reflect.Proxy
 import java.time.Instant
@@ -39,9 +38,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HabitsViewModelTest {
-    private fun goals(start: String?) = TimeGoalsWeekDto("2026-09-26", start ?: "2026-09-21", "2026-09-21",
-        "UTC", "2026-09-26T12:00:00Z", emptyList())
-
     private val dispatcher = StandardTestDispatcher()
     @Before fun before() = Dispatchers.setMain(dispatcher)
     @After fun after() = Dispatchers.resetMain()
@@ -59,7 +55,6 @@ class HabitsViewModelTest {
     @Test fun `navigates within earliest and current week`() = runTest(dispatcher) {
         val weeks = mutableListOf<Any?>()
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
-            if (method.name == "timeGoals") return@newProxyInstance goals(args!![0] as String?)
             check(method.name == "habitsWeek")
             weeks += args!![0]
             week((args[0] as String?) ?: "2026-09-21")
@@ -86,7 +81,6 @@ class HabitsViewModelTest {
 
     private fun api(respond: (name: String, args: Array<Any?>?) -> Any?) =
         Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
-            if (method.name == "timeGoals") return@newProxyInstance goals(args!![0] as String?)
             respond(method.name, args)
         } as TimeboxApi
 
@@ -230,7 +224,6 @@ class HabitsViewModelTest {
         val calls = mutableListOf<String>()
         var patch: JsonObject? = null
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
-            if (method.name == "timeGoals") return@newProxyInstance goals(args!![0] as String?)
             calls += method.name
             when (method.name) {
                 "habitsWeek" -> week("2026-09-21")
@@ -294,7 +287,6 @@ class HabitsViewModelTest {
 
     @Test fun `ticking an item records that item's day`() = runTest(dispatcher) {
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
-            if (method.name == "timeGoals") return@newProxyInstance goals(args!![0] as String?)
             when (method.name) {
                 "habitsWeek" -> HabitsWeekDto("2026-09-26", "2026-09-21", "2026-09-14", listOf(morning(true)))
                 "tickHabitItem" -> {
@@ -322,7 +314,6 @@ class HabitsViewModelTest {
     @Test fun `adding an item keeps the series' other tracked items`() = runTest(dispatcher) {
         var patch: JsonObject? = null
         val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
-            if (method.name == "timeGoals") return@newProxyInstance goals(args!![0] as String?)
             when (method.name) {
                 "patchRecurringTemplate" -> {
                     patch = args!![1] as JsonObject

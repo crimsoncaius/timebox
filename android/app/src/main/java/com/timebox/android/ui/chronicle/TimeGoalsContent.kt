@@ -48,8 +48,7 @@ private fun TimeGoal.outcomeLabel() = when (period.outcome) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TimeGoalsContent(state: HabitsUiState, viewModel: HabitsViewModel, createRequested: Boolean,
-                              onDismissCreate: () -> Unit) {
+internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewModel) {
     val report = state.goals ?: return
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
@@ -58,8 +57,6 @@ internal fun TimeGoalsContent(state: HabitsUiState, viewModel: HabitsViewModel, 
     var editorId by rememberSaveable { mutableStateOf<Int?>(null) }
     var action by rememberSaveable { mutableStateOf<String?>(null) }
     val canManage = !state.offline && !state.goalSaving && !state.loading
-    LaunchedEffect(createRequested) { if (createRequested) editorId = 0 }
-    Text("Time goals", style = type.sectionTitle, color = colors.on, modifier = Modifier.padding(top = 24.dp, bottom = 6.dp))
     Text("Recorded time, measured against each goal’s period", style = type.bodySmall, color = colors.onVariant)
     state.goalError?.let { message ->
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -127,6 +124,8 @@ internal fun TimeGoalsContent(state: HabitsUiState, viewModel: HabitsViewModel, 
     }
     Spacer(Modifier.height(24.dp))
 
+    if (report.goals.isNotEmpty()) TextButton(onClick = { editorId = 0 }, enabled = canManage) { Text("Add Time Goal") }
+
     report.goals.find { it.id == detailId }?.let { goal ->
         ModalBottomSheet(onDismissRequest = { if (!state.goalSaving) detailId = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -188,7 +187,6 @@ internal fun TimeGoalsContent(state: HabitsUiState, viewModel: HabitsViewModel, 
     editorId?.let { id ->
         TimeGoalEditor(report.goals.find { it.id == id }, report.today, report.timezone.id, state, viewModel) {
             editorId = null
-            onDismissCreate()
         }
     }
 }

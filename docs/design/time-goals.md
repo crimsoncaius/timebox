@@ -1,4 +1,4 @@
-# Time Goals in Habits
+# Time Goals in Chronicle
 
 Status: implemented on `codex/time-goals`, pending user review and explicit merge instruction. Design accepted on 2026-09-27, including B (expandable rows), the connected creation/edit/lifecycle flow and the effective-date distinction between target edits and replacements.
 
@@ -6,7 +6,7 @@ Status: implemented on `codex/time-goals`, pending user review and explicit merg
 
 The `/time-goals` API persists goal identity, cadence, start/end dates and period-effective target history. Progress is derived on each read through the same Reporting Time Zone clipping used by Trends. Migration `038_time_goals` adds the two tables; deploy the backend migration with the updated Android app. Goal deletion never deletes Actual Blocks. Task Type deletion separately requires explicit goal deletion or retargeting; merge retains separate goals and reports their count.
 
-Android's real Chronicle → Habits surface includes Add → Habit / Time Goal, expandable duration rows, day-selected periods, contributing blocks and creation/edit/end/delete sheets. It refreshes while displayed, retains the last complete report on connection failure, and keeps a failed-save draft available for retry. Existing completion Habits retain their controls. No durable report cache or offline goal-write queue was added.
+Android's Chronicle has separate Habits and Time Goals tabs, with dedicated Add Habit and Add Time Goal actions. Time Goals includes expandable duration rows, day-selected periods, contributing blocks and creation/edit/end/delete sheets. It refreshes while displayed, retains the last complete report on connection failure, and keeps a failed-save draft available for retry. Existing completion Habits retain their controls. No durable report cache or offline goal-write queue was added.
 
 Validation: full backend suite 559 passed, 6 skipped; all 382 Android unit tests and the debug APK build passed. Tests cover fixed daily/weekly/monthly boundaries, short first periods, target history, no carryover, parent/descendant credit, running intervals and DST, corrected historical outcomes, atomic replacement, migration, Task Type merge/deletion resolution and offline report retention. On-device checks cover real creation, target edits, selected-day periods, end/delete, replacement, contributing records and offline retention. The full Android instrumentation suite was not run; its existing baseline is documented in `docs/agents/android-instrumentation-baseline.md`.
 
@@ -16,9 +16,17 @@ Review runs against isolated SQLite sample data at `http://127.0.0.1:12073` (And
 
 Managed review device: `emulator-5582`, token `cb73d7346f46486e9ccd7188ef94b0dc`, owner `time-goals: production review`, storage root `C:/Users/Caius/TimeboxRuntime/emulators`. Leave this device/backend available until review is complete, then release it using the emulator helper. The prototype branch remains independent; its source and comparison controls were not promoted into production.
 
+## Accepted navigation split
+
+On 2026-09-28 the user accepted **B — Separate tabs** and authorized implementation. Chronicle now has Calendar, Trends, Habits and Time Goals; bottom navigation is unchanged. Each tracker owns its week, loading/error state, and saved scrolling state. Goal expansion and selected periods survive tab switches. Time Goals failures do not prevent Habits from loading. Existing goal editor and lifecycle behavior are unchanged.
+
+Validation of the navigation split: 383 Android unit tests passed and the debug APK built successfully. The added regression covers separate week positions and a Time Goals connection failure while Habits continues loading. Existing Time Goals tests now exercise its dedicated view model, and Habits tests no longer stub goal requests. Backend behavior did not change. On-device checks confirmed independent weeks, retained expansion/scrolling, and both creation sheets. The independent native reviewer returned **ship for user review** for light/default and dark/1.3 captures in `.impeccable/review/time-goals-split-production/`; documentation review found no durable design-system change.
+
+Primary comparison evidence: local branch `codex/prototype-habits-goals-split`, commit `4845a68a`, including `docs/design/habits-goals-split-prototype.md` and its screenshot set. The debug prototype and its sample data stay on that branch.
+
 ## Accepted behavior
 
-- Independent Time Goals appear beside completion-based Habits; no recurring task is required.
+- Independent Time Goals have their own Chronicle tab beside completion-based Habits; no recurring task is required.
 - A selected Task Type includes its own Actual Blocks and all descendants. Exercise, cardio and strength goals can coexist; cardio time credits both cardio and exercise.
 - Target duration repeats every N days, weeks or months. Periods are fixed, not rolling, with no surplus carried forward.
 - Daily cycles anchor to the chosen start date; week and month cycles anchor to its Monday-based calendar week or calendar month in the Reporting Time Zone. An intentionally shortened first period retains its full target. Creation shows the dates before saving.
@@ -29,7 +37,7 @@ Managed review device: `emulator-5582`, token `cb73d7346f46486e9ccd7188ef94b0dc`
 - Task Type rename preserves goal identity; merge transfers goals to the survivor while retaining separate goals. Deletion requires retargeting or deleting affected goals. Current hierarchy determines historical credit, matching Trends.
 - Android first. Daily cells show duration; row details show full period dates, progress and contributing Actual Blocks. Longer periods retain full-period totals across browsed weeks. No time-goal completion ticks.
 - A row initially selects Today's period in the current week, or Sunday's period in a past week. Selecting a day changes the row's selected period and its dates/progress, including when one displayed week intersects several periods.
-- Habits offers Add → Habit / Time Goal. Time Goal creation collects Task Type, hours/minutes, every N days/weeks/months, start date and a first-period preview. Details expose editing, ending and deletion, reusing recurring-task editor controls.
+- Habits offers Add Habit; Time Goals offers Add Time Goal. Time Goal creation collects Task Type, hours/minutes, every N days/weeks/months, start date and a first-period preview. Details expose editing, ending and deletion, reusing recurring-task editor controls.
 - Connection is required to create/edit goals and refresh progress. Already-loaded progress remains visible offline with a last-updated message; unsynced local Activity Tracking contributes only after synchronization. Durable offline reports and goal mutation queues are outside the initial scope.
 
 ## Prototype question

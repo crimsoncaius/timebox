@@ -39,7 +39,7 @@ private fun defaultGoalStart(today: LocalDate, unit: String) = when (unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: String,
-                            state: HabitsUiState, viewModel: HabitsViewModel, onDismiss: () -> Unit) {
+                            state: TimeGoalsUiState, viewModel: TimeGoalsViewModel, onDismiss: () -> Unit) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
     var typeId by rememberSaveable { mutableStateOf(original?.taskTypeId) }

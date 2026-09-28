@@ -49,6 +49,8 @@ import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.chronicle.TrendsScreen
 import com.timebox.android.ui.chronicle.HabitsScreen
+import com.timebox.android.ui.chronicle.TimeGoalsViewModel
+import com.timebox.android.ui.chronicle.TimeGoalsScreen
 import com.timebox.android.ui.chronicle.HabitsViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -197,6 +199,14 @@ private fun NavGraphBuilder.chronicleRoute(dependencies: TimeboxNavigationDepend
                     onSelectView = chronicleViewModel::selectView,
                     onClearHighlights = chronicleViewModel::clearHighlights,
                     trendsContent = { TrendsScreen(chronicleState, chronicleViewModel) },
+                    timeGoalsContent = {
+                        val repository = rememberRepository()
+                        val goalsViewModel: TimeGoalsViewModel = viewModel(
+                            factory = viewModelFactory { initializer { TimeGoalsViewModel(repository) } },
+                        )
+                        val goalsState by goalsViewModel.state.collectAsState()
+                        TimeGoalsScreen(goalsViewModel, goalsState)
+                    },
                     habitsContent = {
                         val repository = rememberRepository()
                         val habitsViewModel: HabitsViewModel = viewModel(

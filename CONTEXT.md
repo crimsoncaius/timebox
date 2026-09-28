@@ -185,7 +185,7 @@ A Recurring Task Series or a Checklist Item opted into habit tracking. It has no
 _Avoid_: Goal, Streak task, Habit tracker, Sub-habit, Subtask habit
 
 **Time Goal**:
-An independently configured target for Actual Block time attributed to a selected Task Type and all its descendants over a repeating, user-chosen period, presented in Habits without requiring a Recurring Task Series or Task Completion. Separate Time Goals may target a Task Type and its descendants at the same time, with the same recorded time contributing to each applicable goal.
+An independently configured target for Actual Block time attributed to a selected Task Type and all its descendants over a repeating, user-chosen period, presented in its own Chronicle view without requiring a Recurring Task Series or Task Completion. Separate Time Goals may target a Task Type and its descendants at the same time, with the same recorded time contributing to each applicable goal.
 _Avoid_: Session quota, Planned time target
 
 **Time Goal Period**:
@@ -243,7 +243,7 @@ The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planni
 _Avoid_: Today view, timeline page
 
 **Chronicle**:
-The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. It has three views, Calendar (one month at a time), Trends, and Habits.
+The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. It has four views, Calendar (one month at a time), Trends, Habits, and Time Goals.
 _Avoid_: History, Analytics tab
 
 **Trends**:
@@ -251,7 +251,7 @@ The Chronicle view that presents activity by Task Type over a selected preset or
 _Avoid_: Analytics, Insights, Reports
 
 **Habits**:
-The Chronicle view that presents Habits and Time Goals across one Calendar Week at a time, judging activity against their recurrence or target. A Habit appears only in weeks where its series was active.
+The Chronicle view that presents completion-based Habits across one Calendar Week at a time, judging activity against their recurrence. A Habit appears only in weeks where its series was active.
 _Avoid_: Habit tracker, Streaks
 
 **Battle Plan**:
