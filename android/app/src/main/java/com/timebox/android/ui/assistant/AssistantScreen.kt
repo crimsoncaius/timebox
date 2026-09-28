@@ -1,5 +1,8 @@
 package com.timebox.android.ui.assistant
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -14,6 +17,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.NorthEast
 import androidx.compose.material.icons.outlined.Stop
@@ -40,6 +44,7 @@ import com.timebox.android.TimeboxApplication
 import com.timebox.android.ui.theme.TimeboxTheme
 import com.timebox.android.ui.theme.TimeboxShapes
 import java.time.LocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
@@ -66,6 +71,18 @@ fun AssistantScreen(
         if (state.exchanges.isEmpty()) list.scrollToItem(0)
         else if (follow && list.layoutInfo.totalItemsCount > 0) list.scrollToItem(list.layoutInfo.totalItemsCount - 1)
     }
+    // Keep the latest message pinned above the composer when the keyboard resizes the viewport.
+    LaunchedEffect(list) {
+        snapshotFlow { list.layoutInfo.viewportSize.height }.collect {
+            if (follow && state.exchanges.isNotEmpty() && list.layoutInfo.totalItemsCount > 0) list.scrollToItem(list.layoutInfo.totalItemsCount - 1)
+        }
+    }
+    val canJump = state.exchanges.isNotEmpty() && list.canScrollForward
+    var jumpVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(canJump, list.isScrollInProgress, state.exchanges.size) {
+        jumpVisible = canJump
+        if (canJump && !list.isScrollInProgress) { delay(2500); jumpVisible = false }
+    }
     fun reset() { controller.newConversation(); draft = ""; follow = true }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -77,7 +94,8 @@ fun AssistantScreen(
             }
         }
         HorizontalDivider(color = colors.hairline)
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             if (state.exchanges.isEmpty()) item {
                 AssistantWelcome { draft = it; composerFocus.requestFocus() }
             }
@@ -116,7 +134,13 @@ fun AssistantScreen(
             state.ended?.let { reason -> item { Text(reason, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) } }
             item { Spacer(Modifier.height(1.dp)) }
         }
-        if (state.exchanges.isNotEmpty() && list.canScrollForward) TextButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount - 1) } }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("↓ Jump to latest") }
+        androidx.compose.animation.AnimatedVisibility(canJump && jumpVisible, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), enter = fadeIn(), exit = fadeOut(tween(600))) {
+            OutlinedIconButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount - 1) } }, shape = CircleShape,
+                colors = IconButtonDefaults.outlinedIconButtonColors(containerColor = colors.card), border = BorderStroke(1.dp, colors.hairline)) {
+                Icon(Icons.Outlined.ArrowDownward, contentDescription = "Jump to latest", Modifier.size(18.dp))
+            }
+        }
+        }
         if (state.ended != null) Button(onClick = ::reset, modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("New conversation") }
         else AssistantComposer(draft, { if (it.length <= 4000) draft = it }, composerFocus, state.busy,
             if (state.exchanges.isEmpty()) "What’s on your mind?" else "Ask a follow-up…",

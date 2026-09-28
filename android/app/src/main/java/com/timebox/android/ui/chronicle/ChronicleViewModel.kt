@@ -17,7 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 
 /** Chronicle's views: one past day at a time, Trends across many days, or Habits by week. */
-enum class ChronicleView { Calendar, Trends, Habits }
+enum class ChronicleView(val label: String) { Calendar("Calendar"), Trends("Trends"), Habits("Habits"), TimeGoals("Time Goals") }
 
 internal fun canAdvanceTrendRange(report: TrendsDto, period: String): Boolean {
     val start = LocalDate.parse(report.start)

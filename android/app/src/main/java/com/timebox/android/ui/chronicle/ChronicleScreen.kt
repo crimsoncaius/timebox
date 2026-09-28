@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.offset
@@ -90,8 +92,10 @@ fun ChronicleScreen(
     onClearHighlights: () -> Unit = {},
     trendsContent: @Composable () -> Unit = {},
     habitsContent: @Composable () -> Unit = {},
+    timeGoalsContent: @Composable () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
+    val tabState = rememberSaveableStateHolder()
     val canNextMonth = YearMonth.from(state.monthStart) < YearMonth.from(state.today)
 
     when {
@@ -116,7 +120,12 @@ fun ChronicleScreen(
             return@Column
         }
         if (state.view == ChronicleView.Habits) {
-            habitsContent()
+            tabState.SaveableStateProvider("habits") { habitsContent() }
+            return@Column
+        }
+
+        if (state.view == ChronicleView.TimeGoals) {
+            tabState.SaveableStateProvider("time-goals") { timeGoalsContent() }
             return@Column
         }
 
@@ -262,11 +271,14 @@ private fun ChronicleViewTabs(selected: ChronicleView, onSelect: (ChronicleView)
                         .weight(1f)
                         .testTag("chronicle-view-${view.name.lowercase(Locale.ENGLISH)}")
                         .selectable(selected = active, role = Role.Tab) { onSelect(view) }
+                        .heightIn(min = 48.dp)
                         .padding(top = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        view.name,
+                        view.label,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 4.dp),
                         style = TimeboxTheme.type.sectionTitle,
                         color = if (active) colors.on else colors.onVariant,
                     )

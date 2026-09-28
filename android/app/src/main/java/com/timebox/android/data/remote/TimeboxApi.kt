@@ -10,6 +10,26 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TimeboxApi {
+    @GET("time-goals")
+    suspend fun timeGoals(@Query("week") week: String?): TimeGoalsWeekDto
+
+    @GET("time-goals/{id}/period")
+    suspend fun timeGoalPeriod(@Path("id") id: Int, @Query("anchor") anchor: String, @Query("week") week: String): TimeGoalDto
+
+    @POST("time-goals")
+    suspend fun createTimeGoal(@Body body: TimeGoalWriteDto): TimeGoalDto
+
+    @PATCH("time-goals/{id}/target")
+    suspend fun changeTimeGoalTarget(@Path("id") id: Int, @Body body: TimeGoalTargetDto)
+
+    @POST("time-goals/{id}/replace")
+    suspend fun replaceTimeGoal(@Path("id") id: Int, @Body body: TimeGoalWriteDto): TimeGoalDto
+
+    @POST("time-goals/{id}/end")
+    suspend fun endTimeGoal(@Path("id") id: Int)
+
+    @DELETE("time-goals/{id}")
+    suspend fun deleteTimeGoal(@Path("id") id: Int)
     @POST("task-types/recommendation")
     suspend fun recommendTaskType(@Body body: TaskTypeRecommendationRequest): TaskTypeRecommendationDto
     @GET("trends")
@@ -123,9 +143,11 @@ interface TimeboxApi {
     @DELETE("task-types/{id}")
     suspend fun deleteTaskType(
         @Path("id") id: Int,
-        @Query("cascade_blocks") cascadeBlocks: Boolean = false,
+        @Query("cascade_blocks") cascadeBlocks: Boolean? = null,
         @Query("migrate_blocks_to") migrateBlocksTo: Int? = null,
         @Query("clear_task_references") clearTaskReferences: Boolean = false,
+        @Query("migrate_goals_to") migrateGoalsTo: Int? = null,
+        @Query("delete_goals") deleteGoals: Boolean = false,
     )
 
     @GET("projects")

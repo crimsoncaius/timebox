@@ -7,6 +7,7 @@ import {
   filterTaskTypesByQuery,
   formatTaskTypePathParts,
   groupTaskTypesByRoot,
+  isSameTaskTypePath,
   pathDepth,
   rankTaskTypes,
   taskTypeRootSegment,
@@ -21,6 +22,12 @@ const rows: TaskType[] = [
 describe('taskTypePaths', () => {
   it('canonicalizes slash-delimited input', () => {
     expect(canonicalizeTaskTypePathInput(' Coding / AI ')).toBe('coding/ai')
+  })
+
+  it('compares paths after canonicalization', () => {
+    expect(isSameTaskTypePath(' Coding / AI ', 'coding/ai')).toBe(true)
+    expect(isSameTaskTypePath('coding', 'coding/ai')).toBe(false)
+    expect(isSameTaskTypePath('  ', '')).toBe(false)
   })
 
   it('drops empty segments and trailing slashes', () => {

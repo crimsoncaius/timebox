@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
+import com.timebox.android.data.rankTaskTypes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,17 @@ data class TypesUiState(
     val renameError: String? = null,
     val mergePreview: com.timebox.android.data.remote.TaskTypeMergePreview? = null,
     val mergeRevision: Long = 0,
-)
+) {
+    /** [groups] narrowed to the types matching [input]; everything while [input] is blank. */
+    val visibleGroups: List<TypeGroup>
+        get() {
+            if (input.isBlank()) return groups
+            val matches = rankTaskTypes(groups.flatMap { it.items }, input).mapTo(mutableSetOf()) { it.id }
+            return groups
+                .map { group -> group.copy(items = group.items.filter { it.id in matches }) }
+                .filter { it.items.isNotEmpty() }
+        }
+}
 
 class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
 
@@ -190,7 +201,9 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
     ) {
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.deleteTaskType(type.id, cascadeBlocks = cascade, migrateBlocksTo = migrateTo, clearTaskReferences = clearReferences).fold(
+            repository.deleteTaskType(type.id, cascadeBlocks = cascade, migrateBlocksTo = migrateTo, clearTaskReferences = clearReferences,
+                migrateGoalsTo = migrateTo.takeIf { type.timeGoalUsageCount > 0 },
+                deleteGoals = migrateTo == null && type.timeGoalUsageCount > 0).fold(
                 onSuccess = {
                     _state.update {
                         it.copy(saving = false, message = "Deleted ${type.name}")
@@ -215,4 +228,4 @@ val TaskType.hasTaskReferences: Boolean
     get() = taskUsageCount > 0 || recurringTemplateUsageCount > 0
 
 val TaskType.totalUsageCount: Int
-    get() = usageCount + taskUsageCount + recurringTemplateUsageCount
+    get() = usageCount + taskUsageCount + recurringTemplateUsageCount + timeGoalUsageCount
