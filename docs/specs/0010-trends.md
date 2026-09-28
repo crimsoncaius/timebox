@@ -11,8 +11,8 @@ Approved first implementation for GitHub issue #10, based on the reviewed Androi
 - Presets are calendar Day, Week, and Month, with previous/next navigation. Custom ranges have inclusive start and end dates.
 - Date boundaries use the Reporting Time Zone.
 - Parent Task Types show totals including descendants and can expand to show children. Time assigned directly to a parent remains visible in its breakdown. Each duration contributes only once to the overall total.
-- The selected presentation is prototype A: ranked horizontal bars, including bars for expanded child Task Types and directly assigned parent time.
-- All bars share the same left edge, full track width, and range-total scale. Child labels remain indented to show hierarchy.
+- The presentation is a ranked ledger (chosen 2026-09-28 over grouped cards and outline sections; variants kept on `prototype/trends-task-types-hierarchy`). Under a Task Type · Share · Time · % header, each row shows its name, a short bar in a fixed Share column, its duration and its percentage. Expanded child Task Types and directly assigned parent time ("(direct)", muted italic) appear as rows beneath their parent.
+- Hierarchy is carried by type and structure rather than indentation alone: top-level rows are taller with medium-weight names and durations and a heavier bar; children are lighter and sit behind vertical tree guides, one per level; hairline dividers separate top-level Task Types only, so an expanded parent keeps its children in one block. Chevrons occupy a fixed slot so names align whether or not they expand. All bars share the range-total scale.
 - As settled in #210, Trends lives beside Calendar in Chronicle and owns its date range independently of Calendar. Task Type figures drill through to Calendar, highlighting contributing days.
 
 ## Reporting and interaction rules

@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -19,7 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import com.timebox.android.ui.components.CurrentRangeState
 import com.timebox.android.ui.components.CurrentRangeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -133,51 +136,95 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
             }
             if (report.types.isEmpty()) Text("No recorded time in this range.", color = colors.onVariant)
             else {
-                Text("BY TASK TYPE", color = colors.onVariant, fontSize = 11.sp, letterSpacing = 1.sp)
-                report.types.forEach { node -> key(node.path) {
-                    // A Day range always has exactly one contributing day, so it offers no drill-through.
-                    TrendNode(node, report.durationSeconds, 0, if (state.period == "day") null else viewModel::showContributingDays)
-                } }
+                Column {
+                    TrendTableHeader()
+                    report.types.forEach { node -> key(node.path) {
+                        TrendDivider()
+                        // A Day range always has exactly one contributing day, so it offers no drill-through.
+                        TrendNode(node, report.durationSeconds, 0, if (state.period == "day") null else viewModel::showContributingDays)
+                    } }
+                    TrendDivider()
+                }
             }
         }
         Spacer(Modifier.height(24.dp))
     }
 }
 
+private val shareColumn = 56.dp
+private val timeColumn = 64.dp
+private val percentColumn = 52.dp
+
 @Composable
-private fun TrendNode(node: TrendNodeDto, total: Double, depth: Int, onDays: ((String, Map<String, Double>) -> Unit)?) {
-    var expanded by rememberSaveable(node.path) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TrendRow(node.name, node.durationSeconds, total, depth,
-            expandable = node.children.isNotEmpty(), expanded = expanded,
-            onExpand = { expanded = !expanded }, onDays = onDays?.let { drill -> { drill(node.path, node.days) } })
-        if (expanded) {
-            // Direct time participates in the same ranking as immediate children.
-            val direct = if (node.directSeconds > 0) listOf(TrendNodeDto("${node.path}/", "Directly under ${node.name}", node.directSeconds, node.directSeconds, node.directDays, node.directDays)) else emptyList()
-            (node.children + direct).sortedWith(compareByDescending<TrendNodeDto> { it.durationSeconds }.thenBy { it.path }).forEach { child -> key(child.path) {
-                if (child.path.endsWith('/')) TrendRow(child.name, child.durationSeconds, total, depth + 1, onDays = onDays?.let { drill -> { drill(child.name, child.days) } })
-                else TrendNode(child, total, depth + 1, onDays)
-            } }
-        }
+private fun TrendTableHeader() {
+    val colors = TimeboxTheme.colors
+    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Task Type", color = colors.onVariant, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text("Share", color = colors.onVariant, fontSize = 12.sp, modifier = Modifier.width(shareColumn))
+        Text("Time", color = colors.onVariant, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.width(timeColumn))
+        Text("%", color = colors.onVariant, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.width(percentColumn))
     }
 }
 
 @Composable
-private fun TrendRow(name: String, seconds: Double, total: Double, depth: Int, expandable: Boolean = false, expanded: Boolean = false, onExpand: () -> Unit = {}, onDays: (() -> Unit)?) {
+private fun TrendDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(TimeboxTheme.colors.low))
+}
+
+@Composable
+private fun TrendNode(node: TrendNodeDto, total: Double, depth: Int, onDays: ((String, Map<String, Double>) -> Unit)?) {
+    var expanded by rememberSaveable(node.path) { mutableStateOf(false) }
+    TrendRow(node.name, node.name, node.durationSeconds, total, depth,
+        expandable = node.children.isNotEmpty(), expanded = expanded,
+        onExpand = { expanded = !expanded }, onDays = onDays?.let { drill -> { drill(node.path, node.days) } })
+    if (expanded) {
+        // Direct time participates in the same ranking as immediate children.
+        val direct = if (node.directSeconds > 0) listOf(TrendNodeDto("${node.path}/", "Directly under ${node.name}", node.directSeconds, node.directSeconds, node.directDays, node.directDays)) else emptyList()
+        (node.children + direct).sortedWith(compareByDescending<TrendNodeDto> { it.durationSeconds }.thenBy { it.path }).forEach { child -> key(child.path) {
+            if (child.path.endsWith('/')) TrendRow(child.name, "(direct)", child.durationSeconds, total, depth + 1, direct = true, onDays = onDays?.let { drill -> { drill(child.name, child.days) } })
+            else TrendNode(child, total, depth + 1, onDays)
+        } }
+    }
+}
+
+/**
+ * One ledger row: tree guides and a chevron slot for depth, then fixed Share, Time and % columns.
+ * Every bar shares the range-total scale; top-level rows are taller and heavier than their children.
+ */
+@Composable
+private fun TrendRow(name: String, label: String, seconds: Double, total: Double, depth: Int, expandable: Boolean = false, expanded: Boolean = false, direct: Boolean = false, onExpand: () -> Unit = {}, onDays: (() -> Unit)?) {
     val colors = TimeboxTheme.colors
+    val top = depth == 0
     val fraction = (seconds / total).coerceIn(0.0, 1.0)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text((if (expandable) if (expanded) "▾  " else "▸  " else "") + name,
-                color = if (depth == 0) colors.on else colors.onVariant, fontSize = if (depth == 0) 15.sp else 13.sp,
-                modifier = Modifier.weight(1f).clickable(enabled = expandable || onDays != null, role = Role.Button, onClickLabel = if (expandable) if (expanded) "Collapse $name" else "Expand $name" else "Show contributing days") { if (expandable) onExpand() else onDays?.invoke() }.padding(start = (depth.coerceAtMost(4) * 18).dp, top = 12.dp, bottom = 12.dp))
-            Column((if (onDays != null) Modifier.clickable(role = Role.Button, onClickLabel = "Show contributing days for $name", onClick = onDays) else Modifier).padding(start = 8.dp, top = 8.dp, bottom = 8.dp), horizontalAlignment = Alignment.End) {
-                Text(trendDuration(seconds), color = colors.on, fontSize = 14.sp)
-                Text(String.format(Locale.getDefault(), "%.1f%%", fraction * 100), color = colors.onVariant, fontSize = 11.sp)
+    Row(Modifier.fillMaxWidth().heightIn(min = if (top) 52.dp else 40.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.weight(1f).fillMaxHeight()
+                .clickable(enabled = expandable || onDays != null, role = Role.Button, onClickLabel = if (expandable) if (expanded) "Collapse $name" else "Expand $name" else "Show contributing days") { if (expandable) onExpand() else onDays?.invoke() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(depth.coerceAtMost(4)) {
+                Box(Modifier.width(18.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(colors.outlineVariant))
+                }
+            }
+            Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) {
+                if (expandable) Icon(if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.onVariant, modifier = Modifier.size(18.dp))
+            }
+            Text(label, modifier = Modifier.weight(1f),
+                color = if (direct) colors.onVariant else colors.on,
+                fontSize = if (top) 15.sp else 13.sp,
+                fontWeight = if (top) FontWeight.Medium else FontWeight.Normal,
+                fontStyle = if (direct) FontStyle.Italic else FontStyle.Normal,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.width(shareColumn).padding(end = 8.dp).height(if (top) 8.dp else 5.dp).clip(TimeboxShapes.chip).background(colors.low)) {
+                Box(Modifier.fillMaxWidth(fraction.toFloat()).fillMaxHeight().background(if (top) colors.on else colors.onVariant))
             }
         }
-        Box(Modifier.fillMaxWidth().height(if (depth == 0) 6.dp else 4.dp).clip(TimeboxShapes.chip).background(colors.low)) {
-            Box(Modifier.fillMaxWidth(fraction.toFloat()).fillMaxHeight().background(if (depth == 0) colors.onVariant else colors.outline))
+        Row((if (onDays != null) Modifier.clickable(role = Role.Button, onClickLabel = "Show contributing days for $name", onClick = onDays) else Modifier).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+            Text(trendDuration(seconds), color = colors.on, fontSize = if (top) 14.sp else 13.sp, fontWeight = if (top) FontWeight.Medium else FontWeight.Normal,
+                textAlign = TextAlign.End, maxLines = 1, modifier = Modifier.width(timeColumn))
+            Text(String.format(Locale.getDefault(), "%.1f%%", fraction * 100), color = colors.onVariant, fontSize = 12.sp,
+                textAlign = TextAlign.End, maxLines = 1, modifier = Modifier.width(percentColumn))
         }
     }
 }
