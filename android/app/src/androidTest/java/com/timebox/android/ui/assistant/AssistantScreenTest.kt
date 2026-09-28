@@ -66,12 +66,15 @@ class AssistantScreenTest {
         }
     }
 
-    @Test fun starterEditsThenCardOnlyExpandsAndResetClears() {
+    @Test fun blankStartThenCardOnlyExpandsAndResetClears() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         try {
             val controller = AssistantController(scope) { Fake() }
             compose.setContent { TimeboxTheme(darkTheme = isSystemInDarkTheme()) { AssistantScreen(controller) } }
-            compose.onNodeWithText("Show today’s plan").performScrollTo().assertIsDisplayed().performClick()
+            compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
+            compose.onNodeWithText("Make room\nfor your day.").assertDoesNotExist()
+            compose.onNodeWithText("Show today’s plan").assertDoesNotExist()
+            compose.onNode(hasSetTextAction()).performTextInput("Show today’s plan")
             compose.onNode(hasSetTextAction()).assertTextContains("Show today’s plan")
             compose.onNodeWithContentDescription("Send").performClick()
             compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.status == "Complete" }
@@ -82,11 +85,11 @@ class AssistantScreenTest {
                 compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }
             compose.onNodeWithText("No response text.").assertDoesNotExist()
-            compose.onNodeWithText("Think through my morning").performScrollTo().performClick()
-            compose.onNode(hasSetTextAction()).assertTextContains("Help me think through my morning")
+            compose.onNodeWithText("Think through my morning").assertDoesNotExist()
             compose.runOnIdle { check(controller.state.value.exchanges.size == 1) }
             compose.onNode(hasText("New conversation") or hasContentDescription("New conversation")).performClick()
-            compose.onNodeWithText("Make room\nfor your day.").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
         } finally { scope.cancel() }
     }
 

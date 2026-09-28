@@ -113,8 +113,9 @@ class AssistantController(
     /** A choice chip fills the card; confirming it is still a separate tap. */
     fun chooseProposal(id: String, taskTypeId: Int) = updateProposal(id) { if (it.status == ProposalStatus.Pending) it.copy(chosen = taskTypeId) else it }
     fun dismissProposal(id: String) = updateProposal(id) { if (it.status == ProposalStatus.Pending) it.copy(status = ProposalStatus.Dismissed) else it }
+    fun proposalApplying(id: String, view: ProposalView?) = updateProposal(id) { it.copy(applying = view) }
     fun proposalApplied(id: String, record: com.timebox.android.ui.day.RecordRef, operationId: String?, stopped: Boolean = false) =
-        updateProposal(id) { it.copy(status = ProposalStatus.Applied, record = record, operationId = operationId, stopped = stopped) }
+        updateProposal(id) { it.copy(status = ProposalStatus.Applied, record = record, operationId = operationId, stopped = stopped, applying = null) }
     /** Undo means the change never happened: the card may be confirmed again until it expires. */
     fun operationUndone(operationId: String) = state.value.proposals.filterValues { it.operationId == operationId }.keys
         .forEach { id -> updateProposal(id) { it.copy(status = ProposalStatus.Pending, record = null, operationId = null) } }

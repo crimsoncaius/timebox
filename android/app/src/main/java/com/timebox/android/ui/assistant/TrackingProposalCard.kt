@@ -48,9 +48,9 @@ fun TrackingProposalCard(
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
-    val expired = state.status == ProposalStatus.Pending && now >= p.expiresAt
+    val expired = state.status == ProposalStatus.Pending && state.applying == null && now >= p.expiresAt
     val pending = state.status == ProposalStatus.Pending && !expired
-    val view = snapshot?.let { deriveProposal(p, state, it, now, zone) }
+    val view = state.applying ?: snapshot?.let { deriveProposal(p, state, it, now, zone) }
     val live = pending && view != null && view.invalid == null
     val applied = if (state.status == ProposalStatus.Applied) appliedLine(state, snapshot, now, zone) else null
     val running = applied?.second?.endAt == null && applied?.second != null
@@ -67,12 +67,14 @@ fun TrackingProposalCard(
                     else -> view.action.label.uppercase()
                 }, Modifier.weight(1f).semantics { heading() }, style = type.kicker, color = colors.onVariant)
                 val left = Duration.between(now, p.expiresAt)
-                if (live && left <= Duration.ofMinutes(5)) Text("Expires in ${left.toMinutes() + 1} min", style = type.bodySmall, color = colors.onVariant)
+                if (live && state.applying == null && left <= Duration.ofMinutes(5)) Text("Expires in ${left.toMinutes() + 1} min", style = type.bodySmall, color = colors.onVariant)
             }
             val title = view?.title ?: if (p.stop) "Stop tracking" else p.taskTypes.singleOrNull()?.path ?: "Choose an activity"
             Text(if (pending) title else (state.chosen?.let { id -> p.taskTypes.find { it.id == id }?.path } ?: title),
                 style = type.sectionTitle, color = if (pending) colors.on else colors.onVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             when {
+                pending && state.applying != null -> Text(state.applying.action.progress,
+                    Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = type.body, color = colors.onVariant)
                 pending && view != null -> PendingBody(p, state, view, snapshot!!, now, zone, busy, error, actions)
                 pending -> Text("Connect once to load Activity Tracking.", style = type.bodySmall, color = colors.onVariant)
                 applied != null -> {
