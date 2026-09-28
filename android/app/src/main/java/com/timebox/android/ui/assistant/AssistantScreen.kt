@@ -100,7 +100,7 @@ fun AssistantScreen(
                 AssistantWelcome { draft = it; composerFocus.requestFocus() }
             }
             itemsIndexed(state.exchanges) { index, exchange ->
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Surface(Modifier.padding(start = 36.dp).align(Alignment.End), color = colors.card, shape = RoundedCornerShape(16.dp, 16.dp, 3.dp, 16.dp), border = BorderStroke(1.dp, colors.hairline)) {
                         Text(exchange.question, Modifier.padding(horizontal = 14.dp, vertical = 11.dp).semantics { contentDescription = "You: ${exchange.question}" }, style = TimeboxTheme.type.body)
                     }

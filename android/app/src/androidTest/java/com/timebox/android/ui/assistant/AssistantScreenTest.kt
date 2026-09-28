@@ -18,6 +18,32 @@ import org.junit.Test
 class AssistantScreenTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun sentQuestionStaysAtSameHorizontalPositionBeforeReply() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val releaseCard = CompletableDeferred<Unit>()
+        val transport = object : AssistantTransport by Fake(pauseAfterCard = true) {
+            override fun stream(conversation: String, run: String, message: String) = flow {
+                releaseCard.await()
+                Fake(pauseAfterCard = true).stream(conversation, run, message).collect { emit(it) }
+            }
+        }
+        try {
+            val controller = AssistantController(scope) { transport }
+            compose.setContent { TimeboxTheme(darkTheme = true) { AssistantScreen(controller) } }
+            compose.onNode(hasSetTextAction()).performTextInput("Hi")
+            compose.onNodeWithContentDescription("Send").performClick()
+            compose.onNodeWithText("Thinking…").assertIsDisplayed()
+            val before = compose.onNodeWithContentDescription("You: Hi").fetchSemanticsNode().boundsInRoot
+            compose.runOnIdle { releaseCard.complete(Unit) }
+            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.plan != null }
+            compose.onNodeWithContentDescription("You: Hi").performScrollTo()
+            val after = compose.onNodeWithContentDescription("You: Hi").fetchSemanticsNode().boundsInRoot
+            check(kotlin.math.abs(before.right - after.right) < 1f) {
+                "User message moved horizontally before reply: before=$before after=$after"
+            }
+        } finally { scope.cancel() }
+    }
+
     private class Fake(private val pauseAfterCard: Boolean = false) : AssistantTransport {
         override val supportsPlanCards = true
         override suspend fun create() = "fixture"
