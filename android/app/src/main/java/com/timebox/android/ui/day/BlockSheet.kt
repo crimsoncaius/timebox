@@ -36,9 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -85,15 +83,10 @@ fun BlockSheet(
     val laneColor = if (lane == Lane.Planned) colors.planned else colors.actual
     val laneSurface = if (lane == Lane.Planned) colors.plannedSurface else colors.actualSurface
     val laneBorder = if (lane == Lane.Planned) colors.plannedBorder else colors.actualBorder
-    val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        // ModalBottomSheet is hosted at the window level, outside the Day screen's
-        // weighted content bounds. Keep its actions above Timebox's own bottom nav,
-        // which hides while the keyboard is up; the sheet already rides the IME.
-        modifier = Modifier.padding(bottom = blockSheetNavClearance(imeBottom)),
         containerColor = blockSheetContainerColor(colors),
         contentColor = colors.on,
         scrimColor = colors.scrim,
@@ -354,10 +347,6 @@ fun BlockSheet(
     }
 
 }
-
-private val BottomNavClearance = 96.dp
-
-internal fun blockSheetNavClearance(imeBottom: Dp): Dp = (BottomNavClearance - imeBottom).coerceAtLeast(0.dp)
 
 internal fun blockSheetContainerColor(colors: TimeboxColors) =
     if (colors.isDark) colors.low else colors.sheet
