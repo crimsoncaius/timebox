@@ -23,6 +23,7 @@ class TaskTypeListItem(TaskTypeRead):
     archived_task_usage_count: int = 0
     trashed_task_usage_count: int = 0
     recurring_template_usage_count: int = 0
+    time_goal_usage_count: int = 0
 
 
 class TaskTypeCreate(BaseModel):
@@ -58,3 +59,4 @@ class TaskTypeMergePreview(BaseModel):
     planned_block_count: int
     actual_block_count: int
     recurring_series_count: int
+    time_goal_count: int = 0

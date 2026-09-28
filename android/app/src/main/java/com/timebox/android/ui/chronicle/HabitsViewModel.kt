@@ -30,6 +30,7 @@ data class HabitsUiState(
     val pending: Set<HabitCellKey> = emptySet(),
     val candidates: List<RecurringTemplate>? = null,
     val candidatesError: String? = null,
+    val offline: Boolean = false,
 )
 
 /** A tick or untick shown on the grid before the server has recorded it. */
@@ -63,11 +64,10 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
         loadJob = viewModelScope.launch {
             repository.habitsWeek(week).fold(
                 onSuccess = { result ->
-                    // An edit confirmed while this read was in flight carries the fresher week.
                     if (confirmations == confirmationsBefore || result.weekStart != confirmed?.weekStart) confirmed = result
-                    publish { it.copy(loading = false, error = null) }
+                    publish { it.copy(loading = false, error = null, offline = false) }
                 },
-                onFailure = { e -> _state.update { it.copy(loading = false, error = e.apiError.message) } },
+                onFailure = { e -> _state.update { it.copy(loading = false, error = e.apiError.message, offline = e.apiError.isNetwork) } },
             )
         }
     }
@@ -75,7 +75,7 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
     fun shiftWeek(weeks: Long) {
         val week = _state.value.week ?: return
         val next = week.weekStart.plusWeeks(weeks)
-        if (next.isBefore(week.earliestWeekStart) || next.isAfter(currentWeekStart(week))) return
+        if (next.isBefore(week.earliestWeekStart) || next.isAfter(currentWeekStart(week)) || _state.value.offline) return
         load(next)
     }
 

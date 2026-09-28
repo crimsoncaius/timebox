@@ -197,12 +197,13 @@ fun TypesScreen(
                             append("Used by ${pending.usageCount} block(s), ${pending.taskUsageCount - pending.archivedTaskUsageCount - pending.trashedTaskUsageCount} active task(s), ${pending.archivedTaskUsageCount} archived task(s), ${pending.trashedTaskUsageCount} trashed task(s), and ${pending.recurringTemplateUsageCount} recurring template(s). ")
                             if (pending.hasTaskReferences) append("Affected tasks and Recurring Task Series will become Unset. ")
                             if (pending.taskUsageCount > 0) append("Restoring archived or trashed tasks will not restore their type. ")
+                            if (pending.timeGoalUsageCount > 0) append("${pending.timeGoalUsageCount} Time Goal(s), including ended history, must be deleted or retargeted. Retargeting recalculates their historical progress. ")
                             append("This cannot be undone. ")
                             if (pending.usageCount > 0) append("Blocks are classified independently of tasks. Delete all blocks using this type, or move them to the selected type.")
                         },
                         style = TimeboxTheme.type.bodySmall,
                     )
-                    if (pending.usageCount > 0 && otherTypes.isNotEmpty()) {
+                    if ((pending.usageCount > 0 || pending.timeGoalUsageCount > 0) && otherTypes.isNotEmpty()) {
                         Box {
                             TextButton(onClick = { migrateMenu = true }) {
                                 Text(otherTypes.firstOrNull { it.id == state.migrateBlocksTo }?.name ?: "Choose migration target")
@@ -211,13 +212,13 @@ fun TypesScreen(
                                 otherTypes.forEach { target -> DropdownMenuItem({ Text(target.name) }, { migrateMenu = false; onMigrateTarget(target.id) }) }
                             }
                         }
-                        TextButton(enabled = state.migrateBlocksTo != null, onClick = onConfirmMigrate) { Text("Migrate blocks and delete") }
+                        TextButton(enabled = state.migrateBlocksTo != null, onClick = onConfirmMigrate) { Text(if (pending.timeGoalUsageCount > 0) "Retarget goals and blocks, delete type" else "Migrate blocks and delete") }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = onConfirmCascade) {
-                    Text(if (pending.usageCount > 0) "Delete blocks and type" else "Clear references and delete", color = colors.error, style = TimeboxTheme.type.label)
+                    Text(if (pending.timeGoalUsageCount > 0) "Delete goals, blocks and type" else if (pending.usageCount > 0) "Delete blocks and type" else "Clear references and delete", color = colors.error, style = TimeboxTheme.type.label)
                 }
             },
             dismissButton = {

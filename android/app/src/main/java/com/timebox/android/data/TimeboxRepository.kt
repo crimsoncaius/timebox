@@ -192,8 +192,10 @@ class TimeboxRepository private constructor(
         cascadeBlocks: Boolean = false,
         migrateBlocksTo: Int? = null,
         clearTaskReferences: Boolean = false,
+        migrateGoalsTo: Int? = null,
+        deleteGoals: Boolean = false,
     ): Result<Unit> = call {
-        api().deleteTaskType(id, cascadeBlocks, migrateBlocksTo, clearTaskReferences)
+        api().deleteTaskType(id, cascadeBlocks.takeIf { it }, migrateBlocksTo, clearTaskReferences, migrateGoalsTo, deleteGoals)
     }
 
     suspend fun createBlock(
@@ -399,6 +401,24 @@ class TimeboxRepository private constructor(
     suspend fun habitsWeek(week: LocalDate?): Result<HabitsWeek> =
         call { api().habitsWeek(week?.toString()).toModel() }
 
+    suspend fun timeGoals(week: LocalDate?): Result<TimeGoalsWeek> =
+        call { api().timeGoals(week?.toString()).toModel() }
+
+    suspend fun timeGoalPeriod(id: Int, anchor: LocalDate, week: LocalDate): Result<TimeGoal> =
+        call { api().timeGoalPeriod(id, anchor.toString(), week.toString()).toModel() }
+
+    suspend fun createTimeGoal(body: com.timebox.android.data.remote.TimeGoalWriteDto): Result<TimeGoal> =
+        call { api().createTimeGoal(body).toModel() }
+
+    suspend fun replaceTimeGoal(id: Int, body: com.timebox.android.data.remote.TimeGoalWriteDto): Result<TimeGoal> =
+        call { api().replaceTimeGoal(id, body).toModel() }
+
+    suspend fun changeTimeGoalTarget(id: Int, minutes: Int): Result<Unit> =
+        call { api().changeTimeGoalTarget(id, com.timebox.android.data.remote.TimeGoalTargetDto(minutes)) }
+
+    suspend fun endTimeGoal(id: Int): Result<Unit> = call { api().endTimeGoal(id) }
+    suspend fun deleteTimeGoal(id: Int): Result<Unit> = call { api().deleteTimeGoal(id) }
+
     suspend fun tickHabit(templateId: Int, day: LocalDate): Result<HabitsWeek> =
         call { api().tickHabit(templateId, day.toString()).toModel() }
 
@@ -550,6 +570,8 @@ class TimeboxRepository private constructor(
     private suspend fun <T> call(block: suspend () -> T): Result<T> = withContext(ioDispatcher) {
         try {
             Result.success(block())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: ApiErrorException) {
             Result.failure(e)
         } catch (e: HttpException) {

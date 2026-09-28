@@ -133,7 +133,10 @@ internal fun habitTotalUnit(total: HabitTotal): String = when (total.unit) {
 fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine: (Int) -> Unit) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(viewModel) {
+        viewModel.refresh()
+        while (true) { delay(60_000); viewModel.refresh() }
+    }
     var sessionSheet by remember { mutableStateOf<Pair<Int, LocalDate>?>(null) }
     var addSheet by remember { mutableStateOf(false) }
     val week = state.week
@@ -152,8 +155,9 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
     }
     checkNotNull(week)
     val currentWeek = currentWeekStart(week)
-    val canPrev = week.weekStart.isAfter(week.earliestWeekStart)
-    val canNext = week.weekStart.isBefore(currentWeek)
+    val earliest = week.earliestWeekStart
+    val canPrev = week.weekStart.isAfter(earliest) && !state.offline
+    val canNext = week.weekStart.isBefore(currentWeek) && !state.offline
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -169,7 +173,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
             )
             Box(
                 Modifier.weight(1f).height(36.dp).clip(TimeboxShapes.field).background(colors.low)
-                    .clickable(onClick = viewModel::thisWeek),
+                    .clickable(enabled = !state.offline, onClick = viewModel::thisWeek),
                 contentAlignment = Alignment.Center,
             ) {
                 val label = if (week.weekStart == currentWeek) "This week"
@@ -182,11 +186,17 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 tint = if (canNext) colors.on else colors.onVariant.copy(alpha = 0.4f),
                 diameter = 36.dp, background = colors.low, iconSize = 19.dp,
             )
+
         }
 
-        if (week.habits.isEmpty() && week.weekStart == currentWeek && week.earliestWeekStart == currentWeek) {
-            HabitsEmptyState(onAdd = { addSheet = true; viewModel.loadCandidates() })
-        } else {
+        (state.error ?: if (state.offline) "Offline" else null)?.let { message ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (state.offline) "Offline · showing the last loaded week." else message,
+                    Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                TextButton(onClick = viewModel::refresh) { Text("Retry") }
+            }
+        }
+        run {
             val shiftWeek by rememberUpdatedState(viewModel::shiftWeek)
             val thresholdPx = with(LocalDensity.current) { HABITS_SWIPE_THRESHOLD.toPx() }
             var drag by remember { mutableFloatStateOf(0f) }
@@ -266,17 +276,15 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                         color = colors.onVariant, strokeWidth = 2.dp,
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                TextButton(onClick = { addSheet = true; viewModel.loadCandidates() }) {
-                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Add habit")
-                }
-                Text(
+                if (week.habits.isNotEmpty()) Text(
                     "Tap a day to record it. Long-press a quota day to remove a session.",
                     style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
+                TextButton(onClick = { addSheet = true; viewModel.loadCandidates() }, enabled = !state.offline) {
+                    Icon(Icons.Outlined.Add, null)
+                    Text("Add Habit")
+                }
             }
         }
     }

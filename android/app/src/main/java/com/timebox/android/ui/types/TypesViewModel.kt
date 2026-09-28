@@ -201,7 +201,9 @@ class TypesViewModel(private val repository: TimeboxRepository) : ViewModel() {
     ) {
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.deleteTaskType(type.id, cascadeBlocks = cascade, migrateBlocksTo = migrateTo, clearTaskReferences = clearReferences).fold(
+            repository.deleteTaskType(type.id, cascadeBlocks = cascade, migrateBlocksTo = migrateTo, clearTaskReferences = clearReferences,
+                migrateGoalsTo = migrateTo.takeIf { type.timeGoalUsageCount > 0 },
+                deleteGoals = migrateTo == null && type.timeGoalUsageCount > 0).fold(
                 onSuccess = {
                     _state.update {
                         it.copy(saving = false, message = "Deleted ${type.name}")
@@ -226,4 +228,4 @@ val TaskType.hasTaskReferences: Boolean
     get() = taskUsageCount > 0 || recurringTemplateUsageCount > 0
 
 val TaskType.totalUsageCount: Int
-    get() = usageCount + taskUsageCount + recurringTemplateUsageCount
+    get() = usageCount + taskUsageCount + recurringTemplateUsageCount + timeGoalUsageCount

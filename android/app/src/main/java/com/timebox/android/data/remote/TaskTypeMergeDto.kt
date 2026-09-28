@@ -32,4 +32,5 @@ data class TaskTypeMergePreview(
     @SerialName("planned_block_count") val plannedBlockCount: Int,
     @SerialName("actual_block_count") val actualBlockCount: Int,
     @SerialName("recurring_series_count") val recurringSeriesCount: Int,
+    @SerialName("time_goal_count") val timeGoalCount: Int = 0,
 )
