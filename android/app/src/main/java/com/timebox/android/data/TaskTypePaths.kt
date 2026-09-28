@@ -31,6 +31,12 @@ fun canonicalizeTaskTypePath(input: String): String? {
 
 private val WHITESPACE_RUN = Regex("\\s+")
 
+/** True when both inputs canonicalize to the same non-empty path. */
+fun isSameTaskTypePath(a: String, b: String): Boolean {
+    val canonical = canonicalizeTaskTypePath(a)
+    return canonical != null && canonical == canonicalizeTaskTypePath(b)
+}
+
 /** `coding/ai/agents` -> every path the backend touches, shallowest first. */
 fun taskTypePathPrefixes(path: String): List<String> {
     val segments = path.split('/')

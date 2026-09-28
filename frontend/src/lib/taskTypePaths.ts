@@ -12,6 +12,12 @@ export function canonicalizeTaskTypePathInput(input: string): string | null {
   return segments.join('/')
 }
 
+/** True when both inputs canonicalize to the same non-empty path. */
+export function isSameTaskTypePath(a: string, b: string): boolean {
+  const canonical = canonicalizeTaskTypePathInput(a)
+  return canonical != null && canonical === canonicalizeTaskTypePathInput(b)
+}
+
 export function formatTaskTypePathParts(path: string): {
   ancestorsLabel: string
   leafLabel: string
