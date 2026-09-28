@@ -1,5 +1,8 @@
 package com.timebox.android.ui.assistant
 
+import com.timebox.android.data.*
+import com.timebox.android.data.remote.*
+import com.timebox.android.ui.day.TrackingHandoff
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.*
@@ -9,6 +12,61 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AssistantControllerTest {
+    @Test fun `confirmed switch retains its valid view while the repository publishes the new activity`() = runTest {
+        val now = java.time.Instant.parse("2026-09-25T12:50:00Z")
+        val zone = java.time.ZoneId.of("UTC")
+        val work = TaskTypeDto(1, "Work")
+        val running = TaskTypeDto(3, "Exercise/Running")
+        val current = ActualBlockDto(1, 1, work,
+            startAt = now.minusSeconds(3600).toString(), createdAt = "", updatedAt = "")
+        var snapshot = ActivitySnapshotDto(cursor = 1, serverAt = now.toString(),
+            reportingTimezone = "UTC", offlineReady = true, current = current, records = listOf(current),
+            taskTypes = listOf(work, running), switchHistoryReady = true)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var commands = 0
+        val repository = ActivityRepository(object : ActivityTransport {
+            override suspend fun read() = snapshot
+            override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto {
+                commands++
+                entered.complete(Unit)
+                release.await()
+                val next = current.copy(id = 2, taskTypeId = running.id, taskType = running, startAt = command.effective.at!!)
+                snapshot = snapshot.copy(cursor = 2, current = next, records = listOf(current.copy(endAt = next.startAt), next),
+                    provenance = mapOf("2" to command.operationId), acknowledgement = ActivityAcknowledgementDto(
+                        command.operationId, ActivityOutcome.Applied))
+                return snapshot
+            }
+        }, object : ActivityStorage {
+            override fun load(): String? = null
+            override fun save(value: String) {}
+        }, wallTime = { now.toEpochMilli() }, monotonicTime = { 0L })
+        repository.refresh()
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Switch to running"); runCurrent()
+        api.proposal(); api.emit("completed"); api.emit("eof"); runCurrent()
+        controller.chooseProposal("p1", 3)
+        val proposal = controller.state.value.exchanges.single().proposal!!
+        val before = deriveProposal(proposal, controller.state.value.proposals.getValue("p1"), snapshot, now, zone)
+        val tracking = ProposalTracking(controller, repository, TrackingHandoff(), {}, this)
+        tracking.confirm(proposal, before)
+        tracking.confirm(proposal, before) // A second tap must not queue another switch.
+        runCurrent()
+        try {
+            withContext(Dispatchers.Default) { withTimeout(5000) { entered.await() } }
+            val during = controller.state.value.proposals.getValue("p1")
+            val after = repository.state.value.snapshot!!
+            assertEquals(3, after.current!!.taskTypeId)
+            assertNotNull("The live view would show the spurious warning", deriveProposal(proposal, during, after, now, zone).invalid)
+            assertEquals("Confirmation must retain its original valid view", before, during.applying)
+            assertEquals(1, commands)
+        } finally { release.complete(Unit) }
+        val applied = controller.state.first { it.proposals["p1"]?.status == ProposalStatus.Applied }.proposals.getValue("p1")
+        assertNull(applied.applying)
+        assertNotNull(applied.record)
+    }
+
     private class Fake : AssistantTransport {
         override val supportsPlanCards = true
         override var supportsActivityCards = false
