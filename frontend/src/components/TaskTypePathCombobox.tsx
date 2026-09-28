@@ -5,6 +5,7 @@ import {
   buildTaskTypeSuggestions,
   createAncestorHint,
   formatTaskTypePathParts,
+  isSameTaskTypePath,
 } from '../lib/taskTypePaths'
 
 const UNSPECIFIED = 'unspecified'
@@ -42,7 +43,9 @@ export function TaskTypePathCombobox({
   const [query, setQuery] = useState(selected?.name ?? '')
   const [open, setOpen] = useState(false)
   const [predictionQuery, setPredictionQuery] = useState('')
-  const { recommendation, dismiss } = useTaskTypeRecommendation(recommendationName, taskTypes, valueTaskTypeId, recommendationEnabled && open, predictionQuery, recommendationLinkedTaskName)
+  const { recommendation: prediction, dismiss } = useTaskTypeRecommendation(recommendationName, taskTypes, valueTaskTypeId, recommendationEnabled && open, predictionQuery, recommendationLinkedTaskName)
+  // Typing the suggested path exactly makes the card a duplicate of the matching row.
+  const recommendation = prediction && !isSameTaskTypePath(query, prediction.name) ? prediction : undefined
   const [activeIndex, setActiveIndex] = useState(-1)
   const [busy, setBusy] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)

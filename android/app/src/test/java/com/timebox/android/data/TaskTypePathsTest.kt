@@ -34,6 +34,13 @@ class TaskTypePathsTest {
     }
 
     @Test
+    fun `same path compares canonical forms`() {
+        assertTrue(isSameTaskTypePath(" Coding / AI ", "coding/ai"))
+        assertFalse(isSameTaskTypePath("coding", "coding/ai"))
+        assertFalse(isSameTaskTypePath("  ", ""))
+    }
+
+    @Test
     fun `canonicalize collapses repeated and trailing slashes`() {
         assertEquals("coding/ai", canonicalizeTaskTypePath("coding//ai/"))
         assertEquals("coding", canonicalizeTaskTypePath("/coding"))

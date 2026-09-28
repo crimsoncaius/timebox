@@ -30,6 +30,18 @@ describe('TaskTypePathCombobox', () => {
     expect(await screen.findByRole('button', { name: 'Use suggested Task Type coding/ai' })).toBeInTheDocument()
     request.mockRestore()
   })
+  it('hides the suggestion while the typed path already equals it', async () => {
+    const request = vi.spyOn(api, 'recommendTaskType').mockResolvedValue({ task_type_id: 2, confidence: .95, reason: 'recommended' })
+    const user = userEvent.setup()
+    render(<TaskTypePathCombobox label="Task type" taskTypes={taskTypes} valueTaskTypeId={null}
+      recommendationName="Train a model" onSelectTaskTypeId={vi.fn()} onCreateTaskTypePath={vi.fn()} />)
+    const input = screen.getByRole('combobox')
+    await user.click(input)
+    expect(await screen.findByRole('button', { name: 'Use suggested Task Type coding/ai' })).toBeInTheDocument()
+    await user.type(input, 'Coding / AI')
+    expect(screen.queryByText('Suggested Task Type')).not.toBeInTheDocument()
+    request.mockRestore()
+  })
   it('commits an active matching option without submitting its form', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()

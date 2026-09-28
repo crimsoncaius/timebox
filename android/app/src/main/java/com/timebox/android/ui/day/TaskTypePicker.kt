@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.canonicalizeTaskTypePath
 import com.timebox.android.data.createAncestorHint
+import com.timebox.android.data.isSameTaskTypePath
 import com.timebox.android.data.rankTaskTypes
 import com.timebox.android.data.shouldOfferCreate
 import com.timebox.android.data.taskTypePathParts
@@ -103,8 +104,10 @@ fun TaskTypePicker(
     var typed by remember { mutableStateOf(false) }
     val currentName = taskTypes.find { it.id == selectedTypeId }?.name
     val searchQuery = if (!typed && query == currentName) "" else query
-    val (localRecommendationState, recommendation) = rememberTaskTypeRecommendation(
+    val (localRecommendationState, prediction) = rememberTaskTypeRecommendation(
         recommendationName, taskTypes, selectedTypeId, recommendationEnabled && pickerOpen, searchQuery, recommendationLinkedTaskName)
+    // Typing the suggested path exactly makes the card a duplicate of the matching row.
+    val recommendation = prediction?.takeUnless { isSameTaskTypePath(searchQuery, it.name) }
     if (!pickerOpen) {
         androidx.compose.material3.TextButton(onClick = { typed = false; onQueryChange(""); pickerOpen = true }, modifier = modifier.fillMaxWidth()) {
             Text(currentName ?: "Unset")
