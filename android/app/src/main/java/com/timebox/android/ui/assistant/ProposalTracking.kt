@@ -31,17 +31,17 @@ class ProposalTracking internal constructor(
     private val scope: kotlinx.coroutines.CoroutineScope,
 ) {
     internal var now by mutableStateOf(repository.now())
-    private var confirming by mutableStateOf<String?>(null)
     private var errors by mutableStateOf(emptyMap<String, String>())
 
     private fun zone() = runCatching { ZoneId.of(repository.state.value.snapshot!!.reportingTimezone) }.getOrDefault(ZoneId.systemDefault())
 
-    private fun confirm(p: TrackingProposal, view: ProposalView) {
+    internal fun confirm(p: TrackingProposal, view: ProposalView) {
         val snapshot = repository.state.value.snapshot ?: return
         val state = controller.state.value.proposals[p.id] ?: return
+        if (state.status != ProposalStatus.Pending || state.applying != null) return
         val typeId = state.chosen ?: p.taskTypes.singleOrNull()?.id
         val running = snapshot.current
-        confirming = p.id
+        controller.proposalApplying(p.id, view)
         errors = errors - p.id
         scope.launch {
             try {
@@ -60,7 +60,7 @@ class ProposalTracking internal constructor(
                     else after.records.find { after.provenance[it.id.toString()] == operation }?.let { RecordRef.of(it, after) }
                     ?: operation?.let { RecordRef(it, p.at ?: repository.now()) }
                 if (record != null) controller.proposalApplied(p.id, record, operation, stopped = view.action == ProposalAction.Stop)
-            } finally { confirming = null }
+            } finally { controller.proposalApplying(p.id, null) }
         }
     }
 
@@ -92,7 +92,7 @@ class ProposalTracking internal constructor(
         val activity by repository.state.collectAsState()
         val states by controller.state.collectAsState()
         TrackingProposalCard(p, states.proposals[p.id] ?: ProposalState(), activity.snapshot, now, zone(),
-            busy = confirming == p.id || activity.busy, error = errors[p.id], actions = actions)
+            busy = states.proposals[p.id]?.applying != null || activity.busy, error = errors[p.id], actions = actions)
     }
 }
 

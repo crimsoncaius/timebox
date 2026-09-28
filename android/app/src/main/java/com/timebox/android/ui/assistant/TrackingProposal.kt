@@ -45,6 +45,8 @@ enum class ProposalStatus { Pending, Applied, Dismissed }
 data class ProposalState(
     val chosen: Int? = null, val status: ProposalStatus = ProposalStatus.Pending,
     val record: RecordRef? = null, val operationId: String? = null, val stopped: Boolean = false,
+    /** Retain the confirmed view while the journal publishes and synchronizes its new activity. */
+    val applying: ProposalView? = null,
 )
 
 enum class ProposalAction(val label: String, val progress: String) { Start("Start", "Starting…"), Switch("Switch", "Switching…"), Stop("Stop", "Stopping…") }
