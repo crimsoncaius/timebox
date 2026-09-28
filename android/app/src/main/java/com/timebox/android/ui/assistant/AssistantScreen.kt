@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material.icons.outlined.NorthEast
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.runtime.*
@@ -96,9 +94,6 @@ fun AssistantScreen(
         HorizontalDivider(color = colors.hairline)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (state.exchanges.isEmpty()) item {
-                AssistantWelcome { draft = it; composerFocus.requestFocus() }
-            }
             itemsIndexed(state.exchanges) { index, exchange ->
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Surface(Modifier.padding(start = 36.dp).align(Alignment.End), color = colors.card, shape = RoundedCornerShape(16.dp, 16.dp, 3.dp, 16.dp), border = BorderStroke(1.dp, colors.hairline)) {
@@ -122,13 +117,7 @@ fun AssistantScreen(
                             if (index == state.exchanges.lastIndex && !state.busy && state.ended == null) TextButton(onClick = { follow = true; controller.retry() }) { Text("Retry response") }
                         }
                     }
-                    if (index == state.exchanges.lastIndex && exchange.status == "Complete" && !state.busy && state.ended == null) {
-                        OutlinedButton(onClick = { draft = "Help me think through my morning"; composerFocus.requestFocus() }, border = BorderStroke(1.dp, colors.hairline)) {
-                            Text("Think through my morning", Modifier.weight(1f, fill = false), style = TimeboxTheme.type.bodySmall)
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Outlined.NorthEast, null, Modifier.size(16.dp))
-                        }
-                    }
+
                 }
             }
             state.ended?.let { reason -> item { Text(reason, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) } }
@@ -145,30 +134,6 @@ fun AssistantScreen(
         else AssistantComposer(draft, { if (it.length <= 4000) draft = it }, composerFocus, state.busy,
             if (state.exchanges.isEmpty()) "What’s on your mind?" else "Ask a follow-up…",
             controller::stop, { follow = true; controller.send(draft); draft = "" })
-    }
-}
-
-@Composable
-private fun AssistantWelcome(onPrompt: (String) -> Unit) {
-    val colors = TimeboxTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Spacer(Modifier.height(8.dp))
-        Surface(shape = CircleShape, border = BorderStroke(1.dp, colors.hairline), color = colors.bg) {
-            Icon(Icons.Outlined.AutoAwesome, null, Modifier.padding(12.dp).size(24.dp), tint = colors.onVariant)
-        }
-        Text("A LITTLE CLARITY", style = TimeboxTheme.type.kicker, color = colors.onVariant)
-        Text("Make room\nfor your day.", style = TimeboxTheme.type.display, color = colors.on)
-        Text("Think through your Planned Blocks, or say what you’re doing.\nAssistant reads your plan and suggests tracking changes for you to confirm.", style = TimeboxTheme.type.body, color = colors.onVariant)
-        Column(Modifier.padding(top = 8.dp)) {
-            listOf("Show today’s plan", "Do I have a 30-minute gap?", "Help me think through my morning").forEachIndexed { index, prompt ->
-                HorizontalDivider(color = colors.hairline)
-                Row(Modifier.fillMaxWidth().clickable(onClickLabel = "Use prompt", onClick = { onPrompt(prompt) }).heightIn(min = 56.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("0${index + 1}", style = TimeboxTheme.type.mono, color = colors.onVariant)
-                    Text(prompt, Modifier.weight(1f), style = TimeboxTheme.type.body, color = colors.on)
-                    Icon(Icons.Outlined.NorthEast, null, Modifier.size(18.dp), tint = colors.onVariant)
-                }
-            }
-        }
     }
 }
 
