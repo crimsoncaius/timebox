@@ -15,6 +15,7 @@ from app.models.day import Day
 from app.models.task_type import TaskType
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.battle_plan import SubtaskRead
+from app.services import activity_journal
 from app.services.battle_plan._shared import _load_task
 from app.services.recurrence.protection import protect_task_occurrence
 from app.services.task_queries import task_select
@@ -85,7 +86,7 @@ def _task_snapshot(task: Task) -> dict[str, object]:
 
 
 def _block_snapshot(
-    block: TimeBlock, *, corresponding_actual_id: int | None
+    block: TimeBlock, *, corresponding_actual_ids: list[int]
 ) -> dict[str, object]:
     return {
         "id": block.id,
@@ -98,12 +99,20 @@ def _block_snapshot(
         "end_minute": block.end_minute,
         "created_at": block.created_at.isoformat(),
         "updated_at": block.updated_at.isoformat(),
-        "corresponding_actual_id": corresponding_actual_id,
+        "corresponding_actual_ids": corresponding_actual_ids,
     }
 
 
 def _parse_datetime(value: str | None) -> dt.datetime | None:
     return dt.datetime.fromisoformat(value) if value else None
+
+
+def _corresponding_actual_ids(state: dict) -> list[int]:
+    if "corresponding_actual_ids" in state:
+        return state["corresponding_actual_ids"]
+    # Undo tokens issued before a Planned Block could correspond to multiple Actuals.
+    actual_id = state.get("corresponding_actual_id")
+    return [actual_id] if actual_id is not None else []
 
 
 def _assert_completable(task: Task) -> None:
@@ -273,14 +282,13 @@ def _removable_future_blocks(
     ]
 
 
-def _lock_corresponding_actuals(db: Session, planned_ids: set[int]) -> dict[int, TimeBlock]:
-    """Lock the Actual corresponding to each removable Planned Block, keyed by Planned id."""
+def _lock_corresponding_actuals(db: Session, planned_ids: set[int]) -> list[TimeBlock]:
+    """Lock every Actual corresponding to a removable Planned Block."""
 
     if not planned_ids:
-        return {}
-    return {
-        actual.planned_block_id: actual
-        for actual in db.execute(
+        return []
+    return list(
+        db.execute(
             select(TimeBlock)
             .where(
                 TimeBlock.lane == BlockLane.actual,
@@ -289,13 +297,13 @@ def _lock_corresponding_actuals(db: Session, planned_ids: set[int]) -> dict[int,
             .order_by(TimeBlock.id)
             .with_for_update()
         ).scalars()
-    }
+    )
 
 
 def _completion_operation(
     row: Task,
     removable: list[TimeBlock],
-    ended_actuals: dict[int, TimeBlock],
+    ended_actuals: list[TimeBlock],
     completed_at: dt.datetime,
 ) -> TaskCompletionOperation:
     """The Undo record: everything this Completion is about to remove."""
@@ -306,9 +314,10 @@ def _completion_operation(
         "removed_planned_blocks": [
             _block_snapshot(
                 block,
-                corresponding_actual_id=(
-                    ended_actuals[block.id].id if block.id in ended_actuals else None
-                ),
+                corresponding_actual_ids=[
+                    actual.id for actual in ended_actuals
+                    if actual.planned_block_id == block.id
+                ],
             )
             for block in removable
         ],
@@ -361,11 +370,11 @@ def complete_task(
 ) -> tuple[Task, str, list[int]]:
     """Apply the one global Task Completion transition atomically.
 
-    Lock order is Task -> Day -> Planned -> Actual -> operation, the same order
-    every other command touching Planned/Actual correspondence uses.
+    Lock order is Activity State -> Task -> Day -> Planned -> Actual -> operation.
     """
 
     completed_at = as_utc(captured_at)
+    activity_state = activity_journal.lock(db)
     row = _load_completable_task(db, task_id)
     active_id, active_planned_id = _peek_active_actual(db, task_id)
     planned_rows, days = _lock_planned_blocks(db, task_id)
@@ -382,18 +391,33 @@ def complete_task(
     token = operation.token
 
     try:
+        ranges = (
+            activity_journal.plan_link_ranges(
+                db, activity_state, {actual.id: None for actual in ended_actuals}
+            ) if activity_state.enabled else []
+        )
         if active is not None:
             assert active.start_at is not None
             if completed_at <= as_utc(active.start_at):
                 raise ValueError("Actual Block end must be after its start")
-            active.end_at = completed_at
+            if activity_state.enabled:
+                activity_journal.pieces(db, activity_state)
+                ranges.append({"start": completed_at.isoformat(), "end": None, "data": None})
+            else:
+                active.end_at = completed_at
+
+        if activity_state.enabled:
+            activity_journal.append(
+                db, activity_state, ranges, completed_at,
+                source="task-completion", metadata={"completion_token": token},
+            )
+        else:
+            for actual in ended_actuals:
+                actual.planned_block_id = None
 
         _mark_completed(db, row, completed_at)
 
         for block in removable:
-            linked_actual = ended_actuals.get(block.id)
-            if linked_actual is not None:
-                linked_actual.planned_block_id = None
             days[block.day_id].updated_at = completed_at
             db.delete(block)
 
@@ -554,8 +578,7 @@ def _assert_plans_restorable(
             for block in existing_plans
         ):
             raise ValueError(_PLAN_CONFLICT)
-        actual_id = state.get("corresponding_actual_id")
-        if actual_id is not None:
+        for actual_id in _corresponding_actual_ids(state):
             actual = actuals.get(actual_id)
             if (
                 actual is None
@@ -616,18 +639,18 @@ def _restore_task_state(db: Session, row: Task, task_state: dict) -> None:
 def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
     """Reverse one Task Completion atomically, or refuse if anything it touched moved.
 
-    Lock order is Task -> Day -> Planned -> Actual -> operation, the same order
-    complete_task uses. The snapshot read that names those rows is unlocked and
-    is therefore taken first, before the Task lock.
+    Lock order is Activity State -> Task -> Day -> Planned -> Actual -> operation.
+    The snapshot read that names those rows is unlocked and precedes the locks.
     """
 
+    activity_state = activity_journal.lock(db)
     snapshot = _peek_completion_snapshot(db, task_id, token)
     plan_states = snapshot["removed_planned_blocks"]
     day_ids = sorted({state["day_id"] for state in plan_states})
     actual_ids = sorted(
-        state["corresponding_actual_id"]
+        actual_id
         for state in plan_states
-        if state.get("corresponding_actual_id") is not None
+        for actual_id in _corresponding_actual_ids(state)
     )
 
     row = _load_undoable_task(db, task_id)
@@ -639,12 +662,21 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
     _assert_plans_restorable(db, plan_states, days, existing_plans, actuals)
 
     try:
-        restored = _restore_planned_blocks(db, plan_states, days)
+        _restore_planned_blocks(db, plan_states, days)
         db.flush()
-        for state in plan_states:
-            actual_id = state.get("corresponding_actual_id")
-            if actual_id is not None:
-                actuals[actual_id].planned_block_id = restored[state["id"]].id
+        links = {
+            actual_id: state["id"] for state in plan_states
+            for actual_id in _corresponding_actual_ids(state)
+        }
+        if activity_state.enabled:
+            activity_journal.append(
+                db, activity_state, activity_journal.plan_link_ranges(db, activity_state, links),
+                dt.datetime.now(dt.UTC), source="task-completion",
+                metadata={"undo_completion_token": token},
+            )
+        else:
+            for actual_id, plan_id in links.items():
+                actuals[actual_id].planned_block_id = plan_id
 
         _restore_task_state(db, row, snapshot["task"])
         operation.undone_at = dt.datetime.now(dt.UTC)
