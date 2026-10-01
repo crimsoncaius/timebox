@@ -4,7 +4,6 @@ import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.secondaryIdentity
 import com.timebox.android.data.identityText
 import com.timebox.android.data.activityIdentityText
-import com.timebox.android.ui.elapsedDurationSeconds
 import com.timebox.android.ui.runningTime
 
 import com.timebox.android.data.parseActivityInstant
@@ -157,7 +156,6 @@ fun ActivityTracking(
     val colors = TimeboxTheme.colors
     val planReview = com.timebox.android.BuildConfig.PLAN_NOW_PROTOTYPE
     val linkedPlan = current?.plannedBlockId?.let { id -> state.snapshot?.plans?.find { it.id == id } }
-    val linkedPlanStart = linkedPlan?.let { parseActivityInstant(it.startAt) }
     val linkedPlanEnd = linkedPlan?.let { parseActivityInstant(it.endAt) }
     fun openCurrentEditor() {
         current?.let { item ->
@@ -185,13 +183,7 @@ fun ActivityTracking(
                     HorizontalDivider(color = colors.hairline)
                     Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         val seconds = Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0)
-                        if (planReview) {
-                            PlanCountdownPrototypeMetrics(true, seconds, now, linkedPlanStart, linkedPlanEnd)
-                            PlanCountdownPrototypeControls(linkedPlan != null)
-                        } else {
-                            Text(elapsedDurationSeconds(seconds), style = TimeboxTheme.type.display, color = colors.on)
-                            Text("elapsed", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(bottom = 5.dp))
-                        }
+                        ActivityTimeMetrics(true, seconds, now, linkedPlanEnd)
                     }
                 }
                 focusTask(elapsed)
@@ -209,11 +201,10 @@ fun ActivityTracking(
                     onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
                     onFocus = { expanded = false; onEnterFocus() },
                     onEdit = if (planReview) ::openCurrentEditor else null,
-                    metrics = if (planReview && current != null) {
-                        { PlanCountdownPrototypeMetrics(false, Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0), now, linkedPlanStart, linkedPlanEnd) }
+                    metrics = if (current != null) {
+                        { ActivityTimeMetrics(false, Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0), now, linkedPlanEnd) }
                     } else null,
                 )
-                if (planReview && current != null) PlanCountdownPrototypeControls(linkedPlan != null)
             }
             ActivityTrackingStatusChip(
                 flags = statusFlags,
