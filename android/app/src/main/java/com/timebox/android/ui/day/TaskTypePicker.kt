@@ -2,6 +2,7 @@ package com.timebox.android.ui.day
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SubdirectoryArrowLeft
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -109,8 +111,23 @@ fun TaskTypePicker(
     // Typing the suggested path exactly makes the card a duplicate of the matching row.
     val recommendation = prediction?.takeUnless { isSameTaskTypePath(searchQuery, it.name) }
     if (!pickerOpen) {
-        androidx.compose.material3.TextButton(onClick = { typed = false; onQueryChange(""); pickerOpen = true }, modifier = modifier.fillMaxWidth()) {
-            Text(currentName ?: "Unset")
+        val colors = TimeboxTheme.colors
+        Surface(
+            onClick = { typed = false; onQueryChange(""); pickerOpen = true },
+            modifier = modifier.fillMaxWidth(),
+            shape = TimeboxShapes.field,
+            color = colors.field,
+            border = BorderStroke(1.dp, colors.outline),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(currentName ?: "Unset", style = TimeboxTheme.type.body, color = colors.on,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text("Change", style = TimeboxTheme.type.button, color = colors.onVariant)
+            }
         }
         return
     }

@@ -1,6 +1,6 @@
 import { FocusHost } from './features/activity/FocusMode'
 import { BrowserCheckInHost } from './features/activity/BrowserCheckInHost'
-import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { AssistantPage } from './features/assistant/AssistantPage'
 import { HistoryPage } from './features/history/HistoryPage'
@@ -15,8 +15,13 @@ import { UndoFailureHost } from './components/UndoFailureHost'
 import { ActivitySwitchUndoHost } from './features/activity/ActivitySwitchUndoHost'
 
 const RecurringPage = lazy(() => import('./features/battle-plan/RecurringPage').then((module) => ({ default: module.RecurringPage })))
+const PlanNowPrototype = lazy(() => import('./features/activity/PlanNowPrototype'))
 
 export function AppRoutes() {
+  const location = useLocation()
+  if (import.meta.env.DEV && location.pathname === '/prototype/297') {
+    return <Suspense fallback={<p className="p-8">Loading prototype…</p>}><PlanNowPrototype /></Suspense>
+  }
   return (
     <ReadinessProvider>
       <BrowserCheckInHost />

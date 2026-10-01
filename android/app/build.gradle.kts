@@ -18,10 +18,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "RECORDING_PROTOTYPE", "false")
+        buildConfigField("boolean", "PLAN_NOW_PROTOTYPE", "false")
     }
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "PLAN_NOW_PROTOTYPE", providers.gradleProperty("planNowPrototype").getOrElse("false"))
             buildConfigField("boolean", "RECORDING_PROTOTYPE", providers.gradleProperty("recordingPrototype").getOrElse("false"))
             // Optional isolated review install; ordinary debug builds keep their identity.
             applicationIdSuffix = providers.gradleProperty("reviewApplicationIdSuffix").orNull
