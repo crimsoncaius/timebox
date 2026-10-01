@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
@@ -9,6 +11,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -27,6 +30,7 @@ internal fun ActivitySelectionFields(
     onTypeQueryChange: () -> Unit = {},
 ) {
     val type = TimeboxTheme.type
+    val colors = TimeboxTheme.colors
     var typeQuery by remember { mutableStateOf(selectedType?.name.orEmpty()) }
     OutlinedTextField(
         value = name, onValueChange = { if (it.length <= 500) onNameChange(it) },
@@ -34,18 +38,21 @@ internal fun ActivitySelectionFields(
         modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field,
         textStyle = type.body, singleLine = true, enabled = !busy,
     )
-    TaskTypePicker(
-        recommendationName = name, recommendationEnabled = !busy,
-        taskTypes = taskTypes,
-        query = typeQuery,
-        onQueryChange = { typeQuery = it; onTypeQueryChange() },
-        selectedTypeId = selectedType?.id,
-        onChoose = { chosen ->
-            onTypeChange(chosen)
-            typeQuery = chosen.name
-        },
-        onCreate = onCreateType,
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Task Type", style = type.label, color = colors.onVariant)
+        TaskTypePicker(
+            recommendationName = name, recommendationEnabled = !busy,
+            taskTypes = taskTypes,
+            query = typeQuery,
+            onQueryChange = { typeQuery = it; onTypeQueryChange() },
+            selectedTypeId = selectedType?.id,
+            onChoose = { chosen ->
+                onTypeChange(chosen)
+                typeQuery = chosen.name
+            },
+            onCreate = onCreateType,
+        )
+    }
     typeError?.let {
         Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })

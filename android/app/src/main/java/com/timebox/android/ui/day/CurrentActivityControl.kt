@@ -31,6 +31,8 @@ internal fun CurrentActivityControl(
     activity: String, enabled: Boolean, focusEnabled: Boolean, elapsed: String, running: Boolean, expanded: Boolean,
     onToggle: () -> Unit, onStart: () -> Unit, onNotes: () -> Unit, onSwitch: () -> Unit,
     onFocus: () -> Unit, onStop: () -> Unit, secondary: String? = null,
+    onEdit: (() -> Unit)? = null,
+    metrics: (@Composable () -> Unit)? = null,
 ) {
     val colors = TimeboxTheme.colors
     val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(180), label = "Tracking disclosure")
@@ -42,7 +44,7 @@ internal fun CurrentActivityControl(
                 .heightIn(min = 52.dp).padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Column(Modifier.weight(1f).then(if (running && onEdit != null) Modifier.clickable(enabled = enabled, role = Role.Button, onClickLabel = "Edit current activity", onClick = onEdit) else Modifier).padding(end = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Box(Modifier.size(5.dp).clip(RoundedCornerShape(50)).background(if (running) colors.actual else colors.onVariant.copy(alpha = .5f)))
                     Text(if (running) "Current activity" else "Tracking stopped", color = colors.onVariant, fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = .15.sp)
@@ -50,9 +52,12 @@ internal fun CurrentActivityControl(
                 Text(if (running) activity else "Start tracking", color = colors.on, fontSize = 14.sp, lineHeight = 20.sp,
                     fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (running && secondary != null) Text(secondary, color = colors.onVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (running) Text(elapsed, color = colors.onVariant, fontSize = 13.sp,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                    modifier = Modifier.padding(top = 2.dp))
+                if (running) {
+                    if (metrics != null) metrics()
+                    else Text(elapsed, color = colors.onVariant, fontSize = 13.sp,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                        modifier = Modifier.padding(top = 2.dp))
+                }
             }
             Icon(if (running) Icons.Rounded.ExpandMore else Icons.Rounded.PlayArrow, contentDescription = null,
                 tint = colors.onVariant, modifier = Modifier.size(18.dp).rotate(if (running) rotation else 0f))

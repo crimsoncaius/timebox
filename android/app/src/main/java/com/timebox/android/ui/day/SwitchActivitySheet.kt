@@ -53,6 +53,10 @@ internal fun SwitchActivitySheet(
     onTypeQueryChange: () -> Unit = {},
     loadPlanTitles: suspend (java.time.LocalDate) -> Map<Int, String> = { emptyMap() },
     allowHistory: Boolean = false,
+    planMinutes: Int? = null,
+    onPlanMinutes: ((Int?) -> Unit)? = null,
+    editCurrent: Boolean = false,
+    keepCurrent: Boolean = false,
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
@@ -62,6 +66,13 @@ internal fun SwitchActivitySheet(
     val effectiveTime = switchTimeLabel(selected, zone)
     val valid = (allowHistory || selected >= start) && selected <= now
     var details by remember { mutableStateOf(false) }
+    var customDuration by remember { mutableStateOf(false) }
+    var customText by remember { mutableStateOf("45") }
+    var confirmPlan by remember { mutableStateOf(false) }
+    val durationValid = !customDuration || customText.toIntOrNull()?.let { it in 1..90 } == true
+    val plannedEnd = planMinutes?.let { now.plusSeconds(it * 60L) }
+    val displaced = plans.filter { plannedEnd != null && parseActivityInstant(it.startAt) < plannedEnd && parseActivityInstant(it.endAt) > now }
+    val laterConflict = displaced.any { parseActivityInstant(it.startAt) > now }
     val affected = records.filter { (it.endAt?.let(::parseActivityInstant) ?: now) > selected }
 
     ModalBottomSheet(
@@ -79,8 +90,40 @@ internal fun SwitchActivitySheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
-                Text("Switch activity", style = type.screenTitle.copy(fontSize = 28.sp))
+                Text(if (editCurrent) "Edit current activity" else "Switch activity", style = type.screenTitle.copy(fontSize = 28.sp))
                 ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType, typeError, onTypeQueryChange)
+                if (onPlanMinutes != null) {
+                    Text("How long from now?", style = type.label)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf<Int?>(null, 15, 30, 60, 90).forEach { minutes ->
+                            FilterChip(selected = !customDuration && planMinutes == minutes, onClick = { customDuration = false; onPlanMinutes(minutes) }, enabled = !busy,
+                                label = { Text(minutes?.let { "$it min" } ?: if (keepCurrent) "Keep plan" else "Open-ended") })
+                        }
+                        FilterChip(selected = customDuration, onClick = { customDuration = true; onPlanMinutes(customText.toIntOrNull()?.takeIf { it in 1..90 }) }, enabled = !busy, label = { Text("Custom") })
+                    }
+                    if (customDuration) Row(
+                        Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = customText,
+                            onValueChange = { customText = it; onPlanMinutes(it.toIntOrNull()?.takeIf { value -> value in 1..90 }) },
+                            label = { Text("Duration") }, suffix = { Text("min") },
+                            textStyle = type.sectionTitle.copy(fontSize = 22.sp),
+                            singleLine = true, isError = !durationValid, enabled = !busy,
+                            shape = TimeboxShapes.field,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                            modifier = Modifier.width(156.dp),
+                        )
+                        Text(
+                            if (durationValid) "Choose 1–90 minutes" else "Enter 1–90 minutes",
+                            style = type.bodySmall,
+                            color = if (durationValid) colors.onVariant else colors.error,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                if (!keepCurrent && planMinutes == null && !customDuration) {
                 Text("When did this change happen?", style = type.label)
                 Text("Drag the line. Hold near an edge to keep scrolling.", style = type.bodySmall, color = colors.onVariant)
                 SwitchActivityTimeline(
@@ -90,13 +133,27 @@ internal fun SwitchActivitySheet(
                     allowHistory = allowHistory,
                     onSelect = { onTimingChange(it?.let { at -> ActivityTimeValue.from(at, zone) }) },
                 )
+                } else Text(if (keepCurrent) "Recording continues from ${switchTimeLabel(start, zone)}. Running Time does not restart." else "Switches now, at ${switchTimeLabel(now, zone)}.", style = type.bodySmall, color = colors.onVariant)
                 Surface(color = colors.low, shape = TimeboxShapes.group) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("AFTER THIS CHANGE · $effectiveTime", style = type.kicker, color = colors.onVariant)
+                        if (plannedEnd != null) {
+                            Text("$nextActivity until ${switchTimeLabel(plannedEnd, zone)}", style = type.sectionTitle)
+                            Text("${planMinutes} minutes added to your plan from now.", style = type.bodySmall, color = colors.onVariant)
+                            displaced.forEach { p ->
+                                val title = activityIdentityText(p.name, p.taskTitle, taskTypes.find { it.id == p.taskTypeId }?.name)
+                                val finish = parseActivityInstant(p.endAt)
+                                Text(if (finish > plannedEnd) "$title resumes at ${switchTimeLabel(plannedEnd, zone)}, until ${switchTimeLabel(finish, zone)}."
+                                    else "$title is replaced until ${switchTimeLabel(finish, zone)}.", style = type.bodySmall)
+                            }
+                            Text("Tracking continues when planned time ends.", style = type.bodySmall, color = colors.onVariant)
+                        } else if (keepCurrent) Text("Your activity and plan stay as they are.", style = type.bodySmall)
+                        else {
                         Text("$currentActivity → $nextActivity", style = type.sectionTitle)
                         Text(if (selected < start) "${affected.size} activities change. $nextActivity replaces time from ${selected.atZone(zone).toLocalDate()}, $effectiveTime through now."
                             else "Previous ends and next starts at $effectiveTime.", style = type.bodySmall, color = colors.onVariant)
                         Text(if (allowHistory) "You can Undo." else "● Recording continues without a gap.", style = type.bodySmall, color = colors.onVariant)
+                        }
                     }
                 }
                 if (selected < start) {
@@ -120,11 +177,15 @@ internal fun SwitchActivitySheet(
             HorizontalDivider(color = colors.outlineVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel", style = type.button) }
-                Button(onClick = onConfirm, enabled = enabled && !busy && valid && selectedType != null,
+                Button(onClick = { if (laterConflict) confirmPlan = true else onConfirm() }, enabled = enabled && !busy && valid && durationValid && selectedType != null,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(50)) {
-                    Text(if (busy) "Switching…" else "Switch activity", style = type.button)
+                    Text(if (busy) "Saving…" else if (keepCurrent) { if (planMinutes == null) "Done" else "Save plan" } else "Switch activity", style = type.button)
                 }
             }
         }
     }
+    if (confirmPlan) AlertDialog(onDismissRequest = { confirmPlan = false }, title = { Text("Replace this planned time?") },
+        text = { Text("$nextActivity will replace the overlapping time in ${displaced.joinToString { activityIdentityText(it.name, it.taskTitle, taskTypes.find { t -> t.id == it.taskTypeId }?.name) }}. Time outside this interval stays in place.") },
+        confirmButton = { TextButton(onClick = { confirmPlan = false; onConfirm() }) { Text("Replace this time") } },
+        dismissButton = { TextButton(onClick = { confirmPlan = false }) { Text("Back") } })
 }

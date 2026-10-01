@@ -67,6 +67,8 @@ fun ActivityTracking(
     var timingError by remember { mutableStateOf<String?>(null) }
     var selectedType by remember { mutableStateOf<TaskType?>(null) }
     var name by remember { mutableStateOf("") }
+    var editingCurrent by remember { mutableStateOf(false) }
+    var planMinutes by remember { mutableStateOf<Int?>(null) }
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(repository, owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -153,6 +155,23 @@ fun ActivityTracking(
     var expanded by remember(current?.id) { mutableStateOf(false) }
     BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
     val colors = TimeboxTheme.colors
+    val planReview = com.timebox.android.BuildConfig.PLAN_NOW_PROTOTYPE
+    val linkedPlan = current?.plannedBlockId?.let { id -> state.snapshot?.plans?.find { it.id == id } }
+    val linkedPlanStart = linkedPlan?.let { parseActivityInstant(it.startAt) }
+    val linkedPlanEnd = linkedPlan?.let { parseActivityInstant(it.endAt) }
+    fun openCurrentEditor() {
+        current?.let { item ->
+            targetId = item.id; timing = null; timingError = null; planMinutes = null
+            selectedType = availableTypes.find { it.id == item.taskTypeId }
+            name = item.name.orEmpty(); editingCurrent = true; switching = true; expanded = false
+        }
+    }
+    fun openSwitch(id: Int) {
+        targetId = id; timing = null; timingError = null; planMinutes = null
+        selectedType = null; name = ""; typeQuery = ""; editingCurrent = false; switching = true
+    }
+    val keepCurrent = editingCurrent && current != null && current.taskTypeId == selectedType?.id && current.name.orEmpty() == name
+    LaunchedEffect(switching) { if (!switching) { editingCurrent = false; planMinutes = null } }
     val content: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(horizontal = if (focus) 0.dp else 20.dp)) {
             if (focus && current != null) {
@@ -166,8 +185,13 @@ fun ActivityTracking(
                     HorizontalDivider(color = colors.hairline)
                     Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         val seconds = Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0)
-                        Text(elapsedDurationSeconds(seconds), style = TimeboxTheme.type.display, color = colors.on)
-                        Text("elapsed", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(bottom = 5.dp))
+                        if (planReview) {
+                            PlanCountdownPrototypeMetrics(true, seconds, now, linkedPlanStart, linkedPlanEnd)
+                            PlanCountdownPrototypeControls(linkedPlan != null)
+                        } else {
+                            Text(elapsedDurationSeconds(seconds), style = TimeboxTheme.type.display, color = colors.on)
+                            Text("elapsed", style = TimeboxTheme.type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(bottom = 5.dp))
+                        }
                     }
                 }
                 focusTask(elapsed)
@@ -181,10 +205,15 @@ fun ActivityTracking(
                     onToggle = { expanded = !expanded },
                     onStart = ::start,
                     onNotes = { current?.let { notesTargetId = it.id } },
-                    onSwitch = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
+                    onSwitch = { expanded = false; current?.let { openSwitch(it.id) } },
                     onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
                     onFocus = { expanded = false; onEnterFocus() },
+                    onEdit = if (planReview) ::openCurrentEditor else null,
+                    metrics = if (planReview && current != null) {
+                        { PlanCountdownPrototypeMetrics(false, Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0), now, linkedPlanStart, linkedPlanEnd) }
+                    } else null,
                 )
+                if (planReview && current != null) PlanCountdownPrototypeControls(linkedPlan != null)
             }
             ActivityTrackingStatusChip(
                 flags = statusFlags,
@@ -239,7 +268,7 @@ fun ActivityTracking(
             ) { Text("Notes", style = TimeboxTheme.type.button, color = colors.on) }
             FilledTonalButton(
                 enabled = enabled && current != null,
-                onClick = { current?.let { targetId = it.id; timing = null; timingError = null; switching = true } },
+                onClick = { current?.let { openSwitch(it.id) } },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp).heightIn(min = 48.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.low, contentColor = colors.on),
             ) { Text("Switch activity", style = TimeboxTheme.type.button) }
@@ -267,7 +296,7 @@ fun ActivityTracking(
             Text(current.primaryIdentity(), style = MaterialTheme.typography.headlineSmall)
             current.secondaryIdentity()?.let { Text(it) }
             Button(modifier = Modifier.fillMaxWidth(), onClick = { scope.launch { if (repository.checkIn(com.timebox.android.data.remote.CheckInEventDto("confirm", questionId = question.id))) checkInOpen = false } }) { Text("Yes, still doing this") }
-            OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { dismissCheckIn(); targetId = current.id; timing = null; timingError = null; switching = true }) { Text("Switch activity") }
+            OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { dismissCheckIn(); openSwitch(current.id) }) { Text("Switch activity") }
             HelperText("Recording continues while you decide.")
         }
     }
@@ -313,6 +342,10 @@ fun ActivityTracking(
     )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
     if (switching && !stopping) SwitchActivitySheet(
+        planMinutes = planMinutes,
+        onPlanMinutes = if (planReview) { value -> planMinutes = value; if (value != null) timing = null } else null,
+        editCurrent = editingCurrent,
+        keepCurrent = keepCurrent,
         allowHistory = state.snapshot?.switchHistoryReady == true,
         currentActivity = switchTarget?.identityText().orEmpty(),
         currentId = targetId ?: 0, start = switchTarget?.startAt?.let(::parseActivityInstant) ?: now,
@@ -336,7 +369,17 @@ fun ActivityTracking(
                     try {
                         val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
                         var operation: String? = null
-                        if (withContext(Dispatchers.IO) { repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it }) }) {
+                        if (withContext(Dispatchers.IO) {
+                            if (planReview && planMinutes != null) {
+                                check(!repository.state.value.offline && !repository.state.value.pending) { "Connect and sync before changing the plan." }
+                                val savedPlan = createReviewPlan(planMinutes!!, selectedType!!.id, name, targetId!!)
+                                repository.refresh()
+                                if (keepCurrent) repository.countTowardPlan(savedPlan)
+                                else repository.command(ActivityKind.Switch, plan = savedPlan, observedTargetId = targetId)
+                            } else if (planReview && keepCurrent) true
+                            else repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it })
+                        }) {
+                            changed()
                             reportApplied(operation, at)
                             switching = false; selectedType = null; name = ""; typeQuery = ""
                         } else timingError = repository.state.value.error
