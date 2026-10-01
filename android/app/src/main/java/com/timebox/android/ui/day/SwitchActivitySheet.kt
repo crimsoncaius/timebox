@@ -57,6 +57,7 @@ internal fun SwitchActivitySheet(
     onPlanMinutes: ((Int?) -> Unit)? = null,
     editCurrent: Boolean = false,
     keepCurrent: Boolean = false,
+    currentPlanId: Int? = null,
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
@@ -71,6 +72,9 @@ internal fun SwitchActivitySheet(
     var confirmPlan by remember { mutableStateOf(false) }
     val durationValid = !customDuration || customText.toIntOrNull()?.let { it in 1..90 } == true
     val plannedEnd = planMinutes?.let { now.plusSeconds(it * 60L) }
+    val adjustingPlan = plans.find { keepCurrent && it.id == currentPlanId &&
+        it.taskTypeId == selectedType?.id && it.name.orEmpty() == name &&
+        parseActivityInstant(it.startAt) <= now && parseActivityInstant(it.endAt) > now }
     val displaced = plans.filter { plannedEnd != null && parseActivityInstant(it.startAt) < plannedEnd && parseActivityInstant(it.endAt) > now }
     val laterConflict = displaced.any { parseActivityInstant(it.startAt) > now }
     val affected = records.filter { (it.endAt?.let(::parseActivityInstant) ?: now) > selected }
@@ -139,8 +143,9 @@ internal fun SwitchActivitySheet(
                         Text("AFTER THIS CHANGE · $effectiveTime", style = type.kicker, color = colors.onVariant)
                         if (plannedEnd != null) {
                             Text("$nextActivity until ${switchTimeLabel(plannedEnd, zone)}", style = type.sectionTitle)
-                            Text("${planMinutes} minutes added to your plan from now.", style = type.bodySmall, color = colors.onVariant)
-                            displaced.forEach { p ->
+                            Text(if (adjustingPlan != null) "Your plan now ends here. Earlier planned time stays as it is."
+                                else "${planMinutes} minutes added to your plan from now.", style = type.bodySmall, color = colors.onVariant)
+                            displaced.filter { it.id != adjustingPlan?.id }.forEach { p ->
                                 val title = activityIdentityText(p.name, p.taskTitle, taskTypes.find { it.id == p.taskTypeId }?.name)
                                 val finish = parseActivityInstant(p.endAt)
                                 Text(if (finish > plannedEnd) "$title resumes at ${switchTimeLabel(plannedEnd, zone)}, until ${switchTimeLabel(finish, zone)}."

@@ -2,6 +2,50 @@
 
 Android is now the primary design-review platform, per user request. The web experiment remains available as an earlier reference.
 
+## Progressive exploration — October 1
+
+Continue the existing experiment on `codex/297-progressive-prototype`. Preserve accepted choices and explore unresolved behavior through focused rounds in the real Android application. This record distinguishes implemented UI from prototype behavior; issue 297 remains open.
+
+### Coverage map
+
+| Decision or scenario | Current status | Next evidence needed |
+| --- | --- | --- |
+| Tracking and Focus countdown | A · Inline accepted and implemented for the linked Planned Block, including overrun and no-plan states | Combined journey review |
+| Selected Task Type hierarchy and Switch heading | Refined and reviewed in the actual Android sheet | Retain through subsequent rounds |
+| Custom duration | Compact minutes field reviewed in the experimental editor | Include validation and keyboard behavior in combined review |
+| Real plan versus timer; separate Focus entry | Accepted: real Planned Block; Focus remains a separate choice | Start and switch journey |
+| Interrupting a different activity | Accepted: preserve preceding plan and resume its remainder; tracking never switches automatically | Review with task-linked and multiple-plan examples |
+| Replacing later plans | Preview plus explicit confirmation accepted; experimental interaction exists | Accurate preview, cancellation, and stale-preview recovery |
+| Timeboxing the same Current Activity | Accepted: chosen duration sets the new end; preserve Running Time and preceding plan | Review shortening and extending the linked matching plan |
+| Starting with no Current Activity | Not explored with duration in the real app | Reuse the existing Start flow and review its outcome |
+| Existing covering plan shortcut | Proposed by issue; not reviewed | Adoption versus explicit resize |
+| Task linkage and recurring plans | Prototype does not support replacement | Inspect existing identity and recurrence rules before an experiment |
+| End behavior | Tracking continues; inline overrun accepted | Whether any additional prompt is needed remains open |
+| Recovery and boundaries | Atomic save, offline behavior, concurrent changes, midnight and time-zone boundaries remain unresolved | Representative recovery and boundary scenarios |
+| Web parity | Earlier local-state fixture only | Carry the connected accepted experience to the real web workflow |
+
+### Current round: change the duration of the same activity
+
+Scenario: Writing is planned 10:00–11:00 and is currently recording. At 10:20 the user selects 15 minutes for Writing. The user accepted the recommendation: the new intended end is 10:35, preserving preceding planned time and the continuous Actual Block. No Writing remainder resumes after 10:35. The experiment resizes a linked matching plan in place, retaining its identity and Supporting Note. A matching but unlinked plan remains a separate coverage gap.
+
+Exercise this case alongside an unplanned Current Activity in the actual editor. Keep the accepted inline countdown, Task Type field, and separate Focus entry stable. Subsequent rounds follow discoveries rather than a fixed component sequence. Production integration is a later step after the connected experience and material coverage gaps have been reviewed.
+
+This round uses `backend/artifacts/plan-now-297-same-activity.sqlite`, preserving the earlier review database. Its fresh seed links a running Writing activity (Draft the proposal) to a plan with 40 minutes remaining and places a Meeting later. Tap the Current Activity, choose 15 min, inspect the new-end preview, and Save plan. Running Time continues and the Day plan retains its earlier start. Try 30 min next to extend the same plan. This is still the isolated experimental protocol.
+
+Validated this round: the isolated check uses a fixed 10:20 clock and passes interruption/resume plus same-activity shortening and extension, preserving plan identity, Supporting Note, Actual start and linkage. The prototype APK built successfully. In the actual app, choosing 15 minutes and saving retained plan ID 1, its 21:55 start and note, changed its end to 22:34, and retained the running Actual start. The Tracking control showed continued Running Time and roughly 14 minutes remaining; no resumed Writing segment was created. Preview screenshot: `backend/artifacts/297-same-activity-preview.png` (local review evidence).
+
+Pending Android review: `emulator-5582`, token `92e70adb4d5b486ea8025f611ea8362a`, owner `issue-297: progressive same-activity plan review`, pool `C:\Users\Caius\TimeboxRuntime\emulators`. The app is left on Day after the shortening check, with the backend running on port 12075. Earlier emulator tokens below are historical.
+
+### Exact duration from Save — accepted
+
+The user noticed 21 seconds of Running Time alongside only 28:39 remaining after choosing 30 minutes. The plan started at the rounded minute (22:40:00), while the Actual Block started at 22:40:59.732. The user explicitly chose **exactly the selected duration from pressing Save**. This supersedes the minute-rounded behavior of earlier rounds.
+
+The Android prototype captures the repository's calibrated instant at confirmation and sends it to the isolated plan endpoint. A timed switch uses that same instant as its Actual start. The review backend stores precise intervals in `prototype_plan_intervals` in the disposable database and uses them in Activity snapshots; shortening, extension and interruption/resume preserve those precise boundaries. These records survive server restart. If an ordinary Day resize changes the grid boundaries, its previous precision override is ignored.
+
+This remains an experiment: production Planned Blocks and the Day layout use whole minutes. Day displays the grid approximation, while Tracking and Focus use the precise interval. A production representation for exact planned boundaries, consistent Day editing/reporting and sub-minute fragments still needs design and implementation; the review table is not a production migration. Atomic planning/tracking and stale-preview handling remain unresolved.
+
+Validation: the isolated check passes with Save at 10:20:59.732, delayed receipt, persistence across sessions, same-activity shortening/extension and interruption/resume. APK build succeeded and the app was reinstalled and relaunched on the same managed review. A real UI switch to Writing for 15 minutes produced Actual and plan start `2026-10-01T22:46:43.082+08:00` and plan end `23:01:43.082+08:00`, exactly 900 seconds apart. The app is left running on Day with this scenario and the backend on port 12075.
+
 ## Current review — real Android UI
 
 The user rejected the custom sample Day layout and activity chips as unrepresentative. They have been removed from Android. This round uses the real DayScreen, CurrentActivityControl, ActivitySelectionFields, TaskTypePicker, SwitchActivitySheet, and Day timeline. Tap the activity name to prefill the existing sheet, choose 30 minutes, and Save plan. The existing disclosure arrow still reveals Notes / Switch / Focus / Stop. Duration chips and the plan preview are the added UI. Open-ended switching retains the existing backdated-switch timeline. Timed planning starts now; combining it with backdating remains out of scope. Focus is separate.

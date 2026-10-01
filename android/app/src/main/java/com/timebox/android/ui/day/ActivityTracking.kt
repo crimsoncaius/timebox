@@ -337,6 +337,7 @@ fun ActivityTracking(
         onPlanMinutes = if (planReview) { value -> planMinutes = value; if (value != null) timing = null } else null,
         editCurrent = editingCurrent,
         keepCurrent = keepCurrent,
+        currentPlanId = current?.plannedBlockId,
         allowHistory = state.snapshot?.switchHistoryReady == true,
         currentActivity = switchTarget?.identityText().orEmpty(),
         currentId = targetId ?: 0, start = switchTarget?.startAt?.let(::parseActivityInstant) ?: now,
@@ -355,6 +356,7 @@ fun ActivityTracking(
         onDismiss = { switching = false; proposalId = null },
         onConfirm = {
             if (!switchSaving) {
+                val savedAt = repository.now()
                 switchSaving = true
                 scope.launch {
                     try {
@@ -363,10 +365,10 @@ fun ActivityTracking(
                         if (withContext(Dispatchers.IO) {
                             if (planReview && planMinutes != null) {
                                 check(!repository.state.value.offline && !repository.state.value.pending) { "Connect and sync before changing the plan." }
-                                val savedPlan = createReviewPlan(planMinutes!!, selectedType!!.id, name, targetId!!)
+                                val savedPlan = createReviewPlan(planMinutes!!, selectedType!!.id, name, targetId!!, savedAt)
                                 repository.refresh()
                                 if (keepCurrent) repository.countTowardPlan(savedPlan)
-                                else repository.command(ActivityKind.Switch, plan = savedPlan, observedTargetId = targetId)
+                                else repository.command(ActivityKind.Switch, plan = savedPlan, effectiveAt = savedAt, observedTargetId = targetId)
                             } else if (planReview && keepCurrent) true
                             else repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it })
                         }) {
