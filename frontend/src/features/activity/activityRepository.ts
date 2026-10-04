@@ -21,6 +21,8 @@ export interface CheckInEvent {
   observed?: 'active' | 'idle' | 'locked' | 'unknown'; coverage_start?: string; coverage_end?: string
 }
 export interface ActivitySnapshot {
+  plan_now_revision?: string | null
+  plan_now_undo?: string | null
   check_in?: CheckInState
   protocol: 'activity-online-v1'; cursor: number; server_at: string; reporting_timezone: string
   current: ActualBlock | null; records: ActualBlock[]; provenance?: Record<string, string>; task_types?: TaskType[]
@@ -32,6 +34,10 @@ export interface ActivitySnapshot {
   coverage?: { start: string; end: string | null; record_id: number | null; order: [string, string, number, string] }[]
   acknowledgement?: { operation_id: string; outcome: string } | null
 }
+export interface PlanNowRequest {
+  operation_id: string; revision: string; current_id: number | null; effective_at: string
+  minutes: number; task_type_id: number; task_id: number | null; name: string | null; replace_plan_ids: number[]
+}
 export type ActivityCorrection = Partial<Pick<ActualBlock, 'start_at' | 'task_type_id' | 'task_id' | 'name' | 'note'>> & { end_at?: string }
 interface Command {
   operation_id: string; device_id: string; sequence: number; action_at: string
@@ -42,7 +48,7 @@ interface Command {
   predecessor_id?: string; kind: 'start' | 'switch' | 'stop' | 'add' | 'edit' | 'delete' | 'check_in' | 'undo_switch'; check_in?: CheckInEvent; target_source?: string; target_start_at?: string; task_type_id?: number; name?: string | null
 }
 interface SwitchRestore { start: string; records: ActualBlock[]; provenance: Record<string, string> }
-export interface ActivitySwitchUndo { operationId: string; name: string; at: string }
+export interface ActivitySwitchUndo { operationId: string; name: string; at: string; planChange?: boolean }
 function switchScope(snapshot: ActivitySnapshot, start: string) {
   return JSON.stringify(snapshot.records.filter(r => !r.end_at || Date.parse(r.end_at) > Date.parse(start)).map(r => [
     snapshot.provenance?.[r.id] ?? `baseline:${r.id}`, Date.parse(r.start_at), r.end_at ? Date.parse(r.end_at) : null,
@@ -51,6 +57,8 @@ function switchScope(snapshot: ActivitySnapshot, start: string) {
 }
 export interface CheckInPreferences { enabled: boolean; thresholdMinutes: number }
 interface Journal {
+  planNow?: PlanNowRequest | null
+  planUndoPending?: string | null
   undoRestorations?: Record<string, SwitchRestore>
   notificationAttempts?: string[]
   checkInPreferences?: CheckInPreferences
@@ -84,7 +92,7 @@ export class ActivityRepository {
     this.storage = storage
     this.exclusive = exclusive
     try { this.journal = this.readJournal() } catch { this.storageError = 'Activity storage is unavailable. Recording has not started.' }
-    this.state = { snapshot: this.project(), pending: this.journal.outbox.length > 0, busy: false, error: this.storageError, offline: false, feedback: this.feedback }
+    this.state = { snapshot: this.project(), pending: this.journal.outbox.length > 0 || !!this.journal.planNow || !!this.journal.planUndoPending, busy: false, error: this.storageError, offline: false, feedback: this.feedback }
   }
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   getSnapshot = () => this.state
@@ -181,7 +189,7 @@ export class ActivityRepository {
     return { ...snapshot, records, current: records.find(r => r.end_at === null) ?? null }
   }
   private publish(error: string | null = null, busy = false) {
-    this.state = { snapshot: this.project(), pending: this.journal.outbox.length > 0, error, busy, offline: this.offline, feedback: this.feedback }
+    this.state = { snapshot: this.project(), pending: this.journal.outbox.length > 0 || !!this.journal.planNow || !!this.journal.planUndoPending, error, busy, offline: this.offline, feedback: this.feedback }
     this.listeners.forEach(listener => listener())
   }
   private readJournal(): Journal {
@@ -219,6 +227,7 @@ export class ActivityRepository {
     }
   }
   private async drain() {
+    await this.drainPlan()
     while (this.journal.outbox.length) {
       const command = this.journal.outbox[0]
       let response: ActivitySnapshot
@@ -238,6 +247,48 @@ export class ActivityRepository {
         outbox: applied ? this.journal.outbox.slice(1) : [], rejected: applied ? this.journal.rejected : this.retainRejected(this.journal.outbox) })
       this.offline = false
       if (!applied) throw new Error('Activity changed on another device. Pending changes were retained for review.')
+    }
+  }
+  private async drainPlan() {
+    const body = this.journal.planNow
+    const undo = this.journal.planUndoPending
+    if (!body && !undo) return
+    let response: ActivitySnapshot
+    try {
+      response = await fetchJson<ActivitySnapshot>(undo ? `/activity/plan-now/${undo}/undo` : '/activity/plan-now',
+        { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) })
+    } catch (error) {
+      if (error instanceof ApiHttpError && [409, 422].includes(error.status)) {
+        this.save({ ...this.journal, planNow: null, planUndoPending: null })
+        try {
+          const snapshot = await fetchJson<ActivitySnapshot>('/activity')
+          if (this.newer(snapshot)) this.save({ ...this.journal, snapshot })
+        } catch { /* Keep the last confirmed snapshot if reconciliation is offline. */ }
+      } else this.offline = true
+      throw error
+    }
+    this.save({ ...this.journal, planNow: null, planUndoPending: null, snapshot: this.newer(response) ? response : this.journal.snapshot })
+    this.offline = false
+    this.switchUndo = null
+    if (body && response.plan_now_undo) this.switchListeners.forEach(listener => listener({
+      operationId: `plan:${body.operation_id}`, name: body.name || response.task_types?.find(t => t.id === body.task_type_id)?.name || 'activity', at: body.effective_at, planChange: true,
+    }))
+  }
+  async planNow(body: PlanNowRequest) {
+    try {
+      await this.exclusive(async () => {
+        this.journal = this.readJournal()
+        if (this.storageError) throw new Error(this.storageError)
+        if (this.offline || this.journal.outbox.length || this.journal.planNow || this.journal.planUndoPending) throw new Error('Connect and sync before changing the plan. Ordinary tracking remains available offline.')
+        this.save({ ...this.journal, planNow: body })
+        this.publish(null, true)
+        await this.drainPlan()
+        this.publish()
+      })
+      return true
+    } catch (error) {
+      this.publish(errorMessage(error, 'Could not confirm the plan. Retry to check whether it saved.'))
+      return this.journal.planNow?.operation_id === body.operation_id
     }
   }
   async refresh() {
@@ -339,6 +390,7 @@ export class ActivityRepository {
       await this.exclusive(async () => {
         if (this.storageError) throw new Error(this.storageError)
         this.journal = this.readJournal()
+        if (this.journal.planNow || this.journal.planUndoPending) throw new Error('Reconnect to confirm the plan change before recording another change.')
         if (!this.journal.snapshot?.offline_ready || !this.journal.calibration) throw new Error('Connect once to an updated server to initialize Activity Tracking before recording offline.')
         if (this.journal.outbox.some(command => command.effective.mode === 'server_now')) throw new Error('Reconnect to confirm the previous online change first.')
         const projected = this.project()!
@@ -371,6 +423,16 @@ export class ActivityRepository {
     return saved
   }
   async undoSwitch(operationId: string) {
+    if (operationId.startsWith('plan:')) {
+      await this.exclusive(async () => {
+        this.journal = this.readJournal()
+        if (this.offline || this.journal.outbox.length || this.journal.planNow || this.journal.planUndoPending) throw new Error('Connect and sync to undo the plan change.')
+        this.save({ ...this.journal, planUndoPending: operationId.slice(5) })
+        try { await this.drainPlan(); this.publish() }
+        catch (error) { this.publish(errorMessage(error, 'Could not confirm Undo. Reconnect to check its result.')); throw error }
+      })
+      return
+    }
     await this.exclusive(async () => {
       this.journal = this.readJournal()
       const opportunity = this.switchUndo
@@ -392,6 +454,7 @@ export class ActivityRepository {
         this.journal = this.readJournal()
         const snapshot = this.project()
         if (this.storageError) throw new Error(this.storageError)
+        if (this.journal.planNow || this.journal.planUndoPending) throw new Error('Reconnect to confirm the plan change before recording another change.')
         if (!snapshot?.offline_ready || !this.journal.calibration) throw new Error('Connect once to initialize Activity Tracking.')
         const target = snapshot.records.find(r => r.id === targetId)
         if (kind !== 'add' && (!target || !target.end_at)) throw new Error('Select an ended Actual Block. Use Switch or Stop for the Current Activity.')
@@ -421,6 +484,7 @@ export class ActivityRepository {
         this.journal = this.readJournal()
         const snapshot = this.project()
         if (this.storageError) throw new Error(this.storageError)
+        if (this.journal.planNow || this.journal.planUndoPending) throw new Error('Reconnect to confirm the plan change before recording another change.')
         if (!snapshot?.offline_ready || !this.journal.calibration) throw new Error('Connect once to initialize Activity Tracking.')
         const current = snapshot.current
         if (!current || !matchesPlan(current, plan)) throw new Error('Activity changed. Review the current activity.')

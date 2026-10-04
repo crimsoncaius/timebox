@@ -134,6 +134,11 @@ export type BattleTaskWrite = {
 }
 
 export interface TimeBlock {
+  start_position?: number | null
+  end_position?: number | null
+  duration_minutes?: number | null
+  start_at?: string | null
+  end_at?: string | null
   actual_block_ids?: number[]
   actual_duration_minutes?: number
   id: number

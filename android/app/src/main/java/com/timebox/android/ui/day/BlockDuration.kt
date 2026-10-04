@@ -22,7 +22,8 @@ import java.time.ZoneId
  */
 internal fun blockDurationMinutes(block: TimeBlock, day: Day, startMinute: Int, endMinute: Int, dragging: Boolean): Int {
     val span = (endMinute - startMinute).coerceAtLeast(0)
-    if (dragging || block.lane != Lane.Actual) return span
+    if (dragging) return span
+    if (block.lane != Lane.Actual) return block.preciseDurationMinutes?.toInt() ?: span
     val record = day.actualBlocks.firstOrNull { it.actualBlock.id == block.actualBlockId }?.actualBlock ?: return span
     record.endAt?.let { return Duration.between(record.startAt, it).toMinutes().toInt().coerceAtLeast(0) }
     val dayStart = day.date.atStartOfDay(ZoneId.of(day.timezone)).toInstant()

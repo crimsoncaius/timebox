@@ -41,6 +41,11 @@ data class TimeBlockDto(
     @SerialName("actual_duration_minutes") val actualDurationMinutes: Double = 0.0,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
+    @SerialName("start_position") val startPosition: Double? = null,
+    @SerialName("end_position") val endPosition: Double? = null,
+    @SerialName("duration_minutes") val preciseDurationMinutes: Double? = null,
+    @SerialName("start_at") val startAt: String? = null,
+    @SerialName("end_at") val endAt: String? = null,
 )
 
 @Serializable

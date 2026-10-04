@@ -9,19 +9,17 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.time import get_zone
 from app.models.activity import ActivityOperation, ActivityState
 from app.models.battle_plan import Task
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.activity import ActivityCommand
 from app.services import actual_block_service as actuals
-from app.services import task_type_service
+from app.services import planned_intervals, task_type_service
 
 
 def plans(db: Session, timezone: str) -> list[dict[str, Any]]:
     """Every Planned Block as a local-time interval, for snapshot and selection."""
 
-    zone = get_zone(timezone)
     rows = db.scalars(
         select(TimeBlock)
         .options(joinedload(TimeBlock.day), joinedload(TimeBlock.task))
@@ -30,7 +28,7 @@ def plans(db: Session, timezone: str) -> list[dict[str, Any]]:
     )
     result: list[dict[str, Any]] = []
     for row in rows:
-        midnight = dt.datetime.combine(row.day.date, dt.time(), zone)
+        start, end = planned_intervals.interval(row, timezone)
         result.append(
             dict(
                 id=row.id,
@@ -39,8 +37,8 @@ def plans(db: Session, timezone: str) -> list[dict[str, Any]]:
                 task_title=row.task.title if row.task else None,
                 name=row.name,
                 note=row.note,
-                start_at=(midnight + dt.timedelta(minutes=row.start_minute)).isoformat(),
-                end_at=(midnight + dt.timedelta(minutes=row.end_minute)).isoformat(),
+                start_at=start.isoformat(),
+                end_at=end.isoformat(),
             )
         )
     return result

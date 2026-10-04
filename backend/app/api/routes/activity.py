@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -7,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.models.activity import ActivityState
-from app.schemas.activity import ActivityCommand, ActivitySnapshot, ReportingTimezone
-from app.services import activity_service
+from app.schemas.activity import ActivityCommand, ActivitySnapshot, PlanNowRequest, ReportingTimezone
+from app.services import activity_service, plan_now
 
 
 def require_activity(
@@ -20,6 +22,24 @@ def require_activity(
 
 
 router = APIRouter(prefix="/activity", tags=["activity"], dependencies=[Depends(require_activity)])
+
+
+@router.post("/plan-now", response_model=ActivitySnapshot)
+def plan_and_track(body: PlanNowRequest, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    try:
+        return plan_now.execute(db, body, settings.app_timezone)
+    except (ValueError, IntegrityError) as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc) if isinstance(exc, ValueError) else "The plan changed. Refresh and review it again.") from exc
+
+
+@router.post("/plan-now/{operation_id}/undo", response_model=ActivitySnapshot)
+def undo_plan_and_track(operation_id: UUID, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    try:
+        return plan_now.undo(db, operation_id, settings.app_timezone)
+    except (ValueError, IntegrityError) as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc) if isinstance(exc, ValueError) else "The plan changed. Undo is no longer available.") from exc
 
 
 @router.get("", response_model=ActivitySnapshot)

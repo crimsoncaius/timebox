@@ -24,11 +24,15 @@ import kotlinx.serialization.json.contentOrNull
 data class CheckInSubmission(val saved: Boolean, val operationId: String? = null, val deviceId: String? = null, val acknowledged: Boolean = false)
 
 interface ActivityTransport {
+    suspend fun planNow(body: PlanNowRequestDto): ActivitySnapshotDto = error("Update the server to plan from now.")
+    suspend fun undoPlanNow(id: String): ActivitySnapshotDto = error("Update the server to undo this plan.")
     suspend fun read(): ActivitySnapshotDto
     suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto
     suspend fun endpoint(): String = "test"
 }
 class RepositoryActivityTransport(private val repository: TimeboxRepository) : ActivityTransport {
+    override suspend fun planNow(body: PlanNowRequestDto) = repository.planNow(body)
+    override suspend fun undoPlanNow(id: String) = repository.undoPlanNow(id)
     override suspend fun read() = repository.getActivity()
     override suspend fun execute(command: ActivityCommandDto) = repository.activityCommand(command)
     override suspend fun endpoint() = repository.activityEndpoint()
@@ -42,6 +46,8 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     }
 }
 @Serializable private data class ActivityJournal(
+    val planNow: PlanNowRequestDto? = null,
+    val planUndoPending: String? = null,
     val undoRestorations: Map<String, SwitchRestore> = emptyMap(),
     val device: String = UUID.randomUUID().toString(), val sequence: Int = 0,
     val checkInPreferences: CheckInPreferences = CheckInPreferences(),
@@ -56,7 +62,7 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     val calibration: ActivityCalibrationDto? = null,
 )
 @Serializable private data class SwitchRestore(val start: String, val records: List<ActualBlockDto>, val provenance: Map<String, String>)
-data class ActivitySwitchUndo(val operationId: String, val name: String, val at: String, val kind: ActivityKind = ActivityKind.Switch)
+data class ActivitySwitchUndo(val operationId: String, val name: String, val at: String, val kind: ActivityKind = ActivityKind.Switch, val planChange: Boolean = false)
 private data class SwitchOpportunity(val offer: ActivitySwitchUndo, val restore: SwitchRestore, val fingerprint: String)
 private fun switchScope(snapshot: ActivitySnapshotDto, start: String): String = snapshot.records
     .filter { it.endAt == null || parseActivityInstant(it.endAt) > parseActivityInstant(start) }
@@ -209,7 +215,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         return snapshot.copy(records = records, current = records.find { it.endAt == null }, provenance = provenance)
     }
     private fun publish(error: String? = null, busy: Boolean = false) {
-        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty(), busy, error, offline, feedback, journal.checkInPreferences, legacyRecovery,
+        mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty() || journal.planNow != null || journal.planUndoPending != null, busy, error, offline, feedback, journal.checkInPreferences, legacyRecovery,
             if (journal.rejectedRecoveryReviewed) null
             else if (journal.retiredJournal != null) ApiFactory.json.encodeToString(journal)
             else journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) })
@@ -254,6 +260,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         }) feedback = "A newer change on another device updated this time."
     }
     private suspend fun drain() {
+        drainPlan()
         while (journal.outbox.isNotEmpty()) {
             val command = journal.outbox.first()
             val response = try { transport.execute(command) }
@@ -276,6 +283,45 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
                 rejectedRecoveryReviewed = applied && journal.rejectedRecoveryReviewed))
             offline = false
             check(applied) { "Activity changed on another device. Pending changes were retained for review." }
+        }
+    }
+    private suspend fun drainPlan() {
+        val body = journal.planNow
+        val undo = journal.planUndoPending
+        if (body == null && undo == null) return
+        val response = try {
+            if (undo != null) transport.undoPlanNow(undo) else transport.planNow(body!!)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            if (error is retrofit2.HttpException && error.code() in listOf(409, 422)) {
+                save(journal.copy(planNow = null, planUndoPending = null))
+                runCatching { transport.read() }.getOrNull()?.let { if (newer(it)) save(journal.copy(snapshot = it)) }
+            }
+            offline = error is java.io.IOException
+            throw error
+        }
+        save(journal.copy(planNow = null, planUndoPending = null, snapshot = if (newer(response)) response else journal.snapshot))
+        offline = false
+        switchOpportunity = null
+        if (body != null && response.planNowUndo != null) {
+            val title = body.name?.takeIf { it.isNotBlank() } ?: response.taskTypes.find { it.id == body.taskTypeId }?.name ?: "activity"
+            switchOffers.tryEmit(ActivitySwitchUndo("plan:" + body.operationId, title, body.effectiveAt, planChange = true))
+        }
+    }
+    suspend fun planNow(body: PlanNowRequestDto): Boolean = mutex.withLock {
+        try {
+            checkEndpoint()
+            check(!offline && journal.outbox.isEmpty() && journal.planNow == null && journal.planUndoPending == null) { "Connect and sync before changing the plan. Ordinary tracking remains available offline." }
+            save(journal.copy(planNow = body))
+            publish(busy = true)
+            drainPlan()
+            publish()
+            true
+        } catch (cancelled: CancellationException) { publish(); throw cancelled }
+        catch (error: Exception) {
+            publish(errorDetail(error) ?: "Could not confirm the plan. Retry to check whether it saved.")
+            // An unknown result is durable and reconciles using this same Save ID.
+            journal.planNow?.operationId == body.operationId
         }
     }
     fun checkInPreferences() = journal.checkInPreferences
@@ -351,6 +397,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         val saved = mutex.withLock {
             try {
                 checkEndpoint()
+                check(journal.planNow == null && journal.planUndoPending == null) { "Reconnect to confirm the plan change before recording another change." }
                 val snapshot = checkNotNull(journal.snapshot) { "Connect once to initialize Activity Tracking before recording offline." }
                 check(snapshot.offlineReady) { "Connect once to an updated server to initialize Activity Tracking before recording offline." }
                 val calibration = checkNotNull(journal.calibration) { "Connect once to initialize Activity Tracking before recording offline." }
@@ -394,6 +441,15 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         return saved
     }
     suspend fun undoSwitch(operationId: String): Result<Unit> {
+        if (operationId.startsWith("plan:")) return mutex.withLock {
+            runCatching {
+                checkEndpoint()
+                check(!offline && journal.outbox.isEmpty() && journal.planNow == null && journal.planUndoPending == null) { "Connect and sync to undo the plan change." }
+                save(journal.copy(planUndoPending = operationId.removePrefix("plan:")))
+                drainPlan()
+                publish()
+            }.onFailure { publish(if (it is Exception) errorDetail(it) else it.message) }
+        }
         val result = runCatching {
             mutex.withLock {
                 checkEndpoint()
@@ -424,6 +480,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         val saved = mutex.withLock {
             try {
                 checkEndpoint()
+                check(journal.planNow == null && journal.planUndoPending == null) { "Reconnect to confirm the plan change before recording another change." }
                 val snapshot = checkNotNull(project()) { "Connect once to initialize Activity Tracking." }
                 check(snapshot.offlineReady && journal.calibration != null) { "Connect once to initialize Activity Tracking." }
                 check(kind in listOf(ActivityKind.Add, ActivityKind.Edit, ActivityKind.Delete))

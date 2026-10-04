@@ -95,8 +95,10 @@ export function TimeBlockCard({
 
   const displayStart = drag ? drag.start : pendingLayout ? pendingLayout.start : block.start_minute
   const displayEnd = drag ? drag.end : pendingLayout ? pendingLayout.end : block.end_minute
-  const displayTop = ((displayStart - visibleStartMin) / SLOT_MINUTES) * slotHeightPx
-  const displayHeight = ((displayEnd - displayStart) / SLOT_MINUTES) * slotHeightPx
+  const layoutStart = !drag && !pendingLayout ? block.start_position ?? displayStart : displayStart
+  const layoutEnd = !drag && !pendingLayout ? block.end_position ?? displayEnd : displayEnd
+  const displayTop = ((layoutStart - visibleStartMin) / SLOT_MINUTES) * slotHeightPx
+  const displayHeight = ((layoutEnd - layoutStart) / SLOT_MINUTES) * slotHeightPx
   const heightPx = Math.max(displayHeight, 1)
 
   const endDrag = useCallback(() => {
@@ -341,7 +343,7 @@ export function TimeBlockCard({
   const secondaryLabel = blockSecondaryIdentity(block)
   const timeRangeLabel = drag?.kind === 'move' && drag.invalid ? NO_NEARBY_BLOCK_SPACE : formatTimeRangeGcal12(displayStart, displayEnd)
   const durationLabel = drag?.kind === 'move' && drag.invalid ? null : formatBlockDuration(
-    drag || pendingLayout ? Math.floor(displayEnd) - Math.floor(displayStart) : recordDurationMinutes ?? Math.floor(displayEnd) - Math.floor(displayStart))
+    drag || pendingLayout ? Math.floor(displayEnd) - Math.floor(displayStart) : recordDurationMinutes ?? block.duration_minutes ?? Math.floor(displayEnd) - Math.floor(displayStart))
   const compactContent = heightPx < 64
   const showText = heightPx >= 22
   const showGrooves = heightPx >= 64 || drag?.kind === 'resize'

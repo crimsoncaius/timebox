@@ -57,12 +57,17 @@ internal fun SwitchActivitySheet(
     onPlanMinutes: ((Int?) -> Unit)? = null,
     editCurrent: Boolean = false,
     keepCurrent: Boolean = false,
+    startTracking: Boolean = false,
+    currentTaskId: Int? = null,
+    currentTaskTitle: String? = null,
     currentPlanId: Int? = null,
+    onConfirmPlan: ((List<Int>) -> Unit)? = null,
+    planEnabled: Boolean = true,
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
 
-    val nextActivity = activityIdentityText(name, null, selectedType?.name)
+    val nextActivity = activityIdentityText(name, if (keepCurrent) currentTaskTitle else null, selectedType?.name)
     val selected = timing?.resolve(zone) ?: now
     val effectiveTime = switchTimeLabel(selected, zone)
     val valid = (allowHistory || selected >= start) && selected <= now
@@ -70,17 +75,20 @@ internal fun SwitchActivitySheet(
     var customDuration by remember { mutableStateOf(false) }
     var customText by remember { mutableStateOf("45") }
     var confirmPlan by remember { mutableStateOf(false) }
+    var confirmedIds by remember { mutableStateOf(emptyList<Int>()) }
+    var startExpanded by remember { mutableStateOf(timing != null) }
     val durationValid = !customDuration || customText.toIntOrNull()?.let { it in 1..90 } == true
     val plannedEnd = planMinutes?.let { now.plusSeconds(it * 60L) }
-    val adjustingPlan = plans.find { keepCurrent && it.id == currentPlanId &&
-        it.taskTypeId == selectedType?.id && it.name.orEmpty() == name &&
-        parseActivityInstant(it.startAt) <= now && parseActivityInstant(it.endAt) > now }
-    val displaced = plans.filter { plannedEnd != null && parseActivityInstant(it.startAt) < plannedEnd && parseActivityInstant(it.endAt) > now }
+    val adjustingPlan = plans.find {
+        it.taskTypeId == selectedType?.id && it.name.orEmpty() == name.trim() &&
+        it.taskId == currentTaskId &&
+        parseActivityInstant(it.startAt) <= now && (parseActivityInstant(it.endAt) > now || (keepCurrent && it.id == currentPlanId)) }
+    val displaced = plans.filter { it.id != adjustingPlan?.id && plannedEnd != null && parseActivityInstant(it.startAt) < plannedEnd && parseActivityInstant(it.endAt) > now }
     val laterConflict = displaced.any { parseActivityInstant(it.startAt) > now }
     val affected = records.filter { (it.endAt?.let(::parseActivityInstant) ?: now) > selected }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!busy) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = colors.bg,
     ) {
@@ -94,10 +102,11 @@ internal fun SwitchActivitySheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
-                Text(if (editCurrent) "Edit current activity" else "Switch activity", style = type.screenTitle.copy(fontSize = 28.sp))
+                Text(if (startTracking) "Start tracking" else if (editCurrent) "Edit current activity" else "Switch activity", style = type.screenTitle.copy(fontSize = 28.sp))
                 ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType, typeError, onTypeQueryChange)
                 if (onPlanMinutes != null) {
                     Text("How long from now?", style = type.label)
+                    if (!planEnabled) Text("Connect and sync to change your plan. Open-ended tracking is still available.", style = type.bodySmall, color = colors.onVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf<Int?>(null, 15, 30, 60, 90).forEach { minutes ->
                             FilterChip(selected = !customDuration && planMinutes == minutes, onClick = { customDuration = false; onPlanMinutes(minutes) }, enabled = !busy,
@@ -128,6 +137,9 @@ internal fun SwitchActivitySheet(
                     }
                 }
                 if (!keepCurrent && planMinutes == null && !customDuration) {
+                if (startTracking) {
+                    StartTime(StartHistory(records, plans, now, zone, timing, onTimingChange, loadPlanTitles), taskTypes, nextActivity, startExpanded, enabled && !busy) { startExpanded = true }
+                } else {
                 Text("When did this change happen?", style = type.label)
                 Text("Drag the line. Hold near an edge to keep scrolling.", style = type.bodySmall, color = colors.onVariant)
                 SwitchActivityTimeline(
@@ -137,7 +149,9 @@ internal fun SwitchActivitySheet(
                     allowHistory = allowHistory,
                     onSelect = { onTimingChange(it?.let { at -> ActivityTimeValue.from(at, zone) }) },
                 )
-                } else Text(if (keepCurrent) "Recording continues from ${switchTimeLabel(start, zone)}. Running Time does not restart." else "Switches now, at ${switchTimeLabel(now, zone)}.", style = type.bodySmall, color = colors.onVariant)
+                }
+                } else Text(if (keepCurrent) "Recording continues from ${switchTimeLabel(start, zone)}. Running Time does not restart." else if (startTracking) "Starts when you press Start." else "Switches now, at ${switchTimeLabel(now, zone)}.", style = type.bodySmall, color = colors.onVariant)
+                if (!startTracking || planMinutes != null) {
                 Surface(color = colors.low, shape = TimeboxShapes.group) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("AFTER THIS CHANGE · $effectiveTime", style = type.kicker, color = colors.onVariant)
@@ -161,7 +175,8 @@ internal fun SwitchActivitySheet(
                         }
                     }
                 }
-                if (selected < start) {
+                }
+                if (!startTracking && selected < start) {
                     TextButton(onClick = { details = !details }) { Text(if (details) "Hide changes" else "See what changes") }
                     if (details) {
                         affected.forEach { record ->
@@ -182,15 +197,19 @@ internal fun SwitchActivitySheet(
             HorizontalDivider(color = colors.outlineVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel", style = type.button) }
-                Button(onClick = { if (laterConflict) confirmPlan = true else onConfirm() }, enabled = enabled && !busy && valid && durationValid && selectedType != null,
+                Button(onClick = {
+                    confirmedIds = displaced.filter { it.id != adjustingPlan?.id }.map { it.id }
+                    if (laterConflict) confirmPlan = true
+                    else if (planMinutes != null && onConfirmPlan != null) onConfirmPlan(confirmedIds) else onConfirm()
+                }, enabled = enabled && !busy && valid && durationValid && selectedType != null && (planMinutes == null || planEnabled),
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(50)) {
-                    Text(if (busy) "Saving…" else if (keepCurrent) { if (planMinutes == null) "Done" else "Save plan" } else "Switch activity", style = type.button)
+                    Text(if (busy) "Saving…" else if (startTracking) "Start" else if (keepCurrent) { if (planMinutes == null) "Done" else "Save plan" } else "Switch activity", style = type.button)
                 }
             }
         }
     }
     if (confirmPlan) AlertDialog(onDismissRequest = { confirmPlan = false }, title = { Text("Replace this planned time?") },
         text = { Text("$nextActivity will replace the overlapping time in ${displaced.joinToString { activityIdentityText(it.name, it.taskTitle, taskTypes.find { t -> t.id == it.taskTypeId }?.name) }}. Time outside this interval stays in place.") },
-        confirmButton = { TextButton(onClick = { confirmPlan = false; onConfirm() }) { Text("Replace this time") } },
+        confirmButton = { TextButton(onClick = { confirmPlan = false; if (onConfirmPlan != null) onConfirmPlan(confirmedIds) else onConfirm() }) { Text("Replace this time") } },
         dismissButton = { TextButton(onClick = { confirmPlan = false }) { Text("Back") } })
 }

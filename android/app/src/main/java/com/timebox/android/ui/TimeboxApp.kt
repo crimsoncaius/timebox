@@ -327,8 +327,8 @@ fun TimeboxApp(
         activityRepository.switchUndoOffers.collect { offer ->
             undoContext?.let { context ->
                 val started = offer.kind == com.timebox.android.data.remote.ActivityKind.Start
-                undoLifecycle.offer(context, if (started) "activity start" else "activity switch",
-                    if (started) "Started ${offer.name}" else "Switched to ${offer.name}", undo = {
+                undoLifecycle.offer(context, if (offer.planChange) "plan change" else if (started) "activity start" else "activity switch",
+                    if (offer.planChange) "Planned ${offer.name}" else if (started) "Started ${offer.name}" else "Switched to ${offer.name}", undo = {
                     activityRepository.undoSwitch(offer.operationId).also { result ->
                         if (result.isSuccess) launch { activityRepository.refresh() }
                     }

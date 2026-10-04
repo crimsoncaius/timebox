@@ -58,6 +58,12 @@ interface TimeboxApi {
     @POST("activity/commands")
     suspend fun activityCommand(@Body body: ActivityCommandDto): ActivitySnapshotDto
 
+    @POST("activity/plan-now")
+    suspend fun planNow(@Body body: PlanNowRequestDto): ActivitySnapshotDto
+
+    @POST("activity/plan-now/{id}/undo")
+    suspend fun undoPlanNow(@Path("id") id: String): ActivitySnapshotDto
+
     @POST("days/plan")
     suspend fun commitPlan(@Body body: PlanningCommitDto): PlanningCommitResponseDto
 

@@ -97,6 +97,8 @@ def _block_snapshot(
         "note": block.note,
         "start_minute": block.start_minute,
         "end_minute": block.end_minute,
+        "start_at": block.start_at.isoformat() if block.start_at else None,
+        "end_at": block.end_at.isoformat() if block.end_at else None,
         "created_at": block.created_at.isoformat(),
         "updated_at": block.updated_at.isoformat(),
         "corresponding_actual_ids": corresponding_actual_ids,
@@ -127,6 +129,8 @@ def _assert_completable(task: Task) -> None:
 def _planned_start(
     block: TimeBlock, day: Day, settings: Settings
 ) -> dt.datetime:
+    if block.start_at is not None:
+        return as_utc(block.start_at)
     assert block.start_minute is not None
     local_midnight = dt.datetime.combine(
         day.date, dt.time.min, tzinfo=get_zone(settings.app_timezone)
@@ -499,7 +503,6 @@ def _lock_snapshot_days_and_plans(
             select(TimeBlock)
             .where(
                 TimeBlock.lane == BlockLane.planned,
-                TimeBlock.day_id.in_(day_ids),
             )
             .order_by(TimeBlock.id)
             .with_for_update()
@@ -572,11 +575,14 @@ def _assert_plans_restorable(
             raise ValueError(_PLAN_CONFLICT)
         if state["task_id"] is not None and db.get(Task, state["task_id"]) is None:
             raise ValueError(_PLAN_CONFLICT)
-        if any(
-            block.day_id == state["day_id"]
-            and _overlaps(state["start_minute"], state["end_minute"], block)
-            for block in existing_plans
-        ):
+        from types import SimpleNamespace
+
+        from app.services import planned_intervals
+        restored = SimpleNamespace(day=days[state["day_id"]], start_minute=state["start_minute"], end_minute=state["end_minute"],
+                             start_at=_parse_datetime(state.get("start_at")), end_at=_parse_datetime(state.get("end_at")))
+        timezone = planned_intervals.zone_name(db)
+        a, b = planned_intervals.interval(restored, timezone)
+        if any(planned_intervals.interval(block, timezone)[0] < b and planned_intervals.interval(block, timezone)[1] > a for block in existing_plans):
             raise ValueError(_PLAN_CONFLICT)
         for actual_id in _corresponding_actual_ids(state):
             actual = actuals.get(actual_id)
@@ -606,8 +612,8 @@ def _restore_planned_blocks(
             note=state["note"],
             start_minute=state["start_minute"],
             end_minute=state["end_minute"],
-            start_at=None,
-            end_at=None,
+            start_at=_parse_datetime(state.get("start_at")),
+            end_at=_parse_datetime(state.get("end_at")),
             planned_block_id=None,
             created_at=_parse_datetime(state["created_at"]),
             updated_at=_parse_datetime(state["updated_at"]),

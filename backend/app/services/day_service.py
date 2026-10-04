@@ -27,7 +27,7 @@ from app.schemas.day import (
 )
 from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
-from app.services import activity_selection, actual_block_service, task_type_service
+from app.services import activity_selection, actual_block_service, planned_intervals, task_type_service
 from app.services.recurrence.protection import protect_task_occurrence
 from app.services.recurrence.task_overrides import record_task_overrides
 from app.services.task_queries import task_select
@@ -147,6 +147,8 @@ def _assert_no_overlap(
     exclude_id: int | None = None,
     exclude_ids: set[int] | None = None,
 ) -> None:
+    if lane == BlockLane.planned and planned_intervals.grid_overlap(day, start, end, set(exclude_ids or ()) | ({exclude_id} if exclude_id else set())):
+        return
     for other in _lane_blocks(
         day, lane, exclude_id=exclude_id, exclude_ids=exclude_ids
     ):
@@ -210,8 +212,7 @@ def get_or_create_day(db: Session, d: dt.date) -> Day:
 
 
 def to_day_read(db: Session, day: Day, settings: Settings) -> DayRead:
-    blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
-    planned = [block for block in blocks if block.lane == BlockLane.planned]
+    preview = build_day_preview(db, day, day.date, settings)
     actual = actual_block_service.project_actual_blocks_for_day(db, day.date, settings)
     meta = _day_meta(settings)
     return DayRead(
@@ -222,12 +223,10 @@ def to_day_read(db: Session, day: Day, settings: Settings) -> DayRead:
         show_full_day=day.show_full_day,
         created_at=day.created_at,
         updated_at=day.updated_at,
-        time_blocks=[TimeBlockRead.model_validate(b) for b in blocks],
-        planned_blocks=[PlannedBlockRead.model_validate(block) for block in planned],
+        time_blocks=preview.time_blocks,
+        planned_blocks=preview.planned_blocks,
         actual_blocks=actual.actual_blocks,
-        planned_minutes=sum(
-            (block.end_minute or 0) - (block.start_minute or 0) for block in planned
-        ),
+        planned_minutes=preview.planned_minutes,
         actual_minutes=actual.actual_minutes,
         meta=meta,
     )
@@ -266,7 +265,8 @@ def build_day_preview(
         show_full_day = day.show_full_day
         blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
 
-    planned = [block for block in blocks if block.lane == BlockLane.planned]
+    planned = planned_intervals.on_day(db, d, settings.app_timezone)
+    projected = [planned_intervals.project(p, d, settings.app_timezone) for p in planned]
     actual = actual_block_service.project_actual_blocks_for_day(db, d, settings)
 
     return DayPreviewRead(
@@ -274,12 +274,10 @@ def build_day_preview(
         start_hour=start_hour,
         end_hour=end_hour,
         show_full_day=show_full_day,
-        time_blocks=[TimeBlockRead.model_validate(block) for block in blocks],
-        planned_blocks=[PlannedBlockRead.model_validate(block) for block in planned],
+        time_blocks=sorted([*[TimeBlockRead.model_validate(b) for b in blocks if b.lane != BlockLane.planned], *projected], key=lambda b: (b.lane, b.start_minute, b.id)),
+        planned_blocks=[PlannedBlockRead.model_validate(block).model_copy(update={"start_minute": projection.start_minute, "end_minute": projection.end_minute}) for block, projection in zip(planned, projected, strict=True)],
         actual_blocks=actual.actual_blocks,
-        planned_minutes=sum(
-            (block.end_minute or 0) - (block.start_minute or 0) for block in planned
-        ),
+        planned_minutes=int(sum(p.minutes_in_day for p in projected)),
         actual_minutes=actual.actual_minutes,
         meta=_day_meta(settings),
     )
@@ -306,10 +304,12 @@ def build_day_summary(
     actual_by_type: dict[int, int] = {}
     names: dict[int, str] = {}
 
-    for block in day.time_blocks if day is not None else []:
+    blocks = [b for b in (day.time_blocks if day else []) if b.lane != BlockLane.planned]
+    blocks += planned_intervals.on_day(db, d, settings.app_timezone)
+    for block in blocks:
         if block.start_minute is None or block.end_minute is None:
             continue
-        minutes = block.end_minute - block.start_minute
+        minutes = planned_intervals.positions(block, d, settings.app_timezone)[2] if block.lane == BlockLane.planned else block.end_minute - block.start_minute
         names[block.task_type_id] = block.task_type.name
         bucket = planned_by_type if block.lane == BlockLane.planned else actual_by_type
         bucket[block.task_type_id] = bucket.get(block.task_type_id, 0) + minutes
@@ -326,7 +326,7 @@ def build_day_summary(
         DaySummaryRow(
             task_type_id=type_id,
             task_type_name=names[type_id],
-            planned_minutes=planned_by_type.get(type_id, 0),
+            planned_minutes=int(planned_by_type.get(type_id, 0)),
             actual_minutes=actual_by_type.get(type_id, 0),
         )
         for type_id in names
@@ -338,7 +338,7 @@ def build_day_summary(
 
     return DaySummaryRead(
         date=d,
-        planned_minutes=sum(planned_by_type.values()),
+        planned_minutes=int(sum(planned_by_type.values())),
         actual_minutes=sum(actual_by_type.values()),
         rows=rows,
         meta=_day_meta(settings),
@@ -394,7 +394,7 @@ def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
 def _day_block_select(day_id: int, block_id: int, *, for_update: bool = False):
     stmt = (
         select(TimeBlock)
-        .where(TimeBlock.id == block_id, TimeBlock.day_id == day_id)
+        .where(TimeBlock.id == block_id, (TimeBlock.day_id == day_id) | ((TimeBlock.lane == BlockLane.planned) & TimeBlock.start_at.is_not(None)))
         .limit(1)
     )
     return stmt.with_for_update() if for_update else stmt
@@ -407,9 +407,16 @@ def get_block(
     *,
     for_update: bool = False,
 ) -> TimeBlock | None:
-    return db.execute(
+    block = db.execute(
         _day_block_select(day.id, block_id, for_update=for_update)
     ).scalar_one_or_none()
+    if block is not None and block.lane == BlockLane.planned and block.start_at is not None:
+        timezone = planned_intervals.zone_name(db)
+        a, b = planned_intervals.bounds(day.date, timezone)
+        start, end = planned_intervals.interval(block, timezone)
+        if start >= b or end <= a:
+            return None
+    return block
 
 
 def _mark_generated_planned_block(
@@ -674,11 +681,35 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
             .with_for_update()
         ).scalar_one()
     original_item = (block.task_type_id, block.task_id)
+    exact = block.lane == BlockLane.planned and block.start_at is not None
+    if exact and (target_date != day.date or "start_minute" in data or "end_minute" in data):
+        timezone = planned_intervals.zone_name(db)
+        a, b = planned_intervals.interval(block, timezone)
+        projection = planned_intervals.project(block, day.date, timezone)
+        midnight = dt.datetime.combine(target_date, dt.time(), get_zone(timezone))
+        changed_start = "start_minute" in data and data["start_minute"] != projection.start_minute
+        changed_end = "end_minute" in data and data["end_minute"] != projection.end_minute
+        if target_date != day.date:
+            delta = target_date - day.date
+            a = (a.astimezone(get_zone(timezone)) + delta).astimezone(dt.UTC)
+            b = (b.astimezone(get_zone(timezone)) + delta).astimezone(dt.UTC)
+        if changed_start and changed_end and data["start_minute"] - projection.start_minute == data["end_minute"] - projection.end_minute:
+            delta = dt.timedelta(minutes=data["start_minute"] - projection.start_minute)
+            a, b = a + delta, b + delta
+        else:
+            if changed_start:
+                a = (midnight + dt.timedelta(minutes=data["start_minute"])).astimezone(dt.UTC)
+            if changed_end:
+                b = (midnight + dt.timedelta(minutes=data["end_minute"])).astimezone(dt.UTC)
+        if b <= a:
+            raise ValueError("Planned Block end must be after its start")
+        planned_intervals.assert_no_overlap(db, a, b, timezone, {block.id})
+        planned_intervals.set_interval(db, block, a, b, timezone)
     if block.lane == BlockLane.planned and block.task_id is not None:
         protect_task_occurrence(db, block.task_id)
     start = data.get("start_minute", block.start_minute)
     end = data.get("end_minute", block.end_minute)
-    if target_date != day.date or "start_minute" in data or "end_minute" in data:
+    if not exact and (target_date != day.date or "start_minute" in data or "end_minute" in data):
         _validate_minutes(start, end)
         _assert_no_overlap(target_day, block.lane, start, end, exclude_id=block.id)
     if "task_type_id" in data:
@@ -708,11 +739,11 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         block.note = str(data["note"] or "").strip() or None
     if "name" in data:
         block.name = data["name"]
-    if "start_minute" in data:
+    if "start_minute" in data and not exact:
         block.start_minute = data["start_minute"]
-    if "end_minute" in data:
+    if "end_minute" in data and not exact:
         block.end_minute = data["end_minute"]
-    if target_day.id != day.id:
+    if target_day.id != day.id and not exact:
         block.day = target_day
     if block.lane == BlockLane.planned and original_item != (
         block.task_type_id,

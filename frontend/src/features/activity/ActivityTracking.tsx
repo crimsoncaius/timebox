@@ -1,3 +1,4 @@
+import { PlanNowEditor } from './PlanNowEditor'
 import { HelperText, DiagnosticText } from '../../components/HelperText'
 import { blockPrimaryIdentity, blockSecondaryIdentity, blockIdentityText } from '../../lib/blockIdentity'
 import { formatDuration, formatRunningTime } from '../../lib/duration'
@@ -18,6 +19,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const focusController = getFocusController()
   const focusState = useSyncExternalStore(focusController.subscribe, focusController.getSnapshot)
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot)
+  const [editingCurrent, setEditingCurrent] = useState(false)
   const [switching, setSwitching] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [starting, setStarting] = useState<'track' | 'focus' | null>(null)
@@ -52,6 +54,11 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     : shortcutAt < Date.parse(current.start_at) && (stopping || !state.snapshot?.switch_history_ready)
       ? '15 min ago is before the Current Activity started. Choose Now or a later time.'
       : null
+  const planNowAvailable = !!state.snapshot?.plan_now_revision
+  const keepCurrent = editingCurrent && !!current && current.task_type_id === Number(typeId) && (current.name ?? '') === name.trim()
+  const linkedPlan = state.snapshot?.plans?.find(p => p.id === current?.planned_block_id)
+  const planSeconds = linkedPlan ? Math.floor((Date.parse(linkedPlan.end_at) - now) / 1000) : null
+  const planClock = planSeconds == null ? '' : `${Math.floor(Math.abs(planSeconds) / 60)}:${String(Math.abs(planSeconds) % 60).padStart(2, '0')} ${planSeconds >= 0 ? 'left in plan' : 'over plan'}`
   const plan = repository.currentPlan()
   const disabled = state.busy || !state.snapshot
   const statusFlags = {
@@ -75,9 +82,10 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
   const controls = <>
     {current ? <>
       <span className={focus ? "text-4xl font-semibold text-on-surface dark:text-dark-on-surface" : "max-w-64 truncate text-on-surface dark:text-dark-on-surface"}>{blockPrimaryIdentity(current)}</span>
+      {!focus && planNowAvailable && <button className="py-2 underline" disabled={disabled} onClick={() => { setEditingCurrent(true); setTypeId(String(current.task_type_id)); setName(current.name ?? ''); setTargetId(current.id); setSwitching(true) }}>Edit current activity</button>}
       {blockSecondaryIdentity(current) && <span className="text-sm">{blockSecondaryIdentity(current)}</span>}
-      <span className={focus ? "text-2xl" : undefined} aria-label="Running time">{formatRunningTime(runningSeconds, focus)}</span>
-      <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
+      <div className={focus ? "text-2xl" : undefined}><span aria-label="Running time">{formatRunningTime(runningSeconds, focus)}</span><span className="block text-xs">Running Time</span>{planSeconds !== null && <span className="block text-sm text-planned dark:text-planned-dark">{planClock}</span>}</div>
+      <button className="py-2" disabled={disabled} onClick={() => { setEditingCurrent(false); setTypeId(''); setName(''); setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch</button>
       {!focus && <button className="py-2" disabled={disabled} onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setStopping(true) }}>Stop</button>}
     </> : <button className="py-2" disabled={disabled || !!starting} onClick={() => start('track')}>Start tracking</button>}
     {!focus && <button disabled={disabled || !!starting || focusState.planning || focusState.entering} onClick={() => current ? void focusController.enter(repository) : start('focus')}>Focus</button>}
@@ -89,7 +97,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {current && state.snapshot?.check_in?.question && <section aria-label="Inactivity check-in" className="my-4 rounded-2xl bg-surface-container-low p-6 dark:bg-dark-surface-container">
       <h2 className="text-lg">Still doing this?</h2><p className="my-3 text-2xl font-semibold">{blockPrimaryIdentity(current)}</p>{blockSecondaryIdentity(current) && <p>{blockSecondaryIdentity(current)}</p>}
       <div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 text-on-primary" onClick={() => void repository.checkIn({ action: 'confirm', question_id: state.snapshot!.check_in!.question!.id })}>Yes, still doing this</button>
-      <button className="rounded-xl border px-5 py-3" onClick={() => { setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch activity</button></div>
+      <button className="rounded-xl border px-5 py-3" onClick={() => { setEditingCurrent(false); setTypeId(''); setName(''); setTargetId(current.id); setTiming(null); setTimingError(null); setSwitching(true) }}>Switch activity</button></div>
       <HelperText className="mt-3">Recording continues while you decide.</HelperText>
     </section>}
     <div hidden={!controlsVisible && !focus}>
@@ -104,7 +112,15 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
     {current?.planned_block_id ? <HelperText className="text-right">{state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).length} linked Actual Blocks · {formatDuration(Math.floor(state.snapshot!.records.filter(r => r.planned_block_id === current.planned_block_id).reduce((sum, r) => sum + Math.max(0, Date.parse(r.end_at ?? new Date(now).toISOString()) - Date.parse(r.start_at)), 0) / 60000))} recorded</HelperText> : null}
     </div>
     {state.feedback ? <p role="status" className="text-right">{state.feedback}</p> : null}
-    {starting && !current ? <form aria-label="Start tracking" className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {
+    {planNowAvailable && (starting || switching) && !stopping && state.snapshot && <PlanNowEditor
+      key={starting ? 'start' : editingCurrent ? 'adjust' : 'switch'} repository={repository} snapshot={state.snapshot} now={now}
+      title={starting ? 'Start tracking' : editingCurrent ? 'Edit current activity' : 'Switch activity'}
+      typeId={typeId ? Number(typeId) : null} name={name} taskId={keepCurrent ? current?.task_id ?? null : null}
+      keepCurrent={keepCurrent} selectionFields={selectionFields}
+      onClose={() => { setStarting(null); setSwitching(false); setEditingCurrent(false) }}
+      onSaved={() => { const enterFocus = starting === 'focus'; setStarting(null); setSwitching(false); setEditingCurrent(false); setTypeId(''); setName(''); if (enterFocus && repository.state.snapshot?.current) void focusController.enter(repository) }}
+    />}
+    {starting && !current && !planNowAvailable ? <form aria-label="Start tracking" className="ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container" onSubmit={async (event) => {
       event.preventDefault()
       const choice = { taskTypeId: Number(typeId), name: name.trim() || undefined }
       const started = starting === 'focus' ? await focusController.enter(repository, choice) : await repository.command('start', choice.taskTypeId, choice.name)
@@ -116,7 +132,7 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
       {startError ? <p role="alert">{startError}</p> : null}
       <div className="flex justify-end gap-4"><button type="button" onClick={() => setStarting(null)}>Cancel</button><button className="rounded-lg bg-[linear-gradient(135deg,#5d5e61_0%,#515255_100%)] px-4 py-2 text-on-primary disabled:opacity-40" disabled={disabled || !typeId}>Start</button></div>
     </form> : null}
-    {switching || stopping ? <ActivitySwitchDialog open={switching} onClose={() => setSwitching(false)}><form aria-label={stopping ? "Stop tracking" : "Switch activity"} className={switching ? "space-y-3" : "ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container"} onSubmit={async (event) => {
+    {(switching && !planNowAvailable) || stopping ? <ActivitySwitchDialog open={switching} onClose={() => setSwitching(false)}><form aria-label={stopping ? "Stop tracking" : "Switch activity"} className={switching ? "space-y-3" : "ml-auto mt-2 max-w-md space-y-3 rounded-xl bg-surface-container-low p-4 dark:bg-dark-surface-container"} onSubmit={async (event) => {
       event.preventDefault()
       try {
         const at = timing ? resolveActivityTime(timing, state.snapshot?.reporting_timezone ?? 'UTC') : undefined
@@ -141,19 +157,20 @@ export function ActivityTracking({ taskTypes, onChanged, repository = getActivit
 function ActivitySelectionFields({ repository, taskTypes, typeId, onTypeId, name, onName }: {
   repository: ActivityRepository; taskTypes: TaskType[]; typeId: string; onTypeId: (id: string) => void; name: string; onName: (name: string) => void
 }) {
+  const [changing, setChanging] = useState(false)
   return <>
-    <TaskTypePathCombobox
+    {typeId && !changing ? <div><span className="mb-1 block">Task Type</span><div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-outline-variant p-3 dark:border-dark-outline-variant"><span>{taskTypes.find(t => t.id === Number(typeId))?.name}</span><button type="button" className="min-h-11 px-2" onClick={() => setChanging(true)}>Change</button></div></div> : <TaskTypePathCombobox
         recommendationName={name}
       label="Task Type"
       taskTypes={taskTypes}
       valueTaskTypeId={typeId ? Number(typeId) : null}
-      onSelectTaskTypeId={(id) => onTypeId(id == null ? '' : String(id))}
+      onSelectTaskTypeId={(id) => { onTypeId(id == null ? '' : String(id)); if (id != null) setChanging(false) }}
       onCreateTaskTypePath={async (name) => {
         const created = await api.createTaskType({ name })
         await repository.refresh()
         return created
       }}
-    />
+    />}
     <label className="block">Block Name (optional)<input className="mt-1 block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={(e) => onName(e.target.value)} /></label>
   </>
 }
