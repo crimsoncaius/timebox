@@ -1,6 +1,6 @@
 # Time Goal archive — issue 306
 
-Status: design accepted and implemented on 4 October 2026; validated and running for user review on `codex/time-goal-archive`. No PR or merge.
+Status: accepted, implemented and merged into local `master` on 4 October 2026 after user review. Implementation commit `0598839b`; integration commit `fdf544a2`. No PR was created.
 
 ## Settled
 
@@ -38,7 +38,7 @@ Build with `./scripts/android-gradle.ps1 :app:assembleDebug '-PreviewApplication
 
 Use `./scripts/goal-archive-prototype.ps1 -Token TOKEN -Variant page` (or `switch`). Deep links: `timebox://prototype/goal-archive?variant=page` and `timebox://prototype/goal-archive?variant=switch`. A/B changes preserve the current compatible navigation and data. Reset sample data restores the scenario and navigation while preserving A/B, past-week inclusion and period-list choices. Sample mutations are temporary and can reset on activity recreation.
 
-Review device: `emulator-5586`, token `efbcdfe41eab4ce08eee8bec75b9d1ea`, owner `issue-306: archive design comparison`, storage root `C:/Users/Caius/TimeboxRuntime/emulators`. Preserve its pending review until the user finishes. Resume it with the repository helper for revisions, then restore its review hold.
+Historical review device: `emulator-5586`, token `efbcdfe41eab4ce08eee8bec75b9d1ea`, owner `issue-306: archive design comparison`, storage root `C:/Users/Caius/TimeboxRuntime/emulators`. The user completed review and requested the merge on 4 October 2026. Acquire a fresh managed reservation for future reproduction.
 
 The debug APK built successfully. On-device checks exercised A/B switching, past-week inclusion, period-list and week-based history, historical targets, contributing blocks, archive confirmation/removal from the current collection, rediscovery in the archive and separately confirmed deletion. Screenshots are under `.impeccable/review/goal-archive/`.
 
@@ -65,4 +65,6 @@ Production review uses the same managed device above and an isolated SQLite back
 - Native screenshots in `.impeccable/review/goal-archive-production/` cover light/default and dark/1.3 text. The independent finish reviewer returned **ship** for this scoped phone extension with no material fixes. Tablet, physical hardware, TalkBack, measured contrast and motion were not assessed.
 - The documenter confirmed this extends existing Android theme roles and components; no design-system files were changed. Pre-existing documentation/schema drift was left untouched.
 
-The review app is left on the production Goal history screen with the isolated backend running. Sample data is synthetic. Offline retention is in-memory while the app remains open; this feature does not add a persistent offline archive. No reactivation is offered.
+The review app was left on the production Goal history screen until the user accepted the implementation and requested its merge. Sample data is synthetic. Offline retention is in-memory while the app remains open; this feature does not add a persistent offline archive. No reactivation is offered.
+
+Integration with the latest `master` (including issue 297) merged without conflicts. The combined backend suite passed **608 tests, 8 skipped**; Android passed **394 unit tests** and assembled successfully.
