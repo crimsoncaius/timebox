@@ -1,0 +1,9 @@
+# Confirmed Assistant task changes are atomic and recoverable
+
+Accepted on 2026-10-04 for later implementation through the [Assistant task-access handoff](../specs/assistant-task-access-handoff.md). The Assistant proposes a bounded, immutable set of ordinary Task/Subtask changes; explicit online user confirmation applies the set and saves its authoritative receipt in one server transaction. A client loop over existing mutation endpoints was rejected because a later failure or lost reply could leave partial changes or duplicate a create.
+
+Confirmation compares the fields and side effects the user reviewed, using transaction-neutral domain operations under the existing short exclusive writer-admission boundary. Unrelated fields are preserved; changed relevant state requires another preview and confirmation. Manual readiness retains ADR 0004's policy, and direct Tracking Proposals retain ADR 0014's client journal path; inherited complete-now effects use the established Task Completion behavior.
+
+Operation and submission identities are distinct. Durable submission claims and terminal outcomes make retries and restart recovery unambiguous; a status request that arrives before a delayed confirmation is inconclusive. Android retains small recovery pointers and blocks overlapping local changes until the outcome is established or execution is fenced out, preventing an older delayed request from overwriting a newer intent. Durable receipts and proposal history are independent of response acknowledgement and retained conversations' rolling model context. Only a sole complete-now mutation offers the existing conflict-checked Undo, whose own outcome is recoverable and never restarts tracking.
+
+Android and backend advance together for the sole developer/user. This feature adds no support for older application versions or capability-negotiated fallback paths. Stored records and submitted-operation recovery remain preserved.

@@ -237,7 +237,7 @@ A sequence of submitted messages and Assistant response attempts, including inco
 _Avoid_: Temporary conversation, Assistant memory
 
 **Assistant Card**:
-A read-only view of Timebox data shown inside an Assistant Conversation, fixed as of the moment the Assistant read it rather than live. It is either a Block Card or a Task Type Card, shows Planned, Actual, or both, and never shows Supporting Notes or Task Descriptions. A response may show more than one.
+A read-only view of Timebox data shown inside an Assistant Conversation, fixed as of the moment the Assistant read it rather than live. It is a Block Card, Task Type Card, or Task Card and never shows Supporting Notes or Task Descriptions; a response may show more than one.
 _Avoid_: Plan card, widget, live view
 
 **Block Card**:
@@ -251,6 +251,10 @@ _Avoid_: Range Card, Summary Card, Trends card
 **Tracking Proposal**:
 An Assistant-suggested change to Activity Tracking: either tracking an activity from a given instant or stopping at a given instant. It takes effect only when the user confirms it. Whether it starts or switches is determined at confirmation, not by the Assistant. It expires fifteen minutes after it is proposed.
 _Avoid_: Switch Proposal, tracking command, suggestion card
+
+**Task Card**:
+An Assistant Card listing saved Battle Plan Tasks and their details as of a particular read. Opening a Task shows its current details without changing the historical card; a Task Card is neither a proposed change nor confirmation that a change was saved.
+_Avoid_: Live task list, task proposal, task receipt
 
 ### Surfaces
 

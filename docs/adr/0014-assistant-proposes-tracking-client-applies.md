@@ -4,6 +4,10 @@ The Assistant never writes Activity Tracking data. Its `propose_tracking` tool a
 
 This keeps the model's job to language (what and when), keeps date arithmetic and tracking-state reasoning deterministic, and preserves offline confirmation, journal reconciliation and the existing switch Undo without a second write path. The cost is that every Assistant tracking change needs a user tap. A future mode in which the Assistant applies changes itself must replace this decision rather than add a server-side write beside the journal.
 
+## Assistant task-confirmation scope
+
+Scope clarification approved with [ADR 0019](0019-assistant-task-confirmation-is-atomic-and-recoverable.md): this decision continues to govern direct Tracking Proposals. A separately confirmed Task Completion uses the existing server Task Completion behavior, including its inherited linked-activity stop and canonical activity-journal updates. It does not add a direct server tracking command or change the Tracking Proposal's offline journal path.
+
 ## Considered Options
 
 - A presentation-line `"tracking"` kind instead of a tool: rejected because schema-validated tool arguments are more reliable on the flash model.
