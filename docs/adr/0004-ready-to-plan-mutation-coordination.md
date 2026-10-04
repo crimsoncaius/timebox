@@ -14,6 +14,10 @@ If neither the write nor reconciliation can be confirmed, clients fall back to t
 
 A pending removal immediately invalidates a matching Day Planning selection and unsaved draft; an already-sent block request remains subject to server validation. Retries are manual only, and a new explicit toggle supersedes the failed intent and clears its old recovery state.
 
+## Assistant task-confirmation scope
+
+Scope clarification approved with [ADR 0019](0019-assistant-task-confirmation-is-atomic-and-recoverable.md): ordinary manual readiness keeps this policy. Assistant task confirmation adds review-sensitive server guards and a scoped local reservation for overlapping changes, including recovery of an unknown submitted outcome. That reservation does not replace readiness coordination with a general conditional-write policy.
+
 ## Considered Options
 
 - Concurrent writes with client sequence numbers were rejected because the server could still receive and persist an older request after a newer one.

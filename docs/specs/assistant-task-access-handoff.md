@@ -1,6 +1,6 @@
 # Assistant access to Battle Plan Tasks — implementation handoff
 
-Status: **proposed for final user approval, 2026-10-04**. This document completes the concrete design for [Agree the Assistant task-access specification and acceptance criteria](https://github.com/crimsoncaius/timebox/issues/305). It is not authorization to implement, deploy, create a PR, or merge. Proposed integration choices below become authoritative only after that ticket records the user's approval.
+Status: **approved and implementation-ready, 2026-10-04**. The user accepted the final handoff, with one amendment: they are the sole developer and user, so older Android/backend versions do not need support. This document completes [Agree the Assistant task-access specification and acceptance criteria](https://github.com/crimsoncaius/timebox/issues/305). Implementation, deployment, PR creation and merge require a later request.
 
 ## Authorities and scope
 
@@ -16,7 +16,7 @@ Approved [prototype and review guide](https://github.com/crimsoncaius/timebox/bl
 
 | Current seam | Required change |
 | --- | --- |
-| `backend/app/api/routes/assistant.py`, `services/assistant_agent.py` | Negotiate task access; add typed read/proposal tools and stream events; retain bounded loop and existing tracking behavior. |
+| `backend/app/api/routes/assistant.py`, `services/assistant_agent.py` | Add task access directly to the current Android/backend protocol, with typed read/proposal tools and stream events; retain bounded loop and existing tracking behavior. |
 | `services/assistant_storage.py`, `models/assistant.py` | Typed snapshot replay; capture automatic current-state/outcome inputs; persist immutable task proposals and independent execution results. Existing replay incorrectly assumes every snapshot above version 1 is an activity read. |
 | `services/battle_plan/tasks.py`, `task_completion_service.py` | Extract transaction-neutral operations from helpers that currently commit individually. Existing manual route wrappers retain their commits and semantics. |
 | `db/activity_admission.py`, `db/session.py`, `api/activity_gate.py` | Admit short task execution/lifecycle transactions separately from SSE; preserve cutover, paused-recovery and protocol gates. |
@@ -25,11 +25,11 @@ Approved [prototype and review guide](https://github.com/crimsoncaius/timebox/bl
 
 Keep one API worker for the existing Assistant generation coordinator. PostgreSQL is the production concurrency target; SQLite remains single-process for supported local use. No multi-worker Assistant redesign is included.
 
-## Proposed bounds
+## Accepted bounds
 
 All byte sizes below mean UTF-8 serialized JSON. Validate before returning a tool result or making a proposal eligible; never truncate a mutation or its reviewed consequences. Centralize constants alongside `assistant_limits.py`, with corresponding client validation limits.
 
-| Resource | Proposed bound and behavior at the limit |
+| Resource | Bound and behavior at the limit |
 | --- | --- |
 | Shared model loop | Keep 3 model-selected reads, 1 proposal of either kind, 3 cards, at most 5 model calls, 4,096 output tokens per call, 4,000 input characters, 120 seconds total, and no automatic provider retries. Validation failures consume tool allowances. No reads follow either proposal tool. |
 | Rolling context | Keep at most 20 acknowledged completed exchanges. Apply a 64 KiB data envelope to model-visible historical reads, task refresh and compact task outcomes together; ordinary conversation text remains subject to the existing exchange/input bounds. Current-turn tool data is separately capped at 64 KiB cumulatively. This strengthens the current implementation, whose 64 KiB limit applies only when historical reads reload. |
@@ -164,12 +164,12 @@ Preview must enumerate every target and identify/count every affected plan, with
 
 ### HTTP API and lifecycle
 
-All routes use existing API authentication and capability/conversation association checks. The current service is single-account; UUIDs are not access control. Do not add new unauthenticated recovery URLs or broaden tenancy assumptions.
+All routes use existing API authentication and conversation/operation association checks. The current service is single-account; UUIDs are not access control. Do not add new unauthenticated recovery URLs or broaden tenancy assumptions.
 
 | Route | Contract |
 | --- | --- |
 | `GET /assistant/task-proposals/{id}` | Full immutable review plus current authoritative lifecycle; full description review only for a proposal explicitly editing descriptions. Bounded response; no model invocation. |
-| `POST /assistant/task-proposals/{id}/confirm` | Body `{revision, operation_id, submission_id}` only. Submission UUID identifies one client confirmation attempt, not new mutation content. Enforce capability, identity match, activated source eligibility, active proposal, expiry, domain gates and guards. Return original receipt for already-applied identity before checking expiry/closed conversation. |
+| `POST /assistant/task-proposals/{id}/confirm` | Body `{revision, operation_id, submission_id}` only. Submission UUID identifies one client confirmation attempt, not new mutation content. Enforce identity match, activated source eligibility, active proposal, expiry, domain gates and guards. Return original receipt for already-applied identity before checking expiry/closed conversation. |
 | `POST /assistant/task-proposals/{id}/dismiss` | Idempotent cancellation of an unconfirmed proposal. If execution won the race, return its result instead of claiming cancellation. |
 | `POST /assistant/task-proposals/{id}/refresh` | Revalidate the same explicit request/targets and return a fresh reviewed proposal; no mutation or model call. Preserve request time anchor and already-resolved dates. Invalid targets or contradictory intent require a new request. This successor inherits the completed source-response eligibility, is captured separately, and still needs a new user tap. |
 | `POST /assistant/task-operations/status` | Status-only body `{operations:[{operation_id,submission_id?}]}`; per-operation and per-submission lifecycle/result, including closed-conversation operations. Reject cross-association requests. Never executes task changes. |
@@ -195,7 +195,7 @@ No asynchronous execution worker/lease system is necessary for these bounded syn
 
 A status read that acquires admission and finds a claimed submission still marked executing but no committed receipt can settle that abandoned submission as rolled back: no executor can still hold the exclusive admission. By contrast, `not_seen` or pending without a terminal submission outcome is **inconclusive**: the original HTTP request may arrive late. Keep its recovery barrier; the user can retry the same submission ID if still eligible. An operation-level terminal cancellation/expiry/stale state also fences late execution. A mere status read must never release the barrier on the assumption that a delayed request will not arrive. Successful duplicate confirmations return the original committed operation receipt, even across different submission IDs. Client-local submission alone does not prove the server accepted execution; close/cancel races report whichever outcome the server establishes. Do not introduce an abort button that claims to undo an already submitted change.
 
-Status recovery and immutable review remain available during paused activity recovery or task-capability rollback. Explicitly exempt these status/review routes from the blanket POST-as-mutation gate while preserving authentication and association/protocol checks. Status may reconcile abandoned submission metadata under admission but never applies a Task change. Confirmation/Undo remain gated. Admission timeout reports checking. Database commit is the only success authority, and no proposal/operation identity is released for a duplicate mutation.
+Status recovery and immutable review remain available during paused activity recovery or a maintenance pause on new task writes. Explicitly exempt these status/review routes from the blanket POST-as-mutation gate while preserving authentication and association/protocol checks. Status may reconcile abandoned submission metadata under admission but never applies a Task change. Confirmation/Undo remain gated. Admission timeout reports checking. Database commit is the only success authority, and no proposal/operation identity is released for a duplicate mutation.
 
 This scoped admission can briefly delay unrelated writes. The finite wait/work budgets bound that cost. It avoids claiming correctness from Task.version or incomplete row-lock coverage. Do not loosen it without PostgreSQL race evidence and a reviewed alternative.
 
@@ -224,9 +224,11 @@ For each response, inject authoritative compact status/outcome data for referenc
 
 ## Android integration
 
-### Compatibility and stream
+### Current-version protocol and stream
 
-Add one opt-in conversation capability, `task_access_v1`, covering task reads/cards/proposals and recovery protocol. Server echoes it only when storage migrations, reads, execution and recovery support are ready. Keep existing protocol header/capabilities and old event schemas unchanged. Without the echo, the new backend omits task tools/events and its prompt explains the unavailable capability when relevant. The new client shows no task confirmation UI and can display a capability-unavailable notice; do not require it to classify arbitrary natural-language requests or promise to fix an older backend's prose. Never turn an unsupported structured mutation into a prose-only executable action. Deploy compatible backend first, Android second; a new conversation negotiates the new capability. A server feature switch may suppress the capability during rollout without changing old-client behavior.
+Android and backend are updated together for the single developer/user. Add the task tools, cards, proposals and recovery endpoints directly to the current protocol. Do not add `task_access_v1` negotiation, old-client/old-server fallback paths, mixed-version test matrices, or a staged capability rollout. An incompatible client/server pair is unsupported and may fail visibly; it must never imply a successful task mutation.
+
+Keep existing authentication, activity protocol/cutover guards, stream validation and schema tags needed to validate current messages and retained records. Preserving already-stored conversations, snapshots and operation receipts is a data-retention requirement, not a promise to run older application versions. The existing unrelated capability machinery need not be redesigned or removed as part of this feature.
 
 Add `task_proposal` and `task_card` SSE events with the existing run/sequence envelope. At most one task or tracking proposal comes before up to three read cards, then text, then one terminal outcome. Task card payload is the safe schema-4 projection. It never contains descriptions. The existing selector format still picks zero to three distinct eligible snapshot IDs; the server dispatches them by type. Each read contributes at most one card. Unknown required events, duplicated proposal kinds, mixed kinds, invalid identity/shape, or bad ordering interrupt the attempt. Preserve valid partial output but disable task confirmation unless completed/saved eligibility is established.
 
@@ -278,28 +280,28 @@ Every row is an implementation release criterion. Use deterministic fixtures/fau
 | Local synchronization | Deferred readiness write, failed latest intent, queued activity and a new edit during drain cannot be bypassed. Unknown completion recreates barriers after restart. Reconciliation never overwrites newer intent. |
 | Offline/recovery | No mutation POST from an offline queue; metadata persisted before send; only bounded GET/status recovery; retry uses same identity. Endpoint switching isolates records; unresolved cap never drops them silently. |
 | Undo | Only sole complete-now offered; domain conflicts preserved, tracking stays stopped; lost Undo response/restart returns original Undo receipt and never retries raw one-shot token blindly. Original completion remains historical. |
-| Compatibility and protocol | Old client/new backend and new client/old backend preserve existing features without task events/false mutation promises. Mixed proposal kinds, unknown events, malformed selector/sequence and save failure never produce confirmable task UI. |
+| Current protocol | The matched current Android/backend pair supports the complete task contract; incompatible versions have no fallback guarantee. Mixed proposal kinds, unknown events, malformed selector/sequence and save failure never produce confirmable task UI. |
 | Truthful model context | Applied, pending, cancelled, stale, rolled back and unknown derive from server evidence; receipt independent of acknowledgement. Fresh conversation has no implicit old chat memory. No model-prose success without receipt. |
 | Native review | Current-detail navigation preserves snapshot, description review is complete/private, TalkBack and focus work, large text/IME/Back have reachable controls, recovery surface works after forced process death. |
 
 ## Implementation slices and release ordering
 
-1. **Storage, pure reads and bounded context.** Add typed Task projections/query manifests, privacy filters, capability-off protocol, capture/replay and deterministic preflight. Validate no-write saved recurrence and historical compatibility. Do not expose task access yet.
+1. **Storage, pure reads and bounded context.** Add typed Task projections/query manifests, privacy filters, current protocol contracts, capture/replay and deterministic preflight. Validate no-write saved recurrence and retained-record replay. Integrate the complete vertical path before release.
 2. **Atomic domain operations and durable execution.** Extract transaction-neutral primitives with existing wrappers preserved; add proposal lifecycle, relevant guards, admission, receipts and recoverable sole-completion Undo. Validate fault injection and real PostgreSQL races before enabling writes.
 3. **Android read/review integration.** Add transport/DTOs, cards/current-detail navigation, complete review and receipt state. Keep confirmation gated while durable recovery and synchronization are unfinished.
 4. **Android synchronization/recovery and complete vertical path.** Add scoped barriers, minimal durable pointers, restart status surface, reminder/Task/Day refresh, Undo adoption and truthful outcome context. Exercise end-to-end deterministic scenarios.
 5. **Release verification and user review.** Run focused backend tests (`test_assistant*`, relevant battle-plan/completion/recurrence/Habits/locking tests), targeted PostgreSQL concurrent integration tests, Android controller/card/readiness/activity/completion units and focused Assistant instrumentation. Build with `scripts/android-gradle.ps1 testDebugUnitTest assembleDebug`; compile instrumentation before device execution. Use managed emulator ownership helper and run instrumentation without competing backend/frontend suites. Read the baseline's later corrections; do not treat its original “19 failures” as an unchanged current baseline, and do not excuse new Assistant failures as baseline.
 
-After deterministic checks, run at most **six live-provider scenarios and thirty model calls total**, with no automatic retries: (1) current task discovery/card, (2) ambiguous title clarification, (3) known-task edit followed by automatic-refresh answer, (4) simple ordinary edit proposal, (5) create with Subtasks proposal, (6) explicit description read/edit with separate review. Use isolated seeded data and test confirmation where appropriate; record model-call/read counts, captured preflight, negotiated protocol and actual terminal outcomes. Provider failure blocks that release check and requires diagnosis; do not spend beyond the bound or silently swap model/encoding. No live provider calls are authorized or performed during this planning session.
+After deterministic checks, run at most **six live-provider scenarios and thirty model calls total**, with no automatic retries: (1) current task discovery/card, (2) ambiguous title clarification, (3) known-task edit followed by automatic-refresh answer, (4) simple ordinary edit proposal, (5) create with Subtasks proposal, (6) explicit description read/edit with separate review. Use isolated seeded data and test confirmation where appropriate; record model-call/read counts, captured preflight, current protocol and actual terminal outcomes. Provider failure blocks that release check and requires diagnosis; do not spend beyond the bound or silently swap model/encoding. No live provider calls are authorized or performed during this planning session.
 
-Deploy migrations and the compatible backend before the capable Android client, then enable capability only when the entire vertical path passes. Schema changes are additive; retain old conversations/snapshots and manual/tracking behavior. If task access is disabled during rollback, status lookup for already submitted operations must remain available; disable new task proposals/confirmations without stranding receipts. A migration rollback must not drop executed-operation evidence.
+Release the updated backend and Android app together once the entire vertical path passes; run the required database migrations for that release. Retain stored conversations, snapshots and operation receipts and preserve current manual/tracking behavior. Status recovery must remain available during a maintenance pause on new task writes. Do not add support for running older binaries against the new contract or migration schema.
 
-Finally launch the updated application from the implementation branch and leave it running for user review, following `docs/agents/android-emulators.md` and `docs/agents/android-instrumentation-baseline.md`. Create a PR only on explicit request; merge into master only on explicit instruction. These slices are a sequence for later implementation tickets, not permission to create those tickets before handoff approval.
+Finally launch the updated application from the implementation branch and leave it running for user review, following `docs/agents/android-emulators.md` and `docs/agents/android-instrumentation-baseline.md`. Create a PR only on explicit request; merge into master only on explicit instruction. These approved slices define the sequence for a later implementation request. No implementation tickets are created by this planning handoff.
 
-## Decision record and documentation follow-through
+## Decision record
 
-Final user review covers: the finite read/write/payload bounds; full-capability rollout; durable online confirmation/recovery including the narrow unknown-outcome barrier; and the admission/validation/release approach. All prior product and prototype decisions remain accepted.
+The user accepted all final recommendations on 2026-10-04, amending version support: “I am solo dev right now with me as only user so ignore this. don't support old versions”. This replaces the draft's capability negotiation and backward-compatible rollout recommendation. Accepted bounds, atomic admission, durable recovery, unknown-outcome barriers and the implementation/validation sequence remain unchanged. All prior product and prototype decisions remain accepted.
 
-After approval, amend ADR 0017's single proposal wording to allow one of task/tracking, retaining all shared model-call limits. Add a narrowly scoped ADR for atomic server task confirmation with preview-sensitive guards and durable receipts; explain the alternative of client mutation loops and why it fails atomicity/recovery. Clarify ADR 0014 continues to govern direct Tracking Proposals and ADR 0004 continues to govern ordinary manual readiness. Preserve ADRs 0012, 0015 and 0018. Do not describe the browser prototype or this planning document as a shipped capability.
+[ADR 0017](../adr/0017-assistant-bounded-read-loop.md) records one task or tracking proposal within the existing bounded loop. [ADR 0019](../adr/0019-assistant-task-confirmation-is-atomic-and-recoverable.md) records atomic server confirmation, review-sensitive guards and durable receipts. ADR 0014 continues to govern direct Tracking Proposals; ADR 0004 continues to govern ordinary manual readiness. ADRs 0012, 0015 and 0018 remain in force. These are approved design decisions for implementation, not a claim that task access is shipped.
 
-Planning validation: inspected the current backend/Android code and resolved tickets; no production code, tests, emulator or provider execution was performed. The implementation must produce the evidence specified above.
+Planning validation: inspected the current backend/Android code and resolved tickets; no production code, tests, emulator or provider execution was performed. Documentation whitespace and consistency checks passed. The implementation must produce the evidence specified above.
