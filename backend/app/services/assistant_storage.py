@@ -29,7 +29,9 @@ def create(key, capabilities):
         raise HTTPException(503, "Conversation could not be saved. Please retry.") from None
 
 
-def load(key):
+def load(key, max_snapshot_bytes=None):
+    if max_snapshot_bytes is None:
+        max_snapshot_bytes = MAX_CONTEXT_READ_BYTES
     try:
         with Session(get_engine()) as db:
             row = db.get(AssistantConversation, key)
@@ -46,7 +48,7 @@ def load(key):
                 for card in displayed_cards(attempt.displayed_plan):
                     snapshots.setdefault(card["snapshot_id"], card)
             # Evict whole reads, oldest first. Durable attempts/cards are untouched.
-            while snapshots and len(json.dumps(snapshots).encode("utf-8")) > MAX_CONTEXT_READ_BYTES:
+            while snapshots and len(json.dumps(snapshots).encode("utf-8")) > max_snapshot_bytes:
                 del snapshots[next(iter(snapshots))]
             for attempt in reversed(attempts):
                 messages.extend(replay(attempt, snapshots))
@@ -71,15 +73,20 @@ def replay(attempt, snapshots=None):
             continue
         read_id = f"{call_id}-{index}"
         args = {}
-        if plan.get("schema_version", 1) > 1:
+        name = "read_today_plan"
+        if plan.get("schema_version") == 4:
+            name = plan["source"]["tool"]
+            args = plan["source"]["normalized_arguments"]
+        elif plan.get("schema_version", 1) > 1:
+            name = "read_activity"
             args = {"lane": plan["lane"], "group_by": plan["group_by"], "when": plan["date"]}
             if plan["schema_version"] == 3:
                 args.update(when={"start": plan["start"], "end": plan["end"], "weekdays": plan["weekdays"]}, detail=plan["detail"])
             if plan["task_type"]:
                 args["task_type"] = plan["task_type"]
         # The rows reach the model once, through the Historical snapshots context.
-        messages += [AIMessage("", tool_calls=[{"id": read_id, "name": "read_activity" if args else "read_today_plan", "args": args}]),
-                     ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "date": plan["date"],
+        messages += [AIMessage("", tool_calls=[{"id": read_id, "name": name, "args": args}]),
+                     ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "read_at": plan["read_at"],
                                              "rows": "in Historical snapshots"}), tool_call_id=read_id)]
     if attempt.tracking_proposal:
         messages += replay_proposal(attempt.tracking_proposal, call_id)
@@ -92,7 +99,8 @@ def replay(attempt, snapshots=None):
     # Legacy clients receive card rows as text. Do not smuggle those rows back
     # into context through the answer after the corresponding read is evicted.
     for card in displayed_cards(attempt.displayed_plan):
-        answer = answer.removeprefix(text_schedule(card))
+        if card.get("schema_version") != 4:
+            answer = answer.removeprefix(text_schedule(card))
     messages.append(AIMessage(header + "\n" + answer if answer else header))
     return messages
 
@@ -119,6 +127,15 @@ def capture(run_id, answer, reads, card, status="running", error=None, proposal=
             db.commit()
     except SQLAlchemyError:
         raise CaptureError("The response could not be saved. Please retry.") from None
+
+
+def capture_inputs(run_id, inputs):
+    try:
+        with Session(get_engine()) as db:
+            db.execute(update(AssistantAttempt).where(AssistantAttempt.run_id == run_id).values(context_inputs=inputs))
+            db.commit()
+    except SQLAlchemyError:
+        raise CaptureError("The response context could not be saved. Please retry.") from None
 
 
 def acknowledge(key, run_id):

@@ -34,5 +34,22 @@ class AssistantAttempt(Base):
     displayed_plan: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     tracking_proposal: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text)
+    context_inputs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AssistantQuery(Base):
+    __tablename__ = "assistant_queries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("assistant_conversations.id"), nullable=False, index=True)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class AssistantQueryCursor(Base):
+    __tablename__ = "assistant_query_cursors"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    query_id: Mapped[str] = mapped_column(ForeignKey("assistant_queries.id"), nullable=False)
+    offset: Mapped[int] = mapped_column(Integer, nullable=False)

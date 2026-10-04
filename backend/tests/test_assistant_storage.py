@@ -212,6 +212,7 @@ def test_migration_can_store_records_and_survive_engine_reopen(tmp_path, monkeyp
     with engine.begin() as connection, Operations.context(MigrationContext.configure(connection)):
         migration.upgrade()
         proposals.upgrade()
+        load_migration("040_assistant_task_reads").upgrade()
     monkeypatch.setattr(assistant_storage, "get_engine", lambda: engine)
     key = Conversations().create(["plan_card_v1"])
     run = str(uuid4())

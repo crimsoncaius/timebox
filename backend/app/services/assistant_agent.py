@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import aclosing
+from contextvars import ContextVar
 
 from langchain_core.messages import SystemMessage, message_chunk_to_message
 from langchain_core.tools import tool
@@ -14,13 +15,48 @@ from openinference.instrumentation.langchain import get_current_span as get_lang
 from opentelemetry import trace
 
 from app.core.config import get_settings
-from app.services.assistant_limits import MAX_CARDS, MAX_PROPOSALS, MAX_READ_CALLS
+from app.services.assistant_limits import (
+    MAX_CARDS,
+    MAX_PROPOSALS,
+    MAX_READ_CALLS,
+    MAX_TURN_READ_BYTES,
+    TASK_READ_TIMEOUT,
+)
 from app.services.assistant_plan import ReadActivityArgs, read_activity, read_today_plan
 from app.services.assistant_presentation import PresentationParser, snapshot
+from app.services.assistant_tasks import ReadTaskChoicesArgs, ReadTasksArgs, encoded, read_tasks
 from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, model_result, propose
+
+task_read_context = ContextVar("task_read_context", default=None)
+
+
+def bounded_read(value):
+    context = task_read_context.get()
+    if context is None:
+        return value
+    size = len(encoded(value))
+    if context["bytes"] + size > MAX_TURN_READ_BYTES - 1024:
+        value = {"error": "Current response data budget exhausted; narrow the request or continue in another response.",
+                 "completeness": "partial", "limitations": ["payload_limit"]}
+        size = len(encoded(value))
+    context["bytes"] += size
+    return value
 
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported.
+Use read_tasks for saved ordinary Tasks, occurrences, Quota Trackers and Session Tasks.
+Use read_task_choices to resolve existing Project IDs or Task Type IDs/paths. Names are not identities.
+Multiple plausible title/child/Project/Type matches require clarification. Never guess saved IDs.
+Current collection questions always require a fresh search: task_refresh_v1 covers known identities only.
+Refresh evidence is current as of its read_at; historical snapshots and their order never change.
+Ordinals bind to the original snapshot. If that snapshot left context, ask which Task or request reselection.
+Respect unavailable/unverified coverage and partial counts. Saved-only recurring results do not prove nothing is due.
+Recurring readiness is a stored value, not freshly synchronized. Sessions are distinct from Subtasks.
+Description search and include_description require the current explicit request or a clear follow-up asking about
+descriptions/what the user wrote. An earlier request grants no standing access. Excerpts are at most 2000 characters;
+truncation never means the whole text was reviewed. Automatic refresh never verifies historical descriptions.
+Choices cannot be shown as Task Cards. A bounded tool error requires truthful text, never an invented card.
+Task changes are not available in this read slice. Never invite task confirmation or claim a Task was changed.
 Use read_activity to read stored Planned Blocks, Actual Blocks or both (default Today).
 Use group_by blocks for a single date; task_type for totals over a date or inclusive range.
 when accepts YYYY-MM-DD, today, yesterday, this_week, last_week, this_month, last_month,
@@ -92,13 +128,44 @@ async def read_activity_tool(**arguments) -> dict:
     """Read blocks for one date or Task Type totals over dates/periods/ranges, by lane, detail and optional subtree."""
     try:
         result = await asyncio.to_thread(read_activity, ReadActivityArgs.model_validate(arguments))
-        return result if "error" in result else snapshot(result)
+        return bounded_read(result if "error" in result else snapshot(result))
     except Exception:
         raise RuntimeError("Activity could not be read. Please retry.") from None
 
 
 read_activity_tool.handle_validation_error = lambda error: json.dumps(
     {"error": "Invalid read_activity arguments: " + "; ".join(e["msg"] for e in error.errors())})
+
+
+@tool("read_tasks", args_schema=ReadTasksArgs)
+async def read_tasks_tool(**arguments) -> dict:
+    """Read saved Tasks: search current/history/future, get IDs, or page Subtasks/Sessions. No domain writes."""
+    return await task_read(arguments, False)
+
+
+@tool("read_task_choices", args_schema=ReadTaskChoicesArgs)
+async def read_task_choices_tool(**arguments) -> dict:
+    """Read existing Project IDs/names or Task Type IDs/paths, without creating anything."""
+    return await task_read(arguments, True)
+
+
+async def task_read(arguments, choices):
+    context = task_read_context.get()
+    if context is None:
+        return {"error": "A saved conversation is required for task reads."}
+    try:
+        args = (ReadTaskChoicesArgs if choices else ReadTasksArgs).model_validate(arguments)
+        async with asyncio.timeout(TASK_READ_TIMEOUT):
+            result = await asyncio.to_thread(read_tasks, args, context["conversation_id"], choices=choices)
+        return bounded_read(result)
+    except ValueError as error:
+        return bounded_read({"error": str(error)})
+    except Exception:
+        return bounded_read({"error": "Saved Task data could not be verified within the read budget. Please narrow or retry.", "completeness": "partial"})
+
+
+for read_tool in (read_tasks_tool, read_task_choices_tool):
+    read_tool.handle_validation_error = lambda error: json.dumps({"error": "Invalid saved-task read arguments: " + "; ".join(e["msg"] for e in error.errors())})
 
 
 def create_model():
@@ -156,7 +223,7 @@ def propose_tracking_tool(sent_at, context):
 
 def build_agent(model=None, tracking=None):
     model = model or create_model()
-    tools = {read_activity_tool.name: read_activity_tool}
+    tools = {t.name: t for t in (read_activity_tool, read_tasks_tool, read_task_choices_tool)}
     prompt = PROMPT
     if tracking:
         proposal_tool = propose_tracking_tool(tracking["sent_at"], tracking["context"])
@@ -254,6 +321,8 @@ async def translate_events(events, snapshots=None):
             elif "snapshot_id" in value:
                 eligible[value["snapshot_id"]] = value
                 yield "snapshot_read", value
+            elif isinstance(value, dict) and "error" in value:
+                yield "read_error", {"tool": event.get("name"), "result": value}
             yield "tool_completed", {}
         elif kind == "on_chat_model_end":
             result = event["data"]["output"]
