@@ -2,7 +2,7 @@
 
 Question: can the user distinguish a historical Task read, a proposed change, and an authoritative saved result inside the existing Android Assistant conversation?
 
-**Status: ready for live user review; no interaction verdict recorded yet.** This is an asset for [Prototype Assistant task cards and confirmation interactions](https://github.com/crimsoncaius/timebox/issues/304), within [Map Assistant access to Battle Plan Tasks](https://github.com/crimsoncaius/timebox/issues/300). Production implementation remains outside this Wayfinder effort.
+**Status: approved through live user review on 2026-10-04.** The user accepted all three presentation recommendations: “this is all excellent, please proceed”. This is an asset for [Prototype Assistant task cards and confirmation interactions](https://github.com/crimsoncaius/timebox/issues/304), within [Map Assistant access to Battle Plan Tasks](https://github.com/crimsoncaius/timebox/issues/300). Production implementation remains outside this Wayfinder effort.
 
 ## Open
 
@@ -37,13 +37,13 @@ Use the left-side scenario tabs and their numbered buttons, or interact with the
 
 Theme, large text (150%) and compact width (360 CSS pixels) controls allow a rough accessibility/layout review. Normal sample width is 412 CSS pixels.
 
-## Recommendations awaiting feedback
+## Accepted presentation decisions
 
 1. Keep task results compact and dated, with three initial rows and expansion. Opening a row navigates to current Task details; the earlier result remains historical.
 2. Keep ordinary change previews inline, with every target and material side effect visible before one confirmation for the complete set. Show the authoritative receipt as a separate section, preserving the read snapshot and original proposed diff.
 3. Review description text in a dedicated full-height dialog with before/after text and confirmation there. Do not put description contents in Task cards.
 
-These presentation choices await live feedback. The behavior contracts were already agreed in [task discovery and reads](https://github.com/crimsoncaius/timebox/issues/301#issuecomment-5975824468), [ordinary changes and side effects](https://github.com/crimsoncaius/timebox/issues/302#issuecomment-5975905998), and [confirmation and recovery](https://github.com/crimsoncaius/timebox/issues/303#issuecomment-5975957264).
+These presentation choices were accepted together after the user reviewed the prototype. The behavior contracts were already agreed in [task discovery and reads](https://github.com/crimsoncaius/timebox/issues/301#issuecomment-5975824468), [ordinary changes and side effects](https://github.com/crimsoncaius/timebox/issues/302#issuecomment-5975905998), and [confirmation and recovery](https://github.com/crimsoncaius/timebox/issues/303#issuecomment-5975957264). The authoritative resolution is recorded on the prototype ticket; its remaining native-validation limits carry into the final specification.
 
 ## Validation and limits
 
