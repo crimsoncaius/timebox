@@ -39,3 +39,11 @@ class PlannedRecordingUndo(Base):
     __tablename__ = "planned_recording_undo"
     token: Mapped[str] = mapped_column(String(36), primary_key=True)
     payload: Mapped[dict] = mapped_column(JSON)
+
+
+class PlanNowOperation(Base):
+    """Online plan-and-track receipt and guarded atomic Undo."""
+    __tablename__ = "plan_now_operations"
+    operation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    request: Mapped[dict] = mapped_column(JSON)
+    payload: Mapped[dict] = mapped_column(JSON)

@@ -508,11 +508,8 @@ def record_actual_as_planned(
     planned_snapshot = _planned_row(db, planned_block_id)
     assert planned_snapshot.day is not None
     assert planned_snapshot.start_minute is not None and planned_snapshot.end_minute is not None
-    zone = get_zone(settings.app_timezone)
-    local_midnight = dt.datetime.combine(planned_snapshot.day.date, dt.time.min, tzinfo=zone)
-    retrospective_end = (
-        local_midnight + dt.timedelta(minutes=planned_snapshot.end_minute)
-    ).astimezone(dt.UTC)
+    from app.services.planned_intervals import interval
+    retrospective_end = interval(planned_snapshot, settings.app_timezone)[1]
     resolve_origin_item(
         db,
         task_type_id=None,
@@ -527,13 +524,7 @@ def record_actual_as_planned(
         raise ValueError("Planned Block already has corresponding Actual")
     assert planned.day is not None
     assert planned.start_minute is not None and planned.end_minute is not None
-    local_midnight = dt.datetime.combine(planned.day.date, dt.time.min, tzinfo=zone)
-    start_at = (local_midnight + dt.timedelta(minutes=planned.start_minute)).astimezone(
-        dt.UTC
-    )
-    end_at = (local_midnight + dt.timedelta(minutes=planned.end_minute)).astimezone(
-        dt.UTC
-    )
+    start_at, end_at = interval(planned, settings.app_timezone)
     token = uuid.uuid4().hex
     actual = TimeBlock(
         lane=BlockLane.actual,

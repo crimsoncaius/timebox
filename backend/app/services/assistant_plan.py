@@ -106,7 +106,9 @@ def read_activity(args: ReadActivityArgs) -> dict:
                 .join(TaskType, TaskType.id == TimeBlock.task_type_id)
                 .outerjoin(Task, Task.id == TimeBlock.task_id)
                 .outerjoin(Day, Day.id == TimeBlock.day_id))
-        planned = (TimeBlock.lane == BlockLane.planned) & (Day.date == date)
+        planned = (TimeBlock.lane == BlockLane.planned) & or_(
+            (TimeBlock.start_at.is_(None)) & (Day.date == date),
+            (TimeBlock.start_at < end) & (TimeBlock.end_at > start))
         actual = (TimeBlock.lane == BlockLane.actual) & (TimeBlock.start_at < min(end, now)) & (or_(TimeBlock.end_at.is_(None), TimeBlock.end_at > start))
         lanes = []
         if args.lane != "actual":
@@ -118,10 +120,10 @@ def read_activity(args: ReadActivityArgs) -> dict:
             if path is not None and kind != path and not kind.startswith(path + "/"):
                 continue
             if block.lane == BlockLane.planned:
-                block_start = dt.datetime.combine(date, dt.time(), ZoneInfo(zone)) + dt.timedelta(minutes=block.start_minute)
-                block_end = dt.datetime.combine(date, dt.time(), ZoneInfo(zone)) + dt.timedelta(minutes=block.end_minute)
-                duration = block.end_minute - block.start_minute
-                inside = duration
+                from app.services.planned_intervals import interval
+                block_start, block_end = interval(block, zone)
+                duration = int((block_end - block_start).total_seconds() // 60)
+                inside = int((min(block_end, end) - max(block_start, start)).total_seconds() // 60)
             else:
                 block_start = as_utc(block.start_at)
                 block_end = as_utc(block.end_at) if block.end_at else now
@@ -152,18 +154,17 @@ def read_today_plan() -> dict:
     with Session(get_engine(), autoflush=False) as db:
         settings = reporting_settings(db, get_settings())
         today = today_in_tz(settings.app_timezone)
-        rows = db.execute(
-            select(TimeBlock.start_minute, TimeBlock.end_minute, TimeBlock.name,
-                   TaskType.name.label("task_type"), Task.id.label("task_id"),
-                   Task.title.label("task_title"))
-            .join(Day, Day.id == TimeBlock.day_id)
-            .join(TaskType, TaskType.id == TimeBlock.task_type_id)
-            .outerjoin(Task, Task.id == TimeBlock.task_id)
-            .where(Day.date == today, TimeBlock.lane == BlockLane.planned)
-            .order_by(TimeBlock.start_minute, TimeBlock.id)
-        ).mappings()
+        from app.services import planned_intervals
+        rows = []
+        for block in planned_intervals.on_day(db, today, settings.app_timezone):
+            projection = planned_intervals.project(block, today, settings.app_timezone)
+            rows.append(dict(start_minute=projection.start_minute, end_minute=projection.end_minute,
+                             name=block.name, task_type=block.task_type.name,
+                             task_id=block.task_id, task_title=block.task.title if block.task else None))
+            if block.start_at is not None:
+                rows[-1].update(start_at=projection.start_at.isoformat(), end_at=projection.end_at.isoformat(), duration_minutes=projection.duration_minutes)
         return {"date": today.isoformat(), "reporting_timezone": settings.app_timezone,
-                "planned_blocks": [dict(row) for row in rows]}
+                "planned_blocks": rows}
 
 
 def read_task_types(db, args, start, end, weekdays, path, zone, now, today):
@@ -182,14 +183,21 @@ def read_task_types(db, args, start, end, weekdays, path, zone, now, today):
         collect(report(db, start, end, zone, now).types)
     planned = defaultdict(lambda: defaultdict(float))
     if args.lane != "actual":
-        rows = db.execute(select(TaskType.name, Day.date, TimeBlock.start_minute, TimeBlock.end_minute)
+        rows = db.execute(select(TaskType.name, TimeBlock)
                           .select_from(TimeBlock).join(TaskType, TaskType.id == TimeBlock.task_type_id)
-                          .join(Day, Day.id == TimeBlock.day_id)
-                          .where(TimeBlock.lane == BlockLane.planned, Day.date.between(start, end)))
-        for kind, day, left, right in rows:
+                          .where(TimeBlock.lane == BlockLane.planned))
+        from app.services import planned_intervals
+        for kind, block in rows:
             segments = kind.split("/")
-            for depth in range(1, len(segments)+1):
-                planned["/".join(segments[:depth])][day] += (right-left)*60
+            left, right = planned_intervals.interval(block, zone)
+            day = max(start, left.astimezone(ZoneInfo(zone)).date())
+            last = min(end, (right - dt.timedelta(microseconds=1)).astimezone(ZoneInfo(zone)).date())
+            while day <= last:
+                a, b = planned_intervals.bounds(day, zone)
+                seconds = max(0, (min(b, right) - max(a, left)).total_seconds())
+                for depth in range(1, len(segments)+1):
+                    planned["/".join(segments[:depth])][day] += seconds
+                day += dt.timedelta(days=1)
     rows = []
     for kind in sorted(planned.keys() | actual.keys()):
         if path is not None and kind != path and not kind.startswith(path+"/"):

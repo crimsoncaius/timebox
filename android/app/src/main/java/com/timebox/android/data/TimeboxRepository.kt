@@ -115,6 +115,8 @@ class TimeboxRepository private constructor(
     }
     suspend fun setReportingTimezone(zone: String) = api().setReportingTimezone(com.timebox.android.data.remote.ReportingTimezoneDto(zone))
     suspend fun activityCommand(body: com.timebox.android.data.remote.ActivityCommandDto) = api().activityCommand(body)
+    suspend fun planNow(body: com.timebox.android.data.remote.PlanNowRequestDto) = api().planNow(body)
+    suspend fun undoPlanNow(id: String) = api().undoPlanNow(id)
     suspend fun activityEndpoint(): String = preferences?.settings?.first()?.baseUrl ?: "test"
 
     val plannedBlockReminders: Flow<PlannedBlockReminderSettings> =

@@ -18,6 +18,16 @@ class PlannedRecordingStateTest {
     private val date = LocalDate.parse("2026-08-30")
     private val zone = ZoneOffset.UTC
 
+    @Test fun `precise plan uses instants for availability and duration`() {
+        val start = Instant.parse("2026-08-30T10:00:59.732Z")
+        val block = plan().copy(planStartAt = start, planEndAt = start.plusSeconds(900), endMinute = 615)
+        assertFalse(plannedRecordingState(block, day(), start.minusMillis(1)).available)
+        assertTrue(plannedRecordingState(block, day(), start.plusMillis(1)).available)
+        val complete = plannedRecordingState(block, day(), start.plusSeconds(901))
+        assertFalse(complete.underway)
+        assertEquals(15L, complete.requestedDurationMinutes)
+    }
+
     @Test
     fun `no linked Actual offers Record`() {
         val state = plannedRecordingState(plan(), day(), Instant.parse("2026-08-30T12:00:00Z"))

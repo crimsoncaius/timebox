@@ -1,0 +1,5 @@
+# Exact intervals for plans chosen from now
+
+Choosing a duration in Activity Tracking creates or resizes a real Planned Block using the confirmation instant, including seconds, so minute-grid storage cannot represent the accepted intent. Such blocks keep authoritative `start_at` and `end_at` instants in one record, including across midnight; legacy Day plans retain their wall-clock grid semantics. Day projects exact intervals into the reporting timezone, clips totals to each date while retaining whole-record Block Duration, and preserves instants on metadata edits and whole-block moves instead of rounding them to display minutes.
+
+Plan-and-track is one online transaction with a preview revision and a durable client Save ID. It writes the existing activity range journal together with plan changes, and retries return the saved outcome; Undo restores both only while the affected state remains unchanged. Ordinary tracking retains its offline queue. This avoids a separate timer, a precision side table, and partial plan/tracking success; it requires migration 039 and clients that consume exact plan projections.

@@ -40,6 +40,10 @@ class TimeBlockRead(BaseModel):
     end_minute: int | None = Field(None, ge=0, le=1440)
     start_at: datetime | None = None
     end_at: datetime | None = None
+    start_position: float | None = None
+    end_position: float | None = None
+    duration_minutes: float | None = None
+    minutes_in_day: float | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,7 +1,40 @@
 # Plan and start from now — issue 297
 
-Android is now the primary design-review platform, per user request. The web experiment remains available as an earlier reference.
+## Production integration — October 4
 
+The user approved the connected Android prototype and authorized implementation, validation, commit, and merge into master without a PR. Work began on `codex/297-plan-start` in worktree `33c8`, from the prototype merge `fb339956`; local and remote master were equal and the Desktop checkout was clean. The prototype merge alone did not ship this feature.
+
+The normal Android and web applications now share the accepted Start / Switch / Edit workflow. Duration choices are 15 / 30 / 60 / 90 minutes and Custom (1–90). Starting with a covering plan retains the one-tap shortcut; the Current Activity editor adjusts its duration afterward. A fresh Switch draft is separate from the prefilled Current Activity editor. The selected Task Type keeps its label and outlined row with Change. Running Time leads the smaller remaining / over-plan display; Focus stays a separate choice and recording never switches or stops automatically.
+
+The final accepted decisions were to adopt and resize a matching unlinked covering plan, and to require online, synced state for duration planning while ordinary tracking remains available offline. Matching uses Task Type, Task, and Block Name. Matching-plan adjustments retain earlier start, identity, and Supporting Note without a resumed tail; same-activity adjustments retain Actual identity and Running Time. Interruptions preserve preceding planned time and resume the remaining plan. Later overlapping plans require preview and explicit confirmation, while plans outside the interval stay in place.
+
+### Production protocol and precision
+
+`POST /activity/plan-now` writes plans and Activity Tracking in one transaction using the existing activity journal. Clients persist the Save ID and request before transmission, so unknown outcomes retry the same operation after reconnect or restart. Preview revisions and exact affected-plan IDs reject concurrent edits and time-crossed boundaries. Undo restores plan fragments, correspondence, recorded time, Task readiness, and recurring-plan realization state only while the observed state remains unchanged. Recurring structural protection intentionally survives Undo, following existing domain rules.
+
+Exact plans use authoritative timestamps in the ordinary TimeBlock row, including seconds and cross-midnight intervals. Day exposes fractional positions and clipped elapsed durations; metadata edits preserve precision, moves preserve seconds, and edited time boundaries take the user's entered minute. Reporting and Record as planned consume the same intervals. Day still uses its established wall-clock axis: repeated DST wall times do not get a second visual axis, but timestamp details and elapsed totals remain exact. See [ADR 0019](../../adr/0019-exact-planned-intervals-for-plan-now.md).
+
+The `PLAN_NOW_PROTOTYPE` flag, special Android HTTP client, scratch endpoint, precision side table, and old experimental verifier are removed. `backend/plan_now_review.py` now only seeds disposable data and launches the normal API; production never imports it. The old web `/prototype/297` fixture remains an isolated historical reference.
+
+### Validation and review
+
+- Backend: full run passed 602 cases with 8 existing skips; one added test used the wrong expected status (201 instead of the existing 200). After correcting that fixture, all 16 planning and migration cases passed, including the new cross-midnight replacement/Undo regression. Ruff passed. Coverage includes atomic rollback, exact second 59.732 with delayed receipt, retry identity, unlinked adoption, conflicts, task readiness, recurring-plan synchronization, midnight, DST, metadata editing, and migration preservation. New IDs are allocated before deleting fully replaced plans, preventing SQLite identity reuse from breaking Undo.
+- Web: all 472 tests, production build, and lint passed. Lost-response retry survives restart, stale previews refresh, final replacement confirmation captures the instant, and Escape cannot dismiss a pending save.
+- Android: ordinary debug APK and unit tests passed, including durable Plan Now replay and precise Record as planned availability. Both new UI instrumentation cases passed: retained Task identity with only displaced plans confirmed, and offline duration disabled while open-ended tracking stays available.
+- The 12 existing ActivityTracking instrumentation cases had 8 passes and 4 failures. All four also failed on master `496f6a2a`: the two Switch cases timed out, and Focus still expected the obsolete `elapsed` label. The planned-start case failed with a duplicate Writing node on this branch and a view-thread error on master; that different signature remains a test limitation, not an identical baseline result. The comparison emulator was automatically released.
+- Normal Android UI Start → Email → 15 min produced Actual and Planned start `2026-10-04T02:42:08.071Z`, ending exactly 900 seconds later. Day displayed 15m. A subsequent confirmed adjustment kept Actual ID/start and retained the later plan remainder.
+- A web editor opened before the Android adjustment rejected its stale save and visibly requested review. Production captures are in ignored `backend/artifacts/297-production-*.png`, with exact API evidence in `297-production-saved.json` and `297-production-adjusted.json`.
+- Final normal-APK walkthrough verified prefilled Edit, fresh Switch, separate Focus, and a confirmed Writing switch with exactly 900 seconds between its plan boundaries. The refreshed `297-production-edit-final.png` and `297-production-confirm.png` show the compact selected type and exclude the matching plan from the displaced-plan list. The finish review found no remaining material UI fixes.
+
+Review runtime uses the normal `com.timebox.android` app and normal web routes at `http://127.0.0.1:5174`, backed by the disposable normal API on 12075 and `backend/artifacts/plan-now-297-production.sqlite`. No feature-only APK or endpoint is involved. The Android review reservation is released after the authorized final merge, per the repository lifecycle.
+
+### Reproduce
+
+Run `backend/plan_now_review.py` with the backend environment. Build the ordinary debug APK with `-PreviewApiBaseUrl=http://10.0.2.2:12075/` (this changes only the server address), then install it on a newly managed emulator. For web, set `VITE_API_PROXY_TARGET=http://127.0.0.1:12075` and run Vite on the configured port 5174. The seed starts idle with Writing 20 minutes later and a Meeting after that; an existing scratch database retains review edits.
+
+## Historical prototype record
+
+The sections below describe earlier experiments and their limitations at that time. Their prototype-only commands and outstanding questions are superseded by the production integration above; old emulator tokens are retired.
 ## Progressive exploration — October 1
 
 Continue the existing experiment on `codex/297-progressive-prototype`. Preserve accepted choices and explore unresolved behavior through focused rounds in the real Android application. This record distinguishes implemented UI from prototype behavior; issue 297 remains open.
@@ -34,7 +67,7 @@ This round uses `backend/artifacts/plan-now-297-same-activity.sqlite`, preservin
 
 Validated this round: the isolated check uses a fixed 10:20 clock and passes interruption/resume plus same-activity shortening and extension, preserving plan identity, Supporting Note, Actual start and linkage. The prototype APK built successfully. In the actual app, choosing 15 minutes and saving retained plan ID 1, its 21:55 start and note, changed its end to 22:34, and retained the running Actual start. The Tracking control showed continued Running Time and roughly 14 minutes remaining; no resumed Writing segment was created. Preview screenshot: `backend/artifacts/297-same-activity-preview.png` (local review evidence).
 
-Pending Android review: `emulator-5582`, token `92e70adb4d5b486ea8025f611ea8362a`, owner `issue-297: progressive same-activity plan review`, pool `C:\Users\Caius\TimeboxRuntime\emulators`. The app is left on Day after the shortening check, with the backend running on port 12075. Earlier emulator tokens below are historical.
+Historical Android review: `emulator-5582`, token `92e70adb4d5b486ea8025f611ea8362a`, owner `issue-297: progressive same-activity plan review`, was released before the October 4 continuation, and its backend stopped. This token is retired.
 
 ### Exact duration from Save — accepted
 

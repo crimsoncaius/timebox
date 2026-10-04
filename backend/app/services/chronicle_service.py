@@ -12,7 +12,7 @@ from app.models.battle_plan import Task, TaskStatus
 from app.models.day import Day
 from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.day import ChronicleDayRead, ChronicleMonthRead
-from app.services import actual_block_service
+from app.services import actual_block_service, planned_intervals
 
 
 def read_month(db: Session, first: dt.date, settings: Settings) -> ChronicleMonthRead:
@@ -39,10 +39,23 @@ def read_month(db: Session, first: dt.date, settings: Settings) -> ChronicleMont
     ).all()
     for day in days:
         for block in day.time_blocks:
-            if block.lane == BlockLane.planned:
+            if block.lane == BlockLane.planned and block.start_at is None:
                 counts[day.date][0] += 1
-            elif block.start_at is None:  # Legacy grid Actual Block.
+            elif block.lane == BlockLane.actual and block.start_at is None:  # Legacy grid Actual Block.
                 counts[day.date][1] += 1
+
+    for block in planned_intervals.rows(db):
+        if block.start_at is None:
+            continue
+        a, b = planned_intervals.interval(block, settings.app_timezone)
+        a, b = max(a, start_utc), min(b, end_utc)
+        if a >= b:
+            continue
+        date = a.astimezone(zone).date()
+        last = (b - dt.timedelta(microseconds=1)).astimezone(zone).date()
+        while date <= last:
+            counts[date][0] += 1
+            date += dt.timedelta(days=1)
 
     candidate_actual_dates: set[dt.date] = set()
     intervals = db.execute(

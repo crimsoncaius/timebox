@@ -41,6 +41,7 @@ internal fun ActivitySelectionFields(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Task Type", style = type.label, color = colors.onVariant)
         TaskTypePicker(
+            initiallyCollapsed = selectedType != null,
             recommendationName = name, recommendationEnabled = !busy,
             taskTypes = taskTypes,
             query = typeQuery,

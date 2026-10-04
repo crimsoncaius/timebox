@@ -45,6 +45,7 @@ def _snapshot(
     timezone: str,
     acknowledgement: ActivityAcknowledgement | None = None,
 ) -> ActivitySnapshot:
+    from app.services.plan_now import revision
     timezone = state.reporting_timezone or timezone
     records = [ActualBlockRead.model_validate(row) for row in db.scalars(
         select(TimeBlock).where(TimeBlock.lane == BlockLane.actual, TimeBlock.start_at.is_not(None))
@@ -54,6 +55,7 @@ def _snapshot(
     operations = list(db.scalars(select(ActivityOperation)))
     reconciliation_state = state.reconciliation or {}
     return ActivitySnapshot(
+        plan_now_revision=revision(db, state, timezone),
         check_in=activity_check_in.synchronize(state, current),
         cursor=state.cursor, server_at=utc_now(),
         reporting_timezone=timezone, reporting_timezone_initialized=state.reporting_timezone is not None, records=records,

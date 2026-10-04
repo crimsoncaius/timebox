@@ -67,6 +67,7 @@ fun ActivityTracking(
     var selectedType by remember { mutableStateOf<TaskType?>(null) }
     var name by remember { mutableStateOf("") }
     var editingCurrent by remember { mutableStateOf(false) }
+    var planRevision by remember { mutableStateOf<String?>(null) }
     var planMinutes by remember { mutableStateOf<Int?>(null) }
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(repository, owner) {
@@ -103,7 +104,7 @@ fun ActivityTracking(
     // Without a covering Planned Block, starting waits for an explicit Task Type.
     fun start() {
         if (plan != null) scope.launch(Dispatchers.IO) { repository.command(ActivityKind.Start) }
-        else { selectedType = null; name = ""; typeQuery = ""; startError = null; timing = null; starting = true }
+        else { selectedType = null; name = ""; typeQuery = ""; startError = null; timing = null; planMinutes = null; timingError = null; planRevision = state.snapshot?.planNowRevision; editingCurrent = false; starting = true }
     }
     val handoff = (context.applicationContext as? TimeboxApplication)?.trackingHandoff
     val sheetRequest = handoff?.sheet?.collectAsState()?.value
@@ -113,6 +114,9 @@ fun ActivityTracking(
     LaunchedEffect(sheetRequest, state.snapshot != null, controlsVisible) {
         if (sheetRequest == null || state.snapshot == null || focus || !controlsVisible) return@LaunchedEffect
         val request = handoff.consumeSheet() ?: return@LaunchedEffect
+        planRevision = state.snapshot?.planNowRevision
+        planMinutes = null
+        editingCurrent = false
         selectedType = state.snapshot?.taskTypes?.find { it.id == request.taskTypeId }?.let { TaskType(it.id, it.name, 0) }
         typeQuery = selectedType?.name.orEmpty(); typeError = null; timingError = null; startError = null
         name = request.name.orEmpty()
@@ -154,21 +158,23 @@ fun ActivityTracking(
     var expanded by remember(current?.id) { mutableStateOf(false) }
     BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
     val colors = TimeboxTheme.colors
-    val planReview = com.timebox.android.BuildConfig.PLAN_NOW_PROTOTYPE
+    val planNowAvailable = state.snapshot?.planNowRevision != null
     val linkedPlan = current?.plannedBlockId?.let { id -> state.snapshot?.plans?.find { it.id == id } }
     val linkedPlanEnd = linkedPlan?.let { parseActivityInstant(it.endAt) }
     fun openCurrentEditor() {
         current?.let { item ->
+            planRevision = state.snapshot?.planNowRevision
             targetId = item.id; timing = null; timingError = null; planMinutes = null
             selectedType = availableTypes.find { it.id == item.taskTypeId }
             name = item.name.orEmpty(); editingCurrent = true; switching = true; expanded = false
         }
     }
     fun openSwitch(id: Int) {
+        planRevision = state.snapshot?.planNowRevision
         targetId = id; timing = null; timingError = null; planMinutes = null
         selectedType = null; name = ""; typeQuery = ""; editingCurrent = false; switching = true
     }
-    val keepCurrent = editingCurrent && current != null && current.taskTypeId == selectedType?.id && current.name.orEmpty() == name
+    val keepCurrent = editingCurrent && current != null && current.taskTypeId == selectedType?.id && current.name.orEmpty() == name.trim()
     LaunchedEffect(switching) { if (!switching) { editingCurrent = false; planMinutes = null } }
     val content: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(horizontal = if (focus) 0.dp else 20.dp)) {
@@ -200,7 +206,7 @@ fun ActivityTracking(
                     onSwitch = { expanded = false; current?.let { openSwitch(it.id) } },
                     onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
                     onFocus = { expanded = false; onEnterFocus() },
-                    onEdit = if (planReview) ::openCurrentEditor else null,
+                    onEdit = if (planNowAvailable) ::openCurrentEditor else null,
                     metrics = if (current != null) {
                         { ActivityTimeMetrics(false, Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0), now, linkedPlanEnd) }
                     } else null,
@@ -298,7 +304,7 @@ fun ActivityTracking(
         activityRepository = repository,
         onDismiss = { notesTargetId = null },
     )
-    if (starting && current == null) StartTrackingSheet(
+    if (starting && current == null && !planNowAvailable) StartTrackingSheet(
         history = if (state.snapshot?.startHistoryReady == true) StartHistory(
             records = state.snapshot?.records.orEmpty(), plans = state.snapshot?.plans.orEmpty(), now = now, zone = zone,
             timing = timing, onTimingChange = { timing = it; startError = null },
@@ -332,13 +338,47 @@ fun ActivityTracking(
         onTypeQueryChange = { typeError = null },
     )
     val switchTarget = state.snapshot?.records?.find { it.id == targetId } ?: current?.takeIf { it.id == targetId }
-    if (switching && !stopping) SwitchActivitySheet(
+    val confirmActivity: (List<Int>) -> Unit = { replacedPlans ->
+            if (!switchSaving) {
+                val savedAt = repository.now()
+                val kind = if (starting) ActivityKind.Start else ActivityKind.Switch
+                val expectedCurrent = if (starting) null else targetId
+                switchSaving = true
+                scope.launch {
+                    try {
+                        val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
+                        var operation: String? = null
+                        if (withContext(Dispatchers.IO) {
+                            if (planNowAvailable && planMinutes != null) {
+                                check(!repository.state.value.offline && !repository.state.value.pending) { "Connect and sync before changing the plan." }
+                                repository.planNow(com.timebox.android.data.remote.PlanNowRequestDto(
+                                    operationId = java.util.UUID.randomUUID().toString(),
+                                    revision = checkNotNull(planRevision) { "Refresh the plan before saving." },
+                                    currentId = expectedCurrent, effectiveAt = savedAt.toString(), minutes = planMinutes!!,
+                                    taskTypeId = selectedType!!.id, taskId = if (keepCurrent) current?.taskId else null,
+                                    name = name.trim().ifBlank { null }, replacePlanIds = replacedPlans,
+                                ))
+                            } else if (planNowAvailable && keepCurrent) true
+                            else repository.command(kind, selectedType!!.id, name, effectiveAt = at, observedTargetId = expectedCurrent, onOperation = { operation = it })
+                        }) {
+                            changed()
+                            reportApplied(operation, at)
+                            switching = false; starting = false; selectedType = null; name = ""; typeQuery = ""
+                        } else { timingError = repository.state.value.error; planRevision = repository.state.value.snapshot?.planNowRevision }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (error: Exception) { timingError = error.message } finally { switchSaving = false }
+                }
+            }
+        }
+    if ((switching || (planNowAvailable && starting)) && !stopping) SwitchActivitySheet(
         planMinutes = planMinutes,
-        onPlanMinutes = if (planReview) { value -> planMinutes = value; if (value != null) timing = null } else null,
+        onPlanMinutes = if (planNowAvailable) { value -> planMinutes = value; if (value != null) timing = null } else null,
         editCurrent = editingCurrent,
+        startTracking = starting,
         keepCurrent = keepCurrent,
-        currentPlanId = current?.plannedBlockId,
-        allowHistory = state.snapshot?.switchHistoryReady == true,
+        currentTaskId = if (keepCurrent) current?.taskId else null,
+        currentTaskTitle = if (keepCurrent) current?.task?.title else null,
+        currentPlanId = if (keepCurrent) current?.plannedBlockId else null,
+        allowHistory = if (starting) state.snapshot?.startHistoryReady == true else state.snapshot?.switchHistoryReady == true,
         currentActivity = switchTarget?.identityText().orEmpty(),
         currentId = targetId ?: 0, start = switchTarget?.startAt?.let(::parseActivityInstant) ?: now,
         loadPlanTitles = { date ->
@@ -351,35 +391,12 @@ fun ActivityTracking(
         name = name, onNameChange = { name = it }, timing = timing,
         onTimingChange = { timing = it; timingError = null }, now = now,
         zone = java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"),
-        enabled = enabled && switchTarget != null && (switchSaving || current?.id == targetId), busy = state.busy || switchSaving,
-        error = if (!switchSaving && current?.id != targetId) "The current activity changed. Close this sheet and review it before switching." else timingError,
-        onDismiss = { switching = false; proposalId = null },
-        onConfirm = {
-            if (!switchSaving) {
-                val savedAt = repository.now()
-                switchSaving = true
-                scope.launch {
-                    try {
-                        val at = timing?.resolve(java.time.ZoneId.of(state.snapshot?.reportingTimezone ?: "UTC"))
-                        var operation: String? = null
-                        if (withContext(Dispatchers.IO) {
-                            if (planReview && planMinutes != null) {
-                                check(!repository.state.value.offline && !repository.state.value.pending) { "Connect and sync before changing the plan." }
-                                val savedPlan = createReviewPlan(planMinutes!!, selectedType!!.id, name, targetId!!, savedAt)
-                                repository.refresh()
-                                if (keepCurrent) repository.countTowardPlan(savedPlan)
-                                else repository.command(ActivityKind.Switch, plan = savedPlan, effectiveAt = savedAt, observedTargetId = targetId)
-                            } else if (planReview && keepCurrent) true
-                            else repository.command(ActivityKind.Switch, selectedType!!.id, name, effectiveAt = at, observedTargetId = targetId, onOperation = { operation = it })
-                        }) {
-                            changed()
-                            reportApplied(operation, at)
-                            switching = false; selectedType = null; name = ""; typeQuery = ""
-                        } else timingError = repository.state.value.error
-                    } catch (error: Exception) { timingError = error.message } finally { switchSaving = false }
-                }
-            }
-        },
+        enabled = enabled && (if (starting) current == null else switchTarget != null && (switchSaving || current?.id == targetId)), busy = state.busy || switchSaving,
+        error = if (!switchSaving && (if (starting) current != null else current?.id != targetId)) "The current activity changed. Close this sheet and review it." else timingError,
+        onDismiss = { if (!switchSaving) { switching = false; starting = false; proposalId = null } },
+        onConfirm = { confirmActivity(emptyList()) },
+        onConfirmPlan = confirmActivity,
+        planEnabled = !state.offline && !state.pending,
         onCreateType = createType, typeError = typeError,
         onTypeQueryChange = { typeError = null },
     )

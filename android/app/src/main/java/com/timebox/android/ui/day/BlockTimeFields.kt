@@ -27,7 +27,9 @@ internal fun BlockTimeFields(block: TimeBlock, day: Day?, saving: Boolean, onSav
     var endText by remember(block.id, block.endMinute) { mutableStateOf(hhmm(block.endMinute)) }
     val start = parseBlockMinute(startText)
     val end = parseBlockMinute(endText)
+    val changed = start != block.startMinute || end != block.endMinute
     val error = when {
+        !changed -> null
         start == null || end == null -> "Enter times as HH:mm."
         end <= start -> "End must be after start."
         day != null && (start < day.visibleStart || end > day.visibleEnd) -> "Choose times within the visible day."
@@ -35,6 +37,10 @@ internal fun BlockTimeFields(block: TimeBlock, day: Day?, saving: Boolean, onSav
         else -> null
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (block.planStartAt != null && block.planEndAt != null && day != null) {
+            val format = java.time.format.DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZone(java.time.ZoneId.of(day.timezone))
+            Text("${format.format(block.planStartAt)} – ${format.format(block.planEndAt)}", style = TimeboxTheme.type.bodySmall)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(startText, { startText = it }, enabled = !saving, singleLine = true,
                 label = { Text("Start") }, modifier = Modifier.weight(1f))

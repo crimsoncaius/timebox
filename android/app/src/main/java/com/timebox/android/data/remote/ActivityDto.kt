@@ -70,6 +70,20 @@ import kotlinx.serialization.Serializable
     val plans: List<ActivityPlanDto> = emptyList(),
     val provenance: Map<String, String> = emptyMap(),
     val coverage: List<ActivityCoverageDto> = emptyList(),
+    @SerialName("plan_now_revision") val planNowRevision: String? = null,
+    @SerialName("plan_now_undo") val planNowUndo: String? = null,
+)
+
+@Serializable data class PlanNowRequestDto(
+    @SerialName("operation_id") val operationId: String,
+    val revision: String,
+    @SerialName("current_id") val currentId: Int?,
+    @SerialName("effective_at") val effectiveAt: String,
+    val minutes: Int,
+    @SerialName("task_type_id") val taskTypeId: Int,
+    @SerialName("task_id") val taskId: Int? = null,
+    val name: String? = null,
+    @SerialName("replace_plan_ids") val replacePlanIds: List<Int> = emptyList(),
 )
 @Serializable data class ActivityCoverageDto(
     val start: String, val end: String?,

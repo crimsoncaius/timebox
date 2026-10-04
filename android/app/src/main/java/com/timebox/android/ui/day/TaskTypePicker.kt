@@ -101,8 +101,9 @@ fun TaskTypePicker(
     recommendationName: String? = null,
     recommendationEnabled: Boolean = true,
     recommendationLinkedTaskName: String? = null,
+    initiallyCollapsed: Boolean = false,
 ) {
-    var pickerOpen by remember { mutableStateOf(true) }
+    var pickerOpen by remember { mutableStateOf(!initiallyCollapsed) }
     var typed by remember { mutableStateOf(false) }
     val currentName = taskTypes.find { it.id == selectedTypeId }?.name
     val searchQuery = if (!typed && query == currentName) "" else query

@@ -864,8 +864,10 @@ private fun BlockCard(
 ) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
-    val top = slotHeight * ((startMinute - visibleStart).toFloat() / SLOT_MINUTES)
-    val slotsTall = (endMinute - startMinute).toFloat() / SLOT_MINUTES
+    val preciseStart = if (!dragging) block.startPosition?.toFloat() ?: startMinute.toFloat() else startMinute.toFloat()
+    val preciseEnd = if (!dragging) block.endPosition?.toFloat() ?: endMinute.toFloat() else endMinute.toFloat()
+    val top = slotHeight * ((preciseStart - visibleStart) / SLOT_MINUTES)
+    val slotsTall = (preciseEnd - preciseStart) / SLOT_MINUTES
     val height = max(slotHeight.value * slotsTall, 1f).dp
     val grooves = resizeEnabled && (height >= TimeboxDimens.resizeHandleMinHeight || dragging)
     val innerHeight = height - if (grooves) TimeboxDimens.grooveHeight * 2 else 0.dp

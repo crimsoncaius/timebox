@@ -90,6 +90,21 @@ class ActivitySnapshot(BaseModel):
     coverage: list[dict] = []
     acknowledgement: ActivityAcknowledgement | None = None
     check_in: dict = {}
+    plan_now_revision: str | None = None
+    plan_now_undo: str | None = None
+
+
+class PlanNowRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: UUID
+    revision: str = Field(min_length=1, max_length=64)
+    current_id: int | None = None
+    effective_at: AwareDatetime
+    minutes: int = Field(ge=1, le=90)
+    task_type_id: int
+    task_id: int | None = None
+    name: str | None = Field(default=None, max_length=500)
+    replace_plan_ids: list[int] = Field(default_factory=list, max_length=1000)
 
 
 class ReportingTimezone(BaseModel):

@@ -11,7 +11,7 @@ export function ActivitySwitchUndoHost() {
   const { notice, offer, dismiss } = useUndoNotice()
   const [error, setError] = useState('')
   useEffect(() => repository.subscribeSwitch(change => offer({ kind: 'switch', targetId: 0,
-    title: 'activity switch', label: `Switched to ${change.name}`, ariaLabel: 'Activity switched',
+    title: change.planChange ? 'plan change' : 'activity switch', label: `${change.planChange ? 'Planned' : 'Switched to'} ${change.name}`, ariaLabel: change.planChange ? 'Plan changed' : 'Activity switched',
     undo: () => repository.undoSwitch(change.operationId),
   })), [repository, offer])
   useEffect(() => { dismiss() }, [location.key, dismiss])

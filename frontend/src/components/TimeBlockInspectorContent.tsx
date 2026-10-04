@@ -71,6 +71,7 @@ function LegacyTimeBlockInspectorContent({
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [])
   const recordingTiming = useMemo(() => {
     if (!block || block.lane !== 'planned') return { available: false, underway: false }
+    if (block.start_at && block.end_at) return { available: clock > Date.parse(block.start_at), underway: clock < Date.parse(block.end_at) }
     try {
       const base = new Date(`${day.date}T00:00:00Z`)
       const instant = (minute: number) => {
@@ -291,7 +292,7 @@ function LegacyTimeBlockInspectorContent({
   const startLabel = formatMinuteLabel24(startMinute)
   const endLabel = formatMinuteLabel24(endMinute)
 
-  const durationLabel = formatBlockDuration(endMinute - startMinute)
+  const durationLabel = formatBlockDuration(block?.duration_minutes ?? endMinute - startMinute)
 
   const lanePillColors =
     lane === 'planned'
@@ -343,6 +344,7 @@ function LegacyTimeBlockInspectorContent({
         <span>{endLabel}</span>
       </p>
 
+      {block?.start_at && block.end_at && <p className="text-sm">{new Date(block.start_at).toLocaleString(undefined, { timeZone: day.meta.timezone })} – {new Date(block.end_at).toLocaleString(undefined, { timeZone: day.meta.timezone })}</p>}
       {block && <BlockTimeFields key={`${block.lane}-${block.id}-${block.start_minute}-${block.end_minute}`} block={block} onSave={onSave} />}
 
       {/* Helper text */}
