@@ -19,6 +19,7 @@ internal data class PlannedRecordingState(
     val underway: Boolean,
     val matching: LinkedRecordingRef?,
     val override: LinkedRecordingRef?,
+    val requestedDurationMinutes: Long? = null,
 )
 
 internal fun clockMinute(at: Instant, date: LocalDate, zone: ZoneId): Int {
@@ -36,6 +37,22 @@ internal fun plannedRecordingState(block: TimeBlock, day: Day?, now: Instant): P
     val nowMinute = clockMinute(now, date, zone)
     val requestedStart = block.startMinute
     val requestedEnd = minOf(block.endMinute, nowMinute).coerceAtLeast(requestedStart)
+    if (block.planStartAt != null && block.planEndAt != null) {
+        val end = minOf(block.planEndAt, now)
+        val overlapping = day?.actualBlocks.orEmpty().filter {
+            it.actualBlock.startAt < end && (it.actualBlock.endAt ?: now) > block.planStartAt
+        }
+        val linked = overlapping.filter { it.actualBlock.id in block.actualBlockIds || it.actualBlock.plannedBlockId == block.id }
+        val matching = linked.firstOrNull { it.actualBlock.startAt == block.planStartAt && (it.actualBlock.endAt ?: now) == end }?.toRef()
+        val differing = linked.firstOrNull { it.actualBlock.id != matching?.id }?.toRef()
+        return PlannedRecordingState(
+            kind = if (matching != null && overlapping.size == 1) PlannedRecordingKind.AlreadyRecorded else if (linked.isNotEmpty()) PlannedRecordingKind.Override else PlannedRecordingKind.Record,
+            requestedStartMinute = requestedStart, requestedEndMinute = requestedEnd,
+            available = now > block.planStartAt, underway = now < block.planEndAt,
+            matching = matching, override = differing ?: matching ?: linked.firstOrNull()?.toRef(),
+            requestedDurationMinutes = java.time.Duration.between(block.planStartAt, end).toMinutes().coerceAtLeast(0),
+        )
+    }
     val available = nowMinute > requestedStart
     val underway = nowMinute < block.endMinute
     val overlapping = day?.actualBlocks.orEmpty().filter { it.startMinute < requestedEnd && it.endMinute > requestedStart }

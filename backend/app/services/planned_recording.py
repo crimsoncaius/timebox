@@ -16,6 +16,7 @@ from app.models.time_block import BlockLane, TimeBlock
 from app.schemas.time_block import ActualBlockRead
 from app.services import activity_reconciliation as rec
 from app.services import actual_block_service as actuals
+from app.services import planned_intervals
 
 
 def lock(db):
@@ -76,10 +77,7 @@ def record(db, planned_id, settings, now, body):
         from app.services import activity_service
         state = activity_service._lock(db)
     plan = actuals._planned_row(db, planned_id, for_update=True)
-    zone = actuals.get_zone(state.reporting_timezone or settings.app_timezone)
-    midnight = dt.datetime.combine(plan.day.date, dt.time.min, tzinfo=zone)
-    start = rec.instant(midnight + dt.timedelta(minutes=plan.start_minute))
-    planned_end = rec.instant(midnight + dt.timedelta(minutes=plan.end_minute))
+    start, planned_end = planned_intervals.interval(plan, state.reporting_timezone or settings.app_timezone)
     end = min(planned_end, rec.instant(body.until) if body.until else now)
     if end > now or end <= start:
         raise ValueError("Recording is available after the Planned Block starts and cannot include future time")

@@ -63,8 +63,13 @@ data class TimeBlock(
     val name: String? = null,
     val actualBlockIds: List<Int> = emptyList(),
     val actualDurationMinutes: Double = 0.0,
+    val startPosition: Double? = null,
+    val endPosition: Double? = null,
+    val preciseDurationMinutes: Double? = null,
+    val planStartAt: Instant? = null,
+    val planEndAt: Instant? = null,
 ) {
-    val durationMinutes: Int get() = endMinute - startMinute
+    val durationMinutes: Int get() = preciseDurationMinutes?.toInt() ?: (endMinute - startMinute)
 }
 
 fun meaningfulActivityType(type: String?): String? =
@@ -245,6 +250,11 @@ fun TimeBlockDto.toModel() = TimeBlock(
     startMinute = startMinute,
     endMinute = endMinute,
     name = name,
+    startPosition = startPosition,
+    endPosition = endPosition,
+    preciseDurationMinutes = preciseDurationMinutes,
+    planStartAt = startAt?.let(::parseInstant),
+    planEndAt = endAt?.let(::parseInstant),
 )
 
 fun ActualBlockDto.toModel() = ActualBlock(

@@ -98,7 +98,7 @@ internal fun StartTrackingSheet(
 }
 
 @Composable
-private fun StartTime(history: StartHistory, taskTypes: List<TaskType>, next: String, expanded: Boolean, enabled: Boolean, onExpand: () -> Unit) {
+internal fun StartTime(history: StartHistory, taskTypes: List<TaskType>, next: String, expanded: Boolean, enabled: Boolean, onExpand: () -> Unit) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
     val selected = minOf(history.timing?.resolve(history.zone) ?: history.now, history.now)

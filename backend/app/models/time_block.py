@@ -41,7 +41,8 @@ class TimeBlock(Base):
         ),
         CheckConstraint(
             "lane != 'planned' OR (day_id IS NOT NULL AND start_minute IS NOT NULL "
-            "AND end_minute IS NOT NULL AND start_at IS NULL AND end_at IS NULL)",
+            "AND end_minute IS NOT NULL AND ((start_at IS NULL AND end_at IS NULL) "
+            "OR (start_at IS NOT NULL AND end_at IS NOT NULL AND end_at > start_at)))",
             name="ck_time_blocks_planned_grid_shape",
         ),
         CheckConstraint(

@@ -20,7 +20,8 @@ export function BlockTimeFields({ block, onSave }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const a = parseBlockMinute(start), b = parseBlockMinute(end)
-  const valid = a != null && b != null && a < b
+  const unchanged = a === block.start_minute && b === block.end_minute
+  const valid = unchanged || (a != null && b != null && a < b)
   return <section className="grid gap-2" aria-label="Block times">
     <div className="flex gap-2">
       <label className="min-w-0 flex-1">Start<input className="w-full rounded border p-2" value={start} disabled={saving} onChange={e => setStart(e.target.value)} /></label>

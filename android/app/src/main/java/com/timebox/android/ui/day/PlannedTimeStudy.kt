@@ -146,7 +146,7 @@ internal fun PlannedRecordingStudy(
     val recording = plannedRecordingState(block, day, now)
     val actionLabel = if (recording.underway) "Record Actual until now" else "Record Actual as planned"
     val requestedRange = "${hhmm(recording.requestedStartMinute)} – ${hhmm(recording.requestedEndMinute)}"
-    val requestedDuration = elapsedDuration((recording.requestedEndMinute - recording.requestedStartMinute).toLong().coerceAtLeast(0))
+    val requestedDuration = elapsedDuration(recording.requestedDurationMinutes ?: (recording.requestedEndMinute - recording.requestedStartMinute).toLong().coerceAtLeast(0))
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (recording.kind) {
             PlannedRecordingKind.AlreadyRecorded -> {
