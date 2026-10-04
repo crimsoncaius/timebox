@@ -192,6 +192,10 @@ _Avoid_: Session quota, Planned time target
 A fixed repeating span of a user-chosen number of days, weeks, or months over which a Time Goal is judged, with no surplus carried forward; daily cycles anchor to the chosen start date, and weekly or monthly cycles to its Calendar Week or calendar month in the Reporting Time Zone. Progress reflects Actual Blocks through now and later corrections to past records; periods before the goal's chosen start are not judged, and a shortened first period retains its full target.
 _Avoid_: Rolling window, Habit Period
 
+**Archived Time Goal**:
+A Time Goal whose expectations have ended, with its historical targets and results retained. It cannot be reactivated; starting again requires a new Time Goal, and its recorded Actual Blocks remain independent of its lifecycle.
+_Avoid_: Paused goal, deleted goal
+
 **Habit Period**:
 The span over which a Habit is judged: one Task Occurrence's recurrence period for a scheduled Habit, or one quota period for a quota Habit. Its outcome is Met, Missed, Open while it has not ended, or Excused while its series is paused or not yet started, or, for a Checklist Item Habit, when that Task Occurrence has no Subtask for the item. A scheduled Habit Period is Met once its Task Occurrence has a Task Completion, whatever that completion's date; a Checklist Item Habit Period is Met once that Task Occurrence's Subtask for the item is checked, whenever it was checked. There is no late outcome.
 _Avoid_: Streak day, check-in

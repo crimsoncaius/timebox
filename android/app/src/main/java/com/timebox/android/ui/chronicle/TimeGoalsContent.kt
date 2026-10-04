@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -38,10 +37,10 @@ internal fun goalDuration(minutes: Int): String = when {
 internal fun goalCadence(unit: String, interval: Int): String =
     if (interval == 1) "Every $unit" else "Every $interval ${unit}s"
 
-private fun TimeGoal.outcomeLabel() = when (period.outcome) {
+internal fun TimeGoal.outcomeLabel() = when (period.outcome) {
     "met" -> "Met"
     "missed" -> "Missed"
-    "excused" -> "Excused · goal ended"
+    "excused" -> "Excused · goal archived"
     "upcoming" -> "Upcoming"
     else -> "${goalDuration(kotlin.math.ceil((period.targetMinutes * 60 - period.durationSeconds) / 60).toInt())} to go"
 }
@@ -55,7 +54,6 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
     var expanded by rememberSaveable { mutableStateOf<Int?>(null) }
     var detailId by rememberSaveable { mutableStateOf<Int?>(null) }
     var editorId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var action by rememberSaveable { mutableStateOf<String?>(null) }
     val canManage = !state.offline && !state.goalSaving && !state.loading
     Text("Recorded time, measured against each goal’s period", style = type.bodySmall, color = colors.onVariant)
     state.goalError?.let { message ->
@@ -89,7 +87,7 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
             }
             LinearProgressIndicator(progress = { (goal.period.durationSeconds / (goal.period.targetMinutes * 60)).toFloat().coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(3.dp), color = colors.actual, trackColor = colors.low)
-            if (goal.endDate != null) Text("Ended ${goal.endDate.format(goalDateFormat)}", style = type.bodySmall,
+            if (goal.endDate != null) Text("Archived ${goal.endDate.format(goalDateFormat)}", style = type.bodySmall,
                 color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             else goal.nextTargetMinutes?.let {
                 Text("${goalDuration(it)} from ${goal.nextTargetDate.format(goalDateFormat)}", style = type.bodySmall,
@@ -127,62 +125,10 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
     if (report.goals.isNotEmpty()) TextButton(onClick = { editorId = 0 }, enabled = canManage) { Text("Add Time Goal") }
 
     report.goals.find { it.id == detailId }?.let { goal ->
-        ModalBottomSheet(onDismissRequest = { if (!state.goalSaving) detailId = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = colors.sheet.copy(alpha = 1f), shape = TimeboxShapes.sheet) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding()) {
-                Text(goal.taskType, style = type.sectionTitle, color = colors.on)
-                Text("${goalRange(goal.period.start, goal.period.end)} · ${goalCadence(goal.unit, goal.interval)}",
-                    style = type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
-                Text("${goalDuration((goal.period.durationSeconds / 60).toInt())} / ${goalDuration(goal.period.targetMinutes)}",
-                    style = type.display, color = colors.on, modifier = Modifier.padding(vertical = 12.dp))
-                Text(goal.outcomeLabel(), style = type.label, color = colors.on)
-                Text("Includes this Task Type and its descendants.\nReporting time zone · ${report.timezone.id}",
-                    style = type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
-                if (goal.endDate == null) goal.nextTargetMinutes?.let {
-                    Text("Target changes to ${goalDuration(it)} on ${goal.nextTargetDate.format(goalDateFormat)}.",
-                        style = type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(top = 12.dp))
-                }
-                Text("Actual Blocks", style = type.sectionTitle, color = colors.on, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
-                if (goal.period.blocks.isEmpty()) Text("No recorded time in this period.", style = type.bodySmall, color = colors.onVariant)
-                goal.period.blocks.asReversed().forEach { block ->
-                    val start = block.startAt.atZone(report.timezone).format(DateTimeFormatter.ofPattern("d MMM, HH:mm"))
-                    val end = block.endAt?.atZone(report.timezone)?.format(DateTimeFormatter.ofPattern("d MMM, HH:mm")) ?: "Running"
-                    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text(block.name.ifBlank { block.taskType }, style = type.body, color = colors.on)
-                            Text("$start – $end\n${block.taskType}", style = type.bodySmall, color = colors.onVariant)
-                        }
-                        Text(goalDuration((block.creditedSeconds / 60).toInt()), style = type.label, color = colors.on)
-                    }
-                    HorizontalDivider(color = colors.hairline)
-                }
-                Text("Durations show time credited within this period.", style = type.bodySmall, color = colors.onVariant,
-                    modifier = Modifier.padding(top = 12.dp))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton({ editorId = goal.id; detailId = null }, enabled = canManage && goal.endDate == null) { Text("Edit goal") }
-                    TextButton({ action = "end" }, enabled = canManage && goal.endDate == null) { Text("End goal") }
-                    TextButton({ action = "delete" }, enabled = canManage) { Text("Delete", color = colors.error) }
-                }
-                state.goalError?.let { Text(it, color = colors.error, style = type.bodySmall) }
-                if (state.offline) Text("Connect to manage this goal.", style = type.bodySmall, color = colors.onVariant)
-                TextButton({ detailId = null }, Modifier.align(Alignment.End), enabled = !state.goalSaving) { Text("Done") }
-            }
-        }
-        action?.let { pending ->
-            AlertDialog(onDismissRequest = { if (!state.goalSaving) action = null },
-                title = { Text(if (pending == "end") "End this goal today?" else "Delete this goal?") },
-                text = { Column {
-                    Text(if (pending == "end") "Your history stays. The current period is excused if its target has not been met. Actual Blocks stay unchanged."
-                        else "Remove this goal and all its assessments. Your Actual Blocks stay unchanged.")
-                    state.goalError?.let { Text(it, color = colors.error) }
-                } },
-                confirmButton = { TextButton({
-                    val done = { action = null; detailId = null }
-                    if (pending == "end") viewModel.endGoal(goal.id, done) else viewModel.deleteGoal(goal.id, done)
-                }, enabled = !state.goalSaving && !state.offline) { Text(if (state.goalSaving) "Saving…" else if (pending == "end") "End goal" else "Delete goal") } },
-                dismissButton = { TextButton({ action = null }, enabled = !state.goalSaving) { Text("Cancel") } })
-        }
+        TimeGoalDetails(goal, report.today, report.timezone, state, viewModel,
+            onDismiss = { detailId = null },
+            onEdit = { editorId = goal.id; detailId = null },
+            onHistory = { detailId = null; viewModel.openGoalHistory(goal.id) })
     }
     editorId?.let { id ->
         TimeGoalEditor(report.goals.find { it.id == id }, report.today, report.timezone.id, state, viewModel) {

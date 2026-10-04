@@ -17,6 +17,13 @@ import com.timebox.android.ui.chronicle.HabitsPrototype
  */
 fun NavGraphBuilder.prototypeRoutes() {
     composable(
+        "prototype/goal-archive?variant={variant}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/goal-archive?variant={variant}" }),
+        arguments = listOf(navArgument("variant") { defaultValue = "page" }),
+    ) { entry ->
+        com.timebox.android.ui.chronicle.GoalArchivePrototype(entry.arguments?.getString("variant") ?: "page")
+    }
+    composable(
         "prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}",
         deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/task-sheet?mode={mode}&layout={layout}&sample={sample}" }),
         arguments = listOf(

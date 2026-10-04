@@ -10,7 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.time_goal import TimeGoal, TimeGoalTarget
-from app.schemas.time_goal import GoalBlock, GoalPeriod, TimeGoalCreate, TimeGoalRead, TimeGoalsWeek
+from app.schemas.time_goal import (
+    ArchivedTimeGoal,
+    GoalBlock,
+    GoalPeriod,
+    TimeGoalArchive,
+    TimeGoalCreate,
+    TimeGoalHistory,
+    TimeGoalRead,
+    TimeGoalsWeek,
+)
 from app.services.task_type_service import resolve_task_type_id
 from app.services.trends import actual_segments
 
@@ -74,7 +83,7 @@ def change_target(db: Session, goal: TimeGoal, minutes: int, today: dt.date) -> 
 
 def require_active(goal: TimeGoal) -> None:
     if goal.end_date is not None:
-        raise ValueError("This Time Goal has ended")
+        raise ValueError("This Time Goal is archived")
 
 
 def end_goal(goal: TimeGoal, today: dt.date) -> None:
@@ -85,7 +94,7 @@ def end_goal(goal: TimeGoal, today: dt.date) -> None:
 
 
 def read_goal(db: Session, goal: TimeGoal, anchor: dt.date, week: dt.date,
-              timezone: str, now: dt.datetime) -> TimeGoalRead:
+              timezone: str, now: dt.datetime, *, segments=None) -> TimeGoalRead:
     today = now.astimezone(ZoneInfo(timezone)).date()
     anchor = min(anchor, goal.end_date) if goal.end_date else anchor
     start, natural_end = period_bounds(goal, anchor)
@@ -94,9 +103,9 @@ def read_goal(db: Session, goal: TimeGoal, anchor: dt.date, week: dt.date,
     blocks = {}
     duration = 0.0
     path = goal.task_type.name
-    for record, day, left, right in actual_segments(
-        db, min(start, week), max(end, week + dt.timedelta(days=6)), timezone, now,
-    ):
+    if segments is None:
+        segments = actual_segments(db, min(start, week), max(end, week + dt.timedelta(days=6)), timezone, now)
+    for record, day, left, right in segments:
         if record.task_type.name != path and not record.task_type.name.startswith(path + "/"):
             continue
         if day < goal.start_date or (goal.end_date and day > goal.end_date):
@@ -140,8 +149,48 @@ def read_week(db: Session, week: dt.date | None, timezone: str, now: dt.datetime
     earliest = monday(min([today] + [g.start_date for g in all_goals]))
     anchor = min(today, week + dt.timedelta(days=6))
     visible = [g for g in all_goals if (g.start_date <= week + dt.timedelta(days=6) or week == monday(today))
-               and (g.end_date is None or g.end_date >= week)]
+               and (g.end_date is None or (week < monday(today) and g.end_date >= week))]
     return TimeGoalsWeek(
         today=today, week_start=week, earliest_week_start=earliest, timezone=timezone, captured_at=now,
         goals=[read_goal(db, g, anchor, week, timezone, now) for g in visible],
     )
+
+
+def archive_entry(goal: TimeGoal) -> ArchivedTimeGoal:
+    start, _ = period_bounds(goal, goal.end_date)
+    return ArchivedTimeGoal(
+        id=goal.id, task_type_id=goal.task_type_id, task_type=goal.task_type.name,
+        unit=goal.unit, interval=goal.interval, start_date=goal.start_date, end_date=goal.end_date,
+        target_minutes=target_at(goal, start),
+    )
+
+
+def read_archive(db: Session, timezone: str, now: dt.datetime) -> TimeGoalArchive:
+    goals = db.scalars(select(TimeGoal).where(TimeGoal.end_date.is_not(None))
+                       .options(joinedload(TimeGoal.task_type))
+                       .order_by(TimeGoal.end_date.desc(), TimeGoal.id.desc())).all()
+    return TimeGoalArchive(today=now.astimezone(ZoneInfo(timezone)).date(), timezone=timezone,
+                           captured_at=now, goals=[archive_entry(goal) for goal in goals])
+
+
+def read_history(db: Session, goal: TimeGoal, before: dt.date | None, limit: int,
+                 timezone: str, now: dt.datetime) -> TimeGoalHistory:
+    if goal.end_date is None:
+        raise ValueError("Choose an archived Time Goal")
+    anchors = []
+    anchor = goal.end_date
+    if before is not None:
+        anchor = min(anchor, before - dt.timedelta(days=1)) if before > goal.start_date else None
+    while anchor is not None and anchor >= goal.start_date and len(anchors) < limit:
+        anchors.append(anchor)
+        start, _ = period_bounds(goal, anchor)
+        anchor = start - dt.timedelta(days=1) if start > goal.start_date else None
+    periods = []
+    if anchors:
+        oldest, _ = period_bounds(goal, anchors[-1])
+        # One bounded record query per page; reuse the same assessment rules as week browsing.
+        segments = list(actual_segments(db, oldest, anchors[0], timezone, now))
+        periods = [read_goal(db, goal, day, monday(day), timezone, now, segments=segments).period
+                   for day in anchors]
+    return TimeGoalHistory(goal=archive_entry(goal), timezone=timezone, captured_at=now, periods=periods,
+                           next_before=periods[-1].start if periods and anchor is not None else None)

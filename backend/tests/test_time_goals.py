@@ -214,3 +214,78 @@ def test_migration_adds_goal_tables_to_existing_schema():
         connection.exec_driver_sql("INSERT INTO time_goal_targets VALUES (1, '2026-09-21', 240)")
     with Session(engine) as db:
         assert db.get(TimeGoal, 1).targets[0].minutes == 240
+
+
+def test_archive_separates_current_goals_but_keeps_historical_weeks(api):
+    old = goal(api, start_date="2026-09-01")
+    block = record("exercise", "2026-09-22T01:00:00Z", "2026-09-22T02:00:00Z")
+    assert api.post(f'/time-goals/{old["id"]}/end').status_code == 204
+    assert api.get('/time-goals').json()['goals'] == []
+    assert api.get('/time-goals?week=2026-09-14').json()['goals'][0]['id'] == old['id']
+    archived = api.get('/time-goals/archive').json()['goals']
+    assert [(g['id'], g['end_date']) for g in archived] == [(old['id'], '2026-09-27')]
+    assert api.get(f'/time-goals/{old["id"]}/history').json()['periods'][0]['outcome'] == 'excused'
+    assert api.delete(f'/time-goals/{old["id"]}').status_code == 204
+    assert api.get('/time-goals/archive').json()['goals'] == []
+    assert api.get(f'/time-goals/{old["id"]}/history').status_code == 404
+    with Session(get_engine()) as db:
+        assert db.get(TimeBlock, block) is not None
+
+
+def test_archive_lists_legacy_and_replaced_goals_newest_first(api):
+    old = goal(api, "reading", start_date="2026-08-01")
+    with Session(get_engine()) as db:
+        db.get(TimeGoal, old['id']).end_date = dt.date(2026, 8, 31)
+        db.commit()
+    replaced = goal(api)
+    assert api.post(f'/time-goals/{replaced["id"]}/replace', json={
+        'task_type_id': replaced['task_type_id'], 'unit': 'day', 'interval': 1, 'target_minutes': 30,
+    }).status_code == 200
+    assert [g['id'] for g in api.get('/time-goals/archive').json()['goals']] == [replaced['id'], old['id']]
+    assert len(api.get('/time-goals').json()['goals']) == 1
+    assert api.post(f'/time-goals/{old["id"]}/end').status_code == 422
+    assert api.patch(f'/time-goals/{old["id"]}/target', json={'target_minutes': 5}).status_code == 422
+
+
+def test_history_pages_targets_blocks_and_live_corrections(api):
+    g = goal(api, unit='day', start_date='2026-08-01', target_minutes=30)
+    app.dependency_overrides[capture_now] = lambda: instant('2026-09-01T05:00:00Z')
+    assert api.patch(f'/time-goals/{g["id"]}/target', json={'target_minutes': 60}).status_code == 204
+    app.dependency_overrides[capture_now] = lambda: instant('2026-09-27T05:00:00Z')
+    block = record('exercise', '2026-09-01T01:00:00Z', '2026-09-01T01:40:00Z')
+    assert api.post(f'/time-goals/{g["id"]}/end').status_code == 204
+    first = api.get(f'/time-goals/{g["id"]}/history').json()
+    assert len(first['periods']) == 30
+    assert first['periods'][0]['start'] == '2026-09-27'
+    assert first['periods'][0]['target_minutes'] == 60
+    assert first['next_before'] == '2026-08-29'
+    earlier = next(p for p in first['periods'] if p['start'] == '2026-09-01')
+    assert (earlier['target_minutes'], earlier['duration_seconds'], earlier['outcome']) == (30, 2400, 'met')
+    assert earlier['blocks'][0]['id'] == block
+    second = api.get(f'/time-goals/{g["id"]}/history', params={'before': first['next_before']}).json()
+    assert second['periods'][0]['start'] == '2026-08-28'
+    assert second['periods'][-1]['start'] == '2026-08-01'
+    assert second['next_before'] is None
+    assert len({p['start'] for p in first['periods'] + second['periods']}) == 58
+    with Session(get_engine()) as db:
+        db.get(TimeBlock, block).end_at = instant('2026-09-01T01:10:00Z')
+        db.commit()
+    refreshed = api.get(f'/time-goals/{g["id"]}/history').json()
+    assert next(p for p in refreshed['periods'] if p['start'] == '2026-09-01')['outcome'] == 'missed'
+    assert api.get(f'/time-goals/{g["id"]}/history?before=0001-01-01').json()['periods'] == []
+    assert api.get(f'/time-goals/{g["id"]}/history?limit=0').status_code == 422
+    assert api.get(f'/time-goals/{g["id"]}/history?limit=51').status_code == 422
+
+
+@pytest.mark.parametrize('unit,interval,start,expected', [
+    ('week', 2, '2026-08-19', [('2026-09-14', '2026-09-27'), ('2026-08-31', '2026-09-13'), ('2026-08-19', '2026-08-30')]),
+    ('month', 1, '2026-07-20', [('2026-09-01', '2026-09-27'), ('2026-08-01', '2026-08-31'), ('2026-07-20', '2026-07-31')]),
+])
+def test_history_respects_natural_periods_and_short_first_and_final_periods(api, unit, interval, start, expected):
+    g = goal(api, unit=unit, interval=interval, start_date=start)
+    assert api.get(f'/time-goals/{g["id"]}/history').status_code == 422
+    assert api.post(f'/time-goals/{g["id"]}/end').status_code == 204
+    history = api.get(f'/time-goals/{g["id"]}/history').json()
+    assert [(p['start'], p['end']) for p in history['periods']] == expected
+    assert all(p['target_minutes'] == 240 for p in history['periods'])
+    assert history['next_before'] is None

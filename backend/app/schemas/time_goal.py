@@ -66,3 +66,29 @@ class TimeGoalsWeek(BaseModel):
     timezone: str
     captured_at: dt.datetime
     goals: list[TimeGoalRead]
+
+
+class ArchivedTimeGoal(BaseModel):
+    id: int
+    task_type_id: int
+    task_type: str
+    unit: str
+    interval: int
+    start_date: dt.date
+    end_date: dt.date
+    target_minutes: int
+
+
+class TimeGoalArchive(BaseModel):
+    today: dt.date
+    timezone: str
+    captured_at: dt.datetime
+    goals: list[ArchivedTimeGoal]
+
+
+class TimeGoalHistory(BaseModel):
+    goal: ArchivedTimeGoal
+    timezone: str
+    captured_at: dt.datetime
+    periods: list[GoalPeriod]
+    next_before: dt.date | None

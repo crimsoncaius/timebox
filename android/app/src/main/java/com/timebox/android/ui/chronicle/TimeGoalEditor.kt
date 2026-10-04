@@ -178,7 +178,7 @@ internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: Str
                     when {
                         replacing -> {
                             Text("Replace from ${today.format(goalDateFormat)}", style = type.label, color = colors.on)
-                            Text("The existing goal ends today; its unfinished period is excused. A replacement starts today with its full target for ${end?.let { goalRange(start, it) }}. Earlier history stays.",
+                            Text("The existing goal is archived today; its final period is excused if its target is unmet. A replacement starts today with its full target for ${end?.let { goalRange(start, it) }}. Its targets and results stay in the archive.",
                                 style = type.bodySmall, color = colors.onVariant)
                         }
                         else -> {
@@ -202,7 +202,7 @@ internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: Str
                 }
             }, enabled = valid && !state.goalSaving && !state.offline && (original == null || touched),
                 modifier = Modifier.fillMaxWidth().padding(20.dp).navigationBarsPadding()) {
-                Text(if (state.goalSaving) "Saving…" else if (original == null) "Create Time Goal" else if (replacing) "End & replace goal" else "Save target")
+                Text(if (state.goalSaving) "Saving…" else if (original == null) "Create Time Goal" else if (replacing) "Archive & replace goal" else "Save target")
             }
         }
     }

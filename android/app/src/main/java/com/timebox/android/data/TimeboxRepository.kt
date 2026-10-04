@@ -404,6 +404,11 @@ class TimeboxRepository private constructor(
     suspend fun timeGoals(week: LocalDate?): Result<TimeGoalsWeek> =
         call { api().timeGoals(week?.toString()).toModel() }
 
+    suspend fun timeGoalArchive(): Result<TimeGoalArchive> = call { api().timeGoalArchive().toModel() }
+
+    suspend fun timeGoalHistory(id: Int, before: LocalDate?): Result<TimeGoalHistory> =
+        call { api().timeGoalHistory(id, before?.toString()).toModel() }
+
     suspend fun timeGoalPeriod(id: Int, anchor: LocalDate, week: LocalDate): Result<TimeGoal> =
         call { api().timeGoalPeriod(id, anchor.toString(), week.toString()).toModel() }
 

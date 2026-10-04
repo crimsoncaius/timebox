@@ -13,6 +13,12 @@ interface TimeboxApi {
     @GET("time-goals")
     suspend fun timeGoals(@Query("week") week: String?): TimeGoalsWeekDto
 
+    @GET("time-goals/archive")
+    suspend fun timeGoalArchive(): TimeGoalArchiveDto
+
+    @GET("time-goals/{id}/history")
+    suspend fun timeGoalHistory(@Path("id") id: Int, @Query("before") before: String?): TimeGoalHistoryDto
+
     @GET("time-goals/{id}/period")
     suspend fun timeGoalPeriod(@Path("id") id: Int, @Query("anchor") anchor: String, @Query("week") week: String): TimeGoalDto
 

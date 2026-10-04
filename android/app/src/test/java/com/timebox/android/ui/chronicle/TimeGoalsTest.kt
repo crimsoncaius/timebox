@@ -5,6 +5,7 @@ import com.timebox.android.data.remote.*
 import java.io.IOException
 import java.lang.reflect.Proxy
 import java.time.LocalDate
+import kotlin.coroutines.startCoroutine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -129,5 +130,109 @@ class TimeGoalsTest {
         assertEquals(selected, vm.state.value.goals)
         assertTrue(vm.state.value.offline)
         assertFalse(vm.state.value.loading)
+    }
+
+    private val archived = ArchivedTimeGoalDto(1, 2, "exercise/cardio", "week", 1, "2026-09-01", "2026-09-27", 240)
+    private fun archive() = TimeGoalArchiveDto("2026-09-27", "Asia/Singapore", "2026-09-27T12:00:00Z", listOf(archived))
+    private fun history(before: String?) = TimeGoalHistoryDto(archived, "Asia/Singapore", "2026-09-27T12:00:00Z",
+        listOf(GoalPeriodDto(if (before == null) "2026-09-21" else "2026-09-14", if (before == null) "2026-09-27" else "2026-09-20",
+            if (before == null) 240 else 120, 7200.0, if (before == null) "excused" else "met", emptyList())),
+        if (before == null) "2026-09-21" else null)
+
+    @Test fun `archive keeps browsed week and history refresh retains pages after network failure`() = runTest(dispatcher) {
+        var failEarlier = false
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            when (method.name) {
+                "timeGoals" -> week(args?.get(0) as String? ?: "2026-09-21")
+                "timeGoalArchive" -> archive()
+                "timeGoalHistory" -> if (failEarlier && args?.get(1) != null) offline(args) else history(args?.get(1) as String?)
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
+        vm.refresh(); advanceUntilIdle()
+        vm.shiftWeek(-1); advanceUntilIdle()
+        vm.openArchive(); advanceUntilIdle()
+        vm.openGoalHistory(1); advanceUntilIdle()
+        vm.loadHistory(more = true); advanceUntilIdle()
+        assertEquals(listOf(240, 120), vm.state.value.history!!.periods.map { it.targetMinutes })
+        val confirmed = vm.state.value.history
+        failEarlier = true
+        vm.refresh(); advanceUntilIdle()
+        assertEquals(confirmed, vm.state.value.history)
+        assertTrue(vm.state.value.offline)
+        assertNotNull(vm.state.value.historyError)
+        assertFalse(vm.state.value.historyLoading)
+        failEarlier = false
+        vm.refresh(); advanceUntilIdle()
+        assertFalse(vm.state.value.offline)
+        assertEquals(2, vm.state.value.history!!.periods.size)
+        vm.archiveBack(); advanceUntilIdle()
+        assertTrue(vm.state.value.archiveOpen)
+        vm.archiveBack(); advanceUntilIdle()
+        assertFalse(vm.state.value.archiveOpen)
+        assertEquals(LocalDate.parse("2026-09-14"), vm.state.value.goals!!.weekStart)
+    }
+
+    @Test fun `successful archive removes current row even when refresh fails`() = runTest(dispatcher) {
+        var saved = false
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            when (method.name) {
+                "timeGoals" -> if (saved) offline(args) else week("2026-09-21")
+                "endTimeGoal" -> { saved = true; Unit }
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
+        vm.refresh(); advanceUntilIdle()
+        var closed = false
+        vm.archiveGoal(1) { closed = true }; advanceUntilIdle()
+        assertTrue(closed)
+        assertTrue(vm.state.value.goals!!.goals.isEmpty())
+        assertTrue(vm.state.value.offline)
+    }
+
+    @Test fun `deletion clears archived history and cache before failed reload`() = runTest(dispatcher) {
+        var deleted = false
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            when (method.name) {
+                "timeGoalArchive" -> if (deleted) offline(args) else archive()
+                "timeGoalHistory" -> history(null)
+                "deleteTimeGoal" -> { deleted = true; Unit }
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
+        vm.openArchive(); advanceUntilIdle()
+        vm.openGoalHistory(1); advanceUntilIdle()
+        vm.deleteGoal(1) {}; advanceUntilIdle()
+        assertNull(vm.state.value.historyGoalId)
+        assertNull(vm.state.value.history)
+        assertTrue(vm.state.value.archive!!.goals.isEmpty())
+        assertNotNull(vm.state.value.archiveError)
+    }
+
+    @Test fun `leaving history cancels its pending request and returns to archive`() = runTest(dispatcher) {
+        val api = Proxy.newProxyInstance(TimeboxApi::class.java.classLoader, arrayOf(TimeboxApi::class.java)) { _, method, args ->
+            when (method.name) {
+                "timeGoalArchive" -> archive()
+                "timeGoalHistory" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val continuation = args!!.last() as kotlin.coroutines.Continuation<TimeGoalHistoryDto>
+                    val work: suspend () -> TimeGoalHistoryDto = { kotlinx.coroutines.delay(1000); history(null) }
+                    work.startCoroutine(continuation)
+                    kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+                }
+                else -> error(method.name)
+            }
+        } as TimeboxApi
+        val vm = TimeGoalsViewModel(TimeboxRepository(api, dispatcher))
+        vm.openArchive(); advanceUntilIdle()
+        vm.openGoalHistory(1); runCurrent()
+        assertTrue(vm.state.value.historyLoading)
+        vm.archiveBack(); advanceUntilIdle()
+        assertNull(vm.state.value.historyGoalId)
+        assertFalse(vm.state.value.historyLoading)
+        assertNull(vm.state.value.history)
     }
 }

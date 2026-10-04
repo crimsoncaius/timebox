@@ -60,3 +60,32 @@ data class TimeGoalsWeekDto(
     @SerialName("captured_at") val capturedAt: String,
     val goals: List<TimeGoalDto>,
 )
+
+@Serializable
+data class ArchivedTimeGoalDto(
+    val id: Int,
+    @SerialName("task_type_id") val taskTypeId: Int,
+    @SerialName("task_type") val taskType: String,
+    val unit: String,
+    val interval: Int,
+    @SerialName("start_date") val startDate: String,
+    @SerialName("end_date") val endDate: String,
+    @SerialName("target_minutes") val targetMinutes: Int,
+)
+
+@Serializable
+data class TimeGoalArchiveDto(
+    val today: String,
+    val timezone: String,
+    @SerialName("captured_at") val capturedAt: String,
+    val goals: List<ArchivedTimeGoalDto>,
+)
+
+@Serializable
+data class TimeGoalHistoryDto(
+    val goal: ArchivedTimeGoalDto,
+    val timezone: String,
+    @SerialName("captured_at") val capturedAt: String,
+    val periods: List<GoalPeriodDto>,
+    @SerialName("next_before") val nextBefore: String? = null,
+)
