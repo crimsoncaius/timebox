@@ -1,6 +1,8 @@
 # Assistant Cards (#296)
 
-Status: design settled 27 Sep 2026; sample routes removed after approval on 28 Sep 2026. Historical prototype on `claude/prototype-assistant-cards` (debug-only deep link, sample data, nothing reaches the API). Parent: #292.
+Status: implemented and merged into `master`. Design settled 27 Sep 2026; sample routes removed after approval on 28 Sep 2026. Parent #292 and children #293–#296 were reconciled and closed as completed on 4 Oct 2026. This document was reconciled on the same date; validation limits are recorded below.
+
+Historical prototype on `claude/prototype-assistant-cards` (debug-only deep link, sample data, nothing reaches the API). Rounds 1–4 below preserve the design exploration; their deep links no longer resolve in the application. The settled direction and Production implementation sections describe the current behavior.
 
 ## Settled (#292, revised 27 Sep 2026)
 
@@ -10,10 +12,12 @@ Status: design settled 27 Sep 2026; sample routes removed after approval on 28 S
 - Up to 3 cards per response.
 - Neither shows Supporting Notes or Task Descriptions. Cards are fixed as of their read time and show it. Historical plan cards keep rendering.
 
-## Open questions
+## Historical design questions
 
-Could change what #293/#294 return: (1) how the Day Card mixes lanes, (3) midnight crossings, (6) where plan-vs-actual numbers go, (10) whether the Range Card uses `day`/`week` detail.
-Presentation only: (2) lane marker, (4) running block, (5) future Days, (7) collapse count, (8) planned vs actual on Range rows, (9) child expansion, (11) filter/future-range labels, (12) header, (13) deep-link placement, (14) empty states.
+The prototype explored these questions, resolved by the rounds below and the production implementation:
+
+- Read-contract questions: (1) how the Day Card mixes lanes, (3) midnight crossings, (6) where plan-vs-actual numbers go, (10) whether the Range Card uses `day`/`week` detail.
+- Presentation questions: (2) lane marker, (4) running block, (5) future Days, (7) collapse count, (8) planned vs actual on Range rows, (9) child expansion, (11) filter/future-range labels, (12) header, (13) deep-link placement, (14) empty states.
 
 ## Round 1 — how does a Day Card mix both lanes?
 
@@ -40,9 +44,9 @@ The first bar row picks what the read selected. Planned-only and Actual-only use
 - **Two lanes**: a mini Day with Plan and Actual columns on one time scale, clipped to the date (0.42 dp/min collapsed; "Show larger" goes to 1.1 dp/min). Blocks shorter than ~40 minutes lose their labels when collapsed.
 - **Paired**: Planned Blocks with their linked Actual Blocks nested, then "Not planned".
 
-On a future date, Actual and Both fall back to the plan with an explanation.
+In this prototype, Actual and Both fell back to the plan on a future date. Production follows the read contract: Planned and Both show stored Planned Blocks with the recurring-work caveat; Actual-only returns no Blocks and explains that actual time is unavailable for a future date.
 
-Verdict (27 Sep 2026): **Two lanes** for Both, collapsed by default. Open: whether to trim the collapsed scale to the waking/planned part of the day (the pre-midnight Sleep stretches it back to 00:00).
+Verdict (27 Sep 2026): **Two lanes** for Both, collapsed by default. Trimming the collapsed scale was still open in this round and was resolved in Round 3: start at the first Planned Block's hour.
 
 ## Round 3 — Task Type Card
 
@@ -66,18 +70,26 @@ Question: for a response with 2–3 cards, **Stacked** (all cards in reading ord
 
 Verdict (27 Sep 2026): **Swipe between.** Responses with 2–3 cards show one card at a time with labelled tabs and page dots; the answer text stays close to the question.
 
-## Direction
+## Settled direction
 
-- **Block Card**: shows exactly the lane read. A single lane is a plain row list (lane-coloured start time, Task Type · duration, "total · this day" for midnight crossings, "running · Xm at read"). Both is **Two lanes**: a mini Day with Plan and Actual columns, collapsed by default and starting at the first Planned Block's hour, with "Show larger" for the full date. Future dates show the plan, with a line saying recurring work isn't included. Open Day.
+- **Block Card**: shows exactly the lane read. A single lane is a plain row list (lane-coloured start time, Task Type · duration, "total · this day" for midnight crossings, "running · Xm at read"). Both is **Two lanes**: a mini Day with Plan and Actual columns, collapsed by default and starting at the first Planned Block's hour, with "Show larger" for the full date. For future dates, Planned and Both show stored Planned Blocks and explain that recurring work isn't included; Actual-only shows an empty result with an explanation. Open Day.
 - **Task Type Card**: one bar per top-level Task Type, expandable into children, with duration and share of the lane. Both is **Paired bars** (plan outline over actual fill) with "actual / plan · difference", or "not planned". Totals only. Notes for a Task Type filter, a partial current range, and future ranges. Open Trends.
 - **Several cards**: swipeable, with a tab per card labelled by its date or range.
 
-## Limitations and coverage gaps
+## Regression coverage and validation limits
 
-Not yet exercised: large font scale and TalkBack order across swiped cards, dark theme, empty Task Type ranges, historical cards from stored conversations, and a running block in Two lanes beyond the "· now" label. Carry these into #296's implementation checks.
+The prototype originally left large fonts, TalkBack, dark theme, empty Task Type ranges, stored historical cards and running Blocks in Two lanes unverified. Production now includes these regression cases:
 
+- [`AssistantCardsTest`](../../android/app/src/androidTest/java/com/timebox/android/ui/assistant/AssistantCardsTest.kt): dark theme at 1.6× font scale, carousel tab selection and hiding inactive pages, exact Day/Trends navigation callbacks, child Task Type expansion, unplanned time and empty ranges. A separate single-lane case checks midnight-crossing details, running time and the captured read time.
+- [`AssistantCardTest`](../../android/app/src/test/java/com/timebox/android/ui/assistant/AssistantCardTest.kt): period-bucket aggregation without double-counting children, frozen running/midnight snapshots and exclusion of Supporting Notes and Task Descriptions from the display model.
+
+These test definitions were inspected during the 4 Oct 2026 reconciliation; they were not rerun, and their presence does not establish a fresh passing run. The existing review approval remains recorded above.
+
+Manual TalkBack order across swiped cards and end-to-end rendering of historical cards from stored conversations were not confirmed by this reconciliation. The carousel fixture includes a running Block in Two lanes, but the explicit running-detail assertions exercise the single-lane list; full visual and accessibility verification of the two-lane running state remains unconfirmed. Offscreen-page semantics and retained historical rendering are implementation evidence, not substitutes for those checks.
 
 ## Production implementation
+
+Merged implementation: #293 Block reads (`f648a6ce`), #294 Task Type range reads (`4b7c5a9b`), #295 bounded read loop (`3dd659f9`), and #296 Android cards (`c0237538`). Approved sample cleanup followed in `47138b67`.
 
 Android negotiates `activity_cards_v1` for schema 1–3 and up to three ordered cards. Historical schema-1 plan cards retain their renderer. Cards keep their captured read time; neither descriptions nor Supporting Notes enter the Android display model. Task Type cards sum period buckets by path and use the returned hierarchy totals without adding descendants twice.
 
