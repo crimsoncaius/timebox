@@ -47,9 +47,10 @@ def unverified(snapshots, now, reason):
     return result
 
 
-def refresh(snapshots, *, now=None, priority_ids=()):
+def refresh(snapshots, *, now=None, priority_ids=(), priority_children=None):
     now = now or utc_now()
     known, children = known_tasks(snapshots)
+    children.update(priority_children or {})
     order = list(dict.fromkeys([*priority_ids, *known]))
     result = {"read_at": now.isoformat(), "requested_ids": order, "refreshed_ids": [], "projections": [],
               "changed_fields": {}, "unavailable_ids": [], "unverified_ids": [], "children": {},

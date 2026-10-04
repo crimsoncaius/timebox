@@ -33,10 +33,14 @@ class Conversations:
     def __init__(self):
         self.items: dict[str, Conversation] = {}
 
-    def create(self, capabilities=None) -> str:
+    def create(self, capabilities=None, previous_conversation_id=None) -> str:
         self.prune()
         key = str(uuid4())
-        assistant_storage.create(key, capabilities or [])
+        assistant_storage.create(key, capabilities or [], previous_conversation_id)
+        if previous_conversation_id:
+            old = self.items.pop(previous_conversation_id, None)
+            if old and old.task:
+                old.task.cancel()
         self.items[key] = Conversation(capabilities=capabilities or [])
         return key
 

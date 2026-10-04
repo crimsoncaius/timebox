@@ -96,6 +96,9 @@ class TaskRead(BaseModel):
     blocking_reason: str | None
     status: TaskStatus
     completed_at: datetime | None
+    completion_precision: Literal["date", "instant"] | None = None
+    completion_local_date: date | None = None
+    completion_timezone: str | None = None
     version: int
     urgency: PriorityLevel | None
     importance: PriorityLevel | None

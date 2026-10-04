@@ -53,3 +53,34 @@ class AssistantQueryCursor(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     query_id: Mapped[str] = mapped_column(ForeignKey("assistant_queries.id"), nullable=False)
     offset: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AssistantTaskProposal(Base):
+    __tablename__ = "assistant_task_proposals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("assistant_conversations.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("assistant_attempts.run_id"), index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft")
+    review: Mapped[dict] = mapped_column(JSON, nullable=False)
+    guards: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    receipt: Mapped[dict | None] = mapped_column(JSON)
+    undo_operation_id: Mapped[str | None] = mapped_column(String(36), unique=True)
+    undo_token: Mapped[str | None] = mapped_column(Text)
+    undo_receipt: Mapped[dict | None] = mapped_column(JSON)
+    events: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
+
+class AssistantTaskSubmission(Base):
+    __tablename__ = "assistant_task_submissions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(ForeignKey("assistant_task_proposals.id"), index=True)
+    operation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -181,6 +181,7 @@ class PresentationParser:
         self.buffer = ""
         self.selected = False
         self.text_only = False
+        self.allow_empty = False
 
     def expect_text_only(self):
         """After a Tracking Proposal the answer is plain text; a leading none-selector is tolerated and removed."""
@@ -252,6 +253,6 @@ class PresentationParser:
         # EOF, cancellation, truncation, or a closing brace during streaming cannot.
         if successful_terminal:
             value = json.loads(self.buffer, object_pairs_hook=unique_object)
-            if isinstance(value, dict) and value.get("presentation") in ("snapshot", "snapshots"):
+            if (self.allow_empty and value == {"presentation": "none"}) or (isinstance(value, dict) and value.get("presentation") in ("snapshot", "snapshots")):
                 return self.feed("\n")
         raise ValueError("Incomplete presentation header")

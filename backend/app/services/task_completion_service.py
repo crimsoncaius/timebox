@@ -164,7 +164,7 @@ def _subtask_read(task: Task) -> SubtaskRead:
 
 
 def set_subtask_checked(
-    db: Session, subtask_id: int, *, checked: bool
+    db: Session, subtask_id: int, *, checked: bool, commit: bool = True
 ) -> SubtaskRead:
     snapshot = db.execute(
         select(Task).where(Task.id == subtask_id)
@@ -200,7 +200,7 @@ def set_subtask_checked(
 
     row.checked = checked
     protect_task_occurrence(db, row)
-    db.commit()
+    db.commit() if commit else db.flush()
     return _subtask_read(row)
 
 
@@ -338,6 +338,9 @@ def _mark_completed(db: Session, row: Task, completed_at: dt.datetime) -> None:
     protect_task_occurrence(db, row)
     row.status = TaskStatus.completed
     row.completed_at = completed_at
+    row.completion_precision = None
+    row.completion_local_date = None
+    row.completion_timezone = None
     row.ready_to_plan = False
     row.is_blocked = False
     row.blocking_reason = None
@@ -348,7 +351,7 @@ def _mark_completed(db: Session, row: Task, completed_at: dt.datetime) -> None:
     row.reminder_claim_until = None
 
 
-def record_dated_completion(db: Session, task_id: int, completed_at: dt.datetime) -> Task:
+def record_dated_completion(db: Session, task_id: int, completed_at: dt.datetime, *, commit: bool = True) -> Task:
     """Record a Task Completion for work done earlier (ADR 0015).
 
     Unlike :func:`complete_task`, it leaves running tracking and Planned Blocks
@@ -359,9 +362,9 @@ def record_dated_completion(db: Session, task_id: int, completed_at: dt.datetime
     try:
         _mark_completed(db, row, as_utc(completed_at))
         _derive_quota(db, row)
-        db.commit()
+        db.commit() if commit else db.flush()
     except Exception:
-        db.rollback()
+        db.rollback() if commit else None
         raise
     return _load_task(db, task_id)
 
@@ -371,6 +374,7 @@ def complete_task(
     task_id: int,
     captured_at: dt.datetime,
     settings: Settings,
+    *, commit: bool = True,
 ) -> tuple[Task, str, list[int]]:
     """Apply the one global Task Completion transition atomically.
 
@@ -429,15 +433,15 @@ def complete_task(
         _derive_quota(db, row)
         db.flush()
         operation.completed_task_version = row.version
-        db.commit()
+        db.commit() if commit else db.flush()
     except Exception:
-        db.rollback()
+        db.rollback() if commit else None
         raise
 
     return _load_task(db, task_id), token, [block.id for block in removable]
 
 
-def reopen_task(db: Session, task_id: int) -> Task:
+def reopen_task(db: Session, task_id: int, *, commit: bool = True) -> Task:
     row = db.execute(task_select(task_id, for_update=True)).scalar_one_or_none()
     if row is None:
         raise ValueError("Task not found")
@@ -448,8 +452,11 @@ def reopen_task(db: Session, task_id: int) -> Task:
     row.status = TaskStatus.open
     protect_task_occurrence(db, row)
     row.completed_at = None
+    row.completion_precision = None
+    row.completion_local_date = None
+    row.completion_timezone = None
     _derive_quota(db, row)
-    db.commit()
+    db.commit() if commit else db.flush()
     return _load_task(db, task_id)
 
 
@@ -642,7 +649,7 @@ def _restore_task_state(db: Session, row: Task, task_state: dict) -> None:
     row.reminder_claim_until = None
 
 
-def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
+def undo_task_completion(db: Session, task_id: int, token: str, *, commit: bool = True) -> Task:
     """Reverse one Task Completion atomically, or refuse if anything it touched moved.
 
     Lock order is Activity State -> Task -> Day -> Planned -> Actual -> operation.
@@ -687,12 +694,12 @@ def undo_task_completion(db: Session, task_id: int, token: str) -> Task:
         _restore_task_state(db, row, snapshot["task"])
         operation.undone_at = dt.datetime.now(dt.UTC)
         _derive_quota(db, row)
-        db.commit()
+        db.commit() if commit else db.flush()
     except IntegrityError as exc:
-        db.rollback()
+        db.rollback() if commit else None
         raise ValueError(_UNDO_CONFLICT) from exc
     except Exception:
-        db.rollback()
+        db.rollback() if commit else None
         raise
 
     return _load_task(db, task_id)

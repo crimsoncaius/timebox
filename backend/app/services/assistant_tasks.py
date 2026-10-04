@@ -315,7 +315,7 @@ def _base(today, description=False):
     fields = [Task.id, Task.title, Task.parent_id, Task.project_id, Task.task_type_id,
               Task.recurring_template_id, Task.ready_to_plan, Task.is_blocked, Task.blocking_reason,
               Task.urgency, Task.importance, Task.deadline_date, Task.deadline_at, Task.reminder_at,
-              Task.completed_at, Task.position, Task.expected_sessions,
+              Task.completed_at, Task.completion_precision, Task.completion_local_date, Task.completion_timezone, Task.position, Task.expected_sessions,
               Project.name.label("project_name"), TaskType.name.label("type_path"),
               period_start.label("period_start"), period_end.label("period_end"),
               kind.label("kind"), lifecycle.label("lifecycle"), relevance.label("relevance")]
@@ -369,7 +369,9 @@ def _project(db, record, zone, now, manifests, include_description=False):
                       {"kind": "instant", "instant": as_utc(r["deadline_at"]).isoformat()} if r["deadline_at"] else None,
                       reminder_at=as_utc(r["reminder_at"]).isoformat() if r["reminder_at"] else None,
                       completed_at=as_utc(r["completed_at"]).isoformat() if r["completed_at"] else None,
-                      completion_precision="unknown" if r["completed_at"] else None)
+                      completion_precision=(r["completion_precision"] or "unknown") if r["completed_at"] else None,
+                      completion_local_date=r["completion_local_date"].isoformat() if r["completion_local_date"] else None,
+                      completion_timezone=r["completion_timezone"])
         dates = list(db.scalars(select(Day.date).join(TimeBlock).where(TimeBlock.task_id == r["id"],
                      TimeBlock.lane == BlockLane.planned).distinct().order_by(Day.date).limit(MAX_TASK_MANIFEST + 1)))
         result.update(planned_dates=[d.isoformat() for d in dates[:MAX_TASK_MANIFEST]],
@@ -530,7 +532,8 @@ def read_tasks(args, conversation_id, *, choices=False, now=None):
         result["source"] = {"tool": "read_tasks", "mode": "get", "normalized_arguments": args.model_dump(mode="json", exclude_defaults=True, exclude_none=True)}
         return _bound(result)
     if not choices and args.mode == "outcomes":
-        return {"error": "Task operation outcomes are not available until task confirmation is enabled."}
+        from app.services.assistant_task_operations import outcome_context
+        return outcome_context(conversation_id, args.operation_ids, explicit_only=True)
     with read_session() as db:
         zone = reporting_settings(db, get_settings()).app_timezone
         normalized = args.model_dump(mode="json", exclude_defaults=True, exclude_none=True)

@@ -15,6 +15,7 @@ from openinference.instrumentation.langchain import get_current_span as get_lang
 from opentelemetry import trace
 
 from app.core.config import get_settings
+from app.services import assistant_task_operations
 from app.services.assistant_limits import (
     MAX_CARDS,
     MAX_PROPOSALS,
@@ -24,6 +25,7 @@ from app.services.assistant_limits import (
 )
 from app.services.assistant_plan import ReadActivityArgs, read_activity, read_today_plan
 from app.services.assistant_presentation import PresentationParser, snapshot
+from app.services.assistant_task_intents import ProposeTaskChangesArgs
 from app.services.assistant_tasks import ReadTaskChoicesArgs, ReadTasksArgs, encoded, read_tasks
 from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, model_result, propose
 
@@ -56,7 +58,17 @@ Description search and include_description require the current explicit request 
 descriptions/what the user wrote. An earlier request grants no standing access. Excerpts are at most 2000 characters;
 truncation never means the whole text was reviewed. Automatic refresh never verifies historical descriptions.
 Choices cannot be shown as Task Cards. A bounded tool error requires truthful text, never an invented card.
-Task changes are not available in this read slice. Never invite task confirmation or claim a Task was changed.
+Use propose_task_changes for explicitly requested ordinary Task/first-level Subtask changes. Never write recurring work.
+Only a saved completed proposal can invite confirmation. Proposal/submission is not success: task_outcomes_v1
+and authoritative receipts alone establish applied/undone results. Pending, cancelled, stale, rolled-back and
+unverified are distinct; not_seen does not prove a delayed confirmation cannot execute. Never invent success.
+Propose only requested fields, except organization/classification the user explicitly asked you to suggest.
+Use IDs from reads. Resolve ambiguity before proposing. Relative dates use DateIntent, never model UTC arithmetic.
+Earlier-today completion needs an explicit time; past date-only completion is allowed, future completion is not.
+Completed Tasks need explicit reopen before edits; checking children never completes the parent.
+At most five parents/twenty operations per set. Never silently split a requested atomic set.
+Description edits use a separate full review. Tool summaries exclude private text; do not claim full text was read.
+A response may propose task changes OR tracking, never both. Direct tracking remains its existing client path.
 Use read_activity to read stored Planned Blocks, Actual Blocks or both (default Today).
 Use group_by blocks for a single date; task_type for totals over a date or inclusive range.
 when accepts YYYY-MM-DD, today, yesterday, this_week, last_week, this_month, last_month,
@@ -221,9 +233,30 @@ def propose_tracking_tool(sent_at, context):
     return propose_tracking
 
 
+@tool("propose_task_changes", args_schema=ProposeTaskChangesArgs, response_format="content_and_artifact")
+async def propose_task_changes_tool(**arguments):
+    """Prepare an immutable ordinary Task/Subtask change set for explicit online user review/confirmation."""
+    context = task_read_context.get()
+    if context is None or not context.get("run_id"):
+        return json.dumps({"error": "A saved running conversation is required."}), None
+    try:
+        args = ProposeTaskChangesArgs.model_validate(arguments)
+        result = await asyncio.to_thread(assistant_task_operations.propose, args, context["conversation_id"],
+            context["run_id"], context["sent_at"], context["zone"])
+        return json.dumps(result), result
+    except ValueError as error:
+        return json.dumps({"error": str(error)}), None
+    except Exception:
+        return json.dumps({"error": "The proposal could not be saved or verified. No confirmable proposal is available."}), None
+
+
+propose_task_changes_tool.handle_validation_error = lambda error: json.dumps(
+    {"error": "Invalid task change arguments: " + "; ".join(e["msg"] for e in error.errors())})
+
+
 def build_agent(model=None, tracking=None):
     model = model or create_model()
-    tools = {t.name: t for t in (read_activity_tool, read_tasks_tool, read_task_choices_tool)}
+    tools = {t.name: t for t in (read_activity_tool, read_tasks_tool, read_task_choices_tool, propose_task_changes_tool)}
     prompt = PROMPT
     if tracking:
         proposal_tool = propose_tracking_tool(tracking["sent_at"], tracking["context"])
@@ -242,7 +275,7 @@ def build_agent(model=None, tracking=None):
         if state.get("proposals", 0) >= MAX_PROPOSALS:
             return {}
         return {name: value for name, value in tools.items()
-                if name == "propose_tracking" or state.get("reads", 0) < MAX_READ_CALLS}
+                if name in {"propose_tracking", "propose_task_changes"} or state.get("reads", 0) < MAX_READ_CALLS}
 
     async def respond(state):
         allowed = available(state)
@@ -258,7 +291,7 @@ def build_agent(model=None, tracking=None):
         if chosen is None:
             raise RuntimeError("The model requested an unsupported tool operation.")
         result = await chosen.ainvoke(calls[0])
-        counter = "proposals" if chosen.name == "propose_tracking" else "reads"
+        counter = "proposals" if chosen.name in {"propose_tracking", "propose_task_changes"} else "reads"
         return {"messages": [result], counter: state.get(counter, 0) + 1}
 
     async def finish(state):
@@ -311,7 +344,12 @@ async def translate_events(events, snapshots=None):
         elif kind == "on_tool_end":
             result = event["data"]["output"]
             value = json.loads(result.content) if hasattr(result, "content") else result
-            if event.get("name") == "propose_tracking":
+            if event.get("name") == "propose_task_changes":
+                value = getattr(result, "artifact", None)
+                if isinstance(value, dict) and "proposal_id" in value:
+                    yield "task_proposal", value
+                    parser.allow_empty = True
+            elif event.get("name") == "propose_tracking":
                 value = getattr(result, "artifact", None)
                 # An invalid request reaches only the model, which explains it; no card.
                 if isinstance(value, dict) and "proposal" in value:
