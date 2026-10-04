@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name=".ui.assistant.AssistantTaskReviewActivity" android:exported="true" android:label="Assistant native review" android:theme="@style/Theme.Timebox" />
         <activity
             android:name=".ui.day.prototype.DayHeaderPrototypeActivity"
             android:exported="true"

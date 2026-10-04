@@ -1,7 +1,15 @@
 package com.timebox.android.ui.assistant
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.Modifier
+import android.view.WindowManager
+import org.junit.Before
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -16,7 +24,12 @@ import org.junit.Rule
 import org.junit.Test
 
 class AssistantScreenTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Before fun useProductionKeyboardMode() {
+        // The generic test host defaults to pan, unlike MainActivity's manifest.
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge(); it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) }
+    }
 
     @Test fun sentQuestionStaysAtSameHorizontalPositionBeforeReply() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -29,7 +42,7 @@ class AssistantScreenTest {
         }
         try {
             val controller = AssistantController(scope) { transport }
-            compose.setContent { TimeboxTheme(darkTheme = true) { AssistantScreen(controller) } }
+            compose.setContent { TimeboxTheme(darkTheme = true) { Box(Modifier.fillMaxSize().imePadding()) { AssistantScreen(controller) } } }
             compose.onNode(hasSetTextAction()).performTextInput("Hi")
             compose.onNodeWithContentDescription("Send").performClick()
             compose.onNodeWithText("Thinking…").assertIsDisplayed()
@@ -70,7 +83,7 @@ class AssistantScreenTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         try {
             val controller = AssistantController(scope) { Fake() }
-            compose.setContent { TimeboxTheme(darkTheme = isSystemInDarkTheme()) { AssistantScreen(controller) } }
+            compose.setContent { TimeboxTheme(darkTheme = isSystemInDarkTheme()) { Box(Modifier.fillMaxSize().imePadding()) { AssistantScreen(controller) } } }
             compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
             compose.onNodeWithText("Make room\nfor your day.").assertDoesNotExist()
             compose.onNodeWithText("Show today’s plan").assertDoesNotExist()
@@ -97,7 +110,7 @@ class AssistantScreenTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         try {
             val controller = AssistantController(scope) { Fake(pauseAfterCard = true) }
-            compose.setContent { TimeboxTheme(darkTheme = true) { AssistantScreen(controller) } }
+            compose.setContent { TimeboxTheme(darkTheme = true) { Box(Modifier.fillMaxSize().imePadding()) { AssistantScreen(controller) } } }
             compose.onNodeWithContentDescription("Send").assertIsNotEnabled()
             compose.onNode(hasSetTextAction()).performTextInput("Show my plan\nand find a gap")
             compose.onNodeWithContentDescription("Send").performClick()

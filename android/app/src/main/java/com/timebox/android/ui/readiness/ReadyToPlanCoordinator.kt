@@ -290,6 +290,7 @@ class ReadyToPlanCoordinator internal constructor(
                     readyToPlan = saved.readyToPlan,
                     status = saved.status,
                     completedAt = saved.completedAt,
+                    completionPrecision = saved.completionPrecision, completionLocalDate = saved.completionLocalDate, completionTimezone = saved.completionTimezone,
                     version = saved.version,
                     archivedAt = saved.archivedAt,
                     deletedAt = saved.deletedAt,

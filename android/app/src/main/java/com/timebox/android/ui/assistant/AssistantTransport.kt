@@ -24,6 +24,10 @@ interface AssistantTransport {
     val supportsPlanCards: Boolean get() = false
     val supportsActivityCards: Boolean get() = false
     val supportsTrackingProposals: Boolean get() = false
+    suspend fun taskReview(id: String): TaskChangeProposal = error("Task review unavailable")
+    suspend fun taskStatus(operation: String): TaskOperationResult? = error("Task status unavailable")
+    suspend fun dismissTask(id: String): TaskOperationResult? = error("Task dismissal unavailable")
+    suspend fun refreshTask(id: String): TaskChangeProposal = error("Task refresh unavailable")
     suspend fun create(): String
     suspend fun delete(conversation: String)
     suspend fun stop(conversation: String, run: String)
@@ -46,7 +50,7 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
         Request.Builder().url(ApiFactory.normalizeBaseUrl(settings.baseUrl) + "assistant/" + path)
             .header("X-API-Key", settings.apiKey)
             .header("X-Timebox-Protocol", "activity-online-v1")
-            .method(method, if (method == "DELETE") null else body.toString().toRequestBody("application/json".toMediaType()))
+            .method(method, if (method in setOf("DELETE", "GET")) null else body.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -96,6 +100,32 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     override suspend fun acknowledge(conversation: String, run: String) {
         execute(request("conversations/$conversation/runs/$run/ack")).use(::check)
     }
+
+    // Task reads use the bounded request deadline, independently of the SSE lifetime.
+    private suspend fun taskRequest(path: String, method: String = "POST", body: JsonObject = JsonObject(emptyMap())): JsonObject =
+        kotlinx.coroutines.withTimeout(30_000) {
+            execute(request(path, method, body)).use { response ->
+                check(response)
+                val source = response.body?.source() ?: throw IOException("Empty task response")
+                if (source.request(65_537)) throw IOException("Task response exceeds its bound")
+                ApiFactory.json.parseToJsonElement(source.readUtf8()).jsonObject
+            }
+        }
+
+    override suspend fun taskReview(id: String) = TaskChangeProposal.parse(taskRequest("task-proposals/$id", "GET"), fullDescription = true)
+    override suspend fun taskStatus(operation: String): TaskOperationResult? {
+        val data = taskRequest("task-operations/status", body = buildJsonObject {
+            putJsonArray("operations") { add(buildJsonObject { put("operation_id", operation) }) }
+        })
+        if (data["status"]?.jsonPrimitive?.content == "checking") return null
+        return TaskOperationResult.parse(data.getValue("operations").jsonArray.single().jsonObject).also { check(it.operationId == operation) }
+    }
+    override suspend fun dismissTask(id: String): TaskOperationResult? {
+        val data = taskRequest("task-proposals/$id/dismiss")
+        if (data["status"]?.jsonPrimitive?.content == "checking") return null
+        return TaskOperationResult.parse(data).also { check(it.proposalId == id) }
+    }
+    override suspend fun refreshTask(id: String) = TaskChangeProposal.parse(taskRequest("task-proposals/$id/refresh"))
 
     override fun stream(conversation: String, run: String, message: String): Flow<AssistantEvent> = callbackFlow {
         val call = client.newCall(request("conversations/$conversation/messages", body = buildJsonObject {

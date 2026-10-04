@@ -49,6 +49,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun AssistantScreen(
     controller: AssistantController = (LocalContext.current.applicationContext as TimeboxApplication).assistant,
+    onOpenTask: (Int) -> Unit = {},
     onOpenDay: (LocalDate) -> Unit = {},
     onOpenTrends: (LocalDate, LocalDate) -> Unit = { _, _ -> },
 ) {
@@ -72,7 +73,9 @@ fun AssistantScreen(
     // Keep the latest message pinned above the composer when the keyboard resizes the viewport.
     LaunchedEffect(list) {
         snapshotFlow { list.layoutInfo.viewportSize.height }.collect {
-            if (follow && state.exchanges.isNotEmpty() && list.layoutInfo.totalItemsCount > 0) list.scrollToItem(list.layoutInfo.totalItemsCount - 1)
+            // Viewport changes are published during layout. Schedule the scroll
+            // for the next measure instead of forcing reentrant measurement.
+            if (follow && state.exchanges.isNotEmpty() && list.layoutInfo.totalItemsCount > 0) list.requestScrollToItem(list.layoutInfo.totalItemsCount - 1)
         }
     }
     val canJump = state.exchanges.isNotEmpty() && list.canScrollForward
@@ -104,10 +107,14 @@ fun AssistantScreen(
                         Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                     }
                     exchange.proposal?.let { proposal -> tracking?.Card(proposal) }
-                    AssistantCards(exchange.cards, onOpenDay, onOpenTrends)
+                    (listOfNotNull(exchange.taskProposal) + state.refreshedTaskProposals.filter { it.runId == exchange.taskProposal?.runId }).forEach { proposal ->
+                        TaskChangeCard(proposal, state.taskChanges[proposal.operationId] ?: TaskChangeState(), onOpenTask,
+                            { controller.descriptionReview(proposal) }, { controller.checkTask(proposal) }, { controller.dismissTask(proposal) }, { controller.refreshTask(proposal) })
+                    }
+                    AssistantReadCards(exchange, onOpenTask, onOpenDay, onOpenTrends)
                     if (exchange.answer.isNotEmpty()) SelectionContainer { AnswerText(exchange.answer) }
                     if (index == state.exchanges.lastIndex && state.busy) Text(
-                        if (state.readingPlan) "Reading activity…" else if (exchange.answer.isEmpty() && exchange.cards.isEmpty()) "Thinking…" else "Writing response…",
+                        if (state.readingPlan) "Reading saved data…" else if (exchange.answer.isEmpty() && exchange.cards.isEmpty() && exchange.taskCards.isEmpty()) "Thinking…" else "Writing response…",
                         Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (exchange.status in listOf("Stopped", "Interrupted")) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(12.dp)) {

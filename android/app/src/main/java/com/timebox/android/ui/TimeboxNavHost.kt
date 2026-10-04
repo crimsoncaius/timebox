@@ -540,7 +540,7 @@ private fun NavGraphBuilder.assistantRoute(dependencies: TimeboxNavigationDepend
     with(dependencies) {
         with(models) {
             composable(AppRoutes.Assistant) {
-                AssistantScreen(onOpenDay = { navController.navigate(AppRoutes.day(it)) },
+                AssistantScreen(onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) }, onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                     onOpenTrends = { start, end ->
                         models.chronicleViewModel.openRange(start, end)
                         navController.navigate(AppRoutes.Chronicle)
