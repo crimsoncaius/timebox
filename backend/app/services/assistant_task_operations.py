@@ -482,7 +482,21 @@ def review(proposal_id, protocol=None):
     with transaction(recovery=True) as db:
         gate(db, protocol, write=False)
         row = _get(db, proposal_id)
-        expire(row, utc_now())
+        now = utc_now()
+        expire(row, now)
+        # Android drains its local writers before fetching the immutable review.
+        # Recheck the reviewed state here as well as at execution admission; never
+        # replace the saved content or silently make a changed preview confirmable.
+        if row.status == "pending":
+            anchor = row.review["request_anchor"]
+            try:
+                _, _, guards, _ = build_review(db, row.review["operations"],
+                    dt.datetime.fromisoformat(anchor["received_at"]), now, anchor["reporting_timezone"])
+                stale = guards != row.guards
+            except ValueError:
+                stale = True
+            if stale:
+                transition(row, "stale", now)
         db.commit()
         return {**row.review, "status": row.status, "source_completed_at": wire(row.source_completed_at)}
 

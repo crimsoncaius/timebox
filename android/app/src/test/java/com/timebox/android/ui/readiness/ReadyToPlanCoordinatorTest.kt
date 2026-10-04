@@ -3,6 +3,8 @@ package com.timebox.android.ui.readiness
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.ui.battleplan.task
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -14,6 +16,34 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReadyToPlanCoordinatorTest {
+    @Test fun `reservation drains deferred readiness and rejects a new intent during drain`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val original = task(10, ready = false).copy(version = 1)
+        coordinator.mergeServerTasks(listOf(original)); coordinator.setReady(original, true); runCurrent()
+        val reservation = async { coordinator.reserveForTask(listOf(10)) }
+        runCurrent(); assertFalse(reservation.isCompleted)
+        coordinator.setReady(original, false)
+        assertEquals(listOf(10 to true), transport.calls)
+        transport.completeNext(original.copy(readyToPlan = true, version = 2))
+        advanceUntilIdle()
+        reservation.await()
+        assertTrue(coordinator.projectedTask(10)!!.readyToPlan)
+        coordinator.releaseForTask(listOf(10))
+    }
+    @Test fun `failed latest readiness is not synchronized just because pending cleared`() = runTest {
+        val transport = DeferredReadyToPlanTransport()
+        val coordinator = ReadyToPlanCoordinator(transport, this)
+        val original = task(10, ready = false).copy(version = 1)
+        coordinator.mergeServerTasks(listOf(original)); coordinator.setReady(original, true); runCurrent()
+        transport.failNext(); runCurrent(); transport.completeReconciliation(original); runCurrent()
+        assertFalse(coordinator.projectedTask(10)!!.readinessPending)
+        assertTrue(runCatching { coordinator.reserveForTask(listOf(10)) }.isFailure)
+        coordinator.retry(10); runCurrent()
+        transport.completeNext(original.copy(readyToPlan = true, version = 2)); runCurrent()
+        coordinator.reserveForTask(listOf(10)); coordinator.releaseForTask(listOf(10))
+    }
+
     @Test
     fun `latest choice projects immediately while writes remain serialized per Task`() = runTest {
         val transport = DeferredReadyToPlanTransport()

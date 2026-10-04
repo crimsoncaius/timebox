@@ -1,6 +1,8 @@
 package com.timebox.android
 
 import android.app.Application
+import com.timebox.android.data.assistantIdentity
+import kotlinx.coroutines.runBlocking
 import com.timebox.android.data.AppPreferences
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.reminders.AndroidReminderNotifier
@@ -30,9 +32,36 @@ class TimeboxApplication : Application() {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var preferences: AppPreferences
+    private val assistantScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private lateinit var taskJournal: com.timebox.android.data.AssistantTaskJournal
+    @Volatile private var assistantServerIdentity = ""
+    val taskRecovery by lazy {
+        createTaskRecovery { com.timebox.android.ui.assistant.HttpAssistantTransport(repository.settings.first()) }
+    }
+    fun createTaskRecovery(transportFactory: suspend () -> com.timebox.android.ui.assistant.AssistantTransport) =
+        com.timebox.android.ui.assistant.AssistantTaskRecovery(assistantScope, taskJournal,
+            transportFactory,
+            reserve = { record ->
+                if (record.affectsTracking) activityRepository.reserveForTask(record.submissionId)
+                try { readinessCoordinator.reserveForTask(record.affectedTaskIds) }
+                catch (error: Throwable) { if (record.affectsTracking) activityRepository.releaseForTask(record.submissionId); throw error }
+            },
+            release = { record ->
+                readinessCoordinator.releaseForTask(record.affectedTaskIds)
+                if (record.affectsTracking) activityRepository.releaseForTask(record.submissionId)
+            },
+            reconcile = { record, _ ->
+                check(repository.settings.first().assistantIdentity() == record.serverIdentity) { "Return to the original server to reconcile Task changes." }
+                val tasks = repository.listBattleTasks().getOrThrow()
+                readinessCoordinator.mergeServerTasks(tasks.items)
+                activityRepository.reconcileTask()
+                repository.onTaskChanged()
+                repository.assistantTasksChanged.emit(record.affectedTaskIds)
+            },
+        )
     val assistant by lazy {
         com.timebox.android.ui.assistant.AssistantController(
-            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            assistantScope, taskRecovery,
         ) { com.timebox.android.ui.assistant.HttpAssistantTransport(repository.settings.first()) }
     }
     val focusController by lazy { com.timebox.android.ui.focus.FocusController(com.timebox.android.ui.focus.AndroidFocusStorage(this)) }
@@ -43,7 +72,7 @@ class TimeboxApplication : Application() {
         com.timebox.android.data.ActivityRepository(
             com.timebox.android.data.RepositoryActivityTransport(repository),
             com.timebox.android.data.AndroidActivityStorage(this),
-        )
+        ).also { activity -> activity.taskRecoveryBlocked = { taskJournal.trackingBlocked(repository.settings.first().assistantIdentity()) } }
     }
 
     lateinit var repository: TimeboxRepository
@@ -81,9 +110,20 @@ class TimeboxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         preferences = AppPreferences(this)
-        repository = TimeboxRepository(preferences)
+        taskJournal = com.timebox.android.data.AssistantTaskJournal(com.timebox.android.data.AndroidTaskJournalStorage(this))
+        repository = TimeboxRepository(preferences).also { it.assistantTaskJournal = taskJournal }
+        assistantServerIdentity = runBlocking { repository.settings.first().assistantIdentity() }
+        applicationScope.launch { repository.settings.collect { assistantServerIdentity = it.assistantIdentity() } }
         readinessCoordinator = createReadyToPlanCoordinator(repository, applicationScope)
+        readinessCoordinator.taskRecoveryBlocked = { taskJournal.blocked(assistantServerIdentity, listOf(it)) }
         taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository))
+        val connectivity = getSystemService(android.net.ConnectivityManager::class.java)
+        fun publishConnection() { assistantScope.launch { taskRecovery.connectionChanged(connectivity.activeNetwork != null) } }
+        connectivity.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) = publishConnection()
+            override fun onLost(network: android.net.Network) = publishConnection()
+        })
+        publishConnection()
         reminderNotifier = AndroidReminderNotifier(this).also { it.createChannel() }
         reminderSuppressions = AndroidReminderSuppressionStore(this)
         reminderScheduler = ReminderScheduler(this)

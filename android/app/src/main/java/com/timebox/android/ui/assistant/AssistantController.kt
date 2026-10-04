@@ -19,6 +19,7 @@ data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), 
 /** Process-owned: tab navigation and activity recreation do not cancel a response. */
 class AssistantController(
     private val scope: CoroutineScope,
+    val taskRecovery: AssistantTaskRecovery? = null,
     private val transportFactory: suspend () -> AssistantTransport,
 ) {
     private val mutableState = MutableStateFlow(AssistantState())
@@ -44,8 +45,12 @@ class AssistantController(
         job = scope.launch {
             var completed = false
             try {
-                val api = transport ?: transportFactory().also { transport = it }
-                val id = conversation ?: api.create().also {
+                val fresh = transportFactory()
+                check(transport == null || transport?.serverIdentity == fresh.serverIdentity) { "Server changed. Start a new conversation." }
+                val api = transport ?: fresh.also { transport = it }
+                val previous = taskRecovery?.journal?.closures(api.serverIdentity)?.lastOrNull()
+                val id = conversation ?: api.create(previous).also {
+                    if (previous != null) taskRecovery?.journal?.closed(api.serverIdentity, previous)
                     if (epoch != generation) { api.delete(it); return@launch }
                     conversation = it
                 }
@@ -141,6 +146,21 @@ class AssistantController(
         return full
     }
 
+    fun confirmTask(proposal: TaskChangeProposal) {
+        var current = state.value.taskChanges[proposal.operationId] ?: return
+        val recovered = taskRecovery?.state?.value?.items?.lastOrNull { it.record.operationId == proposal.operationId }
+        if (recovered != null) {
+            if (!recovered.record.resolved) return
+            current = current.copy(status = recovered.result?.status ?: current.status, result = recovered.result)
+        }
+        if (current.busy || current.status != "pending" || !current.sourceCompleted) return
+        val api = transport ?: return
+        val epoch = generation
+        taskRecovery?.confirm(proposal.copy(sourceCompleted = true, status = "pending"), api.serverIdentity) { result ->
+            if (epoch == generation) updateTask(proposal.operationId, current.copy(status = result?.status ?: "unknown", result = result))
+        }
+    }
+
     fun checkTask(proposal: TaskChangeProposal) = taskAction(proposal) { api -> api.taskStatus(proposal.operationId) }
     fun dismissTask(proposal: TaskChangeProposal) = taskAction(proposal) { api -> api.dismissTask(proposal.id) }
 
@@ -219,12 +239,18 @@ class AssistantController(
     }
 
     fun newConversation() {
+        val previousApi = transport
+        val previousId = conversation
+        if (previousApi != null && previousId != null) {
+            try { taskRecovery?.journal?.closeLater(previousApi.serverIdentity, previousId) }
+            catch (_: Exception) { mutableState.value = state.value.copy(ended = "Could not save conversation closure. Try again."); return }
+        }
         generation++
         job?.cancel()
         val old = conversation
         val api = transport
         conversation = null; transport = null; run = null; completedRun = null
         mutableState.value = AssistantState()
-        if (old != null && api != null) scope.launch { runCatching { api.delete(old) } }
+        if (old != null && api != null) scope.launch { runCatching { api.delete(old); taskRecovery?.journal?.closed(api.serverIdentity, old) } }
     }
 }

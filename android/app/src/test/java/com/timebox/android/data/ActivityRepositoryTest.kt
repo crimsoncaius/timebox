@@ -8,6 +8,26 @@ import org.junit.Test
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 class ActivityRepositoryTest {
+    @Test fun taskReservationRequiresVerifiedOnlineDrainAndBlocksNewActivity() = runTest {
+        var failRead = false
+        val snapshot = ActivitySnapshotDto(cursor = 0, serverAt = "2026-10-04T00:00:00Z", reportingTimezone = "UTC", offlineReady = true, current = null, records = emptyList(), taskTypes = listOf(TaskTypeDto(2, "Reading")))
+        val transport = object : ActivityTransport {
+            override suspend fun read(): ActivitySnapshotDto { if (failRead) throw java.io.IOException("Offline"); return snapshot }
+            override suspend fun execute(command: ActivityCommandDto) = snapshot.copy(acknowledgement = ActivityAcknowledgementDto(command.operationId, ActivityOutcome.Applied))
+        }
+        var saved: String? = null
+        val repository = ActivityRepository(transport, object : ActivityStorage { override fun load() = saved; override fun save(value: String) { saved = value } })
+        repository.refresh(); failRead = true
+        assertTrue(runCatching { repository.reserveForTask("submission") }.isFailure)
+        failRead = false; repository.reserveForTask("submission")
+        assertFalse(repository.command(ActivityKind.Start, 2))
+        assertTrue(repository.state.value.error!!.contains("Task changes need checking"))
+        repository.releaseForTask("submission")
+        assertTrue(repository.command(ActivityKind.Start, 2))
+        repository.taskRecoveryBlocked = { true }
+        assertFalse(repository.command(ActivityKind.Stop))
+    }
+
     @Test fun failedInitialConnectionCanMoveToConfiguredServerAfterRestart() = runTest {
         var endpoint = "http://10.0.2.2:8001/"
         var durable: String? = null

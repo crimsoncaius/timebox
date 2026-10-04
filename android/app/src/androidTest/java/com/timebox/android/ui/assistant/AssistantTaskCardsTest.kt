@@ -23,6 +23,32 @@ class AssistantTaskCardsTest {
     @get:Rule val compose = createComposeRule()
     private fun fixture(name: String) = Json.parseToJsonElement(InstrumentationRegistry.getInstrumentation().context.assets.open("assistant-tasks.json").bufferedReader().use { it.readText() }).jsonObject.getValue(name).jsonObject
 
+    @Test fun confirmationNeedsCompletedSourceAndDescriptionConfirmationStaysInExplicitReview() {
+        val full = TaskChangeProposal.parse(fixture("full"), fullDescription = true)
+        val proposal = TaskChangeProposal.parse(fixture("proposal")).copy(expiresAt = java.time.Instant.now().plusSeconds(900))
+        var confirmations = 0
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                TaskChangeCard(proposal, TaskChangeState("pending", sourceCompleted = true), {}, { full }, {}, {}, {}, onConfirm = { confirmations++ })
+            }
+        } }
+        compose.onNodeWithText("Confirm Task changes").assertDoesNotExist()
+        compose.onNodeWithText("Review description").performScrollTo().performClick()
+        compose.onNodeWithText("Confirm Task changes").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, confirmations) }
+        compose.onNodeWithText("Return to preview").assertDoesNotExist()
+    }
+    @Test fun offlineConfirmationIsDisabledWithAccessibleReason() {
+        val proposal = TaskChangeProposal.parse(fixture("complete")).copy(expiresAt = java.time.Instant.now().plusSeconds(900))
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                TaskChangeCard(proposal, TaskChangeState("pending", sourceCompleted = true), {}, { proposal }, {}, {}, {}, onConfirm = {}, confirmationBlocked = "Connect before confirming Task changes.")
+            }
+        } }
+        compose.onNodeWithText("Confirm Task changes").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Connect before confirming Task changes.").performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun threeRowsExpandAndNavigateBySavedIdentityWithoutChangingSnapshot() {
         val card = AssistantTaskCard.parse(fixture("card"))
         var opened = 0
@@ -98,7 +124,7 @@ class AssistantTaskCardsTest {
         val result = TaskOperationResult.parse(fixture("result"))
         var opened = 0
         compose.setContent { TimeboxTheme(darkTheme = true) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { TaskResultCard(result) { opened = it } }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { TaskResultCard(result, onOpenTask = { opened = it }) }
         } }
         compose.onNodeWithText("Task change result").assertIsDisplayed()
         compose.onNodeWithText("Saved 20", substring = true).assertExists()

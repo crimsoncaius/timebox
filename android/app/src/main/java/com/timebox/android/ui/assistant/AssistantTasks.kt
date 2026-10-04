@@ -162,7 +162,7 @@ data class TaskChangeProposal(val id: String, val operationId: String, val conve
 }
 
 data class TaskOperationResult(val operationId: String, val proposalId: String, val status: String, val receipt: JsonObject?,
-    val submission: JsonObject?, val undo: JsonObject?, val events: JsonArray) {
+    val submission: JsonObject?, val undo: JsonObject?, val events: JsonArray, val raw: JsonObject? = null) {
     companion object {
         fun parse(data: JsonObject): TaskOperationResult {
             data.bounded(64 * 1024)
@@ -196,13 +196,13 @@ data class TaskOperationResult(val operationId: String, val proposalId: String, 
             val submission = data["submission"]?.takeUnless { it == JsonNull }?.jsonObject
             submission?.apply { uuid("submission_id"); check(uuid("operation_id") == operationId); check(text("state") in setOf("not_seen", "executing", "rolled_back", "rejected", "applied")) }
             return TaskOperationResult(operationId, proposalId, status, receipt, submission,
-                data["undo_result"]?.takeUnless { it == JsonNull }?.jsonObject, data.getValue("status_events").jsonArray)
+                data["undo_result"]?.takeUnless { it == JsonNull }?.jsonObject, data.getValue("status_events").jsonArray, data)
         }
     }
 }
 
-/** The write gate is deliberately closed until durable submission/barrier integration is installed. */
-const val TaskConfirmationGate = "Task confirmation is unavailable until synchronization and recovery are ready."
+/** Read-only fixtures omit the production recovery coordinator and keep confirmation disabled. */
+const val TaskConfirmationGate = "Confirmation is unavailable in this read-only preview."
 data class TaskChangeState(val status: String = "draft", val sourceCompleted: Boolean = false, val result: TaskOperationResult? = null, val busy: Boolean = false, val error: String? = null)
 
 internal fun taskFieldLabel(field: String): String = when (field) {

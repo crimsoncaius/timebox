@@ -531,3 +531,18 @@ def test_outcome_bound_explicit_priority_and_cross_conversation_rejection():
     assert len(explicit["operations"]) == 1 and explicit["omitted_count"] == 0
     with pytest.raises(ValueError, match="conversation"):
         ops.outcome_context(str(uuid4()), [p["operation_id"]])
+
+
+def test_review_after_local_drain_rechecks_guards_without_rewriting_preview():
+    identity = task()
+    p = draft([patch(identity, title="Approved title")])
+    original = ops.review(p["proposal_id"])
+    with Session(get_engine()) as db:
+        db.get(Task, identity).title = "Changed while draining"
+        db.commit()
+    checked = ops.review(p["proposal_id"])
+    assert checked["status"] == "stale"
+    assert checked["review_targets"] == original["review_targets"]
+    assert checked["content_hash"] == original["content_hash"]
+    code, result = confirm(p)
+    assert code == 409 and result["receipt"] is None

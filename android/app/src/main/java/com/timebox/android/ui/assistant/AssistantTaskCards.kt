@@ -130,7 +130,7 @@ private fun TaskSnapshotRow(row: AssistantTaskRow, ordinal: Int, zone: ZoneId, o
 
 @Composable
 internal fun TaskChangeCard(proposal: TaskChangeProposal, state: TaskChangeState, onOpenTask: (Int) -> Unit,
-    onDescription: suspend () -> TaskChangeProposal, onCheck: () -> Unit, onDismiss: () -> Unit, onRefresh: () -> Unit) {
+    onDescription: suspend () -> TaskChangeProposal, onCheck: () -> Unit, onDismiss: () -> Unit, onRefresh: () -> Unit, onConfirm: (() -> Unit)? = null, confirmationBlocked: String? = null) {
     var description by remember(proposal.id) { mutableStateOf<TaskChangeProposal?>(null) }
     var loading by remember(proposal.id) { mutableStateOf(false) }
     var error by remember(proposal.id) { mutableStateOf<String?>(null) }
@@ -147,12 +147,12 @@ internal fun TaskChangeCard(proposal: TaskChangeProposal, state: TaskChangeState
         }
     }
     val keyboard = LocalSoftwareKeyboardController.current
+    val status = if (state.status == "pending" && Instant.now() >= proposal.expiresAt) "expired" else state.status
     TaskSurface {
         Text("Proposed Task changes", Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
         Text("Preview · Nothing is saved by this proposal", style = TimeboxTheme.type.bodySmall)
         Text("Review expires ${proposal.expiresAt.atZone(proposal.zone).format(taskReadTime)} · ${proposal.zone.id}", style = TimeboxTheme.type.bodySmall)
         TaskReviewContent(proposal, false, onOpenTask)
-        val status = if (state.status == "pending" && Instant.now() >= proposal.expiresAt) "expired" else state.status
         Text(taskStatusLabel(status, state.result), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = TimeboxTheme.type.bodySmall)
         state.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
@@ -166,15 +166,16 @@ internal fun TaskChangeCard(proposal: TaskChangeProposal, state: TaskChangeState
                 }
             }, enabled = !loading, modifier = Modifier.focusRequester(reviewFocus).focusProperties { canFocus = true }.onFocusChanged { if (it.isFocused) restoreReviewFocus = false }) { Text(if (loading) "Loading description…" else "Review description") }
         } else {
-            Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Confirm Task changes") }
-            Text(TaskConfirmationGate, style = TimeboxTheme.type.bodySmall)
+            Button(onClick = { onConfirm?.invoke() }, enabled = onConfirm != null && confirmationBlocked == null && status == "pending" && state.sourceCompleted && !state.busy, modifier = Modifier.fillMaxWidth()) { Text("Confirm Task changes") }
+            if (onConfirm == null) Text(TaskConfirmationGate, style = TimeboxTheme.type.bodySmall)
         }
+        confirmationBlocked?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = TimeboxTheme.type.bodySmall) }
         if (status in setOf("stale", "expired")) TextButton(onClick = onRefresh, enabled = !state.busy) { Text("Refresh review") }
         TextButton(onClick = onCheck, enabled = !state.busy && state.sourceCompleted) { Text(if (state.busy) "Checking…" else "Check result") }
         if (status in setOf("draft", "pending", "stale", "expired")) TextButton(onClick = onDismiss, enabled = !state.busy && state.sourceCompleted) { Text("Dismiss proposal") }
     }
     state.result?.let { TaskResultCard(it, onOpenTask) }
-    description?.let { full -> DescriptionReview(full, onOpenTask, onClose = { description = null; restoreReviewFocus = true }) }
+    description?.let { full -> DescriptionReview(full, onOpenTask, onClose = { description = null; restoreReviewFocus = true }, onConfirm = if (onConfirm != null && confirmationBlocked == null && status == "pending" && state.sourceCompleted && !state.busy) ({ onConfirm(); description = null }) else null) }
 }
 
 internal fun taskStatusLabel(status: String, result: TaskOperationResult?): String = when {
@@ -254,7 +255,7 @@ internal fun TaskReviewContent(proposal: TaskChangeProposal, descriptions: Boole
 }
 
 @Composable
-internal fun DescriptionReview(proposal: TaskChangeProposal, onOpenTask: (Int) -> Unit, onClose: () -> Unit) {
+internal fun DescriptionReview(proposal: TaskChangeProposal, onOpenTask: (Int) -> Unit, onClose: () -> Unit, onConfirm: (() -> Unit)? = null) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(Modifier.fillMaxSize(), color = TimeboxTheme.colors.bg) {
             Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
@@ -263,17 +264,17 @@ internal fun DescriptionReview(proposal: TaskChangeProposal, onOpenTask: (Int) -
                     Text("Review description", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle)
                     Text("Full saved before-text and proposed after-text. Text is shown literally.", style = TimeboxTheme.type.bodySmall)
                     TaskReviewContent(proposal, true, onOpenTask)
-                    Text(TaskConfirmationGate, style = TimeboxTheme.type.bodySmall)
+                    if (onConfirm == null) Text(TaskConfirmationGate, style = TimeboxTheme.type.bodySmall)
                     Spacer(Modifier.height(12.dp))
                 }
-                Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("Confirm Task changes") }
+                Button(onClick = { onConfirm?.invoke() }, enabled = onConfirm != null, modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("Confirm Task changes") }
             }
         }
     }
 }
 
 @Composable
-internal fun TaskResultCard(result: TaskOperationResult, onOpenTask: (Int) -> Unit) {
+internal fun TaskResultCard(result: TaskOperationResult, onOpenTask: (Int) -> Unit, onUndo: (() -> Unit)? = null) {
     TaskSurface {
         Text("Task change result", Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
         Text(taskStatusLabel(result.status, result), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = TimeboxTheme.type.bodySmall)
@@ -297,8 +298,8 @@ internal fun TaskResultCard(result: TaskOperationResult, onOpenTask: (Int) -> Un
             }
             result.undo?.let { undo ->
                 undo["receipt"]?.takeUnless { it == JsonNull }?.jsonObject?.optionalText("committed_at")?.let { Text("Undo saved $it", style = TimeboxTheme.type.bodySmall) }
-                Text(when (undo.text("status")) { "applied" -> "Completion subsequently undone. Tracking stayed stopped. The original saved receipt remains historical."; "conflict" -> "Undo unavailable because the saved state changed."; else -> "Completion Undo available after recovery integration. Tracking stays stopped." }, style = TimeboxTheme.type.bodySmall)
-                if (undo.text("status") == "available") Button(onClick = {}, enabled = false) { Text("Undo completion") }
+                Text(when (undo.text("status")) { "applied" -> "Completion subsequently undone. Tracking stayed stopped. The original saved receipt remains historical."; "conflict" -> "Undo unavailable because the saved state changed."; else -> "Completion Undo available. Tracking stays stopped." }, style = TimeboxTheme.type.bodySmall)
+                if (undo.text("status") == "available") Button(onClick = { onUndo?.invoke() }, enabled = onUndo != null) { Text("Undo completion") }
             }
         }
     }
