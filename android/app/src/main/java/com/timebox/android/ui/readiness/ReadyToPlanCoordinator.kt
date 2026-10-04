@@ -81,6 +81,26 @@ class ReadyToPlanCoordinator internal constructor(
     private val transport: ReadyToPlanTransport,
     private val scope: CoroutineScope,
 ) {
+    private val reservations = mutableSetOf<Int>()
+    var taskRecoveryBlocked: (Int) -> Boolean = { false }
+    suspend fun reserveForTask(taskIds: List<Int>) {
+        synchronized(this) {
+            check(taskIds.none { it in reservations || taskRecoveryBlocked(it) }) { "Task changes need checking in Assistant." }
+            reservations.addAll(taskIds.sorted())
+            publish()
+        }
+        try {
+            kotlinx.coroutines.withTimeout(30_000) {
+                while (synchronized(this@ReadyToPlanCoordinator) { taskIds.any { entries[it]?.writing == true } }) kotlinx.coroutines.delay(25)
+                synchronized(this@ReadyToPlanCoordinator) {
+                    check(taskIds.none { entries[it]?.failure != null || entries[it]?.let { e -> e.desired != e.confirmed } == true }) {
+                        "Retry the failed Ready to Plan choice before confirming Task changes."
+                    }
+                }
+            }
+        } catch (error: Throwable) { releaseForTask(taskIds); throw error }
+    }
+    @Synchronized fun releaseForTask(taskIds: List<Int>) { reservations.removeAll(taskIds.toSet()); publish() }
     private val entries = mutableMapOf<Int, ReadinessEntry>()
     private val _projections = MutableStateFlow<List<BattleTask>>(emptyList())
     val projections: StateFlow<List<BattleTask>> = _projections.asStateFlow()
@@ -121,7 +141,7 @@ class ReadyToPlanCoordinator internal constructor(
         .map(::projectTree)
 
     @Synchronized
-    fun projectedTask(taskId: Int): BattleTask? = entries[taskId]?.projection()
+    fun projectedTask(taskId: Int): BattleTask? = entries[taskId]?.let(::projectEntry)
 
     @Synchronized
     fun intentVersion(taskId: Int): Long = entries[taskId]?.intentVersion ?: 0
@@ -146,6 +166,10 @@ class ReadyToPlanCoordinator internal constructor(
         var startWorker = false
         synchronized(this) {
             val current = entries[task.id] ?: readinessEntry(task)
+            if (task.id in reservations || taskRecoveryBlocked(task.id)) {
+                publish()
+                return false
+            }
             if (
                 current.task.status == TaskStatus.Completed ||
                 expectedIntentVersion != null && current.intentVersion != expectedIntentVersion
@@ -169,6 +193,7 @@ class ReadyToPlanCoordinator internal constructor(
         var startWorker = false
         synchronized(this) {
             val current = entries[taskId] ?: return
+            if (taskId in reservations || taskRecoveryBlocked(taskId)) return
             if (current.task.status == TaskStatus.Completed) return
             val failed = current.failure ?: return
             val updated = current.copy(
@@ -290,6 +315,7 @@ class ReadyToPlanCoordinator internal constructor(
                     readyToPlan = saved.readyToPlan,
                     status = saved.status,
                     completedAt = saved.completedAt,
+                    completionPrecision = saved.completionPrecision, completionLocalDate = saved.completionLocalDate, completionTimezone = saved.completionTimezone,
                     version = saved.version,
                     archivedAt = saved.archivedAt,
                     deletedAt = saved.deletedAt,
@@ -327,7 +353,7 @@ class ReadyToPlanCoordinator internal constructor(
     private fun projectTree(task: BattleTask): BattleTask {
         val entry = entries[task.id]
         val source = if (entry != null && entry.task.version > task.version) entry.task else task
-        val readiness = entry?.projection()
+        val readiness = entry?.let(::projectEntry)
         val projection = if (readiness == null) {
             task
         } else {
@@ -344,8 +370,14 @@ class ReadyToPlanCoordinator internal constructor(
         )
     }
 
+    private fun projectEntry(entry: ReadinessEntry): BattleTask = entry.projection().let { projection ->
+        if (entry.task.id in reservations || taskRecoveryBlocked(entry.task.id)) projection.copy(
+            readinessFailureMessage = "Task changes need checking in Assistant before changing Ready to Plan.",
+            readinessPending = true,
+        ) else projection
+    }
     private fun publish() {
-        _projections.value = entries.values.map(ReadinessEntry::projection)
+        _projections.value = entries.values.map(::projectEntry)
     }
 
     private fun store(taskId: Int, entry: ReadinessEntry) {

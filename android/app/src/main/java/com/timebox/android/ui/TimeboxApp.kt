@@ -238,6 +238,13 @@ fun TimeboxApp(
             if (route == AppRoutes.TaskDetailPattern) routeTaskId?.let(taskDetailViewModel::load)
         }
     }
+    LaunchedEffect(repository) {
+        repository.assistantTasksChanged.collect { ids ->
+            dayViewModel.refreshAfterTaskCompletion()
+            battlePlanViewModel.refreshAfterTaskCompletion()
+            ids.forEach { taskDetailViewModel.refreshAfterTaskCompletion(it) }
+        }
+    }
     LaunchedEffect(taskCompletionNotice?.id) {
         taskCompletionNotice?.let { notice ->
             if (notice.canUndo) {

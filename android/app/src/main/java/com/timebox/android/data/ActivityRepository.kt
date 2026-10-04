@@ -81,6 +81,39 @@ data class ActivityUiState(
 class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage,
                          private val wallTime: () -> Long = System::currentTimeMillis,
                          private val monotonicTime: () -> Long = System::nanoTime) {
+    var taskRecoveryBlocked: suspend () -> Boolean = { false }
+    private var taskReservation: String? = null
+    private suspend fun checkTaskRecovery() {
+        check(taskReservation == null && !taskRecoveryBlocked()) { "Task changes need checking in Assistant before changing Activity Tracking." }
+    }
+    suspend fun reserveForTask(submissionId: String) = mutex.withLock {
+        checkTaskRecovery()
+        taskReservation = submissionId
+        try { synchronizeForTask() } catch (error: Throwable) { taskReservation = null; throw error }
+    }
+    suspend fun releaseForTask(submissionId: String) = mutex.withLock {
+        if (taskReservation == submissionId) taskReservation = null
+    }
+    /** A successful result guarantees confirmed activity and no unresolved journal recovery. */
+    suspend fun reconcileTask() = mutex.withLock { synchronizeForTask() }
+    private suspend fun synchronizeForTask() {
+        checkEndpoint()
+        drain()
+        check(journal.outbox.isEmpty() && journal.planNow == null && journal.planUndoPending == null &&
+            journal.rejected == null && (journal.rejectedOutbox.isEmpty() || journal.rejectedRecoveryReviewed) &&
+            journal.retiredJournal == null && legacyRecovery == null) { "Resolve Activity Tracking recovery before confirming Task changes." }
+        val snapshot = transport.read()
+        check(snapshot.offlineReady) { "Activity Tracking is not ready. Reconnect before confirming." }
+        if (newer(snapshot)) {
+            noteReconciliation(snapshot)
+            val server = parseActivityInstant(snapshot.serverAt).toEpochMilli()
+            save(journal.copy(snapshot = snapshot, calibration = ActivityCalibrationDto(snapshot.serverAt, server - wallTime())))
+            serverAnchor = server; monotonicAnchor = monotonicTime()
+        }
+        offline = false
+        bootstrappedThisRun = true
+        publish()
+    }
     private var switchOpportunity: SwitchOpportunity? = null
     private val switchOffers = MutableSharedFlow<ActivitySwitchUndo>(extraBufferCapacity = 1)
     val switchUndoOffers = switchOffers.asSharedFlow()
@@ -311,6 +344,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     suspend fun planNow(body: PlanNowRequestDto): Boolean = mutex.withLock {
         try {
             checkEndpoint()
+            checkTaskRecovery()
             check(!offline && journal.outbox.isEmpty() && journal.planNow == null && journal.planUndoPending == null) { "Connect and sync before changing the plan. Ordinary tracking remains available offline." }
             save(journal.copy(planNow = body))
             publish(busy = true)
@@ -343,6 +377,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         var acknowledged = false
         try {
             checkEndpoint()
+            checkTaskRecovery()
             val snapshot = checkNotNull(project())
             val prompt = checkNotNull(snapshot.checkIn)
             val calibration = checkNotNull(journal.calibration)
@@ -397,6 +432,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         val saved = mutex.withLock {
             try {
                 checkEndpoint()
+            checkTaskRecovery()
                 check(journal.planNow == null && journal.planUndoPending == null) { "Reconnect to confirm the plan change before recording another change." }
                 val snapshot = checkNotNull(journal.snapshot) { "Connect once to initialize Activity Tracking before recording offline." }
                 check(snapshot.offlineReady) { "Connect once to an updated server to initialize Activity Tracking before recording offline." }
@@ -444,6 +480,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         if (operationId.startsWith("plan:")) return mutex.withLock {
             runCatching {
                 checkEndpoint()
+            checkTaskRecovery()
                 check(!offline && journal.outbox.isEmpty() && journal.planNow == null && journal.planUndoPending == null) { "Connect and sync to undo the plan change." }
                 save(journal.copy(planUndoPending = operationId.removePrefix("plan:")))
                 drainPlan()
@@ -453,6 +490,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         val result = runCatching {
             mutex.withLock {
                 checkEndpoint()
+            checkTaskRecovery()
                 val opportunity = switchOpportunity
                 val snapshot = project()
                 if (opportunity == null || opportunity.offer.operationId != operationId || snapshot == null ||
@@ -480,6 +518,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         val saved = mutex.withLock {
             try {
                 checkEndpoint()
+            checkTaskRecovery()
                 check(journal.planNow == null && journal.planUndoPending == null) { "Reconnect to confirm the plan change before recording another change." }
                 val snapshot = checkNotNull(project()) { "Connect once to initialize Activity Tracking." }
                 check(snapshot.offlineReady && journal.calibration != null) { "Connect once to initialize Activity Tracking." }
@@ -512,6 +551,7 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     suspend fun updateCurrentNoteOnline(targetId: Int, note: String): Boolean = mutex.withLock {
         try {
             checkEndpoint()
+            checkTaskRecovery()
             check(journal.outbox.isEmpty()) { "Reconnect to confirm pending Activity Tracking changes first." }
             val snapshot = checkNotNull(journal.snapshot) { "Connect before editing notes." }
             val calibration = checkNotNull(journal.calibration) { "Connect before editing notes." }

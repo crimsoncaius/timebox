@@ -59,7 +59,7 @@ def _load_task_for_mutation(db: Session, task_id: int) -> Task:
     return _load_task(db, task_id, for_update=True)
 
 
-def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
+def create_task(db: Session, body: TaskCreate, settings: Settings, *, commit: bool = True) -> Task:
     title = _clean_title(body.title)
     _validate_deadline(body.deadline_date, body.deadline_at)
     status = TaskStatus.open if body.status == TaskStatus.blocked else body.status
@@ -119,11 +119,11 @@ def create_task(db: Session, body: TaskCreate, settings: Settings) -> Task:
     db.add(row)
     if parent is not None:
         protect_task_occurrence(db, parent)
-    db.commit()
+    db.commit() if commit else db.flush()
     return _load_task(db, row.id)
 
 
-def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -> Task:
+def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings, *, commit: bool = True) -> Task:
     row = _load_task_for_mutation(db, task_id)
     fields = body.model_fields_set
     if row.archived_at is not None or row.deleted_at is not None:
@@ -204,10 +204,10 @@ def patch_task(db: Session, task_id: int, body: TaskPatch, settings: Settings) -
     recurrence_service.record_task_overrides(row, fields)
     if fields:
         protect_task_occurrence(db, row)
-    db.commit()
+    db.commit() if commit else db.flush()
     if row.parent_id is not None and row.recurrence_kind == "quota_session":
         recurrence_service._derive_quota_parents(db)
-        db.commit()
+        db.commit() if commit else db.flush()
     return _load_task(db, task_id)
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import aclosing
+from contextvars import ContextVar
 
 from langchain_core.messages import SystemMessage, message_chunk_to_message
 from langchain_core.tools import tool
@@ -14,13 +15,67 @@ from openinference.instrumentation.langchain import get_current_span as get_lang
 from opentelemetry import trace
 
 from app.core.config import get_settings
-from app.services.assistant_limits import MAX_CARDS, MAX_PROPOSALS, MAX_READ_CALLS
+from app.services import assistant_task_operations
+from app.services.assistant_limits import (
+    MAX_CARDS,
+    MAX_PROPOSALS,
+    MAX_READ_CALLS,
+    MAX_TURN_READ_BYTES,
+    TASK_READ_TIMEOUT,
+)
 from app.services.assistant_plan import ReadActivityArgs, read_activity, read_today_plan
 from app.services.assistant_presentation import PresentationParser, snapshot
+from app.services.assistant_task_intents import ProposeTaskChangesArgs
+from app.services.assistant_tasks import ReadTaskChoicesArgs, ReadTasksArgs, encoded, read_tasks
 from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, model_result, propose
+
+task_read_context = ContextVar("task_read_context", default=None)
+
+
+def bounded_read(value):
+    context = task_read_context.get()
+    if context is None:
+        return value
+    size = len(encoded(value))
+    if context["bytes"] + size > MAX_TURN_READ_BYTES - 1024:
+        value = {"error": "Current response data budget exhausted; narrow the request or continue in another response.",
+                 "completeness": "partial", "limitations": ["payload_limit"]}
+        size = len(encoded(value))
+    context["bytes"] += size
+    return value
 
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported.
+Use read_tasks for saved ordinary Tasks, occurrences, Quota Trackers and Session Tasks.
+read_tasks search accepts query, search_in, scope, kinds, filters and cursor only. To read a description by title,
+first search titles, then get the returned task_ids with include_description=true; include_description is get-only.
+Use read_task_choices to resolve existing Project IDs or Task Type IDs/paths. Names are not identities.
+Multiple plausible title/child/Project/Type matches require clarification. Never guess saved IDs.
+Current collection questions always require a fresh search: task_refresh_v1 covers known identities only.
+Refresh evidence is current as of its read_at; historical snapshots and their order never change.
+Ordinals bind to the original snapshot. If that snapshot left context, ask which Task or request reselection.
+Respect unavailable/unverified coverage and partial counts. Saved-only recurring results do not prove nothing is due.
+Recurring readiness is a stored value, not freshly synchronized. Sessions are distinct from Subtasks.
+Description search and include_description require the current explicit request or a clear follow-up asking about
+descriptions/what the user wrote. An earlier request grants no standing access. Excerpts are at most 2000 characters;
+truncation never means the whole text was reviewed. Automatic refresh never verifies historical descriptions.
+Choices cannot be shown as Task Cards. A bounded tool error requires truthful text, never an invented card.
+Use propose_task_changes for explicitly requested ordinary Task/first-level Subtask changes. Never write recurring work.
+For a supported, unambiguous requested change, you MUST call propose_task_changes in this response after any reads.
+Never say you proposed/submitted/prepared changes or ask the user to confirm unless that tool returned a valid
+proposal in this response. Writing the requested diff in prose does not create a proposal or description review.
+After the third read you may still call the proposal tool. If it fails, explain that no proposal is available.
+Only a saved completed proposal can invite confirmation. Proposal/submission is not success: task_outcomes_v1
+and authoritative receipts alone establish applied/undone results. Pending, cancelled, stale, rolled-back and
+unverified are distinct; not_seen does not prove a delayed confirmation cannot execute. Never invent success.
+Propose only requested fields, except organization/classification the user explicitly asked you to suggest.
+Copy exact replacement text verbatim, including punctuation, whitespace and line breaks; never drop terminal punctuation.
+Use IDs from reads. Resolve ambiguity before proposing. Relative dates use DateIntent, never model UTC arithmetic.
+Earlier-today completion needs an explicit time; past date-only completion is allowed, future completion is not.
+Completed Tasks need explicit reopen before edits; checking children never completes the parent.
+At most five parents/twenty operations per set. Never silently split a requested atomic set.
+Description edits use a separate full review. Tool summaries exclude private text; do not claim full text was read.
+A response may propose task changes OR tracking, never both. Direct tracking remains its existing client path.
 Use read_activity to read stored Planned Blocks, Actual Blocks or both (default Today).
 Use group_by blocks for a single date; task_type for totals over a date or inclusive range.
 when accepts YYYY-MM-DD, today, yesterday, this_week, last_week, this_month, last_month,
@@ -92,13 +147,46 @@ async def read_activity_tool(**arguments) -> dict:
     """Read blocks for one date or Task Type totals over dates/periods/ranges, by lane, detail and optional subtree."""
     try:
         result = await asyncio.to_thread(read_activity, ReadActivityArgs.model_validate(arguments))
-        return result if "error" in result else snapshot(result)
+        return bounded_read(result if "error" in result else snapshot(result))
     except Exception:
         raise RuntimeError("Activity could not be read. Please retry.") from None
 
 
 read_activity_tool.handle_validation_error = lambda error: json.dumps(
     {"error": "Invalid read_activity arguments: " + "; ".join(e["msg"] for e in error.errors())})
+
+
+# Preserve omitted fields until task_read validates them. LangChain's Pydantic
+# adapter otherwise inserts every mode's defaults before the second validation.
+@tool("read_tasks", args_schema=ReadTasksArgs.model_json_schema())
+async def read_tasks_tool(**arguments) -> dict:
+    """Read saved Tasks: search current/history/future, get IDs, or page Subtasks/Sessions. No domain writes."""
+    return await task_read(arguments, False)
+
+
+@tool("read_task_choices", args_schema=ReadTaskChoicesArgs)
+async def read_task_choices_tool(**arguments) -> dict:
+    """Read existing Project IDs/names or Task Type IDs/paths, without creating anything."""
+    return await task_read(arguments, True)
+
+
+async def task_read(arguments, choices):
+    context = task_read_context.get()
+    if context is None:
+        return {"error": "A saved conversation is required for task reads."}
+    try:
+        args = (ReadTaskChoicesArgs if choices else ReadTasksArgs).model_validate(arguments)
+        async with asyncio.timeout(TASK_READ_TIMEOUT):
+            result = await asyncio.to_thread(read_tasks, args, context["conversation_id"], choices=choices)
+        return bounded_read(result)
+    except ValueError as error:
+        return bounded_read({"error": str(error)})
+    except Exception:
+        return bounded_read({"error": "Saved Task data could not be verified within the read budget. Please narrow or retry.", "completeness": "partial"})
+
+
+for read_tool in (read_tasks_tool, read_task_choices_tool):
+    read_tool.handle_validation_error = lambda error: json.dumps({"error": "Invalid saved-task read arguments: " + "; ".join(e["msg"] for e in error.errors())})
 
 
 def create_model():
@@ -154,9 +242,30 @@ def propose_tracking_tool(sent_at, context):
     return propose_tracking
 
 
+@tool("propose_task_changes", args_schema=ProposeTaskChangesArgs, response_format="content_and_artifact")
+async def propose_task_changes_tool(**arguments):
+    """Prepare an immutable ordinary Task/Subtask change set for explicit online user review/confirmation."""
+    context = task_read_context.get()
+    if context is None or not context.get("run_id"):
+        return json.dumps({"error": "A saved running conversation is required."}), None
+    try:
+        args = ProposeTaskChangesArgs.model_validate(arguments)
+        result = await asyncio.to_thread(assistant_task_operations.propose, args, context["conversation_id"],
+            context["run_id"], context["sent_at"], context["zone"])
+        return json.dumps(result), result
+    except ValueError as error:
+        return json.dumps({"error": str(error)}), None
+    except Exception:
+        return json.dumps({"error": "The proposal could not be saved or verified. No confirmable proposal is available."}), None
+
+
+propose_task_changes_tool.handle_validation_error = lambda error: json.dumps(
+    {"error": "Invalid task change arguments: " + "; ".join(e["msg"] for e in error.errors())})
+
+
 def build_agent(model=None, tracking=None):
     model = model or create_model()
-    tools = {read_activity_tool.name: read_activity_tool}
+    tools = {t.name: t for t in (read_activity_tool, read_tasks_tool, read_task_choices_tool, propose_task_changes_tool)}
     prompt = PROMPT
     if tracking:
         proposal_tool = propose_tracking_tool(tracking["sent_at"], tracking["context"])
@@ -175,7 +284,7 @@ def build_agent(model=None, tracking=None):
         if state.get("proposals", 0) >= MAX_PROPOSALS:
             return {}
         return {name: value for name, value in tools.items()
-                if name == "propose_tracking" or state.get("reads", 0) < MAX_READ_CALLS}
+                if name in {"propose_tracking", "propose_task_changes"} or state.get("reads", 0) < MAX_READ_CALLS}
 
     async def respond(state):
         allowed = available(state)
@@ -191,7 +300,7 @@ def build_agent(model=None, tracking=None):
         if chosen is None:
             raise RuntimeError("The model requested an unsupported tool operation.")
         result = await chosen.ainvoke(calls[0])
-        counter = "proposals" if chosen.name == "propose_tracking" else "reads"
+        counter = "proposals" if chosen.name in {"propose_tracking", "propose_task_changes"} else "reads"
         return {"messages": [result], counter: state.get(counter, 0) + 1}
 
     async def finish(state):
@@ -244,7 +353,12 @@ async def translate_events(events, snapshots=None):
         elif kind == "on_tool_end":
             result = event["data"]["output"]
             value = json.loads(result.content) if hasattr(result, "content") else result
-            if event.get("name") == "propose_tracking":
+            if event.get("name") == "propose_task_changes":
+                value = getattr(result, "artifact", None)
+                if isinstance(value, dict) and "proposal_id" in value:
+                    yield "task_proposal", value
+                    parser.allow_empty = True
+            elif event.get("name") == "propose_tracking":
                 value = getattr(result, "artifact", None)
                 # An invalid request reaches only the model, which explains it; no card.
                 if isinstance(value, dict) and "proposal" in value:
@@ -254,6 +368,8 @@ async def translate_events(events, snapshots=None):
             elif "snapshot_id" in value:
                 eligible[value["snapshot_id"]] = value
                 yield "snapshot_read", value
+            elif isinstance(value, dict) and "error" in value:
+                yield "read_error", {"tool": event.get("name"), "result": value}
             yield "tool_completed", {}
         elif kind == "on_chat_model_end":
             result = event["data"]["output"]

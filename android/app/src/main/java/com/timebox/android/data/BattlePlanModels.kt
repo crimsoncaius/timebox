@@ -121,6 +121,9 @@ data class BattleTask(
     val blockingReason: String? = null,
     val outstandingOccurrenceCount: Int = 1,
     val reminderSkippedAt: Instant? = null,
+    val completionPrecision: String? = null,
+    val completionLocalDate: LocalDate? = null,
+    val completionTimezone: String? = null,
 )
 
 internal fun List<BattleTask>.flattenBattleTasks(): List<BattleTask> =
@@ -329,6 +332,7 @@ internal fun BattleTaskDto.toModel(): BattleTask {
         description = description, readyToPlan = readyToPlan,
         status = if (legacyStatus == TaskStatus.Blocked) TaskStatus.Open else legacyStatus,
         completedAt = completedAt?.let(::parseInstant), version = version,
+        completionPrecision = completionPrecision, completionLocalDate = completionLocalDate?.let(LocalDate::parse), completionTimezone = completionTimezone,
         urgency = urgency?.let(PriorityLevel::fromWire), importance = importance?.let(PriorityLevel::fromWire),
         deadlineDate = deadlineDate?.let(LocalDate::parse), deadlineAt = deadlineAt?.let(::parseInstant),
         reminderAt = reminderAt?.let(::parseInstant), reminderDeliveredAt = reminderDeliveredAt?.let(::parseInstant),

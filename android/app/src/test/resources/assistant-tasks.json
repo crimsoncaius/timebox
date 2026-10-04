@@ -1,0 +1,1060 @@
+{
+  "card": {
+    "schema_version": 4,
+    "kind": "tasks",
+    "snapshot_id": "d41220a9-0a4f-4384-95f7-ccc26c099bd3",
+    "read_at": "2026-10-04T05:26:33.108569+00:00",
+    "reporting_timezone": "UTC",
+    "query_id": "aac3655e-13d3-4e5a-88ab-cc2d71556b9f",
+    "query_at": "2026-10-04T05:26:33.108569+00:00",
+    "matching_count": 4,
+    "count_relation": "exact",
+    "next_cursor": null,
+    "completeness": "complete",
+    "limitations": [
+      "saved_only"
+    ],
+    "rows": [
+      {
+        "id": 1,
+        "kind": "ordinary",
+        "availability": "available",
+        "title": "Review the complete client brief and all its detailed appendices before Wednesday",
+        "lifecycle": "incomplete",
+        "relevance": "current",
+        "project": null,
+        "task_type": null,
+        "ready_to_plan": false,
+        "blocked": false,
+        "blocking_reason": null,
+        "urgency": null,
+        "importance": null,
+        "deadline": null,
+        "reminder_at": null,
+        "completed_at": null,
+        "completion_precision": null,
+        "completion_local_date": null,
+        "completion_timezone": null,
+        "subtasks": [
+          {
+            "id": 5,
+            "title": "Check appendix",
+            "checked": false
+          }
+        ],
+        "subtasks_count": 1,
+        "planned_dates": [],
+        "planned_dates_complete": true
+      },
+      {
+        "id": 2,
+        "kind": "ordinary",
+        "availability": "available",
+        "title": "Report",
+        "lifecycle": "incomplete",
+        "relevance": "current",
+        "project": null,
+        "task_type": null,
+        "ready_to_plan": false,
+        "blocked": false,
+        "blocking_reason": null,
+        "urgency": null,
+        "importance": null,
+        "deadline": null,
+        "reminder_at": null,
+        "completed_at": null,
+        "completion_precision": null,
+        "completion_local_date": null,
+        "completion_timezone": null,
+        "subtasks": [],
+        "subtasks_count": 0,
+        "planned_dates": [],
+        "planned_dates_complete": true
+      },
+      {
+        "id": 3,
+        "kind": "ordinary",
+        "availability": "available",
+        "title": "Report",
+        "lifecycle": "incomplete",
+        "relevance": "current",
+        "project": null,
+        "task_type": null,
+        "ready_to_plan": false,
+        "blocked": false,
+        "blocking_reason": null,
+        "urgency": null,
+        "importance": null,
+        "deadline": null,
+        "reminder_at": null,
+        "completed_at": null,
+        "completion_precision": null,
+        "completion_local_date": null,
+        "completion_timezone": null,
+        "subtasks": [],
+        "subtasks_count": 0,
+        "planned_dates": [],
+        "planned_dates_complete": true
+      },
+      {
+        "id": 4,
+        "kind": "ordinary",
+        "availability": "available",
+        "title": "Fourth saved Task",
+        "lifecycle": "incomplete",
+        "relevance": "current",
+        "project": null,
+        "task_type": null,
+        "ready_to_plan": false,
+        "blocked": false,
+        "blocking_reason": null,
+        "urgency": null,
+        "importance": null,
+        "deadline": null,
+        "reminder_at": null,
+        "completed_at": null,
+        "completion_precision": null,
+        "completion_local_date": null,
+        "completion_timezone": null,
+        "subtasks": [],
+        "subtasks_count": 0,
+        "planned_dates": [],
+        "planned_dates_complete": true
+      }
+    ]
+  },
+  "proposal": {
+    "schema_version": 1,
+    "proposal_id": "19e909bf-bc2f-4041-a2a3-931f9ca5804a",
+    "revision": 1,
+    "operation_id": "02bb04a9-31ff-4564-b0ed-55f0d69f2a83",
+    "conversation_id": "c84b86bd-4d34-48ac-8bf8-67e94d03d341",
+    "originating_run_id": "ca1bc2af-e199-4495-a62a-d00b4aaaf322",
+    "created_at": "2026-10-04T05:26:33.176240+00:00",
+    "expires_at": "2026-10-04T05:41:33.176240+00:00",
+    "request_anchor": {
+      "received_at": "2026-10-04T05:26:33.176240+00:00",
+      "reporting_timezone": "UTC"
+    },
+    "operations": [
+      {
+        "op": "patch_task",
+        "target": {
+          "id": 1
+        },
+        "set": {
+          "description": {
+            "sha256": "ec79f557c7793c38768590a208e70ca3c3697cd86f0863723429aea52cc917b6",
+            "characters": 1791,
+            "bytes": 1791,
+            "separate_review": true
+          },
+          "ready_to_plan": true
+        }
+      },
+      {
+        "op": "add_subtask",
+        "parent": {
+          "id": 1
+        },
+        "ref": "second",
+        "title": "Review second appendix"
+      }
+    ],
+    "review_targets": [
+      {
+        "target": {
+          "id": 1
+        },
+        "kind": "ordinary",
+        "title": "Review the complete client brief and all its detailed appendices before Wednesday",
+        "parent": null,
+        "before": {
+          "description": {
+            "sha256": "ed037691483b9b62502c512679563cc9e82aab9534d5659fab3b949b49059063",
+            "characters": 1886,
+            "bytes": 1886,
+            "separate_review": true
+          },
+          "ready_to_plan": false
+        },
+        "after": {
+          "description": {
+            "sha256": "ec79f557c7793c38768590a208e70ca3c3697cd86f0863723429aea52cc917b6",
+            "characters": 1791,
+            "bytes": 1791,
+            "separate_review": true
+          },
+          "ready_to_plan": true
+        },
+        "transitions": []
+      },
+      {
+        "target": {
+          "ref": "second"
+        },
+        "kind": "subtask",
+        "title": "Review second appendix",
+        "parent": 1,
+        "before": null,
+        "after": {
+          "title": "Review second appendix",
+          "checked": false
+        },
+        "transitions": []
+      }
+    ],
+    "side_effects": {},
+    "references": {},
+    "description_review_available": true,
+    "parent_ids": [
+      1
+    ],
+    "content_hash": "b19016beeb720dfdabcef552f38e0e2e6294b9a7f3885f1edee177f13600139e",
+    "status": "draft"
+  },
+  "full": {
+    "schema_version": 1,
+    "proposal_id": "19e909bf-bc2f-4041-a2a3-931f9ca5804a",
+    "revision": 1,
+    "operation_id": "02bb04a9-31ff-4564-b0ed-55f0d69f2a83",
+    "conversation_id": "c84b86bd-4d34-48ac-8bf8-67e94d03d341",
+    "originating_run_id": "ca1bc2af-e199-4495-a62a-d00b4aaaf322",
+    "created_at": "2026-10-04T05:26:33.176240+00:00",
+    "expires_at": "2026-10-04T05:41:33.176240+00:00",
+    "request_anchor": {
+      "received_at": "2026-10-04T05:26:33.176240+00:00",
+      "reporting_timezone": "UTC"
+    },
+    "operations": [
+      {
+        "op": "patch_task",
+        "target": {
+          "id": 1
+        },
+        "set": {
+          "description": "After literal **not markdown**\nRevised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. ",
+          "ready_to_plan": true
+        }
+      },
+      {
+        "op": "add_subtask",
+        "parent": {
+          "id": 1
+        },
+        "ref": "second",
+        "title": "Review second appendix"
+      }
+    ],
+    "review_targets": [
+      {
+        "target": {
+          "id": 1
+        },
+        "kind": "ordinary",
+        "title": "Review the complete client brief and all its detailed appendices before Wednesday",
+        "parent": null,
+        "before": {
+          "description": "Before literal <script>alert('data')</script>\nPrivate original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. Private original line. ",
+          "ready_to_plan": false
+        },
+        "after": {
+          "description": "After literal **not markdown**\nRevised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. ",
+          "ready_to_plan": true
+        },
+        "transitions": []
+      },
+      {
+        "target": {
+          "ref": "second"
+        },
+        "kind": "subtask",
+        "title": "Review second appendix",
+        "parent": 1,
+        "before": null,
+        "after": {
+          "title": "Review second appendix",
+          "checked": false
+        },
+        "transitions": []
+      }
+    ],
+    "side_effects": {},
+    "references": {},
+    "description_review_available": true,
+    "parent_ids": [
+      1
+    ],
+    "request_intent": {
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 1
+          },
+          "set": {
+            "description": "After literal **not markdown**\nRevised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. Revised private line. ",
+            "ready_to_plan": true
+          }
+        },
+        {
+          "op": "add_subtask",
+          "parent": {
+            "id": 1
+          },
+          "ref": "second",
+          "title": "Review second appendix"
+        }
+      ]
+    },
+    "content_hash": "b19016beeb720dfdabcef552f38e0e2e6294b9a7f3885f1edee177f13600139e",
+    "status": "pending",
+    "source_completed_at": "2026-10-04T05:26:33.192159+00:00"
+  },
+  "result": {
+    "operation_id": "02bb04a9-31ff-4564-b0ed-55f0d69f2a83",
+    "proposal_id": "19e909bf-bc2f-4041-a2a3-931f9ca5804a",
+    "status": "applied",
+    "receipt": {
+      "schema_version": 1,
+      "operation_id": "02bb04a9-31ff-4564-b0ed-55f0d69f2a83",
+      "proposal_id": "19e909bf-bc2f-4041-a2a3-931f9ca5804a",
+      "revision": 1,
+      "content_hash": "b19016beeb720dfdabcef552f38e0e2e6294b9a7f3885f1edee177f13600139e",
+      "conversation_id": "c84b86bd-4d34-48ac-8bf8-67e94d03d341",
+      "originating_run_id": "ca1bc2af-e199-4495-a62a-d00b4aaaf322",
+      "committed_at": "2026-10-04T05:26:33.207875+00:00",
+      "outcome": "applied",
+      "created": {
+        "second": 6
+      },
+      "changes": [
+        {
+          "target_id": 1,
+          "kind": "ordinary",
+          "changed_fields": [
+            "description",
+            "ready_to_plan"
+          ],
+          "approved_after_values": {
+            "description": {
+              "sha256": "ec79f557c7793c38768590a208e70ca3c3697cd86f0863723429aea52cc917b6",
+              "characters": 1791,
+              "bytes": 1791,
+              "separate_review": true
+            },
+            "ready_to_plan": true
+          }
+        },
+        {
+          "target_id": 6,
+          "kind": "subtask",
+          "changed_fields": [
+            "title",
+            "checked"
+          ],
+          "approved_after_values": {
+            "title": "Review second appendix",
+            "checked": false
+          }
+        }
+      ],
+      "effects": {
+        "completion_instants": [],
+        "stopped_actual_ids": [],
+        "removed_plan_ids": [],
+        "detached_actual_links": [],
+        "cleared_fields": []
+      },
+      "status_events": [
+        {
+          "event_id": "6ccad96a-d667-4314-9fcf-5fad98ffd174",
+          "at": "2026-10-04T05:26:33.207875+00:00",
+          "kind": "applied"
+        }
+      ]
+    },
+    "submission": {
+      "submission_id": "20bba583-4c03-42a6-8bce-3bb944c7c6c5",
+      "operation_id": "02bb04a9-31ff-4564-b0ed-55f0d69f2a83",
+      "state": "applied",
+      "reason": null,
+      "created_at": "2026-10-04T05:26:33.207875+00:00",
+      "updated_at": "2026-10-04T05:26:33.207875+00:00"
+    },
+    "status_events": [
+      {
+        "event_id": "00627d68-1e7f-4586-8db2-5a6de4d72a33",
+        "at": "2026-10-04T05:26:33.176240+00:00",
+        "kind": "draft"
+      },
+      {
+        "event_id": "d3f93ae6-db8c-4244-abb3-94109bbcdf56",
+        "at": "2026-10-04T05:26:33.192159+00:00",
+        "kind": "pending"
+      },
+      {
+        "event_id": "6ccad96a-d667-4314-9fcf-5fad98ffd174",
+        "at": "2026-10-04T05:26:33.207875+00:00",
+        "kind": "applied"
+      }
+    ],
+    "older_status_events": 0,
+    "undo_result": null
+  },
+  "complete": {
+    "schema_version": 1,
+    "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+    "revision": 1,
+    "operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+    "conversation_id": "66aa9e60-93cf-4992-8237-1420406c45a1",
+    "originating_run_id": "788c0225-9e95-446a-b140-62758be97577",
+    "created_at": "2026-10-04T05:26:33.257254+00:00",
+    "expires_at": "2026-10-04T05:41:33.257254+00:00",
+    "request_anchor": {
+      "received_at": "2026-10-04T05:26:33.257254+00:00",
+      "reporting_timezone": "UTC"
+    },
+    "operations": [
+      {
+        "op": "complete_now",
+        "target": {
+          "id": 7
+        }
+      }
+    ],
+    "review_targets": [
+      {
+        "target": {
+          "id": 7
+        },
+        "kind": "ordinary",
+        "title": "Finish report",
+        "parent": null,
+        "before": {
+          "status": "open",
+          "completed_at": null,
+          "completion_precision": null,
+          "completion_local_date": null,
+          "completion_timezone": null,
+          "ready_to_plan": true,
+          "blocked": true,
+          "blocking_reason": "Review",
+          "reminder_at": null
+        },
+        "after": {
+          "status": "completed",
+          "completion": {
+            "precision": "instant",
+            "at": "confirmation"
+          },
+          "ready_to_plan": false,
+          "blocked": false,
+          "blocking_reason": null,
+          "reminder_at": null
+        },
+        "transitions": [
+          "complete_now"
+        ]
+      }
+    ],
+    "side_effects": {
+      "7": {
+        "running_actual": {
+          "id": 2,
+          "task_id": 7,
+          "task_type_id": 1,
+          "start_at": "2026-10-04T04:26:33.257254+00:00",
+          "planned_block_id": null
+        },
+        "tracking": "stop",
+        "removed_plans": [
+          {
+            "id": 1,
+            "day_id": 1,
+            "task_type_id": 1,
+            "task_id": 7,
+            "name": "Final edit",
+            "start_minute": 600,
+            "end_minute": 660,
+            "start_at": null,
+            "end_at": null,
+            "day_date": "2026-10-05"
+          }
+        ],
+        "removed_plan_count": 1,
+        "detached_actual_ids": [],
+        "cleared_fields": [
+          "ready_to_plan",
+          "blocked",
+          "blocking_reason",
+          "reminder_at",
+          "reminder_delivery"
+        ]
+      }
+    },
+    "references": {},
+    "description_review_available": false,
+    "parent_ids": [
+      7
+    ],
+    "content_hash": "dbd7933ba768bbb47f6c42b14e9a3b701bdc3b53886838a7b21bc391bf362629",
+    "status": "draft"
+  },
+  "complete_result": {
+    "operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+    "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+    "status": "applied",
+    "receipt": {
+      "schema_version": 1,
+      "operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+      "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+      "revision": 1,
+      "content_hash": "dbd7933ba768bbb47f6c42b14e9a3b701bdc3b53886838a7b21bc391bf362629",
+      "conversation_id": "66aa9e60-93cf-4992-8237-1420406c45a1",
+      "originating_run_id": "788c0225-9e95-446a-b140-62758be97577",
+      "committed_at": "2026-10-04T05:26:33.257254+00:00",
+      "outcome": "applied",
+      "created": {},
+      "changes": [
+        {
+          "target_id": 7,
+          "kind": "ordinary",
+          "changed_fields": [
+            "status",
+            "completion",
+            "ready_to_plan",
+            "blocked",
+            "blocking_reason",
+            "reminder_at"
+          ],
+          "approved_after_values": {
+            "status": "completed",
+            "completion": {
+              "target_id": 7,
+              "precision": "instant",
+              "instant": "2026-10-04T05:26:33.257254+00:00"
+            },
+            "ready_to_plan": false,
+            "blocked": false,
+            "blocking_reason": null,
+            "reminder_at": null
+          }
+        }
+      ],
+      "effects": {
+        "completion_instants": [
+          {
+            "target_id": 7,
+            "precision": "instant",
+            "instant": "2026-10-04T05:26:33.257254+00:00"
+          }
+        ],
+        "stopped_actual_ids": [
+          2
+        ],
+        "removed_plan_ids": [
+          1
+        ],
+        "detached_actual_links": [],
+        "cleared_fields": [
+          {
+            "target_id": 7,
+            "fields": [
+              "ready_to_plan",
+              "blocked",
+              "blocking_reason",
+              "reminder_at",
+              "reminder_delivery"
+            ]
+          }
+        ]
+      },
+      "undo": {
+        "undo_operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+        "eligible": true,
+        "limitations": "Conflict-checked restoration of Task state/plans; tracking stays stopped."
+      },
+      "status_events": [
+        {
+          "event_id": "0b2a9bef-970d-4851-8ec7-fa281dd21885",
+          "at": "2026-10-04T05:26:33.257254+00:00",
+          "kind": "applied"
+        }
+      ]
+    },
+    "submission": {
+      "submission_id": "df2dcfb5-00fe-4b5c-8ab3-4084fac6371d",
+      "operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+      "state": "applied",
+      "reason": null,
+      "created_at": "2026-10-04T05:26:33.257254+00:00",
+      "updated_at": "2026-10-04T05:26:33.257254+00:00"
+    },
+    "status_events": [
+      {
+        "event_id": "3f71e024-8b3f-481b-a5b5-e2b857d66849",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "draft"
+      },
+      {
+        "event_id": "d71efba0-3da7-4a8a-b639-8b0498227a3c",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "pending"
+      },
+      {
+        "event_id": "0b2a9bef-970d-4851-8ec7-fa281dd21885",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "applied"
+      }
+    ],
+    "older_status_events": 0,
+    "undo_result": {
+      "operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+      "status": "available",
+      "receipt": null
+    }
+  },
+  "undo_result": {
+    "operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+    "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+    "status": "applied",
+    "receipt": {
+      "schema_version": 1,
+      "operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+      "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+      "original_operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+      "conversation_id": "66aa9e60-93cf-4992-8237-1420406c45a1",
+      "outcome": "applied",
+      "committed_at": "2026-10-04T05:26:33.290382+00:00",
+      "target_id": 7,
+      "tracking_restarted": false,
+      "status_events": [
+        {
+          "event_id": "dda35fbf-0091-4a63-9f54-fe4d508026ea",
+          "at": "2026-10-04T05:26:33.290382+00:00",
+          "kind": "undone",
+          "related_operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9"
+        }
+      ]
+    },
+    "submission": {
+      "submission_id": "03196005-d16a-4e61-8501-dd0db3b3c3dc",
+      "operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+      "state": "applied",
+      "reason": null,
+      "created_at": "2026-10-04T05:26:33.290382+00:00",
+      "updated_at": "2026-10-04T05:26:33.290382+00:00"
+    },
+    "status_events": [
+      {
+        "event_id": "3f71e024-8b3f-481b-a5b5-e2b857d66849",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "draft"
+      },
+      {
+        "event_id": "d71efba0-3da7-4a8a-b639-8b0498227a3c",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "pending"
+      },
+      {
+        "event_id": "0b2a9bef-970d-4851-8ec7-fa281dd21885",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "applied"
+      },
+      {
+        "event_id": "dda35fbf-0091-4a63-9f54-fe4d508026ea",
+        "at": "2026-10-04T05:26:33.290382+00:00",
+        "kind": "undone",
+        "related_operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9"
+      }
+    ],
+    "older_status_events": 0,
+    "undo_result": null
+  },
+  "original_after_undo": {
+    "operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+    "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+    "status": "applied",
+    "receipt": {
+      "schema_version": 1,
+      "operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+      "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+      "revision": 1,
+      "content_hash": "dbd7933ba768bbb47f6c42b14e9a3b701bdc3b53886838a7b21bc391bf362629",
+      "conversation_id": "66aa9e60-93cf-4992-8237-1420406c45a1",
+      "originating_run_id": "788c0225-9e95-446a-b140-62758be97577",
+      "committed_at": "2026-10-04T05:26:33.257254+00:00",
+      "outcome": "applied",
+      "created": {},
+      "changes": [
+        {
+          "target_id": 7,
+          "kind": "ordinary",
+          "changed_fields": [
+            "status",
+            "completion",
+            "ready_to_plan",
+            "blocked",
+            "blocking_reason",
+            "reminder_at"
+          ],
+          "approved_after_values": {
+            "status": "completed",
+            "completion": {
+              "target_id": 7,
+              "precision": "instant",
+              "instant": "2026-10-04T05:26:33.257254+00:00"
+            },
+            "ready_to_plan": false,
+            "blocked": false,
+            "blocking_reason": null,
+            "reminder_at": null
+          }
+        }
+      ],
+      "effects": {
+        "completion_instants": [
+          {
+            "target_id": 7,
+            "precision": "instant",
+            "instant": "2026-10-04T05:26:33.257254+00:00"
+          }
+        ],
+        "stopped_actual_ids": [
+          2
+        ],
+        "removed_plan_ids": [
+          1
+        ],
+        "detached_actual_links": [],
+        "cleared_fields": [
+          {
+            "target_id": 7,
+            "fields": [
+              "ready_to_plan",
+              "blocked",
+              "blocking_reason",
+              "reminder_at",
+              "reminder_delivery"
+            ]
+          }
+        ]
+      },
+      "undo": {
+        "undo_operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+        "eligible": true,
+        "limitations": "Conflict-checked restoration of Task state/plans; tracking stays stopped."
+      },
+      "status_events": [
+        {
+          "event_id": "0b2a9bef-970d-4851-8ec7-fa281dd21885",
+          "at": "2026-10-04T05:26:33.257254+00:00",
+          "kind": "applied"
+        }
+      ]
+    },
+    "submission": null,
+    "status_events": [
+      {
+        "event_id": "3f71e024-8b3f-481b-a5b5-e2b857d66849",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "draft"
+      },
+      {
+        "event_id": "d71efba0-3da7-4a8a-b639-8b0498227a3c",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "pending"
+      },
+      {
+        "event_id": "0b2a9bef-970d-4851-8ec7-fa281dd21885",
+        "at": "2026-10-04T05:26:33.257254+00:00",
+        "kind": "applied"
+      },
+      {
+        "event_id": "dda35fbf-0091-4a63-9f54-fe4d508026ea",
+        "at": "2026-10-04T05:26:33.290382+00:00",
+        "kind": "undone",
+        "related_operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9"
+      }
+    ],
+    "older_status_events": 0,
+    "undo_result": {
+      "operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+      "status": "applied",
+      "receipt": {
+        "schema_version": 1,
+        "operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9",
+        "proposal_id": "34deb4a2-83b5-4caf-9f22-d201c33d5028",
+        "original_operation_id": "aefe3c21-6413-4eaf-bbab-6041ba90344d",
+        "conversation_id": "66aa9e60-93cf-4992-8237-1420406c45a1",
+        "outcome": "applied",
+        "committed_at": "2026-10-04T05:26:33.290382+00:00",
+        "target_id": 7,
+        "tracking_restarted": false,
+        "status_events": [
+          {
+            "event_id": "dda35fbf-0091-4a63-9f54-fe4d508026ea",
+            "at": "2026-10-04T05:26:33.290382+00:00",
+            "kind": "undone",
+            "related_operation_id": "cabd6fb2-8f0f-4460-9b7b-ccc84d4499c9"
+          }
+        ]
+      }
+    }
+  },
+  "dated": {
+    "schema_version": 1,
+    "proposal_id": "4bad3c2f-b9c9-40b9-bf3e-af274976d8b1",
+    "revision": 1,
+    "operation_id": "ce90e23b-14b2-4826-8fe5-fa0cbf2025b8",
+    "conversation_id": "40b04f8b-9521-47bb-bb29-f5e774e31343",
+    "originating_run_id": "75cdf3af-3377-4feb-a963-011376f20367",
+    "created_at": "2026-10-04T05:26:33.304409+00:00",
+    "expires_at": "2026-10-04T05:41:33.304409+00:00",
+    "request_anchor": {
+      "received_at": "2026-10-04T05:26:33.304409+00:00",
+      "reporting_timezone": "UTC"
+    },
+    "operations": [
+      {
+        "op": "complete_at",
+        "target": {
+          "id": 7
+        },
+        "completion": {
+          "precision": "date",
+          "local_date": "2026-10-03",
+          "instant": "2026-10-03T12:00:00+00:00",
+          "reporting_timezone": "UTC"
+        }
+      }
+    ],
+    "review_targets": [
+      {
+        "target": {
+          "id": 7
+        },
+        "kind": "ordinary",
+        "title": "Finish report",
+        "parent": null,
+        "before": {
+          "status": "open",
+          "completed_at": null,
+          "completion_precision": null,
+          "completion_local_date": null,
+          "completion_timezone": null,
+          "ready_to_plan": true,
+          "blocked": true,
+          "blocking_reason": "Review",
+          "reminder_at": null
+        },
+        "after": {
+          "status": "completed",
+          "completion": {
+            "precision": "date",
+            "local_date": "2026-10-03",
+            "instant": "2026-10-03T12:00:00+00:00",
+            "reporting_timezone": "UTC"
+          },
+          "ready_to_plan": false,
+          "blocked": false,
+          "blocking_reason": null,
+          "reminder_at": null
+        },
+        "transitions": [
+          "complete_at"
+        ]
+      }
+    ],
+    "side_effects": {
+      "7": {
+        "running_actual": null,
+        "tracking": "unchanged",
+        "removed_plans": [],
+        "detached_actual_ids": [],
+        "cleared_fields": [
+          "ready_to_plan",
+          "blocked",
+          "blocking_reason",
+          "reminder_at",
+          "reminder_delivery"
+        ]
+      }
+    },
+    "references": {},
+    "description_review_available": false,
+    "parent_ids": [
+      7
+    ],
+    "content_hash": "553c8f7afd6158ce1cbf14f8b24122ad3050812cc8311ae8717045824fb3ec4e",
+    "status": "draft"
+  },
+  "dated_result": {
+    "operation_id": "ce90e23b-14b2-4826-8fe5-fa0cbf2025b8",
+    "proposal_id": "4bad3c2f-b9c9-40b9-bf3e-af274976d8b1",
+    "status": "applied",
+    "receipt": {
+      "schema_version": 1,
+      "operation_id": "ce90e23b-14b2-4826-8fe5-fa0cbf2025b8",
+      "proposal_id": "4bad3c2f-b9c9-40b9-bf3e-af274976d8b1",
+      "revision": 1,
+      "content_hash": "553c8f7afd6158ce1cbf14f8b24122ad3050812cc8311ae8717045824fb3ec4e",
+      "conversation_id": "40b04f8b-9521-47bb-bb29-f5e774e31343",
+      "originating_run_id": "75cdf3af-3377-4feb-a963-011376f20367",
+      "committed_at": "2026-10-04T05:26:33.306826+00:00",
+      "outcome": "applied",
+      "created": {},
+      "changes": [
+        {
+          "target_id": 7,
+          "kind": "ordinary",
+          "changed_fields": [
+            "status",
+            "completion",
+            "ready_to_plan",
+            "blocked",
+            "blocking_reason",
+            "reminder_at"
+          ],
+          "approved_after_values": {
+            "status": "completed",
+            "completion": {
+              "target_id": 7,
+              "precision": "date",
+              "local_date": "2026-10-03",
+              "instant": "2026-10-03T12:00:00+00:00",
+              "reporting_timezone": "UTC"
+            },
+            "ready_to_plan": false,
+            "blocked": false,
+            "blocking_reason": null,
+            "reminder_at": null
+          }
+        }
+      ],
+      "effects": {
+        "completion_instants": [
+          {
+            "target_id": 7,
+            "precision": "date",
+            "local_date": "2026-10-03",
+            "instant": "2026-10-03T12:00:00+00:00",
+            "reporting_timezone": "UTC"
+          }
+        ],
+        "stopped_actual_ids": [],
+        "removed_plan_ids": [],
+        "detached_actual_links": [],
+        "cleared_fields": [
+          {
+            "target_id": 7,
+            "fields": [
+              "ready_to_plan",
+              "blocked",
+              "blocking_reason",
+              "reminder_at",
+              "reminder_delivery"
+            ]
+          }
+        ]
+      },
+      "status_events": [
+        {
+          "event_id": "e6effe0e-4d70-4184-9522-e45a35eb9161",
+          "at": "2026-10-04T05:26:33.306826+00:00",
+          "kind": "applied"
+        }
+      ]
+    },
+    "submission": {
+      "submission_id": "bab035ce-b071-46aa-ac93-0d9e75516585",
+      "operation_id": "ce90e23b-14b2-4826-8fe5-fa0cbf2025b8",
+      "state": "applied",
+      "reason": null,
+      "created_at": "2026-10-04T05:26:33.306826+00:00",
+      "updated_at": "2026-10-04T05:26:33.306826+00:00"
+    },
+    "status_events": [
+      {
+        "event_id": "343d3496-0ecf-4e45-a3b8-134e0cc83330",
+        "at": "2026-10-04T05:26:33.304409+00:00",
+        "kind": "draft"
+      },
+      {
+        "event_id": "3c2e63f2-a415-4482-9b83-5cacd500effe",
+        "at": "2026-10-04T05:26:33.306826+00:00",
+        "kind": "pending"
+      },
+      {
+        "event_id": "e6effe0e-4d70-4184-9522-e45a35eb9161",
+        "at": "2026-10-04T05:26:33.306826+00:00",
+        "kind": "applied"
+      }
+    ],
+    "older_status_events": 0,
+    "undo_result": null
+  },
+  "reopen": {
+    "schema_version": 1,
+    "proposal_id": "6905c865-f8aa-46f2-941a-6cb31548b221",
+    "revision": 1,
+    "operation_id": "035b2dac-9548-4b93-980f-d0356c7b07f6",
+    "conversation_id": "2ebddc8f-987c-4361-9bb6-22afc9d4a970",
+    "originating_run_id": "999b5822-90dc-4f04-bac8-d5252971549b",
+    "created_at": "2026-10-04T05:26:33.320309+00:00",
+    "expires_at": "2026-10-04T05:41:33.320309+00:00",
+    "request_anchor": {
+      "received_at": "2026-10-04T05:26:33.320309+00:00",
+      "reporting_timezone": "UTC"
+    },
+    "operations": [
+      {
+        "op": "reopen_task",
+        "target": {
+          "id": 7
+        }
+      }
+    ],
+    "review_targets": [
+      {
+        "target": {
+          "id": 7
+        },
+        "kind": "ordinary",
+        "title": "Finish report",
+        "parent": null,
+        "before": {
+          "status": "completed",
+          "completed_at": "2026-10-03T12:00:00+00:00",
+          "completion_precision": "date",
+          "completion_local_date": "2026-10-03",
+          "completion_timezone": "UTC"
+        },
+        "after": {
+          "status": "open",
+          "completed_at": null,
+          "completion_precision": null,
+          "completion_local_date": null,
+          "completion_timezone": null
+        },
+        "transitions": [
+          "reopen_task"
+        ]
+      }
+    ],
+    "side_effects": {
+      "7": {
+        "restores_prior_state": false,
+        "restarts_tracking": false
+      }
+    },
+    "references": {},
+    "description_review_available": false,
+    "parent_ids": [
+      7
+    ],
+    "content_hash": "cc96e608f0a49ebc9120f228d6c3fa1452395fe80e79e2f7918d469a25d83702",
+    "status": "draft"
+  }
+}

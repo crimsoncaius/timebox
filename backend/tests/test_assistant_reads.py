@@ -94,7 +94,7 @@ def test_read_tool_exposes_only_new_tool_and_rejects_ranges():
             seen.extend(t.name for t in tools)
             return self
     build_agent(Model())
-    assert seen == ['read_activity']
+    assert seen == ['read_activity', 'read_tasks', 'read_task_choices', 'propose_task_changes']
     result = asyncio.run(read_activity_tool.ainvoke({'lane':'both'}))
     assert result['schema_version'] == 2
     assert result['snapshot_id']

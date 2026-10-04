@@ -86,6 +86,9 @@ class TimeboxRepository private constructor(
     var onActiveTasksLoaded: (BattleTaskList) -> Unit = {}
     /** Refresh device reminders after a mutation without reloading the visible task. */
     var onTaskChanged: () -> Unit = {}
+    var assistantTaskJournal: AssistantTaskJournal? = null
+    private val taskParents = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+    val assistantTasksChanged = kotlinx.coroutines.flow.MutableSharedFlow<List<Int>>(extraBufferCapacity = 1)
     var onConnectionChanged: () -> Unit = {}
 
     constructor(preferences: AppPreferences) : this(preferences, null)
@@ -283,10 +286,14 @@ class TimeboxRepository private constructor(
         planningDate: LocalDate? = null,
     ): Result<BattleTaskList> =
         call { api().listBattleTasks(collection.wire, planningDate?.toString()).toModel() }.also { result ->
+            result.onSuccess { tasks -> tasks.items.flattenBattleTasks().forEach { task ->
+                task.parentId?.let { taskParents[task.id] = it }
+                task.subtasks.forEach { child -> taskParents[child.id] = task.id }
+            } }
             if (collection == TaskCollection.Active) result.onSuccess(onActiveTasksLoaded)
         }
 
-    suspend fun createBattleTask(request: BattleTaskCreate): Result<BattleTask> = call {
+    suspend fun createBattleTask(request: BattleTaskCreate): Result<BattleTask> = taskCall(listOfNotNull(request.parentId)) {
         api().createBattleTask(
             BattleTaskCreateDto(
                 title = request.title,
@@ -304,14 +311,14 @@ class TimeboxRepository private constructor(
                 isBlocked = request.isBlocked,
                 blockingReason = request.blockingReason,
             )
-        ).toModel()
+        ).toModel().also { task -> task.parentId?.let { taskParents[task.id] = it } }
     }
 
     suspend fun patchBattleTask(taskId: Int, patch: BattleTaskPatch): Result<BattleTask> =
-        call { api().patchBattleTask(taskId, patch.toJson()).toModel() }.onSuccess { onTaskChanged() }
+        taskCall(listOf(taskId)) { api().patchBattleTask(taskId, patch.toJson()).toModel() }.onSuccess { onTaskChanged() }
 
     suspend fun completeBattleTask(taskId: Int): Result<TaskCompletionResult> =
-        call {
+        taskCall(listOf(taskId, 0)) {
             api().completeBattleTask(taskId).let { response ->
                 TaskCompletionResult(
                     response.task.toModel(),
@@ -322,37 +329,37 @@ class TimeboxRepository private constructor(
         }.onSuccess { onTaskChanged() }
 
     suspend fun checkSubtask(subtaskId: Int): Result<Subtask> =
-        call { api().checkSubtask(subtaskId).toModel() }
+        taskCall(listOf(subtaskId)) { api().checkSubtask(subtaskId).toModel() }
 
     suspend fun uncheckSubtask(subtaskId: Int): Result<Subtask> =
-        call { api().uncheckSubtask(subtaskId).toModel() }
+        taskCall(listOf(subtaskId)) { api().uncheckSubtask(subtaskId).toModel() }
 
     suspend fun reopenBattleTask(taskId: Int): Result<BattleTask> =
-        call { api().reopenBattleTask(taskId).toModel() }.onSuccess { onTaskChanged() }
+        taskCall(listOf(taskId)) { api().reopenBattleTask(taskId).toModel() }.onSuccess { onTaskChanged() }
 
     suspend fun undoBattleTaskCompletion(taskId: Int, undoToken: String): Result<BattleTask> =
-        call { api().undoBattleTaskCompletion(taskId, TaskCompletionUndoDto(undoToken)).toModel() }.onSuccess { onTaskChanged() }
+        taskCall(listOf(taskId, 0)) { api().undoBattleTaskCompletion(taskId, TaskCompletionUndoDto(undoToken)).toModel() }.onSuccess { onTaskChanged() }
 
-    suspend fun reorderBattleTasks(placements: List<TaskPlacement>): Result<Unit> = call {
+    suspend fun reorderBattleTasks(placements: List<TaskPlacement>): Result<Unit> = taskCall(placements.map { it.taskId }) {
         api().reorderBattleTasks(
             TaskReorderDto(placements.map { TaskPlacementDto(it.taskId, it.status.wire, it.position) })
         )
     }
 
     suspend fun archiveCompletedBattleTasks(taskIds: List<Int>): Result<Unit> =
-        call { api().archiveCompletedBattleTasks(TaskIdsDto(taskIds)) }
+        taskCall(taskIds) { api().archiveCompletedBattleTasks(TaskIdsDto(taskIds)) }
 
     suspend fun unarchiveBattleTask(taskId: Int): Result<Unit> =
-        call { api().unarchiveBattleTask(taskId) }
+        taskCall(listOf(taskId)) { api().unarchiveBattleTask(taskId) }
 
     suspend fun trashBattleTask(taskId: Int): Result<BattleTask> =
-        call { api().trashBattleTask(taskId).toModel() }
+        taskCall(listOf(taskId)) { api().trashBattleTask(taskId).toModel() }
 
     suspend fun restoreBattleTask(taskId: Int): Result<Unit> =
-        call { api().restoreBattleTask(taskId) }
+        taskCall(listOf(taskId)) { api().restoreBattleTask(taskId) }
 
     suspend fun permanentlyDeleteBattleTask(taskId: Int): Result<Unit> =
-        call { api().permanentlyDeleteBattleTask(taskId) }
+        taskCall(listOf(taskId)) { api().permanentlyDeleteBattleTask(taskId) }
 
     suspend fun listDueReminders(): Result<List<DueReminder>> =
         call { api().listDueReminders().map { it.toModel() } }
@@ -561,6 +568,7 @@ class TimeboxRepository private constructor(
     }
 
     suspend fun setConnection(baseUrl: String, apiKey: String) {
+        taskParents.clear()
         checkNotNull(preferences).setConnection(baseUrl, apiKey)
         cachedApiKey = apiKey.trim()
         // Force the next call to rebuild against the new host.
@@ -573,6 +581,11 @@ class TimeboxRepository private constructor(
 
     suspend fun setBattlePlanView(view: BattlePlanPreferences) =
         preferences?.setBattlePlanView(view) ?: Unit
+
+    private suspend fun <T> taskCall(ids: Collection<Int>, block: suspend () -> T): Result<T> = call {
+        val journal = assistantTaskJournal
+        if (journal == null) block() else journal.write(settings.first().assistantIdentity(), ids + ids.mapNotNull(taskParents::get), block)
+    }
 
     private suspend fun <T> call(block: suspend () -> T): Result<T> = withContext(ioDispatcher) {
         try {

@@ -111,6 +111,9 @@ class TaskTypeSnapshot(PlanSnapshot):
 
 
 def validate_snapshot(value: dict) -> dict:
+    if value.get("schema_version") == 4:
+        from app.services.assistant_tasks import validate
+        return validate(value)
     model = {1: PlanSnapshot, 2: BlockSnapshot, 3: TaskTypeSnapshot}.get(value.get("schema_version", 1))
     if model is None:
         raise ValueError("Unknown snapshot schema version")
@@ -178,6 +181,7 @@ class PresentationParser:
         self.buffer = ""
         self.selected = False
         self.text_only = False
+        self.allow_empty = False
 
     def expect_text_only(self):
         """After a Tracking Proposal the answer is plain text; a leading none-selector is tolerated and removed."""
@@ -231,7 +235,10 @@ class PresentationParser:
                 or any(not isinstance(key, str) or key not in self.snapshots for key in keys)
                 or len(set(keys)) != len(keys)):
             raise ValueError("Invalid or unknown snapshot selection")
-        return [("plan_card", validate_snapshot(self.snapshots[key])) for key in keys]
+        values = [validate_snapshot(self.snapshots[key]) for key in keys]
+        if any(value.get("kind") == "choices" for value in values):
+            raise ValueError("Choices are not Task Cards")
+        return [("task_card" if value.get("kind") == "tasks" else "plan_card", value) for value in values]
 
     def finish(self, *, successful_terminal: bool = False) -> list[tuple[str, dict]]:
         if self.selected:
@@ -246,6 +253,6 @@ class PresentationParser:
         # EOF, cancellation, truncation, or a closing brace during streaming cannot.
         if successful_terminal:
             value = json.loads(self.buffer, object_pairs_hook=unique_object)
-            if isinstance(value, dict) and value.get("presentation") in ("snapshot", "snapshots"):
+            if (self.allow_empty and value == {"presentation": "none"}) or (isinstance(value, dict) and value.get("presentation") in ("snapshot", "snapshots")):
                 return self.feed("\n")
         raise ValueError("Incomplete presentation header")

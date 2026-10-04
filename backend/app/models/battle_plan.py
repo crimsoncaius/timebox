@@ -322,6 +322,9 @@ class Task(Base):
     completed_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    completion_precision: Mapped[str | None] = mapped_column(String(16))
+    completion_local_date: Mapped[dt.date | None] = mapped_column(Date)
+    completion_timezone: Mapped[str | None] = mapped_column(Text)
     # Used by conflict-aware Task Completion Undo. SQLAlchemy increments this for
     # ordinary ORM updates; completion operations can snapshot the exact version
     # they produced and reject restoration over newer user intent.

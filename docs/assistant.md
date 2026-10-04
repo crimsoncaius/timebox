@@ -158,6 +158,29 @@ See [Phoenix retention documentation](https://arize.com/docs/phoenix/settings/da
 
 ## Verification
 
+### Saved Task reads (task-access slice 1)
+
+The current backend exposes `read_tasks` and `read_task_choices` in the same
+three-read model budget as activity reads. Task reads use schema 4; schemas 1–3
+and retained conversations remain intact. Query manifests retain fixed membership
+and order, with 20-row pages and 15-minute opaque continuations. Their maximum
+1,000 saved identities and all partial/unavailable results are explicit. Reads
+never synchronize recurrence, purge Trash, or change domain records.
+
+Before each response, `task_refresh_v1` supplies bounded current evidence for
+known Tasks, including related labels, Subtasks and saved planned dates. It
+uses no provider call, fetches no descriptions, and leaves historical snapshots
+unchanged. Attempts retain the exact injected messages, refresh evidence and
+read-error markers. Historical reads and current evidence share 64 KiB; current
+tool results separately share 64 KiB. Individual task reads are bounded to 32 KiB,
+refresh to 40 identities/24 KiB, and database reads to five seconds.
+
+`task_card` uses the normal SSE run/sequence envelope and a separate public
+allowlist. Descriptions, source arguments and projection hashes never reach its
+payload. Choice snapshots are replayable data, not cards. The subsequent slices
+add task execution and Android presentation/recovery; task confirmation is not
+enabled by this read slice. Do not release the partial batch as a matched pair.
+
 ```powershell
 cd backend
 uv run python -m pytest

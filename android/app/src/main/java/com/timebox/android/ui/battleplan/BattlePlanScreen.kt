@@ -1,5 +1,8 @@
 package com.timebox.android.ui.battleplan
 
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
 import com.timebox.android.ui.components.HelperText
 import androidx.compose.material3.CircularProgressIndicator
 
@@ -1598,6 +1601,10 @@ fun TaskDetailScreen(
                 if (it.readinessPending) Text(if (it.readyToPlan) "Saving · Ready to Plan" else "Saving · Not Ready to Plan",
                     modifier = Modifier.semantics { contentDescription = readyToPlanActionDescription(it) }, color = TimeboxTheme.colors.onVariant)
                 ReadyToPlanFailureNotice(it)
+                if (it.status == TaskStatus.Completed && it.completedAt != null) {
+                    HelperText("Completed: " + if (it.completionPrecision == "date") it.completionLocalDate.toString()
+                        else it.completedAt.atZone(ZoneId.of(state.timezone)).format(DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")))
+                }
             }
             if (state.task?.recurrenceKind == "quota_parent") {
                 HelperText("Quota progress: ${state.task.quotaCompleted ?: 0} / ${state.task.expectedSessions ?: 0}")

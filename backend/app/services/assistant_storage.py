@@ -20,16 +20,30 @@ class CaptureError(Exception):
     pass
 
 
-def create(key, capabilities):
+def write_session():
+    from app.services.assistant_task_operations import transaction
+    return transaction(engine=get_engine())
+
+
+def create(key, capabilities, previous_conversation_id=None):
     try:
-        with Session(get_engine()) as db:
+        with write_session() as db:
+            if previous_conversation_id:
+                from app.services.assistant_task_operations import close_pending
+                previous = db.get(AssistantConversation, previous_conversation_id, with_for_update=True)
+                if previous is None:
+                    raise HTTPException(404, "Previous conversation not found")
+                previous.closed_at = previous.closed_at or dt.datetime.now(dt.UTC)
+                close_pending(db, previous_conversation_id)
             db.add(AssistantConversation(id=key, capabilities=capabilities))
             db.commit()
     except SQLAlchemyError:
         raise HTTPException(503, "Conversation could not be saved. Please retry.") from None
 
 
-def load(key):
+def load(key, max_snapshot_bytes=None):
+    if max_snapshot_bytes is None:
+        max_snapshot_bytes = MAX_CONTEXT_READ_BYTES
     try:
         with Session(get_engine()) as db:
             row = db.get(AssistantConversation, key)
@@ -46,7 +60,7 @@ def load(key):
                 for card in displayed_cards(attempt.displayed_plan):
                     snapshots.setdefault(card["snapshot_id"], card)
             # Evict whole reads, oldest first. Durable attempts/cards are untouched.
-            while snapshots and len(json.dumps(snapshots).encode("utf-8")) > MAX_CONTEXT_READ_BYTES:
+            while snapshots and len(json.dumps(snapshots).encode("utf-8")) > max_snapshot_bytes:
                 del snapshots[next(iter(snapshots))]
             for attempt in reversed(attempts):
                 messages.extend(replay(attempt, snapshots))
@@ -71,15 +85,20 @@ def replay(attempt, snapshots=None):
             continue
         read_id = f"{call_id}-{index}"
         args = {}
-        if plan.get("schema_version", 1) > 1:
+        name = "read_today_plan"
+        if plan.get("schema_version") == 4:
+            name = plan["source"]["tool"]
+            args = plan["source"]["normalized_arguments"]
+        elif plan.get("schema_version", 1) > 1:
+            name = "read_activity"
             args = {"lane": plan["lane"], "group_by": plan["group_by"], "when": plan["date"]}
             if plan["schema_version"] == 3:
                 args.update(when={"start": plan["start"], "end": plan["end"], "weekdays": plan["weekdays"]}, detail=plan["detail"])
             if plan["task_type"]:
                 args["task_type"] = plan["task_type"]
         # The rows reach the model once, through the Historical snapshots context.
-        messages += [AIMessage("", tool_calls=[{"id": read_id, "name": "read_activity" if args else "read_today_plan", "args": args}]),
-                     ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "date": plan["date"],
+        messages += [AIMessage("", tool_calls=[{"id": read_id, "name": name, "args": args}]),
+                     ToolMessage(json.dumps({"snapshot_id": plan["snapshot_id"], "read_at": plan["read_at"],
                                              "rows": "in Historical snapshots"}), tool_call_id=read_id)]
     if attempt.tracking_proposal:
         messages += replay_proposal(attempt.tracking_proposal, call_id)
@@ -92,14 +111,15 @@ def replay(attempt, snapshots=None):
     # Legacy clients receive card rows as text. Do not smuggle those rows back
     # into context through the answer after the corresponding read is evicted.
     for card in displayed_cards(attempt.displayed_plan):
-        answer = answer.removeprefix(text_schedule(card))
+        if card.get("schema_version") != 4:
+            answer = answer.removeprefix(text_schedule(card))
     messages.append(AIMessage(header + "\n" + answer if answer else header))
     return messages
 
 
 def begin(key, run_id, question, model):
     try:
-        with Session(get_engine()) as db:
+        with write_session() as db:
             db.add(AssistantAttempt(conversation_id=key, run_id=run_id, question=question, model=model))
             db.commit()
     except IntegrityError:
@@ -112,18 +132,29 @@ def capture(run_id, answer, reads, card, status="running", error=None, proposal=
     cards = displayed_cards(card)
     card = cards[0] if len(cards) == 1 else cards or None
     try:
-        with Session(get_engine()) as db:
+        with write_session() as db:
             db.execute(update(AssistantAttempt).where(AssistantAttempt.run_id == run_id).values(
                 answer=answer, snapshots=reads, displayed_plan=card, tracking_proposal=proposal, status=status, error=error,
             ))
+            from app.services.assistant_task_operations import finish_source
+            finish_source(db, run_id, status)
+            db.commit()
+    except (SQLAlchemyError, TimeoutError):
+        raise CaptureError("The response could not be saved. Please retry.") from None
+
+
+def capture_inputs(run_id, inputs):
+    try:
+        with write_session() as db:
+            db.execute(update(AssistantAttempt).where(AssistantAttempt.run_id == run_id).values(context_inputs=inputs))
             db.commit()
     except SQLAlchemyError:
-        raise CaptureError("The response could not be saved. Please retry.") from None
+        raise CaptureError("The response context could not be saved. Please retry.") from None
 
 
 def acknowledge(key, run_id):
     try:
-        with Session(get_engine()) as db:
+        with write_session() as db:
             db.execute(update(AssistantAttempt).where(
                 AssistantAttempt.conversation_id == key,
                 AssistantAttempt.run_id == run_id,
@@ -136,12 +167,14 @@ def acknowledge(key, run_id):
 
 def stop(key, run_id):
     try:
-        with Session(get_engine()) as db:
+        with write_session() as db:
             db.execute(update(AssistantAttempt).where(
                 AssistantAttempt.conversation_id == key,
                 AssistantAttempt.run_id == run_id,
                 AssistantAttempt.acknowledged.is_(False),
             ).values(status="stopped"))
+            from app.services.assistant_task_operations import finish_source
+            finish_source(db, run_id, "stopped")
             db.commit()
     except SQLAlchemyError:
         raise HTTPException(503, "The stopped status could not be saved. Please retry.") from None
@@ -149,10 +182,12 @@ def stop(key, run_id):
 
 def close(key):
     try:
-        with Session(get_engine()) as db:
+        with write_session() as db:
             db.execute(update(AssistantConversation).where(
                 AssistantConversation.id == key, AssistantConversation.closed_at.is_(None),
             ).values(closed_at=dt.datetime.now(dt.UTC)))
+            from app.services.assistant_task_operations import close_pending
+            close_pending(db, key)
             db.commit()
     except SQLAlchemyError:
         raise HTTPException(503, "Conversation could not be closed. Please retry.") from None
@@ -160,7 +195,11 @@ def close(key):
 
 def recover_interrupted():
     """Single-worker startup: preserve captured output, never resume generation."""
-    with Session(get_engine()) as db:
+    with write_session() as db:
+        from app.models.assistant import AssistantTaskProposal
+        from app.services.assistant_task_operations import transition
+        for proposal in db.scalars(select(AssistantTaskProposal).where(AssistantTaskProposal.status == "draft").with_for_update()):
+            transition(proposal, "invalid")
         db.execute(update(AssistantAttempt).where(AssistantAttempt.status == "running").values(
             status="interrupted", error="The backend restarted before this response finished.",
         ))

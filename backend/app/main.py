@@ -98,8 +98,8 @@ app.include_router(time_goals.router, dependencies=_protected)
 app.include_router(actual_blocks.router, dependencies=_protected)
 app.include_router(actual_blocks.planned_router, dependencies=_protected)
 app.include_router(activity.router, dependencies=_protected)
-# Assistant writes its own conversation records only. Do not hold the legacy write
-# admission/database dependency open over an SSE response (Stop must run concurrently).
+# Assistant lifecycle/confirmation routes admit their own short transactions.
+# Never hold admission/database dependencies over SSE (Stop must run concurrently).
 app.include_router(assistant.router, dependencies=[Depends(require_api_key)])
 app.include_router(trends.router, dependencies=_protected)
 

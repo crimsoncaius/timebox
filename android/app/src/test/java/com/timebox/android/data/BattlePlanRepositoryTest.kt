@@ -33,6 +33,25 @@ class BattlePlanRepositoryTest {
     private var recurringPatchBody: JsonObject? = null
     private val repository = TimeboxRepository(fakeApi(), dayElapsedRealtime = { 0L })
 
+    @Test fun `recovered parent barrier blocks child edits and lifecycle before HTTP`() = runBlocking {
+        val journal = AssistantTaskJournal(object : TaskJournalStorage {
+            override fun read(): String? = null
+            override fun write(value: String) {}
+        })
+        repository.assistantTaskJournal = journal
+        repository.listBattleTasks().getOrThrow()
+        val identity = AppSettings("http://localhost/", "", null).assistantIdentity()
+        journal.persist(TaskSubmission(identity, "conversation", "proposal", "operation", "submission",
+            affectedTaskIds = listOf(10), affectedFields = listOf("status"), affectsTracking = false, submittedAt = "now"))
+        calls.clear()
+        assertTrue(repository.checkSubtask(11).isFailure)
+        assertTrue(repository.patchBattleTask(11, BattleTaskPatch(title = PatchField.of("New"))).isFailure)
+        assertTrue(repository.completeBattleTask(10).isFailure)
+        assertTrue(calls.isEmpty())
+        assertTrue(repository.patchBattleTask(12, BattleTaskPatch(title = PatchField.of("Unrelated"))).isSuccess)
+        assertEquals(listOf("patchBattleTask"), calls)
+    }
+
     @Test
     fun `every Battle Plan and recurring endpoint is callable through repository`() = runBlocking {
         repository.listProjects().getOrThrow()
@@ -217,7 +236,7 @@ class BattlePlanRepositoryTest {
                 "listProjects" -> listOf(project)
                 "createProject", "patchProject" -> project
                 "listBattleTasks" -> BattleTaskListDto(
-                    listOf(task), "Asia/Singapore", "2026-08-17T12:00:00+08:00",
+                    listOf(task.copy(subtasks = listOf(subtask))), "Asia/Singapore", "2026-08-17T12:00:00+08:00",
                 )
                 "createBattleTask", "patchBattleTask", "trashBattleTask", "reopenBattleTask",
                 "undoBattleTaskCompletion" -> task
