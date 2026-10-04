@@ -86,6 +86,33 @@ def test_proposal_only_selector_and_shared_tool_bound(client, monkeypatch):
             asyncio.run(run())
 
 
+def test_description_proposal_remains_available_after_three_real_task_reads(client, monkeypatch):
+    tid = task(description="Private original")
+    model = scripted(
+        call("read_tasks", {"mode": "search", "query": "Report"}),
+        call("read_tasks", {"mode": "get", "task_ids": [tid], "include_description": True}),
+        call("read_tasks", {"mode": "get", "task_ids": [tid]}),
+        call("propose_task_changes", {"operations": [patch(tid, description="Private replacement")]}),
+        answer(),
+    )
+
+    async def fake(messages, snapshots, **kwargs):
+        async for event in translate_events(build_agent(model).astream_events({"messages": messages}, version="v2"), snapshots):
+            yield event
+
+    monkeypatch.setattr(assistant, "agent_events", fake)
+    key = client.post("/assistant/conversations").json()["conversation_id"]
+    response = client.post(f"/assistant/conversations/{key}/messages", json={"message": "Read and replace the description", "run_id": str(uuid4())})
+    events = decode(response)
+    assert events[-1][0] == "completed"
+    proposals = [data for kind, data in events if kind == "task_proposal"]
+    assert len(proposals) == 1
+    assert "Private original" not in str(proposals[0])
+    assert confirm(proposals[0])[0] == 200
+    with Session(get_engine()) as db:
+        assert db.get(Task, tid).description == "Private replacement"
+
+
 def test_pending_target_priority_includes_known_child_outside_first_page():
     tid = task()
     with Session(get_engine()) as db:

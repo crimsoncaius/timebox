@@ -32,6 +32,26 @@ def read(key, **args):
     return read_tasks(ReadTasksArgs(**args), key, now=NOW)
 
 
+def test_model_tool_adapter_preserves_omitted_mode_fields(conversation):
+    import asyncio
+
+    from app.services.assistant_agent import read_tasks_tool, task_read_context
+
+    async def invoke():
+        token = task_read_context.set({"conversation_id": conversation, "bytes": 0})
+        try:
+            search = await read_tasks_tool.ainvoke({"mode": "search"})
+            invalid = await read_tasks_tool.ainvoke({"mode": "search", "task_ids": None})
+            return search, invalid
+        finally:
+            task_read_context.reset(token)
+
+    result, invalid = asyncio.run(invoke())
+    assert "error" not in result, result
+    assert result["kind"] == "tasks"
+    assert "Fields do not apply" in invalid["error"]
+
+
 def test_default_privacy_purity_literal_title_and_child_identity(conversation):
     with Session(get_engine()) as db:
         project = Project(name="One"); kind = TaskType(name="work"); db.add_all([project, kind]); db.flush()

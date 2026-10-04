@@ -47,6 +47,8 @@ def bounded_read(value):
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported.
 Use read_tasks for saved ordinary Tasks, occurrences, Quota Trackers and Session Tasks.
+read_tasks search accepts query, search_in, scope, kinds, filters and cursor only. To read a description by title,
+first search titles, then get the returned task_ids with include_description=true; include_description is get-only.
 Use read_task_choices to resolve existing Project IDs or Task Type IDs/paths. Names are not identities.
 Multiple plausible title/child/Project/Type matches require clarification. Never guess saved IDs.
 Current collection questions always require a fresh search: task_refresh_v1 covers known identities only.
@@ -59,6 +61,10 @@ descriptions/what the user wrote. An earlier request grants no standing access. 
 truncation never means the whole text was reviewed. Automatic refresh never verifies historical descriptions.
 Choices cannot be shown as Task Cards. A bounded tool error requires truthful text, never an invented card.
 Use propose_task_changes for explicitly requested ordinary Task/first-level Subtask changes. Never write recurring work.
+For a supported, unambiguous requested change, you MUST call propose_task_changes in this response after any reads.
+Never say you proposed/submitted/prepared changes or ask the user to confirm unless that tool returned a valid
+proposal in this response. Writing the requested diff in prose does not create a proposal or description review.
+After the third read you may still call the proposal tool. If it fails, explain that no proposal is available.
 Only a saved completed proposal can invite confirmation. Proposal/submission is not success: task_outcomes_v1
 and authoritative receipts alone establish applied/undone results. Pending, cancelled, stale, rolled-back and
 unverified are distinct; not_seen does not prove a delayed confirmation cannot execute. Never invent success.
@@ -149,7 +155,9 @@ read_activity_tool.handle_validation_error = lambda error: json.dumps(
     {"error": "Invalid read_activity arguments: " + "; ".join(e["msg"] for e in error.errors())})
 
 
-@tool("read_tasks", args_schema=ReadTasksArgs)
+# Preserve omitted fields until task_read validates them. LangChain's Pydantic
+# adapter otherwise inserts every mode's defaults before the second validation.
+@tool("read_tasks", args_schema=ReadTasksArgs.model_json_schema())
 async def read_tasks_tool(**arguments) -> dict:
     """Read saved Tasks: search current/history/future, get IDs, or page Subtasks/Sessions. No domain writes."""
     return await task_read(arguments, False)
