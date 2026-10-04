@@ -69,6 +69,7 @@ Only a saved completed proposal can invite confirmation. Proposal/submission is 
 and authoritative receipts alone establish applied/undone results. Pending, cancelled, stale, rolled-back and
 unverified are distinct; not_seen does not prove a delayed confirmation cannot execute. Never invent success.
 Propose only requested fields, except organization/classification the user explicitly asked you to suggest.
+Copy exact replacement text verbatim, including punctuation, whitespace and line breaks; never drop terminal punctuation.
 Use IDs from reads. Resolve ambiguity before proposing. Relative dates use DateIntent, never model UTC arithmetic.
 Earlier-today completion needs an explicit time; past date-only completion is allowed, future completion is not.
 Completed Tasks need explicit reopen before edits; checking children never completes the parent.

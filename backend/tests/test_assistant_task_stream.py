@@ -88,11 +88,12 @@ def test_proposal_only_selector_and_shared_tool_bound(client, monkeypatch):
 
 def test_description_proposal_remains_available_after_three_real_task_reads(client, monkeypatch):
     tid = task(description="Private original")
+    replacement = "Revised description: ready for review.\nKeep this line, too."
     model = scripted(
         call("read_tasks", {"mode": "search", "query": "Report"}),
         call("read_tasks", {"mode": "get", "task_ids": [tid], "include_description": True}),
         call("read_tasks", {"mode": "get", "task_ids": [tid]}),
-        call("propose_task_changes", {"operations": [patch(tid, description="Private replacement")]}),
+        call("propose_task_changes", {"operations": [patch(tid, description=replacement)]}),
         answer(),
     )
 
@@ -108,9 +109,11 @@ def test_description_proposal_remains_available_after_three_real_task_reads(clie
     proposals = [data for kind, data in events if kind == "task_proposal"]
     assert len(proposals) == 1
     assert "Private original" not in str(proposals[0])
+    review = client.get(f"/assistant/task-proposals/{proposals[0]['proposal_id']}").json()
+    assert review["review_targets"][0]["after"]["description"] == replacement
     assert confirm(proposals[0])[0] == 200
     with Session(get_engine()) as db:
-        assert db.get(Task, tid).description == "Private replacement"
+        assert db.get(Task, tid).description == replacement
 
 
 def test_pending_target_priority_includes_known_child_outside_first_page():
