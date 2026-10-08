@@ -7,8 +7,8 @@ from app.core.config import get_settings
 from app.core.time import utc_now
 from app.models.battle_plan import Task
 from app.services.activity_service import reporting_settings
-from app.services.assistant_limits import MAX_REFRESH_BYTES, MAX_REFRESH_IDENTITIES, TASK_READ_TIMEOUT
-from app.services.assistant_tasks import encoded, project_ids, read_session
+from app.services.assistant_limits import MAX_REFRESH_IDENTITIES, TASK_READ_TIMEOUT
+from app.services.assistant_tasks import project_ids, read_session
 
 
 def known_tasks(snapshots):
@@ -42,8 +42,6 @@ def unverified(snapshots, now, reason):
               "projections": [], "changed_fields": {}, "unavailable_ids": [], "unverified_ids": list(known),
               "omitted_child_count": len(children), "status": "unverified", "reason": reason,
               "description_coverage": "historical_only_not_refreshed"}
-    if len(encoded(result)) > MAX_REFRESH_BYTES:
-        result.update(requested_ids=[], unverified_ids=[], omitted_identity_count=len(known))
     return result
 
 
@@ -73,10 +71,6 @@ def refresh(snapshots, *, now=None, priority_ids=(), priority_children=None):
                     continue
                 # No fresh cursors: this preflight does not issue discovery reads.
                 row = {k: v for k, v in row.items() if not k.endswith("_cursor")}
-                candidate = [*result["projections"], row]
-                if len(encoded({**result, "projections": candidate})) > MAX_REFRESH_BYTES - 4096:
-                    result["unverified_ids"].append(task_id)
-                    continue
                 result["projections"].append(row)
                 covered_identities = prospective_ids
                 if row["availability"] == "unavailable":
@@ -105,11 +99,4 @@ def refresh(snapshots, *, now=None, priority_ids=(), priority_children=None):
         result["children"].setdefault(str(child_id), {"parent_id": parent_id, "availability": "unverified"})
     if result["unverified_ids"] or any(c["availability"] == "unverified" for c in result["children"].values()):
         result["status"] = "partial" if result["projections"] else "unverified"
-    if len(encoded(result)) > MAX_REFRESH_BYTES:
-        # Keep compact coverage rather than assert that an oversized projection
-        # (or its child collection) was verified.
-        result.update(projections=[], refreshed_ids=[], unavailable_ids=[], unverified_ids=order,
-                      children={}, changed_fields={}, status="unverified", omitted_child_count=len(children))
-        if len(encoded(result)) > MAX_REFRESH_BYTES:
-            result.update(requested_ids=[], unverified_ids=[], omitted_identity_count=len(order))
     return result

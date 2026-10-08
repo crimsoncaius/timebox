@@ -12,6 +12,61 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AssistantControllerTest {
+    @Test fun `retired payloads preserve text and all three supported cards in a completed response`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Read saved response"); runCurrent()
+        val events = Json.parseToJsonElement(javaClass.getResource("/assistant-historical-response.json")!!.readText()).jsonArray
+        for (value in events) {
+            val event = value.jsonObject
+            api.events.emit(AssistantEvent(event.getValue("kind").jsonPrimitive.content,
+                JsonObject(event.getValue("data").jsonObject + mapOf("run_id" to JsonPrimitive(api.run), "sequence" to JsonPrimitive(++api.sequence)))))
+        }
+        api.emit("eof"); runCurrent()
+        val exchange = controller.state.value.exchanges.single()
+        assertEquals("Complete", exchange.status)
+        assertNull(exchange.error)
+        assertEquals("Your saved response is still readable.", exchange.answer)
+        assertEquals(listOf("blocks", "types"), exchange.cards.map { it.id })
+        assertEquals(1, exchange.taskCards.size)
+        assertEquals(listOf("blocks", "types", exchange.taskCards.single().id), exchange.cardOrder)
+        controller.send("Follow up"); runCurrent()
+        assertEquals(1, api.acks)
+    }
+
+    @Test fun `retired payload needs no capability and leaves a text only conversation readable`() = runTest {
+        val api = Fake().apply { supportsActivityCards = false }
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Read old plan"); runCurrent()
+        api.events.emit(AssistantEvent("plan_card", buildJsonObject {
+            put("run_id", api.run); put("sequence", ++api.sequence); put("schema_version", 1)
+        }))
+        api.emit("text_delta", "Historical answer"); api.emit("completed"); api.emit("eof"); runCurrent()
+        val exchange = controller.state.value.exchanges.single()
+        assertEquals("Complete", exchange.status)
+        assertEquals("Historical answer", exchange.answer)
+        assertTrue(exchange.cards.isEmpty())
+        assertTrue(exchange.cardOrder.isEmpty())
+        controller.send("New card without capability"); runCurrent(); api.card(); runCurrent()
+        assertEquals("Interrupted", controller.state.value.exchanges.last().status)
+    }
+
+    @Test fun `retired card only response completes while a truly empty response is still rejected`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Old card only"); runCurrent()
+        api.events.emit(AssistantEvent("plan_card", buildJsonObject {
+            put("run_id", api.run); put("sequence", ++api.sequence); put("schema_version", 1)
+        }))
+        api.emit("completed"); api.emit("eof"); runCurrent()
+        assertEquals("Complete", controller.state.value.exchanges.single().status)
+        assertTrue(controller.state.value.exchanges.single().cards.isEmpty())
+        controller.send("Empty response"); runCurrent()
+        api.emit("completed"); runCurrent()
+        assertEquals(1, api.acks)
+        assertEquals("Interrupted", controller.state.value.exchanges.last().status)
+    }
+
     @Test fun `confirmed switch retains its valid view while the repository publishes the new activity`() = runTest {
         val now = java.time.Instant.parse("2026-09-25T12:50:00Z")
         val zone = java.time.ZoneId.of("UTC")
@@ -68,8 +123,7 @@ class AssistantControllerTest {
     }
 
     private class Fake : AssistantTransport {
-        override val supportsPlanCards = true
-        override var supportsActivityCards = false
+        override var supportsActivityCards = true
         override var supportsTrackingProposals = true
         val events = MutableSharedFlow<AssistantEvent>()
         var run = ""
@@ -101,10 +155,11 @@ class AssistantControllerTest {
 
     private suspend fun Fake.card(id: String = "snapshot-1") {
         events.emit(AssistantEvent("plan_card", buildJsonObject {
-            put("run_id", run); put("sequence", ++sequence); put("schema_version", 1)
+            put("run_id", run); put("sequence", ++sequence); put("schema_version", 2)
+            put("lane", "planned"); put("recurring_not_materialized", false)
             put("snapshot_id", id); put("date", "2026-09-21")
             put("reporting_timezone", "Asia/Singapore"); put("read_at", "2026-09-21T01:41:00Z")
-            putJsonArray("planned_blocks") {}
+            putJsonArray("blocks") {}
         }))
     }
 
@@ -166,7 +221,7 @@ class AssistantControllerTest {
         val controller = AssistantController(backgroundScope) { api }
         controller.send("Show plan"); runCurrent()
         api.card(); runCurrent()
-        assertNotNull(controller.state.value.exchanges.single().plan)
+        assertEquals(1, controller.state.value.exchanges.single().cards.size)
         assertEquals("", controller.state.value.exchanges.single().status)
         api.emit("completed"); api.emit("eof"); runCurrent()
         assertEquals("Complete", controller.state.value.exchanges.single().status)
@@ -174,14 +229,14 @@ class AssistantControllerTest {
         assertEquals(1, api.acks)
     }
 
-    @Test fun `second card interrupts and later completion cannot repair it`() = runTest {
+    @Test fun `duplicate card interrupts and later completion cannot repair it`() = runTest {
         val api = Fake()
         val controller = AssistantController(backgroundScope) { api }
         controller.send("Show plan"); runCurrent()
         api.card(); api.card(); runCurrent()
         api.emit("completed"); runCurrent()
         assertEquals("Interrupted", controller.state.value.exchanges.single().status)
-        assertNotNull(controller.state.value.exchanges.single().plan)
+        assertEquals(1, controller.state.value.exchanges.single().cards.size)
         controller.send("Next"); runCurrent()
         assertEquals(0, api.acks)
     }
@@ -192,10 +247,10 @@ class AssistantControllerTest {
         controller.send("Show plan"); runCurrent()
         api.emit("text_delta", "answer"); api.card(); runCurrent()
         assertEquals("Interrupted", controller.state.value.exchanges.single().status)
-        assertNull(controller.state.value.exchanges.single().plan)
+        assertTrue(controller.state.value.exchanges.single().cards.isEmpty())
         controller.retry(); runCurrent(); api.card(); runCurrent()
         controller.stop(); runCurrent()
-        assertNotNull(controller.state.value.exchanges.last().plan)
+        assertEquals(1, controller.state.value.exchanges.last().cards.size)
         assertEquals("Stopped", controller.state.value.exchanges.last().status)
     }
 

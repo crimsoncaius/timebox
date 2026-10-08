@@ -5,9 +5,9 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.api.routes import assistant
-from app.services import assistant_agent, assistant_storage
+from app.services import assistant_agent
 from app.services.assistant_agent import build_agent, translate_events
-from app.services.assistant_limits import MAX_CARDS, MAX_READ_CALLS
+from app.services.assistant_limits import MAX_CARDS, MAX_READ_ROUNDS
 from app.services.assistant_presentation import PresentationParser
 from app.services.assistant_sessions import conversations
 from tests.test_assistant import decode, isolated_assistant, send  # noqa: F401
@@ -34,14 +34,14 @@ def run(model, tracking=None):
     return asyncio.run(collect())
 
 
-def test_three_reads_then_proposal_and_ordered_cards(monkeypatch):
-    plans = [plan() for _ in range(MAX_READ_CALLS)]
+def test_five_read_rounds_then_proposal_and_ordered_cards(monkeypatch):
+    plans = [plan() for _ in range(MAX_READ_ROUNDS)]
     pending = iter(plans)
     monkeypatch.setattr(assistant_agent, "read_activity", lambda args: next(pending))
     # The tool assigns fresh snapshot IDs; retain deterministic IDs for the selector.
     monkeypatch.setattr(assistant_agent, "snapshot", lambda value: value)
-    model = scripted(*(call(index=i) for i in range(MAX_READ_CALLS)),
-                     call("propose_tracking", {"action": "track", "task_type_paths": ["Meals"], "hour": 2}, 3),
+    model = scripted(*(call(index=i) for i in range(MAX_READ_ROUNDS)),
+                     call("propose_tracking", {"action": "track", "task_type_paths": ["Meals"], "hour": 2}, 5),
                      answer([plans[2]["snapshot_id"], plans[0]["snapshot_id"]]))
     events = run(model, {"sent_at": sgt(25, 16), "context": CONTEXT})
     assert [v for k, v in events if k == "snapshot_read"] == plans
@@ -52,13 +52,15 @@ def test_three_reads_then_proposal_and_ordered_cards(monkeypatch):
 
 
 @pytest.mark.parametrize("tracking_enabled", [False, True])
-def test_fourth_read_cannot_execute(monkeypatch, tracking_enabled):
+def test_sixth_read_round_is_rejected_then_final_answer(monkeypatch, tracking_enabled):
     executed = []
     monkeypatch.setattr(assistant_agent, "read_activity", lambda args: executed.append(args) or plan())
     tracking = {"sent_at": sgt(25, 16), "context": CONTEXT} if tracking_enabled else None
-    with pytest.raises(RuntimeError, match="unsupported tool|did not finish"):
-        run(scripted(*(call(index=i) for i in range(MAX_READ_CALLS + 1))), tracking)
-    assert len(executed) == MAX_READ_CALLS
+    model = scripted(*(call(index=i) for i in range(MAX_READ_ROUNDS + 1)), answer())
+    events = run(model, tracking)
+    assert len(executed) == MAX_READ_ROUNDS
+    assert len([v for k, v in events if k == "read_error"]) == 1
+    assert model.script == []
 
 
 @pytest.mark.parametrize("next_call", [call(), call("propose_tracking", {"action": "stop"})])
@@ -83,7 +85,7 @@ def test_multiple_cards_all_chunk_boundaries_and_duplicate_limit():
 
 @pytest.mark.parametrize("interrupted", [False, True])
 @pytest.mark.parametrize("capabilities", [[], ["plan_card_v1"]])
-def test_multiple_cards_capture_ack_and_oldest_read_eviction(client, monkeypatch, interrupted, capabilities):
+def test_multiple_cards_capture_ack_and_retained_reads(client, monkeypatch, interrupted, capabilities):
     plans = [plan() for _ in range(MAX_CARDS)]
     async def fake(messages, snapshots):
         for value in plans:
@@ -94,25 +96,23 @@ def test_multiple_cards_capture_ack_and_oldest_read_eviction(client, monkeypatch
             raise asyncio.CancelledError()
         yield "text_delta", {"text": "Comparison"}
     monkeypatch.setattr(assistant, "agent_events", fake)
-    # Exactly the newest two whole snapshots fit; card selection order must not alter age.
-    newest = {p["snapshot_id"]: p for p in plans[1:]}
-    monkeypatch.setattr(assistant_storage, "MAX_CONTEXT_READ_BYTES", len(json.dumps(newest).encode("utf-8")))
+    retained = {p["snapshot_id"]: p for p in plans}
     key = client.post("/assistant/conversations", json={"capabilities": capabilities}).json()["conversation_id"]
     events = decode(send(client, key))
     assert events[-1][0] == ("stopped" if interrupted else "completed")
     assert attempts()[0].displayed_plan == list(reversed(plans))
 
-    assert len(attempts()[0].snapshots) == MAX_READ_CALLS
+    assert len(attempts()[0].snapshots) == MAX_CARDS
     assert conversations.get(key).snapshots == {}
     client.post(f"/assistant/conversations/{key}/runs/{events[0][1]['run_id']}/ack")
     conversations.items.clear()
     item = conversations.get(key)
-    assert item.snapshots == ({} if interrupted else newest)
+    assert item.snapshots == ({} if interrupted else retained)
     if not interrupted:
-        assert plans[0]["snapshot_id"] not in str(item.messages)
+        assert plans[0]["snapshot_id"] in str(item.messages)
         assert "No Planned Blocks" not in str(item.messages)
-        assert len({c["id"] for m in item.messages for c in getattr(m, "tool_calls", [])}) == 2
-    # Context pruning never edits the retained cards or data.
+        assert len({c["id"] for m in item.messages for c in getattr(m, "tool_calls", [])}) == MAX_CARDS
+    # Acknowledgement never edits the retained cards or data.
     assert attempts()[0].displayed_plan == list(reversed(plans))
 
 

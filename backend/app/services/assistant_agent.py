@@ -7,7 +7,8 @@ import json
 from contextlib import aclosing
 from contextvars import ContextVar
 
-from langchain_core.messages import SystemMessage, message_chunk_to_message
+from langchain_core.callbacks.manager import adispatch_custom_event
+from langchain_core.messages import SystemMessage, ToolMessage, message_chunk_to_message
 from langchain_core.tools import tool
 from langchain_openrouter import ChatOpenRouter
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -18,31 +19,19 @@ from app.core.config import get_settings
 from app.services import assistant_task_operations
 from app.services.assistant_limits import (
     MAX_CARDS,
+    MAX_MODEL_CALLS,
     MAX_PROPOSALS,
-    MAX_READ_CALLS,
-    MAX_TURN_READ_BYTES,
+    MAX_READ_ROUNDS,
     TASK_READ_TIMEOUT,
 )
 from app.services.assistant_plan import ReadActivityArgs, read_activity, read_today_plan
 from app.services.assistant_presentation import PresentationParser, snapshot
 from app.services.assistant_task_intents import ProposeTaskChangesArgs
-from app.services.assistant_tasks import ReadTaskChoicesArgs, ReadTasksArgs, encoded, read_tasks
+from app.services.assistant_tasks import ReadTaskChoicesArgs, ReadTasksArgs, read_tasks
 from app.services.assistant_tracking import ProposeTrackingArgs, arguments_schema, model_result, propose
 
 task_read_context = ContextVar("task_read_context", default=None)
 
-
-def bounded_read(value):
-    context = task_read_context.get()
-    if context is None:
-        return value
-    size = len(encoded(value))
-    if context["bytes"] + size > MAX_TURN_READ_BYTES - 1024:
-        value = {"error": "Current response data budget exhausted; narrow the request or continue in another response.",
-                 "completeness": "partial", "limitations": ["payload_limit"]}
-        size = len(encoded(value))
-    context["bytes"] += size
-    return value
 
 MODEL = "z-ai/glm-5.3-flash"
 PROMPT = """You are Timebox's Assistant. Be concise; paragraphs, emphasis and lists are supported.
@@ -64,7 +53,7 @@ Use propose_task_changes for explicitly requested ordinary Task/first-level Subt
 For a supported, unambiguous requested change, you MUST call propose_task_changes in this response after any reads.
 Never say you proposed/submitted/prepared changes or ask the user to confirm unless that tool returned a valid
 proposal in this response. Writing the requested diff in prose does not create a proposal or description review.
-After the third read you may still call the proposal tool. If it fails, explain that no proposal is available.
+After the last read round you may still call the proposal tool. If it fails, explain that no proposal is available.
 Only a saved completed proposal can invite confirmation. Proposal/submission is not success: task_outcomes_v1
 and authoritative receipts alone establish applied/undone results. Pending, cancelled, stale, rolled-back and
 unverified are distinct; not_seen does not prove a delayed confirmation cannot execute. Never invent success.
@@ -147,7 +136,7 @@ async def read_activity_tool(**arguments) -> dict:
     """Read blocks for one date or Task Type totals over dates/periods/ranges, by lane, detail and optional subtree."""
     try:
         result = await asyncio.to_thread(read_activity, ReadActivityArgs.model_validate(arguments))
-        return bounded_read(result if "error" in result else snapshot(result))
+        return result if "error" in result else snapshot(result)
     except Exception:
         raise RuntimeError("Activity could not be read. Please retry.") from None
 
@@ -178,11 +167,11 @@ async def task_read(arguments, choices):
         args = (ReadTaskChoicesArgs if choices else ReadTasksArgs).model_validate(arguments)
         async with asyncio.timeout(TASK_READ_TIMEOUT):
             result = await asyncio.to_thread(read_tasks, args, context["conversation_id"], choices=choices)
-        return bounded_read(result)
+        return result
     except ValueError as error:
-        return bounded_read({"error": str(error)})
+        return {"error": str(error)}
     except Exception:
-        return bounded_read({"error": "Saved Task data could not be verified within the read budget. Please narrow or retry.", "completeness": "partial"})
+        return {"error": "Saved Task data could not be verified within the read timeout. Please narrow or retry.", "completeness": "partial"}
 
 
 for read_tool in (read_tasks_tool, read_task_choices_tool):
@@ -271,43 +260,69 @@ def build_agent(model=None, tracking=None):
         proposal_tool = propose_tracking_tool(tracking["sent_at"], tracking["context"])
         tools[proposal_tool.name] = proposal_tool
         prompt += TRACKING_PROMPT
-    prompt += (f"\nMake at most {MAX_READ_CALLS} read calls, then at most {MAX_PROPOSALS} proposal, "
+    prompt += (f"\nMake at most {MAX_READ_ROUNDS} read rounds, then at most {MAX_PROPOSALS} proposal, "
                f"then a tool-free answer. Select at most {MAX_CARDS} cards, at most one per read. "
-               "Call one tool at a time; no reads after a proposal.")
+               "A read round may request any number of independent read calls, mixing read tools as needed. "
+               "Calls execute sequentially in request order; each result carries its original call ID. "
+               "Wait for the next round for calls that depend on earlier results. Rejected batches consume a round. "
+               "Request a proposal alone, never together with reads or another proposal; no reads after a proposal. "
+               "Read failures do not invalidate other results. Retry only when useful and rounds remain; "
+               "explain incomplete coverage and never invent missing evidence.")
     tool_model = model.bind_tools(list(tools.values()))
 
     class ResponseState(MessagesState):
-        reads: int
+        read_rounds: int
         proposals: int
+        model_calls: int
 
     def available(state):
         if state.get("proposals", 0) >= MAX_PROPOSALS:
             return {}
         return {name: value for name, value in tools.items()
-                if name in {"propose_tracking", "propose_task_changes"} or state.get("reads", 0) < MAX_READ_CALLS}
+                if name in {"propose_tracking", "propose_task_changes"} or state.get("read_rounds", 0) < MAX_READ_ROUNDS}
 
     async def respond(state):
         allowed = available(state)
         target = tool_model if len(allowed) == len(tools) else model.bind_tools(list(allowed.values())) if allowed else model
-        result = await call_model(target, [SystemMessage(prompt), *state["messages"]])
+        remaining = MAX_READ_ROUNDS - state.get("read_rounds", 0)
+        result = await call_model(target, [SystemMessage(prompt + f"\nRead rounds remaining: {remaining}."), *state["messages"]])
         if result.tool_calls and not allowed:
             raise RuntimeError("The model did not finish its response.")
-        return {"messages": [result]}
+        return {"messages": [result], "model_calls": state.get("model_calls", 0) + 1}
+
+    async def read_error(call, message):
+        value = {"error": message}
+        await adispatch_custom_event("read_error", {"tool": call["name"], "tool_call_id": call["id"], "result": value})
+        return ToolMessage(json.dumps(value), tool_call_id=call["id"], name=call["name"], status="error")
 
     async def use_tool(state):
         calls = state["messages"][-1].tool_calls
-        chosen = available(state).get(calls[0]["name"]) if len(calls) == 1 else None
-        if chosen is None:
-            raise RuntimeError("The model requested an unsupported tool operation.")
-        result = await chosen.ainvoke(calls[0])
-        counter = "proposals" if chosen.name in {"propose_tracking", "propose_task_changes"} else "reads"
-        return {"messages": [result], counter: state.get(counter, 0) + 1}
+        proposals = {"propose_tracking", "propose_task_changes"}
+        allowed = available(state)
+        rejected = any(call["name"] not in allowed for call in calls) or (
+            len(calls) > 1 and any(call["name"] in proposals for call in calls))
+        if rejected:
+            results = [await read_error(call, "Batch not executed. Use only available read tools together, "
+                "or request one proposal alone. Respect the remaining read rounds.") for call in calls]
+        elif calls[0]["name"] in proposals:
+            result = await allowed[calls[0]["name"]].ainvoke(calls[0])
+            return {"messages": [result], "proposals": state.get("proposals", 0) + 1}
+        else:
+            results = []
+            for call in calls:
+                try:
+                    results.append(await allowed[call["name"]].ainvoke(call))
+                except Exception:
+                    # Cancellation is a BaseException and must terminate the batch.
+                    results.append(await read_error(call, "This read failed. Its data could not be verified; "
+                        "other reads may still succeed."))
+        return {"messages": results, "read_rounds": min(MAX_READ_ROUNDS, state.get("read_rounds", 0) + 1)}
 
     async def finish(state):
         result = await call_model(model, [SystemMessage(prompt), *state["messages"]])
         if result.tool_calls:
             raise RuntimeError("The model did not finish its response.")
-        return {"messages": [result]}
+        return {"messages": [result], "model_calls": state.get("model_calls", 0) + 1}
 
     graph = StateGraph(ResponseState)
     graph.add_node("respond", respond)
@@ -315,7 +330,8 @@ def build_agent(model=None, tracking=None):
     graph.add_node("finish", finish)
     graph.add_edge(START, "respond")
     graph.add_conditional_edges("respond", lambda state: "use_tool" if state["messages"][-1].tool_calls else END)
-    graph.add_conditional_edges("use_tool", lambda state: "respond" if available(state) else "finish")
+    graph.add_conditional_edges("use_tool", lambda state: "respond" if available(state)
+                               and state.get("model_calls", 0) < MAX_MODEL_CALLS - 1 else "finish")
     graph.add_edge("finish", END)
     return graph.compile()
 
@@ -338,7 +354,9 @@ async def translate_events(events, snapshots=None):
     finished = False
     async for event in events:
         kind = event["event"]
-        if kind == "on_chat_model_stream":
+        if kind == "on_custom_event" and event.get("name") == "read_error":
+            yield "read_error", event["data"]
+        elif kind == "on_chat_model_stream":
             chunk = event["data"]["chunk"]
             if chunk.text:
                 # Every tool-capable call can contain discarded preliminary prose.
@@ -350,6 +368,8 @@ async def translate_events(events, snapshots=None):
                     pending_text += chunk.text
         elif kind == "on_tool_start":
             yield "tool_started", {}
+        elif kind == "on_tool_error":
+            yield "tool_completed", {}
         elif kind == "on_tool_end":
             result = event["data"]["output"]
             value = json.loads(result.content) if hasattr(result, "content") else result

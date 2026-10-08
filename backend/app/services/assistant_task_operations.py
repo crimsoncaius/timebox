@@ -36,7 +36,6 @@ from app.services import activity_journal
 from app.services import task_completion_service as completion
 from app.services.activity_service import reporting_settings
 from app.services.assistant_limits import (
-    MAX_OUTCOME_BYTES,
     MAX_TASK_OUTCOMES,
     MAX_TASK_PARENTS,
     MAX_TASK_RECEIPT_BYTES,
@@ -769,7 +768,7 @@ def outcome_context(conversation_id, explicit_ids=(), *, explicit_only=False, re
                 "operation_kinds": list(dict.fromkeys(op["op"] for op in row.review["operations"])),
                 "changed_fields": list(dict.fromkeys(field for target in row.review["review_targets"] for field in target["after"])),
                 "submission_state": submission.state if submission else "not_seen", "undone": row.undo_receipt is not None}
-            if len(output["operations"]) >= MAX_TASK_OUTCOMES or len(encoded({**output, "operations": [*output["operations"], summary]})) > MAX_OUTCOME_BYTES - 128:
+            if len(output["operations"]) >= MAX_TASK_OUTCOMES:
                 output["omitted_count"] += 1
             else:
                 output["operations"].append(summary)

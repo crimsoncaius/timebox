@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null, val plan: AssistantPlan? = null,
+data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null,
                              val proposal: TrackingProposal? = null, val cards: List<AssistantCard> = emptyList(),
                              val taskProposal: TaskChangeProposal? = null, val taskCards: List<AssistantTaskCard> = emptyList(),
                              val cardOrder: List<String> = emptyList())
@@ -44,6 +44,7 @@ class AssistantController(
         mutableState.value = state.value.copy(exchanges = state.value.exchanges + AssistantExchange(message), busy = true)
         job = scope.launch {
             var completed = false
+            var skippedRetiredCard = false
             try {
                 val fresh = transportFactory()
                 check(transport == null || transport?.serverIdentity == fresh.serverIdentity) { "Server changed. Start a new conversation." }
@@ -68,12 +69,13 @@ class AssistantController(
                     when (event.kind) {
                         "started" -> check(sequence == 1) { "Invalid stream start" }
                         "plan_card" -> {
-                            check(api.supportsPlanCards || api.supportsActivityCards) { "Unnegotiated plan card" }
-                            check(state.value.exchanges.last().let { (it.cards.size + it.taskCards.size) < (if (api.supportsActivityCards) 3 else 1) && it.answer.isEmpty() }) { "Invalid card order" }
+                            // Retired day-plan snapshots must not interrupt historical response text or supported cards.
+                            if (event.data.integer("schema_version") == 1) { skippedRetiredCard = true; return@collect }
+                            check(api.supportsActivityCards) { "Unnegotiated activity card" }
+                            check(state.value.exchanges.last().let { (it.cards.size + it.taskCards.size) < 3 && it.answer.isEmpty() }) { "Invalid card order" }
                             val card = AssistantCard.parse(event.data)
-                            check(api.supportsActivityCards || card.legacy != null) { "Unnegotiated card version" }
                             check(state.value.exchanges.last().let { e -> e.cards.none { it.id == card.id } && e.taskCards.none { it.id == card.id } }) { "Duplicate card" }
-                            updateLast { it.copy(plan = it.plan ?: card.legacy, cards = it.cards + card, cardOrder = it.cardOrder + card.id) }
+                            updateLast { it.copy(cards = it.cards + card, cardOrder = it.cardOrder + card.id) }
                         }
                         "task_card" -> {
                             check(state.value.exchanges.last().let { it.cards.size + it.taskCards.size < 3 && it.answer.isEmpty() }) { "Invalid card order" }
@@ -99,7 +101,7 @@ class AssistantController(
                         "tool_started" -> mutableState.value = state.value.copy(readingPlan = true)
                         "tool_completed" -> mutableState.value = state.value.copy(readingPlan = false)
                         "completed" -> {
-                            check(state.value.exchanges.last().let { it.answer.isNotBlank() || it.cards.isNotEmpty() || it.taskCards.isNotEmpty() || it.proposal != null || it.taskProposal != null }) { "Empty response" }
+                            check(skippedRetiredCard || state.value.exchanges.last().let { it.answer.isNotBlank() || it.cards.isNotEmpty() || it.taskCards.isNotEmpty() || it.proposal != null || it.taskProposal != null }) { "Empty response" }
                             completed = true
                         }
                         "failed" -> throw java.io.IOException(event.data.getValue("message").jsonPrimitive.content)

@@ -31,6 +31,34 @@ class AssistantScreenTest {
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge(); it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) }
     }
 
+    @Test fun historicalResponseRendersTextAndSupportedCardsWithoutRetiredPlan() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val events = Json.parseToJsonElement(InstrumentationRegistry.getInstrumentation().context.assets
+            .open("assistant-historical-response.json").bufferedReader().use { it.readText() }).jsonArray
+        val transport = object : AssistantTransport by Fake() {
+            override fun stream(conversation: String, run: String, message: String) = flow {
+                events.forEachIndexed { index, value ->
+                    val event = value.jsonObject
+                    emit(AssistantEvent(event.getValue("kind").jsonPrimitive.content,
+                        JsonObject(event.getValue("data").jsonObject + mapOf("run_id" to JsonPrimitive(run), "sequence" to JsonPrimitive(index + 1)))))
+                }
+            }
+        }
+        try {
+            val controller = AssistantController(scope) { transport }
+            compose.setContent { TimeboxTheme { AssistantScreen(controller) } }
+            compose.runOnIdle { controller.send("Read saved response") }
+            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.status == "Complete" }
+            compose.onNodeWithText("Your saved response is still readable.").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Retired day-plan block").assertDoesNotExist()
+            compose.onNodeWithText("Current activity block").performScrollTo().assertIsDisplayed()
+            compose.runOnIdle {
+                check(controller.state.value.exchanges.single().cards.size == 2)
+                check(controller.state.value.exchanges.single().taskCards.size == 1)
+            }
+        } finally { scope.cancel() }
+    }
+
     @Test fun sentQuestionStaysAtSameHorizontalPositionBeforeReply() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val releaseCard = CompletableDeferred<Unit>()
@@ -48,7 +76,7 @@ class AssistantScreenTest {
             compose.onNodeWithText("Thinking…").assertIsDisplayed()
             val before = compose.onNodeWithContentDescription("You: Hi").fetchSemanticsNode().boundsInRoot
             compose.runOnIdle { releaseCard.complete(Unit) }
-            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.plan != null }
+            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.cards?.isNotEmpty() == true }
             compose.onNodeWithContentDescription("You: Hi").performScrollTo()
             val after = compose.onNodeWithContentDescription("You: Hi").fetchSemanticsNode().boundsInRoot
             check(kotlin.math.abs(before.right - after.right) < 1f) {
@@ -58,18 +86,21 @@ class AssistantScreenTest {
     }
 
     private class Fake(private val pauseAfterCard: Boolean = false) : AssistantTransport {
-        override val supportsPlanCards = true
+        override val supportsActivityCards = true
         override suspend fun create() = "fixture"
         override suspend fun delete(conversation: String) {}
         override suspend fun stop(conversation: String, run: String) {}
         override suspend fun acknowledge(conversation: String, run: String) {}
         override fun stream(conversation: String, run: String, message: String) = flow {
             emit(AssistantEvent("plan_card", buildJsonObject {
-                put("run_id", run); put("sequence", 1); put("schema_version", 1)
+                put("run_id", run); put("sequence", 1); put("schema_version", 2)
+                put("lane", "planned"); put("recurring_not_materialized", false)
                 put("snapshot_id", "fixture"); put("date", "2026-09-21"); put("reporting_timezone", "Asia/Singapore"); put("read_at", "2026-09-21T01:41:00Z")
-                putJsonArray("planned_blocks") {
+                putJsonArray("blocks") {
                     repeat(4) { index -> add(buildJsonObject {
-                        put("start_minute", 540 + index * 60); put("end_minute", 600 + index * 60)
+                        put("start_at", java.time.Instant.parse("2026-09-21T01:00:00Z").plusSeconds(index * 3600L).toString())
+                        put("end_at", java.time.Instant.parse("2026-09-21T02:00:00Z").plusSeconds(index * 3600L).toString())
+                        put("lane", "planned"); put("running", false); put("duration_minutes", 60); put("minutes_in_date", 60)
                         put("name", "Review block ${index + 1}"); put("task_type", "Work / Product"); put("task_id", JsonNull); put("task_title", JsonNull)
                     }) }
                 }
@@ -114,7 +145,7 @@ class AssistantScreenTest {
             compose.onNodeWithContentDescription("Send").assertIsNotEnabled()
             compose.onNode(hasSetTextAction()).performTextInput("Show my plan\nand find a gap")
             compose.onNodeWithContentDescription("Send").performClick()
-            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.plan != null }
+            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.cards?.isNotEmpty() == true }
             compose.onNode(hasSetTextAction()).performTextInput("Keep this\nfor later")
             compose.onNodeWithContentDescription("Stop").assertIsDisplayed().performClick()
             compose.waitUntil(5000) { !controller.state.value.busy }

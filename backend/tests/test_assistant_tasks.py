@@ -104,16 +104,16 @@ def test_pagination_manifest_is_fixed_and_conversation_bound(conversation):
         assert db.scalar(select(AssistantQuery)) is not None
 
 
-def test_manifest_lower_bound_unicode_byte_limit_and_descriptions(conversation):
+def test_manifest_lower_bound_large_unicode_results_and_description_excerpts(conversation):
     with Session(get_engine()) as db:
         db.add_all([Task(title="界" * 500, description="界" * 2400, position=i) for i in range(1002)]); db.commit()
     result = read(conversation, mode="search", search_in="descriptions", query="界")
     assert result["count_relation"] == "at_least" and result["matching_count"] == 1001
-    assert result["completeness"] == "partial" and "payload_limit" in result["limitations"]
-    assert len(encoded(result)) <= 32768
+    assert result["completeness"] == "partial" and "payload_limit" not in result["limitations"]
+    assert len(encoded(result)) > 65536
     available = [r for r in result["rows"] if r["availability"] == "available"]
     assert available and all(len(r["description"]["text"]) == 2000 and r["description"]["truncated"] for r in available)
-    assert any(r["availability"] == "unverified" for r in result["rows"])
+    assert len(available) == 20
 
 
 def test_saved_recurrence_uses_day_carry_oldest_and_never_generates(conversation):
@@ -179,9 +179,9 @@ def test_refresh_bounds_and_failure_are_explicit(conversation, monkeypatch):
     pages.append(read(conversation, mode="search", cursor=pages[-1]["next_cursor"]))
     snapshots = {p["snapshot_id"]: p for p in pages}
     result = refresh(snapshots, now=NOW)
-    assert 0 < len(result["refreshed_ids"]) <= 40
+    assert len(result["refreshed_ids"]) == 40
     assert set(result["refreshed_ids"]) | set(result["unverified_ids"]) == set(range(1, 51))
-    assert len(encoded(result)) <= 24576
+    assert len(encoded(result)) > 24576
     import app.services.assistant_task_context as context
     monkeypatch.setattr(context, "project_ids", lambda *a: (_ for _ in ()).throw(RuntimeError("secret")))
     result = refresh(snapshots, now=NOW)
@@ -278,19 +278,6 @@ def test_task_sse_is_safe_and_exact_preflight_input_is_captured(client, monkeypa
         assert evidence["task_refresh_v1"]["projections"][0]["title"] == "New title"
         assert attempts[0].snapshots[original["snapshot_id"]]["rows"][0]["title"] == "Original"
     conversations.items.clear()
-
-
-def test_current_turn_shared_read_budget():
-    from app.services.assistant_agent import bounded_read, task_read_context
-    token = task_read_context.set({"conversation_id": "test", "bytes": 0})
-    try:
-        first = bounded_read({"data": "界" * 10000})
-        second = bounded_read({"data": "界" * 10000})
-        third = bounded_read({"data": "界" * 10000})
-        assert "error" in third and third["completeness"] == "partial"
-        assert sum(len(encoded(value)) for value in (first, second, third)) <= 65536
-    finally:
-        task_read_context.reset(token)
 
 
 def test_refresh_nested_identities_share_the_forty_identity_bound(conversation):

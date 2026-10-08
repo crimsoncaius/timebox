@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_engine
 from app.models.assistant import AssistantAttempt, AssistantConversation
-from app.services.assistant_limits import MAX_CONTEXT_EXCHANGES, MAX_CONTEXT_READ_BYTES
+from app.services.assistant_limits import MAX_CONTEXT_EXCHANGES
 from app.services.assistant_presentation import text_schedule
 from app.services.assistant_tracking import replay_proposal
 
@@ -41,9 +41,7 @@ def create(key, capabilities, previous_conversation_id=None):
         raise HTTPException(503, "Conversation could not be saved. Please retry.") from None
 
 
-def load(key, max_snapshot_bytes=None):
-    if max_snapshot_bytes is None:
-        max_snapshot_bytes = MAX_CONTEXT_READ_BYTES
+def load(key):
     try:
         with Session(get_engine()) as db:
             row = db.get(AssistantConversation, key)
@@ -59,9 +57,6 @@ def load(key, max_snapshot_bytes=None):
                 snapshots.update(attempt.snapshots)
                 for card in displayed_cards(attempt.displayed_plan):
                     snapshots.setdefault(card["snapshot_id"], card)
-            # Evict whole reads, oldest first. Durable attempts/cards are untouched.
-            while snapshots and len(json.dumps(snapshots).encode("utf-8")) > max_snapshot_bytes:
-                del snapshots[next(iter(snapshots))]
             for attempt in reversed(attempts):
                 messages.extend(replay(attempt, snapshots))
             return row.capabilities, messages, snapshots
