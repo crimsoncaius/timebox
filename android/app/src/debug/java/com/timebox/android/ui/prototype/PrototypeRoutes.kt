@@ -17,6 +17,19 @@ import com.timebox.android.ui.chronicle.HabitsPrototype
  */
 fun NavGraphBuilder.prototypeRoutes() {
     composable(
+        "prototype/assistant-polish?layout={layout}&scenario={scenario}",
+        deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/assistant-polish?layout={layout}&scenario={scenario}" }),
+        arguments = listOf(
+            navArgument("layout") { defaultValue = "focused" },
+            navArgument("scenario") { defaultValue = "complete" },
+        ),
+    ) { entry ->
+        com.timebox.android.ui.assistant.AssistantPolishPrototype(
+            entry.arguments?.getString("layout") ?: "focused",
+            entry.arguments?.getString("scenario") ?: "complete",
+        )
+    }
+    composable(
         "prototype/goal-archive?variant={variant}",
         deepLinks = listOf(navDeepLink { uriPattern = "timebox://prototype/goal-archive?variant={variant}" }),
         arguments = listOf(navArgument("variant") { defaultValue = "page" }),

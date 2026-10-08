@@ -126,7 +126,8 @@ fun AssistantScreen(
                                 else if (result.undo?.optionalText("status") == "applied") "Task changes applied; completion subsequently undone."
                                 else "Task changes applied.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                             TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide saved result" else "View saved result") }
-                            if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null)
+                            if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null,
+                                proposal = (state.exchanges.mapNotNull { it.taskProposal } + state.refreshedTaskProposals).find { it.id == result.proposalId && it.operationId == result.operationId })
                         }
                         item.record.parentTaskIds.forEach { id -> TextButton(onClick = { onOpenTask(id) }) { Text("Open Task #$id") } }
                         if (item.record.resolved && item.result?.receipt == null && item.record.kind == "confirm") TextButton(onClick = {
@@ -165,7 +166,8 @@ fun AssistantScreen(
                             { controller.descriptionReview(proposal) }, { if (saved != null) recovery?.foreground() else controller.checkTask(proposal) },
                             { controller.dismissTask(proposal) }, { controller.refreshTask(proposal) },
                             onConfirm = if (recovery != null) ({ controller.confirmTask(proposal) }) else null,
-                            confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null)
+                            confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null,
+                            onUndo = if (recovery != null && saved != null && saved.record.resolved && !recoveryState.busy && recoveryState.online && saved.record.kind == "confirm") ({ recovery.undo(saved) }) else null)
                     }
                     AssistantReadCards(exchange, onOpenTask, onOpenDay, onOpenTrends)
                     if (exchange.answer.isNotEmpty()) SelectionContainer { AnswerText(exchange.answer) }
