@@ -30,7 +30,6 @@ from app.services.activity_service import reporting_settings
 from app.services.assistant_limits import (
     MAX_TASK_MANIFEST,
     MAX_TASK_PAGE,
-    MAX_TASK_READ_BYTES,
     TASK_CURSOR_SECONDS,
     TASK_READ_TIMEOUT,
 )
@@ -257,8 +256,6 @@ class TaskSnapshotV4(Strict):
 
 
 def validate(value):
-    if len(encoded(value)) > MAX_TASK_READ_BYTES:
-        raise ValueError("Saved-task snapshot exceeds its byte limit")
     return TaskSnapshotV4.model_validate(value).model_dump(exclude_unset=True)
 
 
@@ -494,22 +491,10 @@ def _load_cursor(db, conversation_id, args, tool, now):
     raise ValueError("Unknown cursor for this conversation")
 
 
-def _bound(snapshot):
-    # Keep positional identities when a row cannot fit. Never truncate a value
-    # and claim a complete projection, including multi-byte text.
+def _validate_snapshot(snapshot):
     for row in snapshot["rows"]:
         if snapshot["kind"] == "tasks" and row["availability"] == "available":
             row["projection_hash"] = projection_hash(row)
-    if len(encoded(snapshot)) > MAX_TASK_READ_BYTES:
-        snapshot["completeness"] = "partial"
-        snapshot["limitations"].append("payload_limit")
-        for index in sorted(range(len(snapshot["rows"])), key=lambda i: len(encoded(snapshot["rows"][i])), reverse=True):
-            row = snapshot["rows"][index]
-            snapshot["rows"][index] = {k: row[k] for k in ("id", "kind") if k in row} | {"availability": "unverified"}
-            if len(encoded(snapshot)) <= MAX_TASK_READ_BYTES:
-                break
-    if len(encoded(snapshot)) > MAX_TASK_READ_BYTES:
-        raise ValueError("Read metadata exceeds the byte limit; narrow the request")
     return validate(snapshot)
 
 
@@ -530,7 +515,7 @@ def read_tasks(args, conversation_id, *, choices=False, now=None):
         nested = ReadTasksArgs.model_validate({**source, "cursor": args.cursor})
         result = read_tasks(nested, conversation_id, now=now)
         result["source"] = {"tool": "read_tasks", "mode": "get", "normalized_arguments": args.model_dump(mode="json", exclude_defaults=True, exclude_none=True)}
-        return _bound(result)
+        return _validate_snapshot(result)
     if not choices and args.mode == "outcomes":
         from app.services.assistant_task_operations import outcome_context
         return outcome_context(conversation_id, args.operation_ids, explicit_only=True)
@@ -619,7 +604,7 @@ def read_tasks(args, conversation_id, *, choices=False, now=None):
                   "limitations": limitations, "rows": rows}
         if manifest:
             result.update(query_id=manifest["query_id"], query_at=manifest["query_at"])
-        result = _bound(result)
+        result = _validate_snapshot(result)
     # These are Assistant evidence writes only, after the pure domain read ends.
     with Session(get_engine()) as capture:
         for manifest in manifests:

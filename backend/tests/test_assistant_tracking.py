@@ -85,8 +85,8 @@ class ScriptedModel(BaseChatModel):
         message = self.script.pop(0)
         chunk = ChatGenerationChunk(message=AIMessageChunk(
             content=message.content, response_metadata=message.response_metadata,
-            tool_call_chunks=[{"name": c["name"], "args": json.dumps(c["args"]), "id": c["id"], "index": 0}
-                              for c in message.tool_calls]))
+            tool_call_chunks=[{"name": c["name"], "args": json.dumps(c["args"]), "id": c["id"], "index": i}
+                              for i, c in enumerate(message.tool_calls)]))
         if run_manager:
             await run_manager.on_llm_new_token(message.content, chunk=chunk)
         yield chunk
@@ -157,8 +157,9 @@ def test_text_after_a_proposal_tolerates_a_missing_or_glued_selector():
 
 def test_tool_is_unavailable_without_the_capability():
     model = proposal_turn({"action": "stop"}, "x")
-    with pytest.raises(RuntimeError, match="unsupported tool"):
-        asyncio.run(events_for(model, None))
+    events = asyncio.run(events_for(model, None))
+    assert not any(kind == "tracking_proposal" for kind, _ in events)
+    assert any(kind == "read_error" for kind, _ in events)
 
 
 @pytest.mark.parametrize("capable", [True, False])

@@ -525,8 +525,8 @@ def test_outcome_bound_explicit_priority_and_cross_conversation_rejection():
         draft([{"op": "create_task", "ref": "p", "title": f"Later {i}"}], conversation=p["conversation_id"])
     outcome = ops.outcome_context(p["conversation_id"], reference_text=p["operation_id"])
     assert outcome["operations"][0]["operation_id"] == p["operation_id"]
-    assert len(outcome["operations"]) <= 20 and outcome["omitted_count"] >= 2
-    assert len(json.dumps(outcome).encode()) <= 8192
+    assert len(outcome["operations"]) == 20 and outcome["omitted_count"] == 2
+    assert len(json.dumps(outcome).encode()) > 8192
     explicit = read_tasks(ReadTasksArgs(mode="outcomes", operation_ids=[p["operation_id"]]), p["conversation_id"])
     assert len(explicit["operations"]) == 1 and explicit["omitted_count"] == 0
     with pytest.raises(ValueError, match="conversation"):

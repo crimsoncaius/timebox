@@ -1,0 +1,92 @@
+[
+  {
+    "scenario": "03-next-task",
+    "calls": [
+      {
+        "name": "read_tasks",
+        "args": {
+          "filters": {
+            "completion": "incomplete",
+            "deadline": {
+              "end": "2026-10-31",
+              "start": "2026-10-01"
+            }
+          },
+          "mode": "search",
+          "scope": "current"
+        },
+        "id": "call_d94034b6882d476e92fa69ef",
+        "type": "tool_call"
+      },
+      {
+        "name": "read_tasks",
+        "args": {
+          "filters": {
+            "completion": "incomplete",
+            "ready_to_plan": true
+          },
+          "mode": "search",
+          "scope": "current"
+        },
+        "id": "call_4ee22f49d82040f1bd70400c",
+        "type": "tool_call"
+      }
+    ]
+  },
+  {
+    "scenario": "06-week-comparison",
+    "calls": [
+      {
+        "name": "read_activity",
+        "args": {
+          "detail": "total",
+          "group_by": "task_type",
+          "lane": "actual",
+          "task_type": "Reading",
+          "when": {
+            "period": "this_week"
+          }
+        },
+        "id": "chatcmpl-tool-9abcd17a694e96c5",
+        "type": "tool_call"
+      },
+      {
+        "name": "read_activity",
+        "args": {
+          "detail": "total",
+          "group_by": "task_type",
+          "lane": "actual",
+          "task_type": "Reading",
+          "when": {
+            "period": "last_week"
+          }
+        },
+        "id": "chatcmpl-tool-bfad1b374bca8aee",
+        "type": "tool_call"
+      }
+    ]
+  },
+  {
+    "scenario": "09-create-task",
+    "calls": [
+      {
+        "name": "read_task_choices",
+        "args": {
+          "kind": "projects",
+          "query": "Timebox"
+        },
+        "id": "call_c0c3c1d0f62e41de9e63ddd7",
+        "type": "tool_call"
+      },
+      {
+        "name": "read_task_choices",
+        "args": {
+          "kind": "task_types",
+          "query": "Work/Coding"
+        },
+        "id": "call_4a52027828074445a424493e",
+        "type": "tool_call"
+      }
+    ]
+  }
+]

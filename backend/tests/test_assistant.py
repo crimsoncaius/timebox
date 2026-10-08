@@ -197,14 +197,14 @@ def test_tool_read_failure_is_not_an_empty_plan(monkeypatch):
     assert "SECRET" not in str(error.value)
 
 
-def test_graph_only_allows_one_known_tool_and_final_model_cannot_loop(monkeypatch):
+def test_graph_rejects_unknown_tools_and_final_model_cannot_loop(monkeypatch):
     from app.services import assistant_agent
     class Model:
         def bind_tools(self, tools): return self
         async def astream(self, messages):
             yield AIMessageChunk(content="", tool_calls=[{"name": "write_plan", "args": {}, "id": "call1"}])
     monkeypatch.setattr(assistant_agent, "create_model", Model)
-    with pytest.raises(RuntimeError, match="unsupported tool"):
+    with pytest.raises(RuntimeError, match="did not finish"):
         asyncio.run(assistant_agent.build_agent().ainvoke({"messages": [HumanMessage("change my plan")]}))
 
 
