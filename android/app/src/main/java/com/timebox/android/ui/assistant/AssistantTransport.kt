@@ -26,7 +26,6 @@ interface AssistantTransport {
     suspend fun taskStatuses(records: List<com.timebox.android.data.TaskSubmission>): List<TaskOperationResult> = error("Task recovery unavailable")
     suspend fun confirmTask(record: com.timebox.android.data.TaskSubmission): TaskOperationResult? = error("Task confirmation unavailable")
     suspend fun create(previousConversation: String?): String = create()
-    val supportsPlanCards: Boolean get() = false
     val supportsActivityCards: Boolean get() = false
     val supportsTrackingProposals: Boolean get() = false
     suspend fun taskReview(id: String): TaskChangeProposal = error("Task review unavailable")
@@ -42,8 +41,6 @@ interface AssistantTransport {
 
 class HttpAssistantTransport(private val settings: AppSettings) : AssistantTransport {
     override val serverIdentity = settings.assistantIdentity()
-    override var supportsPlanCards: Boolean = false
-        private set
     override var supportsTrackingProposals: Boolean = false
         private set
     override var supportsActivityCards: Boolean = false
@@ -93,13 +90,12 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     override suspend fun create(): String = create(null)
     override suspend fun create(previousConversation: String?): String = kotlinx.coroutines.withContext(Dispatchers.IO) { execute(request("conversations", body = buildJsonObject {
         previousConversation?.let { put("previous_conversation_id", it) }
-        putJsonArray("capabilities") { add("activity_cards_v1"); add("plan_card_v1"); add("tracking_proposal_v1") }
+        putJsonArray("capabilities") { add("activity_cards_v1"); add("tracking_proposal_v1") }
     })).use {
         check(it)
         val result = ApiFactory.json.parseToJsonElement(it.body!!.string()).jsonObject
         val granted = result["capabilities"]?.jsonArray?.map { value -> value.jsonPrimitive.content }.orEmpty()
         supportsActivityCards = "activity_cards_v1" in granted
-        supportsPlanCards = "plan_card_v1" in granted
         supportsTrackingProposals = "tracking_proposal_v1" in granted
         result.getValue("conversation_id").jsonPrimitive.content
     } }

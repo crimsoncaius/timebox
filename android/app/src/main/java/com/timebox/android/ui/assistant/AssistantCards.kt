@@ -54,7 +54,6 @@ internal fun AssistantCards(cards: List<AssistantCard>, onOpenDay: (LocalDate) -
 
 @Composable
 private fun ActivityCard(card: AssistantCard, onOpenDay: (LocalDate) -> Unit, onOpenTrends: (LocalDate, LocalDate) -> Unit) {
-    card.legacy?.let { PlanCard(it, onOpenDay); return }
     val colors = TimeboxTheme.colors
     Surface(color = colors.field, shape = TimeboxShapes.card, border = BorderStroke(1.dp, colors.hairline)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -3,6 +3,8 @@ package com.timebox.android.ui.assistant
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.flow
 import com.timebox.android.TimeboxApplication
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
@@ -24,6 +26,26 @@ import kotlinx.serialization.json.*
 class AssistantTaskReviewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("historical_response", false)) {
+            val events = Json.parseToJsonElement(assets.open("assistant-historical-response.json").bufferedReader().use { it.readText() }).jsonArray
+            val controller = AssistantController(lifecycleScope) { object : AssistantTransport {
+                override val supportsActivityCards = true
+                override suspend fun create() = "historical-review"
+                override suspend fun delete(conversation: String) {}
+                override suspend fun stop(conversation: String, run: String) {}
+                override suspend fun acknowledge(conversation: String, run: String) {}
+                override fun stream(conversation: String, run: String, message: String) = flow {
+                    events.forEachIndexed { index, value ->
+                        val event = value.jsonObject
+                        emit(AssistantEvent(event.getValue("kind").jsonPrimitive.content,
+                            JsonObject(event.getValue("data").jsonObject + mapOf("run_id" to JsonPrimitive(run), "sequence" to JsonPrimitive(index + 1)))))
+                    }
+                }
+            } }
+            controller.send("Read saved response")
+            setContent { TimeboxTheme { AssistantScreen(controller) } }
+            return
+        }
         if (intent.getBooleanExtra("recovery", false)) {
             setContent { TimeboxTheme { AssistantScreen(onOpenTask = ::openCurrentTask) } }
             return
