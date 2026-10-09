@@ -32,11 +32,11 @@ class AssistantTaskCardsTest {
                 TaskChangeCard(proposal, TaskChangeState("pending", sourceCompleted = true), {}, { full }, {}, {}, {}, onConfirm = { confirmations++ })
             }
         } }
-        compose.onNodeWithText("Confirm Task changes").assertDoesNotExist()
+        compose.onNodeWithText("Confirm all changes").assertDoesNotExist()
         compose.onNodeWithText("Review description").performScrollTo().performClick()
-        compose.onNodeWithText("Confirm Task changes").assertIsEnabled().performClick()
+        compose.onNodeWithText("Confirm all changes").assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(1, confirmations) }
-        compose.onNodeWithText("Return to preview").assertDoesNotExist()
+        compose.onNodeWithText("Back to preview").assertDoesNotExist()
     }
     @Test fun offlineConfirmationIsDisabledWithAccessibleReason() {
         val proposal = TaskChangeProposal.parse(fixture("complete")).copy(expiresAt = java.time.Instant.now().plusSeconds(900))
@@ -45,7 +45,7 @@ class AssistantTaskCardsTest {
                 TaskChangeCard(proposal, TaskChangeState("pending", sourceCompleted = true), {}, { proposal }, {}, {}, {}, onConfirm = {}, confirmationBlocked = "Connect before confirming Task changes.")
             }
         } }
-        compose.onNodeWithText("Confirm Task changes").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Confirm completion").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText("Connect before confirming Task changes.").performScrollTo().assertIsDisplayed()
     }
 
@@ -56,9 +56,9 @@ class AssistantTaskCardsTest {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { TaskReadCard(card) { opened = it } }
         } }
         compose.onNodeWithText("Saved Tasks").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Heading))
-        compose.onNodeWithText("4. Fourth saved Task").assertDoesNotExist()
+        compose.onNodeWithText("Fourth saved Task").assertDoesNotExist()
         compose.onNodeWithText("Show all 4 loaded Tasks").performScrollTo().performClick()
-        compose.onNodeWithText("4. Fourth saved Task").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Fourth saved Task").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Open current Task Fourth saved Task, ID 4").performScrollTo().performClick()
         assertEquals(4, opened)
         assertEquals(listOf(1, 2, 3, 4), card.rows.map { it.id })
@@ -81,17 +81,17 @@ class AssistantTaskCardsTest {
             }
         }
         compose.onAllNodesWithText("Private original", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("Confirm Task changes").assertDoesNotExist()
+        compose.onNodeWithText("Confirm all changes").assertDoesNotExist()
         compose.onNodeWithText("Review description").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(1, fetches)
-        compose.onNodeWithText("Confirm Task changes").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("Confirm all changes").assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("Before literal <script>", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("After literal **not markdown**", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onAllNodesWithText("After: Review second appendix").onLast().performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("Review second appendix").onLast().performScrollTo().assertIsDisplayed()
         Espresso.pressBack()
         compose.waitForIdle()
-        compose.onNodeWithText("Return to preview").assertDoesNotExist()
+        compose.onNodeWithText("Back to preview").assertDoesNotExist()
         compose.waitUntil(5000) {
             compose.onNodeWithText("Review description").fetchSemanticsNode().config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Focused) { false }
         }
@@ -112,11 +112,12 @@ class AssistantTaskCardsTest {
                 TaskChangeCard(proposal, TaskChangeState(status = "pending", sourceCompleted = true), { opened = it }, { error("no fetch") }, {}, {}, {})
             }
         } }
-        compose.onNodeWithText("After: Yes").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("After: Review second appendix").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("No → Yes").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Review second appendix").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Review details").performScrollTo().performClick()
         compose.onAllNodesWithText("Open Task #1").assertCountEquals(2).onLast().performScrollTo().performClick()
         assertEquals(1, opened)
-        compose.onNodeWithText("Confirm Task changes").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Confirm all changes").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText(TaskConfirmationGate).performScrollTo().assertIsDisplayed()
     }
 
@@ -126,12 +127,12 @@ class AssistantTaskCardsTest {
         compose.setContent { TimeboxTheme(darkTheme = true) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { TaskResultCard(result, onOpenTask = { opened = it }) }
         } }
-        compose.onNodeWithText("Task change result").assertIsDisplayed()
-        compose.onNodeWithText("Saved 20", substring = true).assertExists()
+        compose.onNodeWithText("2 changes saved together").assertIsDisplayed()
+        compose.onNodeWithText("Saved 4 Oct 2026", substring = true).assertExists()
         compose.onAllNodesWithText("Revised private", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("Description: Description changed · separate review").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Open Task #6").assertDoesNotExist()
-        compose.onNodeWithText("Open Task #1").performScrollTo().performClick()
+        compose.onNodeWithText("Description updated").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open current Task Review second appendix, ID 6").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open current Task Task #1, ID 1").performScrollTo().performClick()
         assertEquals(1, opened)
     }
 
@@ -152,6 +153,83 @@ class AssistantTaskCardsTest {
         compose.onAllNodesWithText("12:00", substring = true).assertCountEquals(0)
     }
 
+    @Test fun failedDescriptionLoadCannotConfirmAndRetryUsesFullReview() {
+        val proposal = TaskChangeProposal.parse(fixture("proposal")).copy(expiresAt = java.time.Instant.now().plusSeconds(900))
+        val full = TaskChangeProposal.parse(fixture("full"), fullDescription = true)
+        var attempts = 0
+        var confirmed = 0
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                TaskChangeCard(proposal, TaskChangeState("pending", true), {}, { if (++attempts == 1) error("offline"); full }, {}, {}, {}, onConfirm = { confirmed++ })
+            }
+        } }
+        compose.onNodeWithText("Review description").performScrollTo().performClick()
+        compose.onNodeWithText("Could not load", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Confirm all changes").assertDoesNotExist()
+        compose.onNodeWithText("Retry description review").performScrollTo().performClick()
+        compose.onNodeWithText("Confirm all changes").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(2, attempts); assertEquals(1, confirmed) }
+    }
+
+    @Test fun savedResultReplacesConfirmationAndUsesReceiptIdentityForSubtaskParent() {
+        val proposal = TaskChangeProposal.parse(fixture("proposal"))
+        val result = TaskOperationResult.parse(fixture("result"))
+        var opened = 0
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                TaskChangeCard(proposal, TaskChangeState("applied", true, result), { opened = it }, { error("no fetch") }, {}, {}, {}, onConfirm = { error("cannot reconfirm") })
+            }
+        } }
+        compose.onNodeWithText(proposal.targets.first().title).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Confirm all changes").assertDoesNotExist()
+        compose.onNodeWithText("Review description").assertDoesNotExist()
+        compose.onNodeWithText("Subtask created").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open current Task Review second appendix, ID 1").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
+        compose.onNodeWithText("View reviewed changes").performScrollTo().performClick()
+        compose.onNodeWithText("Historical review", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun snapshotDetailsHandleUnavailableChildrenAndKeepRowsIndependent() {
+        val card = AssistantTaskCard.parse(fixture("card"))
+        val first = card.rows.first().let { it.copy(values = JsonObject(it.values + mapOf(
+            "subtasks" to buildJsonArray { add(buildJsonObject { put("id", 91); put("availability", "unavailable") }) },
+            "deadline" to buildJsonObject { put("kind", "instant"); put("instant", "2026-10-09T03:15:00Z") }
+        ))) }
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { TaskReadCard(card.copy(rows = listOf(first, card.rows[1]), zone = java.time.ZoneId.of("Asia/Singapore"))) {} }
+        } }
+        compose.onNodeWithText("Due 9 Oct 2026, 11:15 · Asia/Singapore").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Subtask #91", substring = true).assertDoesNotExist()
+        compose.onAllNodesWithText("Saved details").onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("Subtask #91 · Unavailable at read time").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("Hide details").assertCountEquals(1)
+        compose.onAllNodesWithText("Saved details", substring = false).assertCountEquals(1)
+    }
+
+    @Test fun confirmationWaitsForCompletedSourceAndUndoUsesExistingCallback() {
+        val proposal = TaskChangeProposal.parse(fixture("complete")).copy(expiresAt = java.time.Instant.now().plusSeconds(900))
+        var state by mutableStateOf(TaskChangeState("pending", sourceCompleted = false))
+        var confirmed = 0
+        var undone = 0
+        val result = TaskOperationResult.parse(fixture("result")).copy(operationId = proposal.operationId, proposalId = proposal.id,
+            undo = buildJsonObject { put("status", "available") })
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                TaskChangeCard(proposal, state, {}, { proposal }, {}, {}, {}, onConfirm = { confirmed++ }, onUndo = { undone++ })
+            }
+        } }
+        compose.onNodeWithText("Confirm completion").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle { state = state.copy(sourceCompleted = true, busy = true) }
+        compose.onNodeWithText("Confirm completion").assertIsNotEnabled()
+        compose.runOnIdle { state = state.copy(busy = false) }
+        compose.onNodeWithText("Confirm completion").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, confirmed); state = state.copy(status = "applied", result = result) }
+        compose.onNodeWithText("Confirm completion").assertDoesNotExist()
+        compose.onNodeWithText("Undo completion").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, undone) }
+    }
+
     @Test fun descriptionDialogKeepsControlsReachableAfterComposerKeyboard() {
         val proposal = TaskChangeProposal.parse(fixture("proposal"))
         val full = TaskChangeProposal.parse(fixture("full"), fullDescription = true)
@@ -166,8 +244,8 @@ class AssistantTaskCardsTest {
         } }
         compose.onNodeWithText("Composer").performClick().performTextInput("keep draft")
         compose.onNodeWithText("Review description").performScrollTo().performClick()
-        compose.onNodeWithText("Confirm Task changes").assertIsDisplayed().assertIsNotEnabled()
-        compose.onNodeWithText("Return to preview").performClick()
+        compose.onNodeWithText("Confirm all changes").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("Back to preview").performClick()
         compose.onNodeWithText("keep draft").assertExists()
     }
 }

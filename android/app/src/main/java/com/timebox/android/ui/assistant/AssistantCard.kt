@@ -11,7 +11,7 @@ data class AssistantType(val path: String, val planned: Double, val actual: Doub
 data class AssistantCard(val id: String, val date: LocalDate, val endDate: LocalDate, val zone: ZoneId,
     val readAt: Instant, val lane: String, val filter: String?, val future: Boolean,
     val blocks: List<AssistantBlock> = emptyList(), val types: List<AssistantType>? = null,
-    val weekdays: List<Int>? = null, val actualUnavailable: String? = null, val legacy: AssistantPlan? = null) {
+    val weekdays: List<Int>? = null, val actualUnavailable: String? = null) {
     val label: String get() = if (date == endDate) date.toString() else "$date – $endDate"
     val todayAtRead: LocalDate get() = readAt.atZone(zone).toLocalDate()
     val rootTypes: List<AssistantType> get() = types.orEmpty().filter { row -> types.orEmpty().none { row.path.startsWith(it.path + "/") } }
@@ -20,9 +20,6 @@ data class AssistantCard(val id: String, val date: LocalDate, val endDate: Local
             fun JsonObject.text(key: String) = getValue(key).jsonPrimitive.let { check(it.isString); it.content }
             fun JsonObject.optional(key: String) = get(key)?.takeUnless { it == JsonNull }?.jsonPrimitive?.content
             val version = data.getValue("schema_version").jsonPrimitive.let { check(!it.isString); it.int }
-            if (version == 1) return AssistantPlan.parse(data).let {
-                AssistantCard(it.id, it.date, it.date, it.zone, it.readAt, "planned", null, false, legacy = it)
-            }
             check(version in 2..3)
             val id = data.text("snapshot_id").also { check(it.isNotBlank()) }
             val date = LocalDate.parse(data.text(if (version == 3) "start" else "date"))

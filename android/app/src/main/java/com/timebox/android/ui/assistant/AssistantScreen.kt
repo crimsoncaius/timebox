@@ -28,7 +28,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -40,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.ui.theme.TimeboxTheme
-import com.timebox.android.ui.theme.TimeboxShapes
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -126,7 +124,8 @@ fun AssistantScreen(
                                 else if (result.undo?.optionalText("status") == "applied") "Task changes applied; completion subsequently undone."
                                 else "Task changes applied.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                             TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide saved result" else "View saved result") }
-                            if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null)
+                            if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null,
+                                proposal = (state.exchanges.mapNotNull { it.taskProposal } + state.refreshedTaskProposals).find { it.id == result.proposalId && it.operationId == result.operationId })
                         }
                         item.record.parentTaskIds.forEach { id -> TextButton(onClick = { onOpenTask(id) }) { Text("Open Task #$id") } }
                         if (item.record.resolved && item.result?.receipt == null && item.record.kind == "confirm") TextButton(onClick = {
@@ -165,7 +164,8 @@ fun AssistantScreen(
                             { controller.descriptionReview(proposal) }, { if (saved != null) recovery?.foreground() else controller.checkTask(proposal) },
                             { controller.dismissTask(proposal) }, { controller.refreshTask(proposal) },
                             onConfirm = if (recovery != null) ({ controller.confirmTask(proposal) }) else null,
-                            confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null)
+                            confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null,
+                            onUndo = if (recovery != null && saved != null && saved.record.resolved && !recoveryState.busy && recoveryState.online && saved.record.kind == "confirm") ({ recovery.undo(saved) }) else null)
                     }
                     AssistantReadCards(exchange, onOpenTask, onOpenDay, onOpenTrends)
                     if (exchange.answer.isNotEmpty()) SelectionContainer { AnswerText(exchange.answer) }
@@ -221,53 +221,6 @@ private fun AssistantComposer(draft: String, onDraft: (String) -> Unit, focus: F
         }
     }
 }
-
-@Composable
-internal fun PlanCard(plan: AssistantPlan, onOpenDay: (LocalDate) -> Unit = {}) {
-    var expanded by rememberSaveable(plan.id) { mutableStateOf(false) }
-    val largeText = LocalDensity.current.fontScale > 1.3f
-    val colors = TimeboxTheme.colors
-    Surface(color = colors.field, shape = TimeboxShapes.card, border = BorderStroke(1.dp, colors.hairline)) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val title = if (plan.date == LocalDate.now(plan.zone)) "Today’s plan" else "Plan"
-            if (largeText) {
-                Text(title, Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
-                Text("${plan.rows.size} Planned Blocks", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(title, Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
-                Text("${plan.rows.size} blocks", Modifier.semantics { contentDescription = "${plan.rows.size} Planned Blocks" }, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-            }
-            Text("${plan.date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))} · Read ${plan.readAt.atZone(plan.zone).format(DateTimeFormatter.ofPattern("HH:mm"))} · ${plan.zone.id}", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-            if (plan.rows.isEmpty()) Text("No Planned Blocks for this date.", style = TimeboxTheme.type.body)
-            (if (expanded) plan.rows else plan.rows.take(3)).forEach { row ->
-                HorizontalDivider(Modifier.padding(vertical = 4.dp), color = colors.hairline)
-                if (largeText) Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("${clock(row.start)}–${clock(row.end)}", style = TimeboxTheme.type.mono.copy(fontSize = 12.sp), color = colors.planned)
-                    PlanRowTitle(row)
-                } else Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.width(48.dp)) {
-                        Text(clock(row.start), style = TimeboxTheme.type.mono.copy(fontSize = 12.sp), color = colors.planned)
-                        Text(clock(row.end), style = TimeboxTheme.type.mono.copy(fontSize = 11.sp), color = colors.onVariant)
-                    }
-                    Column(Modifier.weight(1f)) { PlanRowTitle(row) }
-                }
-            }
-            TextButton(onClick = { onOpenDay(plan.date) }) { Text("Open Day") }
-            if (plan.rows.size > 3) TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
-                Text(if (expanded) "Show fewer" else "Show all ${plan.rows.size} blocks", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                Text(if (expanded) "−" else "+", color = colors.onVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlanRowTitle(row: AssistantPlanRow) {
-    Text(row.title, style = TimeboxTheme.type.body, fontWeight = FontWeight.Medium)
-    Text(row.taskType, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-}
-
-private fun clock(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
 
 /** Deliberately small formatting vocabulary: no HTML, links, images or remote content. */
 @Composable
