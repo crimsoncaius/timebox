@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "clock": "2026-10-08T15:30:00+08:00",
+  "families": {
+    "train": [
+      "activity-unavailable",
+      "arithmetic-only",
+      "create-unclassified-task",
+      "hierarchy-totals",
+      "historical-plan-reshow",
+      "rename-proposal",
+      "single-day-schedule",
+      "single-type-duration",
+      "task-collection-filters",
+      "tracking-from-current-plan",
+      "tracking-now",
+      "unacknowledged-reference"
+    ],
+    "validation": [
+      "check-child-proposal",
+      "explicit-supporting-notes",
+      "plan-free-gap",
+      "same-day-lane-cards",
+      "stale-plan-refresh",
+      "tracking-stop"
+    ],
+    "test": [
+      "correct-unconfirmed-tracking",
+      "historical-task-ordinal",
+      "partial-cross-tool-coverage",
+      "reopen-completed-task",
+      "running-block-elapsed",
+      "task-and-activity-cards"
+    ]
+  },
+  "files": {
+    "train.json": {
+      "cases": 60,
+      "sha256": "5c7c263943fca15d4489d4497ebe014d859c73e1f118eaa6403a9c0c539f58d0"
+    },
+    "validation.json": {
+      "cases": 30,
+      "sha256": "98ad5303557773dc296d82fd9e8ccaf3e3ef14d361c83b46620f9ad4ba316747"
+    },
+    "test.json": {
+      "cases": 30,
+      "sha256": "6e561b9d647728ad7801dfaa3677ceb09824e8aeee035ef220bc5f2d242f1c61"
+    },
+    "regression.json": {
+      "cases": 3,
+      "sha256": "b792506a6b195303574d318ddac0464d6b5041976136d22c70b3d14b67d1df29"
+    }
+  },
+  "fixture_source_sha256": "be722a8d21f3e58494f915f78ac3177fed56327d000dd72e10441f3e3dc8493d",
+  "held_out_policy": "Structural validation only until scorer and candidates are frozen."
+}

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # Explicit opt-in telemetry; credentials stay on the backend.
     assistant_trace_endpoint: str | None = None
     assistant_trace_api_key: str | None = None
+    assistant_policy_path: str | None = None
 
 
 @lru_cache

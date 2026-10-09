@@ -1,0 +1,1401 @@
+[
+  {
+    "id": "plan-free-gap-01",
+    "family": "plan-free-gap",
+    "split": "validation",
+    "category": "text-after-read",
+    "question": "Is 16:00 to 16:30 today free in my saved plan? Answer in text, no cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?i)(?:free|unscheduled|no planned block|nothing is planned|unbooked|half.hour is open)"
+      ],
+      "forbidden": [
+        "not free|occupied|busy"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "16:00–16:30 is free in your saved plan.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "plan-free-gap-02",
+    "family": "plan-free-gap",
+    "split": "validation",
+    "category": "text-after-read",
+    "question": "Does my plan leave a free half hour at 4 pm today? No card, please.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?i)(?:free|unscheduled|no planned block|nothing is planned|unbooked|half.hour is open)"
+      ],
+      "forbidden": [
+        "not free|occupied|busy"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "16:00–16:30 is free in your saved plan.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "plan-free-gap-03",
+    "family": "plan-free-gap",
+    "split": "validation",
+    "category": "text-after-read",
+    "question": "Check whether 4:00–4:30 pm today is unscheduled. Just tell me in words.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?i)(?:free|unscheduled|no planned block|nothing is planned|unbooked|half.hour is open)"
+      ],
+      "forbidden": [
+        "not free|occupied|busy"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "16:00–16:30 is free in your saved plan.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "plan-free-gap-04",
+    "family": "plan-free-gap",
+    "split": "validation",
+    "category": "text-after-read",
+    "question": "Am I free from 16:00 until 16:30 according to today's plan? Don't show cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?i)(?:free|unscheduled|no planned block|nothing is planned|unbooked|half.hour is open)"
+      ],
+      "forbidden": [
+        "not free|occupied|busy"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "16:00–16:30 is free in your saved plan.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "plan-free-gap-05",
+    "family": "plan-free-gap",
+    "split": "validation",
+    "category": "text-after-read",
+    "question": "Is there a planned block between 4 and 4:30 this afternoon? Answer without cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?i)(?:free|unscheduled|no planned block|nothing is planned|unbooked|half.hour is open)"
+      ],
+      "forbidden": [
+        "not free|occupied|busy"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "16:00–16:30 is free in your saved plan.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-stop-01",
+    "family": "tracking-stop",
+    "split": "validation",
+    "category": "tracking-no-read",
+    "question": "I stopped reading just now.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "stop",
+        "paths": [],
+        "at": null
+      }
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "stop"
+        }
+      },
+      {
+        "answer": "Confirm the stop proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-stop-02",
+    "family": "tracking-stop",
+    "split": "validation",
+    "category": "tracking-no-read",
+    "question": "I stopped reading five minutes ago.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "stop",
+        "paths": [],
+        "at": "2026-10-08T07:25:00Z"
+      }
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "stop",
+          "minutes_ago": 5
+        }
+      },
+      {
+        "answer": "Confirm the stop proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-stop-03",
+    "family": "tracking-stop",
+    "split": "validation",
+    "category": "tracking-no-read",
+    "question": "Stop tracking; I finished ten minutes ago.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "stop",
+        "paths": [],
+        "at": "2026-10-08T07:20:00Z"
+      }
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "stop",
+          "minutes_ago": 10
+        }
+      },
+      {
+        "answer": "Confirm the stop proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-stop-04",
+    "family": "tracking-stop",
+    "split": "validation",
+    "category": "tracking-no-read",
+    "question": "I stopped fifteen minutes ago. Prepare the stop proposal.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "stop",
+        "paths": [],
+        "at": "2026-10-08T07:15:00Z"
+      }
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "stop",
+          "minutes_ago": 15
+        }
+      },
+      {
+        "answer": "Confirm the stop proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-stop-05",
+    "family": "tracking-stop",
+    "split": "validation",
+    "category": "tracking-no-read",
+    "question": "I stopped reading half an hour ago.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "stop",
+        "paths": [],
+        "at": "2026-10-08T07:00:00Z"
+      }
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "stop",
+          "minutes_ago": 30
+        }
+      },
+      {
+        "answer": "Confirm the stop proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "check-child-proposal-01",
+    "family": "check-child-proposal",
+    "split": "validation",
+    "category": "read-task-proposal",
+    "question": "Check 'Patch export' under Fix calendar export.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "set_subtask_checked",
+          "target": {
+            "id": 11
+          },
+          "parent": {
+            "id": 1
+          },
+          "checked": true
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "children",
+          "parent_id": 1,
+          "kind": "subtasks"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "set_subtask_checked",
+              "target": {
+                "id": 11
+              },
+              "parent": {
+                "id": 1
+              },
+              "checked": true
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to check Patch export.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "check-child-proposal-02",
+    "family": "check-child-proposal",
+    "split": "validation",
+    "category": "read-task-proposal",
+    "question": "Mark the Patch export subtask checked under Fix calendar export.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "set_subtask_checked",
+          "target": {
+            "id": 11
+          },
+          "parent": {
+            "id": 1
+          },
+          "checked": true
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "children",
+          "parent_id": 1,
+          "kind": "subtasks"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "set_subtask_checked",
+              "target": {
+                "id": 11
+              },
+              "parent": {
+                "id": 1
+              },
+              "checked": true
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to check Patch export.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "check-child-proposal-03",
+    "family": "check-child-proposal",
+    "split": "validation",
+    "category": "read-task-proposal",
+    "question": "I've finished Patch export in Fix calendar export; check that subtask only.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "set_subtask_checked",
+          "target": {
+            "id": 11
+          },
+          "parent": {
+            "id": 1
+          },
+          "checked": true
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "children",
+          "parent_id": 1,
+          "kind": "subtasks"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "set_subtask_checked",
+              "target": {
+                "id": 11
+              },
+              "parent": {
+                "id": 1
+              },
+              "checked": true
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to check Patch export.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "check-child-proposal-04",
+    "family": "check-child-proposal",
+    "split": "validation",
+    "category": "read-task-proposal",
+    "question": "Set Patch export to checked, leaving its parent Fix calendar export open.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "set_subtask_checked",
+          "target": {
+            "id": 11
+          },
+          "parent": {
+            "id": 1
+          },
+          "checked": true
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "children",
+          "parent_id": 1,
+          "kind": "subtasks"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "set_subtask_checked",
+              "target": {
+                "id": 11
+              },
+              "parent": {
+                "id": 1
+              },
+              "checked": true
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to check Patch export.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "check-child-proposal-05",
+    "family": "check-child-proposal",
+    "split": "validation",
+    "category": "read-task-proposal",
+    "question": "Please check off Patch export within Fix calendar export, without completing the parent.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "set_subtask_checked",
+          "target": {
+            "id": 11
+          },
+          "parent": {
+            "id": 1
+          },
+          "checked": true
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "children",
+          "parent_id": 1,
+          "kind": "subtasks"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "set_subtask_checked",
+              "target": {
+                "id": 11
+              },
+              "parent": {
+                "id": 1
+              },
+              "checked": true
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to check Patch export.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "explicit-supporting-notes-01",
+    "family": "explicit-supporting-notes",
+    "split": "validation",
+    "category": "private-text-request",
+    "question": "What did I write in yesterday's Reading notes? Quote the note; no cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "Spent extra time understanding transaction isolation[.]"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "task_type": "Reading",
+          "include_text": true
+        }
+      },
+      {
+        "answer": "Spent extra time understanding transaction isolation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "explicit-supporting-notes-02",
+    "family": "explicit-supporting-notes",
+    "split": "validation",
+    "category": "private-text-request",
+    "question": "Read the Supporting Notes on yesterday's Reading block and repeat the text without cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "Spent extra time understanding transaction isolation[.]"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "task_type": "Reading",
+          "include_text": true
+        }
+      },
+      {
+        "answer": "Spent extra time understanding transaction isolation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "explicit-supporting-notes-03",
+    "family": "explicit-supporting-notes",
+    "split": "validation",
+    "category": "private-text-request",
+    "question": "Show the exact note I wrote for Reading yesterday, in text only.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "Spent extra time understanding transaction isolation[.]"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "task_type": "Reading",
+          "include_text": true
+        }
+      },
+      {
+        "answer": "Spent extra time understanding transaction isolation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "explicit-supporting-notes-04",
+    "family": "explicit-supporting-notes",
+    "split": "validation",
+    "category": "private-text-request",
+    "question": "Quote yesterday's Reading Supporting Notes. I don't need a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "Spent extra time understanding transaction isolation[.]"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "task_type": "Reading",
+          "include_text": true
+        }
+      },
+      {
+        "answer": "Spent extra time understanding transaction isolation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "explicit-supporting-notes-05",
+    "family": "explicit-supporting-notes",
+    "split": "validation",
+    "category": "private-text-request",
+    "question": "Tell me the saved note text for yesterday's Reading activity; no cards please.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "Spent extra time understanding transaction isolation[.]"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "task_type": "Reading",
+          "include_text": true
+        }
+      },
+      {
+        "answer": "Spent extra time understanding transaction isolation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "stale-plan-refresh-01",
+    "family": "stale-plan-refresh",
+    "split": "validation",
+    "category": "changed-history",
+    "question": "Has the plan changed? Tell me when Quarterly report is now scheduled, without a card.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ],
+      "move_plan": true
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?:18:00|6(?::00)?\\s*pm)"
+      ],
+      "forbidden": [
+        "still (?:at )?(?:16:30|4:30)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "Quarterly report is now scheduled at 18:00.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "stale-plan-refresh-02",
+    "family": "stale-plan-refresh",
+    "split": "validation",
+    "category": "changed-history",
+    "question": "Refresh today's plan: when does Quarterly report start now? Text only.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ],
+      "move_plan": true
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?:18:00|6(?::00)?\\s*pm)"
+      ],
+      "forbidden": [
+        "still (?:at )?(?:16:30|4:30)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "Quarterly report is now scheduled at 18:00.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "stale-plan-refresh-03",
+    "family": "stale-plan-refresh",
+    "split": "validation",
+    "category": "changed-history",
+    "question": "Check the current schedule again and tell me the report's current start time, no cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ],
+      "move_plan": true
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?:18:00|6(?::00)?\\s*pm)"
+      ],
+      "forbidden": [
+        "still (?:at )?(?:16:30|4:30)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "Quarterly report is now scheduled at 18:00.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "stale-plan-refresh-04",
+    "family": "stale-plan-refresh",
+    "split": "validation",
+    "category": "changed-history",
+    "question": "What time is Quarterly report planned now? Use fresh data and answer without cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ],
+      "move_plan": true
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?:18:00|6(?::00)?\\s*pm)"
+      ],
+      "forbidden": [
+        "still (?:at )?(?:16:30|4:30)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "Quarterly report is now scheduled at 18:00.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "stale-plan-refresh-05",
+    "family": "stale-plan-refresh",
+    "split": "validation",
+    "category": "changed-history",
+    "question": "Read today's plan again. Is the report still at its old time? Give the new time in words, no card.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ],
+      "move_plan": true
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "facts": [
+        "(?:18:00|6(?::00)?\\s*pm)"
+      ],
+      "forbidden": [
+        "still (?:at )?(?:16:30|4:30)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "Quarterly report is now scheduled at 18:00.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "same-day-lane-cards-01",
+    "family": "same-day-lane-cards",
+    "split": "validation",
+    "category": "multiple-cards",
+    "question": "Show yesterday's planned and actual blocks in two separate cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "planned"
+        }
+      },
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "same-day-lane-cards-02",
+    "family": "same-day-lane-cards",
+    "split": "validation",
+    "category": "multiple-cards",
+    "question": "Display one card for yesterday's plan and another for yesterday's actual activity.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "planned"
+        }
+      },
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "same-day-lane-cards-03",
+    "family": "same-day-lane-cards",
+    "split": "validation",
+    "category": "multiple-cards",
+    "question": "I want two cards for October 7: the plan and the actual blocks, separately.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "planned"
+        }
+      },
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "same-day-lane-cards-04",
+    "family": "same-day-lane-cards",
+    "split": "validation",
+    "category": "multiple-cards",
+    "question": "Show planned versus actual activity for yesterday, using a separate card for each lane.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "planned"
+        }
+      },
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "same-day-lane-cards-05",
+    "family": "same-day-lane-cards",
+    "split": "validation",
+    "category": "multiple-cards",
+    "question": "Give me yesterday's planned schedule card followed by its actual activity card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "planned"
+        }
+      },
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  }
+]

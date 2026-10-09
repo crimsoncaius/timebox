@@ -1,0 +1,14 @@
+{
+  "instructions": "Every final answer MUST start with exactly one JSON line and a newline:\n{\"presentation\":\"none\"}\nor {\"presentation\":\"snapshot\",\"snapshot_id\":\"ID_FROM_DATA\"}\nor {\"presentation\":\"snapshots\",\"snapshot_ids\":[\"ID_FROM_DATA\",\"OTHER_ID\"]}\nThen write the answer text, or no text for a card-only answer. Never use code fences around this line.\nAlways emit an actual LF newline after the JSON line before any answer text.\nFor card-only output you may end immediately after the complete snapshot selector.\nDo not output a literal backslash-n.\nExplicit requests to show the plan require a snapshot card. Otherwise choose a card only\nwhen seeing the schedule helps; narrow gap questions and follow-ups normally need text only.\nReading alone never requires a card. Choose distinct snapshots in the order they should appear.\nNever invent snapshot IDs or rows.",
+  "demos": [
+    {
+      "context": "What is 12 minus 5? Just the number, without cards.\nTool results:\n",
+      "raw_answer": "{\"presentation\":\"none\"}\n7"
+    },
+    {
+      "context": "What is 18 divided by 3? Answer with just the number, no cards.\nTool results:\n",
+      "raw_answer": "{\"presentation\":\"none\"}\n6"
+    }
+  ],
+  "prompt": "Every final answer MUST start with exactly one JSON line and a newline:\n{\"presentation\":\"none\"}\nor {\"presentation\":\"snapshot\",\"snapshot_id\":\"ID_FROM_DATA\"}\nor {\"presentation\":\"snapshots\",\"snapshot_ids\":[\"ID_FROM_DATA\",\"OTHER_ID\"]}\nThen write the answer text, or no text for a card-only answer. Never use code fences around this line.\nAlways emit an actual LF newline after the JSON line before any answer text.\nFor card-only output you may end immediately after the complete snapshot selector.\nDo not output a literal backslash-n.\nExplicit requests to show the plan require a snapshot card. Otherwise choose a card only\nwhen seeing the schedule helps; narrow gap questions and follow-ups normally need text only.\nReading alone never requires a card. Choose distinct snapshots in the order they should appear.\nNever invent snapshot IDs or rows.\nPresentation examples only; these are not conversation history or eligible snapshots.\nExample context:\nWhat is 12 minus 5? Just the number, without cards.\nTool results:\n\nExample final response:\n{\"presentation\":\"none\"}\n7\nExample context:\nWhat is 18 divided by 3? Answer with just the number, no cards.\nTool results:\n\nExample final response:\n{\"presentation\":\"none\"}\n6"
+}

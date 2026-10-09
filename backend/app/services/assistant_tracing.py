@@ -45,11 +45,11 @@ class RedactingExporter(SpanExporter):
         self.exporter.shutdown()
 
 
-def setup_tracing():
+def setup_tracing(*, project_name="timebox-assistant"):
     settings = get_settings()
     if not settings.assistant_trace_endpoint:
         return None
-    provider = TracerProvider(resource=Resource.create({"openinference.project.name": "timebox-assistant"}))
+    provider = TracerProvider(resource=Resource.create({"openinference.project.name": project_name}))
     provider.add_span_processor(BatchSpanProcessor(RedactingExporter(
         OTLPSpanExporter(
             endpoint=settings.assistant_trace_endpoint,

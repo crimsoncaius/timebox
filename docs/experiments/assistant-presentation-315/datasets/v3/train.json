@@ -1,0 +1,2620 @@
+[
+  {
+    "id": "arithmetic-only-01",
+    "family": "arithmetic-only",
+    "split": "train",
+    "category": "text",
+    "question": "What is 7 plus 8? Reply with the number only, no cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "^15[.]?$"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "15",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "arithmetic-only-02",
+    "family": "arithmetic-only",
+    "split": "train",
+    "category": "text",
+    "question": "What is 12 minus 5? Just the number, without cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "^7[.]?$"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "7",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "arithmetic-only-03",
+    "family": "arithmetic-only",
+    "split": "train",
+    "category": "text",
+    "question": "Calculate 6 times 4. Give only the number and no cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "^24[.]?$"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "24",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "arithmetic-only-04",
+    "family": "arithmetic-only",
+    "split": "train",
+    "category": "text",
+    "question": "What is 18 divided by 3? Answer with just the number, no cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "^6[.]?$"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "6",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "arithmetic-only-05",
+    "family": "arithmetic-only",
+    "split": "train",
+    "category": "text",
+    "question": "Calculate 9 plus 11. Only the number, without cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "^20[.]?$"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "20",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "single-day-schedule-01",
+    "family": "single-day-schedule",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show today's full saved plan as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned",
+            "task_type": null
+          }
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "2026-10-08"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "single-day-schedule-02",
+    "family": "single-day-schedule",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show tomorrow's saved plan as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-09",
+            "lane": "planned",
+            "task_type": null
+          }
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "2026-10-09"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "single-day-schedule-03",
+    "family": "single-day-schedule",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show the saved plan for yesterday as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-07",
+            "lane": "planned",
+            "task_type": null
+          }
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "2026-10-07"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "single-day-schedule-04",
+    "family": "single-day-schedule",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show Tuesday October 6's full plan as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-06",
+            "lane": "planned",
+            "task_type": null
+          }
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "2026-10-06"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "single-day-schedule-05",
+    "family": "single-day-schedule",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show Monday October 5's saved schedule as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-05",
+            "lane": "planned",
+            "task_type": null
+          }
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "2026-10-05"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "single-type-duration-01",
+    "family": "single-type-duration",
+    "split": "train",
+    "category": "optional-card",
+    "question": "How much actual time did I record for Work/Coding yesterday? A relevant card is fine but not necessary.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-07",
+            "end": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work/Coding",
+          "seconds": 5400
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work/Coding"
+        }
+      },
+      {
+        "answer": "Work/Coding: 90 minutes.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "single-type-duration-02",
+    "family": "single-type-duration",
+    "split": "train",
+    "category": "optional-card",
+    "question": "How much actual time did I record for Work/Admin yesterday? A relevant card is fine but not necessary.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-07",
+            "end": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work/Admin",
+          "seconds": 2700
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work/Admin"
+        }
+      },
+      {
+        "answer": "Work/Admin: 45 minutes.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "single-type-duration-03",
+    "family": "single-type-duration",
+    "split": "train",
+    "category": "optional-card",
+    "question": "How much actual time did I record for Reading yesterday? A relevant card is fine but not necessary.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-07",
+            "end": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Reading",
+          "seconds": 6300
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Reading"
+        }
+      },
+      {
+        "answer": "Reading: 105 minutes.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "single-type-duration-04",
+    "family": "single-type-duration",
+    "split": "train",
+    "category": "optional-card",
+    "question": "How much actual time did I record for Meals yesterday? A relevant card is fine but not necessary.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-07",
+            "end": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Meals",
+          "seconds": 2700
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Meals"
+        }
+      },
+      {
+        "answer": "Meals: 45 minutes.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "single-type-duration-05",
+    "family": "single-type-duration",
+    "split": "train",
+    "category": "optional-card",
+    "question": "How much actual time did I record for Exercise/Walking yesterday? A relevant card is fine but not necessary.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-07",
+            "end": "2026-10-07",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Exercise/Walking",
+          "seconds": 0
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "yesterday",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Exercise/Walking"
+        }
+      },
+      {
+        "answer": "Exercise/Walking: 0 minutes.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "task-collection-filters-01",
+    "family": "task-collection-filters",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show my Ready to Plan ordinary tasks as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4,
+            "kind": "tasks"
+          },
+          "task_ids": [
+            1,
+            4
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "kinds": [
+            "ordinary"
+          ],
+          "filters": {
+            "ready_to_plan": true
+          }
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-collection-filters-02",
+    "family": "task-collection-filters",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show my blocked ordinary tasks as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4,
+            "kind": "tasks"
+          },
+          "task_ids": [
+            6
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "kinds": [
+            "ordinary"
+          ],
+          "filters": {
+            "blocked": true
+          }
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-collection-filters-03",
+    "family": "task-collection-filters",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show incomplete ordinary tasks with no project as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4,
+            "kind": "tasks"
+          },
+          "task_ids": [
+            8
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "kinds": [
+            "ordinary"
+          ],
+          "filters": {
+            "project_id": "unassigned"
+          }
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-collection-filters-04",
+    "family": "task-collection-filters",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show incomplete ordinary tasks with no Task Type as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4,
+            "kind": "tasks"
+          },
+          "task_ids": [
+            7
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "kinds": [
+            "ordinary"
+          ],
+          "filters": {
+            "task_type_id": "unset"
+          }
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-collection-filters-05",
+    "family": "task-collection-filters",
+    "split": "train",
+    "category": "required-card",
+    "question": "Show unblocked Ready to Plan ordinary tasks as a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4,
+            "kind": "tasks"
+          },
+          "task_ids": [
+            1,
+            4
+          ]
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "kinds": [
+            "ordinary"
+          ],
+          "filters": {
+            "ready_to_plan": true,
+            "blocked": false
+          }
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "rename-proposal-01",
+    "family": "rename-proposal",
+    "split": "train",
+    "category": "read-task-proposal",
+    "question": "Rename Weekly report to 'Send weekly update'.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 3
+          },
+          "set": {
+            "title": "Send weekly update"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            3
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been renamed",
+        "I (?:have )?renamed"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Weekly report"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "patch_task",
+              "target": {
+                "id": 3
+              },
+              "set": {
+                "title": "Send weekly update"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposed rename before confirming.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "rename-proposal-02",
+    "family": "rename-proposal",
+    "split": "train",
+    "category": "read-task-proposal",
+    "question": "Rename Quarterly report to 'Prepare quarterly review'.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 2
+          },
+          "set": {
+            "title": "Prepare quarterly review"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            2
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been renamed",
+        "I (?:have )?renamed"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Quarterly report"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "patch_task",
+              "target": {
+                "id": 2
+              },
+              "set": {
+                "title": "Prepare quarterly review"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposed rename before confirming.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "rename-proposal-03",
+    "family": "rename-proposal",
+    "split": "train",
+    "category": "read-task-proposal",
+    "question": "Rename Send invoice to 'Send October invoice'.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 5
+          },
+          "set": {
+            "title": "Send October invoice"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            5
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been renamed",
+        "I (?:have )?renamed"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Send invoice"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "patch_task",
+              "target": {
+                "id": 5
+              },
+              "set": {
+                "title": "Send October invoice"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposed rename before confirming.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "rename-proposal-04",
+    "family": "rename-proposal",
+    "split": "train",
+    "category": "read-task-proposal",
+    "question": "Rename Buy groceries to 'Buy pantry supplies'.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 7
+          },
+          "set": {
+            "title": "Buy pantry supplies"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            7
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been renamed",
+        "I (?:have )?renamed"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Buy groceries"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "patch_task",
+              "target": {
+                "id": 7
+              },
+              "set": {
+                "title": "Buy pantry supplies"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposed rename before confirming.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "rename-proposal-05",
+    "family": "rename-proposal",
+    "split": "train",
+    "category": "read-task-proposal",
+    "question": "Rename Review pull request to 'Review API changes'.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 4
+          },
+          "set": {
+            "title": "Review API changes"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            4
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been renamed",
+        "I (?:have )?renamed"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Review pull request"
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "patch_task",
+              "target": {
+                "id": 4
+              },
+              "set": {
+                "title": "Review API changes"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposed rename before confirming.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "create-unclassified-task-01",
+    "family": "create-unclassified-task",
+    "split": "train",
+    "category": "task-proposal-no-read",
+    "question": "Create an ordinary task titled 'Test calendar import', with no other fields or classification.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "create_task",
+          "ref": "new",
+          "title": "Test calendar import"
+        }
+      ],
+      "forbidden": [
+        "(?:I have|I've|successfully) created",
+        "has been created"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "create_task",
+              "ref": "new",
+              "title": "Test calendar import"
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the new task proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "create-unclassified-task-02",
+    "family": "create-unclassified-task",
+    "split": "train",
+    "category": "task-proposal-no-read",
+    "question": "Create an ordinary task titled 'Call the dentist', with no other fields or classification.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "create_task",
+          "ref": "new",
+          "title": "Call the dentist"
+        }
+      ],
+      "forbidden": [
+        "(?:I have|I've|successfully) created",
+        "has been created"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "create_task",
+              "ref": "new",
+              "title": "Call the dentist"
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the new task proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "create-unclassified-task-03",
+    "family": "create-unclassified-task",
+    "split": "train",
+    "category": "task-proposal-no-read",
+    "question": "Create an ordinary task titled 'Read the migration guide', with no other fields or classification.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "create_task",
+          "ref": "new",
+          "title": "Read the migration guide"
+        }
+      ],
+      "forbidden": [
+        "(?:I have|I've|successfully) created",
+        "has been created"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "create_task",
+              "ref": "new",
+              "title": "Read the migration guide"
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the new task proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "create-unclassified-task-04",
+    "family": "create-unclassified-task",
+    "split": "train",
+    "category": "task-proposal-no-read",
+    "question": "Create an ordinary task titled 'Buy printer paper', with no other fields or classification.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "create_task",
+          "ref": "new",
+          "title": "Buy printer paper"
+        }
+      ],
+      "forbidden": [
+        "(?:I have|I've|successfully) created",
+        "has been created"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "create_task",
+              "ref": "new",
+              "title": "Buy printer paper"
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the new task proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "create-unclassified-task-05",
+    "family": "create-unclassified-task",
+    "split": "train",
+    "category": "task-proposal-no-read",
+    "question": "Create an ordinary task titled 'Write release notes', with no other fields or classification.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "create_task",
+          "ref": "new",
+          "title": "Write release notes"
+        }
+      ],
+      "forbidden": [
+        "(?:I have|I've|successfully) created",
+        "has been created"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "create_task",
+              "ref": "new",
+              "title": "Write release notes"
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the new task proposal.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-now-01",
+    "family": "tracking-now",
+    "split": "train",
+    "category": "tracking-no-read",
+    "question": "I'm doing Reading now. Propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": null
+      },
+      "forbidden": [
+        "tracking (?:has )?started",
+        "I(?:'ve| have) started"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to start tracking.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-now-02",
+    "family": "tracking-now",
+    "split": "train",
+    "category": "tracking-no-read",
+    "question": "I'm doing Meals now. Propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Meals"
+        ],
+        "at": null
+      },
+      "forbidden": [
+        "tracking (?:has )?started",
+        "I(?:'ve| have) started"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Meals"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to start tracking.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-now-03",
+    "family": "tracking-now",
+    "split": "train",
+    "category": "tracking-no-read",
+    "question": "I'm doing Exercise/Walking now. Propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Exercise/Walking"
+        ],
+        "at": null
+      },
+      "forbidden": [
+        "tracking (?:has )?started",
+        "I(?:'ve| have) started"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Exercise/Walking"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to start tracking.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-now-04",
+    "family": "tracking-now",
+    "split": "train",
+    "category": "tracking-no-read",
+    "question": "I'm doing Work/Coding now. Propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Work/Coding"
+        ],
+        "at": null
+      },
+      "forbidden": [
+        "tracking (?:has )?started",
+        "I(?:'ve| have) started"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Work/Coding"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to start tracking.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-now-05",
+    "family": "tracking-now",
+    "split": "train",
+    "category": "tracking-no-read",
+    "question": "I'm doing Work/Admin now. Propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Work/Admin"
+        ],
+        "at": null
+      },
+      "forbidden": [
+        "tracking (?:has )?started",
+        "I(?:'ve| have) started"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Work/Admin"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to start tracking.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-from-current-plan-01",
+    "family": "tracking-from-current-plan",
+    "split": "train",
+    "category": "read-tracking-proposal",
+    "question": "Read today's plan and propose tracking what I planned for right now.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": null
+      }
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to track Reading.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-from-current-plan-02",
+    "family": "tracking-from-current-plan",
+    "split": "train",
+    "category": "read-tracking-proposal",
+    "question": "I am doing the activity scheduled at this moment. Check the plan and propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": null
+      }
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to track Reading.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-from-current-plan-03",
+    "family": "tracking-from-current-plan",
+    "split": "train",
+    "category": "read-tracking-proposal",
+    "question": "Look up what is planned at 3:30 pm today and propose tracking that now.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": null
+      }
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to track Reading.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-from-current-plan-04",
+    "family": "tracking-from-current-plan",
+    "split": "train",
+    "category": "read-tracking-proposal",
+    "question": "Use the current schedule to find this moment's activity, then propose tracking it.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": null
+      }
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to track Reading.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "tracking-from-current-plan-05",
+    "family": "tracking-from-current-plan",
+    "split": "train",
+    "category": "read-tracking-proposal",
+    "question": "Check the plan for now; that is what I'm doing. Prepare a tracking proposal.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": null
+      }
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ]
+        }
+      },
+      {
+        "answer": "Confirm to track Reading.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "historical-plan-reshow-01",
+    "family": "historical-plan-reshow",
+    "split": "train",
+    "category": "acknowledged-history",
+    "question": "Show the same plan card you showed in your previous answer, as it was then.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "historical_cards": true
+    },
+    "probe": [
+      {
+        "answer": "",
+        "cards": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "id": "historical-plan-reshow-02",
+    "family": "historical-plan-reshow",
+    "split": "train",
+    "category": "acknowledged-history",
+    "question": "Display that earlier plan snapshot again without refreshing it.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "historical_cards": true
+    },
+    "probe": [
+      {
+        "answer": "",
+        "cards": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "id": "historical-plan-reshow-03",
+    "family": "historical-plan-reshow",
+    "split": "train",
+    "category": "acknowledged-history",
+    "question": "Bring back the original schedule card from your last answer.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "historical_cards": true
+    },
+    "probe": [
+      {
+        "answer": "",
+        "cards": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "id": "historical-plan-reshow-04",
+    "family": "historical-plan-reshow",
+    "split": "train",
+    "category": "acknowledged-history",
+    "question": "Show the plan snapshot from our previous exchange again.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "historical_cards": true
+    },
+    "probe": [
+      {
+        "answer": "",
+        "cards": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "id": "historical-plan-reshow-05",
+    "family": "historical-plan-reshow",
+    "split": "train",
+    "category": "acknowledged-history",
+    "question": "Repeat the earlier plan card, keeping its original data.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": true,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "historical_cards": true
+    },
+    "probe": [
+      {
+        "answer": "",
+        "cards": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unacknowledged-reference-01",
+    "family": "unacknowledged-reference",
+    "split": "train",
+    "category": "unacknowledged-history",
+    "question": "What did your previous answer say? I only want a reminder, no new reads or cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": false,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "(?i)(?:no|don't|do not|cannot|can't).*(?:previous|earlier|prior|history|answer)"
+      ],
+      "forbidden": [
+        "you had|I showed|I told you"
+      ],
+      "no_reads": true
+    },
+    "probe": [
+      {
+        "answer": "I don't have a previous answer in this conversation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "unacknowledged-reference-02",
+    "family": "unacknowledged-reference",
+    "split": "train",
+    "category": "unacknowledged-history",
+    "question": "Repeat your last answer in words without reading any data or showing cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": false,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "(?i)(?:no|don't|do not|cannot|can't).*(?:previous|earlier|prior|history|answer)"
+      ],
+      "forbidden": [
+        "you had|I showed|I told you"
+      ],
+      "no_reads": true
+    },
+    "probe": [
+      {
+        "answer": "I don't have a previous answer in this conversation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "unacknowledged-reference-03",
+    "family": "unacknowledged-reference",
+    "split": "train",
+    "category": "unacknowledged-history",
+    "question": "Remind me of the answer you already gave, without fetching anything or displaying cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": false,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "(?i)(?:no|don't|do not|cannot|can't).*(?:previous|earlier|prior|history|answer)"
+      ],
+      "forbidden": [
+        "you had|I showed|I told you"
+      ],
+      "no_reads": true
+    },
+    "probe": [
+      {
+        "answer": "I don't have a previous answer in this conversation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "unacknowledged-reference-04",
+    "family": "unacknowledged-reference",
+    "split": "train",
+    "category": "unacknowledged-history",
+    "question": "What had you told me in this conversation? Don't look up fresh information or show cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": false,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "(?i)(?:no|don't|do not|cannot|can't).*(?:previous|earlier|prior|history|answer)"
+      ],
+      "forbidden": [
+        "you had|I showed|I told you"
+      ],
+      "no_reads": true
+    },
+    "probe": [
+      {
+        "answer": "I don't have a previous answer in this conversation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "unacknowledged-reference-05",
+    "family": "unacknowledged-reference",
+    "split": "train",
+    "category": "unacknowledged-history",
+    "question": "Summarize the answer immediately before this message, without tools or cards.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show me today's plan.",
+          "acknowledge": false,
+          "steps": [
+            {
+              "tool": "read_activity",
+              "args": {}
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "(?i)(?:no|don't|do not|cannot|can't).*(?:previous|earlier|prior|history|answer)"
+      ],
+      "forbidden": [
+        "you had|I showed|I told you"
+      ],
+      "no_reads": true
+    },
+    "probe": [
+      {
+        "answer": "I don't have a previous answer in this conversation.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "activity-unavailable-01",
+    "family": "activity-unavailable",
+    "split": "train",
+    "category": "unavailable-read",
+    "question": "Show today's plan if it can be verified; otherwise explain that it is unavailable.",
+    "setup": {
+      "unavailable": [
+        "read_activity"
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)(?:unavailable|could not|cannot|can't|unable|failed)"
+      ],
+      "forbidden": [
+        "no (?:planned blocks|plans|activities)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "The plan is unavailable, so I cannot verify today's schedule.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "activity-unavailable-02",
+    "family": "activity-unavailable",
+    "split": "train",
+    "category": "unavailable-read",
+    "question": "Read my current schedule. If the read fails, explain the failure without inventing a plan.",
+    "setup": {
+      "unavailable": [
+        "read_activity"
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)(?:unavailable|could not|cannot|can't|unable|failed)"
+      ],
+      "forbidden": [
+        "no (?:planned blocks|plans|activities)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "The plan is unavailable, so I cannot verify today's schedule.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "activity-unavailable-03",
+    "family": "activity-unavailable",
+    "split": "train",
+    "category": "unavailable-read",
+    "question": "Check the plan for today and tell me if it cannot be loaded.",
+    "setup": {
+      "unavailable": [
+        "read_activity"
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)(?:unavailable|could not|cannot|can't|unable|failed)"
+      ],
+      "forbidden": [
+        "no (?:planned blocks|plans|activities)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "The plan is unavailable, so I cannot verify today's schedule.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "activity-unavailable-04",
+    "family": "activity-unavailable",
+    "split": "train",
+    "category": "unavailable-read",
+    "question": "Can you retrieve today's saved plan? Tell me if the data is unavailable.",
+    "setup": {
+      "unavailable": [
+        "read_activity"
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)(?:unavailable|could not|cannot|can't|unable|failed)"
+      ],
+      "forbidden": [
+        "no (?:planned blocks|plans|activities)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "The plan is unavailable, so I cannot verify today's schedule.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "activity-unavailable-05",
+    "family": "activity-unavailable",
+    "split": "train",
+    "category": "unavailable-read",
+    "question": "Fetch today's plan. If you cannot verify it, say so.",
+    "setup": {
+      "unavailable": [
+        "read_activity"
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)(?:unavailable|could not|cannot|can't|unable|failed)"
+      ],
+      "forbidden": [
+        "no (?:planned blocks|plans|activities)"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "answer": "The plan is unavailable, so I cannot verify today's schedule.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "hierarchy-totals-01",
+    "family": "hierarchy-totals",
+    "split": "train",
+    "category": "hierarchy-facts",
+    "question": "Give this week's actual Work total and its Coding and Admin breakdown, without double counting.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-05",
+            "end": "2026-10-11",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work",
+          "seconds": 32400
+        },
+        {
+          "label": "Work/Coding",
+          "aliases": [
+            "Coding",
+            "Work/Coding"
+          ],
+          "seconds": 21600
+        },
+        {
+          "label": "Work/Admin",
+          "aliases": [
+            "Admin",
+            "Work/Admin"
+          ],
+          "seconds": 10800
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "this_week",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work"
+        }
+      },
+      {
+        "answer": "Work: 9 hours.\nCoding: 6 hours.\nAdmin: 3 hours.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "hierarchy-totals-02",
+    "family": "hierarchy-totals",
+    "split": "train",
+    "category": "hierarchy-facts",
+    "question": "How many hours of Work have I recorded this week? Separate Coding and Admin.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-05",
+            "end": "2026-10-11",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work",
+          "seconds": 32400
+        },
+        {
+          "label": "Work/Coding",
+          "aliases": [
+            "Coding",
+            "Work/Coding"
+          ],
+          "seconds": 21600
+        },
+        {
+          "label": "Work/Admin",
+          "aliases": [
+            "Admin",
+            "Work/Admin"
+          ],
+          "seconds": 10800
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "this_week",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work"
+        }
+      },
+      {
+        "answer": "Work: 9 hours.\nCoding: 6 hours.\nAdmin: 3 hours.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "hierarchy-totals-03",
+    "family": "hierarchy-totals",
+    "split": "train",
+    "category": "hierarchy-facts",
+    "question": "Summarize actual Work time since Monday, showing Coding and Admin within the total.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-05",
+            "end": "2026-10-11",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work",
+          "seconds": 32400
+        },
+        {
+          "label": "Work/Coding",
+          "aliases": [
+            "Coding",
+            "Work/Coding"
+          ],
+          "seconds": 21600
+        },
+        {
+          "label": "Work/Admin",
+          "aliases": [
+            "Admin",
+            "Work/Admin"
+          ],
+          "seconds": 10800
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "this_week",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work"
+        }
+      },
+      {
+        "answer": "Work: 9 hours.\nCoding: 6 hours.\nAdmin: 3 hours.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "hierarchy-totals-04",
+    "family": "hierarchy-totals",
+    "split": "train",
+    "category": "hierarchy-facts",
+    "question": "What is this week's Work total, with its two child Task Types broken out?",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-05",
+            "end": "2026-10-11",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work",
+          "seconds": 32400
+        },
+        {
+          "label": "Work/Coding",
+          "aliases": [
+            "Coding",
+            "Work/Coding"
+          ],
+          "seconds": 21600
+        },
+        {
+          "label": "Work/Admin",
+          "aliases": [
+            "Admin",
+            "Work/Admin"
+          ],
+          "seconds": 10800
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "this_week",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work"
+        }
+      },
+      {
+        "answer": "Work: 9 hours.\nCoding: 6 hours.\nAdmin: 3 hours.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "hierarchy-totals-05",
+    "family": "hierarchy-totals",
+    "split": "train",
+    "category": "hierarchy-facts",
+    "question": "Compare Coding and Admin actual hours this week and state their combined Work total.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "required_reads": [
+        "read_activity"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 3,
+            "start": "2026-10-05",
+            "end": "2026-10-11",
+            "lane": "actual"
+          }
+        }
+      ],
+      "durations": [
+        {
+          "label": "Work",
+          "seconds": 32400
+        },
+        {
+          "label": "Work/Coding",
+          "aliases": [
+            "Coding",
+            "Work/Coding"
+          ],
+          "seconds": 21600
+        },
+        {
+          "label": "Work/Admin",
+          "aliases": [
+            "Admin",
+            "Work/Admin"
+          ],
+          "seconds": 10800
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "this_week",
+          "lane": "actual",
+          "group_by": "task_type",
+          "task_type": "Work"
+        }
+      },
+      {
+        "answer": "Work: 9 hours.\nCoding: 6 hours.\nAdmin: 3 hours.",
+        "cards": []
+      }
+    ]
+  }
+]

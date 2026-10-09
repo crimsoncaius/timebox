@@ -182,6 +182,29 @@ class PresentationParser:
         self.selected = False
         self.text_only = False
         self.allow_empty = False
+        self.pending_body = ""
+
+    def body(self, text: str, *, final=False):
+        """Stream prose while withholding a possible misplaced control object."""
+        text = self.pending_body + text
+        self.pending_body = ""
+        position = text.find("{")
+        prefixes = ('{"presentation"', '{"snapshot_id"', '{"snapshot_ids"')
+        while position >= 0:
+            suffix = re.sub(r"\s", "", text[position:])
+            if any(suffix.startswith(prefix) for prefix in prefixes):
+                raise ValueError("Presentation selector must precede answer text")
+            if any(prefix.startswith(suffix) for prefix in prefixes):
+                if final:
+                    if len(suffix) > 1:
+                        raise ValueError("Incomplete presentation selector in answer text")
+                else:
+                    if len(text[position:].encode("utf-8")) > 512:
+                        raise ValueError("Presentation header too long")
+                    self.pending_body, text = text[position:], text[:position]
+                break
+            position = text.find("{", position + 1)
+        return [("text_delta", {"text": text})] if text else []
 
     def expect_text_only(self):
         """After a Tracking Proposal the answer is plain text; a leading none-selector is tolerated and removed."""
@@ -189,8 +212,14 @@ class PresentationParser:
 
     def feed(self, text: str) -> list[tuple[str, dict]]:
         if self.selected:
-            return [("text_delta", {"text": text})] if text else []
+            return self.body(text)
         self.buffer += text
+        if not self.buffer.strip():
+            return []
+        if self.buffer.lstrip() and not self.buffer.lstrip().startswith("{"):
+            self.selected = True
+            rest, self.buffer = self.buffer, ""
+            return self.body(rest)
         if self.text_only:
             # Wait while the text could still be the none-selector; otherwise strip it if present.
             if '{"presentation":"none"}'.startswith(re.sub(r"\s", "", self.buffer)) and "\n" not in self.buffer.lstrip():
@@ -199,13 +228,13 @@ class PresentationParser:
             rest = self.buffer[match.end():] if match else self.buffer
             self.selected = True
             self.buffer = ""
-            return [("text_delta", {"text": rest})] if rest else []
+            return self.body(rest)
         glued = GLUED_NONE.match(self.buffer)
         if glued:
             # A none-selector followed directly by text on the same line selects nothing either way.
             self.selected = True
             rest, self.buffer = self.buffer[glued.end():], ""
-            return [("text_delta", {"text": rest})]
+            return self.body(rest)
         line, separator, rest = self.buffer.partition("\n")
         header = line.removesuffix("\r")
         if len(header.encode("utf-8")) > 512:
@@ -227,7 +256,7 @@ class PresentationParser:
         self.selected = True
         self.buffer = ""
         if rest:
-            events.append(("text_delta", {"text": rest}))
+            events.extend(self.body(rest))
         return events
 
     def cards(self, keys):
@@ -242,7 +271,7 @@ class PresentationParser:
 
     def finish(self, *, successful_terminal: bool = False) -> list[tuple[str, dict]]:
         if self.selected:
-            return []
+            return self.body("", final=True)
         if self.text_only and successful_terminal:
             # Only a bare none-selector (or nothing) remains: the card is the whole answer.
             self.selected = True

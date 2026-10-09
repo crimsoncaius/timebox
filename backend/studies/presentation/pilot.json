@@ -1,0 +1,143 @@
+[
+  {
+    "id": "text-only",
+    "family": "conversation",
+    "split": "pilot",
+    "question": "Reply with just Hello, without showing any cards.",
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "^Hello[.!]?$"
+      ],
+      "forbidden": []
+    }
+  },
+  {
+    "id": "today-plan",
+    "family": "current-plan",
+    "split": "pilot",
+    "question": "Show me today's plan.",
+    "expectation": {
+      "cards": "required",
+      "card_schema": 2,
+      "facts": [],
+      "forbidden": [],
+      "card_fields": {
+        "date": "2026-10-08",
+        "lane": "planned"
+      }
+    }
+  },
+  {
+    "id": "17-dismiss-rename",
+    "family": "rename-proposal",
+    "split": "regression",
+    "question": "Rename Weekly report to 'Send weekly update'.",
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "facts": [],
+      "forbidden": [
+        "(?:I(?:'ve| have)? |successfully )renamed",
+        "has been renamed"
+      ],
+      "operations": [
+        {
+          "op": "patch_task",
+          "target": {
+            "id": 3
+          },
+          "set": {
+            "title": "Send weekly update"
+          }
+        }
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            3
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "07-work-breakdown",
+    "family": "hierarchy-totals",
+    "split": "regression",
+    "question": "How much time have I spent on Work this week, and how much of that was Coding versus Admin?",
+    "expectation": {
+      "cards": "optional",
+      "card_schema": 3,
+      "facts": [],
+      "forbidden": [
+        "(?:18|eighteen)\\s*(?:h|hours)"
+      ],
+      "durations": [
+        {
+          "label": "Work",
+          "seconds": 32400
+        },
+        {
+          "label": "Work/Coding",
+          "aliases": [
+            "Coding",
+            "Work/Coding"
+          ],
+          "seconds": 21600
+        },
+        {
+          "label": "Work/Admin",
+          "aliases": [
+            "Admin",
+            "Work/Admin"
+          ],
+          "seconds": 10800
+        }
+      ]
+    },
+    "expected_outcome": "Work totals 9 hours: Coding 6 hours and Admin 3 hours. Parent totals must not be added to child totals."
+  },
+  {
+    "id": "18-check-subtask",
+    "family": "child-check-state",
+    "split": "regression",
+    "question": "Show me the subtasks of Fix calendar export.",
+    "expectation": {
+      "cards": "optional",
+      "card_schema": 4,
+      "facts": [],
+      "forbidden": [
+        "(?:parent|Fix calendar export) (?:is|has been) (?:complete|completed|done)"
+      ],
+      "checked": [
+        {
+          "title": "Reproduce timezone bug",
+          "value": true
+        },
+        {
+          "title": "Patch export",
+          "value": false
+        },
+        {
+          "title": "Verify exported event",
+          "value": false
+        }
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ]
+    },
+    "expected_outcome": "Reproduce timezone bug is checked; Patch export and Verify exported event are unchecked. A grounded Task Card or accurate text is acceptable; the parent remains open."
+  }
+]

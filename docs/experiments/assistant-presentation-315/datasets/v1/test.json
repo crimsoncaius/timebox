@@ -1,0 +1,1622 @@
+[
+  {
+    "id": "reopen-completed-task-01",
+    "family": "reopen-completed-task",
+    "split": "test",
+    "category": "read-task-proposal",
+    "question": "Reopen Update changelog.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "reopen_task",
+          "target": {
+            "id": 9
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            9
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been reopened|I reopened|is now open"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Update changelog",
+          "scope": "history",
+          "filters": {
+            "completion": "completed"
+          }
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "reopen_task",
+              "target": {
+                "id": 9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to reopen Update changelog.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "reopen-completed-task-02",
+    "family": "reopen-completed-task",
+    "split": "test",
+    "category": "read-task-proposal",
+    "question": "Move Update changelog back to open tasks.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "reopen_task",
+          "target": {
+            "id": 9
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            9
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been reopened|I reopened|is now open"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Update changelog",
+          "scope": "history",
+          "filters": {
+            "completion": "completed"
+          }
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "reopen_task",
+              "target": {
+                "id": 9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to reopen Update changelog.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "reopen-completed-task-03",
+    "family": "reopen-completed-task",
+    "split": "test",
+    "category": "read-task-proposal",
+    "question": "Undo the completed status of Update changelog by reopening it.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "reopen_task",
+          "target": {
+            "id": 9
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            9
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been reopened|I reopened|is now open"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Update changelog",
+          "scope": "history",
+          "filters": {
+            "completion": "completed"
+          }
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "reopen_task",
+              "target": {
+                "id": 9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to reopen Update changelog.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "reopen-completed-task-04",
+    "family": "reopen-completed-task",
+    "split": "test",
+    "category": "read-task-proposal",
+    "question": "I need to work on Update changelog again; reopen that completed task.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "reopen_task",
+          "target": {
+            "id": 9
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            9
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been reopened|I reopened|is now open"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Update changelog",
+          "scope": "history",
+          "filters": {
+            "completion": "completed"
+          }
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "reopen_task",
+              "target": {
+                "id": 9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to reopen Update changelog.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "reopen-completed-task-05",
+    "family": "reopen-completed-task",
+    "split": "test",
+    "category": "read-task-proposal",
+    "question": "Set Update changelog back to open, with no other changes.",
+    "setup": {},
+    "expectation": {
+      "cards": "optional",
+      "task_proposal": true,
+      "operations": [
+        {
+          "op": "reopen_task",
+          "target": {
+            "id": 9
+          }
+        }
+      ],
+      "required_reads": [
+        "read_tasks"
+      ],
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            9
+          ]
+        }
+      ],
+      "forbidden": [
+        "has been reopened|I reopened|is now open"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Update changelog",
+          "scope": "history",
+          "filters": {
+            "completion": "completed"
+          }
+        }
+      },
+      {
+        "tool": "propose_task_changes",
+        "args": {
+          "operations": [
+            {
+              "op": "reopen_task",
+              "target": {
+                "id": 9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "answer": "Review the proposal to reopen Update changelog.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "correct-unconfirmed-tracking-01",
+    "family": "correct-unconfirmed-tracking",
+    "split": "test",
+    "category": "tracking-history",
+    "question": "Actually I started at 2:15 pm. Correct the proposal.",
+    "setup": {
+      "history": [
+        {
+          "question": "I've been reading for twenty minutes.",
+          "steps": [
+            {
+              "tool": "propose_tracking",
+              "args": {
+                "action": "track",
+                "task_type_paths": [
+                  "Reading"
+                ],
+                "minutes_ago": 20
+              }
+            },
+            {
+              "answer": "Confirm to track Reading.",
+              "cards": []
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": "2026-10-08T06:15:00Z"
+      },
+      "forbidden": [
+        "tracking (?:has )?started|already tracking"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ],
+          "hour": 14,
+          "minute": 15
+        }
+      },
+      {
+        "answer": "Confirm the corrected Reading proposal for 14:15.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "correct-unconfirmed-tracking-02",
+    "family": "correct-unconfirmed-tracking",
+    "split": "test",
+    "category": "tracking-history",
+    "question": "Change that unconfirmed tracking proposal: I began at 14:15.",
+    "setup": {
+      "history": [
+        {
+          "question": "I've been reading for twenty minutes.",
+          "steps": [
+            {
+              "tool": "propose_tracking",
+              "args": {
+                "action": "track",
+                "task_type_paths": [
+                  "Reading"
+                ],
+                "minutes_ago": 20
+              }
+            },
+            {
+              "answer": "Confirm to track Reading.",
+              "cards": []
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": "2026-10-08T06:15:00Z"
+      },
+      "forbidden": [
+        "tracking (?:has )?started|already tracking"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ],
+          "hour": 14,
+          "minute": 15
+        }
+      },
+      {
+        "answer": "Confirm the corrected Reading proposal for 14:15.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "correct-unconfirmed-tracking-03",
+    "family": "correct-unconfirmed-tracking",
+    "split": "test",
+    "category": "tracking-history",
+    "question": "I meant 2:15 pm as the start of Reading; prepare the corrected proposal.",
+    "setup": {
+      "history": [
+        {
+          "question": "I've been reading for twenty minutes.",
+          "steps": [
+            {
+              "tool": "propose_tracking",
+              "args": {
+                "action": "track",
+                "task_type_paths": [
+                  "Reading"
+                ],
+                "minutes_ago": 20
+              }
+            },
+            {
+              "answer": "Confirm to track Reading.",
+              "cards": []
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": "2026-10-08T06:15:00Z"
+      },
+      "forbidden": [
+        "tracking (?:has )?started|already tracking"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ],
+          "hour": 14,
+          "minute": 15
+        }
+      },
+      {
+        "answer": "Confirm the corrected Reading proposal for 14:15.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "correct-unconfirmed-tracking-04",
+    "family": "correct-unconfirmed-tracking",
+    "split": "test",
+    "category": "tracking-history",
+    "question": "The start time should be 14:15, not twenty minutes ago. Update the proposal.",
+    "setup": {
+      "history": [
+        {
+          "question": "I've been reading for twenty minutes.",
+          "steps": [
+            {
+              "tool": "propose_tracking",
+              "args": {
+                "action": "track",
+                "task_type_paths": [
+                  "Reading"
+                ],
+                "minutes_ago": 20
+              }
+            },
+            {
+              "answer": "Confirm to track Reading.",
+              "cards": []
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": "2026-10-08T06:15:00Z"
+      },
+      "forbidden": [
+        "tracking (?:has )?started|already tracking"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ],
+          "hour": 14,
+          "minute": 15
+        }
+      },
+      {
+        "answer": "Confirm the corrected Reading proposal for 14:15.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "correct-unconfirmed-tracking-05",
+    "family": "correct-unconfirmed-tracking",
+    "split": "test",
+    "category": "tracking-history",
+    "question": "Please propose Reading from 2:15 pm instead; I haven't confirmed the first proposal.",
+    "setup": {
+      "history": [
+        {
+          "question": "I've been reading for twenty minutes.",
+          "steps": [
+            {
+              "tool": "propose_tracking",
+              "args": {
+                "action": "track",
+                "task_type_paths": [
+                  "Reading"
+                ],
+                "minutes_ago": 20
+              }
+            },
+            {
+              "answer": "Confirm to track Reading.",
+              "cards": []
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "tracking": {
+        "action": "track",
+        "paths": [
+          "Reading"
+        ],
+        "at": "2026-10-08T06:15:00Z"
+      },
+      "forbidden": [
+        "tracking (?:has )?started|already tracking"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "propose_tracking",
+        "args": {
+          "action": "track",
+          "task_type_paths": [
+            "Reading"
+          ],
+          "hour": 14,
+          "minute": 15
+        }
+      },
+      {
+        "answer": "Confirm the corrected Reading proposal for 14:15.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "historical-task-ordinal-01",
+    "family": "historical-task-ordinal",
+    "split": "test",
+    "category": "task-history",
+    "question": "What is the title of the first task in that earlier card? No new card.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show my blocked tasks as a card.",
+          "steps": [
+            {
+              "tool": "read_tasks",
+              "args": {
+                "mode": "search",
+                "kinds": [
+                  "ordinary"
+                ],
+                "filters": {
+                  "blocked": true
+                }
+              }
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "Renew insurance"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "Renew insurance.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "historical-task-ordinal-02",
+    "family": "historical-task-ordinal",
+    "split": "test",
+    "category": "task-history",
+    "question": "Name the first task you showed in the previous card, in text only.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show my blocked tasks as a card.",
+          "steps": [
+            {
+              "tool": "read_tasks",
+              "args": {
+                "mode": "search",
+                "kinds": [
+                  "ordinary"
+                ],
+                "filters": {
+                  "blocked": true
+                }
+              }
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "Renew insurance"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "Renew insurance.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "historical-task-ordinal-03",
+    "family": "historical-task-ordinal",
+    "split": "test",
+    "category": "task-history",
+    "question": "Which task was first in the card from your last answer? Don't show another card.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show my blocked tasks as a card.",
+          "steps": [
+            {
+              "tool": "read_tasks",
+              "args": {
+                "mode": "search",
+                "kinds": [
+                  "ordinary"
+                ],
+                "filters": {
+                  "blocked": true
+                }
+              }
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "Renew insurance"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "Renew insurance.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "historical-task-ordinal-04",
+    "family": "historical-task-ordinal",
+    "split": "test",
+    "category": "task-history",
+    "question": "Remind me of the title at the top of that original task card. No card this time.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show my blocked tasks as a card.",
+          "steps": [
+            {
+              "tool": "read_tasks",
+              "args": {
+                "mode": "search",
+                "kinds": [
+                  "ordinary"
+                ],
+                "filters": {
+                  "blocked": true
+                }
+              }
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "Renew insurance"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "Renew insurance.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "historical-task-ordinal-05",
+    "family": "historical-task-ordinal",
+    "split": "test",
+    "category": "task-history",
+    "question": "Tell me the first task's title from the previous snapshot, without a new card.",
+    "setup": {
+      "history": [
+        {
+          "question": "Show my blocked tasks as a card.",
+          "steps": [
+            {
+              "tool": "read_tasks",
+              "args": {
+                "mode": "search",
+                "kinds": [
+                  "ordinary"
+                ],
+                "filters": {
+                  "blocked": true
+                }
+              }
+            },
+            {
+              "answer": "",
+              "cards": "all"
+            }
+          ]
+        }
+      ]
+    },
+    "expectation": {
+      "cards": "unwanted",
+      "facts": [
+        "Renew insurance"
+      ]
+    },
+    "probe": [
+      {
+        "answer": "Renew insurance.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "partial-cross-tool-coverage-01",
+    "family": "partial-cross-tool-coverage",
+    "split": "test",
+    "category": "partial-read-failure",
+    "question": "Show today's plan and my blocked tasks; tell me clearly if either read is unavailable.",
+    "setup": {
+      "unavailable": [
+        "read_tasks"
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)tasks.*(?:unavailable|could not|cannot|can't|unable)"
+      ],
+      "forbidden": [
+        "no blocked tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "filters": {
+            "blocked": true
+          }
+        }
+      },
+      {
+        "answer": "Saved tasks are unavailable; the card shows today's verified plan.",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "partial-cross-tool-coverage-02",
+    "family": "partial-cross-tool-coverage",
+    "split": "test",
+    "category": "partial-read-failure",
+    "question": "Read the current schedule and blocked task list. Show what is available and explain any failed read.",
+    "setup": {
+      "unavailable": [
+        "read_tasks"
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)tasks.*(?:unavailable|could not|cannot|can't|unable)"
+      ],
+      "forbidden": [
+        "no blocked tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "filters": {
+            "blocked": true
+          }
+        }
+      },
+      {
+        "answer": "Saved tasks are unavailable; the card shows today's verified plan.",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "partial-cross-tool-coverage-03",
+    "family": "partial-cross-tool-coverage",
+    "split": "test",
+    "category": "partial-read-failure",
+    "question": "Display today's plan plus blocked tasks, but be explicit about missing coverage.",
+    "setup": {
+      "unavailable": [
+        "read_tasks"
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)tasks.*(?:unavailable|could not|cannot|can't|unable)"
+      ],
+      "forbidden": [
+        "no blocked tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "filters": {
+            "blocked": true
+          }
+        }
+      },
+      {
+        "answer": "Saved tasks are unavailable; the card shows today's verified plan.",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "partial-cross-tool-coverage-04",
+    "family": "partial-cross-tool-coverage",
+    "split": "test",
+    "category": "partial-read-failure",
+    "question": "Fetch today's schedule and blocked tasks. If only one can be read, show it and explain the gap.",
+    "setup": {
+      "unavailable": [
+        "read_tasks"
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)tasks.*(?:unavailable|could not|cannot|can't|unable)"
+      ],
+      "forbidden": [
+        "no blocked tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "filters": {
+            "blocked": true
+          }
+        }
+      },
+      {
+        "answer": "Saved tasks are unavailable; the card shows today's verified plan.",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "partial-cross-tool-coverage-05",
+    "family": "partial-cross-tool-coverage",
+    "split": "test",
+    "category": "partial-read-failure",
+    "question": "Can you show today's planned blocks and my blocked tasks? Don't treat failed reads as empty results.",
+    "setup": {
+      "unavailable": [
+        "read_tasks"
+      ]
+    },
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ],
+      "read_error": true,
+      "facts": [
+        "(?i)tasks.*(?:unavailable|could not|cannot|can't|unable)"
+      ],
+      "forbidden": [
+        "no blocked tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "filters": {
+            "blocked": true
+          }
+        }
+      },
+      {
+        "answer": "Saved tasks are unavailable; the card shows today's verified plan.",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-and-activity-cards-01",
+    "family": "task-and-activity-cards",
+    "split": "test",
+    "category": "multiple-card-types",
+    "question": "Show today's plan and the Fix calendar export task in separate cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-and-activity-cards-02",
+    "family": "task-and-activity-cards",
+    "split": "test",
+    "category": "multiple-card-types",
+    "question": "Display two cards: today's planned blocks and the saved task Fix calendar export.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-and-activity-cards-03",
+    "family": "task-and-activity-cards",
+    "split": "test",
+    "category": "multiple-card-types",
+    "question": "Give me the current plan card together with a task card for Fix calendar export.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-and-activity-cards-04",
+    "family": "task-and-activity-cards",
+    "split": "test",
+    "category": "multiple-card-types",
+    "question": "Show Fix calendar export as a Task Card and today's schedule as another card.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "task-and-activity-cards-05",
+    "family": "task-and-activity-cards",
+    "split": "test",
+    "category": "multiple-card-types",
+    "question": "I want the plan for today alongside a card containing just Fix calendar export.",
+    "setup": {},
+    "expectation": {
+      "cards": "required",
+      "allowed_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_cards": [
+        {
+          "fields": {
+            "schema_version": 2,
+            "date": "2026-10-08",
+            "lane": "planned"
+          }
+        },
+        {
+          "fields": {
+            "schema_version": 4
+          },
+          "task_ids": [
+            1
+          ]
+        }
+      ],
+      "required_reads": [
+        "read_activity",
+        "read_tasks"
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {}
+      },
+      {
+        "tool": "read_tasks",
+        "args": {
+          "mode": "search",
+          "query": "Fix calendar export"
+        }
+      },
+      {
+        "answer": "",
+        "cards": "all"
+      }
+    ]
+  },
+  {
+    "id": "running-block-elapsed-01",
+    "family": "running-block-elapsed",
+    "split": "test",
+    "category": "clock-sensitive-fact",
+    "question": "How long has today's running Reading block lasted so far? No cards.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "durations": [
+        {
+          "label": "Reading",
+          "seconds": 5400
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "today",
+          "lane": "actual",
+          "task_type": "Reading"
+        }
+      },
+      {
+        "answer": "Reading: 90 minutes so far.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "running-block-elapsed-02",
+    "family": "running-block-elapsed",
+    "split": "test",
+    "category": "clock-sensitive-fact",
+    "question": "Tell me the elapsed duration of the Reading activity still running today, in text only.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "durations": [
+        {
+          "label": "Reading",
+          "seconds": 5400
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "today",
+          "lane": "actual",
+          "task_type": "Reading"
+        }
+      },
+      {
+        "answer": "Reading: 90 minutes so far.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "running-block-elapsed-03",
+    "family": "running-block-elapsed",
+    "split": "test",
+    "category": "clock-sensitive-fact",
+    "question": "How many minutes have accumulated on today's active Reading block? Don't show a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "durations": [
+        {
+          "label": "Reading",
+          "seconds": 5400
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "today",
+          "lane": "actual",
+          "task_type": "Reading"
+        }
+      },
+      {
+        "answer": "Reading: 90 minutes so far.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "running-block-elapsed-04",
+    "family": "running-block-elapsed",
+    "split": "test",
+    "category": "clock-sensitive-fact",
+    "question": "As of now, how long have I been reading in the current actual block? No cards please.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "durations": [
+        {
+          "label": "Reading",
+          "seconds": 5400
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "today",
+          "lane": "actual",
+          "task_type": "Reading"
+        }
+      },
+      {
+        "answer": "Reading: 90 minutes so far.",
+        "cards": []
+      }
+    ]
+  },
+  {
+    "id": "running-block-elapsed-05",
+    "family": "running-block-elapsed",
+    "split": "test",
+    "category": "clock-sensitive-fact",
+    "question": "Read the ongoing Reading block and report its current elapsed time without a card.",
+    "setup": {},
+    "expectation": {
+      "cards": "unwanted",
+      "required_reads": [
+        "read_activity"
+      ],
+      "durations": [
+        {
+          "label": "Reading",
+          "seconds": 5400
+        }
+      ]
+    },
+    "probe": [
+      {
+        "tool": "read_activity",
+        "args": {
+          "when": "today",
+          "lane": "actual",
+          "task_type": "Reading"
+        }
+      },
+      {
+        "answer": "Reading: 90 minutes so far.",
+        "cards": []
+      }
+    ]
+  }
+]

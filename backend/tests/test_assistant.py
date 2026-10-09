@@ -211,7 +211,7 @@ def test_graph_rejects_unknown_tools_and_final_model_cannot_loop(monkeypatch):
 def test_missing_provider_finish_event_is_interrupted(monkeypatch):
     from app.services import assistant_agent
     class Graph:
-        def __init__(self, model, tracking=None): pass
+        def __init__(self, model, tracking=None, *, presentation_prompt=None): pass
         async def astream_events(self, *args, **kwargs):
             yield {"event": "on_chat_model_end", "data": {"output": AIMessage("truncated")}}
     monkeypatch.setattr(assistant_agent, "build_agent", Graph)

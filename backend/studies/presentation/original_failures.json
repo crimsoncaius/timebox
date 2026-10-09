@@ -1,0 +1,22 @@
+{
+  "source_commit": "6165b3421dc04e989c31e6ff1a4a3e9a512ee5c1",
+  "source_study": "baseline-2026-10-08",
+  "source_events_sha256": "648fe02115d5e9523d8d0d276e7f37ada92b25dd38beba82662c106ffb83aca5",
+  "cases": [
+    {
+      "id": "07-work-breakdown",
+      "raw_answer": "This week (Mon Oct 5 \u2013 now), you've logged **9h of Work** actual time:\n- **Coding: 6h**\n- **Admin: 3h**\n\nFor reference, the plan for the week is 15h of Work (10h Coding, 5h Admin), so you're tracking 9h actual through Thursday.\n\n{\"presentation\":\"none\"}",
+      "observed_error": "ValueError: Missing presentation header"
+    },
+    {
+      "id": "17-dismiss-rename",
+      "raw_answer": "I proposed renaming **Weekly report** to **Send weekly update** \u2014 please confirm it in the app to apply the change.",
+      "observed_error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "id": "18-check-subtask",
+      "raw_answer": "Here are the subtasks of **Fix calendar export** (Timebox, Work/Coding, due today):\n\n- \u2705 Reproduce timezone bug\n- \u2b1c Patch export\n- \u2b1c Verify exported event\n\n1 of 3 completed.",
+      "observed_error": "ValueError: Missing presentation header"
+    }
+  ]
+}

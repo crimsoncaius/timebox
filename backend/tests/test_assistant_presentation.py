@@ -17,21 +17,21 @@ def plan():
     return snapshot({"date": "2026-09-21", "reporting_timezone": "Asia/Singapore", "planned_blocks": []})
 
 
-def test_prefix_all_chunk_boundaries_and_body_is_not_control():
+def test_prefix_all_chunk_boundaries():
     item = plan()
-    wire = json.dumps({"presentation": "snapshot", "snapshot_id": item["snapshot_id"]}) + '\r\nHello 世界\n{"presentation":"none"}'
+    wire = json.dumps({"presentation": "snapshot", "snapshot_id": item["snapshot_id"]}) + '\r\nHello 世界'
     for i in range(len(wire) + 1):
         parser = PresentationParser({item["snapshot_id"]: item})
         events = parser.feed(wire[:i]) + parser.feed(wire[i:])
         parser.finish()
         assert [k for k, _ in events].count("plan_card") == 1
-        assert ''.join(d["text"] for k, d in events if k == "text_delta") == 'Hello 世界\n{"presentation":"none"}'
+        assert ''.join(d["text"] for k, d in events if k == "text_delta") == 'Hello 世界'
 
 
 @pytest.mark.parametrize("wire", [
-    'prose\n', '```json\n', '{"presentation":"none","presentation":"none"}\n',
+    '{"presentation":"none","presentation":"none"}\n',
     '{"presentation":"none","extra":1}\n', '{"presentation":"snapshot","snapshot_id":"other"}\n',
-    '{"presentation":"snapshot","snapshot_id":[]}\n', 'x' * 513,
+    '{"presentation":"snapshot","snapshot_id":[]}\n', '{' + 'x' * 513,
     '{"presentation":"none"}',
 ])
 def test_bad_prefix_fails_without_visible_output(wire):
@@ -39,6 +39,27 @@ def test_bad_prefix_fails_without_visible_output(wire):
     with pytest.raises(ValueError):
         parser.feed(wire)
         parser.finish()
+
+
+@pytest.mark.parametrize("wire", ["15", "Hello 世界\nMore text.", "\n  Plain text", "x" * 1024, "A set {one, two} and a brace {"])
+def test_plain_text_at_every_chunk_boundary(wire):
+    for split in range(len(wire) + 1):
+        parser = PresentationParser({})
+        events = parser.feed(wire[:split]) + parser.feed(wire[split:]) + parser.finish(successful_terminal=True)
+        assert all(kind == "text_delta" for kind, _ in events)
+        assert "".join(data["text"] for _, data in events) == wire
+
+
+@pytest.mark.parametrize("prefix", ["", '{"presentation":"none"}\n'])
+@pytest.mark.parametrize("selector", ['{ "presentation" : "none"}', '{"presentation"}', '{"snapshot_id":"unknown"}'])
+def test_late_selector_is_rejected_at_every_chunk_boundary(prefix, selector):
+    wire = prefix + 'Answer\n' + selector
+    for split in range(len(wire) + 1):
+        parser = PresentationParser({})
+        with pytest.raises(ValueError, match="precede answer"):
+            parser.feed(wire[:split])
+            parser.feed(wire[split:])
+            parser.finish(successful_terminal=True)
 
 
 def test_terminal_only_card_waits_for_confirmed_success():

@@ -33,6 +33,16 @@ read times, dates, time zones and rows come from the server. Reading a plan does
 not force a card. Completed reads, including undisplayed reads, join temporary
 response context only on acknowledgement; stopped and interrupted attempts never do.
 
+For text-only answers the selector is optional: ordinary prose selects no cards.
+A leading `{"presentation":"none"}` is still accepted and consumed. Explicit
+selectors remain validated; malformed selectors, duplicate/unknown snapshot IDs,
+and selectors appearing after answer text are errors. The streaming parser holds
+possible control-object prefixes across chunk boundaries so trailing selectors do
+not leak as answer text. An initial JSON object is reserved for the selector.
+Text may still be delivered when the user requested a card, but evaluation marks
+that missing card as unsuccessful. Proposal completion still requires a successful
+model terminal; acknowledgement, confirmation and mutation rules are unchanged.
+
 Android uses the approved Conversation layout with a dated inline card, three
 initial rows and expansion for longer plans. Retry appends an attempt. Idle time
 and exchange count do not end a conversation. Malformed or out-of-order card events cannot become completed
@@ -228,3 +238,16 @@ and sends message/tool content to OpenRouter.
 - The isolated review API is `http://127.0.0.1:12063/`, with database
   `artifacts/assistant-review/review-current.sqlite`. The review APK points to
   `http://10.0.2.2:12063/`. No production database was changed.
+
+### DSPy presentation policy
+
+DSPy 3.4.0 remains a runtime dependency. The application and optimization share
+`app/services/assistant_policy.py` and the native agent executor. DSPy stores and
+executes the presentation predictor; the native graph still owns tools, streaming
+and proposal handling. This wrapper adds no extra model request.
+
+Set `ASSISTANT_POLICY_PATH` to an absolute path to a reviewed DSPy JSON state file.
+Without it, the current built-in presentation instructions are used. Optimization
+requires the optional `eval` extra, but inference does not. See the
+[study guide](../backend/studies/presentation/README.md) for evaluation and
+[historical reports](experiments/assistant-presentation-315/README.md).
