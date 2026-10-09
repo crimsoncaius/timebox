@@ -94,3 +94,15 @@ attributes, not Phoenix Experiments records. Verify collector delivery separatel
 Ignored `artifacts/presentation-experiment/` holds detailed transcripts and budget
 records. Historical results and their interpretation are indexed in
 `docs/experiments/assistant-presentation-315/README.md` (repository-relative).
+
+## Merge validation — 2026-10-09
+
+After integrating master `0b1577b8`, the full backend suite at `06491d7e` reported
+835 passed, 22 skipped and seven failures. All seven failures reproduced on
+unchanged master using the same Python environment: four cases in
+`test_legacy_cutover_migration.py` and one each in `test_plan_now_migration.py`,
+`test_planned_block_name_migration.py`, and
+`test_planned_block_type_resolution_migration.py`. Each encounters
+`table assistant_queries already exists` during migration 040. They are existing
+baseline failures; no migration changes are included here. Changed-file lint
+passed. No paid model calls or held-out evaluations were performed for this check.
