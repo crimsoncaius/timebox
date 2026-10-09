@@ -1,5 +1,7 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -11,15 +13,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.dp
 import com.timebox.android.ui.planning.PlanningSessionState
 import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Assert.assertEquals
@@ -61,49 +59,6 @@ class DayCalendarHeaderTest {
             .fetchSemanticsNode().boundsInRoot.top
         assertEquals(shortDateTitleHeight, longDateTitleHeight, 0.5f)
         assertEquals(shortDateDividerTop, longDateDividerTop, 0.5f)
-    }
-
-    @Test
-    fun timelineHeadersKeepBreathingRoomBelowTheCalendar() {
-        showDay(
-            state = DayUiState(
-                date = LocalDate.of(2026, 8, 22),
-                today = LocalDate.of(2026, 8, 22),
-            ),
-        )
-
-        val dividerBottom = compose.onNodeWithTag("day-header-divider")
-            .fetchSemanticsNode().boundsInRoot.bottom
-        val headersTop = compose.onAllNodesWithTag("day-lane-headers")
-            .fetchSemanticsNodes()
-            .filter { it.boundsInRoot.top >= dividerBottom }
-            .minBy { it.boundsInRoot.top }
-            .boundsInRoot.top
-        val expectedGap = with(compose.density) { 8.dp.toPx() }
-
-        val actualGap = headersTop - dividerBottom
-        assertTrue(
-            "Expected at least $expectedGap px between divider and lane headers, found $actualGap px",
-            actualGap >= expectedGap,
-        )
-    }
-
-    @Test
-    fun selectedCalendarModeFillsTheToggleTrack() {
-        showDay(
-            state = DayUiState(
-                date = LocalDate.of(2026, 8, 22),
-                today = LocalDate.of(2026, 8, 22),
-            ),
-        )
-
-        val controlHeight = compose.onNodeWithTag("calendar-mode-control")
-            .fetchSemanticsNode().boundsInRoot.height
-        val selectedHeight = compose.onNodeWithTag("calendar-mode-week")
-            .fetchSemanticsNode().boundsInRoot.height
-        val inset = with(compose.density) { 4.dp.toPx() }
-
-        assertTrue(selectedHeight >= controlHeight - inset)
     }
 
     @Test

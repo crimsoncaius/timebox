@@ -69,25 +69,6 @@ describe('TimeBlockInspectorContent', () => {
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
   })
 
-  it('keeps the note field tall enough to show its placeholder', () => {
-    render(
-      <TimeBlockInspectorContent variant="sheet"
-        block={makeBlock()}
-        draft={null}
-        day={emptyDay}
-        taskTypes={taskTypes}
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onDelete={vi.fn()}
-        onCreateTaskTypePath={noopCreate}
-      />,
-    )
-
-    const noteField = screen.getByLabelText('Note')
-    expect(noteField).toHaveAttribute('rows', '4')
-    expect(noteField).toHaveClass('min-h-20')
-  })
-
   describe.each(['rail', 'sheet'] as const)('%s field synchronization', (variant) => {
     it.each(['name', 'note'] as const)('preserves a newer %s draft through late saves and unrelated refreshes', async (field) => {
       const original = makeBlock({ name: 'Original name', note: 'Previously saved note' })

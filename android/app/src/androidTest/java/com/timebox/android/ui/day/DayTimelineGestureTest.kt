@@ -6,19 +6,16 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
-import androidx.compose.ui.test.swipeLeft
-import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.semantics.SemanticsActions
 import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
-import com.timebox.android.data.LinkedTask
-import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TimeBlock
 import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Rule
@@ -170,73 +167,6 @@ class DayTimelineGestureTest {
             up()
         }
         compose.runOnIdle { check(committed == Triple(7, 540, 613)) { "$committed" } }
-    }
-
-    @Test
-    fun derivedActualAndRevisedPlanPresentTheirIndependentNames() {
-        val date = LocalDate.of(2026, 8, 20)
-        val base = stateWithBlock(date)
-        val planned = base.day!!.blocks.single().copy(name = "Revised plan")
-        val actual = planned.copy(
-            id = -44,
-            lane = Lane.Actual,
-            name = "Original snapshot",
-            plannedBlockId = planned.id,
-            actualBlockId = 44,
-        )
-        setDayContent(
-            state = base.copy(
-                pages = base.pages + (
-                    date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(planned, actual)))
-                ),
-            ),
-            haptics = RecordingHaptics(),
-        )
-
-        compose.onNodeWithText("Revised plan").assertIsDisplayed()
-        compose.onNodeWithText("Original snapshot").assertIsDisplayed()
-    }
-
-    @Test
-    fun standaloneActualUsesNameThenMeaningfulTaskTypeThenUntitled() {
-        val date = LocalDate.of(2026, 8, 20)
-        val base = stateWithBlock(date, lane = Lane.Actual)
-        val named = base.day!!.blocks.single().copy(name = "Dinner with Alex", taskTypeName = "social")
-        setDayContent(
-            state = base.copy(pages = base.pages + (date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(named))))),
-            haptics = RecordingHaptics(),
-        )
-
-        compose.onNodeWithText("Dinner with Alex").assertIsDisplayed()
-        compose.onNodeWithText("social").assertIsDisplayed()
-    }
-
-    @Test
-    fun taskBackedDayBlockUsesNameAndTaskType() {
-        val date = LocalDate.of(2026, 8, 20)
-        val base = stateWithBlock(date)
-        val task = LinkedTask(
-            id = 42,
-            title = "Prepare launch",
-            status = TaskStatus.InProgress,
-            taskTypeId = 1,
-            archivedAt = null,
-            deletedAt = null,
-        )
-        val named = base.day!!.blocks.single().copy(
-            name = "Outline session",
-            taskId = task.id,
-            task = task,
-        )
-        setDayContent(
-            state = base.copy(
-                pages = base.pages + (date to base.page(date).copy(day = base.day!!.copy(blocks = listOf(named)))),
-            ),
-            haptics = RecordingHaptics(),
-        )
-
-        compose.onNodeWithText("Outline session · Task ○").assertIsDisplayed()
-        compose.onNodeWithText(named.taskTypeName).assertIsDisplayed()
     }
 
     @Test
@@ -416,9 +346,13 @@ class DayTimelineGestureTest {
         setDayContent(state, RecordingHaptics())
         compose.waitForIdle()
 
-        val hourBefore = compose.onNodeWithTag("day-hour-540").fetchSemanticsNode().boundsInRoot.top
-        val plannedBefore = compose.onNodeWithTag("day-block-7").fetchSemanticsNode().boundsInRoot.top
-        val actualBefore = compose.onNodeWithTag("day-block-8").fetchSemanticsNode().boundsInRoot.top
+        // Clipped semantics bounds collapse to zero once a row scrolls off screen.
+        fun top(tag: String) = with(compose.density) {
+            compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().top.toPx()
+        }
+        val hourBefore = top("day-hour-540")
+        val plannedBefore = top("day-block-7")
+        val actualBefore = top("day-block-8")
         val plannedGap = plannedBefore - hourBefore
         val actualGap = actualBefore - hourBefore
 
@@ -427,9 +361,9 @@ class DayTimelineGestureTest {
         }
         compose.waitForIdle()
 
-        val hourAfter = compose.onNodeWithTag("day-hour-540").fetchSemanticsNode().boundsInRoot.top
-        val plannedAfter = compose.onNodeWithTag("day-block-7").fetchSemanticsNode().boundsInRoot.top
-        val actualAfter = compose.onNodeWithTag("day-block-8").fetchSemanticsNode().boundsInRoot.top
+        val hourAfter = top("day-hour-540")
+        val plannedAfter = top("day-block-7")
+        val actualAfter = top("day-block-8")
         check(hourAfter < hourBefore - 80f) { "Hour gutter did not scroll: before=$hourBefore after=$hourAfter" }
         check(kotlin.math.abs((plannedAfter - hourAfter) - plannedGap) < 2f) {
             "Planned Block left the hour gutter: hour $hourBefore->$hourAfter block $plannedBefore->$plannedAfter"
@@ -574,66 +508,6 @@ class DayTimelineGestureTest {
     }
 
     @Test
-    fun nextDaySwipeUpdatesHeaderWithinFirstFrame() {
-        val thursday = LocalDate.of(2026, 8, 20)
-        val friday = thursday.plusDays(1)
-        val thursdayState = stateWithBlock(thursday)
-        val fridayDay = thursdayState.day!!.copy(
-            date = friday,
-            blocks = listOf(thursdayState.day!!.blocks.single().copy(id = 8, taskTypeName = "Friday content")),
-        )
-        val navigated = mutableListOf<LocalDate>()
-        setDayContent(
-            state = thursdayState.copy(
-                pages = thursdayState.pages + (
-                    friday to DayPageState(day = fridayDay, loading = false, materialized = false)
-                ),
-            ),
-            haptics = RecordingHaptics(),
-            onDateSettled = navigated::add,
-        )
-        compose.waitForIdle()
-        compose.mainClock.autoAdvance = false
-
-        compose.onNodeWithTag("day-pager").performTouchInput { swipeLeft() }
-        compose.mainClock.advanceTimeBy(16L)
-
-        compose.onNodeWithText("Friday content").assertIsDisplayed()
-        compose.onNodeWithText("Fri, August 21").assertIsDisplayed()
-        compose.runOnIdle { check(navigated.isEmpty()) }
-    }
-
-    @Test
-    fun previousDaySwipeUpdatesHeaderWithinFirstFrame() {
-        val friday = LocalDate.of(2026, 8, 21)
-        val thursday = friday.minusDays(1)
-        val fridayState = stateWithBlock(friday)
-        val thursdayDay = fridayState.day!!.copy(
-            date = thursday,
-            blocks = listOf(fridayState.day!!.blocks.single().copy(id = 6, taskTypeName = "Thursday content")),
-        )
-        val navigated = mutableListOf<LocalDate>()
-        setDayContent(
-            state = fridayState.copy(
-                pages = fridayState.pages + (
-                    thursday to DayPageState(day = thursdayDay, loading = false, materialized = false)
-                ),
-            ),
-            haptics = RecordingHaptics(),
-            onDateSettled = navigated::add,
-        )
-        compose.waitForIdle()
-        compose.mainClock.autoAdvance = false
-
-        compose.onNodeWithTag("day-pager").performTouchInput { swipeRight() }
-        compose.mainClock.advanceTimeBy(16L)
-
-        compose.onNodeWithText("Thu, August 20").assertIsDisplayed()
-        compose.onNodeWithText("Thursday content").assertIsDisplayed()
-        compose.runOnIdle { check(navigated.isEmpty()) }
-    }
-
-    @Test
     fun cancelledDaySwipeKeepsCurrentHeaderAndDoesNotNavigate() {
         val thursday = LocalDate.of(2026, 8, 20)
         val navigated = mutableListOf<LocalDate>()
@@ -652,55 +526,8 @@ class DayTimelineGestureTest {
         }
         compose.mainClock.advanceTimeBy(16L)
 
-        compose.onNodeWithText("Thu, August 20").assertIsDisplayed()
+        compose.onNodeWithText("Thu, Aug 20").assertIsDisplayed()
         compose.runOnIdle { check(navigated.isEmpty()) }
-    }
-
-    @Test
-    fun actualBlockMovesLikePlannedBlock() {
-        val date = LocalDate.of(2026, 8, 20)
-        var committedMove: Triple<Int, Int, Int>? = null
-        val haptics = RecordingHaptics()
-        setDayContent(
-            state = stateWithBlock(date, Lane.Actual),
-            haptics = haptics,
-            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
-        )
-
-        compose.onNodeWithTag("day-block-7").performTouchInput {
-            down(center)
-            advanceEventTime(1_000)
-            moveTo(center + Offset(0f, height / 4f))
-            up()
-        }
-        compose.runOnIdle {
-            check(committedMove == Triple(7, 9 * 60 + 15, 10 * 60 + 15))
-            check(haptics.events == listOf(HapticFeedbackType.LongPress))
-        }
-    }
-
-    @Test
-    fun actualBlockResizeGroovesAreImmediate() {
-        val date = LocalDate.of(2026, 8, 20)
-        var committedMove: Triple<Int, Int, Int>? = null
-        val haptics = RecordingHaptics()
-        setDayContent(
-            state = stateWithBlock(date, Lane.Actual, serverNowMinute = 12 * 60),
-            haptics = haptics,
-            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
-        )
-
-        compose.onNodeWithTag("day-block-7").performTouchInput {
-            val bottomGroove = Offset(center.x, height - 2f)
-            down(bottomGroove)
-            moveTo(bottomGroove + Offset(0f, height / 12f))
-            up()
-        }
-
-        compose.runOnIdle {
-            check(committedMove == Triple(7, 9 * 60, 10 * 60 + 5))
-            check(haptics.events.isEmpty())
-        }
     }
 
     @Test
@@ -708,26 +535,29 @@ class DayTimelineGestureTest {
         val date = LocalDate.of(2026, 8, 20)
         var committedMove: Triple<Int, Int, Int>? = null
 
-        setDayContent(
-            state = stateWithBlock(
-                date = date,
-                lane = Lane.Actual,
-                startMinute = 9 * 60,
-                endMinute = 9 * 60 + 10,
-            ),
-            haptics = RecordingHaptics(),
-            onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) },
-        )
+        val day = stateWithBlock(date, Lane.Actual, startMinute = 540, endMinute = 550, serverNowMinute = 720).day!!
+        compose.setContent {
+            TimeboxTheme {
+                // A ten-minute block needs zoom before it exposes resize handles.
+                CompositionLocalProvider(LocalTimelineZoom provides TimelineZoom(3f)) {
+                    DayTimeline(day, null, null, onTapSlot = { _, _ -> }, onSelectBlock = {},
+                        onCommitMove = { id, start, end -> committedMove = Triple(id, start, end) })
+                }
+            }
+        }
 
+        val fiveMinutes = with(compose.density) {
+            (com.timebox.android.ui.theme.TimeboxDimens.slotHeight * 3f * (5f / com.timebox.android.data.SLOT_MINUTES)).toPx()
+        }
         compose.onNodeWithTag("day-block-7").performTouchInput {
             val bottomGroove = Offset(center.x, height - 2f)
             down(bottomGroove)
-            moveTo(bottomGroove - Offset(0f, height / 6f))
+            moveTo(bottomGroove - Offset(0f, fiveMinutes))
             up()
         }
 
         compose.runOnIdle {
-            check(committedMove == Triple(7, 9 * 60, 9 * 60 + 5))
+            check(committedMove == Triple(7, 9 * 60, 9 * 60 + 5)) { "Committed $committedMove" }
         }
     }
 

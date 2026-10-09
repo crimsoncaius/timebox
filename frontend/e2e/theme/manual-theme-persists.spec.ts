@@ -1,5 +1,4 @@
 // spec: specs/web-frontend-audit.plan.md
-// seed: e2e/seed.spec.ts
 import { expect, test } from '@playwright/test'
 
 test.describe('Theme behavior', () => {

@@ -111,7 +111,8 @@ test('saved move picks closest space and exact resize saves at the neighbor', as
   await expect.poll(async () => (await (await request.get(`${apiBase}/days/${date}`, { headers })).json())
     .time_blocks.find((b: { id: number }) => b.id === id).start_minute).toBe(510)
 
-  const [resizeId] = await seed(request, date, [[480, 510], [547, 600]])
+  // A 45-minute block exposes resize handles at the default zoom.
+  const [resizeId] = await seed(request, date, [[480, 525], [547, 600]])
   await page.reload()
   const edge = page.locator(`[data-block-id="${resizeId}"]`).getByRole('button', { name: 'Resize block end' })
   const edgeBox = await edge.boundingBox()

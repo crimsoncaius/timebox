@@ -47,24 +47,13 @@ Once the wrapper exists you can also build from PowerShell at the repository roo
 
 On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `./gradlew assembleDebug` from this directory.
 
-## Dark-theme visual regression screenshots
+## UI regression tests
 
-Using the managed emulator pool, regenerate the deterministic Task Details, menu,
-dialog, Day calendar, and Chronicle dark-theme screenshots from the repository
-root:
-
-```powershell
-python scripts/android-emulator.py test --owner "dark-theme tests" connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.class=com.timebox.android.ui.visual.DarkThemeScreenshotTest"
-```
-
-This reserves a clean emulator, runs only `DarkThemeScreenshotTest`, and releases
-the emulator afterward. The deterministic set also
-covers grouped editors, collapsed empty Plan Mode, and both themes of the component
-gallery. To collect PNGs for review, acquire a reservation manually, run the same
-Gradle task through the helper's `gradle TOKEN` command, then use `adb TOKEN pull
-/sdcard/Android/data/com.timebox.android/files/visual-regression/. artifacts/android-dark-theme/`
-through the helper before releasing the reservation. See
-[emulator ownership](../docs/agents/android-emulators.md) for pool setup and review holds.
+The instrumentation suite covers interaction, accessibility, persistence, and
+platform behavior. Screenshot-only fixtures and duplicate cosmetic checks have
+been removed; theme contrast checks remain in `VisualAccessibilityTest`, and
+`ThemeCompositionTest` checks the actual Compose content-color provider.
+Run device tests through the [managed emulator helper](../docs/agents/android-emulators.md).
 
 ## Pointing the app at your API
 

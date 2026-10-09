@@ -1,25 +1,19 @@
 package com.timebox.android.ui.visual
 
-import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
-import androidx.test.platform.app.InstrumentationRegistry
 import com.timebox.android.ui.components.TransientFeedback
 import com.timebox.android.ui.theme.TimeboxTheme
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -50,10 +44,5 @@ class TransientFeedbackTest {
         compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithContentDescription("Dismiss").performClick()
         compose.runOnIdle { assertEquals(1, actions); assertEquals(1, dismisses) }
-        val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "visual-regression")
-        directory.mkdirs()
-        File(directory, "feedback-${if (dark) "dark" else "light"}.png").outputStream().use {
-            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
     }
 }

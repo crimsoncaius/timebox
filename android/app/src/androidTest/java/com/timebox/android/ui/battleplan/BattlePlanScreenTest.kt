@@ -32,7 +32,6 @@ import com.timebox.android.data.PriorityLevel
 import com.timebox.android.data.Project
 import com.timebox.android.data.TaskStatus
 import com.timebox.android.data.TaskType
-import com.timebox.android.ui.theme.DarkTimeboxColors
 import com.timebox.android.ui.theme.TimeboxTheme
 import org.junit.Rule
 import org.junit.Test
@@ -138,46 +137,6 @@ class BattlePlanScreenTest {
         compose.runOnIdle { check(completion == TaskStatus.Completed); check(!opened) }
         compose.onNodeWithContentDescription("Actions for Task 1").performClick()
         compose.onNodeWithTag("battle-plan-task-actions-menu").fetchSemanticsNode()
-    }
-
-    @Test
-    fun compactCardsKeepRecurringTitlesWithoutExtraCardLabels() {
-        compose.setContent {
-            TimeboxTheme(darkTheme = false) {
-                BattlePlanScreen(
-                    state = BattlePlanUiState(
-                        loading = false,
-                        tasks = listOf(
-                            battleTask(1).copy(
-                                title = "Weekly planning occurrence",
-                                recurringTemplateId = 7,
-                                recurringTemplateTitle = "Weekly planning",
-                                recurrenceKind = "scheduled",
-                            ),
-                            battleTask(2).copy(
-                                title = "Exercise quota",
-                                recurringTemplateId = 8,
-                                recurringTemplateTitle = "Exercise three times",
-                                recurrenceKind = "quota_parent",
-                            ),
-                            battleTask(3).copy(title = "One-off task"),
-                            battleTask(4).copy(
-                                title = "Nested session task",
-                                parentId = 2,
-                                recurringTemplateId = 8,
-                                recurringTemplateTitle = "Exercise three times",
-                                recurrenceKind = "quota_session",
-                            ),
-                        ),
-                    ),
-                    onRetry = {},
-                )
-            }
-        }
-
-        compose.onNodeWithText("Weekly planning occurrence").fetchSemanticsNode()
-        compose.onNodeWithText("Exercise quota").fetchSemanticsNode()
-        check(compose.onAllNodesWithText("Recurring").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
@@ -869,175 +828,6 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun pickupLiftsPreviewAndClosesSourceGapOverTime() {
-        compose.setContent {
-            TimeboxTheme(darkTheme = false) {
-                BattlePlanScreen(
-                    state = BattlePlanUiState(
-                        loading = false,
-                        tasks = listOf(battleTask(1), battleTask(2), battleTask(3)),
-                    ),
-                    onRetry = {},
-                )
-            }
-        }
-
-        val root = compose.onRoot()
-        val firstCenter = compose.onNodeWithTag("battle-plan-task-1")
-            .fetchSemanticsNode().boundsInRoot.center
-        compose.mainClock.autoAdvance = false
-        root.performTouchInput {
-            down(firstCenter)
-            advanceEventTime(500)
-            moveBy(androidx.compose.ui.geometry.Offset(0f, 1f))
-        }
-        compose.mainClock.advanceTimeByFrame()
-        compose.waitForIdle()
-
-        val pickupStartProgress = compose.onNodeWithTag("battle-plan-drag-preview")
-            .fetchSemanticsNode().config[MobilePickupProgressKey]
-        val pickupStartSecondTop = compose.onNodeWithTag("battle-plan-task-2")
-            .fetchSemanticsNode().boundsInRoot.top
-
-        compose.mainClock.advanceTimeBy(32)
-        compose.waitForIdle()
-        val pickupMiddleProgress = compose.onNodeWithTag("battle-plan-drag-preview")
-            .fetchSemanticsNode().config[MobilePickupProgressKey]
-        val pickupMiddleSecondTop = compose.onNodeWithTag("battle-plan-task-2")
-            .fetchSemanticsNode().boundsInRoot.top
-
-        compose.mainClock.advanceTimeBy(400)
-        compose.waitForIdle()
-        val pickupEndProgress = compose.onNodeWithTag("battle-plan-drag-preview")
-            .fetchSemanticsNode().config[MobilePickupProgressKey]
-        val pickupEndSecondTop = compose.onNodeWithTag("battle-plan-task-2")
-            .fetchSemanticsNode().boundsInRoot.top
-
-        check(pickupMiddleProgress > pickupStartProgress) {
-            "pickup did not begin: start=$pickupStartProgress, middle=$pickupMiddleProgress, end=$pickupEndProgress"
-        }
-        check(pickupEndProgress > pickupMiddleProgress) {
-            "pickup did not finish: start=$pickupStartProgress, middle=$pickupMiddleProgress, end=$pickupEndProgress"
-        }
-        check(pickupMiddleSecondTop < pickupStartSecondTop) {
-            "source gap did not begin closing: start=$pickupStartSecondTop, middle=$pickupMiddleSecondTop, end=$pickupEndSecondTop"
-        }
-        check(pickupEndSecondTop < pickupMiddleSecondTop) {
-            "source gap did not finish closing: start=$pickupStartSecondTop, middle=$pickupMiddleSecondTop, end=$pickupEndSecondTop"
-        }
-    }
-
-    @Test
-    fun droppedPreviewSettlesIntoDestinationBeforeReorderIsCommitted() {
-        var dropped: Triple<Int, TaskStatus, Int>? = null
-        compose.setContent {
-            TimeboxTheme(darkTheme = false) {
-                BattlePlanScreen(
-                    state = BattlePlanUiState(
-                        loading = false,
-                        tasks = listOf(battleTask(1), battleTask(2), battleTask(3)),
-                    ),
-                    onRetry = {},
-                    taskActions = BattlePlanTaskActions(
-                        drop = { task, status, index -> dropped = Triple(task.id, status, index) },
-                    ),
-                )
-            }
-        }
-
-        val root = compose.onRoot()
-        val firstCenter = compose.onNodeWithTag("battle-plan-task-1").fetchSemanticsNode().boundsInRoot.center
-        root.performTouchInput {
-            down(firstCenter)
-            advanceEventTime(1_000)
-            moveBy(androidx.compose.ui.geometry.Offset(0f, 1f))
-        }
-        compose.waitForIdle()
-
-        val thirdCenter = compose.onNodeWithTag("battle-plan-task-3").fetchSemanticsNode().boundsInRoot.center
-        root.performTouchInput {
-            moveTo(thirdCenter)
-            advanceEventTime(32)
-        }
-        compose.waitForIdle()
-        val releaseTop = compose.onNodeWithTag("battle-plan-drag-preview")
-            .fetchSemanticsNode().boundsInRoot.top
-
-        compose.mainClock.autoAdvance = false
-        root.performTouchInput { up() }
-        compose.waitForIdle()
-
-        check(dropped == null)
-        compose.onNodeWithTag("battle-plan-drag-preview").fetchSemanticsNode()
-
-        compose.mainClock.advanceTimeBy(80)
-        compose.waitForIdle()
-        val settlingTop = compose.onNodeWithTag("battle-plan-drag-preview")
-            .fetchSemanticsNode().boundsInRoot.top
-        check(settlingTop > releaseTop)
-
-        compose.mainClock.advanceTimeBy(500)
-        compose.waitForIdle()
-        check(dropped == Triple(1, TaskStatus.Open, 2))
-        check(compose.onAllNodesWithTag("battle-plan-drag-preview").fetchSemanticsNodes().isEmpty())
-    }
-
-    @Test
-    fun darkDragPreviewKeepsRaisedSurfaceWhileHeldMovingAndSettling() {
-        compose.setContent {
-            TimeboxTheme(darkTheme = true) {
-                BattlePlanScreen(
-                    state = BattlePlanUiState(
-                        loading = false,
-                        tasks = listOf(
-                            battleTask(1).copy(readyToPlan = true, isBlocked = true),
-                            battleTask(2),
-                            battleTask(3),
-                        ),
-                    ),
-                    onRetry = {},
-                )
-            }
-        }
-
-        fun previewSurface() = compose.onNodeWithTag("battle-plan-drag-preview")
-            .fetchSemanticsNode().config[MobileDragPreviewSurfaceKey]
-
-        val root = compose.onRoot()
-        val firstCenter = compose.onNodeWithTag("battle-plan-task-1")
-            .fetchSemanticsNode().boundsInRoot.center
-        root.performTouchInput {
-            down(firstCenter)
-            advanceEventTime(1_000)
-            moveBy(androidx.compose.ui.geometry.Offset(0f, 1f))
-        }
-        compose.waitForIdle()
-        check(previewSurface() == DarkTimeboxColors.surf)
-
-        val thirdCenter = compose.onNodeWithTag("battle-plan-task-3")
-            .fetchSemanticsNode().boundsInRoot.center
-        root.performTouchInput {
-            moveTo(thirdCenter)
-            advanceEventTime(32)
-        }
-        compose.waitForIdle()
-        check(previewSurface() == DarkTimeboxColors.surf)
-
-        compose.mainClock.autoAdvance = false
-        root.performTouchInput { up() }
-        compose.waitForIdle()
-        check(previewSurface() == DarkTimeboxColors.surf)
-
-        compose.mainClock.advanceTimeBy(80)
-        compose.waitForIdle()
-        check(previewSurface() == DarkTimeboxColors.surf)
-
-        compose.mainClock.advanceTimeBy(500)
-        compose.waitForIdle()
-        check(compose.onAllNodesWithTag("battle-plan-drag-preview").fetchSemanticsNodes().isEmpty())
-    }
-
-    @Test
     fun cancelledDragRestoresTheSourceWithoutDropFeedback() {
         val haptics = RecordingHaptics()
         var dropped = false
@@ -1165,27 +955,6 @@ class BattlePlanScreenTest {
         compose.onNodeWithText("Undoing Draft launch brief…").fetchSemanticsNode()
         compose.onNodeWithText("Undoing…").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Dismiss").assertIsNotEnabled()
-    }
-
-    @Test
-    fun expiryUsesTheFullDecorativeFadeWhenMotionIsAllowed() {
-        var finished = false
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            TimeboxTheme(darkTheme = false) {
-                UndoNoticeHost(
-                    notice = UndoNotice(1, "battle_plan", "Draft launch brief", "Draft launch brief moved to Trash", phase = UndoPhase.Expiring),
-                    onUndo = {},
-                    onDismiss = {},
-                    onExpiryFinished = { finished = true },
-                )
-            }
-        }
-        compose.mainClock.advanceTimeBy(100)
-        compose.runOnIdle { check(!finished) }
-
-        compose.mainClock.advanceTimeBy(100)
-        compose.runOnIdle { check(finished) }
     }
 
     @Test

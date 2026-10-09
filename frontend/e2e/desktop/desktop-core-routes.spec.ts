@@ -1,5 +1,4 @@
 // spec: specs/web-frontend-audit.plan.md
-// seed: e2e/seed.spec.ts
 import { expect, test } from '@playwright/test'
 
 const routes = [
@@ -7,7 +6,7 @@ const routes = [
   { path: '/history', heading: 'Chronicle of focus' },
   { path: '/battle-plan', heading: 'All Tasks' },
   { path: '/battle-plan?view=recurring', heading: 'Recurring' },
-  { path: '/task-types', heading: 'Task types' },
+  { path: '/task-types', heading: 'Task Types' },
   { path: '/settings', heading: 'Settings' },
 ]
 

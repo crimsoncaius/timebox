@@ -11,8 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
-    "screenshots": "playwright test e2e/visual-screenshots.spec.ts --workers=1"
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@dnd-kit/dom": "^0.5.0",

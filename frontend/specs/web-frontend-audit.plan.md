@@ -1,5 +1,10 @@
 # Web Frontend Audit Test Plan
 
+Historical plan. The 2026-10-09 test cleanup removed the seed-only spec and the
+separate light-theme case; system light/dark switching remains covered by
+`e2e/theme/system-dark-preference.spec.ts`. Work Mode has been replaced by
+Activity Tracking and Focus Mode. See the root README for the retained test scope.
+
 ## Application Overview
 
 Timebox's desktop web frontend provides the Day timeline, Chronicle, Battle Plan, recurring-task administration, Task types, Settings, and Work Mode. This audit protects desktop readability and verifies that light/dark theming follows both the user's system preference and any explicit saved override.

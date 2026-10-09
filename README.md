@@ -78,8 +78,10 @@ These commands use the workspace's registered Timebox ports. The Android emulato
 
 ## Tests
 
+Keep tests for persisted behavior, validation, time calculations, offline recovery, concurrency, accessibility, and destructive actions. Prefer one representative browser/device journey over repeated integration tests of the same logic. Screenshot capture without baseline comparison, fixed palette/spacing assertions, and retired UI flows are excluded.
+
 ```bash
-cd backend && uv run pytest
+cd backend && uv run --extra dev --extra eval python -m pytest
 cd frontend && npm test
 cd frontend && npm run lint
 cd frontend && npm run build
@@ -92,7 +94,7 @@ The Windows launcher safety helpers have a focused Pester suite:
 Invoke-Pester .\scripts\tests\Timebox.Launch.Tests.ps1
 ```
 
-`npm test` runs Vitest unit/component tests. `npm run e2e` starts isolated API and web servers with a SQLite test database, then runs Playwright across Day, Chronicle, Settings, Battle Plan, recurring work, and responsive layouts. Install its browser once with `npx playwright install chromium`. `npm run screenshots` regenerates the visual screenshot set.
+`npm test` runs Vitest unit/component tests. `npm run e2e` starts isolated API and web servers with a SQLite test database, then checks core routes, task lifecycle, planning placement, themes, and responsive layouts. Install its browser once with `npx playwright install chromium`. Recurrence rules and editing remain covered by backend and component tests. The backend command includes the optional `eval` dependencies required by its controlled optimizer tests; it makes no paid model calls.
 
 **E2E note:** Playwright uses the dedicated ports declared in [frontend/playwright.config.ts](frontend/playwright.config.ts) and may reuse listeners already occupying those exact ports outside CI. If a stale E2E server or schema causes failures, stop that listener or delete `backend/e2e.sqlite` so Playwright can start a fresh API using `AUTO_CREATE_TABLES=1`.
 

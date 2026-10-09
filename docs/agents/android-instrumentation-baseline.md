@@ -106,3 +106,17 @@ The historical recurring screenshot failure above no longer applies.
 The Settings reorganization aligned `SettingsNotificationTest` with the current
 notification copy and grouped layout; it now passes. The historical failure above
 no longer applies.
+
+## Essential-test cleanup — 2026-10-09
+
+The three legacy Actual-lane `BlockSheetTest` cases, screenshot generator, and
+duplicate first-frame swipe and Actual move/resize cases were removed. The retained
+cancelled-swipe test now expects the compact date. `scrollingKeepsBlocksLockedToHourGutter`
+now measures unclipped bounds rather than coordinates that collapse to zero off screen.
+The short-Actual resize test now zooms to expose its handles and places the completed
+block before the fixture's current time. Both corrected geometry tests pass on
+`timebox-agent-04`; the gutter failure above no longer applies.
+
+Validation covered 71 cases in the seven edited instrumentation classes: 69 passed
+in the first run, and the two corrected geometry cases passed on focused rerun.
+The remaining historical failures outside those classes were not retested.

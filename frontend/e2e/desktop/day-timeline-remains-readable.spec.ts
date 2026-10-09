@@ -1,5 +1,4 @@
 // spec: specs/web-frontend-audit.plan.md
-// seed: e2e/seed.spec.ts
 import type { APIRequestContext } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
