@@ -22,6 +22,8 @@ data class AssistantEvent(val kind: String, val data: JsonObject)
 class AssistantEndedException(message: String) : IOException(message)
 
 interface AssistantTransport {
+    suspend fun reviewRequest(path: String, body: JsonObject? = null): JsonObject = error("Review unavailable")
+    fun stream(conversation: String, run: String, message: String, reviewLater: Boolean): Flow<AssistantEvent> = stream(conversation, run, message)
     val serverIdentity: String get() = "test"
     suspend fun taskStatuses(records: List<com.timebox.android.data.TaskSubmission>): List<TaskOperationResult> = error("Task recovery unavailable")
     suspend fun confirmTask(record: com.timebox.android.data.TaskSubmission): TaskOperationResult? = error("Task confirmation unavailable")
@@ -160,9 +162,17 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     }
     override suspend fun refreshTask(id: String) = TaskChangeProposal.parse(taskRequest("task-proposals/$id/refresh"))
 
-    override fun stream(conversation: String, run: String, message: String): Flow<AssistantEvent> = callbackFlow {
+    override suspend fun reviewRequest(path: String, body: JsonObject?): JsonObject = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        execute(request(path, if (body == null) "GET" else "POST", body ?: JsonObject(emptyMap())), taskClient).use {
+            check(it)
+            ApiFactory.json.parseToJsonElement(it.body!!.string()).jsonObject
+        }
+    }
+
+    override fun stream(conversation: String, run: String, message: String) = stream(conversation, run, message, false)
+    override fun stream(conversation: String, run: String, message: String, reviewLater: Boolean): Flow<AssistantEvent> = callbackFlow {
         val call = client.newCall(request("conversations/$conversation/messages", body = buildJsonObject {
-            put("run_id", run); put("message", message)
+            put("run_id", run); put("message", message); put("tracking_mode", if (reviewLater) "review_later" else "confirm")
         }))
         val reader = launch(Dispatchers.IO) {
             try {

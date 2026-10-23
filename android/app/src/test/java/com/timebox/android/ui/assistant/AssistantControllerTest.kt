@@ -122,6 +122,25 @@ class AssistantControllerTest {
         assertNotNull(applied.record)
     }
 
+    @Test fun `review later is per command and a lost completion preserves its saved receipt`() = runTest {
+        val api = Fake()
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Gym now", reviewLater = true); runCurrent()
+        assertTrue(api.reviewLater)
+        api.proposal()
+        api.events.emit(AssistantEvent("tracking_result", buildJsonObject {
+            put("run_id", api.run); put("sequence", ++api.sequence); put("status", "recorded"); put("review_id", 1)
+        }))
+        api.emit("eof"); runCurrent()
+        val exchange = controller.state.value.exchanges.single()
+        assertTrue(exchange.reviewLater)
+        assertEquals("recorded", exchange.trackingResult?.get("status")?.jsonPrimitive?.content)
+        assertEquals("Interrupted", exchange.status)
+        assertEquals(1, api.streams)
+        controller.send("Next command"); runCurrent()
+        assertFalse(api.reviewLater)
+    }
+
     private class Fake : AssistantTransport {
         override var supportsActivityCards = true
         override var supportsTrackingProposals = true
@@ -134,6 +153,11 @@ class AssistantControllerTest {
         var acks = 0
         var ackFailures = 0
         var streams = 0
+        var reviewLater = false
+        override fun stream(conversation: String, run: String, message: String, reviewLater: Boolean): Flow<AssistantEvent> {
+            this.reviewLater = reviewLater
+            return stream(conversation, run, message)
+        }
         override suspend fun create() = "conversation-${++creates}"
         override suspend fun delete(conversation: String) { deletes++ }
         override suspend fun stop(conversation: String, run: String) { stops++ }

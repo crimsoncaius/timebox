@@ -249,7 +249,7 @@ An Assistant Card of planned time, actual time, or both by Task Type over one da
 _Avoid_: Range Card, Summary Card, Trends card
 
 **Tracking Proposal**:
-An Assistant-suggested change to Activity Tracking: either tracking an activity from a given instant or stopping at a given instant. It takes effect only when the user confirms it. Whether it starts or switches is determined at confirmation, not by the Assistant. It expires fifteen minutes after it is proposed.
+An Assistant-suggested change to Activity Tracking: either tracking an activity from a given instant or stopping at a given instant. In confirmation mode it takes effect only when the user confirms it; in Review later mode it can execute after the completed response. Whether it starts or switches is determined from the current activity at execution, not by the Assistant. It expires fifteen minutes after it is proposed.
 _Avoid_: Switch Proposal, tracking command, suggestion card
 
 **Task Card**:
@@ -283,5 +283,17 @@ The management page for renaming, reparenting and deleting Task Types. It is rea
 _Avoid_: Types, Task types page
 
 **Assistant**:
-The AI assistant's surface and the home of its conversations.
+The AI assistant's surface and the home of its conversations and activity review.
 _Avoid_: Chat, AI tab
+
+**Review later**:
+An optional Activity Tracking mode in which the Assistant records its best matching activity immediately and leaves an Execution Receipt for later inspection. Task and Subtask changes still require confirmation.
+_Avoid_: Auto-confirm tasks, pending proposal
+
+**Execution Receipt**:
+The preserved original command and recorded result of an executed Assistant tracking action. It remains available in Assistant Review after the activity is corrected.
+_Avoid_: Tracking Proposal, draft
+
+**Mark reviewed**:
+Acknowledgement that the displayed activity has been inspected. It does not execute tracking and does not prevent later corrections.
+_Avoid_: Confirm action, approve execution

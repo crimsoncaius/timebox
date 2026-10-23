@@ -42,6 +42,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.*
 import java.time.format.DateTimeFormatter
 
 @Composable
@@ -51,7 +52,13 @@ fun AssistantScreen(
     onOpenDay: (LocalDate) -> Unit = {},
     onOpenTrends: (LocalDate, LocalDate) -> Unit = { _, _ -> },
 ) {
+    var reviewTab by rememberSaveable { mutableStateOf(false) }
+    var reviewLater by rememberSaveable { mutableStateOf(false) }
     val state by controller.state.collectAsState()
+    val application = LocalContext.current.applicationContext as TimeboxApplication
+    LaunchedEffect(state.exchanges.lastOrNull()?.trackingResult) {
+        if (state.exchanges.lastOrNull()?.trackingResult?.get("status")?.jsonPrimitive?.content == "recorded") application.activityRepository.refresh()
+    }
     val recovery = controller.taskRecovery
     val recoveryState by (recovery?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(TaskRecoveryState()) }).collectAsState()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -102,6 +109,13 @@ fun AssistantScreen(
                 Icon(Icons.Outlined.Add, contentDescription = "New conversation")
             }
         }
+        TabRow(selectedTabIndex = if (reviewTab) 1 else 0, containerColor = colors.bg, contentColor = colors.on) {
+            Tab(selected = !reviewTab, onClick = { reviewTab = false }, text = { Text("Conversation") })
+            Tab(selected = reviewTab, onClick = { reviewTab = true }, text = { Text("Review") })
+        }
+        if (reviewTab) {
+            AssistantReviewScreen(controller, onOpenDay, Modifier.weight(1f))
+        } else {
         HorizontalDivider(color = colors.hairline)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -155,7 +169,17 @@ fun AssistantScreen(
                         Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = colors.onVariant)
                         Text("Assistant", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                     }
-                    exchange.proposal?.let { proposal -> tracking?.Card(proposal) }
+                    if (!exchange.reviewLater) exchange.proposal?.let { proposal -> tracking?.Card(proposal) }
+                    if (exchange.reviewLater && (exchange.proposal != null || exchange.trackingResult != null)) {
+                        val result = exchange.trackingResult
+                        Text(if (result?.get("status")?.jsonPrimitive?.content == "recorded")
+                            "Recorded · ${result["name"]?.jsonPrimitive?.content.orEmpty()}"
+                            else result?.get("message")?.jsonPrimitive?.content ?: "Waiting for the saved tracking result. Check before repeating this command.")
+                        Row {
+                            TextButton(onClick = { reviewTab = true }) { Text("Review activity") }
+                            if (result == null || result["status"]?.jsonPrimitive?.content == "pending") TextButton(onClick = { controller.checkTracking(exchange.runId) }) { Text("Check result") }
+                        }
+                    }
                     (listOfNotNull(exchange.taskProposal) + state.refreshedTaskProposals.filter { it.runId == exchange.taskProposal?.runId }).forEach { proposal ->
                         val saved = recoveryState.items.lastOrNull { it.record.operationId == proposal.operationId }
                         val current = state.taskChanges[proposal.operationId] ?: TaskChangeState()
@@ -177,7 +201,7 @@ fun AssistantScreen(
                             Text(exchange.status, style = MaterialTheme.typography.labelLarge)
                             exchange.error?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             Text("This attempt won’t be used in later answers.", style = MaterialTheme.typography.bodySmall)
-                            if (index == state.exchanges.lastIndex && !state.busy && state.ended == null) TextButton(onClick = { follow = true; controller.retry() }) { Text("Retry response") }
+                            if (!exchange.reviewLater && index == state.exchanges.lastIndex && !state.busy && state.ended == null) TextButton(onClick = { follow = true; controller.retry() }) { Text("Retry response") }
                         }
                     }
 
@@ -193,10 +217,18 @@ fun AssistantScreen(
             }
         }
         }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Track now, review later", style = TimeboxTheme.type.bodySmall)
+                Text("Activity only · Task changes need confirmation", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            }
+            Switch(checked = reviewLater, onCheckedChange = { reviewLater = it }, enabled = !state.busy)
+        }
         if (state.ended != null) Button(onClick = ::reset, modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("New conversation") }
         else AssistantComposer(draft, { if (it.length <= 4000) draft = it }, composerFocus, state.busy,
             if (state.exchanges.isEmpty()) "What’s on your mind?" else "Ask a follow-up…",
-            controller::stop, { follow = true; controller.send(draft); draft = "" })
+            controller::stop, { follow = true; controller.send(draft, reviewLater); draft = "" })
+        }
     }
 }
 

@@ -78,7 +78,7 @@ def read(db: Session, timezone: str) -> ActivitySnapshot:
     return result
 
 
-def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapshot:
+def execute(db: Session, body: ActivityCommand, timezone: str, *, commit: bool = True) -> ActivitySnapshot:
     state = _lock(db)
     timezone = state.reporting_timezone or timezone
     envelope = body.model_dump(mode="json")
@@ -95,7 +95,10 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
             operation_id=previous.operation_id, outcome=previous.outcome,
             effective_at=effective_at,
         ))
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return result
     if body.kind == "check_in":
         activity_check_in.synchronize(state, actuals.get_active_actual_block(db))
@@ -107,7 +110,10 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
         db.flush()
         result = _snapshot(db, state, timezone, ActivityAcknowledgement(
             operation_id=str(body.operation_id), outcome=outcome, effective_at=None))
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return result
     if body.kind == "undo_switch" or body.effective.mode != "server_now" or state.reconciliation is not None or body.selection_snapshot or body.task_id is not None or body.planned_block_id is not None:
         reconciliation.initialize(db, state)
@@ -123,7 +129,10 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
         db.flush()
         result = _snapshot(db, state, timezone, ActivityAcknowledgement(
             operation_id=operation.operation_id, outcome=operation.outcome, effective_at=effective_at))
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return result
     last = db.scalar(select(func.max(ActivityOperation.sequence)).where(ActivityOperation.device_id == body.device_id))
     if last is not None and body.sequence <= last:
@@ -175,7 +184,10 @@ def execute(db: Session, body: ActivityCommand, timezone: str) -> ActivitySnapsh
     result = _snapshot(db, state, timezone, ActivityAcknowledgement(
         operation_id=str(body.operation_id), outcome=outcome, effective_at=effective_at,
     ))
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return result
 
 

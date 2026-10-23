@@ -1,8 +1,8 @@
-# The Assistant proposes tracking changes; the client applies them
+# Assistant tracking uses the activity journal with explicit execution modes
 
-The Assistant never writes Activity Tracking data. Its `propose_tracking` tool accepts only a Track (Task Type Path candidates, optional Block Name, optional start) or Stop (optional end) intent; the server validates the paths against existing Task Types, resolves stated times to instants in the Reporting Time Zone, and returns a Tracking Proposal without persisting any activity change. The client decides at confirmation whether a Track intent starts or switches, renders the live impact from local state, and applies the confirmed change through the ordinary activity journal, the same path as manual tracking.
+In the default confirmation mode, the Assistant never writes Activity Tracking data. Its `propose_tracking` tool accepts only a Track (Task Type Path candidates, optional Block Name, optional start) or Stop (optional end) intent; the server validates the paths against existing Task Types, resolves stated times to instants in the Reporting Time Zone, and returns a Tracking Proposal without persisting any activity change. The client decides at confirmation whether a Track intent starts or switches, renders the live impact from local state, and applies the confirmed change through the ordinary activity journal, the same path as manual tracking.
 
-This keeps the model's job to language (what and when), keeps date arithmetic and tracking-state reasoning deterministic, and preserves offline confirmation, journal reconciliation and the existing switch Undo without a second write path. The cost is that every Assistant tracking change needs a user tap. A future mode in which the Assistant applies changes itself must replace this decision rather than add a server-side write beside the journal.
+This keeps the model's job to language (what and when), keeps date arithmetic and tracking-state reasoning deterministic, and preserves offline confirmation, journal reconciliation and the existing switch Undo without a second write path. The default retains a confirmation tap. The optional Review later mode below uses the same journal on the server.
 
 ## Assistant task-confirmation scope
 
@@ -13,3 +13,13 @@ Scope clarification approved with [ADR 0019](0019-assistant-task-confirmation-is
 - A presentation-line `"tracking"` kind instead of a tool: rejected because schema-validated tool arguments are more reliable on the flash model.
 - Converting the Assistant to an open ReAct loop: rejected as unnecessary; the respond → one tool → finish graph fits a single proposal per response.
 - Deterministic server-side Task Type matching: rejected because mapping "eating" to `Meals` needs the model; the server only rejects paths that do not exist.
+
+## Review later mode (2026-10-23, issue #318)
+
+The user selected Assistant -> Review (variant B) on web and Android, and limited immediate execution to Activity Tracking. Task and Subtask changes keep ADR 0019 confirmation.
+
+An explicitly opted-in command lets the model propose its best existing Task Type match. After generation completes, deterministic server code chooses Start, Switch, or Stop against the current activity, then applies that command through the canonical activity journal. The activity operation, immutable execution receipt, and response result commit in one transaction. An incomplete response cannot authorize execution; a completed transaction remains discoverable even when its reply is lost. The server does not queue unexecuted commands for later application.
+
+Review receipts preserve the original command and original recorded interval. Assistant -> Review shows their current records across conversations and dates. Mark reviewed acknowledges the displayed revision and never executes tracking. A concurrent change rejects the batch atomically. Corrections use ordinary journal range edits with stable retry IDs, preserve original receipts, and reopen the corrected receipt. A removed or split record links to Day instead of selecting a guessed fragment. Reviewed receipts remain available and correctable; later activity changes are identified as changed since review.
+
+This trades offline execution of Review later commands for one authoritative cross-device receipt. The existing client-confirmed tracking path retains its offline journal behavior. Widgets and other quick command surfaces can opt into the same per-message mode in later work; this change provides the Assistant entry point.

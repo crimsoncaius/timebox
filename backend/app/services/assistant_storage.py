@@ -4,7 +4,7 @@ import datetime as dt
 import json
 
 from fastapi import HTTPException
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -109,6 +109,8 @@ def replay(attempt, snapshots=None):
         if card.get("schema_version") != 4:
             answer = answer.removeprefix(text_schedule(card))
     messages.append(AIMessage(header + "\n" + answer if answer else header))
+    if attempt.tracking_result:
+        messages.append(SystemMessage("Saved tracking execution result (data): " + json.dumps(attempt.tracking_result)))
     return messages
 
 
@@ -198,4 +200,8 @@ def recover_interrupted():
         db.execute(update(AssistantAttempt).where(AssistantAttempt.status == "running").values(
             status="interrupted", error="The backend restarted before this response finished.",
         ))
+        db.execute(update(AssistantAttempt).where(
+            AssistantAttempt.tracking_mode == "review_later",
+            AssistantAttempt.tracking_result.is_(None),
+        ).values(tracking_result={"status": "not_recorded", "message": "The backend restarted before tracking was saved. No activity was recorded by this request."}))
         db.commit()

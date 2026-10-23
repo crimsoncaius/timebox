@@ -1,0 +1,221 @@
+.assistant-page{
+  max-width:860px;
+  margin:0 auto;
+  color:var(--color-on-surface)}
+
+.assistant-page header{
+  margin:12px 0 28px}
+.assistant-eyebrow{
+  font-size:.75rem;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  opacity:.55;
+  margin-bottom:10px}
+.assistant-page h1{
+  font-family:var(--font-headline);
+  font-size:2.75rem;
+  font-weight:300;
+  letter-spacing:-.05em}
+.assistant-page h2{
+  font-family:var(--font-headline);
+  font-size:1.65rem;
+  font-weight:400;
+  letter-spacing:-.025em}
+.assistant-page p{
+  line-height:1.6}
+.assistant-page button{
+  cursor:pointer;
+  font-size:.875rem;
+  min-height:44px;
+  padding:8px 12px;
+  border-radius:8px}
+.assistant-page button:hover:not(:disabled){
+  background:color-mix(in srgb,currentColor 6%,transparent)}
+.assistant-page button:disabled{
+  opacity:.45;
+  cursor:default}
+.assistant-tabs{
+  display:flex;
+  gap:20px;
+  border-bottom:1px solid color-mix(in srgb,currentColor 15%,transparent);
+  margin-bottom:32px}
+.assistant-tabs button{
+  border-radius:0;
+  padding:12px 4px}
+.assistant-tabs button[aria-current]{
+  border-bottom:2px solid currentColor}
+.assistant-intro{
+  padding:48px 0 56px;
+  max-width:540px}
+.assistant-intro p{
+  margin-top:12px;
+  opacity:.65}
+.assistant-composer{
+  margin:24px 0;
+  padding:18px;
+  border:1px solid color-mix(in srgb,currentColor 20%,transparent);
+  border-radius:16px}
+.assistant-composer label{
+  font-size:.8rem;
+  display:block;
+  margin-bottom:12px}
+.assistant-composer label span{
+  opacity:.5;
+  margin-left:12px}
+.assistant-composer>div{
+  display:flex;
+  gap:10px}
+.assistant-composer input{
+  flex:1;
+  min-width:0;
+  background:transparent;
+  padding:10px 0;
+  outline-offset:4px}
+.assistant-composer button,.assistant-selection>button,.assistant-dialog footer button:last-child{
+  background:var(--color-on-surface);
+  color:var(--color-surface);
+  padding:8px 16px}
+.assistant-composer small{
+  display:block;
+  opacity:.55;
+  margin-top:12px}
+.assistant-exchange{
+  padding:18px 0}
+.assistant-question{
+  background:color-mix(in srgb,currentColor 5%,transparent);
+  padding:14px 18px;
+  border-radius:16px;
+  margin-left:15%}
+.assistant-answer{
+  white-space:pre-wrap;
+  margin-top:18px}
+.assistant-receipt{
+  font-size:.875rem}
+.assistant-review-heading{
+  display:flex;
+  align-items:start;
+  justify-content:space-between;
+  gap:20px}
+.assistant-review-heading p{
+  font-size:.875rem;
+  opacity:.6;
+  margin:8px 0 20px}
+.assistant-review-toolbar,.assistant-selection{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:16px}
+.assistant-review-toolbar>span{
+  font-size:.75rem;
+  opacity:.55}
+.assistant-filters{
+  display:flex;
+  gap:8px}
+.assistant-filters button[aria-pressed=true]{
+  background:color-mix(in srgb,currentColor 7%,transparent)}
+.assistant-selection{
+  font-size:.875rem;
+  border-bottom:1px solid color-mix(in srgb,currentColor 12%,transparent);
+  padding-bottom:14px}
+.assistant-selection label{
+  display:flex;
+  gap:12px;
+  align-items:center}
+.assistant-page input[type=checkbox]{
+  width:18px;
+  height:18px;
+  accent-color:var(--color-on-surface);
+  flex-shrink:0}
+.assistant-review-row{
+  display:flex;
+  gap:16px;
+  padding:24px 0;
+  border-bottom:1px solid color-mix(in srgb,currentColor 12%,transparent)}
+.assistant-review-row>input{
+  margin-top:4px}
+.assistant-review-row blockquote{
+  font-size:1rem;
+  margin-bottom:12px}
+.assistant-review-row h3{
+  font-size:1.1rem;
+  font-weight:500}
+.assistant-review-row h3 span{
+  font-size:.7rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  opacity:.5;
+  margin-right:10px}
+.assistant-review-row p,.assistant-review-row details{
+  font-size:.8125rem;
+  opacity:.65;
+  margin:6px 0}
+.assistant-row-actions{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  font-size:.8125rem;
+  margin-top:12px}
+.assistant-row-actions button{
+  padding-left:0}
+.assistant-empty{
+  padding:60px 0}
+.assistant-empty h3{
+  font-size:1.5rem}
+.assistant-empty p{
+  opacity:.6}
+.assistant-error{
+  border-left:3px solid currentColor;
+  padding:10px 16px}
+.assistant-dialog{
+  position:fixed;
+  inset:0;
+  margin:auto;
+  max-width:480px;
+  width:calc(100% - 32px);
+  max-height:90dvh;
+  overflow:auto;
+  padding:28px;
+  border-radius:18px;
+  background:var(--color-surface);
+  color:var(--color-on-surface);
+  border:1px solid color-mix(in srgb,currentColor 18%,transparent)}
+.assistant-dialog::backdrop{
+  background:#0006}
+.assistant-dialog p{
+  font-size:.8rem;
+  opacity:.7;
+  margin:10px 0}
+.assistant-dialog label{
+  display:block;
+  font-size:.8rem;
+  margin:18px 0}
+.assistant-dialog input,.assistant-dialog select{
+  display:block;
+  width:100%;
+  margin-top:6px;
+  padding:10px;
+  border:1px solid color-mix(in srgb,currentColor 20%,transparent);
+  border-radius:8px;
+  background:transparent}
+.assistant-dialog footer{
+  display:flex;
+  justify-content:flex-end;
+  gap:12px;
+  margin-top:24px}
+@media(max-width:600px){
+  .assistant-review-toolbar{
+  align-items:start;
+  flex-direction:column}
+.assistant-intro{
+  padding:20px 0}
+.assistant-composer label span{
+  display:block;
+  margin:4px 0}
+.assistant-review-heading h2{
+  font-size:1.4rem}
+}
+
+.dark .assistant-page,.dark .assistant-dialog{
+  --color-on-surface:var(--color-dark-on-surface);
+  --color-surface:var(--color-dark-surface)}

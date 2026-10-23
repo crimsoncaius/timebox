@@ -3,13 +3,13 @@ package com.timebox.android.ui.assistant
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.*
 import java.util.UUID
 
 data class AssistantExchange(val question: String, val answer: String = "", val status: String = "", val error: String? = null,
                              val proposal: TrackingProposal? = null, val cards: List<AssistantCard> = emptyList(),
                              val taskProposal: TaskChangeProposal? = null, val taskCards: List<AssistantTaskCard> = emptyList(),
-                             val cardOrder: List<String> = emptyList())
+                             val cardOrder: List<String> = emptyList(), val reviewLater: Boolean = false, val runId: String = "", val trackingResult: JsonObject? = null)
 data class AssistantState(val exchanges: List<AssistantExchange> = emptyList(), val busy: Boolean = false, val readingPlan: Boolean = false, val ended: String? = null,
                           /** Tracking Proposal card states by proposal id, retained with the conversation. */
                           val proposals: Map<String, ProposalState> = emptyMap(),
@@ -36,12 +36,12 @@ class AssistantController(
         mutableState.value = current.copy(exchanges = current.exchanges.dropLast(1) + change(current.exchanges.last()))
     }
 
-    fun send(message: String) {
+    fun send(message: String, reviewLater: Boolean = false) {
         if (state.value.busy || state.value.ended != null || message.isBlank() || message.length > 4000) return
         val epoch = generation
         val runId = UUID.randomUUID().toString()
         run = runId
-        mutableState.value = state.value.copy(exchanges = state.value.exchanges + AssistantExchange(message), busy = true)
+        mutableState.value = state.value.copy(exchanges = state.value.exchanges + AssistantExchange(message, reviewLater = reviewLater, runId = runId), busy = true)
         job = scope.launch {
             var completed = false
             var skippedRetiredCard = false
@@ -59,7 +59,7 @@ class AssistantController(
                 // A lost acknowledgement is safe to repeat; generation is never retried.
                 completedRun?.let { api.acknowledge(id, it); completedRun = null }
                 var sequence = 0
-                api.stream(id, runId, message).collect { event ->
+                api.stream(id, runId, message, reviewLater).collect { event ->
                     if (epoch != generation || run != runId) return@collect
                     if (event.data["run_id"]?.jsonPrimitive?.content != runId) return@collect
                     val next = event.data.integer("sequence")
@@ -96,6 +96,11 @@ class AssistantController(
                             val proposal = TrackingProposal.parse(event.data)
                             updateLast { it.copy(proposal = proposal) }
                             mutableState.value = state.value.let { it.copy(proposals = it.proposals + (proposal.id to ProposalState())) }
+                        }
+                        "tracking_result" -> {
+                            check(reviewLater && state.value.exchanges.last().trackingResult == null) { "Unexpected tracking result" }
+                            check(event.data["status"]?.jsonPrimitive?.content in setOf("recorded", "not_recorded")) { "Invalid tracking result" }
+                            updateLast { it.copy(trackingResult = event.data) }
                         }
                         "text_delta" -> updateLast { it.copy(answer = it.answer + event.data.getValue("text").jsonPrimitive.content) }
                         "tool_started" -> mutableState.value = state.value.copy(readingPlan = true)
@@ -134,6 +139,19 @@ class AssistantController(
                     run = null
                 }
             }
+        }
+    }
+
+    suspend fun reviewRequest(path: String, body: JsonObject? = null): JsonObject = transportFactory().reviewRequest(path, body)
+
+    fun checkTracking(runId: String) {
+        scope.launch {
+            try {
+                val result = reviewRequest("tracking-results/$runId")
+                mutableState.value = state.value.copy(exchanges = state.value.exchanges.map {
+                    if (it.runId == runId) it.copy(trackingResult = result) else it
+                })
+            } catch (_: Exception) { /* The visible unresolved state remains retryable. */ }
         }
     }
 

@@ -33,6 +33,8 @@ class AssistantAttempt(Base):
     # Historical single-card records are dictionaries; multi-card records keep ordered lists.
     displayed_plan: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     tracking_proposal: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tracking_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="confirm", server_default="confirm")
+    tracking_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text)
     context_inputs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -45,6 +47,16 @@ class AssistantQuery(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     conversation_id: Mapped[str] = mapped_column(ForeignKey("assistant_conversations.id"), nullable=False, index=True)
     evidence: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class AssistantTrackingReview(Base):
+    __tablename__ = "assistant_tracking_reviews"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("assistant_attempts.run_id"), nullable=False, unique=True)
+    operation_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
+    receipt: Mapped[dict] = mapped_column(JSON, nullable=False)
+    reviewed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_revision: Mapped[str | None] = mapped_column(String(64))
 
 
 class AssistantQueryCursor(Base):
