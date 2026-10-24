@@ -105,3 +105,15 @@ def test_late_delivery_keeps_own_receipt_when_another_device_supersedes_it(monke
     row = assistant_reviews.listing()["items"][0]
     assert row["record"] is None
     assert row["receipt"]["record"]["task_type"]["name"] == "Work"
+
+
+def test_stop_that_removes_all_activity_is_not_a_start_correction(monkeypatch):
+    execute(interpreted(monkeypatch, minutes=20), "start", 1)
+    execute(interpreted(monkeypatch, action="stop", minutes=30), "stop", 2)
+    row = assistant_reviews.listing()["items"][0]
+    assert row["receipt"]["action"] == "stop"
+    assert row["record"] is None and not row["correction_available"]
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):
+        assistant_reviews.correct(row["id"], {"operation_id": uuid4(), "revision": row["revision"],
+            "effective_at": dt.datetime.now(dt.UTC) - dt.timedelta(minutes=25)})

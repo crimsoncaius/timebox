@@ -151,3 +151,116 @@ def test_task_proposal_never_enters_immediate_tracking_execution(client, monkeyp
     assert 'event: completed' in response.text
     assert not reviews.listing()["items"]
     conversations.items.clear()
+
+
+def event_body(item, at=None, **fields):
+    stop = item["receipt"]["action"] == "stop"
+    record = item["record"]
+    return {"operation_id": uuid4(), "revision": item["revision"],
+            "effective_at": reviews.instant(at or record["end_at" if stop else "start_at"]),
+            **({} if stop else {"task_type_id": record["task_type_id"], "name": record["name"]}), **fields}
+
+
+def test_start_event_correction_preserves_later_end_and_marks_reviewed_atomically():
+    now = dt.datetime.now(dt.UTC)
+    first = reviews.execute_run(request(at=(now - dt.timedelta(minutes=40)).isoformat()))
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=20)).isoformat()))
+    item = next(r for r in reviews.listing()["items"] if r["id"] == first["review_id"])
+    with Session(get_engine()) as db:
+        category = TaskType(name="Learning"); db.add(category); db.commit(); type_id = category.id
+    body = event_body(item, now - dt.timedelta(minutes=35), task_type_id=type_id, name="Study")
+    saved = reviews.correct(item["id"], body)
+    assert saved["reviewed"] and not saved["changed_since_review"]
+    assert saved["record"]["end_at"] == item["record"]["end_at"]
+    assert saved["record"]["task_type_id"] == type_id
+    assert reviews.instant(saved["record"]["start_at"]) == body["effective_at"]
+    assert saved["receipt"] == item["receipt"]
+    assert reviews.listing()["unchecked_count"] == 1
+    assert reviews.correct(item["id"], body)["revision"] == saved["revision"]
+    with pytest.raises(HTTPException) as error:
+        reviews.correct(item["id"], {**body, "name": "different"})
+    assert error.value.status_code == 409
+
+
+def test_running_start_correction_keeps_open_end_and_leaves_gap():
+    now = dt.datetime.now(dt.UTC)
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=40)).isoformat()))
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=20)).isoformat()))
+    items = reviews.listing()["items"]
+    item, earlier = items
+    saved = reviews.correct(item["id"], event_body(item, now - dt.timedelta(minutes=10)))
+    assert saved["record"]["end_at"] is None
+    assert reviews.instant(saved["record"]["start_at"]) > reviews.instant(earlier["record"]["end_at"])
+    assert saved["reviewed"]
+
+
+def test_stop_event_correction_preserves_start_category_and_later_activity():
+    now = dt.datetime.now(dt.UTC)
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=40)).isoformat()))
+    stop = reviews.execute_run(request(action="stop", at=(now - dt.timedelta(minutes=20)).isoformat()))
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=10)).isoformat()))
+    rows = reviews.listing()["items"]
+    item = next(r for r in rows if r["id"] == stop["review_id"])
+    current = rows[0]["record"]
+    body = event_body(item, now - dt.timedelta(minutes=15))
+    saved = reviews.correct(item["id"], body)
+    assert saved["record"]["start_at"] == item["record"]["start_at"]
+    assert saved["record"]["task_type_id"] == item["record"]["task_type_id"]
+    assert saved["record"]["name"] == item["record"]["name"]
+    assert reviews.instant(saved["record"]["end_at"]) == body["effective_at"]
+    assert saved["reviewed"] and saved["correction_available"]
+    assert reviews.listing()["items"][0]["record"] == current
+    again = reviews.correct(saved["id"], event_body(saved, now - dt.timedelta(minutes=18)))
+    assert again["reviewed"]
+
+
+@pytest.mark.parametrize("case", ["future", "overlap", "stale", "wrong_fields", "before_start"])
+def test_invalid_stop_correction_does_not_acknowledge_or_mutate(case):
+    now = dt.datetime.now(dt.UTC)
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=40)).isoformat()))
+    stop = reviews.execute_run(request(action="stop", at=(now - dt.timedelta(minutes=20)).isoformat()))
+    reviews.execute_run(request(at=(now - dt.timedelta(minutes=10)).isoformat()))
+    item = next(r for r in reviews.listing()["items"] if r["id"] == stop["review_id"])
+    body = event_body(item, now - dt.timedelta(minutes=15))
+    if case == "future": body["effective_at"] = now + dt.timedelta(hours=1)
+    if case == "overlap": body["effective_at"] = now - dt.timedelta(minutes=5)
+    if case == "stale": body["revision"] = "0" * 64
+    if case == "wrong_fields": body["task_type_id"] = item["record"]["task_type_id"]
+    if case == "before_start": body["effective_at"] = now - dt.timedelta(minutes=50)
+    with pytest.raises(HTTPException): reviews.correct(item["id"], body)
+    unchanged = next(r for r in reviews.listing()["items"] if r["id"] == item["id"])
+    assert not unchanged["reviewed"] and unchanged["record"] == item["record"]
+    with Session(get_engine()) as db:
+        from app.models.activity import ActivityOperation
+        assert db.get(ActivityOperation, str(body["operation_id"])) is None
+
+
+def test_event_endpoint_validates_and_saves(client):
+    reviews.execute_run(request(at=(dt.datetime.now(dt.UTC) - dt.timedelta(minutes=20)).isoformat()))
+    item = reviews.listing()["items"][0]
+    body = event_body(item)
+    payload = {k: str(v) if isinstance(v, (dt.datetime, type(uuid4()))) else v for k, v in body.items()}
+    assert client.post(f"/assistant/reviews/{item['id']}/correct-event", json={**payload, "end_at": None}).status_code == 422
+    response = client.post(f"/assistant/reviews/{item['id']}/correct-event", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["reviewed"]
+
+
+def test_correction_and_acknowledgement_roll_back_together(monkeypatch):
+    reviews.execute_run(request(at=(dt.datetime.now(dt.UTC) - dt.timedelta(minutes=20)).isoformat()))
+    item = reviews.listing()["items"][0]
+    body = event_body(item, name="Changed")
+    original_view = reviews._view
+    def failed_ack(db, state, row):
+        if row.reviewed_at is not None:
+            raise RuntimeError("acknowledgement failed")
+        return original_view(db, state, row)
+    monkeypatch.setattr(reviews, "_view", failed_ack)
+    with pytest.raises(RuntimeError, match="acknowledgement failed"):
+        reviews.correct(item["id"], body)
+    monkeypatch.setattr(reviews, "_view", original_view)
+    unchanged = reviews.listing()["items"][0]
+    assert unchanged["record"] == item["record"] and not unchanged["reviewed"]
+    with Session(get_engine()) as db:
+        from app.models.activity import ActivityOperation
+        assert db.get(ActivityOperation, str(body["operation_id"])) is None

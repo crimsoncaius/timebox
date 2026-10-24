@@ -1,7 +1,7 @@
 """Online Assistant tracking uses the canonical activity journal and atomic receipts.
 
 Review acknowledges an executed command, not future edits to its Actual Block.
-Corrections from Review use the same journal and reopen that receipt for review.
+Corrections from Review use the same journal and acknowledge the saved revision atomically.
 """
 import datetime as dt
 import hashlib
@@ -53,7 +53,13 @@ def _view(db, state, row):
     operation = db.get(ActivityOperation, row.operation_id)
     outcome = operation.outcome if operation else "unavailable"
     revision = hashlib.sha256(json.dumps([current, outcome], sort_keys=True).encode()).hexdigest()
+    correction_available = block is not None
+    if row.receipt["action"] == "stop":
+        original_end = row.receipt["record"].get("end_at")
+        effective = row.receipt.get("effective_at") or original_end
+        correction_available = bool(block and block.end_at and original_end and effective and instant(original_end) == instant(effective))
     return {"id": row.id, "run_id": row.run_id, "receipt": row.receipt, "record": current,
+            "correction_available": correction_available,
             "outcome": outcome, "revision": revision, "reviewed": row.reviewed_at is not None,
             "changed_since_review": row.reviewed_revision is not None and row.reviewed_revision != revision,
             "reviewed_at": row.reviewed_at}
@@ -183,10 +189,33 @@ def correct(review_id, body):
             return _view(db, state, row)
         if _view(db, state, row)["revision"] != body["revision"]:
             raise HTTPException(409, "This activity changed. Refresh before correcting it.")
+        if "effective_at" in body and not _view(db, state, row)["correction_available"]:
+            raise HTTPException(409, "This tracking event no longer has one editable record. Open Day to inspect it.")
         target = _record(db, state, row)
         if target is None:
             raise HTTPException(409, "The activity was removed or split. Open Day to inspect it.")
-        start, end = instant(body["start_at"]), instant(body["end_at"]) if body.get("end_at") else None
+        event_edit = "effective_at" in body
+        stop = row.receipt["action"] == "stop"
+        if event_edit:
+            at = instant(body["effective_at"])
+            if at > dt.datetime.now(dt.UTC):
+                raise HTTPException(422, "Choose a time no later than now.")
+            if stop:
+                if target.end_at is None:
+                    raise HTTPException(409, "This activity is running now. Open Day to inspect the stop.")
+                if body.get("task_type_id") is not None or body.get("name") is not None:
+                    raise HTTPException(422, "A stop correction changes only the stopped time.")
+                start, end = instant(target.start_at), at
+                type_id, name = target.task_type_id, target.name
+            else:
+                if body.get("task_type_id") is None:
+                    raise HTTPException(422, "Choose an activity category.")
+                start, end = at, instant(target.end_at) if target.end_at else None
+                type_id, name = body["task_type_id"], body.get("name")
+        else:
+            # Keep the existing web interval editor compatible.
+            start, end = instant(body["start_at"]), instant(body["end_at"]) if body.get("end_at") else None
+            type_id, name = body["task_type_id"], body["name"]
         if end is not None and end <= start:
             raise HTTPException(422, "End must be after start.")
         # Review does not restart a stopped activity or stop a running one through an edit.
@@ -198,16 +227,16 @@ def correct(review_id, body):
         command = ActivityCommand(operation_id=operation_id, device_id=device, sequence=1, action_at=now,
             calibration={"server_at": now, "offset_ms": 0}, base_cursor=state.cursor, kind="edit",
             target_id=target.id, target_source=row.receipt["record_source"], target_start_at=instant(target.start_at),
-            effective={"mode": "range", "at": start, "end": end}, task_type_id=body["task_type_id"],
-            name=body["name"], clear_fields=["name"] if not body["name"] else [])
+            effective={"mode": "range", "at": start, "end": end}, task_type_id=type_id,
+            name=name, clear_fields=["name"] if not name else [])
         try:
             snapshot = activity_service.execute(db, command, get_settings().app_timezone, commit=False)
         except ValueError as error:
             raise HTTPException(409, str(error)) from None
         if snapshot.acknowledgement.outcome != "applied":
             raise HTTPException(409, "The correction conflicted with newer activity. Refresh and try again.")
-        row.reviewed_at = None
-        row.reviewed_revision = None
+        row.reviewed_at = dt.datetime.now(dt.UTC)
+        row.reviewed_revision = _view(db, state, row)["revision"]
         payload = _view(db, state, row)
         db.commit()
         return payload

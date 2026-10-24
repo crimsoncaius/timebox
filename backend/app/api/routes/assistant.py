@@ -378,6 +378,15 @@ class ReviewCorrection(BaseModel):
     end_at: AwareDatetime | None
 
 
+class ReviewEventCorrection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: UUID
+    revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    effective_at: AwareDatetime
+    task_type_id: int | None = Field(default=None, gt=0)
+    name: str | None = Field(default=None, max_length=500)
+
+
 @router.get("/tracking-results/{run_id}")
 def tracking_result(run_id: UUID):
     return assistant_reviews.result(str(run_id))
@@ -395,4 +404,9 @@ def review_acknowledge(body: ReviewBatch):
 
 @router.post("/reviews/{review_id}/correct")
 def review_correct(review_id: int, body: ReviewCorrection):
+    return assistant_reviews.correct(review_id, body.model_dump())
+
+
+@router.post("/reviews/{review_id}/correct-event")
+def review_correct_event(review_id: int, body: ReviewEventCorrection):
     return assistant_reviews.correct(review_id, body.model_dump())

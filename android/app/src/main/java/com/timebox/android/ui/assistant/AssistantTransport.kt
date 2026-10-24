@@ -20,6 +20,7 @@ import kotlin.coroutines.resumeWithException
 
 data class AssistantEvent(val kind: String, val data: JsonObject)
 class AssistantEndedException(message: String) : IOException(message)
+class ReviewRejectedException(val status: Int, message: String) : IOException(message)
 
 interface AssistantTransport {
     suspend fun reviewRequest(path: String, body: JsonObject? = null): JsonObject = error("Review unavailable")
@@ -172,7 +173,10 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
 
     override suspend fun reviewRequest(path: String, body: JsonObject?): JsonObject = kotlinx.coroutines.withContext(Dispatchers.IO) {
         execute(request(path, if (body == null) "GET" else "POST", body ?: JsonObject(emptyMap())), taskClient).use {
-            check(it)
+            try { check(it) } catch (e: IOException) {
+                if (it.code in 400..499) throw ReviewRejectedException(it.code, e.message ?: "Review request was rejected.")
+                throw e
+            }
             ApiFactory.json.parseToJsonElement(it.body!!.string()).jsonObject
         }
     }

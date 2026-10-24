@@ -19,6 +19,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="timebox" android:host="prototype" android:path="/assistant-polish" />
+                <data android:scheme="timebox" android:host="prototype" android:path="/review-queue" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

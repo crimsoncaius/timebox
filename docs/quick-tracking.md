@@ -12,6 +12,30 @@ has corrections but no Undo. Unsynced local actions appear separately until the
 canonical journal transaction creates their account-level receipt. Rejected and
 superseded operations must be inspected rather than reported as successful sync.
 
+## Review and correction
+
+Each row shows the recorded category/name, Started at (or Stopped at), and the
+spoken request. Details preserves the original receipt and links to Day.
+Looks right acknowledges that displayed revision without changing tracking.
+Save correction applies the edit and acknowledges its resulting revision in one
+transaction. Reviewed items remain inspectable and correctable.
+
+A start correction edits category, optional name, and start time only, preserving
+any eventual end from later tracking. A stop correction edits only stopped time,
+preserving its activity's start and identity. If a stop removed its affected
+record, or the record is split or running again, correction is unavailable and
+Day provides recovery. Overlaps, future times, and stale revisions are rejected;
+moving a start later leaves the preceding gap intact. Older receipts can be
+corrected on their actual dates. The existing time field handles Reporting Time
+Zone conversion and asks which occurrence to use during repeated local times.
+
+Review corrections require connectivity and a synced local journal. Failed
+validation preserves an editable draft. A lost reply preserves the exact
+operation for explicit Retry; fields are locked until its outcome is known.
+Closing an edited draft asks before discarding it. Neither a retained draft nor
+reconnecting automatically applies a correction. Unsynced quick tracking remains
+in the existing durable activity journal and cannot be marked reviewed early.
+
 ## Setup
 
 Open Settings → Quick tracking → Set up. Add the Quick Settings tile and select
