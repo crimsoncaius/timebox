@@ -100,6 +100,11 @@ def execute(db: Session, body: ActivityCommand, timezone: str, *, commit: bool =
         else:
             db.flush()
         return result
+    quick_attempt = None
+    if body.quick_tracking_id:
+        from app.services import quick_tracking
+        quick_attempt = quick_tracking.validate(db, body, timezone)
+        before = _snapshot(db, state, timezone)
     if body.kind == "check_in":
         activity_check_in.synchronize(state, actuals.get_active_actual_block(db))
         outcome = activity_check_in.apply(state, body)
@@ -129,6 +134,8 @@ def execute(db: Session, body: ActivityCommand, timezone: str, *, commit: bool =
         db.flush()
         result = _snapshot(db, state, timezone, ActivityAcknowledgement(
             operation_id=operation.operation_id, outcome=operation.outcome, effective_at=effective_at))
+        if quick_attempt:
+            quick_tracking.receipt(db, body, before, result, quick_attempt)
         if commit:
             db.commit()
         else:

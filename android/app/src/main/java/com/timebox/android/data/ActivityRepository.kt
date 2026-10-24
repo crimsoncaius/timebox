@@ -46,6 +46,7 @@ class AndroidActivityStorage(context: Context) : ActivityStorage {
     }
 }
 @Serializable private data class ActivityJournal(
+    val quickReviews: Map<String, QuickInterpretation> = emptyMap(),
     val planNow: PlanNowRequestDto? = null,
     val planUndoPending: String? = null,
     val undoRestorations: Map<String, SwitchRestore> = emptyMap(),
@@ -76,6 +77,7 @@ data class ActivityUiState(
     val checkInPreferences: CheckInPreferences = CheckInPreferences(),
     val legacyRecovery: String? = null,
     val rejectedRecovery: String? = null,
+    val quickReviews: List<QuickLocalReview> = emptyList(),
 )
 /** Confirmed history plus durable local intent. Acknowledgements never restamp intent. */
 class ActivityRepository(private val transport: ActivityTransport, private val storage: ActivityStorage,
@@ -251,7 +253,14 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
         mutableState.value = ActivityUiState(project(), journal.outbox.isNotEmpty() || journal.planNow != null || journal.planUndoPending != null, busy, error, offline, feedback, journal.checkInPreferences, legacyRecovery,
             if (journal.rejectedRecoveryReviewed) null
             else if (journal.retiredJournal != null) ApiFactory.json.encodeToString(journal)
-            else journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) })
+            else journal.rejectedOutbox.takeIf { it.isNotEmpty() }?.let { ApiFactory.json.encodeToString(it) },
+            journal.quickReviews.values.mapNotNull { result ->
+                when {
+                    journal.outbox.any { it.operationId == result.requestId } -> QuickLocalReview(result, false)
+                    journal.rejectedOutbox.any { it.operationId == result.requestId } -> QuickLocalReview(result, true)
+                    else -> null
+                }
+            })
     }
     private fun save(value: ActivityJournal) {
         try { storage.save(ApiFactory.json.encodeToString(value)) }
@@ -421,6 +430,56 @@ class ActivityRepository(private val transport: ActivityTransport, private val s
     }
     fun now(): Instant = serverAnchor?.let { Instant.ofEpochMilli(it + (monotonicTime() - monotonicAnchor) / 1_000_000) }
         ?: Instant.ofEpochMilli(wallTime() + (journal.calibration?.offsetMs ?: 0))
+
+    fun quickFingerprint(): String = project()?.let { snapshot ->
+        snapshot.reportingTimezone + ApiFactory.json.encodeToString(snapshot.records)
+    }.orEmpty()
+
+    fun hasQuickOperation(id: String): Boolean = journal.quickReviews.containsKey(id)
+
+    /** Interpretation, local projection and its review metadata share one durable save. */
+    suspend fun applyQuick(result: QuickInterpretation, expected: String): String {
+        val message = mutex.withLock {
+            checkEndpoint()
+            checkTaskRecovery()
+            if (hasQuickOperation(result.requestId)) return@withLock "Already saved. Check Assistant Review."
+            check(expected == quickFingerprint()) { "Activity changed while listening. Retry your command." }
+            check(journal.planNow == null && journal.planUndoPending == null) { "Sync the plan change before quick tracking." }
+            val snapshot = checkNotNull(project()) { "Connect once to initialize Activity Tracking." }
+            check(snapshot.offlineReady && journal.calibration != null) { "Connect once to initialize Activity Tracking." }
+            val kind = quickTrackingKind(result, snapshot, now())
+                ?: return@withLock if (result.action == "stop") "Nothing was being tracked at that time." else "Already tracking this activity."
+            val target = snapshot.current
+            val action = maxOf(now().toEpochMilli(), Instant.parse(result.receivedAt).toEpochMilli(), journal.lastAction + 1)
+            val at = Instant.ofEpochMilli(action).toString()
+            val edit = kind == ActivityKind.Edit
+            val predecessor = journal.outbox.lastOrNull { it.kind in listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop, ActivityKind.UndoSwitch) }
+            val source = target?.let { snapshot.provenance[it.id.toString()] ?: "baseline:${it.id}" }
+            val command = ActivityCommandDto(result.requestId, journal.device, journal.sequence + 1, at,
+                journal.calibration!!, journal.snapshot!!.cursor,
+                ActivityEffectiveDto(if (edit) "range" else "instant", result.effectiveAt),
+                if (edit || predecessor == null) target?.id else null, kind, result.taskTypeId,
+                name = if (edit) target?.name else null, note = if (edit) target?.note else null,
+                taskId = if (edit) target?.taskId else null, plannedBlockId = if (edit) target?.plannedBlockId else null,
+                selectionSnapshot = true, predecessorId = if (edit) null else predecessor?.operationId,
+                targetSource = if (edit) source else null, targetStartAt = if (edit) target?.startAt else null,
+                quickTrackingId = result.requestId)
+            save(journal.copy(sequence = command.sequence, lastAction = action, outbox = journal.outbox + command,
+                quickReviews = journal.quickReviews + (result.requestId to result)))
+            switchOpportunity = null
+            publish()
+            when (kind) {
+                ActivityKind.Stop -> "Stopped tracking"
+                ActivityKind.Edit -> "Corrected activity start"
+                else -> "Tracking ${snapshot.taskTypes.first { it.id == result.taskTypeId }.name}"
+            }
+        }
+        refresh()
+        check(journal.rejectedOutbox.none { it.operationId == result.requestId }) { "This change could not sync. Check Assistant Review." }
+        if (journal.snapshot?.operationOutcomes?.get(result.requestId)?.outcome == ActivityOutcome.Superseded)
+            return "Newer activity changed this time. Check Assistant Review."
+        return message
+    }
     suspend fun command(kind: ActivityKind, taskTypeId: Int? = null, name: String? = null, retryOnly: Boolean = false, taskId: Int? = null, plan: ActivityPlanDto? = null, effectiveAt: Instant? = null, observedTargetId: Int? = null, onPersisted: () -> Unit = {}, onOperation: (String) -> Unit = {}): Boolean {
         if (retryOnly) { refresh(); return !state.value.pending && state.value.error == null }
         val requestedAt = now().toEpochMilli()

@@ -20,6 +20,8 @@ private val reviewTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 @Composable
 fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+    val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
+    val local by application.activityRepository.state.collectAsState()
     val scope = rememberCoroutineScope()
     var page by remember { mutableStateOf<JsonObject?>(null) }
     var rows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
@@ -43,6 +45,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
         }
     }
     LaunchedEffect(reviewed) { page = null; rows = emptyList(); load() }
+    LaunchedEffect(local.snapshot?.cursor) { if (!local.pending) load() }
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Review", style = MaterialTheme.typography.titleLarge)
         Text("Already recorded. Check the details when you have a moment.", style = TimeboxTheme.type.bodySmall)
@@ -70,6 +73,16 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             }) { Text("Mark reviewed (${selected.size})") }
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+            if (!reviewed) items(local.quickReviews, key = { it.interpretation.requestId }) { pending ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(pending.interpretation.question)
+                    Text(if (pending.rejected) "Could not sync · Check Activity Tracking recovery in Day" else "Saved on this device · Unsynced", style = TimeboxTheme.type.bodySmall)
+                    Text("${pending.interpretation.effectiveAt} · ${pending.interpretation.timezone}", style = TimeboxTheme.type.bodySmall)
+                    TextButton(onClick = { scope.launch { application.activityRepository.refresh(); load() } }) { Text("Check sync") }
+                    TextButton(onClick = { onOpenDay(Instant.parse(pending.interpretation.effectiveAt).atZone(ZoneId.of(pending.interpretation.timezone)).toLocalDate()) }) { Text("Open day") }
+                    HorizontalDivider(color = TimeboxTheme.colors.hairline)
+                }
+            }
             if (rows.isEmpty() && !busy && error == null) item { Text(if (reviewed) "No reviewed activity yet." else "All caught up. Activity recorded with Review later will appear here.") }
             items(rows, key = { it.getValue("id").jsonPrimitive.int }) { row ->
                 val receipt = row.getValue("receipt").jsonObject
@@ -85,6 +98,8 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                     Text(shown.getValue("task_type").jsonObject.reviewText("name").orEmpty(), style = TimeboxTheme.type.bodySmall)
                     fun time(key: String) = shown.reviewText(key)?.let { Instant.parse(it).atZone(zone).format(reviewTime) } ?: "Still running"
                     Text("${time("start_at")} → ${time("end_at")} · $zone", style = TimeboxTheme.type.bodySmall)
+                    receipt.reviewText("effective_at")?.let { Text("Took effect ${Instant.parse(it).atZone(zone).format(reviewTime)}", style = TimeboxTheme.type.bodySmall) }
+                    if (row.reviewText("outcome") != "applied") Text("Changed by later activity · Inspect the current record before correcting.")
                     var showOriginal by remember(row.getValue("id")) { mutableStateOf(false) }
                     TextButton(onClick = { showOriginal = !showOriginal }) { Text(if (showOriginal) "Hide original" else "Originally recorded") }
                     if (showOriginal) Text("${original.reviewText("name") ?: original.getValue("task_type").jsonObject.reviewText("name")} · ${Instant.parse(original.reviewText("start_at")).atZone(zone).format(reviewTime)} → ${original.reviewText("end_at")?.let { Instant.parse(it).atZone(zone).format(reviewTime) } ?: "Running at the time"}", style = TimeboxTheme.type.bodySmall)
@@ -100,7 +115,6 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             if (page?.reviewText("next_before") != null) item { TextButton(onClick = { load(true) }, enabled = !busy) { Text("Earlier activity") } }
         }
     }
-    val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
     edit?.let { row -> ReviewCorrectionDialog(row, page?.get("task_types")?.jsonArray.orEmpty(), zone, controller, onDismiss = { edit = null }, onSaved = { edit = null; load(); scope.launch { application.activityRepository.refresh() } }) }
 }
 

@@ -153,6 +153,10 @@ def prepare(db, state, body, operations, timezone="UTC"):
     historical = body.kind in {"add", "edit", "delete"}
     if historical:
         running_edit = body.kind == "edit" and target is not None and target["end"] is None and body.effective.end is None
+        if body.quick_tracking_id and (not running_edit or start <= instant(target["start"]) or
+                body.task_type_id != target["data"]["task_type_id"] or
+                any(getattr(body, field) != target["data"].get(field) for field in ("name", "note", "task_id", "planned_block_id"))):
+            raise ValueError("Quick start correction must preserve the observed Current Activity.")
         if body.effective.mode != "range" or (not running_edit and (body.effective.end is None or body.effective.end <= start)):
             raise ValueError("Historical commands require an explicit positive range")
         end = INF if running_edit else instant(body.effective.end)
@@ -175,11 +179,11 @@ def prepare(db, state, body, operations, timezone="UTC"):
             raise ValueError("Effective time must be within the current interval and action time")
         current = next((p for p in known if p["data"] and p["end"] is None), None)
         if not body.predecessor_id:
-            if (body.kind == "start") == (current is not None) or body.target_id != (identity(current) if current else None):
+            if ((body.kind == "start") == (current is not None) and not (body.quick_tracking_id and body.kind == "stop")) or body.target_id != (identity(current) if current else None):
                 raise ValueError("Transition does not match the observed activity")
-        if body.kind != "switch" and current and start < instant(current["start"]):
+        if body.kind != "switch" and not body.quick_tracking_id and current and start < instant(current["start"]):
             raise ValueError("Transition must follow the observed activity start")
-        if body.kind == "stop" and any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
+        if body.kind == "stop" and not body.quick_tracking_id and any(p["data"] and p["end"] and start < instant(p["end"]) for p in known):
             raise ValueError("Activity instant overlaps known history")
     data = None
     if body.kind not in {"stop", "delete"}:

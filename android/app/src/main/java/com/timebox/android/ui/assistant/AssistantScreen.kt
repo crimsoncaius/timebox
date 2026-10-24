@@ -56,6 +56,10 @@ fun AssistantScreen(
     var reviewLater by rememberSaveable { mutableStateOf(false) }
     val state by controller.state.collectAsState()
     val application = LocalContext.current.applicationContext as TimeboxApplication
+    val openReview by application.reviewRequested.collectAsState()
+    LaunchedEffect(openReview) {
+        if (openReview) { reviewTab = true; application.reviewRequested.value = false }
+    }
     LaunchedEffect(state.exchanges.lastOrNull()?.trackingResult) {
         if (state.exchanges.lastOrNull()?.trackingResult?.get("status")?.jsonPrimitive?.content == "recorded") application.activityRepository.refresh()
     }

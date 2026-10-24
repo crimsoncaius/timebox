@@ -1,0 +1,238 @@
+package com.timebox.android.quicktracking
+
+import android.Manifest
+import android.app.KeyguardManager
+import android.app.StatusBarManager
+import android.app.role.RoleManager
+import android.content.ComponentName
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.drawable.Icon as AndroidIcon
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.timebox.android.MainActivity
+import com.timebox.android.R
+import com.timebox.android.TimeboxApplication
+import com.timebox.android.data.AppSettings
+import com.timebox.android.ui.theme.TimeboxTheme
+import kotlinx.coroutines.delay
+
+class QuickTrackingActivity : ComponentActivity(), RecognitionListener {
+    private val app get() = application as TimeboxApplication
+    private var recognizer: SpeechRecognizer? = null
+    private var listening by mutableStateOf(false)
+    private var speechStatus by mutableStateOf<String?>(null)
+    private var typing by mutableStateOf(false)
+    private var setup by mutableStateOf(false)
+    private var assistantAssigned by mutableStateOf(false)
+    private var started = false
+    private var source = "assistant"
+    private var speechGeneration = 0
+    private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) listen() else { speechStatus = "Microphone permission is off. Enable it in app settings or type your command."; typing = true }
+    }
+    private val assistantRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { updateRole() }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        source = intent.getStringExtra("source")?.takeIf { it in listOf("tile", "app") } ?: "assistant"
+        setup = intent.getBooleanExtra("setup", false)
+        if (savedInstanceState == null && app.quickTracking.state.value.saved && !setup) app.quickTracking.edit("")
+        // Rotation or process recreation never submits or reopens the microphone by itself.
+        started = savedInstanceState != null
+        setContent {
+            val settings by app.repository.settings.collectAsState(AppSettings("", "", null))
+            val capture by app.quickTracking.state.collectAsState()
+            val tracking by app.activityRepository.state.collectAsState()
+            TimeboxTheme(darkTheme = settings.darkTheme ?: isSystemInDarkTheme()) {
+                Surface(color = TimeboxTheme.colors.bg, modifier = Modifier.fillMaxSize()) {
+                    Column(Modifier.safeDrawingPadding().imePadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (setup) "Quick tracking" else "Track activity", style = TimeboxTheme.type.screenTitle, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { cancelListening(); finish() }) { Text("Close") }
+                        }
+                        if (setup) {
+                            Text("Speak an activity. When you finish speaking, Timebox records it automatically. Correct the result later in Assistant → Review.")
+                            Text(if (assistantAssigned) "Timebox is your default digital assistant." else "Choose Timebox as your default digital assistant to use the system assistant gesture.")
+                            Button(onClick = ::chooseAssistant) { Text(if (assistantAssigned) "Assistant settings" else "Choose default assistant") }
+                            Button(onClick = ::addTile) { Text("Add Quick Settings tile") }
+                            Text("On Samsung: Settings → Apps → Choose default apps → Digital assistant app → Timebox. Then Advanced features → Side button → Long press → Digital assistant. Availability and menu names depend on your model and One UI version.", style = TimeboxTheme.type.bodySmall)
+                            Text("On gesture navigation, enable the device’s assistant gesture. A button assigned to Bixby or the power menu will not open Timebox.", style = TimeboxTheme.type.bodySmall)
+                            speechStatus?.let { Text(it) }
+                            TextButton(onClick = { setup = false; requestListen() }) { Text("Try voice tracking") }
+                        } else {
+                            Icon(Icons.Outlined.Mic, contentDescription = null, modifier = Modifier.size(48.dp))
+                            Text(when {
+                                capture.busy -> "Interpreting…"
+                                listening -> speechStatus ?: "Listening…"
+                                capture.saved -> capture.message.orEmpty()
+                                else -> "What are you doing?"
+                            }, style = TimeboxTheme.type.sectionTitle, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                            if (listening) Text("Finish speaking to record automatically.", style = TimeboxTheme.type.bodySmall)
+                            if (capture.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            if (capture.text.isNotBlank() && !typing) Text(capture.text)
+                            if (!capture.busy && !listening && !capture.saved) {
+                                (speechStatus ?: capture.message)?.let { Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+                                Button(onClick = ::requestListen) { Text("Listen again") }
+                                if (capture.text.isNotBlank()) TextButton(onClick = { app.quickTracking.submit(capture.text, source) }) { Text("Retry command") }
+                            }
+                            if (typing && !capture.busy) {
+                                OutlinedTextField(capture.text, app.quickTracking::edit, label = { Text("Activity") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                                Button(onClick = { app.quickTracking.submit(capture.text, source) }, enabled = capture.text.isNotBlank()) { Text("Track") }
+                            }
+                            if (!capture.busy && !capture.saved) TextButton(onClick = {
+                                if (typing) requestListen() else { cancelListening(); typing = true; speechStatus = null }
+                            }) { Text(if (typing) "Use microphone" else "Type instead") }
+                            if (capture.saved) Text(if (!capture.recorded) "No change was needed." else if (tracking.pending) "Saved on this device · Unsynced" else "Available in Assistant → Review", style = TimeboxTheme.type.bodySmall)
+                            TextButton(onClick = ::openReview) { Text("Open Assistant Review") }
+                            if (!capture.busy && !listening) TextButton(onClick = { cancelListening(); setup = true; updateRole() }) { Text("Entry point setup") }
+                        }
+                    }
+                }
+            }
+            LaunchedEffect(capture.saved, setup) {
+                if (capture.saved && !setup) { delay(2200); finish() }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateRole()
+        if (!started) {
+            started = true
+            if (!setup && !app.quickTracking.state.value.busy && app.quickTracking.state.value.message == null) requestListen()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (!app.quickTracking.state.value.busy) {
+            source = intent.getStringExtra("source")?.takeIf { it in listOf("tile", "app") } ?: "assistant"
+            setup = intent.getBooleanExtra("setup", false)
+            if (app.quickTracking.state.value.saved) app.quickTracking.edit("")
+            // Dispatch may bring a stopped task forward; start only after it resumes.
+            started = false
+        }
+    }
+
+    override fun onStop() { cancelListening(); super.onStop() }
+    override fun onDestroy() { recognizer?.destroy(); recognizer = null; super.onDestroy() }
+
+    private fun requestListen() {
+        if (app.quickTracking.state.value.busy) return
+        if (getSystemService(KeyguardManager::class.java).isDeviceLocked) {
+            speechStatus = "Unlock your device to track an activity."
+            getSystemService(KeyguardManager::class.java).requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { requestListen() }
+            })
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permission.launch(Manifest.permission.RECORD_AUDIO)
+        else listen()
+    }
+
+    private fun listen() {
+        cancelListening()
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { speechStatus = "Speech recognition is unavailable on this device. Type your command instead."; typing = true; return }
+        app.quickTracking.edit("")
+        typing = false
+        speechStatus = "Listening…"
+        recognizer?.destroy()
+        val generation = ++speechGeneration
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { if (generation == speechGeneration) this@QuickTrackingActivity.onReadyForSpeech(params) }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { if (generation == speechGeneration) this@QuickTrackingActivity.onEndOfSpeech() }
+            override fun onError(error: Int) { if (generation == speechGeneration) this@QuickTrackingActivity.onError(error) }
+            override fun onResults(results: Bundle?) { if (generation == speechGeneration) this@QuickTrackingActivity.onResults(results) }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        }) }
+        listening = true
+        try {
+            recognizer!!.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            })
+        } catch (error: Exception) { listening = false; speechStatus = "Could not start the microphone. Try again or type your command." }
+    }
+
+    private fun cancelListening() {
+        speechGeneration++
+        if (listening) { listening = false; recognizer?.cancel(); speechStatus = "Listening stopped. Tap Listen again when ready." }
+    }
+    override fun onReadyForSpeech(params: Bundle?) { speechStatus = "Listening…" }
+    override fun onBeginningOfSpeech() {}
+    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onEndOfSpeech() { if (listening) speechStatus = "Finishing transcription…" }
+    override fun onError(error: Int) {
+        if (!listening) return
+        listening = false
+        speechStatus = when (error) {
+            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech heard. Try again or type your command."
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required. Enable it in app settings or type instead."
+            else -> "Speech recognition could not finish. Try again or type your command."
+        }
+    }
+    override fun onResults(results: Bundle?) {
+        if (!listening) return
+        listening = false
+        val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()
+        if (text.isNullOrEmpty()) { speechStatus = "No speech heard. Try again."; return }
+        speechStatus = null
+        app.quickTracking.submit(text, source)
+    }
+    override fun onPartialResults(partialResults: Bundle?) {}
+    override fun onEvent(eventType: Int, params: Bundle?) {}
+
+    private fun updateRole() {
+        assistantAssigned = if (Build.VERSION.SDK_INT >= 29) getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_ASSISTANT)
+        else Settings.Secure.getString(contentResolver, "assistant")?.startsWith("$packageName/") == true
+    }
+    private fun chooseAssistant() {
+        // ASSISTANT is available but not requestable on Android 36; Settings owns selection.
+        assistantRole.launch(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+    }
+    private fun addTile() {
+        if (Build.VERSION.SDK_INT >= 33) getSystemService(StatusBarManager::class.java).requestAddTileService(
+            ComponentName(this, QuickTrackingTile::class.java), "Track activity", AndroidIcon.createWithResource(this, R.drawable.ic_quick_tracking), mainExecutor
+        ) { result -> speechStatus = if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED || result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) "Tile is available in Quick Settings." else "Tile was not added. You can add Track activity from Quick Settings → Edit." }
+        else speechStatus = "Open Quick Settings → Edit, then drag Track activity into your tiles."
+    }
+    private fun openReview() {
+        cancelListening()
+        app.reviewRequested.value = true
+        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        finish()
+    }
+}

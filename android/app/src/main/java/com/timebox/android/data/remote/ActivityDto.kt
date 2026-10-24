@@ -46,6 +46,7 @@ import kotlinx.serialization.Serializable
     val clear_fields: List<String> = emptyList(),
     @SerialName("predecessor_id") val predecessorId: String? = null,
     @SerialName("undo_operation_id") val undoOperationId: String? = null,
+    @SerialName("quick_tracking_id") val quickTrackingId: String? = null,
 )
 @Serializable data class ActivityAcknowledgementDto(
     @SerialName("operation_id") val operationId: String,

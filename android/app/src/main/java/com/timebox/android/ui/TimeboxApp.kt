@@ -87,6 +87,10 @@ fun TimeboxApp(
         timeboxViewModelFactory(repository, taskCompletion, readinessCoordinator, activityRepository, undoLifecycle)
     }
     val navController = rememberNavController()
+    val reviewRequested by application.reviewRequested.collectAsState()
+    LaunchedEffect(reviewRequested) {
+        if (reviewRequested) navController.navigate(AppRoutes.Assistant) { launchSingleTop = true }
+    }
 
     val dayViewModel: DayViewModel = viewModel(factory = factory)
     val chronicleViewModel: ChronicleViewModel = viewModel(factory = factory)

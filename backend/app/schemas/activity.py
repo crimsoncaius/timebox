@@ -54,6 +54,7 @@ class ActivityCommand(BaseModel):
     target_start_at: AwareDatetime | None = None
     kind: Literal["start", "switch", "stop", "add", "edit", "delete", "check_in", "undo_switch"]
     undo_operation_id: UUID | None = None
+    quick_tracking_id: UUID | None = None
     check_in: CheckInEvent | None = None
     selection_snapshot: bool = False
     task_type_id: int | None = None

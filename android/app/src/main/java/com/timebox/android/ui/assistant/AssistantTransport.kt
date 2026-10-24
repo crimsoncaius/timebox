@@ -52,6 +52,14 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
         .retryOnConnectionFailure(false).build()
 
     private val taskClient = client.newBuilder().callTimeout(30, TimeUnit.SECONDS).build()
+    private val quickClient = client.newBuilder().readTimeout(115, TimeUnit.SECONDS).callTimeout(120, TimeUnit.SECONDS).build()
+
+    suspend fun interpretQuick(body: JsonObject): com.timebox.android.data.QuickInterpretation = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        execute(request("quick-tracking", body = body), quickClient).use {
+            check(it)
+            ApiFactory.json.decodeFromString<com.timebox.android.data.QuickInterpretation>(it.body!!.string())
+        }
+    }
 
     private fun request(path: String, method: String = "POST", body: JsonObject = JsonObject(emptyMap())): Request =
         Request.Builder().url(ApiFactory.normalizeBaseUrl(settings.baseUrl) + "assistant/" + path)

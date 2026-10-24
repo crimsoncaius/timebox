@@ -67,6 +67,8 @@ class TimeboxApplication : Application() {
     val focusController by lazy { com.timebox.android.ui.focus.FocusController(com.timebox.android.ui.focus.AndroidFocusStorage(this)) }
     /** Assistant ↔ Day: prefilled tracking sheets, their results, and View in Day landings. */
     val trackingHandoff by lazy { com.timebox.android.ui.day.TrackingHandoff() }
+    val reviewRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val quickTracking by lazy { com.timebox.android.quicktracking.QuickTrackingController(this, repository, activityRepository) }
     val checkIns by lazy { com.timebox.android.checkin.AndroidCheckIns(this, activityRepository) }
     val activityRepository by lazy {
         com.timebox.android.data.ActivityRepository(

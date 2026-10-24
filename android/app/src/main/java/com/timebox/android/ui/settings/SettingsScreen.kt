@@ -189,6 +189,14 @@ fun SettingsScreen(
             )
         }
 
+        SettingsGroup(title = "Quick tracking", scope = "This device") {
+            val context = LocalContext.current
+            SettingRow(title = "Voice entry points", description = "Quick Settings tile and default digital assistant.") {
+                TextButton(onClick = {
+                    context.startActivity(android.content.Intent(context, com.timebox.android.quicktracking.QuickTrackingActivity::class.java).putExtra("setup", true).putExtra("source", "app"))
+                }) { Text("Set up") }
+            }
+        }
         SettingsGroup(title = "Appearance", scope = "This device") {
             SettingRow(title = "Dark theme", description = "Charcoal surfaces, brighter lanes.") {
                 TimeboxSwitch(checked = isDark, onCheckedChange = { onToggleDark() })

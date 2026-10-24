@@ -16,7 +16,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
-from app.services import assistant_reviews, assistant_storage, assistant_task_operations
+from app.services import assistant_reviews, assistant_storage, assistant_task_operations, quick_tracking
 from app.services.assistant_agent import MODEL, agent_events, task_read_context
 from app.services.assistant_limits import (
     MAX_CARDS,
@@ -31,6 +31,10 @@ from app.services.assistant_tasks import encoded, task_card
 from app.services.assistant_tracking import TrackingProposal, local_time, tracking_context
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
+
+@router.post("/quick-tracking")
+async def quick_track(body: quick_tracking.QuickRequest):
+    return await quick_tracking.interpret(body)
 
 
 class MessageRequest(BaseModel):

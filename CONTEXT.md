@@ -96,6 +96,10 @@ _Avoid_: All caught up, sync complete
 The work or non-work activity represented by the running Actual Block, using its Block Name, Task Type, and optional Battle Plan Task linkage. It may be unnamed and unclassified.
 _Avoid_: Current Task, Activity catalog
 
+**Quick Tracking**:
+A spoken or typed request to record an activity immediately, without a separate confirmation. Its result can be checked and corrected in Assistant Review. An uninterpreted request is not recorded activity.
+_Avoid_: Tracking Proposal, scheduled activity
+
 **Reporting Time Zone**:
 The shared time zone used to divide recorded activity between calendar days on all devices. Changing it changes daily attribution without changing elapsed time.
 _Avoid_: Device time zone
