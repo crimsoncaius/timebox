@@ -1,5 +1,23 @@
 # Android instrumentation baseline
 
+## Assistant follow-up — 2026-10-24
+
+On managed `timebox-agent-07` (Android 36), six Assistant cases also fail with
+the unchanged production screens from `434fe6bd`. These reproduced with the same
+assertions before and after the conversation-reset fix:
+
+- `AssistantScreenTest#sentQuestionStaysAtSameHorizontalPositionBeforeReply`: `Thinking…` is not displayed.
+- `AssistantScreenTest#historicalResponseRendersTextAndSupportedCardsWithoutRetiredPlan`: saved-response text is not found by `performScrollTo`.
+- `AssistantReviewTest#startCorrectsCategoryAndNameWithoutSendingEndAndMarksReviewed`: `Change` is not found after opening correction.
+- `AssistantReviewTest#lostReplyRetriesExactOperationAndDoesNotEnableAnotherEdit` and `#rejectedSaveKeepsDraftEditableAndNextEditGetsNewIdentity`: `Save correction` is not found.
+- `AssistantReviewTest#stopOffersOnlyStoppedTimeAndPreservesOtherFields`: `Correct stop` is not displayed.
+
+This establishes the failures, not their causes. The three conversation reset,
+draft reset, and saved-task-result navigation cases passed in the initial fixed
+run. A repeat passed the fresh-conversation and saved-result cases again, but
+`multilineDraftSurvivesStopAndResetClearsIt` timed out waiting for its fixture
+card after five seconds; that case was intermittent in these runs.
+
 First recorded execution of `android/app/src/androidTest`: 208 cases across 39 files,
 on the managed pool's `timebox-agent-04` (stock Android 36 Google Play x86_64,
 1080x2424 at density 420). Before this, the suite had only ever been compiled.

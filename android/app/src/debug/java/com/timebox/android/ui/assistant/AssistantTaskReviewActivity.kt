@@ -28,9 +28,12 @@ class AssistantTaskReviewActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (intent.getBooleanExtra("historical_response", false)) {
             val events = Json.parseToJsonElement(assets.open("assistant-historical-response.json").bufferedReader().use { it.readText() }).jsonArray
-            val controller = AssistantController(lifecycleScope) { object : AssistantTransport {
+            val api = object : AssistantTransport {
                 override val supportsActivityCards = true
-                override suspend fun create() = "historical-review"
+                override suspend fun create() = java.util.UUID.randomUUID().toString()
+                override suspend fun reviewRequest(path: String, body: JsonObject?) = buildJsonObject {
+                    put("timezone", "UTC"); putJsonArray("items") {}
+                }
                 override suspend fun delete(conversation: String) {}
                 override suspend fun stop(conversation: String, run: String) {}
                 override suspend fun acknowledge(conversation: String, run: String) {}
@@ -41,7 +44,23 @@ class AssistantTaskReviewActivity : ComponentActivity() {
                             JsonObject(event.getValue("data").jsonObject + mapOf("run_id" to JsonPrimitive(run), "sequence" to JsonPrimitive(index + 1)))))
                     }
                 }
-            } }
+            }
+            val recovery = if (intent.getBooleanExtra("saved_task_result", false)) {
+                val journal = com.timebox.android.data.AssistantTaskJournal(object : com.timebox.android.data.TaskJournalStorage {
+                    var value: String? = null
+                    override fun read() = value
+                    override fun write(value: String) { this.value = value }
+                })
+                val result = Json.parseToJsonElement(assets.open("assistant-tasks.json").bufferedReader().use { it.readText() })
+                    .jsonObject.getValue("result").jsonObject
+                val record = com.timebox.android.data.TaskSubmission(api.serverIdentity, "previous",
+                    result.getValue("proposal_id").jsonPrimitive.content, result.getValue("operation_id").jsonPrimitive.content,
+                    java.util.UUID.randomUUID().toString(), affectedTaskIds = emptyList(), affectedFields = emptyList(),
+                    affectsTracking = false, submittedAt = "2026-10-20T14:09:22Z")
+                journal.persist(record); journal.resolve(record, result.toString())
+                AssistantTaskRecovery(lifecycleScope, journal, { api }, {}, {}, { _, _ -> }).also { it.foreground() }
+            } else null
+            val controller = AssistantController(lifecycleScope, recovery) { api }
             controller.send("Read saved response")
             setContent { TimeboxTheme { AssistantScreen(controller) } }
             return

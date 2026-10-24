@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -42,7 +43,7 @@ private fun displayReviewTime(value: String?, zone: ZoneId): String = value?.let
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate) -> Unit, modifier: Modifier = Modifier, onOpenTask: (Int) -> Unit = {}) {
     val application = LocalContext.current.applicationContext as TimeboxApplication
     val local by application.activityRepository.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -89,7 +90,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     }
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Review", style = type.sectionTitle)
-        Text("Already recorded. Compare the activity and time with what you said.", style = type.body, color = colors.onVariant)
+        Text("Check saved task changes and recorded activity.", style = type.body, color = colors.onVariant)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(!reviewed, { if (!busy && reviewed) { reviewed = false; rows = emptyList(); page = null } }, label = { Text("To review${page?.reviewText("unchecked_count")?.let { " · $it" }.orEmpty()}") })
             FilterChip(reviewed, { if (!busy && !reviewed) { reviewed = true; rows = emptyList(); page = null } }, label = { Text("Reviewed") })
@@ -103,6 +104,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+            item { SavedTaskResults(controller, onOpenTask) }
             if (!reviewed) items(local.quickReviews, key = { it.interpretation.requestId }) { pending ->
                 val result = pending.interpretation
                 Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -116,7 +118,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             }
             if (rows.isEmpty() && (reviewed || local.quickReviews.isEmpty()) && !busy && error == null) item {
                 Column(Modifier.padding(vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (reviewed) "Nothing reviewed yet" else "You're caught up", style = type.sectionTitle)
+                    Text(if (reviewed) "No activities reviewed yet" else "No activities to review", style = type.sectionTitle)
                     Text(if (reviewed) "Activities you mark reviewed will appear here." else "Your next recorded activity will appear here for a quick check.", style = type.body, color = colors.onVariant)
                 }
             }
@@ -277,4 +279,53 @@ private fun ReviewCorrectionSheet(row: JsonObject, types: List<JsonElement>, zon
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text(if (pendingText != null) "Close before checking the save?" else "Discard correction?") },
         text = { Text(if (pendingText != null) "The save may have completed. Refresh Review before making another correction." else "Your unsaved changes will be lost.") },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }, dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } })
+}
+
+/** Saved task outcomes survive conversation resets and live in Review. */
+@Composable
+private fun SavedTaskResults(controller: AssistantController, onOpenTask: (Int) -> Unit) {
+    val recovery = controller.taskRecovery ?: return
+    val recoveryState by recovery.state.collectAsState()
+    val state by controller.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    if (recoveryState.items.isEmpty() && recoveryState.error == null) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(if (recoveryState.items.any { !it.record.resolved }) "Task changes need checking" else "Saved task results", Modifier.semantics { heading() })
+        Text("Task results stay here when you start a new conversation.", style = TimeboxTheme.type.bodySmall)
+        recoveryState.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        TextButton(onClick = recovery::foreground, enabled = !recoveryState.busy) { Text(if (recoveryState.busy) "Checking…" else "Check result") }
+        recoveryState.items.forEach { item ->
+            Text("${if (item.record.kind == "undo") "Completion Undo" else "Task changes"} · Submitted ${item.record.submittedAt}", style = TimeboxTheme.type.bodySmall)
+            if (!item.record.resolved) Text("Overlapping Task controls are blocked until the saved outcome is reconciled.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            var expanded by rememberSaveable(item.record.submissionId) { mutableStateOf(false) }
+            var retryReview by remember(item.record.submissionId) { mutableStateOf<TaskChangeProposal?>(null) }
+            var reviewError by remember(item.record.submissionId) { mutableStateOf<String?>(null) }
+            var dismissalResult by remember(item.record.submissionId) { mutableStateOf<TaskOperationResult?>(null) }
+            item.result?.let { result ->
+                Text(if (result.receipt == null) taskStatusLabel(result.status, result)
+                    else if (item.record.kind == "undo") "Completion undone. Tracking stayed stopped."
+                    else if (result.undo?.optionalText("status") == "applied") "Task changes applied; completion subsequently undone."
+                    else "Task changes applied.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide saved result" else "View saved result") }
+                if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null,
+                    proposal = (state.exchanges.mapNotNull { it.taskProposal } + state.refreshedTaskProposals).find { it.id == result.proposalId && it.operationId == result.operationId })
+            }
+            item.record.parentTaskIds.forEach { id -> TextButton(onClick = { onOpenTask(id) }) { Text("Open Task #$id") } }
+            if (item.record.resolved && item.result?.receipt == null && item.record.kind == "confirm") TextButton(onClick = {
+                scope.launch { try { retryReview = recovery.reviewRetry(item.record); reviewError = null } catch (_: Exception) { reviewError = "Could not load the review. Try again online." } }
+            }, enabled = !recoveryState.busy && recoveryState.online) { Text("Review retry") }
+            reviewError?.let { Text(it) }
+            dismissalResult?.let { TaskResultCard(it, onOpenTask) }
+            retryReview?.let { proposal ->
+                TaskChangeCard(proposal, TaskChangeState(proposal.status, proposal.sourceCompleted, busy = recoveryState.busy), onOpenTask,
+                    { recovery.descriptionReview(proposal, item.record.serverIdentity) }, recovery::foreground,
+                    { scope.launch { try { dismissalResult = recovery.dismissReview(proposal, item.record.serverIdentity); retryReview = null } catch (_: Exception) { reviewError = "Dismissal needs checking. Try again online." } } },
+                    { scope.launch { try { retryReview = recovery.refreshReview(proposal, item.record.serverIdentity) } catch (_: Exception) { reviewError = "Could not refresh review. Make a new request." } } },
+                    onConfirm = { recovery.confirm(proposal, item.record.serverIdentity); retryReview = null },
+                    confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes." else null)
+            }
+            if (!item.record.resolved && item.result?.submission?.optionalText("state") == "not_seen") TextButton(onClick = { recovery.retry(item.record) }, enabled = !recoveryState.busy) { Text("Retry same submission") }
+            if (item.record.resolved) TextButton(onClick = { recovery.acknowledge(item.record) }, enabled = !recoveryState.busy) { Text("Dismiss saved result") }
+        }
+    }
 }

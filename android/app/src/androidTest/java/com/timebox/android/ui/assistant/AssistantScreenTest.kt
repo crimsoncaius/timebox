@@ -26,6 +26,61 @@ import org.junit.Test
 class AssistantScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun newConversationLeavesSavedTaskResultsInReview() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val journal = com.timebox.android.data.AssistantTaskJournal(object : com.timebox.android.data.TaskJournalStorage {
+            var value: String? = null
+            override fun read() = value
+            override fun write(value: String) { this.value = value }
+        })
+        val result = Json.parseToJsonElement(InstrumentationRegistry.getInstrumentation().context.assets
+            .open("assistant-tasks.json").bufferedReader().use { it.readText() }).jsonObject.getValue("result").jsonObject
+        val api = object : AssistantTransport by Fake() {
+            override val serverIdentity = "reset-test"
+            override suspend fun taskStatuses(records: List<com.timebox.android.data.TaskSubmission>) = emptyList<TaskOperationResult>()
+            override suspend fun reviewRequest(path: String, body: JsonObject?) = buildJsonObject {
+                put("timezone", "UTC"); putJsonArray("items") {}
+            }
+        }
+        val record = com.timebox.android.data.TaskSubmission(api.serverIdentity, "previous", result.getValue("proposal_id").jsonPrimitive.content,
+            result.getValue("operation_id").jsonPrimitive.content, java.util.UUID.randomUUID().toString(),
+            affectedTaskIds = emptyList(), affectedFields = emptyList(), affectsTracking = false, submittedAt = "2026-10-20T14:09:22Z")
+        journal.persist(record)
+        journal.resolve(record, result.toString())
+        val recovery = AssistantTaskRecovery(scope, journal, { api }, {}, {}, { _, _ -> })
+        try {
+            val controller = AssistantController(scope, recovery) { api }
+            compose.setContent { TimeboxTheme { AssistantScreen(controller) } }
+            compose.runOnIdle { recovery.foreground(); controller.send("Previous conversation") }
+            compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.status == "Complete" && recovery.state.value.items.size == 1 }
+            compose.onNodeWithContentDescription("New conversation").performClick()
+            compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
+            compose.onNodeWithText("Recovered Task results").assertDoesNotExist()
+            compose.onNodeWithText("Saved task results").assertDoesNotExist()
+            compose.onNodeWithText("Task changes applied.").assertDoesNotExist()
+            compose.onNodeWithText("Review").performClick()
+            compose.onNodeWithText("View saved result").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription("New conversation").performClick()
+            compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).performTextInput("Fresh conversation")
+            compose.onNodeWithContentDescription("Send").performClick()
+            compose.waitUntil(5000) { controller.state.value.exchanges.singleOrNull()?.status == "Complete" }
+            compose.runOnIdle {
+                check(controller.state.value.exchanges.single().question == "Fresh conversation")
+                check(journal.records(api.serverIdentity).single().resolved)
+            }
+            compose.onNodeWithText("Review").performClick()
+            compose.onNodeWithText("Dismiss saved result").performScrollTo().performClick()
+            compose.waitUntil(5000) { recovery.state.value.items.isEmpty() }
+            compose.runOnIdle { journal.persist(record); recovery.foreground() }
+            compose.waitUntil(5000) { recovery.state.value.items.any { !it.record.resolved } }
+            compose.onNodeWithContentDescription("New conversation").performClick()
+            compose.onNodeWithText("Task changes need checking · Review").performClick()
+            compose.onNodeWithText("Task changes need checking").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Dismiss saved result").assertDoesNotExist()
+        } finally { scope.cancel() }
+    }
+
     @Before fun useProductionKeyboardMode() {
         // The generic test host defaults to pan, unlike MainActivity's manifest.
         compose.activityRule.scenario.onActivity { it.enableEdgeToEdge(); it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) }

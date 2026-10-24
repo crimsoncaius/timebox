@@ -103,7 +103,7 @@ fun AssistantScreen(
         jumpVisible = canJump
         if (canJump && !list.isScrollInProgress) { delay(2500); jumpVisible = false }
     }
-    fun reset() { controller.newConversation(); draft = ""; follow = true }
+    fun reset() { controller.newConversation(); draft = ""; follow = true; reviewTab = false }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -118,50 +118,14 @@ fun AssistantScreen(
             Tab(selected = reviewTab, onClick = { reviewTab = true }, text = { Text("Review") })
         }
         if (reviewTab) {
-            AssistantReviewScreen(controller, onOpenDay, Modifier.weight(1f))
+            AssistantReviewScreen(controller, onOpenDay, Modifier.weight(1f), onOpenTask)
         } else {
         HorizontalDivider(color = colors.hairline)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (recovery != null && (recoveryState.items.isNotEmpty() || recoveryState.error != null)) item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (recoveryState.items.any { !it.record.resolved }) "Task changes need checking" else "Recovered Task results", Modifier.semantics { heading() })
-                    Text("Submitted changes remain recoverable independently of this conversation.", style = TimeboxTheme.type.bodySmall)
-                    recoveryState.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-                    TextButton(onClick = recovery::foreground, enabled = !recoveryState.busy) { Text(if (recoveryState.busy) "Checking…" else "Check result") }
-                    recoveryState.items.forEach { item ->
-                        Text("${if (item.record.kind == "undo") "Completion Undo" else "Task changes"} · Submitted ${item.record.submittedAt}", style = TimeboxTheme.type.bodySmall)
-                        if (!item.record.resolved) Text("Overlapping Task controls are blocked until the saved outcome is reconciled.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                        var expanded by rememberSaveable(item.record.submissionId) { mutableStateOf(false) }
-                        var retryReview by remember(item.record.submissionId) { mutableStateOf<TaskChangeProposal?>(null) }
-                        var reviewError by remember(item.record.submissionId) { mutableStateOf<String?>(null) }
-                        var dismissalResult by remember(item.record.submissionId) { mutableStateOf<TaskOperationResult?>(null) }
-                        item.result?.let { result ->
-                            Text(if (result.receipt == null) taskStatusLabel(result.status, result)
-                                else if (item.record.kind == "undo") "Completion undone. Tracking stayed stopped."
-                                else if (result.undo?.optionalText("status") == "applied") "Task changes applied; completion subsequently undone."
-                                else "Task changes applied.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                            TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide saved result" else "View saved result") }
-                            if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null,
-                                proposal = (state.exchanges.mapNotNull { it.taskProposal } + state.refreshedTaskProposals).find { it.id == result.proposalId && it.operationId == result.operationId })
-                        }
-                        item.record.parentTaskIds.forEach { id -> TextButton(onClick = { onOpenTask(id) }) { Text("Open Task #$id") } }
-                        if (item.record.resolved && item.result?.receipt == null && item.record.kind == "confirm") TextButton(onClick = {
-                            scope.launch { try { retryReview = recovery.reviewRetry(item.record); reviewError = null } catch (_: Exception) { reviewError = "Could not load the review. Try again online." } }
-                        }, enabled = !recoveryState.busy && recoveryState.online) { Text("Review retry") }
-                        reviewError?.let { Text(it) }
-                        dismissalResult?.let { TaskResultCard(it, onOpenTask) }
-                        retryReview?.let { proposal ->
-                            TaskChangeCard(proposal, TaskChangeState(proposal.status, proposal.sourceCompleted, busy = recoveryState.busy), onOpenTask,
-                                { recovery.descriptionReview(proposal, item.record.serverIdentity) }, recovery::foreground,
-                                { scope.launch { try { dismissalResult = recovery.dismissReview(proposal, item.record.serverIdentity); retryReview = null } catch (_: Exception) { reviewError = "Dismissal needs checking. Try again online." } } },
-                                { scope.launch { try { retryReview = recovery.refreshReview(proposal, item.record.serverIdentity) } catch (_: Exception) { reviewError = "Could not refresh review. Make a new request." } } },
-                                onConfirm = { recovery.confirm(proposal, item.record.serverIdentity); retryReview = null },
-                                confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes." else null)
-                        }
-                        if (!item.record.resolved && item.result?.submission?.optionalText("state") == "not_seen") TextButton(onClick = { recovery.retry(item.record) }, enabled = !recoveryState.busy) { Text("Retry same submission") }
-                        if (item.record.resolved) TextButton(onClick = { recovery.acknowledge(item.record) }, enabled = !recoveryState.busy) { Text("Dismiss saved result") }
-                    }
+            if (recoveryState.items.any { !it.record.resolved } || recoveryState.error != null) item {
+                TextButton(onClick = { reviewTab = true }) {
+                    Text("Task changes need checking · Review", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
             itemsIndexed(state.exchanges) { index, exchange ->
