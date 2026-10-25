@@ -7,6 +7,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -55,7 +57,7 @@ class BlockSheetTest {
             }
         }
 
-        val nameTop = compose.onNodeWithText("Name").fetchSemanticsNode().boundsInRoot.top
+        val nameTop = compose.onAllNodesWithText("Name", substring = true).onFirst().fetchSemanticsNode().boundsInRoot.top
         val taskTypeTop = compose.onNodeWithText("Task type").fetchSemanticsNode().boundsInRoot.top
         assertTrue(nameTop < taskTypeTop)
         compose.onNodeWithTag("block-name-input").performTextInput("Dinner with Alex")

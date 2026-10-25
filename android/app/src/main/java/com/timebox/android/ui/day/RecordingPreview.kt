@@ -2,21 +2,22 @@ package com.timebox.android.ui.day
 
 import com.timebox.android.data.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.timebox.android.data.remote.PlannedRecordingDto
+import com.timebox.android.ui.components.RelatedCard
+import com.timebox.android.ui.components.SheetField
+import com.timebox.android.ui.components.SheetHelp
+import com.timebox.android.ui.components.SheetPrimary
+import com.timebox.android.ui.components.TimeboxSheet
+import com.timebox.android.ui.elapsedDuration
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
@@ -24,7 +25,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit, error: String? = null, plannedBlock: TimeBlock? = null) {
     if (com.timebox.android.BuildConfig.RECORDING_PROTOTYPE) {
@@ -39,80 +39,91 @@ fun RecordingPreview(preview: PlannedRecordingDto, timezone: String, busy: Boole
     val model = remember(preview, title, secondary) { recordingTimelineModel(preview, listOfNotNull(title, secondary).joinToString(" · ")) }
     val start = model.start
     val end = model.end
-    val sameDay = start.atZone(zone).toLocalDate() == end.atZone(zone).toLocalDate()
-    val clockPattern = if (start.epochSecond % 60 == 0L && end.epochSecond % 60 == 0L) "HH:mm" else "HH:mm:ss"
-    val short = DateTimeFormatter.ofPattern(if (sameDay) clockPattern else "MMM d $clockPattern").withZone(zone)
-    val exact = DateTimeFormatter.ofPattern("MMM d HH:mm:ss XXX").withZone(zone)
-    fun time(at: Instant) = exact.format(at)
+    fun time(at: Instant) = recordingClock(at, start, zone)
     var details by remember(preview.fingerprint) { mutableStateOf(false) }
     val changedDetails = preview.conflicts.filter { it.name != preview.replacement.name || it.note != preview.replacement.note }
-    ModalBottomSheet(
-        onDismissRequest = { if (!busy) onCancel() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { !busy }),
-        containerColor = colors.bg, contentColor = colors.on, scrimColor = colors.scrim, shape = TimeboxShapes.sheet,
+    val replaced = replacedRecordingMinutes(preview)
+    TimeboxSheet(
+        lane = Lane.Actual,
+        kicker = "Record from plan",
+        title = "${time(start)} – ${time(end)}",
+        subtitle = listOfNotNull(title, secondary).joinToString(" · "),
+        meta = elapsedDuration(Duration.between(start, end).toMinutes()),
+        onDismiss = onCancel,
+        busy = busy,
+        primary = when {
+            busy -> SheetPrimary.Disabled("Recording…")
+            preview.conflicts.isEmpty() -> SheetPrimary.Action("Record ${elapsedDuration(Duration.between(start, end).toMinutes())}", onConfirm)
+            else -> SheetPrimary.Action("Record and replace ${elapsedDuration(replaced)}", onConfirm)
+        },
     ) {
-        Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)
-            .padding(horizontal = 22.dp).navigationBarsPadding().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("RECORD ACTUAL", style = type.kicker, color = colors.actual)
-                Text(if (preview.conflicts.isEmpty()) "Record Actual" else "Replace overlapping time", style = type.screenTitle.copy(fontSize = 26.sp))
-                Text("${DateTimeFormatter.ofPattern("EEE, d MMM").withZone(zone).format(start)} · $timezone", style = type.bodySmall, color = colors.onVariant)
-                error?.let { Text(it, style = type.bodySmall, color = colors.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-                if (preview.stale) Text("Records changed. Review this updated preview before confirming again.", style = type.bodySmall, color = colors.error,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                Column(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.actualSurface)
-                    .border(1.dp, colors.actualBorder, TimeboxShapes.card).padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("${short.format(start)} – ${short.format(end)}", style = type.display.copy(fontSize = 26.sp))
-                    Text("${Duration.between(start, end).seconds / 60} min ${Duration.between(start, end).seconds % 60} sec", style = type.monoSmall, color = colors.onVariant)
-                    Text(title, style = type.label)
-                    secondary?.let { Text(it, style = type.bodySmall, color = colors.onVariant) }
-                    Text("From your Planned Block", style = type.bodySmall, color = colors.onVariant)
-                }
-                if (model.before.isNotEmpty()) {
-                    RecordingTimeline(model.before, model.after, model.first, model.last, start, end, false, zone)
-                    Text("Only overlapping time is replaced. Time outside this range keeps its original details.", style = type.bodySmall, color = colors.onVariant)
-                    // Exact text remains available for tiny fragments, long names, dates and DST offsets.
-                    preview.conflicts.sortedBy { it.startAt }.forEach { row ->
-                        val a = Instant.parse(row.startAt)
-                        val b = row.endAt?.let(Instant::parse)
-                        Column(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(row.primaryIdentity(), style = type.label)
-                            row.secondaryIdentity()?.let { Text(it, style = type.bodySmall, color = colors.onVariant) }
-                            Text("Replace ${time(maxOf(a, start))} – ${time(minOf(b ?: end, end))}", style = type.bodySmall, color = colors.error)
-                            if (a < start) Text("Keep ${time(a)} – ${time(start)}", style = type.bodySmall)
-                            if (b != null && b > end) Text("Keep ${time(end)} – ${time(b)}", style = type.bodySmall)
-                            if (b == null) Text("Keep tracking from ${time(end)}. Tracking stays on.", style = type.bodySmall, color = colors.actual)
-                        }
-                    }
-                } else Text("No Actual time overlaps this updated range.", style = type.bodySmall)
-                if (changedDetails.isNotEmpty()) {
-                    Column(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("Name or note will change for ${changedDetails.size} overlapping ${if (changedDetails.size == 1) "block" else "blocks"}.", style = type.bodySmall)
-                        TextButton(onClick = { details = !details }, contentPadding = PaddingValues(0.dp)) {
-                            Text(if (details) "Hide details" else "See name and note changes", style = type.bodySmall)
-                        }
-                        if (details) {
-                            changedDetails.forEach { row ->
-                                Text("Existing: ${row.identityText()}", style = type.label)
-                                Text("${time(Instant.parse(row.startAt))} – ${row.endAt?.let { time(Instant.parse(it)) } ?: "Running"}", style = type.monoSmall, color = colors.onVariant)
-                                Text(row.note ?: "No note", style = type.bodySmall)
-                            }
-                            Text("After: $title", style = type.label)
-                            Text(preview.replacement.note ?: "No note", style = type.bodySmall)
-                            Text("Kept time retains its original details.", style = type.bodySmall, color = colors.onVariant)
-                        }
-                    }
-                }
-                Text("The plan is kept. Task completion is unchanged.", style = type.bodySmall, color = colors.onVariant)
+        SheetHelp("${DateTimeFormatter.ofPattern("EEE, d MMM").withZone(zone).format(start)} · $timezone")
+        error?.let { Text(it, style = type.bodySmall, color = colors.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        if (preview.stale) Text("Records changed. Review this updated preview before confirming again.", style = type.bodySmall, color = colors.error,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (model.before.isNotEmpty()) {
+            SheetField("Before and after") {
+                RecordingTimeline(model.before, model.after, model.first, model.last, start, end, false, zone)
             }
-            HorizontalDivider(color = colors.hairline)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(onClick = onCancel, enabled = !busy) { Text("Cancel", style = type.button, color = colors.onVariant) }
-                Button(onClick = onConfirm, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = TimeboxShapes.chip,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.action, contentColor = colors.onAction)) {
-                    Text(if (busy) "Recording…" else if (preview.conflicts.isEmpty()) "Record Actual" else "Replace overlapping time", style = type.button)
+            // Exact text remains available for tiny fragments, long names, dates and DST offsets.
+            preview.conflicts.sortedBy { it.startAt }.forEach { row ->
+                val a = Instant.parse(row.startAt)
+                val b = row.endAt?.let(Instant::parse)
+                val from = maxOf(a, start)
+                val until = minOf(b ?: end, end)
+                val keeps = listOfNotNull(
+                    if (a < start) "Keeps ${time(a)} – ${time(start)}." else null,
+                    if (b != null && b > end) "Keeps ${time(end)} – ${time(b)}." else null,
+                    if (b == null) "Tracking stays on from ${time(end)}." else null,
+                )
+                val renamed = row.name != preview.replacement.name || row.note != preview.replacement.note
+                RelatedCard(
+                    lane = Lane.Actual,
+                    warn = true,
+                    caption = "Replaces recorded time",
+                    trailing = elapsedDuration(Duration.between(from, until).toMinutes().coerceAtLeast(0)),
+                    title = row.primaryIdentity(),
+                    text = (listOfNotNull(
+                        listOfNotNull(row.secondaryIdentity(), "${time(from)} – ${time(until)} becomes $title.").joinToString(" · "),
+                        if (renamed) "Its name and note change." else null,
+                    ) + keeps).joinToString(" "),
+                )
+            }
+        } else SheetHelp("No Actual time overlaps this updated range.")
+        if (changedDetails.isNotEmpty()) {
+            TextButton(onClick = { details = !details }, contentPadding = PaddingValues(0.dp)) {
+                Text(if (details) "Hide details" else "See name and note changes", style = type.bodySmall)
+            }
+            if (details) Column(Modifier.fillMaxWidth().clip(TimeboxShapes.card).background(colors.low).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                changedDetails.forEach { row ->
+                    Text("Existing: ${row.identityText()}", style = type.label)
+                    Text("${time(Instant.parse(row.startAt))} – ${row.endAt?.let { time(Instant.parse(it)) } ?: "Running"}", style = type.monoSmall, color = colors.onVariant)
+                    Text(row.note ?: "No note", style = type.bodySmall)
                 }
+                Text("After: $title", style = type.label)
+                Text(preview.replacement.note ?: "No note", style = type.bodySmall)
+                Text("Kept time retains its original details.", style = type.bodySmall, color = colors.onVariant)
             }
         }
+        SheetHelp(if (preview.conflicts.isEmpty()) "The plan is kept. Task completion is unchanged."
+            else "Only overlapping time is replaced. The plan is kept. Task completion is unchanged.")
     }
+}
+
+/** Minutes of recorded time the preview overwrites, clipped to its interval. */
+internal fun replacedRecordingMinutes(preview: PlannedRecordingDto): Long {
+    val start = Instant.parse(preview.startAt)
+    val end = Instant.parse(preview.endAt)
+    val seconds = preview.conflicts.sumOf { row ->
+        val a = maxOf(Instant.parse(row.startAt), start)
+        val b = minOf(row.endAt?.let(Instant::parse) ?: end, end)
+        Duration.between(a, b).seconds.coerceAtLeast(0)
+    }
+    return (seconds + 30) / 60
+}
+
+/** Minute precision; the date appears only when [at] falls on another day than [reference]. */
+internal fun recordingClock(at: Instant, reference: Instant, zone: ZoneId): String {
+    val sameDay = at.atZone(zone).toLocalDate() == reference.atZone(zone).toLocalDate()
+    return DateTimeFormatter.ofPattern(if (sameDay) "HH:mm" else "d MMM HH:mm").withZone(zone).format(at)
 }

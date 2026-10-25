@@ -1,9 +1,5 @@
 package com.timebox.android.ui.day
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -11,9 +7,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import com.timebox.android.data.TaskType
-import com.timebox.android.ui.theme.TimeboxShapes
+import com.timebox.android.ui.components.SheetField
+import com.timebox.android.ui.components.SheetTextField
 import com.timebox.android.ui.theme.TimeboxTheme
 
 /** The choice shared by starting and switching: an optional Block Name and a required Task Type. */
@@ -30,16 +27,13 @@ internal fun ActivitySelectionFields(
     onTypeQueryChange: () -> Unit = {},
 ) {
     val type = TimeboxTheme.type
-    val colors = TimeboxTheme.colors
     var typeQuery by remember { mutableStateOf(selectedType?.name.orEmpty()) }
-    OutlinedTextField(
+    SheetTextField(
         value = name, onValueChange = { if (it.length <= 500) onNameChange(it) },
-        label = { Text("Block Name (optional)", style = type.bodySmall) },
-        modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field,
-        textStyle = type.body, singleLine = true, enabled = !busy,
+        label = "Name", optional = true, placeholder = "Add a name", enabled = !busy,
+        fieldModifier = Modifier.testTag("activity-name-input"),
     )
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Task Type", style = type.label, color = colors.onVariant)
+    SheetField("Task type") {
         TaskTypePicker(
             initiallyCollapsed = selectedType != null,
             recommendationName = name, recommendationEnabled = !busy,

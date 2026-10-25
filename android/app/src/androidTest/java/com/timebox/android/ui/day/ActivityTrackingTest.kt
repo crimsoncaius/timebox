@@ -87,9 +87,9 @@ class ActivityTrackingTest {
         compose.onNodeWithText("What are you doing?").assertDoesNotExist()
         compose.onNodeWithText("Choose activity").assertDoesNotExist()
         compose.onNodeWithText("Switch activity").performClick()
-        compose.onNodeWithText("Block Name (optional)").assertIsDisplayed()
+        compose.onNodeWithTag("activity-name-input").assertIsDisplayed()
         androidx.test.espresso.Espresso.pressBack()
-        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
+        compose.onNodeWithTag("activity-name-input").assertDoesNotExist()
         assertEquals(7, repository.state.value.snapshot!!.current!!.id)
     }
 
@@ -105,15 +105,15 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithContentDescription("Start tracking").performClick()
         compose.onNodeWithText("When did this change happen?").assertDoesNotExist()
-        compose.onNode(hasText("Start") and hasClickAction()).assertIsNotEnabled()
+        compose.onNode(hasText("Choose a type to start") and hasClickAction()).assertIsNotEnabled()
         compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
+        compose.onNodeWithTag("activity-name-input").assertDoesNotExist()
         assertNull(repository.state.value.snapshot!!.current)
         assertTrue(commands.isEmpty())
         compose.onNodeWithContentDescription("Start tracking").performClick()
         chooseTaskType("read", "Reading")
-        compose.onNodeWithText("Block Name (optional)").performTextInput("Paper")
-        compose.onNode(hasText("Start") and hasClickAction()).performClick()
+        compose.onNodeWithTag("activity-name-input").performTextInput("Paper")
+        compose.onNode(hasText("Start now") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
         assertEquals(2, repository.state.value.snapshot!!.current!!.taskTypeId)
         assertEquals("Paper", repository.state.value.snapshot!!.current!!.name)
@@ -125,7 +125,8 @@ class ActivityTrackingTest {
     /** Picks a type in the Switch sheet's picker; a partial query keeps the typed text from matching the row. */
     private fun chooseTaskType(query: String, name: String) {
         compose.onAllNodes(hasSetTextAction()).onLast().performScrollTo().performTextInput(query)
-        compose.onNodeWithText(name, useUnmergedTree = true).performScrollTo().performClick()
+        // The running activity behind the sheet can carry the same type name; the picker row comes last.
+        compose.onAllNodesWithText(name, useUnmergedTree = true).onLast().performScrollTo().performClick()
     }
 
     @Test fun newerRemoteChangeShowsCanonicalActivityAndTransientFeedback() {
@@ -152,7 +153,7 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithContentDescription("Start tracking").performClick()
         chooseTaskType("read", "Reading")
-        compose.onNode(hasText("Start") and hasClickAction()).performClick()
+        compose.onNode(hasText("Start now") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.feedback != null }
         compose.onNodeWithText("Reading").assertIsDisplayed()
         compose.onNodeWithText("A newer change on another device updated this time.").assertIsDisplayed()
@@ -193,7 +194,7 @@ class ActivityTrackingTest {
         compose.onNodeWithText("Chapter").assertIsDisplayed()
         compose.onNodeWithText("Switch").performClick()
         chooseTaskType("writ", "Writing")
-        compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
+        compose.onNode(hasText("Switch now") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
         compose.onNodeWithText("Chapter planned at", substring = true).assertIsDisplayed().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
@@ -253,17 +254,17 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithContentDescription("Start tracking").performClick()
         chooseTaskType("unspec", "unspecified")
-        compose.onNode(hasText("Start") and hasClickAction()).performClick()
+        compose.onNode(hasText("Start now") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
         compose.onNodeWithText("Unnamed activity").assertIsDisplayed()
         compose.onNodeWithText("Switch").performClick()
-        compose.onNode(hasText("Switch activity") and hasClickAction()).assertIsNotEnabled()
+        compose.onNode(hasText("Choose a type to switch") and hasClickAction()).assertIsNotEnabled()
         chooseTaskType("read", "reading")
-        compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
+        compose.onNode(hasText("Switch now") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
         compose.onNodeWithText("Stop").performClick()
-        compose.onNodeWithText("Unrecorded after ", substring = true).assertExists()
-        compose.onNode(hasText("Stop tracking") and hasClickAction()).assertIsDisplayed().performClick()
+        compose.onNodeWithTag("stop-after-now", useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("Stop at", substring = true) and hasClickAction()).assertIsDisplayed().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
         compose.onNodeWithContentDescription("Start tracking").assertIsDisplayed()
         assertEquals(listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop), commands.map { it.kind })
@@ -299,7 +300,7 @@ class ActivityTrackingTest {
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         compose.onNodeWithText("Switch").performClick()
         chooseTaskType("read", "reading")
-        compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
+        compose.onNode(hasText("Switch now") and hasClickAction()).performClick()
         // The local projection moves to the next activity while the server round trip is pending.
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
         compose.onNodeWithText("Unset").assertDoesNotExist()

@@ -178,4 +178,31 @@ class TaskTypePathsTest {
     fun `a top level path has nothing to explain`() {
         assertNull(createAncestorHint(types, "errands"))
     }
+
+    // ---- enter -------------------------------------------------------------
+
+    @Test
+    fun `enter picks the top existing match over creating the typed path`() {
+        assertEquals(TaskTypeSubmit.Choose(types[3]), taskTypeSubmit(types, "coding/ai/ev"))
+    }
+
+    @Test
+    fun `enter picks an exact match`() {
+        assertEquals(TaskTypeSubmit.Choose(types[1]), taskTypeSubmit(types, "Coding/AI"))
+    }
+
+    @Test
+    fun `enter creates only when nothing matches`() {
+        assertEquals(TaskTypeSubmit.Create("gardening/roses"), taskTypeSubmit(types, "Gardening/Roses"))
+    }
+
+    @Test
+    fun `enter creates a new child instead of choosing its parent`() {
+        assertEquals(TaskTypeSubmit.Create("coding/ai/tooling"), taskTypeSubmit(types, "coding/ai/tooling"))
+    }
+
+    @Test
+    fun `enter on an empty query does nothing`() {
+        assertEquals(TaskTypeSubmit.None, taskTypeSubmit(types, "  "))
+    }
 }

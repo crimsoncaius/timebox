@@ -142,6 +142,27 @@ private fun pathMatchScore(path: String, query: String): Int {
     return 4
 }
 
+/** What Enter commits in the picker. */
+sealed interface TaskTypeSubmit {
+    data class Choose(val type: TaskType) : TaskTypeSubmit
+    data class Create(val path: String) : TaskTypeSubmit
+    data object None : TaskTypeSubmit
+}
+
+/**
+ * Enter picks the top existing path match; it creates the typed path only when nothing
+ * matches, so a half-typed path never spawns a near-duplicate of a type that exists.
+ * Ancestors the query extends are not matches: typing `coding/ai/tooling` creates it
+ * rather than choosing `coding/ai`.
+ */
+fun taskTypeSubmit(taskTypes: List<TaskType>, query: String, currentTypeId: Int? = null): TaskTypeSubmit {
+    val canonical = canonicalizeTaskTypePath(query) ?: return TaskTypeSubmit.None
+    rankTaskTypes(taskTypes, query, currentTypeId)
+        .firstOrNull { !canonical.startsWith("${canonicalName(it.name)}/") }
+        ?.let { return TaskTypeSubmit.Choose(it) }
+    return if (shouldOfferCreate(taskTypes, query)) TaskTypeSubmit.Create(canonical) else TaskTypeSubmit.None
+}
+
 /** True when the query names a path that does not exist yet, so creating is on offer. */
 fun shouldOfferCreate(taskTypes: List<TaskType>, query: String): Boolean {
     val canonical = canonicalizeTaskTypePath(query) ?: return false

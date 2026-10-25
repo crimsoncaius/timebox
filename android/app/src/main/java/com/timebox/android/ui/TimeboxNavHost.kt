@@ -161,6 +161,8 @@ private fun NavGraphBuilder.dayRoute(dependencies: TimeboxNavigationDependencies
                     onNameChange = dayViewModel::onNameChange,
                     onNoteChange = dayViewModel::onNoteChange,
                     onCreateDraft = dayViewModel::createTasklessPlannedDraft,
+                    onPlannedTimesInput = dayViewModel::onTimesInput,
+                    onSavePlanned = dayViewModel::saveSelected,
                     onDeleteSelected = dayViewModel::deleteSelected,
                     onRecordPlanned = dayViewModel::recordPlanned,
                     onCancelRecording = dayViewModel::cancelRecordingPreview,

@@ -8,11 +8,10 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.toModel
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.timebox.android.TimeboxApplication
@@ -21,8 +20,18 @@ import com.timebox.android.data.remote.ActivityKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.style.TextOverflow
+import com.timebox.android.data.Lane
+import com.timebox.android.ui.components.CardLink
+import com.timebox.android.ui.components.LinkedTaskRow
+import com.timebox.android.ui.components.RelatedCard
+import com.timebox.android.ui.components.SheetDeleteRow
+import com.timebox.android.ui.components.SheetField
+import com.timebox.android.ui.components.SheetPrimary
+import com.timebox.android.ui.components.SheetSecondary
+import com.timebox.android.ui.components.SheetTextField
+import com.timebox.android.ui.components.TimeboxDialog
+import com.timebox.android.ui.components.TimeboxSheet
+import com.timebox.android.ui.hhmm
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
@@ -30,7 +39,6 @@ import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 
 /** Actual-specific fields in the existing Day block sheet. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                          repository: ActivityRepository = (LocalContext.current.applicationContext as TimeboxApplication).activityRepository,
@@ -103,114 +111,105 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
             }
         }
     }
-    ModalBottomSheet(
-        onDismissRequest = { if (!saving) onDismiss() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.bg,
-        contentColor = colors.on,
-        shape = TimeboxShapes.sheet,
+    if (actual == null) {
+        LogTimeForm(
+            start = start, end = end, zone = zone, taskTypes = taskTypes, selectedTypeId = type,
+            query = typeQuery, name = name, note = note, saving = saving, error = error,
+            onStart = { start = it }, onEnd = { end = it },
+            onQuery = { if (!saving) typeQuery = it },
+            onChooseType = { if (!saving) { type = it.id; typeQuery = it.name } },
+            onCreateType = createType, onName = { name = it.take(500) }, onNote = { note = it },
+            onSave = save, onDismiss = onDismiss,
+        )
+        return
+    }
+    if (actual.endAt == null) {
+        TimeboxSheet(
+            lane = Lane.Actual, kicker = "Actual block", title = "Current Activity",
+            onDismiss = onDismiss, secondary = SheetSecondary.Cancel,
+            primary = SheetPrimary.Disabled("Use Switch or Stop"),
+        ) { HelperText("Use Switch or Stop above the Day timeline to correct the Current Activity.") }
+        return
+    }
+    val startAt = parseActivityInstant(actual.startAt)
+    val endAt = parseActivityInstant(actual.endAt)
+    val localStart = startAt.atZone(zone)
+    val localEnd = endAt.atZone(zone)
+    val clock = DateTimeFormatter.ofPattern("HH:mm")
+    val dateTime = DateTimeFormatter.ofPattern("d MMM HH:mm")
+    val format = if (localStart.toLocalDate() == localEnd.toLocalDate()) clock else dateTime
+    val range = "${format.format(localStart)} – ${format.format(localEnd)}"
+    val changed = runCatching { start.resolve(zone) != startAt || end.resolve(zone) != endAt }.getOrDefault(true) ||
+        name.trim() != actual.name.orEmpty() || note != actual.note.orEmpty() || type != actual.taskTypeId
+    TimeboxSheet(
+        lane = Lane.Actual,
+        kicker = "Actual block",
+        title = range,
+        meta = elapsedDuration(Duration.between(startAt, endAt).toMinutes()),
+        onDismiss = onDismiss,
+        busy = saving,
+        primary = when {
+            saving -> SheetPrimary.Disabled("Saving…")
+            !changed -> SheetPrimary.Disabled("No changes")
+            else -> SheetPrimary.Action("Save changes", save)
+        },
     ) {
-        if (actual != null && actual.endAt != null) {
-            val startAt = parseActivityInstant(actual.startAt)
-            val endAt = parseActivityInstant(actual.endAt)
-            val localStart = startAt.atZone(zone)
-            val localEnd = endAt.atZone(zone)
-            val clock = DateTimeFormatter.ofPattern("HH:mm")
-            val dateTime = DateTimeFormatter.ofPattern("d MMM HH:mm")
-            val format = if (localStart.toLocalDate() == localEnd.toLocalDate()) clock else dateTime
-            Column(Modifier.fillMaxWidth().heightIn(max = 760.dp).imePadding()) {
-                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = colors.actualSurface, shape = TimeboxShapes.chip) {
-                            Text("●  ACTUAL BLOCK", Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                style = TimeboxTheme.type.laneLabel, color = colors.actual)
-                        }
-                        TextButton(enabled = !saving, onClick = onDismiss) { Text("Close") }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
-                        Text("${format.format(localStart)} – ${format.format(localEnd)}", Modifier.weight(1f),
-                            style = TimeboxTheme.type.display)
-                        Text(elapsedDuration(Duration.between(startAt, endAt).toMinutes()), style = TimeboxTheme.type.label, color = colors.actual)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.weight(1f)) { ActivityTimeField("Start", start, zone, compact = true, enabled = !saving, onChange = { start = it }) }
-                        Box(Modifier.weight(1f)) { ActivityTimeField("End", end, zone, compact = true, enabled = !saving, onChange = { end = it }) }
-                    }
-                    val plan = actual.plannedBlockId?.let { planId ->
-                        state.day?.blocks?.firstOrNull { it.lane == com.timebox.android.data.Lane.Planned && it.id == planId }
-                    }
-                    plan?.let {
-                        val startMinute = localStart.hour * 60 + localStart.minute
-                        val endMinute = localEnd.hour * 60 + localEnd.minute
-                        val timesMatch = startMinute == it.startMinute && endMinute == it.endMinute
-                        ActualPlanLink(
-                            it,
-                            caption = if (timesMatch) "From this plan · already recorded" else "From this plan · times differ",
-                            onOpen = { onOpenPlanned(it.id) },
-                        )
-                    }
-                    OutlinedTextField(name, { name = it.take(500) }, enabled = !saving,
-                        label = { Text("Block Name (optional)") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)
-                    Column {
-                        Text("TASK TYPE", style = TimeboxTheme.type.kicker, color = colors.onVariant)
-                        Spacer(Modifier.height(8.dp))
-                        TaskTypePicker(
-                            recommendationName = name, recommendationLinkedTaskName = actual.task?.title, recommendationEnabled = !saving && actual.plannedBlockId == null,
-                            taskTypes = taskTypes,
-                            query = typeQuery,
-                            onQueryChange = { if (!saving) typeQuery = it },
-                            selectedTypeId = type,
-                            onChoose = { if (!saving) { type = it.id; typeQuery = it.name } },
-                            onCreate = createType,
-                        )
-                    }
-                    OutlinedTextField(note, { note = it }, enabled = !saving, label = { Text("Note (optional)") },
-                        modifier = Modifier.fillMaxWidth(), minLines = 2, shape = TimeboxShapes.field, textStyle = TimeboxTheme.type.body)
-                    actual.task?.let { task ->
-                        Surface(shape = TimeboxShapes.group, color = colors.low, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("LINKED BATTLE PLAN TASK", style = TimeboxTheme.type.kicker, color = colors.onVariant)
-                                Text(task.title + if (task.status == "completed") "  ✓" else "", style = TimeboxTheme.type.label)
-                                Text(if (task.status == "completed") "Completed · Recording time does not change Task Completion."
-                                    else "Recording time does not change Task Completion.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                            }
-                        }
-                    }
-                    error?.let { Text(it, color = colors.error, style = TimeboxTheme.type.bodySmall) }
-                    TextButton(enabled = !saving, onClick = { deleting = true }) { Text("Delete", color = colors.error) }
-                }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(enabled = !saving, onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel") }
-                    Button(enabled = !saving, onClick = save, modifier = Modifier.weight(1f)) { Text(if (saving) "Saving…" else "Save changes") }
-                }
-            }
-        } else if (actual == null) {
-            LogTimeForm(
-                start = start, end = end, zone = zone, taskTypes = taskTypes, selectedTypeId = type,
-                query = typeQuery, name = name, note = note, saving = saving, error = error,
-                onStart = { start = it }, onEnd = { end = it },
-                onQuery = { if (!saving) typeQuery = it },
-                onChooseType = { if (!saving) { type = it.id; typeQuery = it.name } },
-                onCreateType = createType, onName = { name = it.take(500) }, onNote = { note = it },
-                onSave = save, onDismiss = onDismiss,
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.weight(1f)) { ActivityTimeField("Start", start, zone, compact = true, enabled = !saving, onChange = { start = it }) }
+            Box(Modifier.weight(1f)) { ActivityTimeField("End", end, zone, compact = true, enabled = !saving, onChange = { end = it }) }
+        }
+        val plan = actual.plannedBlockId?.let { planId ->
+            state.day?.blocks?.firstOrNull { it.lane == Lane.Planned && it.id == planId }
+        }
+        plan?.let {
+            val startMinute = localStart.hour * 60 + localStart.minute
+            val endMinute = localEnd.hour * 60 + localEnd.minute
+            val timesMatch = startMinute == it.startMinute && endMinute == it.endMinute
+            RelatedCard(
+                lane = Lane.Planned,
+                caption = if (timesMatch) "From this plan · already recorded" else "From this plan · times differ",
+                trailing = elapsedDuration(it.durationMinutes.toLong()),
+                title = "${hhmm(it.startMinute)} – ${hhmm(it.endMinute)}",
+            ) { CardLink("Open planned block", Lane.Planned, { onOpenPlanned(it.id) }) }
+        }
+        SheetTextField(name, { name = it.take(500) }, "Name", optional = true, placeholder = "Add a name", enabled = !saving, fieldModifier = Modifier.testTag("actual-name-input"))
+        SheetField("Task type") {
+            TaskTypePicker(
+                recommendationName = name, recommendationLinkedTaskName = actual.task?.title, recommendationEnabled = !saving && actual.plannedBlockId == null,
+                taskTypes = taskTypes,
+                query = typeQuery,
+                onQueryChange = { if (!saving) typeQuery = it },
+                selectedTypeId = type,
+                onChoose = { if (!saving) { type = it.id; typeQuery = it.name } },
+                onCreate = createType,
             )
-        } else {
-            Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Current Activity", style = TimeboxTheme.type.screenTitle)
-                HelperText("Use Switch or Stop above the Day timeline to correct the Current Activity.")
-                TextButton(onClick = onDismiss) { Text("Close") }
+        }
+        SheetTextField(note, { note = it }, "Note", optional = true, placeholder = "Add a note", enabled = !saving, singleLine = false, minLines = 2)
+        actual.task?.let { task ->
+            SheetField("Battle Plan task") {
+                LinkedTaskRow(task.title + if (task.status == "completed") "  ✓" else "",
+                    if (task.status == "completed") "Completed · Recording time does not change Task Completion."
+                    else "Recording time does not change Task Completion.",
+                    onOpen = { onOpenLinkedTask(task.id) }, lane = Lane.Actual, enabled = !saving)
             }
         }
+        error?.let { Text(it, color = colors.error, style = TimeboxTheme.type.bodySmall) }
+        SheetDeleteRow(onClick = { deleting = true }, enabled = !saving)
     }
 
-    if (deleting) AlertDialog(onDismissRequest = { if (!saving) deleting = false }, title = { Text("Delete Actual Block?") }, text = { Text("This time will be unrecorded. Adjacent activities stay unchanged.") },
-        dismissButton = { TextButton(enabled = !saving, onClick = { deleting = false }) { Text("Cancel") } }, confirmButton = {
-            TextButton(enabled = !saving, onClick = { scope.launch {
+    if (deleting) TimeboxDialog(
+        lane = Lane.Actual,
+        kicker = "Actual block",
+        title = "Delete actual block $range?",
+        body = "This time will be unrecorded. Adjacent activities stay unchanged.",
+        onDismiss = { deleting = false },
+        destructive = true,
+        busy = saving,
+        primary = SheetPrimary.Action("Delete block") {
+            scope.launch {
                 saving = true
                 try {
-                    if (withContext(Dispatchers.IO) { repository.correct(ActivityKind.Delete, actual!!.id) }) onDismiss()
+                    if (withContext(Dispatchers.IO) { repository.correct(ActivityKind.Delete, actual.id) }) onDismiss()
                     else error = repository.state.value.error
                 } catch (cause: kotlinx.coroutines.CancellationException) {
                     throw cause
@@ -220,6 +219,7 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
                     saving = false
                     deleting = false
                 }
-            } }) { Text("Delete") }
-        })
+            }
+        },
+    )
 }
