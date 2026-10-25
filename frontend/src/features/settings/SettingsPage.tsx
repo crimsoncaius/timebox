@@ -3,6 +3,7 @@ import { FocusWakeSettings } from '../activity/FocusMode'
 import { ReportingTimezoneSettings } from '../activity/ReportingTimezoneSettings'
 import { Layout } from '../../components/Layout'
 import { SettingsSection } from '../../components/SettingsControls'
+import { ApiKeySetting, GoogleCalendar } from '../calendar/GoogleCalendar'
 
 export function SettingsPage() {
   return (
@@ -17,6 +18,7 @@ export function SettingsPage() {
       </section>
 
       <div className="max-w-3xl space-y-6">
+        <SettingsSection id="settings-google" title="Google Calendar" scope="shared"><GoogleCalendar /></SettingsSection>
         <SettingsSection
           id="settings-day"
           title="Day & time"
@@ -34,6 +36,7 @@ export function SettingsPage() {
         <SettingsSection id="settings-notifications" title="Notifications" scope="device">
           <BrowserNotificationSettings />
         </SettingsSection>
+        <SettingsSection id="settings-connection" title="Connection" scope="device"><ApiKeySetting /></SettingsSection>
       </div>
     </Layout>
   )

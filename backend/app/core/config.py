@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # When set, every /days, /settings and /task-types request must send a matching
     # X-API-Key header. Unset (the default) leaves the API open, as it was before.
     api_key: str | None = None
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str | None = None
+    google_token_key: str | None = None
     # Opt in only on an isolated development database. Never a production cutover.
     activity_tracking_dev: bool = False
     openrouter_api_key: str | None = None

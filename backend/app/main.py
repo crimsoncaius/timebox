@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +18,7 @@ from app.api.routes import (
     assistant,
     battle_plan,
     days,
+    google_calendar,
     habits,
     recurring,
     task_type_recommendations,
@@ -44,9 +46,13 @@ async def lifespan(app: FastAPI):
     repair_sqlite_actual_record_operation_references(get_engine())
     recover_interrupted()
     tracing = setup_tracing()
+    calendar_poller = asyncio.create_task(google_calendar.poll())
     try:
         yield
     finally:
+        calendar_poller.cancel()
+        with suppress(asyncio.CancelledError):
+            await calendar_poller
         if tracing:
             tracing.shutdown()
 
@@ -76,6 +82,7 @@ app.add_middleware(
 _protected = [Depends(require_api_key), Depends(guard_legacy_actual_writes)]
 
 app.include_router(days.router, dependencies=_protected)
+app.include_router(google_calendar.router)
 app.include_router(task_types.router, dependencies=_protected)
 app.include_router(task_type_recommendations.router, dependencies=[Depends(require_api_key)])
 app.include_router(battle_plan.router, dependencies=_protected)

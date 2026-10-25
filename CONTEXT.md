@@ -228,6 +228,18 @@ _Avoid_: Planned timebox, Task, appointment
 A record of time that occurred. It may link to a Planned Block or stand alone and is authoritative for actual time.
 _Avoid_: Actual session, work session, completed block
 
+**Google-linked Planned Block**:
+A Planned Block imported from a Google Calendar event, whose name and scheduled interval are owned by Google while its Task Type, Supporting Note, and optional Battle Plan Task linkage belong to Timebox. It represents a commitment, not evidence of attendance.
+_Avoid_: External-events lane, synced Task
+
+**Calendar Import Conflict**:
+An incoming Google event or schedule change that cannot become a Planned Block because its requested interval overlaps another Planned Block. A conflicting move replaces the old linked block with a pending notice showing the previous and requested times.
+_Avoid_: Overlapping Planned Block, stale appointment
+
+**Excluded Calendar Occurrence**:
+A Google event occurrence explicitly left out of the Timebox plan until its scheduled interval changes. The exclusion applies to that occurrence, not its entire recurring series.
+_Avoid_: Declined invitation, excluded series
+
 **Untracked Gap**:
 A stretch of at least 15 minutes on a Day with no Actual Block, lying after that Day's first Actual Block and before either the latest Actual Block's end or, on Today, the current instant. It is an invitation to record time, not recorded time; time before the Day's first Actual Block and time on future dates is never an Untracked Gap.
 _Avoid_: Empty slot, missing time, idle time

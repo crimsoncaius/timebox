@@ -108,6 +108,10 @@ fun SettingsScreen(
             )
         }
 
+        SettingsGroup(title = "Calendar integration", scope = "All devices") {
+            com.timebox.android.ui.calendar.GoogleCalendarPanel()
+        }
+
         SettingsGroup(title = "Focus & check-ins", scope = "This device") {
             FocusWakeSettingRow()
             CheckInSettingRows()

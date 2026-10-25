@@ -23,7 +23,7 @@ export function TimeBlockCard({
   visibleEndMin,
   slotHeightPx,
   readOnly,
-  timeEditingDisabled = false,
+  timeEditingDisabled: suppliedTimeEditingDisabled = false,
   sameLaneBlocks,
   resizeMinStartMinute,
   resizeMaxEndMinute,
@@ -64,6 +64,7 @@ export function TimeBlockCard({
   /** Whole-record length of an Actual Block, which may extend beyond this Day. */
   recordDurationMinutes?: number
 }) {
+  const timeEditingDisabled = suppliedTimeEditingDisabled || !!block.google_calendar
   const [drag, setDrag] = useState<DragState | null>(null)
   const [pendingLayout, setPendingLayout] = useState<{
     start: number

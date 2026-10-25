@@ -26,8 +26,12 @@ data class LinkedTaskDto(
 )
 
 @Serializable
+data class GoogleBlockDto(val id: String, val url: String? = null, @SerialName("calendar_id") val calendarId: String? = null, val frozen: Boolean = false)
+
+@Serializable
 data class TimeBlockDto(
     val id: Int,
+    @SerialName("google_calendar") val googleCalendar: GoogleBlockDto? = null,
     val lane: String,
     @SerialName("task_type_id") val taskTypeId: Int,
     @SerialName("task_type") val taskType: TaskTypeDto,

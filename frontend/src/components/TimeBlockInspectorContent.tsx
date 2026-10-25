@@ -84,7 +84,7 @@ function LegacyTimeBlockInspectorContent({
 
   const isCreateMode = draft != null && block == null
   const lane = block?.lane ?? draft?.lane
-  const isNameEditable = lane === 'planned' || lane === 'actual'
+  const isNameEditable = !block?.google_calendar && (lane === 'planned' || lane === 'actual')
   const noteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftCreateAttemptedRef = useRef(false)
@@ -345,7 +345,7 @@ function LegacyTimeBlockInspectorContent({
       </p>
 
       {block?.start_at && block.end_at && <p className="text-sm">{new Date(block.start_at).toLocaleString(undefined, { timeZone: day.meta.timezone })} – {new Date(block.end_at).toLocaleString(undefined, { timeZone: day.meta.timezone })}</p>}
-      {block && <BlockTimeFields key={`${block.lane}-${block.id}-${block.start_minute}-${block.end_minute}`} block={block} onSave={onSave} />}
+      {block?.google_calendar ? <p className="text-sm">Google Calendar · {block.google_calendar.calendar_id} {block.google_calendar.url && <a className="underline" href={block.google_calendar.url} target="_blank" rel="noreferrer">Open source event</a>}</p> : block && <BlockTimeFields key={`${block.lane}-${block.id}-${block.start_minute}-${block.end_minute}`} block={block} onSave={onSave} />}
 
       {/* Helper text */}
       <p className="max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">
@@ -353,7 +353,7 @@ function LegacyTimeBlockInspectorContent({
           ? isNameEditable
             ? 'Add a Name, choose a Task Type if useful, then create the block.'
             : 'Pick a Task Type to create this block. Edits save as you make them.'
-          : 'Drag the block edges on the timeline to adjust. Edits save as you make them.'}
+          : block?.google_calendar ? 'Name and time follow Google. Local classification and notes save here.' : 'Drag the block edges on the timeline to adjust. Edits save as you make them.'}
       </p>
 
       {(block?.task ?? (draft?.task_id ? { id: draft.task_id, title: 'Selected Battle Plan task' } : null)) ? (
@@ -435,9 +435,9 @@ function LegacyTimeBlockInspectorContent({
           <button
             type="button"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-error transition-colors hover:bg-error-container/15"
-            aria-label="Delete"
-            title="Delete"
-            onClick={() => void handleDelete()}
+            aria-label={block?.google_calendar && !block.google_calendar.frozen ? 'Leave this meeting out' : 'Delete'}
+            title={block?.google_calendar && !block.google_calendar.frozen ? 'Leave this meeting out' : 'Delete'}
+            onClick={() => { if (!block?.google_calendar || block.google_calendar.frozen || window.confirm('Leave this meeting out of your plan? The Google event stays unchanged.')) void handleDelete() }}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
               delete

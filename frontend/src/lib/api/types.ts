@@ -134,6 +134,7 @@ export type BattleTaskWrite = {
 }
 
 export interface TimeBlock {
+  google_calendar?: { id: string; url: string | null; calendar_id: string | null; frozen: boolean } | null
   start_position?: number | null
   end_position?: number | null
   duration_minutes?: number | null

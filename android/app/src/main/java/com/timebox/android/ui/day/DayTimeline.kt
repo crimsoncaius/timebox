@@ -407,7 +407,7 @@ private fun LaneColumn(
             }
         }
         day.lane(lane).forEach { block ->
-            val timeEditable = blockGesturesEnabled && !isLiveActualBlock(block, day)
+            val timeEditable = blockGesturesEnabled && !isLiveActualBlock(block, day) && block.googleCalendar == null
             val live = if (drag != null && drag.id == block.id) drag else null
             val start = live?.startMinute ?: block.startMinute
             val running = isLiveActualBlock(block, day)

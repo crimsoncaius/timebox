@@ -122,6 +122,17 @@ class TimeBlock(Base):
     )
 
     @property
+    def google_calendar(self) -> dict | None:
+        from sqlalchemy.orm import object_session
+        from app.services.google_calendar import linked
+        db = object_session(self)
+        row = linked(db, self.id) if db is not None and self.lane == BlockLane.planned else None
+        if row is None:
+            return None
+        return {"id": row.id, "url": row.data.get("url"), "calendar_id": row.data.get("calendar_id"),
+                "frozen": bool(row.data.get("frozen"))}
+
+    @property
     def actual_block_id(self) -> int | None:
         """The explicit corresponding Actual Block, never an inferred match."""
 

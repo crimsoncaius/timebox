@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
-import { fetchJson, fetchVoid } from '../../lib/api/client'
+import { fetchJson, fetchVoid, protocolHeaders } from '../../lib/api/client'
 import './assistant.css'
 import { getActivityRepository } from '../activity/activityRepository'
 
@@ -50,7 +50,7 @@ function Conversation({ onReview }: { onReview: () => void }) {
       if (previous.current) { await fetchVoid(`/assistant/conversations/${conversation.current}/runs/${previous.current}/ack`, post({})); previous.current = null }
       const controller = new AbortController(); abort.current = controller
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/assistant/conversations/${conversation.current}/messages`, {
-        ...post({ run_id: run, message: question, tracking_mode: 'review_later' }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(135000)]), headers: { 'Content-Type': 'application/json', 'X-Timebox-Protocol': 'activity-online-v1' },
+        ...post({ run_id: run, message: question, tracking_mode: 'review_later' }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(135000)]), headers: { 'Content-Type': 'application/json', ...protocolHeaders() },
       })
       if (!response.ok) { const error = await response.json(); throw new Error(typeof error.detail === 'string' ? error.detail : 'Could not start Assistant.') }
       const reader = response.body!.getReader(), decoder = new TextDecoder()

@@ -180,6 +180,7 @@ fun DayScreen(
             )
 
             if (trackingVisible) Spacer(Modifier.height(8.dp))
+            com.timebox.android.ui.calendar.GoogleCalendarPanel(date = state.date.toString(), onChanged = { onRetry(state.date) })
             ActivityTracking(controlsVisible = trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
             // The same rule as under the week strip separates tracking from the lanes.
             if (trackingVisible) {

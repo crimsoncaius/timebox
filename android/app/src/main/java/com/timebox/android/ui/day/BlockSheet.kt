@@ -102,9 +102,14 @@ fun BlockSheet(
         },
     ) {
         if (block != null) {
-            PlannedTimeFields(state.sheetStart, state.sheetEnd, enabled = !state.saving) { start, end -> onChangeTimes(block.id, start, end) }
+            PlannedTimeFields(state.sheetStart, state.sheetEnd, enabled = !state.saving && block.googleCalendar == null) { start, end -> onChangeTimes(block.id, start, end) }
             timesError?.let { SheetHelp(it, color = colors.error) }
-            SheetHelp("Drag the block on the timeline to move it, or pull its grooves to resize.")
+            if (block.googleCalendar == null) SheetHelp("Drag the block on the timeline to move it, or pull its grooves to resize.")
+            else {
+                SheetHelp("Name and time follow Google Calendar. Local classification and notes save here.")
+                val context = LocalContext.current
+                block.googleCalendar.url?.let { url -> androidx.compose.material3.TextButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }) { Text("Open source event") } }
+            }
             val now = produceState(Instant.now()) {
                 while (true) { kotlinx.coroutines.delay(1000); value = Instant.now() }
             }.value
@@ -124,7 +129,8 @@ fun BlockSheet(
                 }
             }
         }
-        SheetTextField(
+        if (block?.googleCalendar != null) Text(block.name ?: "Busy", style = TimeboxTheme.type.sectionTitle)
+        else SheetTextField(
             state.nameInput, onNameChange, "Name", optional = true, placeholder = "Add a name",
             fieldModifier = Modifier.testTag("block-name-input"),
         )
@@ -164,17 +170,18 @@ fun BlockSheet(
                 )
             }
         }
-        if (block != null) SheetDeleteRow(onClick = { deleting = true }, enabled = !state.saving)
+        if (block?.googleCalendar != null && !block.googleCalendar.frozen) androidx.compose.material3.TextButton(onClick = { deleting = true }, enabled = !state.saving) { Text("Leave this meeting out") }
+        else if (block != null) SheetDeleteRow(onClick = { deleting = true }, enabled = !state.saving)
     }
 
     if (deleting && block != null) TimeboxDialog(
         lane = Lane.Planned,
         kicker = "Planned block",
-        title = "Delete planned block ${hhmm(block.startMinute)} – ${hhmm(block.endMinute)}?",
-        body = "The plan is removed. Recorded time is unchanged.",
+        title = if (block.googleCalendar != null && !block.googleCalendar.frozen) "Leave this meeting out?" else "Delete planned block ${hhmm(block.startMinute)} – ${hhmm(block.endMinute)}?",
+        body = if (block.googleCalendar != null) "The Timebox plan is removed. The Google event and recorded activity stay unchanged." else "The plan is removed. Recorded time is unchanged.",
         onDismiss = { deleting = false },
         destructive = true,
-        primary = SheetPrimary.Action("Delete block") { deleting = false; onDelete() },
+        primary = SheetPrimary.Action(if (block.googleCalendar != null && !block.googleCalendar.frozen) "Leave out" else "Delete block") { deleting = false; onDelete() },
     )
 }
 

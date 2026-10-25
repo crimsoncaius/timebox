@@ -67,6 +67,7 @@ data class TimeBlock(
     val preciseDurationMinutes: Double? = null,
     val planStartAt: Instant? = null,
     val planEndAt: Instant? = null,
+    val googleCalendar: com.timebox.android.data.remote.GoogleBlockDto? = null,
 ) {
     val durationMinutes: Int get() = preciseDurationMinutes?.toInt() ?: (endMinute - startMinute)
 }
@@ -219,6 +220,7 @@ data class PlanningCommitPlacement(
 
 fun TimeBlockDto.toModel() = TimeBlock(
     id = id,
+    googleCalendar = googleCalendar,
     lane = Lane.fromWire(lane),
     taskTypeId = taskTypeId,
     taskTypeName = taskType.name,

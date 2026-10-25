@@ -160,6 +160,8 @@ class TimeboxRepository private constructor(
     }
 
     suspend fun getDay(date: LocalDate): Result<Day> = call { api().getDay(date.toString()).toModel(dayElapsedRealtime) }
+    suspend fun googleCalendar(date: String? = null) = api().googleCalendar(date)
+    suspend fun googleCalendarAction(action: String, body: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())) = api().googleCalendarAction(action, body)
 
     suspend fun getDayPreview(date: LocalDate): Result<Day> =
         call { api().getDayPreview(date.toString()).toModel(dayElapsedRealtime) }

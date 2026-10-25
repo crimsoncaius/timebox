@@ -594,6 +594,10 @@ def patch_time_block(db: Session, day: Day, block_id: int, patch: TimeBlockPatch
         raise ValueError("Block not found")
     if target_date != day.date and block.lane != BlockLane.planned:
         raise ValueError("Only Planned Blocks can move to another Day")
+    from app.services.google_calendar import linked
+    google = linked(db, block.id)
+    if google and ("name" in data and data["name"] != block.name or target_date != day.date or "start_minute" in data or "end_minute" in data):
+        raise ValueError("Change Google meeting names and times in Google Calendar.")
     target_day = day
     if target_date != day.date:
         target_day = get_day_by_date(db, target_date) or create_day(db, target_date)
@@ -701,6 +705,15 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
     block = get_block(db, day, block_id, for_update=True)
     if block is None:
         raise ValueError("Block not found")
+    from app.services.google_calendar import linked, exclude
+    google = linked(db, block.id)
+    if google:
+        now = utc_now()
+        if planned_intervals.interval(block, planned_intervals.zone_name(db))[0] > now and not google.data.get("frozen"):
+            exclude(db, google, now)
+            db.commit()
+            return
+        google.data = {**google.data, "frozen": True, "status": "frozen"}
     if block.lane == BlockLane.planned:
         if block.task_id is not None:
             protect_task_occurrence(db, block.task_id)

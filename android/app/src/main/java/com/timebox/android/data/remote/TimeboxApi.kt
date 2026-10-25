@@ -10,6 +10,10 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TimeboxApi {
+    @GET("google-calendar")
+    suspend fun googleCalendar(@Query("date") date: String? = null): kotlinx.serialization.json.JsonObject
+    @POST("google-calendar/{action}")
+    suspend fun googleCalendarAction(@Path("action") action: String, @Body body: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject
     @GET("time-goals")
     suspend fun timeGoals(@Query("week") week: String?): TimeGoalsWeekDto
 

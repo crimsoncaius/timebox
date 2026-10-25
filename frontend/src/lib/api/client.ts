@@ -2,8 +2,9 @@ function apiPrefix(): string {
   return import.meta.env.VITE_API_BASE_URL || '/api'
 }
 
-function protocolHeaders(): Record<string, string> {
-  return { 'X-Timebox-Protocol': 'activity-online-v1' }
+export function protocolHeaders(): Record<string, string> {
+  const key = sessionStorage.getItem('timebox.api-key')
+  return { 'X-Timebox-Protocol': 'activity-online-v1', ...(key ? { 'X-API-Key': key } : {}) }
 }
 
 /** Avoid hung "Loading today…" when the API is down or the dev proxy cannot connect. */

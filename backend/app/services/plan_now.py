@@ -69,6 +69,9 @@ def execute(db, body, timezone):
     matching = next((p for p in plans if (p.task_type_id, p.task_id, p.name) == selected and times[p.id][0] <= now
                      and (times[p.id][1] > now or (same and current.planned_block_id == p.id))), None)
     affected = [p for p in plans if times[p.id][0] < end and times[p.id][1] > now and p is not matching]
+    from app.services.google_calendar import linked
+    if any(linked(db, p.id) for p in affected) or (matching and linked(db, matching.id) and times[matching.id][1] != end):
+        raise ValueError("This would change a Google meeting's time. Track without changing the plan, or edit the meeting in Google Calendar.")
     if {p.id for p in affected} != set(body.replace_plan_ids):
         raise ValueError("The affected plans changed as time passed. Review the preview and save again.")
     # Initialize before changing links: Undo retains the true preceding timeline.

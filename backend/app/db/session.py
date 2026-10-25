@@ -93,7 +93,7 @@ def _session_factory():
 
 def get_db(request: Request) -> Generator[Session, None, None]:
     from app.db.activity_admission import admission
-    with admission(get_engine(), exclusive=request.method == "POST" and request.url.path.startswith("/task-types/") and request.url.path.endswith("/merge")) as connection, Session(bind=connection, autoflush=False) as db:
+    with admission(get_engine(), exclusive=request.url.path.startswith("/google-calendar") or (request.method == "POST" and request.url.path.startswith("/task-types/") and request.url.path.endswith("/merge"))) as connection, Session(bind=connection, autoflush=False) as db:
         yield db
 
 

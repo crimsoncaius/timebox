@@ -37,6 +37,7 @@ import {
 } from '../../lib/time'
 import { errorMessage } from '../../lib/errors'
 import { useInspectorDismiss } from './useInspectorDismiss'
+import { GoogleCalendar } from '../calendar/GoogleCalendar'
 
 function formatDisplayDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)
@@ -746,6 +747,7 @@ export function TodayPage() {
 
           {viewOpen && <DayViewOptions preferences={dayView} onChange={changeDayView} zoom={timelineZoom} onZoomChange={setTimelineZoom} onResetZoom={resetTimelineZoom} onClose={() => setViewOpen(false)} storageError={storageError} />}
 
+          <GoogleCalendar date={day.date} onChanged={() => { void load(); void activityRepository.refresh() }} />
           {taskTypes.length === 0 && (
             <div className="mb-6 rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 text-sm text-on-surface-variant">
               No task types yet.{' '}

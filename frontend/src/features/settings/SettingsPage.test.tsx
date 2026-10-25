@@ -13,7 +13,7 @@ describe('SettingsPage', () => {
   afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks() })
 
   it('groups settings by where they apply, with no day window or week boundary', async () => {
-    globalThis.fetch = vi.fn(async () => response({})) as typeof fetch
+    globalThis.fetch = vi.fn(async (url) => response(String(url).includes('/google-calendar') ? { configured: false, connected: false, selected: [], calendars: [], occurrences: [], timezone: 'UTC' } : {})) as typeof fetch
 
     render(<MemoryRouter><SettingsPage /></MemoryRouter>)
     const day = await screen.findByRole('region', { name: 'Day & time' })

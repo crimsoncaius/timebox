@@ -25,6 +25,7 @@ class TimeBlockRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
     id: int
+    google_calendar: dict | None = None
     lane: BlockLane
     task_type_id: int
     task_type: TaskTypeRead
