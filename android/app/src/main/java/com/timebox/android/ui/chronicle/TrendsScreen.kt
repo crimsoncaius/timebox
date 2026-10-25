@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -60,7 +61,7 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel, onOpenC
             while (true) { delay(60_000); viewModel.loadTrends() }
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalNavigationDockInset.current).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         val customStart = state.customStart ?: state.today
         val customEnd = state.customEnd ?: state.today
         if (state.period == "custom") {

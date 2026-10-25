@@ -1,5 +1,6 @@
 package com.timebox.android.ui.assistant
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -100,7 +101,7 @@ fun AssistantScreen(
         if (canJump && !list.isScrollInProgress) { delay(2500); jumpVisible = false }
     }
     fun reset() { controller.newConversation(); draft = ""; follow = true }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = LocalNavigationDockInset.current)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Conversation", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)

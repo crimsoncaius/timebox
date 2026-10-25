@@ -1,5 +1,6 @@
 package com.timebox.android.ui.types
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -142,7 +143,7 @@ fun TypesScreen(
                 contentPadding = PaddingValues(
                     start = TimeboxDimens.screenPadding,
                     end = TimeboxDimens.screenPadding,
-                    bottom = TimeboxDimens.bottomInset,
+                    bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current,
                 ),
             ) {
                 visibleGroups.forEach { group ->

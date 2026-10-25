@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -76,7 +77,7 @@ private fun TimeGoalsWeekContent(viewModel: TimeGoalsViewModel, state: TimeGoals
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
             .padding(horizontal = TimeboxDimens.screenPadding)
-            .padding(top = 12.dp, bottom = TimeboxDimens.bottomInset).testTag("time-goals-week")) {
+            .padding(top = 12.dp, bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current).testTag("time-goals-week")) {
             TimeGoalsContent(state, viewModel)
             if (state.loading) CircularProgressIndicator(Modifier.size(18.dp).align(Alignment.CenterHorizontally), strokeWidth = 2.dp)
         }

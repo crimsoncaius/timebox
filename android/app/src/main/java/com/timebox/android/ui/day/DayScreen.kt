@@ -1,6 +1,7 @@
 package com.timebox.android.ui.day
 
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -496,7 +497,7 @@ private fun DayPage(
                     .timelinePinch(scrollState, active = active)
                     .verticalScroll(scrollState)
                     .padding(horizontal = TimeboxDimens.screenPadding)
-                    .padding(bottom = TimeboxDimens.bottomInset),
+                    .padding(bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current),
             ) {
                 val elapsedDay = day.actualBlocks.any { it.dayLengthMinutes != 1440 }
                 Column {

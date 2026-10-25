@@ -17,7 +17,7 @@ class ChromeTest {
 
     @Test fun navigateButtonOpensDirectory() {
         var opened = false
-        compose.setContent { TimeboxTheme { NavigationDock(emptyList(), AppRoutes.DayPattern, {}, { opened = true }) } }
+        compose.setContent { TimeboxTheme { NavigationDock(emptyList(), AppRoutes.DayPattern, {}, { opened = true }, onAdd = {}) } }
         compose.onNodeWithText("Navigate").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(true, opened) }
     }

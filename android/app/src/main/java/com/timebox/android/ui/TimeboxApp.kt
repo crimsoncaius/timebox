@@ -16,13 +16,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.timebox.android.ui.components.LocalNavigationBlockers
 import com.timebox.android.ui.components.NavigationDirectory
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import com.timebox.android.ui.components.NavigationDock
 import com.timebox.android.ui.components.NavigationShortcutEditor
 import com.timebox.android.ui.components.navigationShortcutRoutes
 import com.timebox.android.ui.components.navigationDestinations
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -447,16 +447,17 @@ fun TimeboxApp(
         val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
         val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
-        if (!focused) Column(
-            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryCovering) Modifier.clearAndSetSemantics {} else Modifier),
+        if (!focused) Box(
+            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryCovering || shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
-            Box(modifier = Modifier.weight(1f)) {
+            CompositionLocalProvider(LocalNavigationDockInset provides if (showNavigation) navigationHeight else 0.dp) {
                 TimeboxNavHost(navigation)
             }
 
             if (showNavigation) shortcuts?.let { pins ->
                 NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) }, { directoryOpen = true },
-                    Modifier.onSizeChanged { navigationHeight = with(density) { it.height.toDp() } })
+                    Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = with(density) { it.height.toDp() } },
+                    onAdd = { shortcutEditorOpen = true }, resetScroll = directoryCovering || shortcutEditorOpen)
             }
 
         }
