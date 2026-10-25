@@ -164,3 +164,18 @@ native implementation is included here. This implements the creation portion of
 issue #163; the existing recorded-block detail flow remains separate.
 
 The Chronicle Calendar uses fixed-height date boxes and a single dot for recorded time. Plans and Task Completion alone do not add a dot. The accepted visual study is A on `codex/chronicle-calendar-prototype` at `f00fed6d`, with the existing production boxes retained.
+
+## Quick tracking from the lock screen
+
+The default Digital Assistant gesture and **Track activity** Quick Settings tile
+open capture over the phone's lock screen. Grant microphone permission once while
+unlocked; without it, locked capture offers typing. Closing capture leaves the
+phone locked. Opening the full application still requires unlocking.
+
+To check entry behavior on an owned Android 36 emulator, install the debug APK,
+grant microphone permission, select Timebox as the assistant, add its tile, and
+configure a test PIN with immediate locking. Set a long screen timeout so it does
+not sleep during assertions. Run `python scripts/check-locked-quick-tracking.py TOKEN`
+from the repository root. The check invokes a one-second power-button hold and
+the actual tile, verifies capture is visible while keyguard stays secure, and
+submits no commands. All device operations use the reservation helper.
