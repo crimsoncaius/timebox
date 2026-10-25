@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Icon
@@ -19,10 +20,13 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import com.timebox.android.ui.AppRoutes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -79,15 +83,22 @@ internal fun NavigationDirectory(currentRoute: String, onClose: () -> Unit, onSe
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
+                if (group == "Preferences") {
+                    Hairline(Modifier.padding(top = 20.dp))
+                }
                 Text(group, Modifier.padding(start = 8.dp, top = 20.dp, bottom = 6.dp).semantics { heading() },
                     style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                 destinations.forEach { destination ->
-                    Row(Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${destination.label}") { onSelect(destination.route) }
+                    val current = currentRoute == destination.route
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(if (current) colors.high else Color.Transparent)
+                        .semantics { selected = current }
+                        .clickable(onClickLabel = "Open ${destination.label}") { onSelect(destination.route) }
                         .heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(destination.icon, null, Modifier.size(21.dp), tint = colors.onVariant)
                         Spacer(Modifier.width(14.dp))
                         Text(destination.label, Modifier.weight(1f), style = TimeboxTheme.type.body, color = colors.on)
-                        if (currentRoute == destination.route) {
+                        if (current) {
                             Text("Current", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                         }
                     }
