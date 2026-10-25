@@ -2,7 +2,7 @@ package com.timebox.android.ui.day
 
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -146,7 +146,7 @@ class DayCalendarHeaderTest {
         )
 
         compose.onNodeWithText("28 August").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Selected date, Friday, August 28, 2026").assertHasClickAction()
+        compose.onNodeWithContentDescription("Selected date, Friday, August 28, 2026").assertHasNoClickAction()
         compose.onNodeWithText("Back to today").assertIsDisplayed()
         compose.onNodeWithContentDescription("Day view options").assertIsDisplayed()
         compose.onNodeWithText("Month").assertDoesNotExist()
