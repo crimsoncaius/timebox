@@ -1,62 +1,33 @@
 # Android navigation quick access
 
-Status: behavior agreed; throwaway UI prototype available for comparison. No visual treatment has been selected for production.
+Status: prototype C selected by the user on 2026-10-25 and implemented; awaiting user review before merge. Tracked in [issue 320](https://github.com/crimsoncaius/timebox/issues/320).
 
-## Confirmed direction
+## Accepted design
 
-- Quick access provides shortcuts to destination screens.
-- Navigate continues to open the full navigation directory.
-- Creating tasks and starting Activity Tracking are outside this mechanism.
-- Users choose their shortcuts, starting from sensible defaults.
-- Shortcut positions remain stable rather than changing with recent usage.
-- Navigate remains permanently available within the navigation bar.
-- The bar supports up to three destination shortcuts plus Navigate, in one row with icons and text labels.
-- Day and Battle Plan are pinned initially. The third slot is left for the user to choose; it is not filled automatically.
-- An Edit shortcuts control inside the Navigate directory lets users select, remove, and reorder shortcuts.
-- Navigate stays at the right end. An unused shortcut slot has no permanent add button.
-- Shortcuts use existing destination navigation: resume previous screen state, highlight the selected destination, and do nothing when that destination is tapped again.
-- Existing Back behavior and bar visibility rules remain: hide during editing, keyboard use, detail screens, and Focus Mode.
-- Shortcut selections and ordering persist across app restarts.
-- Any directory destination can be pinned. Users may remove every shortcut; Navigate then remains on the right by itself.
-- Preferences are local to this Android installation, without account synchronization.
-- The editor uses Save and Cancel. Back discards unsaved edits.
-- At capacity, show "3 of 3 selected" and require removing a shortcut before adding another. Removal and reordering remain available; no shortcut is automatically replaced.
+A rounded, inset tonal dock contains up to three shortcuts and Navigate at the right. Icons sit above text; the current destination gets a filled rounded background. The dock occupies layout space and retains unused shortcut slots, matching prototype C.
 
-## Existing decision to revisit
+- Start with Day and Battle Plan. Any directory destination is eligible; all shortcuts may be removed.
+- Navigate always opens the complete directory. Edit shortcuts inside it supports selecting, removing, and reordering up to three destinations, with a live preview.
+- Save commits the ordered selection on this Android installation. Cancel and Back discard drafts. Empty selections persist; nothing is automatically replaced at capacity.
+- Shortcuts preserve the existing navigation, destination state, Back, and visibility behavior. Day is distinct from Today. Actions such as creating tasks or starting Activity Tracking are outside scope.
+- Feedback and undo placement account for the dock's measured height.
 
-[ADR 0020](adr/0020-full-page-mobile-navigation.md) chose a single bottom Navigate button and accepted two taps between destinations. Destination shortcuts would revise that choice. The ADR remains unchanged while the replacement design is being discussed.
+The revised decision is recorded in [ADR 0020](adr/0020-full-page-mobile-navigation.md).
 
-## UI prototype
+## Prototype source
 
-Question: which bar structure makes pinned screens easy to reach while keeping Navigate distinct?
+Question settled: which bar structure should provide direct access while retaining Navigate?
 
-Branch: `codex/navigation-shortcuts-prototype`.
+Verdict: the user selected C, the inset dock, after comparing A (equal tabs), B (split controls), C (inset dock), D (translucent overlay), and E (individual floating pills inspired by their Notion screenshots).
 
-- A — Equal tabs: icon above label, with a compact selected icon background.
-- B — Split controls: icons beside labels, with Navigate separated by a rule.
-- C — Inset dock: grouped tonal surface with a full selected-item background.
-- D — Translucent overlay: the current screen extends behind a translucent inset bar. Only visible destinations and Navigate share equal-width slots; there is no unused shortcut placeholder. This is the user's requested fourth comparison, intentionally revisiting the fixed empty slot used in A–C.
-- E — Floating pills: inspired by the user's two Notion screenshots, each navigation item has its own rounded tonal surface and fine outline. No common bar background joins the items; screen content remains visible in the gaps and beneath them. Visible items have equal widths and equal gaps. Labels remain for discoverability. The prototype switcher sits above the items so they float directly above the system navigation area.
+Primary source: local branch `codex/navigation-shortcuts-prototype`, commit `a6218e3d`. That branch contains the runnable comparison, launcher, and full exploration notes. Production code excludes prototype routes and controls.
 
-The variants run on the actual Android destination screens. The native equivalent of the UI skill's URL switcher uses `timebox://prototype/navigation-shortcuts?variant=A` (also B, C, D, and E), with debug-only comparison controls. It updates the Activity's deep-link URI. Preferences remain in memory for this throwaway experiment; the agreed production behavior still requires local persistence. D uses alpha translucency without background blur; D/E comparison controls also overlay the screen and are not part of the proposed product navigation.
+## Review
 
-Build with `./scripts/android-gradle.ps1 assembleDebug`, install the resulting APK through the managed emulator helper, then launch with `./scripts/navigation-shortcuts-prototype.ps1 -Token <reservation-token> -Variant A`. The launcher defaults to this chat's review reservation.
+Implementation branch: `codex/navigation-shortcuts`. Merge requires the user's explicit instruction; no pull request was requested.
 
-Try Navigate → Edit shortcuts, add a third destination, reorder it, and Save. Compare all three variants with the same selections. Also try Cancel, Back, the three-item limit, and removing all shortcuts.
+Managed review device: `emulator-5594`, token `43683640e3424ed0ac4bfef0b81de463`, storage root `C:\Users\Caius\TimeboxRuntime\emulators`.
 
-## Pending review
+Validation: the debug build passed. Twelve targeted instrumentation cases passed across the initial run and one isolated retry: the task-detail Back case initially lost Espresso window focus and passed unchanged on retry. Coverage includes persistence and explicit empty selections, order, capacity, configuration restoration of editor drafts, Cancel/Back, save-error retry, current-item no-op, full directory access, keyboard visibility, conversation drafts, Calendar state, and detail-screen Back behavior.
 
-- Validate label fit, touch targets, selected states, unused space, and the editing interaction in the app.
-- Review the concrete UI before implementation is considered agreed.
-
-The prototype is gated to debug deep-link launches. No production shortcut behavior has been implemented.
-
-## Review evidence
-
-- Debug APK build succeeded. Manual emulator checks covered A/B/C switching, adding a third shortcut, rejecting a fourth, reordering, saving, cancelling, and saving no shortcuts. The editor no longer exposes the directory behind it to accessibility.
-- Screenshots: `artifacts/navigation-review/shortcuts-a.png`, `shortcuts-b.png`, `shortcuts-c.png`, `shortcuts-editor.png`, and `shortcuts-final.png` (local review artifacts).
-- Pending review: emulator `emulator-5594`, reservation `43683640e3424ed0ac4bfef0b81de463`, storage root `C:\Users\Caius\TimeboxRuntime\emulators`.
-- Left running on E with Day and Battle Plan. User verdict pending.
-- E verification: debug build passed; inspected three- and four-item layouts, added Habits through the editor, saved, returned from the directory, and scrolled the timeline beneath the fixed floating pills. Restored the two default shortcuts for review. Screenshots: `artifacts/navigation-review/shortcuts-e.png` and `shortcuts-e-four.png`.
-- D verification: debug build passed; the timeline visibly continues beneath the translucent bar, the three labels are centered at equal intervals, the switcher wraps D → A → D, and Navigate opens the directory and returns correctly. Screenshot: `artifacts/navigation-review/shortcuts-d.png`.
-- Production persistence and broader navigation regression tests are deferred until a treatment is selected. Preserve this throwaway branch as the primary source and link it from the implementation issue when that work is scoped.
+The installed app also retained an added Habits shortcut after force-stop and restart. The default Day/Battle Plan selection was restored afterward. The editor and live dock preview are left open for review. The local API on port 8001 is not running, so live Day data remains loading; navigation and local shortcut preferences were reviewed independently of it.

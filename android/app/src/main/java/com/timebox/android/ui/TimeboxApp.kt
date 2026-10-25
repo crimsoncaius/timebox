@@ -5,10 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.timebox.android.ui.components.LocalNavigationBlockers
 import com.timebox.android.ui.components.NavigationDirectory
-import com.timebox.android.ui.components.NavigateButton
-import com.timebox.android.ui.components.ShortcutPrototype
-import com.timebox.android.ui.components.ShortcutPrototypeBar
-import com.timebox.android.ui.components.ShortcutPrototypeEditor
+import com.timebox.android.ui.components.NavigationDock
+import com.timebox.android.ui.components.NavigationShortcutEditor
+import com.timebox.android.ui.components.navigationShortcutRoutes
 import com.timebox.android.ui.components.navigationDestinations
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -38,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.paneTitle
@@ -72,6 +73,7 @@ import com.timebox.android.ui.types.TypesViewModel
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -318,6 +320,10 @@ fun TimeboxApp(
 
     val navigationBlockers = remember { mutableStateOf(0) }
     var directoryOpen by rememberSaveable { mutableStateOf(false) }
+    var shortcutEditorOpen by rememberSaveable { mutableStateOf(false) }
+    val shortcuts by remember(repository) { repository.navigationShortcuts.map(::navigationShortcutRoutes) }.collectAsState(initial = null)
+    var navigationHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
     fun selectDestination(target: String) {
         directoryOpen = false
         if (target == route) return
@@ -420,7 +426,7 @@ fun TimeboxApp(
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
         val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
-        val overlayNavigation = ShortcutPrototype.enabled && ShortcutPrototype.variant >= 3
+        val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
         if (!focused) Column(
             modifier = Modifier.fillMaxSize().imePadding().then(if (directoryOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
@@ -444,21 +450,15 @@ fun TimeboxApp(
                 TimeboxNavHost(navigation)
             }
 
-            if (showNavigation && !overlayNavigation) {
-                if (ShortcutPrototype.enabled) ShortcutPrototypeBar(route, ::selectDestination) { directoryOpen = true }
-                else NavigateButton { directoryOpen = true }
+            if (showNavigation) shortcuts?.let { pins ->
+                NavigationDock(pins, route, ::selectDestination, { directoryOpen = true },
+                    Modifier.onSizeChanged { navigationHeight = with(density) { it.height.toDp() } })
             }
 
-        }
-
-        if (showNavigation && overlayNavigation && !directoryOpen) {
-            Box(Modifier.align(Alignment.BottomCenter)) {
-                ShortcutPrototypeBar(route, ::selectDestination) { directoryOpen = true }
-            }
         }
 
         if (route != AppRoutes.TaskDetailPattern) {
-            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = if (undoNotice == null) 92.dp else 172.dp)) { data ->
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = if (undoNotice == null) feedbackBottom else feedbackBottom + 80.dp)) { data ->
                 TransientFeedback(
                     message = data.visuals.message,
                     modifier = Modifier.semantics {
@@ -480,14 +480,14 @@ fun TimeboxApp(
                     onDismiss = { undoLifecycle.dismiss(notice.id) },
                     onExpiryFinished = { undoLifecycle.finishExpiry(notice.id) },
                     reducedMotion = reducedMotion,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = feedbackBottom),
                 )
             }
         }
 
-        if (directoryOpen && !focused && !(ShortcutPrototype.enabled && ShortcutPrototype.editing)) {
+        if (directoryOpen && !focused && !shortcutEditorOpen) {
             NavigationDirectory(route, { directoryOpen = false }, ::selectDestination,
-                onEditShortcuts = if (ShortcutPrototype.enabled) ({ ShortcutPrototype.editing = true }) else null)
+                onEditShortcuts = if (shortcuts != null) ({ shortcutEditorOpen = true }) else null)
         }
 
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
@@ -499,7 +499,12 @@ fun TimeboxApp(
             selectDestination(AppRoutes.DayPattern)
         }
         BackHandler(enabled = directoryOpen) { directoryOpen = false }
-        if (ShortcutPrototype.enabled && ShortcutPrototype.editing) ShortcutPrototypeEditor()
+        if (shortcutEditorOpen && !focused) shortcuts?.let { pins ->
+            NavigationShortcutEditor(pins, onCancel = { shortcutEditorOpen = false }, onSave = { updated ->
+                repository.setNavigationShortcuts(updated)
+                shortcutEditorOpen = false
+            })
+        }
 
     }
     }

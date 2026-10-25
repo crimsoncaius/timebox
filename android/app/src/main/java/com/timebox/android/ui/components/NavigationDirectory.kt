@@ -60,19 +60,6 @@ internal val navigationDestinations = listOf(
 )
 
 @Composable
-internal fun NavigateButton(onOpen: () -> Unit) {
-    val colors = TimeboxTheme.colors
-    Column(Modifier.fillMaxWidth().background(colors.bg).navigationBarsPadding()) {
-        Hairline()
-        TextButton(onClick = onOpen, modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 4.dp)) {
-            Icon(Icons.Outlined.GridView, null, Modifier.size(20.dp), tint = colors.on)
-            Spacer(Modifier.width(10.dp))
-            Text("Navigate", style = TimeboxTheme.type.label, color = colors.on)
-        }
-    }
-}
-
-@Composable
 internal fun NavigationDirectory(currentRoute: String, onClose: () -> Unit, onSelect: (String) -> Unit, onEditShortcuts: (() -> Unit)? = null) {
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize().background(colors.bg).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Timebox navigation" }

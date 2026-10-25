@@ -1,5 +1,7 @@
 package com.timebox.android.ui
 
+import androidx.compose.ui.test.onFirst
+
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.runtime.mutableStateOf
@@ -379,11 +381,11 @@ class TimeboxAppReadyToPlanTest {
         navigate("Battle Plan")
         compose.onNodeWithText("Navigate").performClick()
         androidx.test.espresso.Espresso.pressBack()
-        compose.onNodeWithText("Battle Plan").assertIsDisplayed()
+        compose.onAllNodesWithText("Battle Plan").onFirst().assertIsDisplayed()
         androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
         navigate("Battle Plan")
-        compose.onNodeWithText("Battle Plan").assertIsDisplayed()
+        compose.onAllNodesWithText("Battle Plan").onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -413,7 +415,7 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithText("App projection Task").performClick()
         compose.onNodeWithText("Navigate").assertDoesNotExist()
         androidx.test.espresso.Espresso.pressBack()
-        compose.onNodeWithText("Battle Plan").assertIsDisplayed()
+        compose.onAllNodesWithText("Battle Plan").onFirst().assertIsDisplayed()
         compose.onNodeWithText("App projection Task").assertIsDisplayed()
         compose.onNodeWithText("Navigate").assertIsDisplayed()
     }
