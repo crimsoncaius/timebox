@@ -1,5 +1,6 @@
 package com.timebox.android.ui.assistant
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -116,7 +117,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
         if (local.pending) Text("Syncing activity. Corrections are available after sync.", style = type.bodySmall)
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp + LocalNavigationDockInset.current)) {
             item { SavedTaskResults(controller, onOpenTask) }
             if (!reviewed) items(local.quickReviews, key = { it.interpretation.requestId }) { pending ->
                 val result = pending.interpretation

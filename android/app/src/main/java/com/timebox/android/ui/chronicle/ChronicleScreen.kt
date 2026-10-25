@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -373,7 +374,7 @@ private fun ChronicleMonthPage(
             }
             .verticalScroll(rememberScrollState())
             .padding(horizontal = TimeboxDimens.screenPadding)
-            .padding(bottom = TimeboxDimens.bottomInset),
+            .padding(bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),

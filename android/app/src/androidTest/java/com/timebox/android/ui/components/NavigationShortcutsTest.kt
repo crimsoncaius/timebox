@@ -1,6 +1,7 @@
 package com.timebox.android.ui.components
 
 import android.content.Context
+import androidx.compose.runtime.mutableStateOf
 import androidx.test.core.app.ApplicationProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -23,7 +24,7 @@ class NavigationShortcutsTest {
         val preferences = AppPreferences(context)
         val before = preferences.navigationShortcuts.first()
         try {
-            val ordered = listOf(AppRoutes.Settings, AppRoutes.DayPattern, AppRoutes.Review)
+            val ordered = listOf(AppRoutes.Settings, AppRoutes.DayPattern, AppRoutes.Review, AppRoutes.Habits, AppRoutes.Trends)
             preferences.setNavigationShortcuts(ordered)
             assertEquals(ordered, AppPreferences(context).navigationShortcuts.first())
             preferences.setNavigationShortcuts(emptyList())
@@ -34,18 +35,18 @@ class NavigationShortcutsTest {
         } finally { preferences.setNavigationShortcuts(navigationShortcutRoutes(before)) }
     }
 
-    @Test fun editorEnforcesLimitRestoresDraftAndSavesOrder() {
+    @Test fun editorAllowsMoreThanThreeRestoresDraftAndSavesOrder() {
         var saved: List<String>? = null
         val restoration = StateRestorationTester(compose)
         restoration.setContent { TimeboxTheme {
             NavigationShortcutEditor(navigationShortcutRoutes(null), {}, { saved = it })
         } }
         compose.onNode(hasText("Habits") and isToggleable()).performScrollTo().performClick()
-        compose.onNode(hasText("Trends") and isToggleable()).assertIsNotEnabled()
+        compose.onNode(hasText("Trends") and isToggleable()).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Move Habits earlier").performScrollTo().performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Save").performClick()
-        compose.runOnIdle { assertEquals(listOf(AppRoutes.DayPattern, AppRoutes.Habits, AppRoutes.BattlePlan), saved) }
+        compose.runOnIdle { assertEquals(listOf(AppRoutes.DayPattern, AppRoutes.Habits, AppRoutes.BattlePlan, AppRoutes.Trends), saved) }
     }
 
     @Test fun cancelAndSystemBackNeverCommitEdits() {
@@ -73,15 +74,43 @@ class NavigationShortcutsTest {
         compose.onNodeWithContentDescription("Remove Battle Plan").performClick()
         compose.onNodeWithText("Save").performClick()
         compose.onNodeWithText("Couldn't save shortcuts. Try again.").assertIsDisplayed()
-        compose.onNodeWithText("0 of 3 selected").assertIsDisplayed()
+        compose.onNodeWithText("0 selected").assertIsDisplayed()
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle { assertEquals(emptyList<String>(), saved) }
+    }
+
+    @Test fun emptyDockOffersAddShortcut() {
+        var added = false
+        compose.setContent { TimeboxTheme {
+            NavigationDock(emptyList(), AppRoutes.DayPattern, {}, {}, onAdd = { added = true })
+        } }
+        compose.onNodeWithText("Add shortcut").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Navigate").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(added) }
+    }
+
+    @Test fun stripScrollsWhileNavigateStaysFixedAndResetsOnReturn() {
+        val route = mutableStateOf(AppRoutes.DayPattern)
+        val editing = mutableStateOf(false)
+        var added = false
+        compose.setContent { TimeboxTheme {
+            NavigationDock(listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan, AppRoutes.Habits, AppRoutes.Trends, AppRoutes.Settings),
+                route.value, { route.value = it }, {}, onAdd = { added = true }, resetScroll = editing.value)
+        } }
+        val navigate = compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot()
+        compose.onNodeWithText("Settings").performScrollTo().performClick()
+        compose.onNodeWithText("Day").assertIsDisplayed()
+        compose.onNodeWithText("Add shortcut").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(added); editing.value = true }
+        compose.runOnIdle { editing.value = false }
+        compose.onNodeWithText("Day").assertIsDisplayed()
+        assertEquals(navigate, compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot())
     }
 
     @Test fun dockReselectDoesNothingAndOtherShortcutsNavigate() {
         var selected: String? = null
         compose.setContent { TimeboxTheme {
-            NavigationDock(navigationShortcutRoutes(null), AppRoutes.DayPattern, { selected = it }, {})
+            NavigationDock(navigationShortcutRoutes(null), AppRoutes.DayPattern, { selected = it }, {}, onAdd = {})
         } }
         compose.onNodeWithText("Day").assertIsSelected().performClick()
         compose.runOnIdle { assertNull(selected) }

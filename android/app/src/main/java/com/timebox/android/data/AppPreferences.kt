@@ -124,11 +124,11 @@ class AppPreferences(private val context: Context) {
 
     /** Null means unconfigured; an empty list is an intentional choice. Order is significant. */
     val navigationShortcuts: Flow<List<String>?> = context.dataStore.data.map { prefs ->
-        prefs[Keys.navigationShortcuts]?.split(',')?.filter(String::isNotBlank)?.distinct()?.take(3)
+        prefs[Keys.navigationShortcuts]?.split(',')?.filter(String::isNotBlank)?.distinct()
     }
 
     suspend fun setNavigationShortcuts(routes: List<String>) {
-        require(routes.size <= 3 && routes.distinct() == routes && routes.none { it.isBlank() || ',' in it })
+        require(routes.distinct() == routes && routes.none { it.isBlank() || ',' in it })
         context.dataStore.edit { it[Keys.navigationShortcuts] = routes.joinToString(",") }
     }
 

@@ -4,11 +4,11 @@ Status: prototype C selected by the user on 2026-10-25 and implemented; awaiting
 
 ## Accepted design
 
-The inset dock visually separates two roles: up to three shortcuts share a rounded tonal surface, and Navigate has its own matching rounded surface at the right, separated by a 10 dp gap. An empty shortcut group is not drawn. Icons sit above text; the current destination gets a filled rounded background. The dock occupies layout space and retains unused shortcut slots, matching prototype C.
+The inset dock visually separates two roles: horizontally scrollable shortcuts share a rounded tonal surface, and Navigate has its own matching rounded surface at the right, separated by a 10 dp gap. Add shortcut follows the saved shortcuts and remains available for an empty selection. Icons sit above text; the current destination gets a filled rounded background. Navigate stays fixed while shortcuts scroll; switching destinations or returning from editing or the directory resets the strip to its beginning. The subsequent floating-navigation refinement overlays these surfaces on the screen, with transparent surrounding space and scroll clearance below content.
 
 - Start with Day and Battle Plan. Any directory destination is eligible; all shortcuts may be removed.
-- Navigate always opens the complete directory. Edit shortcuts inside it supports selecting, removing, and reordering up to three destinations, with a live preview.
-- Save commits the ordered selection on this Android installation. Cancel and Back discard drafts. Empty selections persist; nothing is automatically replaced at capacity.
+- Navigate always opens the complete directory. Edit shortcuts is also available directly through Add shortcut and supports selecting, removing, and reordering all directory destinations, with a scrollable preview.
+- Save commits the ordered selection on this Android installation. Cancel and Back discard drafts. Empty selections persist; there is no three-shortcut limit.
 - Shortcuts preserve the existing navigation, destination state, Back, and visibility behavior. Day is distinct from Today. Actions such as creating tasks or starting Activity Tracking are outside scope.
 - Feedback and undo placement account for the dock's measured height.
 

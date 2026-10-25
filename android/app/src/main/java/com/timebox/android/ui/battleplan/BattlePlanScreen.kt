@@ -1,5 +1,6 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -585,7 +586,7 @@ private fun MobileKanbanBoard(
                 text = "New task",
                 onClick = { onShowComposer(true) },
                 enabled = !state.saving,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = LocalNavigationDockInset.current).padding(18.dp),
                 leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
             )
             visualDrag?.let { drag ->
@@ -953,7 +954,7 @@ private fun MobileTaskLane(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp + LocalNavigationDockInset.current),
         ) {
             for (index in 0..visibleTasks.size) {
                 if (insertionIndex == index) {

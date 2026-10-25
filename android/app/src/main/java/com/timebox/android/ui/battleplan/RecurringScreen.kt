@@ -1,5 +1,6 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -115,7 +116,7 @@ fun RecurringScreen(
                 items(state.templates, key = { it.id }) { template ->
                     RecurringTemplateRow(template, onOpen, onRequestDelete)
                 }
-                item { Spacer(Modifier.height(24.dp)) }
+                item { Spacer(Modifier.height(24.dp + LocalNavigationDockInset.current)) }
             }
         }
     }

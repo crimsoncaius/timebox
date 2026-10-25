@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -218,7 +219,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                     }
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = TimeboxDimens.screenPadding)
-                    .padding(bottom = TimeboxDimens.bottomInset)
+                    .padding(bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current)
                     .testTag("habits-week"),
             ) {
                 WeekdayHeader(week.weekStart, week.today)

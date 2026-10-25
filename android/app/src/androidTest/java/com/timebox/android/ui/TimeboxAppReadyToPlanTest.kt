@@ -96,6 +96,25 @@ class TimeboxAppReadyToPlanTest {
     }
 
     @Test
+    fun addShortcutOpensEditorDirectlyAndCancelReturnsToDay() {
+        setAppContent(ControllableTimeboxApi())
+        compose.onNodeWithText("Add shortcut").performScrollTo().performClick()
+        compose.onNodeWithText("Edit shortcuts").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithTag("day-pager").assertIsDisplayed()
+        compose.onNodeWithText("Navigate").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close navigation").assertDoesNotExist()
+    }
+
+    @Test
+    fun dayContentExtendsBehindFloatingNavigation() {
+        setAppContent(ControllableTimeboxApi())
+        val day = compose.onNodeWithTag("day-pager").getUnclippedBoundsInRoot()
+        val navigation = compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot()
+        assertTrue("Day must extend below the floating navigation", day.bottom > navigation.bottom)
+    }
+
+    @Test
     fun shortcutMovesThePageHeadingWhileDockStaysFixed() {
         setAppContent(ControllableTimeboxApi())
         val dock = compose.onAllNodesWithText("Battle Plan").onLast()

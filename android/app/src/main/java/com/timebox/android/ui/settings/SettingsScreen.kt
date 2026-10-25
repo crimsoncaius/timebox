@@ -1,5 +1,6 @@
 package com.timebox.android.ui.settings
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -90,7 +91,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = TimeboxDimens.screenPadding)
-            .padding(bottom = TimeboxDimens.bottomInset),
+            .padding(bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         SettingsGroup(

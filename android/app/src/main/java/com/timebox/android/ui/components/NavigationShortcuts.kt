@@ -2,6 +2,7 @@ package com.timebox.android.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -17,9 +18,11 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -31,36 +34,44 @@ import kotlinx.coroutines.launch
 
 internal fun navigationShortcutRoutes(saved: List<String>?): List<String> =
     (saved ?: listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan))
-        .filter { route -> navigationDestinations.any { it.route == route } }.distinct().take(3)
+        .filter { route -> navigationDestinations.any { it.route == route } }.distinct()
+
+// Clearance belongs inside scrolling content so it can move behind the floating dock.
+internal val LocalNavigationDockInset = compositionLocalOf { 0.dp }
 
 @Composable
 internal fun NavigationDock(
     shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    onAdd: () -> Unit,
+    resetScroll: Boolean = false,
 ) {
-    Column(modifier.fillMaxWidth().background(TimeboxTheme.colors.bg).navigationBarsPadding()) {
-        ShortcutDockItems(shortcuts, currentRoute, onSelect, onOpen)
+    Column(modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
+        ShortcutDockItems(shortcuts, currentRoute, onSelect, onOpen, onAdd, resetScroll)
     }
 }
 
 @Composable
-private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onOpen: () -> Unit, preview: Boolean = false) {
+private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onOpen: () -> Unit, onAdd: () -> Unit, resetScroll: Boolean = false, preview: Boolean = false) {
     val colors = TimeboxTheme.colors
     val entries = navigationShortcutRoutes(shortcuts).map { route -> navigationDestinations.first { it.route == route } }
+    val scroll = rememberScrollState()
+    LaunchedEffect(currentRoute, resetScroll) { scroll.scrollTo(0) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (entries.isEmpty()) Spacer(Modifier.weight(3f))
-        else Row(Modifier.weight(3f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
-            .background(colors.low).padding(6.dp).semantics { isTraversalGroup = true },
+        Row(Modifier.weight(3f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
+            .background(colors.low).padding(6.dp).horizontalScroll(scroll).testTag("shortcut-strip")
+            .semantics { isTraversalGroup = true },
             verticalAlignment = Alignment.CenterVertically) {
             entries.forEach { destination ->
-                ShortcutDockItem(destination, currentRoute == destination.route, Modifier.weight(1f), preview) {
+                ShortcutDockItem(destination, currentRoute == destination.route, Modifier.width(88.dp), preview) {
                     if (currentRoute != destination.route) onSelect(destination.route)
                 }
             }
-            repeat(3 - entries.size) { Spacer(Modifier.weight(1f)) }
+            ShortcutDockItem(NavigationDestination("", "Add shortcut", "shortcuts", Icons.Outlined.Add),
+                false, Modifier.width(88.dp), preview, onAdd)
         }
-        Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
+        Box(Modifier.weight(1f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
             .background(colors.low).padding(6.dp), contentAlignment = Alignment.Center) {
             ShortcutDockItem(NavigationDestination("", "Navigate", "directory", Icons.Outlined.GridView),
                 false, Modifier.fillMaxWidth(), preview, onOpen)
@@ -111,9 +122,9 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
             }) { Text(if (saving) "Saving…" else "Save") }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-            Text("${draft.size} of 3 selected", style = TimeboxTheme.type.screenTitle, color = colors.on,
+            Text("${draft.size} selected", style = TimeboxTheme.type.screenTitle, color = colors.on,
                 modifier = Modifier.padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Polite })
-            Text(if (draft.size == 3) "Remove a shortcut to choose another." else "Choose the screens you reach for most.",
+            Text("Choose the screens you reach for most. Swipe the bar to reach more shortcuts.",
                 style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
             error?.let { Text(it, color = colors.error, style = TimeboxTheme.type.body,
                 modifier = Modifier.padding(bottom = 16.dp).semantics { liveRegion = LiveRegionMode.Polite }) }
@@ -139,7 +150,7 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
                     modifier = Modifier.padding(top = 16.dp, bottom = 4.dp).semantics { heading() })
                 destinations.forEach { destination ->
                     val chosen = destination.route in draft
-                    val enabled = !saving && (chosen || draft.size < 3)
+                    val enabled = !saving
                     Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(RoundedCornerShape(8.dp))
                         .toggleable(value = chosen, role = Role.Checkbox, enabled = enabled) {
                             draft = if (chosen) draft - destination.route else draft + destination.route
@@ -153,6 +164,6 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
             }
         }
         Text("Bar preview", Modifier.padding(start = 20.dp, top = 8.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-        ShortcutDockItems(draft, "", {}, {}, preview = true)
+        ShortcutDockItems(draft, "", {}, {}, {}, preview = true)
     }
 }

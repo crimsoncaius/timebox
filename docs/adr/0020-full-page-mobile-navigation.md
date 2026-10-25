@@ -27,7 +27,7 @@ Remove local sibling tabs duplicated by the directory. Keep destination-specific
 
 ## State, visibility, and Back
 
-- An inset bottom dock contains up to three user-selected destination shortcuts and a permanent Navigate item at the right. Unused shortcut positions remain blank; no suggested or add item fills them.
+- A floating bottom dock contains a horizontally scrollable strip of user-selected shortcuts, followed by Add shortcut, and a separate fixed Navigate item at the right. With no shortcuts, the strip still offers Add shortcut. The strip returns to its beginning when switching destinations or returning from the directory or shortcut editor.
 - Opening the directory preserves the source screen. Closing it with the close control or Android Back returns to that screen unchanged.
 - Selecting a destination resumes its state within the current session, including selected date, filters, scroll position, and drafts. A fresh launch starts on Day. This agreement does not promise restoring all screen state after process death.
 - Hide Navigate during editing, while the keyboard is open, in Focus Mode, and on detail screens. Finishing or dismissing the interaction restores navigation. Focus Mode retains its explicit exit without stopping Activity Tracking.
@@ -39,12 +39,12 @@ CONTEXT.md records the platform-specific surface hierarchy without changing the 
 
 ## Quick access revision (2026-10-25)
 
-The user selected prototype C after comparing five treatments. The dock uses icons above labels and a full selected-item background. A subsequent user-requested refinement groups shortcuts in one rounded tonal surface and places Navigate in its own adjacent rounded surface, making their different roles visible. When all shortcuts are removed, only the Navigate surface is drawn. It occupies layout space rather than overlaying screen content. This balances predictable one-tap access with the complete directory.
+The user selected prototype C after comparing five treatments. The dock uses icons above labels and a full selected-item background. A subsequent user-requested refinement groups shortcuts in one rounded tonal surface and places Navigate in its own adjacent rounded surface, making their different roles visible. When all shortcuts are removed, Add shortcut remains available beside Navigate. A subsequent user-requested refinement makes these surfaces float over the app, with transparent space around and below them. Scrolling content continues behind the dock and includes enough trailing clearance to bring the last item above it; fixed actions stay above the dock. This replaces the original choice to reserve layout space beneath the screen.
 
 - Day and Battle Plan are the initial shortcuts. Any directory destination can be selected, including Settings; users can remove all shortcuts.
-- Edit shortcuts lives inside Navigate. It supports selecting up to three destinations, removing and reordering them, with a preview. At capacity, users must remove one before selecting another; nothing is replaced automatically.
+- Edit shortcuts is accessible through Navigate and directly through Add shortcut. It supports all directory destinations without a three-item limit, removing and reordering them, and a scrollable preview. Save, Cancel, and Back return to the surface that opened the editor.
 - Save commits the ordered list locally on this Android installation. Cancel and Back discard draft changes. An empty saved list remains empty across restarts. Preferences do not synchronize between devices.
 - Shortcuts use the same navigation path as directory selection, including preserved destination state and Back behavior. Selecting the current shortcut does nothing. Day resumes its selected date rather than jumping to Today.
-- The entire dock follows the existing visibility rules. The editor hides the directory behind it and returns there after Save or Cancel.
+- The entire dock follows the existing visibility rules. The editor hides the originating surface and returns there after Save or Cancel.
 
 The throwaway comparison is preserved on branch `codex/navigation-shortcuts-prototype`, commit `a6218e3d`. The implementation excludes the comparison controls and prototype routes.

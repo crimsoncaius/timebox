@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.LocalNavigationDockInset
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -52,7 +53,7 @@ internal fun TimeGoalArchiveContent(state: TimeGoalsUiState, viewModel: TimeGoal
         }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         savedScroll.SaveableStateProvider(state.historyGoalId?.let { "history-$it" } ?: "archive") {
-            LazyColumn(state = rememberLazyListState(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = TimeboxDimens.bottomInset),
+            LazyColumn(state = rememberLazyListState(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current),
                 modifier = Modifier.weight(1f).testTag("time-goal-archive-list")) {
                 if (!showingHistory) {
                     item { Text("Past goals, with their targets and results.", style = type.bodySmall, color = colors.onVariant,
