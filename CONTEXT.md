@@ -189,7 +189,7 @@ A Recurring Task Series or a Checklist Item opted into habit tracking. It has no
 _Avoid_: Goal, Streak task, Habit tracker, Sub-habit, Subtask habit
 
 **Time Goal**:
-An independently configured target for Actual Block time attributed to a selected Task Type and all its descendants over a repeating, user-chosen period, presented in its own Chronicle view without requiring a Recurring Task Series or Task Completion. Separate Time Goals may target a Task Type and its descendants at the same time, with the same recorded time contributing to each applicable goal.
+An independently configured target for Actual Block time attributed to a selected Task Type and all its descendants over a repeating, user-chosen period, presented in its own view without requiring a Recurring Task Series or Task Completion. Separate Time Goals may target a Task Type and its descendants at the same time, with the same recorded time contributing to each applicable goal.
 _Avoid_: Session quota, Planned time target
 
 **Time Goal Period**:
@@ -267,7 +267,7 @@ The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planni
 _Avoid_: Today view, timeline page
 
 **Chronicle**:
-The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. It has four views, Calendar (one month at a time), Trends, Habits, and Time Goals.
+The retrospective surface for dates through Today with Planned Blocks, Actual Blocks, or Task Completion. On Android it groups Calendar (one month at a time) and Trends in the navigation directory; Habits and Time Goals are independent destinations under Routines and goals. On web it contains Calendar and Trends.
 _Avoid_: History, Analytics tab
 
 **Trends**:
@@ -275,19 +275,19 @@ The Chronicle view that presents activity by Task Type over a selected preset or
 _Avoid_: Analytics, Insights, Reports
 
 **Habits**:
-The Chronicle view that presents completion-based Habits across one Calendar Week at a time, judging activity against their recurrence. A Habit appears only in weeks where its series was active.
+The view that presents completion-based Habits across one Calendar Week at a time, judging activity against their recurrence. A Habit appears only in weeks where its series was active.
 _Avoid_: Habit tracker, Streaks
 
 **Battle Plan**:
-The surface for Battle Plan Tasks, Projects and Recurring Task Series, and the home of Task Types management.
+The surface for Battle Plan Tasks and Projects. On Android, Recurring Tasks and Task Types have independent navigation destinations; Battle Plan retains a contextual link to Recurring Tasks. On web, Battle Plan also provides access to Recurring Task Series and Task Types management.
 _Avoid_: Board, backlog
 
 **Task Types**:
-The management page for renaming, reparenting and deleting Task Types. It is reached from Battle Plan and is not a primary navigation destination.
+The management page for renaming, reparenting and deleting Task Types. On Android it is an independent destination under Organization; on web it is reached from Battle Plan.
 _Avoid_: Types, Task types page
 
 **Assistant**:
-The AI assistant's surface and the home of its conversations and activity review.
+The AI assistant's conversations and activity review. On Android, Conversation and Review are independent destinations grouped under Assistant; on web they share the Assistant surface.
 _Avoid_: Chat, AI tab
 
 **Review later**:

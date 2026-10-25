@@ -215,21 +215,18 @@ class ChronicleScreenTest {
     }
 
     @Test
-    fun viewTabsSwitchBetweenCalendarAndTrends() {
-        val views = mutableListOf<ChronicleView>()
-        showChronicle(onPrevMonth = {}, onNextMonth = {}, onSelectView = { views += it })
-
-        compose.onNodeWithTag("chronicle-view-calendar").assertIsSelected()
+    fun calendarHasNoDuplicateDestinationTabs() {
+        showChronicle(onPrevMonth = {}, onNextMonth = {})
         compose.onNodeWithContentDescription("Chronicle month content").assertIsDisplayed()
-        compose.onNodeWithTag("chronicle-view-trends").performClick()
-        compose.runOnIdle { assertEquals(listOf(ChronicleView.Trends), views) }
+        compose.onNodeWithTag("chronicle-view-calendar").assertDoesNotExist()
+        compose.onNodeWithTag("chronicle-view-trends").assertDoesNotExist()
     }
 
     @Test
     fun trendsViewShowsItsContentInsteadOfTheCalendar() {
         showChronicle(onPrevMonth = {}, onNextMonth = {}, view = ChronicleView.Trends)
 
-        compose.onNodeWithTag("chronicle-view-trends").assertIsSelected()
+        compose.onNodeWithTag("chronicle-view-trends").assertDoesNotExist()
         compose.onNodeWithText("Recorded time content").assertIsDisplayed()
         compose.onNodeWithContentDescription("Chronicle month content").assertDoesNotExist()
     }

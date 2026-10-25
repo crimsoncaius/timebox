@@ -7,9 +7,11 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
@@ -71,19 +73,16 @@ class TimeboxAppReadyToPlanTest {
                 imeVisibleOverride = imeVisible.value,
             )
         }
-        compose.onNodeWithContentDescription("Assistant").performClick()
+        navigate("Conversation")
         compose.onNodeWithContentDescription("Message Assistant").assertIsDisplayed()
-        listOf("Day", "Chronicle", "Battle Plan", "Settings").forEach { destination ->
-            compose.onNodeWithContentDescription(destination).assertIsDisplayed()
-        }
+        compose.onNodeWithText("Navigate").assertIsDisplayed()
         compose.runOnIdle { imeVisible.value = true }
-        listOf("Day", "Chronicle", "Battle Plan", "Settings").forEach { destination ->
-            compose.onNodeWithContentDescription(destination).assertDoesNotExist()
-        }
+        compose.onNodeWithText("Navigate").assertDoesNotExist()
         compose.onNodeWithContentDescription("Send").assertIsDisplayed()
         compose.runOnIdle { imeVisible.value = false }
-        compose.onNodeWithContentDescription("Day").performClick()
-        compose.onNodeWithContentDescription("Assistant").assertIsDisplayed()
+        navigate("Day")
+        compose.onNodeWithText("Navigate").assertIsDisplayed()
+
     }
 
     @After
@@ -118,9 +117,9 @@ class TimeboxAppReadyToPlanTest {
         }
 
         compose.waitUntil(15_000) {
-            compose.onAllNodesWithText("Battle Plan").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("Navigate").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -129,12 +128,12 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
             .assertIsEnabled()
 
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithTag("planning-mode-action").performClick()
         compose.onNodeWithContentDescription("App projection Task is saving and unavailable")
             .assertIsNotEnabled()
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.onNodeWithContentDescription("Saving Ready to Plan for App projection Task")
             .assertIsEnabled()
 
@@ -145,12 +144,12 @@ class TimeboxAppReadyToPlanTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithContentDescription("Schedule App projection Task").assertIsEnabled()
     }
 
     @Test
-    fun pendingRemovalClearsDaySelectionAndUnsubmittedDraftAcrossNavigation() {
+    fun leavingPlanningClearsDraftAndRemovalRemainsConsistentOnReturn() {
         val transport = ControllableTimeboxApi(initialReady = true)
         setAppContent(transport)
 
@@ -159,14 +158,14 @@ class TimeboxAppReadyToPlanTest {
             .performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("App projection Task selected", useUnmergedTree = true).assertExists()
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.onNodeWithContentDescription("Remove App projection Task from Ready to Plan").performClick()
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithText("App projection Task selected", useUnmergedTree = true).assertDoesNotExist()
 
         awaitReadinessRequest(transport)
         compose.runOnIdle { transport.completeReadiness(ready = false, version = 2) }
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -175,15 +174,16 @@ class TimeboxAppReadyToPlanTest {
         awaitReadinessRequest(transport)
         compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
 
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithContentDescription("Schedule App projection Task")
             .performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("day-lane-planned").performTouchInput { click(center) }
         compose.onNodeWithContentDescription("Planning draft App projection Task").assertExists()
+        compose.onNodeWithText("Navigate").assertDoesNotExist()
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.onNodeWithContentDescription("Remove App projection Task from Ready to Plan").performClick()
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithContentDescription("Planning draft App projection Task").assertDoesNotExist()
     }
 
@@ -192,7 +192,7 @@ class TimeboxAppReadyToPlanTest {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -215,7 +215,7 @@ class TimeboxAppReadyToPlanTest {
         compose.onNodeWithText("Retry").assertDoesNotExist()
         compose.runOnIdle { assertEquals(listOf(true), transport.readinessCalls) }
 
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithTag("planning-mode-action").performClick()
         compose.onNodeWithContentDescription("Schedule App projection Task").assertDoesNotExist()
     }
@@ -225,7 +225,7 @@ class TimeboxAppReadyToPlanTest {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -236,8 +236,8 @@ class TimeboxAppReadyToPlanTest {
 
         awaitReadinessRequest(transport)
         compose.runOnIdle { transport.setServerTask(ready = false, version = 2, status = "completed") }
-        compose.onNodeWithText("Day").performClick()
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Day")
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Completed").fetchSemanticsNodes().isNotEmpty()
         }
@@ -261,7 +261,7 @@ class TimeboxAppReadyToPlanTest {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -276,8 +276,8 @@ class TimeboxAppReadyToPlanTest {
         }
         compose.onNodeWithText("Ready to Plan was not saved. Retry your latest choice.").assertExists()
 
-        compose.onNodeWithText("Day").performClick()
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Day")
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("App projection Task readiness error")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -295,7 +295,7 @@ class TimeboxAppReadyToPlanTest {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
 
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -319,7 +319,7 @@ class TimeboxAppReadyToPlanTest {
     fun TaskDetailSavesFieldsInPlaceAndReadinessUsesCoordinatorImmediately() {
         val transport = ControllableTimeboxApi()
         setAppContent(transport)
-        compose.onNodeWithText("Battle Plan").performClick()
+        navigate("Battle Plan")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription("Add App projection Task to Ready to Plan").fetchSemanticsNodes().isNotEmpty()
         }
@@ -341,6 +341,83 @@ class TimeboxAppReadyToPlanTest {
         compose.runOnIdle { transport.completeReadiness(ready = true, version = 3) }
     }
 
+    private var resumePlanning = false
+
+    private fun navigate(label: String) {
+        val onDay = compose.onAllNodesWithTag("planning-mode-action").fetchSemanticsNodes().isNotEmpty()
+        if (label == "Day" && onDay) return
+        if (compose.onAllNodesWithText("Navigate").fetchSemanticsNodes().isEmpty() && onDay) {
+            // The redesign requires leaving the planning editor before navigating.
+            resumePlanning = true
+            androidx.test.espresso.Espresso.pressBack()
+        }
+        compose.onNodeWithText("Navigate").performClick()
+        compose.onNodeWithText(label).performScrollTo().performClick()
+        if (label == "Day" && resumePlanning) compose.onNodeWithTag("planning-mode-action").performClick()
+    }
+
+    @Test
+    fun directoryClosesWithoutResetAndRestoresConversationDraft() {
+        setAppContent(ControllableTimeboxApi())
+        navigate("Conversation")
+        compose.onNodeWithContentDescription("Message Assistant").performTextReplacement("Keep this draft")
+        compose.onNodeWithText("Navigate").performClick()
+        compose.onNodeWithContentDescription("Close navigation").performClick()
+        compose.onNodeWithText("Keep this draft").assertIsDisplayed()
+        navigate("Battle Plan")
+        navigate("Conversation")
+        compose.onNodeWithText("Keep this draft").assertIsDisplayed()
+        compose.onNodeWithText("Review").assertDoesNotExist()
+        androidx.test.espresso.Espresso.pressBack()
+        navigate("Conversation")
+        compose.onNodeWithText("Keep this draft").assertIsDisplayed()
+    }
+
+    @Test
+    fun directoryBackReturnsToSourceAndTopLevelBackReturnsToDay() {
+        setAppContent(ControllableTimeboxApi())
+        navigate("Battle Plan")
+        compose.onNodeWithText("Navigate").performClick()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("Battle Plan").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
+        navigate("Battle Plan")
+        compose.onNodeWithText("Battle Plan").assertIsDisplayed()
+    }
+
+    @Test
+    fun calendarMonthAndContextualReturnSurviveDirectorySwitches() {
+        setAppContent(ControllableTimeboxApi())
+        navigate("Calendar")
+        compose.onNodeWithContentDescription("Previous month").performClick()
+        compose.onNodeWithText("August 2026").assertIsDisplayed()
+        navigate("Battle Plan")
+        navigate("Calendar")
+        compose.onNodeWithText("August 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("2026-08-21, no time recorded").performClick()
+        compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("August 2026").assertIsDisplayed()
+        // Leaving a contextual Day must not save it above Calendar's directory entry.
+        compose.onNodeWithContentDescription("2026-08-21, no time recorded").performClick()
+        navigate("Battle Plan")
+        navigate("Calendar")
+        compose.onNodeWithText("August 2026").assertIsDisplayed()
+    }
+
+    @Test
+    fun taskDetailHidesNavigationAndBackReturnsToList() {
+        setAppContent(ControllableTimeboxApi())
+        navigate("Battle Plan")
+        compose.onNodeWithText("App projection Task").performClick()
+        compose.onNodeWithText("Navigate").assertDoesNotExist()
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithText("Battle Plan").assertIsDisplayed()
+        compose.onNodeWithText("App projection Task").assertIsDisplayed()
+        compose.onNodeWithText("Navigate").assertIsDisplayed()
+    }
+
     private fun setAppContent(transport: ControllableTimeboxApi) {
         val repository = TimeboxRepository(transport.proxy())
         val readinessCoordinator = testReadyToPlanCoordinator(repository)
@@ -358,7 +435,7 @@ class TimeboxAppReadyToPlanTest {
             )
         }
         compose.waitUntil(15_000) {
-            compose.onAllNodesWithText("Battle Plan").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("Navigate").fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -369,7 +446,7 @@ class TimeboxAppReadyToPlanTest {
         )
 
     private fun enterPlanningMode() {
-        compose.onNodeWithText("Day").performClick()
+        navigate("Day")
         compose.onNodeWithTag("planning-mode-action").performClick()
     }
 
@@ -420,6 +497,8 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
             COROUTINE_SUSPENDED
         } else {
             val value: Any? = when (method.name) {
+                "chronicleMonth" -> com.timebox.android.data.remote.ChronicleMonthDto(
+                    args?.firstOrNull() as? String ?: "2026-09", meta.today, emptyList())
                 "getDay" -> day(args?.firstOrNull() as? String ?: meta.today)
                 "getDayPreview" -> preview(args?.firstOrNull() as? String ?: meta.today)
                 "getDaySummary" -> DaySummaryDto(meta.today, 0, 0, emptyList(), meta)

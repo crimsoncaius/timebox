@@ -41,21 +41,32 @@ private fun displayReviewTime(value: String?, zone: ZoneId): String = value?.let
     time.format(DateTimeFormatter.ofPattern(if (time.toLocalDate() == LocalDate.now(zone)) "HH:mm" else "d MMM yyyy · HH:mm"))
 } ?: "Time unavailable"
 
+// Destination-scoped data survives navigation, including loaded review pages.
+internal class AssistantReviewState : androidx.lifecycle.ViewModel() {
+    val page = mutableStateOf<JsonObject?>(null)
+    val rows = mutableStateOf<List<JsonObject>>(emptyList())
+    val loadedKey = mutableStateOf<String?>(null)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate) -> Unit, modifier: Modifier = Modifier, onOpenTask: (Int) -> Unit = {}) {
     val application = LocalContext.current.applicationContext as TimeboxApplication
     val local by application.activityRepository.state.collectAsState()
     val scope = rememberCoroutineScope()
-    var page by remember { mutableStateOf<JsonObject?>(null) }
-    var rows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    val retained: AssistantReviewState = androidx.lifecycle.viewmodel.compose.viewModel()
+    var page by retained.page
+    var rows by retained.rows
+    var loadedKey by retained.loadedKey
     var reviewed by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var editText by rememberSaveable { mutableStateOf<String?>(null) }
+    if (editText != null) com.timebox.android.ui.components.HideNavigate()
     val edit = editText?.let { Json.parseToJsonElement(it).jsonObject }
     var details by remember { mutableStateOf<JsonObject?>(null) }
-    var refresh by remember { mutableIntStateOf(0) }
+    if (details != null) com.timebox.android.ui.components.HideNavigate()
+    var refresh by rememberSaveable { mutableIntStateOf(0) }
     val zone = ZoneId.of(page?.reviewText("timezone") ?: local.snapshot?.reportingTimezone ?: "UTC")
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
@@ -69,8 +80,10 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     }
     // One cancellable load per tab/refresh. Cursor changes are folded into this same load.
     LaunchedEffect(reviewed, refresh, local.snapshot?.cursor) {
+        val key = "$reviewed:$refresh:${local.snapshot?.cursor}"
+        if (loadedKey == key) return@LaunchedEffect
         busy = true
-        try { fetch() }
+        try { fetch(); loadedKey = key }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { error = e.message ?: "Could not load Review. Try Refresh." }
         finally { busy = false }

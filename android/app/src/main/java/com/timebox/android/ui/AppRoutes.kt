@@ -11,6 +11,10 @@ object AppRoutes {
 
     const val DayPattern = "day/{$DateArg}?blockId={$BlockIdArg}"
     const val Chronicle = "chronicle"
+    const val Trends = "trends"
+    const val Habits = "habits"
+    const val TimeGoals = "time-goals"
+    const val Review = "assistant/review"
     const val BattlePlan = "battle-plan"
     const val TaskDetailPattern = "battle-plan/task/{$TaskIdArg}"
     const val Recurring = "battle-plan/recurring"

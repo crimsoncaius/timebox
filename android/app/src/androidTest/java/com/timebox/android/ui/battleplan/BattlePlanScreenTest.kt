@@ -508,41 +508,15 @@ class BattlePlanScreenTest {
     }
 
     @Test
-    fun scopeMenuOpensTaskTypes() {
-        var taskTypesOpened = false
+    fun taskTypesManagementIsNotInTheBattlePlanMenu() {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                BattlePlanScreen(
-                    state = BattlePlanUiState(loading = false),
-                    onRetry = {},
-                    onOpenTaskTypes = { taskTypesOpened = true },
-                )
+                BattlePlanScreen(state = BattlePlanUiState(loading = false), onRetry = {})
             }
         }
-
         compose.onNodeWithText("All Tasks", substring = true).performClick()
-        compose.onNodeWithText("Task Types").performClick()
-        compose.runOnIdle { check(taskTypesOpened) }
-    }
-
-    @Test
-    fun taskTypesKeepsTheBattlePlanMenuWithTaskTypesSelected() {
-        var recurringOpened = false
-        compose.setContent {
-            TimeboxTheme(darkTheme = false) {
-                TaskNavigationMenu(
-                    state = BattlePlanUiState(loading = false),
-                    taskTypes = true,
-                    onOpenRecurring = { recurringOpened = true },
-                )
-            }
-        }
-
-        compose.onNodeWithText("Task Types").performClick()
-        compose.onNodeWithTag("battle-plan-scope-menu").fetchSemanticsNode()
-        compose.onNodeWithContentDescription("Selected").fetchSemanticsNode()
-        compose.onNodeWithText("Recurring").performClick()
-        compose.runOnIdle { check(recurringOpened) }
+        compose.onNodeWithText("Task Types").assertDoesNotExist()
+        compose.onNodeWithText("Recurring").assertExists()
     }
 
     @Test

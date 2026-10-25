@@ -12,22 +12,19 @@ import org.junit.Assert.assertEquals
 class RecurringNavigationTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun recurringKeepsTheTaskNavigationMenu() {
-        var selected: BattlePlanScope? = null
+    @Test fun recurringIsIndependentAndRetainsItsCreationAction() {
+        var created = false
         compose.setContent {
             TimeboxTheme(darkTheme = true) {
                 RecurringScreen(
                     state = RecurringUiState(), onRetry = {}, onSelectStatus = {},
-                    onNew = {}, onOpen = {},
-                    onSelectScope = { selected = it },
+                    onNew = { created = true }, onOpen = {},
                 )
             }
         }
-        compose.onNodeWithText("Recurring").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Admin").assertIsDisplayed()
-        compose.onNodeWithText("All Tasks").assertIsDisplayed()
-        compose.onNodeWithText("Admin").performClick()
-        compose.runOnIdle { assertEquals(BattlePlanScope.Admin, selected) }
-        compose.onNodeWithText("Recurring").assertIsDisplayed()
+        compose.onNodeWithText("All Tasks").assertDoesNotExist()
+        compose.onNodeWithText("Task Types").assertDoesNotExist()
+        compose.onNodeWithText("New recurrence").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(true, created) }
     }
 }

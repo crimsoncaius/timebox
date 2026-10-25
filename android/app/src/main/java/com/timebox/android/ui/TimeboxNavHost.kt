@@ -44,7 +44,7 @@ import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.RoutineScreen
 import com.timebox.android.ui.battleplan.TaskDetailScreen
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
-import com.timebox.android.ui.battleplan.TaskNavigationMenu
+import com.timebox.android.ui.chronicle.ChronicleView
 import com.timebox.android.ui.chronicle.ChronicleScreen
 import com.timebox.android.ui.chronicle.ChronicleViewModel
 import com.timebox.android.ui.chronicle.TrendsScreen
@@ -120,6 +120,12 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies) {
         editRecurringRoute(dependencies)
         typesRoute(dependencies)
         assistantRoute(dependencies)
+        composable(AppRoutes.Review) {
+            val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
+            com.timebox.android.ui.assistant.AssistantReviewScreen(application.assistant,
+                { dependencies.navController.navigate(AppRoutes.day(it)) }, Modifier.fillMaxSize(),
+                { dependencies.navController.navigate(AppRoutes.taskDetail(it)) })
+        }
         settingsRoute(dependencies)
         themePreviewRoute(dependencies)
     }
@@ -189,37 +195,45 @@ private fun NavGraphBuilder.dayRoute(dependencies: TimeboxNavigationDependencies
 private fun NavGraphBuilder.chronicleRoute(dependencies: TimeboxNavigationDependencies) {
     with(dependencies) {
         with(models) {
-            composable(AppRoutes.Chronicle) {
-                val chronicleState by chronicleViewModel.state.collectAsState()
-                ChronicleScreen(
-                    state = chronicleState,
-                    onPrevMonth = { chronicleViewModel.shiftMonth(-1) },
-                    onNextMonth = { chronicleViewModel.shiftMonth(1) },
-                    onThisMonth = chronicleViewModel::goToThisMonth,
-                    onSelectView = chronicleViewModel::selectView,
-                    onClearHighlights = chronicleViewModel::clearHighlights,
-                    trendsContent = { TrendsScreen(chronicleState, chronicleViewModel) },
-                    timeGoalsContent = {
-                        val repository = rememberRepository()
-                        val goalsViewModel: TimeGoalsViewModel = viewModel(
-                            factory = viewModelFactory { initializer { TimeGoalsViewModel(repository) } },
-                        )
-                        val goalsState by goalsViewModel.state.collectAsState()
-                        TimeGoalsScreen(goalsViewModel, goalsState)
-                    },
-                    habitsContent = {
-                        val repository = rememberRepository()
-                        val habitsViewModel: HabitsViewModel = viewModel(
-                            factory = viewModelFactory { initializer { HabitsViewModel(repository) } },
-                        )
-                        val habitsState by habitsViewModel.state.collectAsState()
-                        HabitsScreen(habitsViewModel, habitsState) { templateId ->
-                            navController.navigate(AppRoutes.recurringDetail(templateId))
-                        }
-                    },
-                    onOpenDay = { navController.navigate(AppRoutes.day(it)) },
-                    onRetry = chronicleViewModel::load,
-                )
+            mapOf(AppRoutes.Chronicle to ChronicleView.Calendar, AppRoutes.Trends to ChronicleView.Trends,
+                AppRoutes.Habits to ChronicleView.Habits, AppRoutes.TimeGoals to ChronicleView.TimeGoals).forEach { (route, view) ->
+                composable(route) {
+                    val chronicleState by chronicleViewModel.state.collectAsState()
+                    ChronicleScreen(
+                        state = chronicleState.copy(view = view),
+                        onPrevMonth = { chronicleViewModel.shiftMonth(-1) },
+                        onNextMonth = { chronicleViewModel.shiftMonth(1) },
+                        onThisMonth = chronicleViewModel::goToThisMonth,
+                        onSelectView = {
+                            if (it == ChronicleView.Trends) {
+                                if (navController.previousBackStackEntry?.destination?.route == AppRoutes.Trends) navController.popBackStack()
+                                else navController.navigate(AppRoutes.Trends)
+                            }
+                        },
+                        onClearHighlights = chronicleViewModel::clearHighlights,
+                        trendsContent = { TrendsScreen(chronicleState, chronicleViewModel, onOpenCalendar = { navController.navigate(AppRoutes.Chronicle) }) },
+                        timeGoalsContent = {
+                            val repository = rememberRepository()
+                            val goalsViewModel: TimeGoalsViewModel = viewModel(
+                                factory = viewModelFactory { initializer { TimeGoalsViewModel(repository) } },
+                            )
+                            val goalsState by goalsViewModel.state.collectAsState()
+                            TimeGoalsScreen(goalsViewModel, goalsState)
+                        },
+                        habitsContent = {
+                            val repository = rememberRepository()
+                            val habitsViewModel: HabitsViewModel = viewModel(
+                                factory = viewModelFactory { initializer { HabitsViewModel(repository) } },
+                            )
+                            val habitsState by habitsViewModel.state.collectAsState()
+                            HabitsScreen(habitsViewModel, habitsState) { templateId ->
+                                navController.navigate(AppRoutes.recurringDetail(templateId))
+                            }
+                        },
+                        onOpenDay = { navController.navigate(AppRoutes.day(it)) },
+                        onRetry = chronicleViewModel::load,
+                    )
+                }
             }
         }
     }
@@ -288,7 +302,6 @@ private fun NavGraphBuilder.battlePlanRoute(dependencies: TimeboxNavigationDepen
                         confirmPermanentDelete = battlePlanViewModel::confirmPermanentDelete,
                     ),
                     onOpenRecurring = { navController.navigate(AppRoutes.Recurring) },
-                    onOpenTaskTypes = { navController.navigate(AppRoutes.Types) },
                 )
             }
         }
@@ -400,27 +413,9 @@ private fun NavGraphBuilder.recurringRoute(dependencies: TimeboxNavigationDepend
     with(dependencies) {
         with(models) {
             composable(AppRoutes.Recurring) {
-                val battlePlanState by battlePlanViewModel.state.collectAsState()
                 val recurringState by recurringViewModel.state.collectAsState()
-                fun returnToTasks() {
-                    navController.popBackStack(AppRoutes.BattlePlan, inclusive = false)
-                }
                 RecurringScreen(
                     state = recurringState,
-                    navigationState = battlePlanState,
-                    onSelectScope = {
-                        battlePlanViewModel.selectCollection(TaskCollection.Active)
-                        battlePlanViewModel.selectScope(it)
-                        returnToTasks()
-                    },
-                    onSelectCollection = { battlePlanViewModel.selectCollection(it); returnToTasks() },
-                    onReorderProjects = battlePlanViewModel::reorderProjects,
-                    onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
-                    onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
-                    onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
-                    onOpenTaskTypes = {
-                        navController.navigate(AppRoutes.Types) { popUpTo(AppRoutes.BattlePlan) }
-                    },
                     onRetry = { recurringViewModel.load() },
                     onSelectStatus = recurringViewModel::selectStatus,
                     onNew = { navController.navigate(AppRoutes.RecurringNew) },
@@ -485,52 +480,23 @@ private fun NavGraphBuilder.typesRoute(dependencies: TimeboxNavigationDependenci
         with(models) {
             composable(AppRoutes.Types) {
                 val typesState by typesViewModel.state.collectAsState()
-                val battlePlanState by battlePlanViewModel.state.collectAsState()
-                fun returnToTasks() {
-                    if (!navController.popBackStack(AppRoutes.BattlePlan, inclusive = false)) {
-                        navController.navigate(AppRoutes.BattlePlan) { popUpTo(AppRoutes.Types) { inclusive = true } }
-                    }
-                }
-                Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        TaskNavigationMenu(
-                            state = battlePlanState,
-                            taskTypes = true,
-                            onSelectScope = {
-                                battlePlanViewModel.selectCollection(TaskCollection.Active)
-                                battlePlanViewModel.selectScope(it)
-                                returnToTasks()
-                            },
-                            onSelectCollection = { battlePlanViewModel.selectCollection(it); returnToTasks() },
-                            onOpenRecurring = {
-                                navController.navigate(AppRoutes.Recurring) { popUpTo(AppRoutes.BattlePlan) }
-                            },
-                            onReorderProjects = battlePlanViewModel::reorderProjects,
-                            onEditProject = { battlePlanViewModel.editProject(it); returnToTasks() },
-                            onPrepareDeleteProject = { battlePlanViewModel.prepareProjectDelete(it); returnToTasks() },
-                            onNewProject = { battlePlanViewModel.startProjectCreation(); returnToTasks() },
-                        )
-                    }
-                    Box(Modifier.weight(1f)) {
-                        TypesScreen(
-                            state = typesState,
-                            onInputChange = typesViewModel::onInputChange,
-                            onAdd = typesViewModel::addType,
-                            onDelete = typesViewModel::deleteType,
-                            onConfirmCascade = typesViewModel::confirmCascadeDelete,
-                            onMigrateTarget = typesViewModel::setMigrateBlocksTo,
-                            onConfirmMigrate = typesViewModel::confirmMigrateDelete,
-                            onDismissCascade = typesViewModel::dismissCascadePrompt,
-                            onRetry = typesViewModel::load,
-                            onRename = typesViewModel::beginRename,
-                            onRenameChange = typesViewModel::changeRename,
-                            onSaveRename = typesViewModel::saveRename,
-                            onConfirmMerge = typesViewModel::confirmMerge,
-                            onBackFromMerge = typesViewModel::backFromMerge,
-                            onCancelRename = typesViewModel::cancelRename,
-                        )
-                    }
-                }
+                TypesScreen(
+                    state = typesState,
+                    onInputChange = typesViewModel::onInputChange,
+                    onAdd = typesViewModel::addType,
+                    onDelete = typesViewModel::deleteType,
+                    onConfirmCascade = typesViewModel::confirmCascadeDelete,
+                    onMigrateTarget = typesViewModel::setMigrateBlocksTo,
+                    onConfirmMigrate = typesViewModel::confirmMigrateDelete,
+                    onDismissCascade = typesViewModel::dismissCascadePrompt,
+                    onRetry = typesViewModel::load,
+                    onRename = typesViewModel::beginRename,
+                    onRenameChange = typesViewModel::changeRename,
+                    onSaveRename = typesViewModel::saveRename,
+                    onConfirmMerge = typesViewModel::confirmMerge,
+                    onBackFromMerge = typesViewModel::backFromMerge,
+                    onCancelRename = typesViewModel::cancelRename,
+                )
             }
         }
     }
@@ -540,10 +506,10 @@ private fun NavGraphBuilder.assistantRoute(dependencies: TimeboxNavigationDepend
     with(dependencies) {
         with(models) {
             composable(AppRoutes.Assistant) {
-                AssistantScreen(onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) }, onOpenDay = { navController.navigate(AppRoutes.day(it)) },
+                AssistantScreen(onOpenReview = { navController.navigate(AppRoutes.Review) }, onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) }, onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                     onOpenTrends = { start, end ->
                         models.chronicleViewModel.openRange(start, end)
-                        navController.navigate(AppRoutes.Chronicle)
+                        navController.navigate(AppRoutes.Trends)
                     })
             }
         }

@@ -1,6 +1,12 @@
 package com.timebox.android.ui
 
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.timebox.android.ui.components.LocalNavigationBlockers
+import com.timebox.android.ui.components.NavigationDirectory
+import com.timebox.android.ui.components.NavigateButton
+import com.timebox.android.ui.components.navigationDestinations
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -49,8 +56,6 @@ import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.chronicle.ChronicleView
 import com.timebox.android.ui.chronicle.ChronicleViewModel
-import com.timebox.android.ui.components.TimeboxBottomNav
-import com.timebox.android.ui.components.TimeboxTab
 import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.components.TransientFeedback
 import com.timebox.android.ui.day.DayViewModel
@@ -89,7 +94,10 @@ fun TimeboxApp(
     val navController = rememberNavController()
     val reviewRequested by application.reviewRequested.collectAsState()
     LaunchedEffect(reviewRequested) {
-        if (reviewRequested) navController.navigate(AppRoutes.Assistant) { launchSingleTop = true }
+        if (reviewRequested) {
+            navController.navigate(AppRoutes.Review) { launchSingleTop = true }
+            application.reviewRequested.value = false
+        }
     }
 
     val dayViewModel: DayViewModel = viewModel(factory = factory)
@@ -152,6 +160,7 @@ fun TimeboxApp(
     val snackbarHostState = remember { SnackbarHostState() }
     val openedDayEntryIds = remember { mutableSetOf<String>() }
     val openedBattlePlanEntryIds = remember { mutableSetOf<String>() }
+    val openedSettingsEntryIds = remember { mutableSetOf<String>() }
 
     LaunchedEffect(route, routeDate, routeTaskId, routeTemplateId, routeBlockId, backStackEntry?.id) {
         when (route) {
@@ -167,18 +176,27 @@ fun TimeboxApp(
                 dayViewModel.refreshTaskTypes()
                 dayViewModel.refreshReadyToPlan()
             }
-            AppRoutes.Chronicle -> {
+            AppRoutes.Chronicle, AppRoutes.Trends, AppRoutes.Habits, AppRoutes.TimeGoals -> {
                 dayState.day?.today?.let(chronicleViewModel::setToday)
-                chronicleViewModel.open()
+                chronicleViewModel.selectView(when (route) {
+                    AppRoutes.Trends -> ChronicleView.Trends
+                    AppRoutes.Habits -> ChronicleView.Habits
+                    AppRoutes.TimeGoals -> ChronicleView.TimeGoals
+                    else -> ChronicleView.Calendar
+                })
+                if (route == AppRoutes.Chronicle) chronicleViewModel.open()
             }
             AppRoutes.Types -> typesViewModel.load()
-            AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)
+            AppRoutes.Settings -> {
+                val entryId = backStackEntry?.id ?: return@LaunchedEffect
+                if (openedSettingsEntryIds.add(entryId)) settingsViewModel.load(dayState.day?.timezone)
+            }
             AppRoutes.BattlePlan -> {
                 val entryId = backStackEntry?.id ?: return@LaunchedEffect
                 if (openedBattlePlanEntryIds.add(entryId)) battlePlanViewModel.load()
             }
             AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
-            AppRoutes.Recurring -> recurringViewModel.load()
+            AppRoutes.Recurring -> recurringViewModel.load(showSpinner = recurringState.templates.isEmpty())
             AppRoutes.RecurringNew -> recurringEditorViewModel.open(null)
             AppRoutes.RecurringDetailPattern -> routeTemplateId?.let { recurringViewModel.openDetail(it); recurringEditorViewModel.open(it) }
             AppRoutes.RecurringEditPattern -> recurringEditorViewModel.open(routeTemplateId)
@@ -295,16 +313,28 @@ fun TimeboxApp(
         }
     }
 
-    val selectedTab = when (route) {
-        AppRoutes.DayPattern -> TimeboxTab.Day
-        AppRoutes.Chronicle -> TimeboxTab.Chronicle
-        AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
-        AppRoutes.Recurring, AppRoutes.RecurringNew,
-        AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern,
-        AppRoutes.Types -> TimeboxTab.BattlePlan
-        AppRoutes.Assistant -> TimeboxTab.Assistant
-        AppRoutes.Settings, AppRoutes.ThemePreview -> TimeboxTab.Settings
-        else -> null
+    val navigationBlockers = remember { mutableStateOf(0) }
+    var directoryOpen by rememberSaveable { mutableStateOf(false) }
+    fun selectDestination(target: String) {
+        directoryOpen = false
+        if (target == route) return
+        // Discard contextual drill-ins before saving a directory destination. Otherwise
+        // restoring its stack would reopen a different destination above it.
+        while (navController.previousBackStackEntry != null &&
+            navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>("directoryRoot") != true &&
+            navController.previousBackStackEntry?.destination?.route != AppRoutes.DayPattern) {
+            if (!navController.popBackStack()) break
+        }
+        if (target == AppRoutes.DayPattern) {
+            navController.popBackStack(AppRoutes.DayPattern, inclusive = false, saveState = true)
+        } else {
+            navController.navigate(target) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            navController.currentBackStackEntry?.savedStateHandle?.set("directoryRoot", true)
+        }
     }
     val colors = TimeboxTheme.colors
     val isImeVisible = imeVisibleOverride ?: WindowInsets.isImeVisible
@@ -381,10 +411,10 @@ fun TimeboxApp(
         )
     }
 
-    CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry) {
+    CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry, LocalNavigationBlockers provides navigationBlockers) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         if (!focused) Column(
-            modifier = Modifier.fillMaxSize().imePadding(),
+            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
             if (surfaceRoute != AppRoutes.DayPattern &&
                 surfaceRoute != AppRoutes.Assistant &&
@@ -397,12 +427,7 @@ fun TimeboxApp(
                     title = routeTitle(
                         surfaceRoute,
                         formatFullDate(dayState.date),
-                        when (chronicleState.view) {
-                            ChronicleView.Trends -> "Trends"
-                            ChronicleView.Habits -> "Habits"
-                            ChronicleView.TimeGoals -> "Time Goals"
-                            ChronicleView.Calendar -> formatMonthTitle(chronicleState.monthStart)
-                        },
+                        formatMonthTitle(chronicleState.monthStart),
                     ),
                 )
             }
@@ -411,25 +436,13 @@ fun TimeboxApp(
                 TimeboxNavHost(navigation)
             }
 
-            if (shouldShowBottomNavigation(
-                    battlePlanState.showComposer,
-                    isImeVisible,
-                    route == AppRoutes.TaskDetailPattern,
-                )) {
-                TimeboxBottomNav(selectedTab) { tab ->
-                    val target = when (tab) {
-                        TimeboxTab.Day -> AppRoutes.day(dayState.date)
-                        TimeboxTab.Chronicle -> AppRoutes.Chronicle
-                        TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
-                        TimeboxTab.Assistant -> AppRoutes.Assistant
-                        TimeboxTab.Settings -> AppRoutes.Settings
-                    }
-                    navController.navigate(target) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                    }
-                }
+            val editing = navigationBlockers.value > 0 || battlePlanState.showComposer || battlePlanState.projectEditor != null || typesState.renaming != null ||
+                (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
+            if (navigationDestinations.any { it.route == route } &&
+                shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)) {
+                NavigateButton { directoryOpen = true }
             }
+
         }
 
         if (route != AppRoutes.TaskDetailPattern) {
@@ -460,7 +473,20 @@ fun TimeboxApp(
             }
         }
 
+        if (directoryOpen && !focused) {
+            NavigationDirectory(route, { directoryOpen = false }, ::selectDestination)
+        }
+
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
+        // Only direct directory landings return to Day. Contextual links keep their source.
+        BackHandler(enabled = !focused && !directoryOpen && navigationBlockers.value == 0 && !isImeVisible &&
+            !battlePlanState.showComposer && battlePlanState.projectEditor == null && typesState.renaming == null && route != AppRoutes.DayPattern &&
+            navigationDestinations.any { it.route == route } &&
+            navController.previousBackStackEntry?.destination?.route == AppRoutes.DayPattern) {
+            selectDestination(AppRoutes.DayPattern)
+        }
+        BackHandler(enabled = directoryOpen) { directoryOpen = false }
+
     }
     }
 }
@@ -485,12 +511,14 @@ internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
 
 private fun routeKicker(route: String): String = when (route) {
     AppRoutes.DayPattern -> "Day"
-    AppRoutes.Chronicle -> "Chronicle"
-    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
+    AppRoutes.Chronicle -> "Calendar"
+    AppRoutes.Trends -> "Chronicle"
+    AppRoutes.Habits, AppRoutes.TimeGoals -> "Routines and goals"
+    AppRoutes.Types -> "Organization"
+    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern -> "Daily work"
     AppRoutes.Recurring, AppRoutes.RecurringNew,
-    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern,
-    AppRoutes.Types -> "Battle Plan"
-    AppRoutes.Assistant -> "Assistant"
+    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Routines and goals"
+    AppRoutes.Assistant, AppRoutes.Review -> "Assistant"
     AppRoutes.Settings, AppRoutes.ThemePreview -> "Settings"
     else -> "Timebox"
 }
@@ -499,9 +527,13 @@ internal fun routeTitle(route: String, day: String, chronicle: String): String =
     when (route) {
         AppRoutes.DayPattern -> day
         AppRoutes.Chronicle -> chronicle
-        AppRoutes.BattlePlan -> "Tasks"
+        AppRoutes.Trends -> "Trends"
+        AppRoutes.Habits -> "Habits"
+        AppRoutes.TimeGoals -> "Time Goals"
+        AppRoutes.Review -> "Review"
+        AppRoutes.BattlePlan -> "Battle Plan"
         AppRoutes.TaskDetailPattern -> "Task details"
-        AppRoutes.Recurring -> "Recurring"
+        AppRoutes.Recurring -> "Recurring Tasks"
         AppRoutes.RecurringNew -> "New recurrence"
         AppRoutes.RecurringDetailPattern -> "Template details"
         AppRoutes.RecurringEditPattern -> "Edit recurrence"
