@@ -45,7 +45,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -59,7 +58,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.ui.components.Hairline
-import com.timebox.android.ui.showMondayDatePicker
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -73,7 +71,7 @@ private val weekdayFormatter = DateTimeFormatter.ofPattern("EEEEE", Locale.ENGLI
 private val WEEK_SWIPE_THRESHOLD = 55.dp
 
 /**
- * One title row above an optional week strip. Tapping the title opens a date picker; the
+ * One title row above an optional week strip. The
  * "Back to today" pill appears only while another date is shown.
  */
 @Composable
@@ -90,7 +88,6 @@ internal fun DayCalendarHeader(
     onNavigateToday: (LocalDate) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -106,10 +103,6 @@ internal fun DayCalendarHeader(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(role = Role.Button, onClickLabel = "Choose a date") {
-                        showMondayDatePicker(context, selectedDate) { onSelectDate(it) }
-                    }
                     .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
                     .semantics(mergeDescendants = true) {
                         contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
