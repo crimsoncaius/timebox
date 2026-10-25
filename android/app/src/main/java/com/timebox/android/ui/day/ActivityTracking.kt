@@ -207,7 +207,6 @@ fun ActivityTracking(
                     planName = plan?.let { activityIdentityText(it.name, it.taskTitle, availableTypes.find { type -> type.id == it.taskTypeId }?.name) }.orEmpty(),
                     zone = zone,
                 ) else null
-                val last = state.snapshot?.records?.filter { it.endAt != null }?.maxByOrNull { parseActivityInstant(it.endAt!!) }
                 CurrentActivityControl(
                     activity = current?.primaryIdentity().orEmpty(),
                     secondary = current?.secondaryIdentity(),
@@ -226,7 +225,6 @@ fun ActivityTracking(
                             if (hint is PlanHint.CountToward) repository.countTowardPlan(plan) else repository.command(ActivityKind.Switch, plan = plan)
                         }
                     },
-                    lastActivity = last?.let { "last: ${it.primaryIdentity()} ended ${timeFormat.format(parseActivityInstant(it.endAt!!).atZone(zone))}" },
                 )
             }
             ActivityTrackingStatusChip(

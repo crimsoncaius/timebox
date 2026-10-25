@@ -61,7 +61,6 @@ internal fun CurrentActivityControl(
     since: String? = null,
     planHint: PlanHint? = null,
     onPlanHint: () -> Unit = {},
-    lastActivity: String? = null,
     onEdit: (() -> Unit)? = null,
 ) {
     val colors = TimeboxTheme.colors
@@ -74,7 +73,7 @@ internal fun CurrentActivityControl(
         ) {
             Box(Modifier.width(4.dp).fillMaxHeight().background(colors.actual))
             Text(
-                listOfNotNull("Not tracking", lastActivity).joinToString(" · "),
+                "Not tracking",
                 color = colors.onVariant, style = TimeboxTheme.type.body,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
