@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -27,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.timebox.android.BuildConfig
 import com.timebox.android.ui.theme.TimeboxTheme
 
-/** THROWAWAY: four native bar treatments on the real app, selected by ?variant=A|B|C|D.
+/** THROWAWAY: five native bar treatments on the real app, selected by ?variant=A|B|C|D|E.
  * Preferences deliberately live in memory. Production persistence is not being tested.
  */
 internal object ShortcutPrototype {
@@ -35,8 +36,8 @@ internal object ShortcutPrototype {
     var variant by mutableStateOf(0)
     var pins by mutableStateOf(navigationDestinations.take(2).map { it.route })
     var editing by mutableStateOf(false)
-    val keys = listOf("A", "B", "C", "D")
-    val names = listOf("A · Equal tabs", "B · Split controls", "C · Inset dock", "D · Translucent overlay")
+    val keys = listOf("A", "B", "C", "D", "E")
+    val names = listOf("A · Equal tabs", "B · Split controls", "C · Inset dock", "D · Translucent overlay", "E · Floating pills")
 }
 
 internal fun configureShortcutPrototype(intent: Intent?) {
@@ -48,9 +49,13 @@ internal fun configureShortcutPrototype(intent: Intent?) {
 
 @Composable
 internal fun ShortcutPrototypeBar(current: String, onSelect: (String) -> Unit, onOpen: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(if (ShortcutPrototype.variant == 3) Color.Transparent else TimeboxTheme.colors.bg).navigationBarsPadding()) {
+    Column(Modifier.fillMaxWidth().background(if (ShortcutPrototype.variant >= 3) Color.Transparent else TimeboxTheme.colors.bg).navigationBarsPadding()) {
+        if (ShortcutPrototype.variant == 4) {
+            PrototypeControls(current)
+            Spacer(Modifier.height(12.dp))
+        }
         PrototypeBarLayout(ShortcutPrototype.pins, current, onSelect, onOpen)
-        PrototypeControls(current)
+        if (ShortcutPrototype.variant != 4) PrototypeControls(current)
     }
 }
 
@@ -66,11 +71,12 @@ private fun PrototypeBarLayout(pins: List<String>, current: String, onSelect: (S
         .clip(RoundedCornerShape(if (inset) 20.dp else 0.dp))
         .background(when (variant) { 3 -> c.bg.copy(alpha = 0.78f); 2 -> c.low; else -> Color.Transparent })
         .padding(if (inset) 6.dp else 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (variant == 4) 10.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically) {
         entries.forEach { item ->
             PrototypeNavItem(item, current == item.route, variant, Modifier.weight(1f)) { if (current != item.route) onSelect(item.route) }
         }
-        if (variant != 3) repeat(3 - pins.size) { Spacer(Modifier.weight(1f)) }
+        if (variant < 3) repeat(3 - pins.size) { Spacer(Modifier.weight(1f)) }
         if (variant == 1) Box(Modifier.padding(horizontal = 3.dp).width(1.dp).height(36.dp).background(c.hairline))
         PrototypeNavItem(navigate, false, variant, Modifier.weight(1f), onOpen)
     }
@@ -79,6 +85,22 @@ private fun PrototypeBarLayout(pins: List<String>, current: String, onSelect: (S
 @Composable
 private fun PrototypeNavItem(item: NavigationDestination, active: Boolean, variant: Int, modifier: Modifier, onClick: () -> Unit) {
     val c = TimeboxTheme.colors
+    if (variant == 4) {
+        val shape = RoundedCornerShape(50)
+        val tint = if (active) c.onSelected else c.on
+        Column(modifier.clip(shape)
+            .background((if (active) c.selected else c.low).copy(alpha = 0.94f))
+            .border(1.dp, (if (active) c.outline else c.hairline).copy(alpha = 0.7f), shape)
+            .semantics { selected = active }.clickable(onClickLabel = "Open ${item.label}", onClick = onClick)
+            .heightIn(min = 64.dp).padding(horizontal = 8.dp, vertical = 9.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(item.icon, null, Modifier.size(23.dp), tint = tint)
+            Spacer(Modifier.height(4.dp))
+            Text(item.label, color = tint, style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp),
+                textAlign = TextAlign.Center, maxLines = 2)
+        }
+        return
+    }
     if (variant == 1) {
         Row(modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(8.dp))
             .background(if (active) c.selected else Color.Transparent)

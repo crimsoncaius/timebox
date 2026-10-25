@@ -420,7 +420,7 @@ fun TimeboxApp(
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
         val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
-        val overlayNavigation = ShortcutPrototype.enabled && ShortcutPrototype.variant == 3
+        val overlayNavigation = ShortcutPrototype.enabled && ShortcutPrototype.variant >= 3
         if (!focused) Column(
             modifier = Modifier.fillMaxSize().imePadding().then(if (directoryOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
