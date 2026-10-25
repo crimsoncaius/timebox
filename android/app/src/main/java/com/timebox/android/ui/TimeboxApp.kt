@@ -416,6 +416,11 @@ fun TimeboxApp(
 
     CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry, LocalNavigationBlockers provides navigationBlockers) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
+        val editing = navigationBlockers.value > 0 || battlePlanState.showComposer || battlePlanState.projectEditor != null || typesState.renaming != null ||
+            (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
+        val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
+            shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
+        val overlayNavigation = ShortcutPrototype.enabled && ShortcutPrototype.variant == 3
         if (!focused) Column(
             modifier = Modifier.fillMaxSize().imePadding().then(if (directoryOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
@@ -439,14 +444,17 @@ fun TimeboxApp(
                 TimeboxNavHost(navigation)
             }
 
-            val editing = navigationBlockers.value > 0 || battlePlanState.showComposer || battlePlanState.projectEditor != null || typesState.renaming != null ||
-                (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
-            if (navigationDestinations.any { it.route == route } &&
-                shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)) {
+            if (showNavigation && !overlayNavigation) {
                 if (ShortcutPrototype.enabled) ShortcutPrototypeBar(route, ::selectDestination) { directoryOpen = true }
                 else NavigateButton { directoryOpen = true }
             }
 
+        }
+
+        if (showNavigation && overlayNavigation && !directoryOpen) {
+            Box(Modifier.align(Alignment.BottomCenter)) {
+                ShortcutPrototypeBar(route, ::selectDestination) { directoryOpen = true }
+            }
         }
 
         if (route != AppRoutes.TaskDetailPattern) {

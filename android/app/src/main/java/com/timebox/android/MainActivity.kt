@@ -122,8 +122,8 @@ class MainActivity : ComponentActivity() {
         val prototype = com.timebox.android.ui.components.ShortcutPrototype
         if (prototype.enabled && !prototype.editing && currentFocus !is android.widget.EditText &&
             (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
-            prototype.variant = (prototype.variant + if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) 1 else 2) % 3
-            intent.data = Uri.parse("timebox://prototype/navigation-shortcuts?variant=${listOf("A", "B", "C")[prototype.variant]}")
+            prototype.variant = (prototype.variant + if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) 1 else prototype.keys.size - 1) % prototype.keys.size
+            intent.data = Uri.parse("timebox://prototype/navigation-shortcuts?variant=${prototype.keys[prototype.variant]}")
             return true
         }
         return super.onKeyUp(keyCode, event)

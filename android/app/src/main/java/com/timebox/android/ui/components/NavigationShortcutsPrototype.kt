@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.timebox.android.BuildConfig
 import com.timebox.android.ui.theme.TimeboxTheme
 
-/** THROWAWAY: three native bar treatments on the real app, selected by ?variant=A|B|C.
+/** THROWAWAY: four native bar treatments on the real app, selected by ?variant=A|B|C|D.
  * Preferences deliberately live in memory. Production persistence is not being tested.
  */
 internal object ShortcutPrototype {
@@ -35,19 +35,20 @@ internal object ShortcutPrototype {
     var variant by mutableStateOf(0)
     var pins by mutableStateOf(navigationDestinations.take(2).map { it.route })
     var editing by mutableStateOf(false)
-    val names = listOf("A · Equal tabs", "B · Split controls", "C · Inset dock")
+    val keys = listOf("A", "B", "C", "D")
+    val names = listOf("A · Equal tabs", "B · Split controls", "C · Inset dock", "D · Translucent overlay")
 }
 
 internal fun configureShortcutPrototype(intent: Intent?) {
     ShortcutPrototype.enabled = BuildConfig.DEBUG && intent?.data?.path == "/navigation-shortcuts"
     if (ShortcutPrototype.enabled) {
-        ShortcutPrototype.variant = listOf("A", "B", "C").indexOf(intent?.data?.getQueryParameter("variant")).coerceAtLeast(0)
+        ShortcutPrototype.variant = ShortcutPrototype.keys.indexOf(intent?.data?.getQueryParameter("variant")).coerceAtLeast(0)
     }
 }
 
 @Composable
 internal fun ShortcutPrototypeBar(current: String, onSelect: (String) -> Unit, onOpen: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(TimeboxTheme.colors.bg).navigationBarsPadding()) {
+    Column(Modifier.fillMaxWidth().background(if (ShortcutPrototype.variant == 3) Color.Transparent else TimeboxTheme.colors.bg).navigationBarsPadding()) {
         PrototypeBarLayout(ShortcutPrototype.pins, current, onSelect, onOpen)
         PrototypeControls(current)
     }
@@ -57,17 +58,19 @@ internal fun ShortcutPrototypeBar(current: String, onSelect: (String) -> Unit, o
 private fun PrototypeBarLayout(pins: List<String>, current: String, onSelect: (String) -> Unit, onOpen: () -> Unit) {
     val c = TimeboxTheme.colors
     val variant = ShortcutPrototype.variant
+    val inset = variant >= 2
     val navigate = NavigationDestination("", "Navigate", "directory", Icons.Outlined.GridView)
     val entries = pins.map { route -> navigationDestinations.first { it.route == route } }
     if (variant == 0) Hairline()
-    Row(Modifier.fillMaxWidth().padding(horizontal = if (variant == 2) 12.dp else 4.dp, vertical = 6.dp)
-        .clip(RoundedCornerShape(if (variant == 2) 20.dp else 0.dp))
-        .background(if (variant == 2) c.low else Color.Transparent).padding(if (variant == 2) 6.dp else 0.dp),
+    Row(Modifier.fillMaxWidth().padding(horizontal = if (inset) 12.dp else 4.dp, vertical = 6.dp)
+        .clip(RoundedCornerShape(if (inset) 20.dp else 0.dp))
+        .background(when (variant) { 3 -> c.bg.copy(alpha = 0.78f); 2 -> c.low; else -> Color.Transparent })
+        .padding(if (inset) 6.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically) {
         entries.forEach { item ->
             PrototypeNavItem(item, current == item.route, variant, Modifier.weight(1f)) { if (current != item.route) onSelect(item.route) }
         }
-        repeat(3 - pins.size) { Spacer(Modifier.weight(1f)) }
+        if (variant != 3) repeat(3 - pins.size) { Spacer(Modifier.weight(1f)) }
         if (variant == 1) Box(Modifier.padding(horizontal = 3.dp).width(1.dp).height(36.dp).background(c.hairline))
         PrototypeNavItem(navigate, false, variant, Modifier.weight(1f), onOpen)
     }
@@ -88,8 +91,8 @@ private fun PrototypeNavItem(item: NavigationDestination, active: Boolean, varia
         }
         return
     }
-    Column(modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(if (variant == 2) 14.dp else 8.dp))
-        .background(if (active && variant != 0) c.selected else Color.Transparent)
+    Column(modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(if (variant >= 2) 14.dp else 8.dp))
+        .background(if (active && variant != 0) c.selected.copy(alpha = if (variant == 3) 0.65f else 1f) else Color.Transparent)
         .semantics { selected = active }.clickable(onClickLabel = "Open ${item.label}", onClick = onClick)
         .heightIn(min = 64.dp).padding(vertical = 6.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -107,8 +110,8 @@ private fun PrototypeControls(current: String) {
     val c = TimeboxTheme.colors
     val activity = LocalContext.current as? Activity
     fun change(delta: Int) {
-        ShortcutPrototype.variant = (ShortcutPrototype.variant + delta + 3) % 3
-        activity?.intent?.data = Uri.parse("timebox://prototype/navigation-shortcuts?variant=${listOf("A", "B", "C")[ShortcutPrototype.variant]}")
+        ShortcutPrototype.variant = (ShortcutPrototype.variant + delta + ShortcutPrototype.keys.size) % ShortcutPrototype.keys.size
+        activity?.intent?.data = Uri.parse("timebox://prototype/navigation-shortcuts?variant=${ShortcutPrototype.keys[ShortcutPrototype.variant]}")
     }
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.clip(RoundedCornerShape(24.dp)).background(c.on), verticalAlignment = Alignment.CenterVertically) {

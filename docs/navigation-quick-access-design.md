@@ -35,8 +35,9 @@ Branch: `codex/navigation-shortcuts-prototype`.
 - A — Equal tabs: icon above label, with a compact selected icon background.
 - B — Split controls: icons beside labels, with Navigate separated by a rule.
 - C — Inset dock: grouped tonal surface with a full selected-item background.
+- D — Translucent overlay: the current screen extends behind a translucent inset bar. Only visible destinations and Navigate share equal-width slots; there is no unused shortcut placeholder. This is the user's requested fourth comparison, intentionally revisiting the fixed empty slot used in A–C.
 
-The variants run on the actual Android destination screens. The native equivalent of the UI skill's URL switcher uses `timebox://prototype/navigation-shortcuts?variant=A` (also B and C), with a debug-only comparison bar below the proposed navigation. It updates the Activity's deep-link URI. Preferences remain in memory for this throwaway experiment; the agreed production behavior still requires local persistence.
+The variants run on the actual Android destination screens. The native equivalent of the UI skill's URL switcher uses `timebox://prototype/navigation-shortcuts?variant=A` (also B, C, and D), with a debug-only comparison bar below the proposed navigation. It updates the Activity's deep-link URI. Preferences remain in memory for this throwaway experiment; the agreed production behavior still requires local persistence. D uses alpha translucency without background blur; the comparison controls also overlay the screen and are not part of the proposed product bar.
 
 Build with `./scripts/android-gradle.ps1 assembleDebug`, install the resulting APK through the managed emulator helper, then launch with `./scripts/navigation-shortcuts-prototype.ps1 -Token <reservation-token> -Variant A`. The launcher defaults to this chat's review reservation.
 
@@ -54,5 +55,6 @@ The prototype is gated to debug deep-link launches. No production shortcut behav
 - Debug APK build succeeded. Manual emulator checks covered A/B/C switching, adding a third shortcut, rejecting a fourth, reordering, saving, cancelling, and saving no shortcuts. The editor no longer exposes the directory behind it to accessibility.
 - Screenshots: `artifacts/navigation-review/shortcuts-a.png`, `shortcuts-b.png`, `shortcuts-c.png`, `shortcuts-editor.png`, and `shortcuts-final.png` (local review artifacts).
 - Pending review: emulator `emulator-5594`, reservation `43683640e3424ed0ac4bfef0b81de463`, storage root `C:\Users\Caius\TimeboxRuntime\emulators`.
-- Left running on A with Day and Battle Plan. Agent recommendation: A for label space and the least visual weight; user verdict pending.
+- Left running on D with Day and Battle Plan. User verdict pending.
+- D verification: debug build passed; the timeline visibly continues beneath the translucent bar, the three labels are centered at equal intervals, the switcher wraps D → A → D, and Navigate opens the directory and returns correctly. Screenshot: `artifacts/navigation-review/shortcuts-d.png`.
 - Production persistence and broader navigation regression tests are deferred until a treatment is selected. Preserve this throwaway branch as the primary source and link it from the implementation issue when that work is scoped.
