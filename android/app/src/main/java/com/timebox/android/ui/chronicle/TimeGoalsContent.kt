@@ -54,6 +54,7 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
     var expanded by rememberSaveable { mutableStateOf<Int?>(null) }
     var detailId by rememberSaveable { mutableStateOf<Int?>(null) }
     var editorId by rememberSaveable { mutableStateOf<Int?>(null) }
+    if (detailId != null || editorId != null) com.timebox.android.ui.components.HideNavigate()
     val canManage = !state.offline && !state.goalSaving && !state.loading
     Text("Recorded time, measured against each goal’s period", style = type.bodySmall, color = colors.onVariant)
     state.goalError?.let { message ->

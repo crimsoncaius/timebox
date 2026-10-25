@@ -139,6 +139,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
     }
     var sessionSheet by remember { mutableStateOf<Pair<Int, LocalDate>?>(null) }
     var addSheet by remember { mutableStateOf(false) }
+    if (addSheet || sessionSheet != null) com.timebox.android.ui.components.HideNavigate()
     val week = state.week
     val context = LocalContext.current.applicationContext
     val preferences = remember(context) { AppPreferences(context) }

@@ -71,7 +71,6 @@ class ChronicleViewModel(private val repository: TimeboxRepository) : ViewModel(
     private var calendarInitialized = false
 
     fun open() {
-        calendarInitialized = false
         load()
     }
 

@@ -79,6 +79,7 @@ class AppPreferences(private val context: Context) {
 
 
     private object Keys {
+        val navigationShortcuts = stringPreferencesKey("navigation_shortcuts")
         val baseUrl = stringPreferencesKey("base_url")
         val apiKey = stringPreferencesKey("api_key")
         val darkTheme = booleanPreferencesKey("dark_theme")
@@ -119,6 +120,16 @@ class AppPreferences(private val context: Context) {
             importance = prefs[Keys.battlePlanImportance].toPreferenceSet(),
             taskTypes = prefs[Keys.battlePlanTaskTypes].toPreferenceSet(),
         )
+    }
+
+    /** Null means unconfigured; an empty list is an intentional choice. Order is significant. */
+    val navigationShortcuts: Flow<List<String>?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.navigationShortcuts]?.split(',')?.filter(String::isNotBlank)?.distinct()?.take(3)
+    }
+
+    suspend fun setNavigationShortcuts(routes: List<String>) {
+        require(routes.size <= 3 && routes.distinct() == routes && routes.none { it.isBlank() || ',' in it })
+        context.dataStore.edit { it[Keys.navigationShortcuts] = routes.joinToString(",") }
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->

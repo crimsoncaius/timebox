@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -58,6 +59,10 @@ class QuickTrackingActivity : ComponentActivity(), RecognitionListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT < 27) {
+            @Suppress("DEPRECATION")
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+        }
         enableEdgeToEdge()
         source = intent.getStringExtra("source")?.takeIf { it in listOf("tile", "app") } ?: "assistant"
         setup = intent.getBooleanExtra("setup", false)
@@ -146,15 +151,11 @@ class QuickTrackingActivity : ComponentActivity(), RecognitionListener {
 
     private fun requestListen() {
         if (app.quickTracking.state.value.busy) return
-        if (getSystemService(KeyguardManager::class.java).isDeviceLocked) {
-            speechStatus = "Unlock your device to track an activity."
-            getSystemService(KeyguardManager::class.java).requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
-                override fun onDismissSucceeded() { requestListen() }
-            })
-            return
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permission.launch(Manifest.permission.RECORD_AUDIO)
-        else listen()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listen()
+        else if (getSystemService(KeyguardManager::class.java).isDeviceLocked) {
+            speechStatus = "Enable microphone permission from the unlocked app, or type your command."
+            typing = true
+        } else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     private fun listen() {

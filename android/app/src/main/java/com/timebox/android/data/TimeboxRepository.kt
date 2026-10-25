@@ -110,6 +110,10 @@ class TimeboxRepository private constructor(
 
     val dailyReminders: Flow<DailyReminderSettings> = preferences?.dailyReminders ?: flowOf(DailyReminderSettings())
 
+    val navigationShortcuts: Flow<List<String>?> = preferences?.navigationShortcuts ?: flowOf(null)
+
+    suspend fun setNavigationShortcuts(routes: List<String>) = checkNotNull(preferences).setNavigationShortcuts(routes)
+
     suspend fun getActivity(): com.timebox.android.data.remote.ActivitySnapshotDto {
         val response = api().getActivity()
         return if (response.reportingTimezoneInitialized == false) api().initializeReportingTimezone(
