@@ -6,6 +6,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import com.timebox.android.ui.components.LocalNavigationBlockers
 import com.timebox.android.ui.components.NavigationDirectory
 import com.timebox.android.ui.components.NavigateButton
+import com.timebox.android.ui.components.ShortcutPrototype
+import com.timebox.android.ui.components.ShortcutPrototypeBar
+import com.timebox.android.ui.components.ShortcutPrototypeEditor
 import com.timebox.android.ui.components.navigationDestinations
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -440,7 +443,8 @@ fun TimeboxApp(
                 (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
             if (navigationDestinations.any { it.route == route } &&
                 shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)) {
-                NavigateButton { directoryOpen = true }
+                if (ShortcutPrototype.enabled) ShortcutPrototypeBar(route, ::selectDestination) { directoryOpen = true }
+                else NavigateButton { directoryOpen = true }
             }
 
         }
@@ -473,8 +477,9 @@ fun TimeboxApp(
             }
         }
 
-        if (directoryOpen && !focused) {
-            NavigationDirectory(route, { directoryOpen = false }, ::selectDestination)
+        if (directoryOpen && !focused && !(ShortcutPrototype.enabled && ShortcutPrototype.editing)) {
+            NavigationDirectory(route, { directoryOpen = false }, ::selectDestination,
+                onEditShortcuts = if (ShortcutPrototype.enabled) ({ ShortcutPrototype.editing = true }) else null)
         }
 
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
@@ -486,6 +491,7 @@ fun TimeboxApp(
             selectDestination(AppRoutes.DayPattern)
         }
         BackHandler(enabled = directoryOpen) { directoryOpen = false }
+        if (ShortcutPrototype.enabled && ShortcutPrototype.editing) ShortcutPrototypeEditor()
 
     }
     }

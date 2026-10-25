@@ -73,13 +73,18 @@ internal fun NavigateButton(onOpen: () -> Unit) {
 }
 
 @Composable
-internal fun NavigationDirectory(currentRoute: String, onClose: () -> Unit, onSelect: (String) -> Unit) {
+internal fun NavigationDirectory(currentRoute: String, onClose: () -> Unit, onSelect: (String) -> Unit, onEditShortcuts: (() -> Unit)? = null) {
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize().background(colors.bg).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Timebox navigation" }
         .statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Timebox", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
             IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "Close navigation", tint = colors.on) }
+        }
+        if (onEditShortcuts != null) TextButton(onClick = onEditShortcuts, modifier = Modifier.padding(horizontal = 16.dp)) {
+            Icon(Icons.Outlined.Tune, null, Modifier.size(20.dp), tint = colors.on)
+            Spacer(Modifier.width(10.dp))
+            Text("Edit shortcuts", style = TimeboxTheme.type.label, color = colors.on)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->

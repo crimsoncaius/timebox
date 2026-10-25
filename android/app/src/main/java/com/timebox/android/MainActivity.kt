@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.timebox.android.ui.day.configureRecordingStudy(intent)
+        com.timebox.android.ui.components.configureShortcutPrototype(intent)
         enableEdgeToEdge()
         notificationsAllowed = canDisplayNotifications()
         exactAlarmsAllowed = canScheduleExactAlarms(this)
@@ -112,8 +113,20 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        com.timebox.android.ui.components.configureShortcutPrototype(intent)
         com.timebox.android.ui.day.configureRecordingStudy(intent)
         openCheckIn(intent)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val prototype = com.timebox.android.ui.components.ShortcutPrototype
+        if (prototype.enabled && !prototype.editing && currentFocus !is android.widget.EditText &&
+            (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            prototype.variant = (prototype.variant + if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) 1 else 2) % 3
+            intent.data = Uri.parse("timebox://prototype/navigation-shortcuts?variant=${listOf("A", "B", "C")[prototype.variant]}")
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     private fun openCheckIn(intent: Intent?) {
