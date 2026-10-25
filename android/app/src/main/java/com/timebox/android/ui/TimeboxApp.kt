@@ -60,7 +60,6 @@ import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.chronicle.ChronicleView
 import com.timebox.android.ui.chronicle.ChronicleViewModel
-import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.components.TransientFeedback
 import com.timebox.android.ui.day.DayViewModel
 import com.timebox.android.ui.focus.FocusMode
@@ -158,7 +157,6 @@ fun TimeboxApp(
     val routeDate = backStackEntry?.arguments?.getString(AppRoutes.DateArg)?.let {
         runCatching { LocalDate.parse(it) }.getOrNull()
     }
-    val surfaceRoute = if (route == AppRoutes.TaskDetailPattern) navController.previousBackStackEntry?.destination?.route ?: AppRoutes.BattlePlan else route
     val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
     val routeBlockId = backStackEntry?.arguments?.getInt(AppRoutes.BlockIdArg)?.takeIf { it >= 0 }
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
@@ -324,7 +322,12 @@ fun TimeboxApp(
     val shortcuts by remember(repository) { repository.navigationShortcuts.map(::navigationShortcutRoutes) }.collectAsState(initial = null)
     var navigationHeight by remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
-    fun selectDestination(target: String) {
+    var shortcutSlide by remember { mutableStateOf<ShortcutSlide?>(null) }
+    LaunchedEffect(route) {
+        if (shortcutSlide?.to != route) shortcutSlide = null
+    }
+    fun selectDestination(target: String, fromShortcut: Boolean = false) {
+        shortcutSlide = if (fromShortcut) shortcutSlide(shortcuts.orEmpty(), route, target) else null
         directoryOpen = false
         if (target == route) return
         // Discard contextual drill-ins before saving a directory destination. Otherwise
@@ -398,7 +401,7 @@ fun TimeboxApp(
     }
     val navigationOptions = rememberUpdatedState(TimeboxNavigationOptions(
         isDark, onToggleDark, notificationsAllowed, onRequestNotificationPermission,
-        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion,
+        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion, shortcutSlide,
     ))
     val navigation = remember(
         screenModels, navController, snackbarHostState, trackingScope,
@@ -430,28 +433,12 @@ fun TimeboxApp(
         if (!focused) Column(
             modifier = Modifier.fillMaxSize().imePadding().then(if (directoryOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
-            if (surfaceRoute != AppRoutes.DayPattern &&
-                surfaceRoute != AppRoutes.Assistant &&
-                surfaceRoute != AppRoutes.RecurringNew &&
-                surfaceRoute != AppRoutes.RecurringEditPattern &&
-                surfaceRoute != AppRoutes.RecurringDetailPattern &&
-                surfaceRoute?.startsWith("prototype/") != true) {
-                TimeboxTopBar(
-                    kicker = routeKicker(surfaceRoute),
-                    title = routeTitle(
-                        surfaceRoute,
-                        formatFullDate(dayState.date),
-                        formatMonthTitle(chronicleState.monthStart),
-                    ),
-                )
-            }
-
             Box(modifier = Modifier.weight(1f)) {
                 TimeboxNavHost(navigation)
             }
 
             if (showNavigation) shortcuts?.let { pins ->
-                NavigationDock(pins, route, ::selectDestination, { directoryOpen = true },
+                NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) }, { directoryOpen = true },
                     Modifier.onSizeChanged { navigationHeight = with(density) { it.height.toDp() } })
             }
 
@@ -486,7 +473,7 @@ fun TimeboxApp(
         }
 
         if (directoryOpen && !focused && !shortcutEditorOpen) {
-            NavigationDirectory(route, { directoryOpen = false }, ::selectDestination,
+            NavigationDirectory(route, { directoryOpen = false }, { selectDestination(it) },
                 onEditShortcuts = if (shortcuts != null) ({ shortcutEditorOpen = true }) else null)
         }
 
@@ -528,7 +515,7 @@ internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
     AppRoutes.RecurringEditPattern,
 )
 
-private fun routeKicker(route: String): String = when (route) {
+internal fun routeKicker(route: String): String = when (route) {
     AppRoutes.DayPattern -> "Day"
     AppRoutes.Chronicle -> "Calendar"
     AppRoutes.Trends -> "Chronicle"

@@ -1,6 +1,8 @@
 package com.timebox.android.ui
 
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
@@ -55,6 +57,22 @@ import org.junit.Test
 class TimeboxAppReadyToPlanTest {
     @get:Rule val compose = createComposeRule()
     private val readinessScopes = mutableListOf<CoroutineScope>()
+
+    @Test
+    fun shortcutMovesThePageHeadingWhileDockStaysFixed() {
+        setAppContent(ControllableTimeboxApi())
+        val dock = compose.onAllNodesWithText("Battle Plan").onLast()
+        val dockLeft = dock.getUnclippedBoundsInRoot().left
+        compose.mainClock.autoAdvance = false
+        dock.performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val movingLeft = compose.onAllNodesWithText("Battle Plan").onFirst().getUnclippedBoundsInRoot().left
+        assertEquals(dockLeft, compose.onAllNodesWithText("Battle Plan").onLast().getUnclippedBoundsInRoot().left)
+        compose.mainClock.advanceTimeBy(400)
+        val settledLeft = compose.onAllNodesWithText("Battle Plan").onFirst().getUnclippedBoundsInRoot().left
+        assertTrue("Page heading must move left as the right-hand shortcut enters", movingLeft > settledLeft)
+        compose.mainClock.autoAdvance = true
+    }
 
     @Test
     fun assistantShowsNavigationOnlyWhileKeyboardIsHidden() {

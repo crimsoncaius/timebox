@@ -31,3 +31,18 @@ Managed review device: `emulator-5594`, token `43683640e3424ed0ac4bfef0b81de463`
 Validation: the debug build passed. Twelve targeted instrumentation cases passed across the initial run and one isolated retry: the task-detail Back case initially lost Espresso window focus and passed unchanged on retry. Coverage includes persistence and explicit empty selections, order, capacity, configuration restoration of editor drafts, Cancel/Back, save-error retry, current-item no-op, full directory access, keyboard visibility, conversation drafts, Calendar state, and detail-screen Back behavior.
 
 The installed app also retained an added Habits shortcut after force-stop and restart. The default Day/Battle Plan selection was restored afterward. The editor and live dock preview are left open for review. The local API was subsequently started on port 8001, with its database backed up and migrated; the app now loads live Day data.
+
+## Shortcut motion decision (2026-10-25)
+
+After comparing the native motion prototype, the user selected the full-width
+slide at 250 ms. Tapping a shortcut to the right moves the page left; tapping
+one to the left reverses it. Headings move with their destination and the dock
+stays fixed. Direction follows the saved shortcut order. Reselecting the current
+shortcut does nothing; unpinned sources and ordinary directory/contextual
+navigation keep their previous transition. Android Remove animations skips the
+slide. This is tap-triggered motion, not a finger-swipe navigation gesture.
+
+Implementation is isolated on `codex/navigation-motion`. The original comparison
+is preserved on `codex/shortcut-motion-prototype` at `ac467cf0`. Opening Navigate
+and selecting a destination from its directory are a separate prototype whose
+motion treatment is not yet selected.
