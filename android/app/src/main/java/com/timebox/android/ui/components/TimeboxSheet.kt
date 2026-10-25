@@ -100,13 +100,14 @@ fun TimeboxSheet(
     live: Boolean = false,
     busy: Boolean = false,
     onCancel: () -> Unit = onDismiss,
+    dismissAllowed: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = TimeboxTheme.colors
     val dismiss = { if (!busy) onDismiss() }
     ModalBottomSheet(
         onDismissRequest = dismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { !busy }),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden || (!busy && dismissAllowed) }),
         containerColor = colors.sheet.copy(alpha = 1f),
         contentColor = colors.on,
         scrimColor = colors.scrim,

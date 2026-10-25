@@ -2,6 +2,7 @@ package com.timebox.android.ui.assistant
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -17,9 +18,10 @@ import java.io.IOException
 class AssistantReviewTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private class ReviewTransport(val stopEvent: Boolean = false, val loseReply: Boolean = false, val rejectFirst: Boolean = false) : AssistantTransport {
+    private class ReviewTransport(val stopEvent: Boolean = false, val loseReply: Boolean = false, val rejectFirst: Boolean = false, val failLoadOnce: Boolean = false) : AssistantTransport {
         val corrections = mutableListOf<JsonObject>()
         var reviewed = false
+        var loads = 0
         override suspend fun create() = "unused"
         override suspend fun delete(conversation: String) {}
         override suspend fun stop(conversation: String, run: String) {}
@@ -34,6 +36,8 @@ class AssistantReviewTest {
                 if (loseReply && corrections.size == 1) throw IOException("Reply lost")
                 return buildJsonObject { put("reviewed", true) }
             }
+            loads++
+            if (failLoadOnce && loads == 1) throw IOException("Load failed")
             return buildJsonObject {
                 put("timezone", "Asia/Singapore"); put("unchecked_count", if (reviewed) 0 else 1)
                 putJsonArray("task_types") {
@@ -64,18 +68,49 @@ class AssistantReviewTest {
         } finally { scope.cancel() }
     }
 
+    @Test fun contextualRetryRecoversLoadWithoutPermanentRefresh() {
+        val transport = ReviewTransport(failLoadOnce = true)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        try {
+            val controller = AssistantController(scope) { transport }
+            compose.setContent { TimeboxTheme { AssistantReviewScreen(controller, {}, Modifier.fillMaxSize()) } }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Retry").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Refresh").assertDoesNotExist()
+            compose.onNodeWithText("Retry").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Correct").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Retry").assertDoesNotExist()
+        } finally { scope.cancel() }
+    }
+
+    @Test fun returningReloadsRemoteChangesWithoutLocalCursorChange() {
+        val transport = ReviewTransport()
+        val visible = mutableStateOf(true)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        try {
+            val controller = AssistantController(scope) { transport }
+            compose.setContent { TimeboxTheme { if (visible.value) AssistantReviewScreen(controller, {}, Modifier.fillMaxSize()) } }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Correct").fetchSemanticsNodes().isNotEmpty() }
+            compose.runOnIdle { visible.value = false }
+            compose.waitForIdle()
+            compose.runOnIdle { transport.reviewed = true; visible.value = true }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("To review · 0").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("No activities to review").assertIsDisplayed()
+            assertTrue(transport.loads >= 2)
+        } finally { scope.cancel() }
+    }
+
     @Test fun startCorrectsCategoryAndNameWithoutSendingEndAndMarksReviewed() {
         val transport = ReviewTransport()
         show(transport) {
             compose.onNodeWithText("You said: “I started working”").assertIsDisplayed()
             compose.onNodeWithText("Correct").performClick()
             compose.onNodeWithText("Change").performClick()
-            compose.onNodeWithText("Search categories").performTextInput("Learn")
+            compose.onNodeWithTag("task-type-search").performTextInput("Learn")
             compose.onNodeWithText("Learning").performClick()
-            compose.onNodeWithText("Activity name (optional)").performScrollTo().performTextReplacement("Study")
-            compose.onNodeWithText("Save correction").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Block Name").performScrollTo().performTextReplacement("Study")
+            compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { transport.corrections.isNotEmpty() }
-            compose.onNodeWithText("To review · 0").assertExists()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("To review · 0").fetchSemanticsNodes().isNotEmpty() }
             val body = transport.corrections.single()
             assertEquals(2, body.getValue("task_type_id").jsonPrimitive.int)
             assertEquals("Study", body.getValue("name").jsonPrimitive.content)
@@ -84,16 +119,31 @@ class AssistantReviewTest {
         }
     }
 
+    @Test fun pickerCancellationAndDiscardProtectionPreserveDraft() {
+        show(ReviewTransport()) {
+            compose.onNodeWithText("Correct").performClick()
+            compose.onNodeWithContentDescription("Block Name").performScrollTo().performTextReplacement("My draft")
+            compose.onNodeWithText("Change").performScrollTo().performClick()
+            compose.onNodeWithTag("task-type-search").performTextInput("Learning")
+            compose.onNodeWithText("Cancel").performClick()
+            compose.onNodeWithContentDescription("Block Name").assertTextEquals("My draft")
+            compose.onNodeWithText("Cancel").performClick()
+            compose.onNodeWithText("Discard correction?").assertIsDisplayed()
+            compose.onNodeWithText("Keep editing").performClick()
+            compose.onNodeWithContentDescription("Block Name").assertTextEquals("My draft")
+        }
+    }
+
     @Test fun stopOffersOnlyStoppedTimeAndPreservesOtherFields() {
         val transport = ReviewTransport(stopEvent = true)
         show(transport) {
-            compose.onNodeWithText("Stopped tracking").assertIsDisplayed()
+            compose.onNodeWithText("Stopped at 23 Oct 2026 · 10:00").assertIsDisplayed()
             compose.onNodeWithText("Correct").performClick()
             compose.onNodeWithText("Correct stop").assertIsDisplayed()
             compose.onNodeWithContentDescription("Stopped at time").assertExists()
             compose.onNodeWithText("Change").assertDoesNotExist()
-            compose.onNodeWithText("Activity name (optional)").assertDoesNotExist()
-            compose.onNodeWithText("Save correction").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Block Name").assertDoesNotExist()
+            compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { transport.corrections.isNotEmpty() }
             assertEquals(setOf("operation_id", "revision", "effective_at"), transport.corrections.single().keys)
             assertEquals("2026-10-23T02:00:41Z", transport.corrections.single().getValue("effective_at").jsonPrimitive.content)
@@ -104,10 +154,10 @@ class AssistantReviewTest {
         val transport = ReviewTransport(loseReply = true)
         show(transport) {
             compose.onNodeWithText("Correct").performClick()
-            compose.onNodeWithText("Save correction").performScrollTo().performClick()
+            compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Retry save").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Activity name (optional)").assertIsNotEnabled()
-            compose.onNodeWithText("Retry save").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Block Name").assertIsNotEnabled()
+            compose.onNodeWithText("Retry save").performClick()
             compose.waitUntil(5000) { transport.corrections.size == 2 }
             assertEquals(transport.corrections[0], transport.corrections[1])
         }
@@ -117,10 +167,10 @@ class AssistantReviewTest {
         val transport = ReviewTransport(rejectFirst = true)
         show(transport) {
             compose.onNodeWithText("Correct").performClick()
-            compose.onNodeWithText("Save correction").performScrollTo().performClick()
+            compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Activity overlaps known time").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Activity name (optional)").performScrollTo().performTextReplacement("Retained draft")
-            compose.onNodeWithText("Save correction").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Block Name").performScrollTo().performTextReplacement("Retained draft")
+            compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { transport.corrections.size == 2 }
             assertNotEquals(transport.corrections[0]["operation_id"], transport.corrections[1]["operation_id"])
             assertEquals("Retained draft", transport.corrections[1].getValue("name").jsonPrimitive.content)

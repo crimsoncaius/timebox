@@ -1,7 +1,5 @@
 package com.timebox.android.ui.assistant
 
-import com.timebox.android.ui.components.LocalNavigationDockInset
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.timebox.android.TimeboxApplication
+import com.timebox.android.data.Lane
+import com.timebox.android.data.TaskType
+import com.timebox.android.ui.components.*
+import com.timebox.android.ui.day.TaskTypePicker
 import com.timebox.android.ui.day.ActivityTimeField
 import com.timebox.android.ui.day.ActivityTimeValue
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -46,7 +48,6 @@ private fun displayReviewTime(value: String?, zone: ZoneId): String = value?.let
 internal class AssistantReviewState : androidx.lifecycle.ViewModel() {
     val page = mutableStateOf<JsonObject?>(null)
     val rows = mutableStateOf<List<JsonObject>>(emptyList())
-    val loadedKey = mutableStateOf<String?>(null)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,10 +59,17 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     val retained: AssistantReviewState = androidx.lifecycle.viewmodel.compose.viewModel()
     var page by retained.page
     var rows by retained.rows
-    var loadedKey by retained.loadedKey
     var reviewed by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    val accessibility = androidx.compose.ui.platform.LocalAccessibilityManager.current
+    LaunchedEffect(notice) {
+        if (notice != null) {
+            kotlinx.coroutines.delay(accessibility?.calculateRecommendedTimeoutMillis(5000, containsText = true, containsControls = true) ?: 5000)
+            notice = null
+        }
+    }
     var editText by rememberSaveable { mutableStateOf<String?>(null) }
     if (editText != null) com.timebox.android.ui.components.HideNavigate()
     val edit = editText?.let { Json.parseToJsonElement(it).jsonObject }
@@ -81,12 +89,10 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     }
     // One cancellable load per tab/refresh. Cursor changes are folded into this same load.
     LaunchedEffect(reviewed, refresh, local.snapshot?.cursor) {
-        val key = "$reviewed:$refresh:${local.snapshot?.cursor}"
-        if (loadedKey == key) return@LaunchedEffect
         busy = true
-        try { fetch(); loadedKey = key }
+        try { fetch() }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = e.message ?: "Could not load Review. Try Refresh." }
+        catch (e: Exception) { error = e.message ?: "Could not load Review. Try again." }
         finally { busy = false }
     }
     fun acknowledge(row: JsonObject) {
@@ -96,26 +102,25 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                 controller.reviewRequest("reviews/acknowledge", buildJsonObject {
                     putJsonArray("items") { add(buildJsonObject { put("id", row.getValue("id")); put("revision", row.getValue("revision")) }) }
                 })
+                notice = "Marked reviewed"
                 refresh++
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "Could not mark reviewed. Refresh and retry." }
+            catch (e: Exception) { error = e.message ?: "Could not mark reviewed. Reload Review and try again." }
             finally { busy = false }
         }
     }
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Review", style = type.sectionTitle)
-        Text("Check saved task changes and recorded activity.", style = type.body, color = colors.onVariant)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(!reviewed, { if (!busy && reviewed) { reviewed = false; rows = emptyList(); page = null } }, label = { Text("To review${page?.reviewText("unchecked_count")?.let { " · $it" }.orEmpty()}") })
             FilterChip(reviewed, { if (!busy && !reviewed) { reviewed = true; rows = emptyList(); page = null } }, label = { Text("Reviewed") })
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Times in $zone", Modifier.weight(1f), style = type.bodySmall, color = colors.onVariant)
-            TextButton(enabled = !busy, onClick = { refresh++; scope.launch { application.activityRepository.refresh() } }) { Text("Refresh") }
-        }
         if (local.offline) Text("Offline · Reconnect to save corrections or mark reviewed.", style = type.bodySmall)
         if (local.pending) Text("Syncing activity. Corrections are available after sync.", style = type.bodySmall)
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall) }
+        error?.let {
+            Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = type.bodySmall)
+            TextButton(enabled = !busy, onClick = { refresh++; scope.launch { application.activityRepository.refresh() } }) { Text("Retry") }
+        }
+        notice?.let { TransientFeedback(it, onDismiss = { notice = null }) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp + LocalNavigationDockInset.current)) {
             item { SavedTaskResults(controller, onOpenTask) }
@@ -141,8 +146,9 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                 val shown = row.reviewRecord() ?: receipt.getValue("record").jsonObject
                 val category = shown.getValue("task_type").jsonObject.reviewText("name").orEmpty()
                 Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (row.isStop()) "Stopped tracking" else shown.reviewText("name") ?: category, style = type.sectionTitle)
-                    Text(if (row.isStop()) shown.reviewText("name")?.let { "$it · $category" } ?: category else category, style = type.bodySmall, color = colors.onVariant)
+                    val identity = shown.reviewText("name")?.takeIf { it.isNotBlank() } ?: category
+                    Text(identity, style = type.sectionTitle)
+                    if (identity != category) Text(category, style = type.bodySmall, color = colors.onVariant)
                     Text("${if (row.isStop()) "Stopped" else "Started"} at ${displayReviewTime(row.eventTime(), zone)}", style = type.body)
                     Text("You said: “${receipt.reviewText("question").orEmpty()}”", style = type.body, color = colors.onVariant)
                     if (!row.canCorrect()) Text("This event no longer has one editable record. Inspect it in Day.", style = type.bodySmall)
@@ -152,7 +158,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                         TextButton(onClick = { details = row }) { Text("Details") }
                         Spacer(Modifier.weight(1f))
                         TextButton(enabled = row.canCorrect() && !busy && !local.offline && !local.pending, onClick = { editText = row.toString() }) { Text("Correct") }
-                        if (!reviewed) TextButton(enabled = !busy && !local.offline && !local.pending, onClick = { acknowledge(row) }) { Text("Looks right") }
+                        if (!reviewed) FilledTonalButton(enabled = !busy && !local.offline && !local.pending, onClick = { acknowledge(row) }) { Text("Looks right") }
                     }
                 }
                 HorizontalDivider(color = colors.hairline)
@@ -173,15 +179,18 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     details?.let { row ->
         val receipt = row.getValue("receipt").jsonObject
         val original = receipt.getValue("record").jsonObject
-        ModalBottomSheet(onDismissRequest = { details = null }) {
+        ModalBottomSheet(onDismissRequest = { details = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = colors.sheet, contentColor = colors.on) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Tracking details", style = type.sectionTitle)
                 Text("You said: “${receipt.reviewText("question").orEmpty()}”", style = type.body)
                 Text("Originally recorded", style = type.label)
-                Text(original.getValue("task_type").jsonObject.reviewText("name").orEmpty(), style = type.body)
+                ReviewIdentity(original)
                 Text("${if (row.isStop()) "Stopped" else "Started"} at ${displayReviewTime(receipt.reviewText("effective_at") ?: original.reviewText(if (row.isStop()) "end_at" else "start_at"), zone)}", style = type.body)
                 row.reviewRecord()?.let { current ->
-                    Text("Current activity record", style = type.label)
+                    Text("Current activity", style = type.label)
+                    ReviewIdentity(current)
                     Text("${displayReviewTime(current.reviewText("start_at"), zone)} → ${current.reviewText("end_at")?.let { displayReviewTime(it, zone) } ?: "Running"}", style = type.body)
                 }
                 TextButton(onClick = { details = null; onOpenDay(Instant.parse(original.reviewText("start_at")).atZone(zone).toLocalDate()) }) { Text("Open day") }
@@ -191,9 +200,17 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     }
     edit?.let { row ->
         ReviewCorrectionSheet(row, page?.get("task_types")?.jsonArray.orEmpty(), zone, controller,
-            available = !local.offline && !local.pending, onDismiss = { editText = null },
-            onSaved = { editText = null; refresh++; scope.launch { application.activityRepository.refresh() } })
+            available = !local.offline && !local.pending, onDismiss = { editText = null; refresh++ },
+            onSaved = { notice = "Saved and marked reviewed"; editText = null; refresh++; scope.launch { application.activityRepository.refresh() } })
     }
+}
+
+@Composable
+private fun ReviewIdentity(record: JsonObject) {
+    val category = record.getValue("task_type").jsonObject.reviewText("name").orEmpty()
+    val identity = record.reviewText("name")?.takeIf { it.isNotBlank() } ?: category
+    Text(identity, style = TimeboxTheme.type.body)
+    if (identity != category) Text(category, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -223,76 +240,104 @@ private fun ReviewCorrectionSheet(row: JsonObject, types: List<JsonElement>, zon
     val colors = TimeboxTheme.colors
     // After a lost reply, only Retry is offered until the exact operation has a known result.
     val editable = !busy && pendingText == null
-    ModalBottomSheet(onDismissRequest = { dismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
-        confirmValueChange = { it != SheetValue.Hidden || (!busy && !changed && pendingText == null) })) {
-        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (chooseCategory) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Activity category", Modifier.weight(1f), style = style.sectionTitle)
-                    TextButton(onClick = { chooseCategory = false }) { Text("Back") }
+    val application = LocalContext.current.applicationContext as TimeboxApplication
+    var createdTypesText by rememberSaveable { mutableStateOf("[]") }
+    val taskTypes = (types + Json.parseToJsonElement(createdTypesText).jsonArray).map {
+        val item = it.jsonObject
+        TaskType(item.getValue("id").jsonPrimitive.int, item.reviewText("name").orEmpty(), item["usage_count"]?.jsonPrimitive?.intOrNull ?: 0)
+    }.distinctBy { it.id }
+    val save: () -> Unit = {
+        scope.launch {
+            busy = true
+            try {
+                val body = pendingText?.let { Json.parseToJsonElement(it).jsonObject } ?: run {
+                    val at = time.resolve(zone)
+                    require(at <= Instant.now()) { "Choose a time no later than now." }
+                    if (stop) require(at > Instant.parse(record.reviewText("start_at"))) { "Stopped time must be after this activity started." }
+                    else record.reviewText("end_at")?.let { require(at < Instant.parse(it)) { "Later activity ended this record at ${displayReviewTime(it, zone)}. Choose an earlier start." } }
+                    buildJsonObject {
+                        put("operation_id", UUID.randomUUID().toString()); put("revision", row.getValue("revision"))
+                        put("effective_at", at.toString())
+                        if (!stop) { put("task_type_id", type); put("name", name.ifBlank { null }) }
+                    }.also { pendingText = it.toString() }
                 }
-                OutlinedTextField(search, { search = it }, label = { Text("Search categories") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                val matches = types.filter { it.jsonObject.reviewText("name").orEmpty().contains(search, ignoreCase = true) }
-                if (matches.isEmpty()) Text("No matching category. Try another search.", style = style.body)
-                matches.forEach { item ->
-                    val id = item.jsonObject.getValue("id").jsonPrimitive.int
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { type = id; chooseCategory = false; error = null }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(type == id, onClick = null)
-                        Text(item.jsonObject.reviewText("name").orEmpty(), style = style.body)
-                    }
-                }
-            } else {
-                Text(if (stop) "Correct stop" else "Correct activity", style = style.sectionTitle)
-                Text("You said: “${row.getValue("receipt").jsonObject.reviewText("question").orEmpty()}”", style = style.body, color = colors.onVariant)
-                if (!stop) OutlinedButton(enabled = editable, onClick = { search = ""; chooseCategory = true }, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                        Text("Category", style = style.bodySmall)
-                        Text(types.find { it.jsonObject.getValue("id").jsonPrimitive.int == type }?.jsonObject?.reviewText("name") ?: record.getValue("task_type").jsonObject.reviewText("name").orEmpty(), style = style.label)
-                    }
-                    Text("Change")
-                } else Text("${record.reviewText("name") ?: record.getValue("task_type").jsonObject.reviewText("name")} · Started ${displayReviewTime(record.reviewText("start_at"), zone)}", style = style.body)
-                Text("Times in $zone", style = style.bodySmall, color = colors.onVariant)
-                ActivityTimeField(if (stop) "Stopped at" else "Started at", time, zone, compact = true, enabled = editable) {
-                    timeLocal = it.local; occurrence = it.occurrence?.name; timeChanged = true; error = null
-                }
-                if (!stop) OutlinedTextField(name, { name = it; error = null }, label = { Text("Activity name (optional)") }, enabled = editable, modifier = Modifier.fillMaxWidth())
-                Text("Saving also marks this activity reviewed.", style = style.bodySmall)
-                if (!available) Text("Reconnect and finish syncing before saving.", style = style.bodySmall)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = style.bodySmall) }
-                Button(enabled = !busy && available, modifier = Modifier.fillMaxWidth(), onClick = {
-                    scope.launch {
-                        busy = true
-                        try {
-                            val body = pendingText?.let { Json.parseToJsonElement(it).jsonObject } ?: run {
-                                val at = time.resolve(zone)
-                                require(at <= Instant.now()) { "Choose a time no later than now." }
-                                if (stop) require(at > Instant.parse(record.reviewText("start_at"))) { "Stopped time must be after this activity started." }
-                                else record.reviewText("end_at")?.let { require(at < Instant.parse(it)) { "Later activity ended this record at ${displayReviewTime(it, zone)}. Choose an earlier start." } }
-                                buildJsonObject {
-                                    put("operation_id", UUID.randomUUID().toString()); put("revision", row.getValue("revision"))
-                                    put("effective_at", at.toString())
-                                    if (!stop) { put("task_type_id", type); put("name", name.ifBlank { null }) }
-                                }.also { pendingText = it.toString() }
-                            }
-                            controller.reviewRequest("reviews/${row.reviewText("id")}/correct-event", body)
-                            onSaved()
-                        } catch (e: CancellationException) { throw e }
-                        catch (e: Exception) {
-                            // A definitive rejection did not save this request; keep the draft editable.
-                            // Only an unknown outcome needs an exact, locked retry.
-                            if (e is ReviewRejectedException) pendingText = null
-                            error = (e.message ?: "Could not save.") + if (pendingText != null) " Retry to check this save, or close and refresh Review." else ""
-                        }
-                        finally { busy = false }
-                    }
-                }) { Text(if (busy) "Saving…" else if (pendingText != null) "Retry save" else "Save correction") }
-                TextButton(enabled = !busy, onClick = { dismiss() }) { Text("Close") }
+                controller.reviewRequest("reviews/${row.reviewText("id")}/correct-event", body)
+                onSaved()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                // A definitive rejection did not save this request; keep the draft editable.
+                // Only an unknown outcome needs an exact, locked retry.
+                if (e is ReviewRejectedException) pendingText = null
+                error = (e.message ?: "Could not save.") + if (pendingText != null) " Retry to check this save. Closing does not cancel the submitted change." else ""
             }
+            finally { busy = false }
         }
     }
+    TimeboxSheet(
+        lane = Lane.Actual, kicker = "Recorded activity",
+        title = if (chooseCategory) "Task Type" else if (stop) "Correct stop" else "Correct activity",
+        onDismiss = { if (chooseCategory) chooseCategory = false else dismiss() },
+        dismissAllowed = !changed && pendingText == null && !chooseCategory,
+        onCancel = { if (chooseCategory) chooseCategory = false else dismiss() },
+        busy = busy,
+        secondary = if (pendingText != null) SheetSecondary.Action("Close", { dismiss() }) else SheetSecondary.Cancel,
+        primary = when {
+            busy -> SheetPrimary.Disabled(if (chooseCategory) "Creating…" else "Saving…")
+            chooseCategory -> SheetPrimary.Action("Back", { chooseCategory = false })
+            !available -> SheetPrimary.Disabled("Waiting for sync")
+            else -> SheetPrimary.Action(if (pendingText != null) "Retry save" else "Save & mark reviewed", save)
+        },
+    ) {
+        if (chooseCategory) {
+            if (!busy) TaskTypePicker(
+                taskTypes = taskTypes, query = search, onQueryChange = { search = it }, selectedTypeId = type,
+                onChoose = { type = it.id; chooseCategory = false; error = null },
+                onCreate = { path ->
+                    scope.launch {
+                        busy = true
+                        error = null
+                        try {
+                            val created = application.repository.createTaskType(path).getOrThrow()
+                            createdTypesText = JsonArray(Json.parseToJsonElement(createdTypesText).jsonArray + buildJsonObject {
+                                put("id", created.id); put("name", created.name); put("usage_count", created.usageCount)
+                            }).toString()
+                            type = created.id
+                            chooseCategory = false
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) { error = e.message ?: "Could not create Task Type. Try again." }
+                        finally { busy = false }
+                    }
+                },
+            )
+        } else {
+            Text("You said: “${row.getValue("receipt").jsonObject.reviewText("question").orEmpty()}”", style = style.body, color = colors.onVariant)
+            if (!stop) {
+                OutlinedButton(enabled = editable, onClick = { search = ""; chooseCategory = true },
+                    shape = com.timebox.android.ui.theme.TimeboxShapes.field, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                        Text("Task Type", style = style.bodySmall)
+                        Text(taskTypes.find { it.id == type }?.name ?: record.getValue("task_type").jsonObject.reviewText("name").orEmpty(), style = style.label)
+                    }
+                    Text("Change")
+                }
+                SheetTextField(name, { name = it; error = null }, "Block Name", optional = true, enabled = editable,
+                    fieldModifier = Modifier.semantics { contentDescription = "Block Name" })
+            } else {
+                ReviewIdentity(record)
+                Text("Started ${displayReviewTime(record.reviewText("start_at"), zone)}", style = style.body)
+            }
+            Text("Times in $zone", style = style.bodySmall, color = colors.onVariant)
+            ActivityTimeField(if (stop) "Stopped at" else "Started at", time, zone, compact = true, enabled = editable) {
+                timeLocal = it.local; occurrence = it.occurrence?.name; timeChanged = true; error = null
+            }
+            if (!available) Text("Reconnect and finish syncing before saving.", style = style.bodySmall)
+            if (pendingText != null) Text("The save may have completed. Closing does not cancel the submitted change.", style = style.bodySmall)
+        }
+        error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = style.bodySmall) }
+    }
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text(if (pendingText != null) "Close before checking the save?" else "Discard correction?") },
-        text = { Text(if (pendingText != null) "The save may have completed. Refresh Review before making another correction." else "Your unsaved changes will be lost.") },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }, dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } })
+        text = { Text(if (pendingText != null) "The save may have completed. Closing does not cancel it. Return to Review to reload the current result." else "Your unsaved changes will be lost.") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }, dismissButton = { TextButton(onClick = { discard = false }) { Text(if (pendingText != null) "Keep checking" else "Keep editing") } })
 }
 
 /** Saved task outcomes survive conversation resets and live in Review. */
