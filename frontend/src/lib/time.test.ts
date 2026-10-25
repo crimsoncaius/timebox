@@ -12,7 +12,6 @@ import {
   monthGridForIso,
   monthYearLabelForIso,
   sameLaneResizeBounds,
-  visibleMinuteRange,
   zonedLocalDateTimeToIso,
   zonedLocalToIso,
 } from './time'
@@ -32,16 +31,6 @@ describe('time helpers', () => {
   it('rejects invalid and nonexistent wall-clock values', () => {
     expect(() => zonedLocalDateTimeToIso('2026-02-30T09:00', 'UTC')).toThrow(/valid local date/i)
     expect(() => zonedLocalDateTimeToIso('2026-03-08T02:30', 'America/New_York')).toThrow(/does not exist/i)
-  })
-
-  it('visibleMinuteRange respects day window', () => {
-    expect(
-      visibleMinuteRange({ show_full_day: false, start_hour: 8, end_hour: 20 }),
-    ).toEqual({ start: 8 * 60, end: 20 * 60 })
-    expect(visibleMinuteRange({ show_full_day: true, start_hour: 8, end_hour: 20 })).toEqual({
-      start: 0,
-      end: 24 * 60,
-    })
   })
 
   it('minuteFromPointerYInVisibleLane clamps Y to the visible slot rows', () => {

@@ -1,5 +1,4 @@
 from app.models.activity import ActivityOperation, ActivityState
-from app.models.app_settings import AppSettings
 from app.models.assistant import AssistantAttempt, AssistantConversation, AssistantQuery
 from app.models.battle_plan import (
     PriorityLevel,
@@ -25,7 +24,7 @@ from app.models.time_goal import TimeGoal, TimeGoalTarget
 __all__ = [
     "TimeGoal", "TimeGoalTarget",
     "AssistantAttempt", "AssistantConversation", "AssistantQuery",
-    "AppSettings", "Day", "TaskType", "TimeBlock", "ActualBlockRecordOperation", "BlockLane",
+    "Day", "TaskType", "TimeBlock", "ActualBlockRecordOperation", "BlockLane",
     "Project", "Task", "TaskCompletionOperation", "TaskStatus", "PriorityLevel",
     "RecurringTemplate", "RecurringChecklistItem", "RecurrenceOccurrence",
     "RecurringPreplanningSlot", "RecurringPlannedBlockRealization", "RecurringPlannedBlockState",

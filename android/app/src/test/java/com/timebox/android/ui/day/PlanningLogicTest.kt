@@ -77,9 +77,6 @@ class PlanningLogicTest {
 
     private fun dayWithBlocks(vararg blocks: TimeBlock) = Day(
         date = LocalDate.of(2026, 8, 20),
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         blocks = blocks.toList(),
         timezone = "Asia/Singapore",
         today = LocalDate.of(2026, 8, 20),

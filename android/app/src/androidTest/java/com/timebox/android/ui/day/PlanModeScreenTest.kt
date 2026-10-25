@@ -130,7 +130,7 @@ class PlanModeScreenTest {
     private fun queueDropUsesVisibleTime(scrollHours: Int) {
         val date = LocalDate.of(2026, 8, 20)
         var placement: Pair<Int, Int>? = null
-        val day = emptyDay(date).copy(endHour = 24)
+        val day = emptyDay(date)
         val state = DayUiState(
             date = date,
             pages = mapOf(date to DayPageState(day = day, loading = false, materialized = true)),
@@ -214,9 +214,6 @@ class PlanModeScreenTest {
         val date = LocalDate.of(2026, 8, 20)
         val day = Day(
             date = date,
-            startHour = 8,
-            endHour = 20,
-            showFullDay = false,
             blocks = emptyList(),
             timezone = "Asia/Singapore",
             today = date,
@@ -944,9 +941,6 @@ class PlanModeScreenTest {
 
     private fun emptyDay(date: LocalDate) = Day(
         date = date,
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         blocks = emptyList(),
         timezone = "Asia/Singapore",
         today = date,

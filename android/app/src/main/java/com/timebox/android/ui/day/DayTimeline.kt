@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -147,6 +150,7 @@ fun DayTimeline(
     onPlanningDraftDragCancel: () -> Unit = {},
     onPlanningDraftResize: (Int, Int, Int) -> Unit = { _, _, _ -> },
     onReturnPlanningDraft: (Int) -> Unit = {},
+    onLogGap: ((Int, Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -209,6 +213,7 @@ fun DayTimeline(
                     onTapSlot = onTapSlot,
                     onSelectBlock = onSelectBlock,
                     onCommitMove = onCommitMove,
+                    onLogGap = onLogGap,
                     modifier = Modifier.weight(1f).fillMaxSize(),
                 )
             }
@@ -346,6 +351,7 @@ private fun LaneColumn(
     onPlanningDraftDragCancel: () -> Unit = {},
     onPlanningDraftResize: (Int, Int, Int) -> Unit = { _, _, _ -> },
     onReturnPlanningDraft: (Int) -> Unit = {},
+    onLogGap: ((Int, Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -395,6 +401,11 @@ private fun LaneColumn(
         }
 
         val nowMinute = rememberNowMinute(day)
+        if (lane == Lane.Actual && onLogGap != null && drag == null) {
+            untrackedGaps(day, nowMinute).forEach { gap ->
+                UntrackedGapRegion(gap, day.visibleStart, slotHeight) { onLogGap(gap.startMinute, gap.endMinute) }
+            }
+        }
         day.lane(lane).forEach { block ->
             val timeEditable = blockGesturesEnabled && !isLiveActualBlock(block, day)
             val live = if (drag != null && drag.id == block.id) drag else null
@@ -887,14 +898,7 @@ private fun BlockCard(
             .then(if (dragging) Modifier.graphicsLayer { rotationZ = -1f }.shadow(16.dp, TimeboxShapes.block, clip = false) else Modifier)
             .blockEmphasis(block.id, spaceAbove = top)
             .clipInPlace(TimeboxShapes.block)
-            .background(
-                when {
-                    height < 22.dp ->
-                        (if (block.lane == Lane.Planned) colors.planned else colors.actual).copy(alpha = 0.65f)
-                    dragging || selected -> colors.paperRaised
-                    else -> colors.paper
-                }
-            )
+            .background(blockFill(colors, block.lane, raised = dragging || selected, sliver = height < 22.dp))
             .semantics {
                 contentDescription = "${block.primaryIdentity()}, ${hhmm(startMinute)} to ${hhmm(endMinute)}, ${durationShort(durationMinutes)}"
                 customActions = onAccessibleMove?.let { move ->
@@ -958,58 +962,58 @@ private fun BlockCard(
                 )
             },
     ) {
+        val laneColor = if (block.lane == Lane.Planned) colors.planned else colors.actual
+        // The lane-colored edge says which lane a block belongs to at any size and in either theme.
+        Box(Modifier.width(3.dp).fillMaxHeight().background(laneColor))
         Column(modifier = Modifier.fillMaxSize()) {
             if (grooves) Groove()
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                verticalArrangement = Arrangement.Center,
+                    .padding(start = 9.dp, end = 6.dp, top = if (grooves) 0.dp else 3.dp),
+                verticalArrangement = if (innerHeight < 30.dp) Arrangement.Center else Arrangement.Top,
             ) {
-                if (innerHeight >= 22.dp) Text(
-                    text = buildString {
-                        append(block.primaryIdentity())
-                        block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
-                    },
-                    style = if (selected) {
-                        TimeboxTheme.type.blockTitleSelected
-                    } else {
-                        TimeboxTheme.type.blockTitle
-                    },
-                    color = colors.on,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val secondary = if (invalid) {
-                    NO_NEARBY_BLOCK_SPACE
-                } else if (dragging) {
-                    null
-                } else {
-                    block.secondaryIdentity()
+                if (innerHeight >= 22.dp) Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = buildString {
+                            append(block.primaryIdentity())
+                            block.task?.let { append(if (it.status == com.timebox.android.data.TaskStatus.Completed) " · Task ✓" else " · Task ○") }
+                        },
+                        style = if (selected) TimeboxTheme.type.blockTitleSelected else TimeboxTheme.type.blockTitle,
+                        color = colors.on,
+                        maxLines = blockTitleLines(innerHeight.value),
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 6.dp),
+                    )
+                    Text(
+                        durationShort(durationMinutes),
+                        style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp, lineHeight = 15.sp),
+                        color = laneColor,
+                        maxLines = 1,
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
                 }
-                if (secondary != null && innerHeight >= 30.dp) {
+                val secondary = when {
+                    invalid -> NO_NEARBY_BLOCK_SPACE
+                    dragging -> "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}"
+                    else -> block.secondaryIdentity()
+                }
+                if (secondary != null && innerHeight >= 36.dp) {
                     Text(
                         text = secondary,
-                        style = TimeboxTheme.type.monoSmall,
+                        style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp, lineHeight = 15.sp),
                         color = colors.onVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                } else if (innerHeight >= 30.dp) {
-                    TimeRangeWithDuration(
-                        range = "${hhmm(previewStartMinute)} – ${hhmm(previewEndMinute)}",
-                        duration = durationShort(durationMinutes),
-                        style = TimeboxTheme.type.monoSmall,
-                        color = colors.onVariant,
-                    )
                 }
                 val note = block.note
-                if (!note.isNullOrBlank() && innerHeight >= 48.dp) {
+                if (!note.isNullOrBlank() && innerHeight >= 52.dp) {
                     Text(
-                        text = note,
-                        style = TimeboxTheme.type.monoSmall,
-                        color = colors.outlineVariant,
+                        text = "“$note”",
+                        style = TimeboxTheme.type.bodySmall.copy(fontSize = 11.sp, lineHeight = 15.sp),
+                        color = colors.onVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1018,6 +1022,20 @@ private fun BlockCard(
             if (grooves) Groove()
         }
     }
+}
+
+/** A block's fill: its lane's tint, stronger while selected or dragged, and solid when too short for text. */
+internal fun blockFill(colors: com.timebox.android.ui.theme.TimeboxColors, lane: Lane, raised: Boolean, sliver: Boolean): androidx.compose.ui.graphics.Color = when {
+    sliver -> (if (lane == Lane.Planned) colors.planned else colors.actual).copy(alpha = 0.65f)
+    lane == Lane.Planned -> if (raised) colors.plannedBlockRaised else colors.plannedBlock
+    else -> if (raised) colors.actualBlockRaised else colors.actualBlock
+}
+
+/** How many lines a block title may wrap to before the block runs out of height. */
+internal fun blockTitleLines(innerHeightDp: Float): Int = when {
+    innerHeightDp >= 66f -> 3
+    innerHeightDp >= 44f -> 2
+    else -> 1
 }
 
 /**

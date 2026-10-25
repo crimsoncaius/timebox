@@ -2,7 +2,8 @@ package com.timebox.android.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import com.timebox.android.ui.chronicle.chronicleDateTextColor
-import com.timebox.android.ui.day.monthDateTextColor
+import com.timebox.android.ui.day.blockFill
+import com.timebox.android.data.Lane
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -24,15 +25,26 @@ class VisualAccessibilityTest {
     fun interactiveAdjacentMonthDatesMeetNormalTextContrast() {
         listOf(LightTimeboxColors, DarkTimeboxColors).forEach { colors ->
             assertContrastAtLeast(
-                monthDateTextColor(colors, selected = false, today = false, inDisplayedMonth = false),
-                colors.bg,
-                4.5,
-            )
-            assertContrastAtLeast(
                 chronicleDateTextColor(colors, isToday = false, inMonth = false),
                 colors.bg,
                 4.5,
             )
+        }
+    }
+
+    @Test
+    fun blockTextAndLaneEdgesStayReadableOnEveryBlockFill() {
+        listOf(LightTimeboxColors, DarkTimeboxColors).forEach { colors ->
+            listOf(Lane.Planned, Lane.Actual).forEach { lane ->
+                val edge = if (lane == Lane.Planned) colors.planned else colors.actual
+                listOf(false, true).forEach { raised ->
+                    val fill = blockFill(colors, lane, raised = raised, sliver = false)
+                    assertContrastAtLeast(colors.on, fill, 4.5)
+                    assertContrastAtLeast(colors.onVariant, fill, 4.5)
+                    // The edge and duration share the lane color and must read against the fill.
+                    assertContrastAtLeast(edge, fill, 4.5)
+                }
+            }
         }
     }
 

@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
-import java.time.YearMonth
 
 class DayCalendarHeaderLogicTest {
 
@@ -25,17 +24,20 @@ class DayCalendarHeaderLogicTest {
     }
 
     @Test
-    fun monthDatesAreMondayFirstAndAlwaysFillSixWeeks() {
-        val dates = monthDates(YearMonth.of(2026, 8))
-
-        assertEquals(42, dates.size)
-        assertEquals(LocalDate.of(2026, 7, 27), dates.first())
-        assertEquals(LocalDate.of(2026, 9, 6), dates.last())
+    fun titleNamesTheWeekdayAndWhetherItIsTodayYesterdayOrTomorrow() {
+        val today = LocalDate.of(2026, 10, 24)
+        assertEquals("Saturday · Today", dayTitleKicker(today, today))
+        assertEquals("Friday · Yesterday", dayTitleKicker(today.minusDays(1), today))
+        assertEquals("Sunday · Tomorrow", dayTitleKicker(today.plusDays(1), today))
+        assertEquals("Monday", dayTitleKicker(today.plusDays(2), today))
+        assertEquals("Saturday", dayTitleKicker(today, null))
     }
 
     @Test
-    fun selectedDateUsesAbbreviatedWeekdayHeaderFormat() {
-        assertEquals("Fri, August 28", formatCalendarHeaderDate(LocalDate.of(2026, 8, 28)))
+    fun titleShowsTheYearOnlyOutsideTodaysYear() {
+        val today = LocalDate.of(2026, 10, 24)
+        assertEquals("24 October", dayTitle(today, today))
+        assertEquals("31 December 2025", dayTitle(LocalDate.of(2025, 12, 31), today))
     }
 
     @Test
@@ -43,12 +45,5 @@ class DayCalendarHeaderLogicTest {
         assertNull(committedWeekDelta(dragPx = 55f, thresholdPx = 55f))
         assertEquals(7L, committedWeekDelta(dragPx = -55.1f, thresholdPx = 55f))
         assertEquals(-7L, committedWeekDelta(dragPx = 55.1f, thresholdPx = 55f))
-    }
-
-    @Test
-    fun monthSwipeCommitsOneMonthPastThreshold() {
-        assertNull(committedMonthDelta(dragPx = 55f, thresholdPx = 55f))
-        assertEquals(1L, committedMonthDelta(dragPx = -55.1f, thresholdPx = 55f))
-        assertEquals(-1L, committedMonthDelta(dragPx = 55.1f, thresholdPx = 55f))
     }
 }

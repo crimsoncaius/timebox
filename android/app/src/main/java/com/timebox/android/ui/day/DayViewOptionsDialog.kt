@@ -44,7 +44,7 @@ internal fun DayViewOptionsDialog(
                 Text("Choose what stays in view.", style = TimeboxTheme.type.body, color = colors.onVariant)
                 Spacer(Modifier.height(20.dp))
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                    VisibilityRow("Calendar", Icons.Outlined.CalendarToday, calendar, onCalendar)
+                    VisibilityRow("Week strip", Icons.Outlined.CalendarToday, calendar, onCalendar)
                     HorizontalDivider(color = colors.hairline)
                     VisibilityRow("Activity Tracking", Icons.Outlined.PlayArrow, tracking, onTracking)
                     HorizontalDivider(color = colors.hairline)

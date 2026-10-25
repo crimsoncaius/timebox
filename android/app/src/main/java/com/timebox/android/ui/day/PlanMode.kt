@@ -244,7 +244,7 @@ internal fun PlanningWorkspace(
 
     AutoScrollTimelineToNowOnce(
         day = day,
-        enabled = day.date == state.today && !state.skipScrollToNow,
+        enabled = !state.skipScrollToNow,
         scrollState = timelineScroll,
         viewportHeightPx = viewportBounds.height.roundToInt(),
         scrollToNowRequest = state.scrollToNowRequest,

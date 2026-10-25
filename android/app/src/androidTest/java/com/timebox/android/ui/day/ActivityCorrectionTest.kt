@@ -61,7 +61,6 @@ class ActivityCorrectionTest {
         val snapshot = ActivitySnapshotDto(offlineReady = true, cursor = 1, serverAt = "2026-09-11T12:15:00Z", reportingTimezone = "UTC", current = current, records = listOf(current), taskTypes = listOf(type))
         val repository = repository(snapshot)
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
-        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithTag("stop-timeline").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(2f / 3f) }
         compose.onNodeWithText("10:00 – 12:00").assertExists()
@@ -69,7 +68,6 @@ class ActivityCorrectionTest {
         compose.onNodeWithText("Cancel").performClick()
         assertFalse(repository.state.value.pending)
         assertEquals(current, repository.state.value.snapshot!!.current)
-        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithTag("stop-timeline").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(2f / 3f) }
         compose.onNode(hasText("Stop at 12:00") and hasClickAction()).performClick()

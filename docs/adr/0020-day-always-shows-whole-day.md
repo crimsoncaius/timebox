@@ -1,0 +1,3 @@
+# Day always shows the whole day
+
+The configurable day window (start hour, end hour, show full day) is removed from the backend, web and Android, and its stored settings are dropped by migration; every Day spans midnight to midnight in the Reporting Time Zone. The window hid Planned and Actual Blocks outside it while assistive technology still announced them, and made the Now Line and any running block vanish after the end hour, so each surface needed out-of-window markers to stay honest. A whole-day timeline removes that class of hidden state; the cost is a taller timeline, answered by opening Today scrolled to the Now Line and other dates at their first block (8 AM when empty), and the setting cannot be restored without a new migration.

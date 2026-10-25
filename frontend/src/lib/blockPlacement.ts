@@ -1,11 +1,11 @@
 import type { DayRead } from './api'
-import { minuteOfDayWithSecondsInTimeZone, SLOT_MINUTES, visibleMinuteRange } from './time'
+import { minuteOfDayWithSecondsInTimeZone, SLOT_MINUTES, DAY_MINUTE_RANGE } from './time'
 
 /** Historical corrections cannot include time that has not occurred. */
 export function actualPlacementEnd(day: DayRead): number {
-  if (day.date < day.meta.today) return visibleMinuteRange(day).end
+  if (day.date < day.meta.today) return DAY_MINUTE_RANGE.end
   if (day.date > day.meta.today) return 0
-  return Math.min(visibleMinuteRange(day).end,
+  return Math.min(DAY_MINUTE_RANGE.end,
     Math.floor(minuteOfDayWithSecondsInTimeZone(new Date(day.meta.server_now_iso), day.meta.timezone)))
 }
 

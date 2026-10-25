@@ -12,7 +12,7 @@ class DayElapsedClockTest {
     fun productionClockCapturesAndAdvancesInAndroidElapsedRealtimeDomain() {
         val before = SystemClock.elapsedRealtime()
         val date = LocalDate.of(2026, 8, 10)
-        val day = Day(date, 0, 24, true, emptyList(), timezone = "Asia/Singapore",
+        val day = Day(date, emptyList(), timezone = "Asia/Singapore",
             today = date, serverNowMinute = 600)
         val after = SystemClock.elapsedRealtime()
         assertTrue(day.capturedAtElapsedMillis in before..after)

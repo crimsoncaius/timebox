@@ -19,19 +19,15 @@ class SettingsNotificationTest {
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
                 SettingsScreen(
-                    state = SettingsUiState(loading = false),
+                    state = SettingsUiState(),
                     isDark = false,
                     onToggleDark = {},
-                    onStartHourDelta = {},
-                    onEndHourDelta = {},
-                    onToggleFullDay = {},
                     onBaseUrlChange = {},
                     onApiKeyChange = {},
                     onSaveConnection = {},
                     notificationsAllowed = false,
                     onRequestNotificationPermission = { requested += 1 },
                     onOpenNotificationSettings = { openedSettings += 1 },
-                    onRetry = {},
                 )
             }
         }

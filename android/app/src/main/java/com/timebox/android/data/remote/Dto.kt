@@ -85,9 +85,6 @@ data class DayMetaDto(
 data class DayDto(
     val id: Int? = null,
     val date: String,
-    @SerialName("start_hour") val startHour: Int,
-    @SerialName("end_hour") val endHour: Int,
-    @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("time_blocks") val timeBlocks: List<TimeBlockDto>,
     @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
     @SerialName("planned_minutes") val plannedMinutes: Int = 0,
@@ -98,9 +95,6 @@ data class DayDto(
 @Serializable
 data class DayPreviewDto(
     val date: String,
-    @SerialName("start_hour") val startHour: Int,
-    @SerialName("end_hour") val endHour: Int,
-    @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("time_blocks") val timeBlocks: List<TimeBlockDto>,
     @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
     @SerialName("planned_minutes") val plannedMinutes: Int = 0,
@@ -112,9 +106,6 @@ data class DayPreviewDto(
 data class DayListItemDto(
     val id: Int,
     val date: String,
-    @SerialName("start_hour") val startHour: Int,
-    @SerialName("end_hour") val endHour: Int,
-    @SerialName("show_full_day") val showFullDay: Boolean,
     @SerialName("block_count") val blockCount: Int,
     @SerialName("actual_blocks") val actualBlocks: List<ActualBlockDayProjectionDto> = emptyList(),
 )
@@ -150,20 +141,6 @@ data class DaySummaryDto(
     @SerialName("actual_minutes") val actualMinutes: Int,
     val rows: List<DaySummaryRowDto>,
     val meta: DayMetaDto,
-)
-
-@Serializable
-data class SettingsDto(
-    @SerialName("start_hour") val startHour: Int,
-    @SerialName("end_hour") val endHour: Int,
-    @SerialName("show_full_day") val showFullDay: Boolean,
-)
-
-@Serializable
-data class SettingsPatchDto(
-    @SerialName("start_hour") val startHour: Int? = null,
-    @SerialName("end_hour") val endHour: Int? = null,
-    @SerialName("show_full_day") val showFullDay: Boolean? = null,
 )
 
 @Serializable

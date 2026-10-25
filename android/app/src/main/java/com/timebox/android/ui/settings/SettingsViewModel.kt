@@ -2,7 +2,6 @@ package com.timebox.android.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.timebox.android.data.DayWindowSettings
 import com.timebox.android.data.TimeboxRepository
 import com.timebox.android.data.apiError
 import com.timebox.android.reminders.DailyReminderSettings
@@ -17,15 +16,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
-    val window: DayWindowSettings? = null,
     val timezone: String? = null,
     val reportingZoneInput: String = "",
     val baseUrlInput: String = "",
     val apiKeyInput: String = "",
     val connectionDirty: Boolean = false,
-    val loading: Boolean = true,
     val saving: Boolean = false,
-    val error: String? = null,
     val message: String? = null,
     val dailyReminders: DailyReminderSettings = DailyReminderSettings(),
     val plannedBlockReminders: PlannedBlockReminderSettings = PlannedBlockReminderSettings(),
@@ -40,7 +36,7 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
 
     fun load(timezone: String?) {
         _state.update {
-            it.copy(loading = it.window == null, error = null, timezone = timezone ?: it.timezone)
+            it.copy(timezone = timezone ?: it.timezone)
         }
         viewModelScope.launch {
             if (!connectionPrimed) {
@@ -58,14 +54,6 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
             runCatching { repository.getActivity() }.fold(
                 onSuccess = { snapshot -> _state.update { it.copy(timezone = snapshot.reportingTimezone, reportingZoneInput = snapshot.reportingTimezone) } },
                 onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
-            )
-            repository.getWindowSettings().fold(
-                onSuccess = { window ->
-                    _state.update { it.copy(window = window, loading = false, error = null) }
-                },
-                onFailure = { e ->
-                    _state.update { it.copy(loading = false, error = e.apiError.message) }
-                },
             )
         }
     }
@@ -103,33 +91,6 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
         }
     }
 
-    fun adjustStartHour(delta: Int) {
-        val window = _state.value.window ?: return
-        val next = (window.startHour + delta).coerceIn(0, 23)
-        if (next == window.startHour) return
-        if (next >= window.endHour) {
-            _state.update { it.copy(message = "Start hour must stay before the end hour") }
-            return
-        }
-        patch(startHour = next)
-    }
-
-    fun adjustEndHour(delta: Int) {
-        val window = _state.value.window ?: return
-        val next = (window.endHour + delta).coerceIn(1, 24)
-        if (next == window.endHour) return
-        if (next <= window.startHour) {
-            _state.update { it.copy(message = "End hour must stay after the start hour") }
-            return
-        }
-        patch(endHour = next)
-    }
-
-    fun toggleFullDay() {
-        val window = _state.value.window ?: return
-        patch(showFullDay = !window.showFullDay)
-    }
-
     fun updatePlannedBlockReminders(next: PlannedBlockReminderSettings) {
         _state.update { it.copy(plannedBlockReminders = next) }
         viewModelScope.launch { repository.setPlannedBlockReminders(next) }
@@ -142,23 +103,5 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
         val next = if (planning) current.copy(planning = nextReminder) else current.copy(review = nextReminder)
         _state.update { it.copy(dailyReminders = next) }
         viewModelScope.launch { repository.setDailyReminders(next) }
-    }
-
-    private fun patch(
-        startHour: Int? = null,
-        endHour: Int? = null,
-        showFullDay: Boolean? = null,
-    ) {
-        _state.update { it.copy(saving = true) }
-        viewModelScope.launch {
-            repository.patchWindowSettings(startHour, endHour, showFullDay).fold(
-                onSuccess = { window ->
-                    _state.update { it.copy(window = window, saving = false) }
-                },
-                onFailure = { e ->
-                    _state.update { it.copy(saving = false, message = e.apiError.message) }
-                },
-            )
-        }
     }
 }

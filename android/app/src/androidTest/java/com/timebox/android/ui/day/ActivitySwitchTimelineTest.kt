@@ -35,7 +35,7 @@ class ActivitySwitchTimelineTest {
         }
         val repository = ActivityRepository(transport, storage, { now.toEpochMilli() }, { 0 }).also { runBlocking { it.refresh() } }
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
-        fun open() { compose.onNodeWithText("Current activity").performClick(); compose.onNodeWithText("Switch activity", substring = false).performClick() }
+        fun open() { compose.onNodeWithText("Switch").performClick() }
         open()
         val left = compose.onNodeWithTag("switch-planned-header").fetchSemanticsNode().boundsInRoot.left
         val right = compose.onNodeWithTag("switch-recorded-header").fetchSemanticsNode().boundsInRoot.left

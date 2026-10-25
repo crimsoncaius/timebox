@@ -22,13 +22,10 @@ def test_health(client):
     assert data["timezone"] == "UTC"
 
 
-def test_week_start_is_not_configurable(client):
-    settings = client.get("/settings")
-    assert settings.status_code == 200
-    assert "week_start" not in settings.json()
-
-    response = client.patch("/settings", json={"week_start": "sunday"})
-    assert response.status_code == 422
+def test_day_window_is_not_configurable(client):
+    assert client.get("/settings").status_code == 404
+    day = client.get("/days/2026-04-13").json()
+    assert "start_hour" not in day and "show_full_day" not in day
 
 
 @pytest.fixture
@@ -92,17 +89,10 @@ def test_get_day_renders_empty_blocks_without_saving(client):
 
 
 def test_preview_missing_day_does_not_create_archive_row(client):
-    client.patch(
-        "/settings",
-        json={"start_hour": 7, "end_hour": 19, "show_full_day": False},
-    )
-
     r = client.get("/days/2026-04-30/preview")
 
     assert r.status_code == 200
     assert r.json()["date"] == "2026-04-30"
-    assert r.json()["start_hour"] == 7
-    assert r.json()["end_hour"] == 19
     assert r.json()["time_blocks"] == []
     assert all(row["date"] != "2026-04-30" for row in client.get("/days").json())
 

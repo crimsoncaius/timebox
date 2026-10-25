@@ -349,7 +349,7 @@ fun BlockSheet(
 }
 
 internal fun blockSheetContainerColor(colors: TimeboxColors) =
-    if (colors.isDark) colors.low else colors.sheet
+    if (colors.isDark) colors.low else colors.sheet.copy(alpha = 1f)
 
 @Composable
 private fun SheetLabel(text: String) {

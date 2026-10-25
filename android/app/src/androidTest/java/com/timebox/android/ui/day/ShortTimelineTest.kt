@@ -29,7 +29,7 @@ class ShortTimelineTest {
             TimeBlock(index + 1, lane, 1, "Work", null, null, null, null,
                 startMinute = 600, endMinute = 605, name = "Five minutes")
         }
-        val day = Day(date, 10, 14, false, blocks, timezone = "UTC", today = date.plusDays(1), serverNowMinute = null)
+        val day = Day(date, blocks, timezone = "UTC", today = date.plusDays(1), serverNowMinute = null)
         var writes = 0
         compose.setContent {
             TimeboxTheme {

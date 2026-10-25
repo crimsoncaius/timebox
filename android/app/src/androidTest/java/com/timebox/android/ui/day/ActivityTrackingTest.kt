@@ -103,14 +103,14 @@ class ActivityTrackingTest {
         val repository = ActivityRepository(object : ActivityTransport { override suspend fun read() = snapshot; override suspend fun execute(command: ActivityCommandDto): ActivitySnapshotDto { commands += command; error("Offline") } }, object : ActivityStorage { override fun load() = journal; override fun save(value: String) { journal = value } })
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
-        compose.onNodeWithText("Start tracking").performClick()
+        compose.onNodeWithContentDescription("Start tracking").performClick()
         compose.onNodeWithText("When did this change happen?").assertDoesNotExist()
         compose.onNode(hasText("Start") and hasClickAction()).assertIsNotEnabled()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
         assertNull(repository.state.value.snapshot!!.current)
         assertTrue(commands.isEmpty())
-        compose.onNodeWithText("Start tracking").performClick()
+        compose.onNodeWithContentDescription("Start tracking").performClick()
         chooseTaskType("read", "Reading")
         compose.onNodeWithText("Block Name (optional)").performTextInput("Paper")
         compose.onNode(hasText("Start") and hasClickAction()).performClick()
@@ -150,7 +150,7 @@ class ActivityTrackingTest {
         val repository = ActivityRepository(transport, storage)
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(listOf(TaskType(2, "Reading", 0)), {}, repository) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
-        compose.onNodeWithText("Start tracking").performClick()
+        compose.onNodeWithContentDescription("Start tracking").performClick()
         chooseTaskType("read", "Reading")
         compose.onNode(hasText("Start") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.feedback != null }
@@ -158,7 +158,6 @@ class ActivityTrackingTest {
         compose.onNodeWithText("A newer change on another device updated this time.").assertIsDisplayed()
         compose.onNodeWithText("Stop").assertDoesNotExist()
         compose.onNodeWithText("Synced").assertDoesNotExist()
-        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").assertIsEnabled()
         assertFalse(repository.state.value.pending)
         assertNull(repository.state.value.error)
@@ -189,21 +188,15 @@ class ActivityTrackingTest {
         val repository = ActivityRepository(transport, store)
         compose.setContent { TimeboxTheme(darkTheme = false) { ActivityTracking(emptyList(), {}, repository) } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
-        compose.onNodeWithText("Start tracking").performClick()
+        compose.onNodeWithContentDescription("Start tracking").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == 4 }
         compose.onNodeWithText("Chapter").assertIsDisplayed()
-        compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("Switch activity").performClick()
+        compose.onNodeWithText("Switch").performClick()
         chooseTaskType("writ", "Writing")
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.plannedBlockId == null }
-        compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("PLANNED NOW").assertIsDisplayed()
-        compose.onNodeWithText("Chapter").assertIsDisplayed()
-        compose.onNodeWithText("10:00 AM – 11:00 AM", substring = true).assertIsDisplayed()
-        compose.onNode(hasText("Switch") and hasClickAction()).performClick()
+        compose.onNodeWithText("Chapter planned at", substring = true).assertIsDisplayed().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.records?.count { it.plannedBlockId == 4 } == 2 }
-        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("2 sessions ·", substring = true).assertDoesNotExist()
         compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
         assertEquals(7, repository.state.value.snapshot?.current?.taskId)
@@ -226,7 +219,6 @@ class ActivityTrackingTest {
             compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
         } else {
             compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
-            compose.onNodeWithText("Current activity").performClick()
             compose.onNodeWithText("2 sessions ·", substring = true).assertDoesNotExist()
             compose.onNodeWithText("on this plan", substring = true).assertDoesNotExist()
         }
@@ -259,23 +251,21 @@ class ActivityTrackingTest {
             ActivityTracking(listOf(TaskType(1, "unspecified", 0), TaskType(2, "reading", 0)), {}, repository)
         } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
-        compose.onNodeWithText("Start tracking").performClick()
+        compose.onNodeWithContentDescription("Start tracking").performClick()
         chooseTaskType("unspec", "unspecified")
         compose.onNode(hasText("Start") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current != null }
         compose.onNodeWithText("Unnamed activity").assertIsDisplayed()
-        compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("Switch activity").performClick()
+        compose.onNodeWithText("Switch").performClick()
         compose.onNode(hasText("Switch activity") and hasClickAction()).assertIsNotEnabled()
         chooseTaskType("read", "reading")
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
-        compose.onNodeWithText("Current activity").performClick()
         compose.onNodeWithText("Stop").performClick()
         compose.onNodeWithText("Unrecorded after ", substring = true).assertExists()
         compose.onNode(hasText("Stop tracking") and hasClickAction()).assertIsDisplayed().performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current == null }
-        compose.onNodeWithText("Start tracking").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Start tracking").assertIsDisplayed()
         assertEquals(listOf(ActivityKind.Start, ActivityKind.Switch, ActivityKind.Stop), commands.map { it.kind })
         assertEquals(1, commands[0].taskTypeId)
         assertNull(commands[1].name)
@@ -307,8 +297,7 @@ class ActivityTrackingTest {
             ActivityTracking(listOf(TaskType(1, "writing", 0), TaskType(2, "reading", 0)), {}, repository)
         } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
-        compose.onNodeWithText("Current activity").performClick()
-        compose.onNodeWithText("Switch activity").performClick()
+        compose.onNodeWithText("Switch").performClick()
         chooseTaskType("read", "reading")
         compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
         // The local projection moves to the next activity while the server round trip is pending.

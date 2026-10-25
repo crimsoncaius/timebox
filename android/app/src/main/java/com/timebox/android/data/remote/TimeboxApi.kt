@@ -131,12 +131,6 @@ interface TimeboxApi {
     @DELETE("actual-blocks/{actualBlockId}")
     suspend fun deleteActualBlock(@Path("actualBlockId") actualBlockId: Int)
 
-    @GET("settings")
-    suspend fun getSettings(): SettingsDto
-
-    @PATCH("settings")
-    suspend fun patchSettings(@Body body: SettingsPatchDto): SettingsDto
-
     @GET("task-types")
     suspend fun listTaskTypes(): List<TaskTypeDto>
 

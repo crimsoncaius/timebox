@@ -41,9 +41,6 @@ class DayTimelineDisplayTest {
     )
     private val day = Day(
         date = today,
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         blocks = listOf(planned, actualCard),
         actualBlocks = listOf(
             ActualBlockDayProjection(

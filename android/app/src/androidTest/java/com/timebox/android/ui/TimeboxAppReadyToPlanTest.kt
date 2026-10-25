@@ -491,18 +491,12 @@ private class ControllableTimeboxApi(initialReady: Boolean = false) {
     private fun day(date: String) = DayDto(
         id = 1,
         date = date,
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         timeBlocks = emptyList(),
         meta = meta.copy(today = meta.today),
     )
 
     private fun preview(date: String) = DayPreviewDto(
         date = date,
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         timeBlocks = emptyList(),
         meta = meta,
     )

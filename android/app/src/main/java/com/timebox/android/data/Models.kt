@@ -9,7 +9,6 @@ import com.timebox.android.data.remote.ChronicleDayDto
 import com.timebox.android.data.remote.ChronicleMonthDto
 import com.timebox.android.data.remote.DayPreviewDto
 import com.timebox.android.data.remote.DaySummaryDto
-import com.timebox.android.data.remote.SettingsDto
 import com.timebox.android.data.remote.TaskTypeDto
 import com.timebox.android.data.remote.TimeBlockDto
 import java.time.Instant
@@ -133,9 +132,6 @@ data class LinkedTask(
 
 data class Day(
     val date: LocalDate,
-    val startHour: Int,
-    val endHour: Int,
-    val showFullDay: Boolean,
     val blocks: List<TimeBlock>,
     val actualBlocks: List<ActualBlockDayProjection> = emptyList(),
     val timezone: String,
@@ -147,8 +143,9 @@ data class Day(
     /** Captured in the same clock domain used to advance the server anchor. */
     val capturedAtElapsedMillis: Long = elapsedRealtime(),
 ) {
-    val visibleStart: Int get() = if (showFullDay) 0 else startHour * 60
-    val visibleEnd: Int get() = if (showFullDay) DAY_END_MINUTES else endHour * 60
+    /** Every Day spans midnight to midnight (ADR 0020). */
+    val visibleStart: Int get() = 0
+    val visibleEnd: Int get() = DAY_END_MINUTES
     val slotCount: Int get() = (visibleEnd - visibleStart) / SLOT_MINUTES
 
     fun lane(lane: Lane): List<TimeBlock> = blocks.filter { it.lane == lane }
@@ -200,12 +197,6 @@ data class DaySummary(
     val plannedMinutes: Int,
     val actualMinutes: Int,
     val rows: List<DaySummaryRow>,
-)
-
-data class DayWindowSettings(
-    val startHour: Int,
-    val endHour: Int,
-    val showFullDay: Boolean,
 )
 
 fun TaskTypeDto.toModel() = TaskType(
@@ -318,9 +309,6 @@ private fun ActualBlockDayProjectionDto.toTimelineBlock() = TimeBlock(
 fun DayDto.toModel(elapsedRealtime: () -> Long = SystemClock::elapsedRealtime) = Day(
     elapsedRealtime = elapsedRealtime,
     date = LocalDate.parse(date),
-    startHour = startHour,
-    endHour = endHour,
-    showFullDay = showFullDay,
     blocks = timeBlocks.filter { it.lane == Lane.Planned.wire }.map { it.toModel() } +
         actualBlocks.map { it.toTimelineBlock() },
     actualBlocks = actualBlocks.map { it.toModel() },
@@ -332,9 +320,6 @@ fun DayDto.toModel(elapsedRealtime: () -> Long = SystemClock::elapsedRealtime) =
 fun DayPreviewDto.toModel(elapsedRealtime: () -> Long = SystemClock::elapsedRealtime) = Day(
     elapsedRealtime = elapsedRealtime,
     date = LocalDate.parse(date),
-    startHour = startHour,
-    endHour = endHour,
-    showFullDay = showFullDay,
     blocks = timeBlocks.filter { it.lane == Lane.Planned.wire }.map { it.toModel() } +
         actualBlocks.map { it.toTimelineBlock() },
     actualBlocks = actualBlocks.map { it.toModel() },
@@ -368,12 +353,6 @@ fun DaySummaryDto.toModel() = DaySummary(
             actualMinutes = it.actualMinutes,
         )
     },
-)
-
-fun SettingsDto.toModel() = DayWindowSettings(
-    startHour = startHour,
-    endHour = endHour,
-    showFullDay = showFullDay,
 )
 
 /**

@@ -5,7 +5,7 @@ import pytest
 from app.core.config import Settings, get_settings
 from app.main import app
 
-PROTECTED = ["/days", "/settings", "/task-types", "/days/2026-04-13"]
+PROTECTED = ["/days", "/task-types", "/days/2026-04-13"]
 
 
 @pytest.fixture

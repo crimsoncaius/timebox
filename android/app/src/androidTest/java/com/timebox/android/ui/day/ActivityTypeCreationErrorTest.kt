@@ -38,9 +38,8 @@ class ActivityTypeCreationErrorTest {
         } }
         compose.waitUntil(5000) { repository.state.value.snapshot != null }
         if (switching) {
-            compose.onNodeWithText("Current activity").performClick()
-            compose.onNodeWithText("Switch activity").performClick()
-        } else compose.onNodeWithText("Start tracking").performClick()
+            compose.onNodeWithText("Switch").performClick()
+        } else compose.onNodeWithContentDescription("Start tracking").performClick()
         compose.onAllNodes(hasSetTextAction()).onLast().performScrollTo().performTextInput("work/deep")
         compose.onNodeWithText("Create work/deep").performScrollTo().performClick()
         compose.onNodeWithText("Creation unavailable").performScrollTo().assertIsDisplayed()

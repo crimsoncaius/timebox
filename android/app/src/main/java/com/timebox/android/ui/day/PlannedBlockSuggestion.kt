@@ -34,7 +34,27 @@ internal fun plannedSuggestionTiming(plan: ActivityPlanDto, now: Instant, zone: 
     return "${format.format(start)} – ${format.format(end.atZone(zone))} · ${elapsedDuration(left)} left"
 }
 
-/** Suggests switching the Current Activity onto the Planned Block that covers now. */
+/**
+ * The Now card's note about the Planned Block covering now. A plan the Current Activity already
+ * counts toward reads as on plan; a matching but uncounted activity offers to count toward it;
+ * anything else offers to switch to the planned activity.
+ */
+internal fun plannedNowHint(
+    plan: ActivityPlanDto?,
+    currentPlannedBlockId: Int?,
+    matchesPlan: Boolean,
+    planName: String,
+    zone: ZoneId,
+    locale: Locale = Locale.getDefault(),
+): PlanHint? {
+    plan ?: return null
+    if (currentPlannedBlockId == plan.id) return PlanHint.OnPlan()
+    if (matchesPlan) return PlanHint.CountToward("matches your plan · count it")
+    val start = parseActivityInstant(plan.startAt).atZone(zone)
+    return PlanHint.SwitchTo("$planName planned at ${DateTimeFormatter.ofPattern("H:mm", locale).format(start)}")
+}
+
+/** Suggests switching the Current Activity onto the Planned Block that covers now. Focus only. */
 @Composable
 internal fun PlannedBlockSuggestion(name: String, timing: String, enabled: Boolean, focus: Boolean, onSwitch: () -> Unit, actionLabel: String = "Switch") {
     val colors = TimeboxTheme.colors

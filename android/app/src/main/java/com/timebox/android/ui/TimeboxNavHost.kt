@@ -151,6 +151,7 @@ private fun NavGraphBuilder.dayRoute(dependencies: TimeboxNavigationDependencies
                     },
                     onRetry = dayViewModel::retryPage,
                     onTapSlot = { lane: Lane, minute: Int -> dayViewModel.startDraft(lane, minute) },
+                    onLogGap = dayViewModel::startActualDraft,
                     onSelectBlock = dayViewModel::selectBlock,
                     onCommitMove = dayViewModel::moveBlock,
                     onDismissSheet = dayViewModel::closeSheet,
@@ -568,9 +569,6 @@ private fun NavGraphBuilder.settingsRoute(dependencies: TimeboxNavigationDepende
                     state = settingsState,
                     isDark = isDark,
                     onToggleDark = onToggleDark,
-                    onStartHourDelta = settingsViewModel::adjustStartHour,
-                    onEndHourDelta = settingsViewModel::adjustEndHour,
-                    onToggleFullDay = settingsViewModel::toggleFullDay,
                     onDailyReminderChange = settingsViewModel::updateDailyReminder,
                     onPlannedBlockRemindersChange = { next ->
                         if (next.enabled && !settingsState.plannedBlockReminders.enabled && !exactAlarmsAllowed) onRequestExactAlarms()
@@ -590,7 +588,6 @@ private fun NavGraphBuilder.settingsRoute(dependencies: TimeboxNavigationDepende
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     onOpenNotificationSettings = onOpenNotificationSettings,
                     onOpenThemePreview = { navController.navigate(AppRoutes.ThemePreview) },
-                    onRetry = { settingsViewModel.load(dayState.day?.timezone) },
                 )
             }
         }

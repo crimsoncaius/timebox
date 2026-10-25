@@ -22,7 +22,7 @@ class BlockDurationTest {
         val card = planned.copy(id = -44, lane = Lane.Actual, actualBlockId = 44, startMinute = startMinute, endMinute = endMinute)
         val record = ActualBlock(44, 1, "Writing", null, null, null, null, Instant.parse(startAt), endAt?.let(Instant::parse))
         val day = Day(
-            date = date, startHour = 0, endHour = 24, showFullDay = true, blocks = listOf(card),
+            date = date, blocks = listOf(card),
             actualBlocks = listOf(ActualBlockDayProjection(record, date, startMinute, endMinute, endMinute - startMinute)),
             timezone = "UTC", today = date, elapsedRealtime = { 0L }, serverNowMinute = 12 * 60,
         )

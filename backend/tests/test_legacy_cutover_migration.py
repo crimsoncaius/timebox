@@ -73,8 +73,7 @@ def test_cutover_preserves_tasks_and_plans_but_deletes_legacy_actual_and_undo(
         )
         connection.execute(
             Base.metadata.tables["days"].insert().values(
-                id=1, date=dt.date(2026, 8, 21), start_hour=8, end_hour=20,
-                show_full_day=False,
+                id=1, date=dt.date(2026, 8, 21),
             )
         )
         _insert_task(connection, 1, "Completed standalone", status="completed", updated_at=completed_at)
@@ -171,8 +170,7 @@ def test_cutover_detaches_every_stateful_or_malformed_child_without_orphaning_pl
         connection.execute(Base.metadata.tables["task_types"].insert().values(id=1, name="owned"))
         connection.execute(
             Base.metadata.tables["days"].insert().values(
-                id=1, date=dt.date(2026, 8, 22), start_hour=8, end_hour=20,
-                show_full_day=False,
+                id=1, date=dt.date(2026, 8, 22),
             )
         )
         _insert_task(connection, 10, "Parent")
@@ -243,8 +241,7 @@ def test_cutover_reinterprets_scheduled_checklists_in_place_and_keeps_quota_sema
         connection.execute(Base.metadata.tables["task_types"].insert().values(id=1, name="series"))
         connection.execute(
             Base.metadata.tables["days"].insert().values(
-                id=1, date=dt.date(2026, 8, 23), start_hour=8, end_hour=20,
-                show_full_day=False,
+                id=1, date=dt.date(2026, 8, 23),
             )
         )
         connection.execute(

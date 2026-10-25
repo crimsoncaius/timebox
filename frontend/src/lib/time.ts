@@ -232,19 +232,8 @@ export function minuteInTimeZone(instant: string, timeZone: string): number {
   return intPart(parts, 'hour') * 60 + intPart(parts, 'minute')
 }
 
-export function visibleMinuteRange(day: {
-  show_full_day: boolean
-  start_hour: number
-  end_hour: number
-}): { start: number; end: number } {
-  if (day.show_full_day) {
-    return { start: 0, end: MINUTES_PER_DAY }
-  }
-  return {
-    start: day.start_hour * 60,
-    end: day.end_hour * 60,
-  }
-}
+/** Every Day spans midnight to midnight (ADR 0020). */
+export const DAY_MINUTE_RANGE: { readonly start: number; readonly end: number } = { start: 0, end: MINUTES_PER_DAY }
 
 /**
  * Maps pointer distance from the lane's top edge to a slot-aligned minute in the visible window.

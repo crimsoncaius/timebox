@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
@@ -97,6 +98,7 @@ fun DayScreen(
     onRecordPlanned: () -> Unit = {},
     onCancelRecording: () -> Unit = {},
     onUndoRecording: () -> Unit = {},
+    onLogGap: (Int, Int) -> Unit = { _, _ -> },
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val preferences = remember(context) { com.timebox.android.data.AppPreferences(context) }
@@ -154,9 +156,10 @@ fun DayScreen(
         }) {
             DayCalendarHeader(
                 showCalendar = calendarVisible,
-                compactDate = true,
                 viewAction = {
-                    androidx.compose.material3.TextButton(onClick = { viewOpen = true }) { androidx.compose.material3.Text("View") }
+                    androidx.compose.material3.IconButton(onClick = { viewOpen = true }) {
+                        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Tune, contentDescription = "Day view options", tint = TimeboxTheme.colors.onVariant)
+                    }
                 },
                 hiddenTrackingAction = {
                     if (!trackingVisible) androidx.compose.material3.TextButton(modifier = Modifier.semantics { stateDescription = trackingAttention ?: if (activityState.snapshot?.current != null) "Recording" else "Tracking stopped" }, onClick = { setVisible(com.timebox.android.data.DayViewSection.Tracking, true) }) {
@@ -174,11 +177,12 @@ fun DayScreen(
                 onNavigateToday = onNavigateToday,
             )
 
+            if (trackingVisible) Spacer(Modifier.height(8.dp))
             ActivityTracking(controlsVisible = trackingVisible, taskTypes = state.taskTypes, onChanged = { onRetry(state.date) }, onEnterFocus = onEnterFocus, planning = state.focusPlanningBlocked)
+            // The same rule as under the week strip separates tracking from the lanes.
             if (trackingVisible) {
-            Spacer(Modifier.height(6.dp))
-            androidx.compose.material3.HorizontalDivider(color = TimeboxTheme.colors.hairline)
-            Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
+                com.timebox.android.ui.components.Hairline()
             }
             Box(Modifier.weight(1f)) {
                 if (state.isPlanningMode) {
@@ -203,6 +207,7 @@ fun DayScreen(
                         onTapSlot = onTapSlot,
                         onSelectBlock = onSelectBlock,
                         onCommitMove = onCommitMove,
+                        onLogGap = onLogGap,
                         landingTarget = landingTarget,
                     )
                 }
@@ -287,6 +292,10 @@ private fun PlanningDayPage(
     }
 }
 
+/** A lane header with its total, e.g. "Planned 8h 15m"; the total is left off when it is zero. */
+internal fun laneHeader(label: String, minutes: Int): String =
+    if (minutes > 0) "$label ${com.timebox.android.ui.durationShort(minutes)}" else label
+
 /** How far sideways a drag must travel before it counts as changing the day. */
 private val DAY_SWIPE_THRESHOLD = 55.dp
 private val SAVED_BLOCK_DRAG_EDGE_ZONE = 48.dp
@@ -307,6 +316,7 @@ private fun InteractiveDayPager(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    onLogGap: (Int, Int) -> Unit = { _, _ -> },
     landingTarget: LandingTarget? = null,
 ) {
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
@@ -391,7 +401,7 @@ private fun InteractiveDayPager(
                             page = state.page(date),
                             scrollState = if (pagePosition == 0) timelineScroll else previewScroll,
                             active = pagePosition == 0,
-                            autoScrollToNow = pagePosition == 0 && date == state.today && !state.skipScrollToNow,
+                            autoScrollToNow = pagePosition == 0 && !state.skipScrollToNow,
                             scrollToNowRequest = state.scrollToNowRequest,
                             landing = landingTarget?.takeIf { pagePosition == 0 && it.date == date },
                             selectedBlockId = if (interactive) state.selectedBlockId else null,
@@ -400,6 +410,7 @@ private fun InteractiveDayPager(
                             onTapSlot = if (interactive) onTapSlot else ({ _, _ -> }),
                             onSelectBlock = if (interactive) onSelectBlock else ({ }),
                             onCommitMove = if (interactive) onCommitMove else ({ _, _, _ -> }),
+                            onLogGap = if (interactive) onLogGap else null,
                         )
                     }
                 }
@@ -430,6 +441,7 @@ private fun DayPage(
     onTapSlot: (Lane, Int) -> Unit,
     onSelectBlock: (Int) -> Unit,
     onCommitMove: (Int, Int, Int) -> Unit,
+    onLogGap: ((Int, Int) -> Unit)? = null,
 ) {
     val colors = TimeboxTheme.colors
     var viewportHeightPx by remember(date) { mutableIntStateOf(0) }
@@ -440,7 +452,9 @@ private fun DayPage(
         if (placementFailure != null) { delay(4_000); placementFailure = null }
     }
     Column(Modifier.fillMaxSize()) {
-        Row(
+        val day = page.day
+        // A Day that never loaded draws no lanes, so it cannot pass for an empty one.
+        if (day != null) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = TimeboxDimens.screenPadding)
@@ -449,15 +463,24 @@ private fun DayPage(
             horizontalArrangement = Arrangement.spacedBy(TimeboxDimens.laneGap),
         ) {
             Spacer(Modifier.width(TimeboxDimens.gutterWidth))
-            Kicker("Planned", colors.planned, Modifier.weight(1f))
-            Kicker("Actual", colors.actual, Modifier.weight(1f))
+            Kicker(laneHeader("Planned", day.lane(Lane.Planned).sumOf { it.endMinute - it.startMinute }), colors.planned, Modifier.weight(1f))
+            Kicker(laneHeader("Actual", day.actualBlocks.sumOf { it.durationMinutes }), colors.actual, Modifier.weight(1f))
         }
 
-        val day = page.day
+        if (day != null && page.problem != null) StaleDayStatus(page.problem, onRetry)
+        if (day != null && day.blocks.isEmpty() && page.problem == null) {
+            androidx.compose.material3.Text(
+                "Nothing planned · tap an hour or Plan from tasks",
+                style = TimeboxTheme.type.bodySmall,
+                color = colors.onVariant,
+                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding).padding(bottom = 4.dp),
+            )
+        }
         when {
             page.loading && day == null -> LoadingState(Modifier.weight(1f))
-            page.error != null && day == null -> ErrorState(
-                message = page.error,
+            day == null && (page.problem != null || page.error != null) -> DayCouldNotLoad(
+                date = date,
+                problem = page.problem ?: LoadProblem.Other,
                 onRetry = onRetry,
                 modifier = Modifier.weight(1f),
             )
@@ -483,6 +506,7 @@ private fun DayPage(
                     onCommitMove = onCommitMove,
                     onSavedPlannedBlockDragPointer = { savedBlockDragPointerY = it },
                     onPlacementError = { placementFailure = it },
+                    onLogGap = onLogGap,
                 )
                 }
                 SavedPlannedBlockDragEdgeScroll(
@@ -532,7 +556,21 @@ private fun SavedPlannedBlockDragEdgeScroll(
 /** A finished block Day was opened on, placed where the Now Line would be. */
 internal data class LandingTarget(val key: String, val date: LocalDate, val minute: Int)
 
-/** Scroll once per date (or landing) so the now line, or the landing, sits one-third down the visible timeline. */
+/** Where a Day opens, and whether that minute sits one-third down the viewport or just below its top. */
+internal data class InitialScroll(val minute: Int, val oneThirdDown: Boolean)
+
+/** Dates other than Today open at their first block, or here when they have none. */
+internal const val DEFAULT_SCROLL_MINUTE = 8 * 60
+
+/** Today opens at the Now Line (or a landing); other dates at their first block (ADR 0020). */
+internal fun initialScroll(day: Day, landingMinute: Int?): InitialScroll? {
+    landingMinute?.let { return InitialScroll(it, oneThirdDown = true) }
+    if (day.date == day.today) return day.nowMinuteAt()?.let { InitialScroll(it, oneThirdDown = true) }
+    val first = day.blocks.minOfOrNull { it.startMinute }
+    return InitialScroll(first ?: DEFAULT_SCROLL_MINUTE, oneThirdDown = false)
+}
+
+/** Scroll once per date (or landing) to where [initialScroll] says the Day opens. */
 @Composable
 internal fun AutoScrollTimelineToNowOnce(
     day: Day,
@@ -545,6 +583,7 @@ internal fun AutoScrollTimelineToNowOnce(
     var completed by remember(day.date, scrollToNowRequest, landing?.key) { mutableStateOf(false) }
     val slotHeight = timelineSlotHeight()
     val slotHeightPx = with(LocalDensity.current) { slotHeight.toPx() }
+    val headroomPx = with(LocalDensity.current) { 24.dp.toPx() }
     val maxScroll = scrollState.maxValue
 
     androidx.compose.runtime.LaunchedEffect(
@@ -556,18 +595,21 @@ internal fun AutoScrollTimelineToNowOnce(
         landing?.key,
     ) {
         if (!(enabled || landing != null) || completed || viewportHeightPx <= 0) return@LaunchedEffect
-        val nowMinute = landing?.minute ?: day.nowMinuteAt()
-        if (nowMinute == null || nowMinute !in day.visibleStart until day.visibleEnd) {
+        val target = initialScroll(day, landing?.minute)
+        if (target == null || target.minute !in day.visibleStart until day.visibleEnd) {
             completed = true
             return@LaunchedEffect
         }
         val lineOffsetPx = slotHeightPx *
-            (nowMinute - day.visibleStart).toFloat() /
+            (target.minute - day.visibleStart).toFloat() /
             com.timebox.android.data.SLOT_MINUTES
         // A zero maximum can be transient during first layout. Wait if the line is
         // demonstrably below the viewport; maxValue changing will restart this effect.
         if (maxScroll == 0 && lineOffsetPx > viewportHeightPx) return@LaunchedEffect
-        scrollState.scrollTo(initialNowScrollOffset(lineOffsetPx, viewportHeightPx, maxScroll))
+        scrollState.scrollTo(
+            if (target.oneThirdDown) initialNowScrollOffset(lineOffsetPx, viewportHeightPx, maxScroll)
+            else (lineOffsetPx - headroomPx).roundToInt().coerceIn(0, maxScroll),
+        )
         completed = true
     }
 }

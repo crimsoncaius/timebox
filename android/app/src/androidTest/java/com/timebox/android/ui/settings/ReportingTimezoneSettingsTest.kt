@@ -15,7 +15,7 @@ class ReportingTimezoneSettingsTest {
         var saved = ""
         compose.setContent {
             TimeboxTheme(darkTheme = false) {
-                SettingsScreen(state, false, {}, {}, {}, {}, onBaseUrlChange = {}, onApiKeyChange = {}, onSaveConnection = {}, notificationsAllowed = false, onRequestNotificationPermission = {}, onOpenNotificationSettings = {}, onReportingZoneChange = { state = state.copy(reportingZoneInput = it) }, onSaveReportingZone = { saved = state.reportingZoneInput }, onRetry = {})
+                SettingsScreen(state, false, {}, onBaseUrlChange = {}, onApiKeyChange = {}, onSaveConnection = {}, notificationsAllowed = false, onRequestNotificationPermission = {}, onOpenNotificationSettings = {}, onReportingZoneChange = { state = state.copy(reportingZoneInput = it) }, onSaveReportingZone = { saved = state.reportingZoneInput })
             }
         }
         compose.onNodeWithText("Asia/Singapore", substring = true).assertExists()

@@ -11,9 +11,6 @@ const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCaptur
 const day: DayRead = {
   id: 1,
   date: '2026-06-01',
-  start_hour: 8,
-  end_hour: 20,
-  show_full_day: false,
   created_at: '',
   updated_at: '',
   time_blocks: [],
@@ -70,6 +67,9 @@ function mockNowLineGeometry(lineTop: number, timelineTop: number, viewportHeigh
   return scrollBy
 }
 
+/** Where 8 AM sits on the whole-day timeline at the default slot height. */
+const EIGHT_AM_PX = 480 / 30 * 46
+
 describe('DayTimeline half-hour creation requests', () => {
   it.each([false, true])('floors clicks in both lanes with task selection %s', (placementSelected) => {
     const clicked = vi.fn()
@@ -83,7 +83,7 @@ describe('DayTimeline half-hour creation requests', () => {
       const target = lane === 'planned' && placementSelected
         ? screen.getByTestId('planned-placement-target') : node
       for (const [minute, expected] of [[980, 960], [990, 990], [1199, 1170]]) {
-        fireEvent.click(target, { clientY: (minute - 480) / 30 * slotHeight })
+        fireEvent.click(target, { clientY: minute / 30 * slotHeight })
         expect(clicked).toHaveBeenLastCalledWith(lane, expected, expected + 30)
       }
     }
@@ -108,9 +108,9 @@ describe('DayTimeline draft resize', () => {
       onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} onDraftTimeChange={changed} />
     </DragDropProvider>)
     const edge = screen.getByRole('button', { name: 'Resize draft block end (Actual)' })
-    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientY: 322 })
-    fireEvent.pointerMove(window, { pointerId: 1, clientY: 460 })
-    fireEvent.pointerUp(window, { pointerId: 1, clientY: 460 })
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientY: EIGHT_AM_PX + 322 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientY: EIGHT_AM_PX + 460 })
+    fireEvent.pointerUp(window, { pointerId: 1, clientY: EIGHT_AM_PX + 460 })
     expect(changed).toHaveBeenCalledWith(660, 720)
     expect(screen.getByRole('button', { name: 'Move draft actual block' })).toBeInTheDocument()
   })
@@ -126,9 +126,9 @@ describe('DayTimeline draft resize', () => {
       task_type_id: 1, task_type: { id: 1, name: 'work', created_at: '', updated_at: '' },
       note: null, created_at: '', updated_at: '' }
     const { resizeEnd } = renderTimeline(changed, { ...day, time_blocks: [neighbor] })
-    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 4, clientY: 46 })
-    fireEvent.pointerMove(window, { pointerId: 4, clientY: 184 })
-    fireEvent.pointerUp(window, { pointerId: 4, clientY: 184 })
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 4, clientY: EIGHT_AM_PX + 46 })
+    fireEvent.pointerMove(window, { pointerId: 4, clientY: EIGHT_AM_PX + 184 })
+    fireEvent.pointerUp(window, { pointerId: 4, clientY: EIGHT_AM_PX + 184 })
     expect(changed).toHaveBeenCalledWith(480, 547)
   })
 
@@ -149,26 +149,26 @@ describe('DayTimeline draft resize', () => {
     const onDraftTimeChange = vi.fn()
     const { draft, resizeEnd } = renderTimeline(onDraftTimeChange)
 
-    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 4, clientY: 46 })
-    fireEvent.pointerMove(window, { pointerId: 4, clientY: 92 })
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 4, clientY: EIGHT_AM_PX + 46 })
+    fireEvent.pointerMove(window, { pointerId: 4, clientY: EIGHT_AM_PX + 92 })
     expect(draft).toHaveAttribute('data-dragging', 'true')
 
-    fireEvent.pointerCancel(window, { pointerId: 4, clientY: 92 })
+    fireEvent.pointerCancel(window, { pointerId: 4, clientY: EIGHT_AM_PX + 92 })
 
     expect(draft).not.toHaveAttribute('data-dragging')
     expect(draft.style.height).toBe('46px')
     expect(onDraftTimeChange).not.toHaveBeenCalled()
 
-    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 5, clientY: 46 })
-    fireEvent.pointerMove(window, { pointerId: 5, clientY: 92 })
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 5, clientY: EIGHT_AM_PX + 46 })
+    fireEvent.pointerMove(window, { pointerId: 5, clientY: EIGHT_AM_PX + 92 })
     fireEvent.lostPointerCapture(resizeEnd, { pointerId: 5 })
 
     expect(draft).not.toHaveAttribute('data-dragging')
     expect(onDraftTimeChange).not.toHaveBeenCalled()
 
-    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 6, clientY: 46 })
-    fireEvent.pointerMove(window, { pointerId: 6, clientY: 92 })
-    fireEvent.pointerUp(window, { pointerId: 6, clientY: 92 })
+    fireEvent.pointerDown(resizeEnd, { button: 0, pointerId: 6, clientY: EIGHT_AM_PX + 46 })
+    fireEvent.pointerMove(window, { pointerId: 6, clientY: EIGHT_AM_PX + 92 })
+    fireEvent.pointerUp(window, { pointerId: 6, clientY: EIGHT_AM_PX + 92 })
 
     expect(onDraftTimeChange).toHaveBeenCalledWith(480, 540)
     expect(onDraftTimeChange).toHaveBeenCalledTimes(1)
@@ -342,22 +342,22 @@ describe('DayTimeline initial current-time positioning', () => {
     expect(scrollBy).toHaveBeenCalledTimes(2)
   })
 
-  it('does not scroll another date', () => {
+  it('opens another date at 8 AM when it has no blocks', () => {
     const scrollBy = mockNowLineGeometry(600, 0, 900)
-    render(timeline({ ...day, date: '2026-06-02' }, true))
-    expect(scrollBy).not.toHaveBeenCalled()
+    render(timeline({ ...day, date: '2026-06-02', time_blocks: [], actual_blocks: [] }, true))
+    expect(scrollBy).toHaveBeenCalledWith({ top: EIGHT_AM_PX - 96, behavior: 'auto' })
   })
 
-  it('does not scroll when the Now Line is outside the hours shown, including after time later enters range', () => {
+  it('opens another date at its first block', () => {
     const scrollBy = mockNowLineGeometry(600, 0, 900)
-    vi.setSystemTime(new Date('2026-06-01T03:00:00Z'))
-    render(timeline(day, true))
-    expect(scrollBy).not.toHaveBeenCalled()
-
-    vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
-    act(() => { vi.advanceTimersByTime(30_000) })
-    expect(scrollBy).not.toHaveBeenCalled()
+    render(timeline({ ...day, date: '2026-06-02', actual_blocks: [], time_blocks: [{
+      id: 7, lane: 'planned', task_type_id: 1, task_type: { id: 1, name: 'Work', created_at: '', updated_at: '' },
+      note: null, start_minute: 360, end_minute: 420, created_at: '', updated_at: '',
+    }] }, true))
+    expect(scrollBy).toHaveBeenCalledWith({ top: 360 / 30 * 46 - 96, behavior: 'auto' })
   })
+
+
 })
 
 
@@ -379,7 +379,7 @@ describe('DayTimeline authoritative clock', () => {
     expect(block).toHaveAccessibleDescription('Work, 9 – 10:23am, 1h 23m')
     expect(parseFloat(block.parentElement!.style.height)).toBeCloseTo((623.35 - 540) / 30 * 46)
     const line = screen.getByTestId('day-now-line').firstElementChild as HTMLElement
-    expect(parseFloat(line.style.top)).toBeCloseTo((623.35 - 480) / 30 * 46)
+    expect(parseFloat(line.style.top)).toBeCloseTo(623.35 / 30 * 46)
     expect(onPatchBlock).not.toHaveBeenCalled()
   })
 
@@ -422,10 +422,10 @@ describe('DayTimeline authoritative clock', () => {
     }] }} readOnly={false} draft={null} selectedBlockId={null}
       onLaneSlotClick={vi.fn()} onPatchBlock={onPatchBlock} /></DragDropProvider>)
     const line = screen.getByTestId('day-now-line').firstElementChild as HTMLElement
-    expect(line.style.top).toBe('368px')
+    expect(line.style.top).toBe('1104px')
     expect(screen.getByText('11am – 12pm')).toBeInTheDocument()
     act(() => vi.advanceTimersByTime(60_000))
-    expect(parseFloat(line.style.top)).toBeCloseTo(369.5333)
+    expect(parseFloat(line.style.top)).toBeCloseTo(1105.5333)
     expect(screen.getByText('11am – 12:01pm')).toBeInTheDocument()
     expect(onPatchBlock).not.toHaveBeenCalled()
   })
@@ -436,7 +436,7 @@ describe('DayTimeline authoritative clock', () => {
     const anchor = Date.now()
     const now = () => Date.parse('2026-06-01T15:59:30Z') + Date.now() - anchor
     const renderDay = (date: string) => <DragDropProvider><DayTimeline
-      day={{ ...day, date, show_full_day: true, meta: { ...day.meta, timezone: 'Asia/Singapore' } }}
+      day={{ ...day, date, meta: { ...day.meta, timezone: 'Asia/Singapore' } }}
       now={now} readOnly={false} draft={null} selectedBlockId={null}
       onLaneSlotClick={vi.fn()} onPatchBlock={vi.fn()} /></DragDropProvider>
     const view = render(renderDay('2026-06-01'))

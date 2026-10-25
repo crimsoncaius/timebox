@@ -155,8 +155,6 @@ fun ActivityTracking(
             }
         }
     }
-    var expanded by remember(current?.id) { mutableStateOf(false) }
-    BackHandler(!focus && expanded && !switching && !stopping && !checkInOpen) { expanded = false }
     val colors = TimeboxTheme.colors
     val planNowAvailable = state.snapshot?.planNowRevision != null
     val linkedPlan = current?.plannedBlockId?.let { id -> state.snapshot?.plans?.find { it.id == id } }
@@ -166,7 +164,7 @@ fun ActivityTracking(
             planRevision = state.snapshot?.planNowRevision
             targetId = item.id; timing = null; timingError = null; planMinutes = null
             selectedType = availableTypes.find { it.id == item.taskTypeId }
-            name = item.name.orEmpty(); editingCurrent = true; switching = true; expanded = false
+            name = item.name.orEmpty(); editingCurrent = true; switching = true
         }
     }
     fun openSwitch(id: Int) {
@@ -195,21 +193,33 @@ fun ActivityTracking(
                 focusTask(elapsed)
             }
             if (!focus) {
+                val timeFormat = java.time.format.DateTimeFormatter.ofPattern("H:mm")
+                val hint = if (current != null) plannedNowHint(
+                    plan = plan, currentPlannedBlockId = current.plannedBlockId,
+                    matchesPlan = plan != null && current.matchesPlan(plan),
+                    planName = plan?.let { activityIdentityText(it.name, it.taskTitle, availableTypes.find { type -> type.id == it.taskTypeId }?.name) }.orEmpty(),
+                    zone = zone,
+                ) else null
+                val last = state.snapshot?.records?.filter { it.endAt != null }?.maxByOrNull { parseActivityInstant(it.endAt!!) }
                 CurrentActivityControl(
                     activity = current?.primaryIdentity().orEmpty(),
                     secondary = current?.secondaryIdentity(),
-                    elapsed = current?.let { runningTime(Duration.between(parseActivityInstant(it.startAt), now).seconds) }.orEmpty(),
-                    running = current != null, expanded = expanded, enabled = enabled, focusEnabled = enabled && !planning,
-                    onToggle = { expanded = !expanded },
+                    since = current?.let { timeFormat.format(parseActivityInstant(it.startAt).atZone(zone)) },
+                    elapsedSeconds = current?.let { Duration.between(parseActivityInstant(it.startAt), now).seconds } ?: 0,
+                    running = current != null, enabled = enabled, focusEnabled = enabled && !planning,
                     onStart = ::start,
                     onNotes = { current?.let { notesTargetId = it.id } },
-                    onSwitch = { expanded = false; current?.let { openSwitch(it.id) } },
-                    onStop = { expanded = false; current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
-                    onFocus = { expanded = false; onEnterFocus() },
+                    onSwitch = { current?.let { openSwitch(it.id) } },
+                    onStop = { current?.let { targetId = it.id; timing = null; timingError = null; stopping = true } },
+                    onFocus = onEnterFocus,
                     onEdit = if (planNowAvailable) ::openCurrentEditor else null,
-                    metrics = if (current != null) {
-                        { ActivityTimeMetrics(false, Duration.between(parseActivityInstant(current.startAt), now).seconds.coerceAtLeast(0), now, linkedPlanEnd) }
-                    } else null,
+                    planHint = hint,
+                    onPlanHint = {
+                        if (plan != null) scope.launch(Dispatchers.IO) {
+                            if (hint is PlanHint.CountToward) repository.countTowardPlan(plan) else repository.command(ActivityKind.Switch, plan = plan)
+                        }
+                    },
+                    lastActivity = last?.let { "last: ${it.primaryIdentity()} ended ${timeFormat.format(parseActivityInstant(it.endAt!!).atZone(zone))}" },
                 )
             }
             ActivityTrackingStatusChip(
@@ -219,9 +229,8 @@ fun ActivityTracking(
                 modifier = Modifier.padding(top = if (focus) 12.dp else 4.dp, bottom = 4.dp),
             )
             state.error?.let { Text(it, color = colors.onVariant, style = TimeboxTheme.type.bodySmall) }
-            if ((focus || expanded) && question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
-            if (!focus && expanded && planning) HelperText("Finish or cancel planning to enter Focus.", Modifier.fillMaxWidth().padding(bottom = 8.dp))
-            if ((focus || expanded) && current != null && plan != null && current.plannedBlockId != plan.id) {
+            if (question != null && !checkInOpen) TextButton(onClick = { checkInOpen = true }) { Text("Check-in waiting") }
+            if (focus && current != null && plan != null && current.plannedBlockId != plan.id) {
                 val counts = current.matchesPlan(plan)
                 PlannedBlockSuggestion(
                     name = activityIdentityText(plan.name, plan.taskTitle, availableTypes.find { it.id == plan.taskTypeId }?.name),

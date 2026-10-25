@@ -49,10 +49,17 @@ def prepare_legacy_schema():
                 batch.drop_constraint("fk_task_type_merge_target", type_="foreignkey")
                 batch.drop_column("merged_into_id")
                 batch.drop_column("is_merged")
-            # Historical revisions predate the Monday-only settings migration.
+            # Historical revisions predate the whole-day and Monday-only settings migrations.
             connection.execute(text(
-                "ALTER TABLE app_settings ADD COLUMN week_start TEXT NOT NULL DEFAULT 'monday'"
+                "CREATE TABLE app_settings (id INTEGER PRIMARY KEY, "
+                "start_hour INTEGER NOT NULL DEFAULT 8, end_hour INTEGER NOT NULL DEFAULT 20, "
+                "show_full_day BOOLEAN NOT NULL DEFAULT 0, week_start TEXT NOT NULL DEFAULT 'monday', "
+                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
             ))
+            connection.execute(text("ALTER TABLE days ADD COLUMN start_hour INTEGER NOT NULL DEFAULT 8"))
+            connection.execute(text("ALTER TABLE days ADD COLUMN end_hour INTEGER NOT NULL DEFAULT 20"))
+            connection.execute(text("ALTER TABLE days ADD COLUMN show_full_day BOOLEAN NOT NULL DEFAULT 0"))
             connection.execute(text("DROP INDEX IF EXISTS uq_time_blocks_legacy_correspondence"))
             connection.execute(text("ALTER TABLE time_blocks DROP COLUMN activity_source"))
             connection.execute(text("DROP TABLE IF EXISTS activity_operations"))

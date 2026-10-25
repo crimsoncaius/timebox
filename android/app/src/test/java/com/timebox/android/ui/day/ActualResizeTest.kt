@@ -42,7 +42,7 @@ class ActualResizeTest {
             injectedScope = backgroundScope, readinessCoordinator = readiness)
         val records = listOf(previous, target, next).filter { it.actualBlock.id == target.actualBlock.id ||
             it.actualBlock.endAt!! <= target.actualBlock.startAt || it.actualBlock.startAt >= target.actualBlock.endAt!! }
-        val day = Day(date, 0, 24, true, records.map {
+        val day = Day(date, records.map {
             TimeBlock(it.actualBlock.id, Lane.Actual, 1, "Activity", null, null, null, null,
                 actualBlockId = it.actualBlock.id, startMinute = it.startMinute, endMinute = it.endMinute)
         }, actualBlocks = records, timezone = "UTC", today = date.plusDays(1), serverNowMinute = 1440, elapsedRealtime = { 0L })

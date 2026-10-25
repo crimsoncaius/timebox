@@ -44,8 +44,7 @@ it('keeps controls usable and explains when persistent storage is unavailable', 
   } finally { spy.mockRestore() }
 })
 it('adjusts and resets timeline zoom from View without a standalone zoom bar', () => {
-  const day: DayRead = { id: 1, date: '2026-09-13', start_hour: 10, end_hour: 14,
-    show_full_day: false, time_blocks: [], actual_blocks: [], created_at: '', updated_at: '',
+  const day: DayRead = { id: 1, date: '2026-09-13', time_blocks: [], actual_blocks: [], created_at: '', updated_at: '',
     meta: { timezone: 'UTC', today: '2026-09-13', server_now_iso: '2026-09-13T12:00:00Z' } }
   function Page() {
     const [zoom, setZoom] = useState(1)

@@ -56,6 +56,8 @@ data class DayPageState(
     val day: Day? = null,
     val loading: Boolean = true,
     val error: String? = null,
+    /** Why the latest load failed, or null after a success. */
+    val problem: LoadProblem? = null,
     /** False for a read-only preview; true once the normal day endpoint has opened it. */
     val materialized: Boolean = false,
 )
@@ -155,11 +157,13 @@ class DayViewModel(
                     val dates = ui.pages.keys + ui.date
                     val pages = dates.associateWith { date ->
                         val old = ui.page(date)
-                        var projected = snapshot.projectDay(date, old.day)
+                        // Tracking overlays a loaded Day; it never stands in for one that has not loaded.
+                        val loaded = old.day ?: return@associateWith old
+                        var projected = snapshot.projectDay(date, loaded)
                         pendingActualMoves.filterKeys { it.first == date }.forEach { (key, range) ->
                             projected = projected.withBlockTimes(key.second, range.first, range.second)
                         }
-                        old.copy(day = projected, loading = if (old.day == null) false else old.loading)
+                        old.copy(day = projected)
                     }
                     if (pages != ui.pages) _state.update {
                         it.copy(pages = pages, taskTypes = snapshot.taskTypes.map { t -> t.toModel() })
@@ -243,7 +247,7 @@ class DayViewModel(
         val requestVersion = nextRequestVersion(date)
         _state.update { state ->
             state.copy(date = date).withPage(date) { page ->
-                page.copy(loading = showSpinner && page.day == null, error = null)
+                page.copy(loading = showSpinner && page.day == null, error = null, problem = null)
             }
         }
         launchScope.launch {
@@ -267,7 +271,7 @@ class DayViewModel(
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
                             state.withPage(date) { page ->
-                                page.copy(loading = false, error = e.apiError.message)
+                                page.copy(loading = false, error = e.apiError.message, problem = e.apiError.loadProblem())
                             }
                         }
                     }
@@ -296,7 +300,7 @@ class DayViewModel(
         if (existing?.loading == true) return
         val requestVersion = nextRequestVersion(date)
         _state.update { state ->
-            state.withPage(date) { it.copy(loading = true, error = null) }
+            state.withPage(date) { it.copy(loading = true, error = null, problem = null) }
         }
         launchScope.launch {
             repository.getDayPreview(date).fold(
@@ -313,7 +317,7 @@ class DayViewModel(
                     if (isLatest(date, requestVersion) && isInActiveWindow(date)) {
                         _state.update { state ->
                             state.withPage(date) {
-                                it.copy(loading = false, error = error.apiError.message)
+                                it.copy(loading = false, error = error.apiError.message, problem = error.apiError.loadProblem())
                             }
                         }
                     }
@@ -440,6 +444,20 @@ class DayViewModel(
                     startMinute = start,
                     endMinute = start + SLOT_MINUTES,
                 ),
+                selectedBlockId = null,
+                nameInput = "",
+                noteInput = "",
+                typeQuery = "",
+            )
+        }
+    }
+
+    /** Opens a new Actual Block prefilled with an Untracked Gap's times. */
+    fun startActualDraft(startMinute: Int, endMinute: Int) {
+        if (_state.value.saving || _state.value.day == null || endMinute <= startMinute) return
+        _state.update { state ->
+            state.copy(
+                draft = Draft(lane = Lane.Actual, startMinute = startMinute, endMinute = endMinute),
                 selectedBlockId = null,
                 nameInput = "",
                 noteInput = "",

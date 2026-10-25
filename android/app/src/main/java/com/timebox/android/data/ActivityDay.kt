@@ -35,7 +35,7 @@ fun ActivitySnapshotDto.projectDay(
     // Without a fetched Day (e.g. offline), the journal's server clock is the only "now";
     // leaving it unknown would forbid every Actual placement on Today.
     val local = now.atZone(zone)
-    return (previous ?: Day(date, 0, 24, true, emptyList(), timezone = reportingTimezone,
+    return (previous ?: Day(date, emptyList(), timezone = reportingTimezone,
         elapsedRealtime = elapsedRealtime, today = local.toLocalDate(), serverNowMinute = local.hour * 60 + local.minute))
         .copy(blocks = blocks, actualBlocks = actuals, timezone = reportingTimezone)
 }

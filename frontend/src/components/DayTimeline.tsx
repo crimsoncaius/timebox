@@ -14,7 +14,7 @@ import {
   sameLaneResizeBounds,
   SLOT_MINUTES,
   TIMELINE_SLOT_HEIGHT_PX,
-  visibleMinuteRange,
+  DAY_MINUTE_RANGE,
 } from '../lib/time'
 import { actualPlacementEnd, nearestBlockStart, NO_NEARBY_BLOCK_SPACE, blockRangeAvailable } from '../lib/blockPlacement'
 import { TimeBlockCard } from './TimeBlockCard'
@@ -90,7 +90,7 @@ export const DayTimeline = forwardRef<
   },
   ref,
 ) {
-  const { start: visibleStartMin, end: visibleEndMin } = visibleMinuteRange(day)
+  const { start: visibleStartMin, end: visibleEndMin } = DAY_MINUTE_RANGE
   const slotCount = (visibleEndMin - visibleStartMin) / SLOT_MINUTES
   const [localZoom, setLocalZoom] = useState(1)
   const zoom = controlledZoom ?? localZoom
@@ -247,8 +247,20 @@ export const DayTimeline = forwardRef<
       autoScrollCompletedRef.current = false
     }
     if (!autoScrollToNow || autoScrollCompletedRef.current) return
+    if (!isTodayInTz) {
+      const timeline = timelineRef.current
+      if (!timeline) return
+      autoScrollCompletedRef.current = true
+      const starts = [
+        ...day.time_blocks.filter((block) => block.lane === 'planned').map((block) => block.start_minute),
+        ...day.actual_blocks.map((projection) => projection.start_minute),
+      ]
+      const firstMinute = starts.length ? Math.min(...starts) : DEFAULT_SCROLL_MINUTE
+      window.scrollBy({ top: timeline.getBoundingClientRect().top + (firstMinute / SLOT_MINUTES) * slotHeightPx - SCROLL_HEADROOM_PX, behavior: 'auto' })
+      return
+    }
     if (!showNowLine) {
-      if (isTodayInTz) autoScrollCompletedRef.current = true
+      autoScrollCompletedRef.current = true
       return
     }
     const line = nowLineRef.current
@@ -256,7 +268,7 @@ export const DayTimeline = forwardRef<
     if (!line || !timeline) return
     autoScrollCompletedRef.current = true
     scrollCurrentTimeIntoView(line, timeline)
-  }, [autoScrollToNow, day.date, isTodayInTz, scrollToNowRequest, showNowLine])
+  }, [autoScrollToNow, day, isTodayInTz, scrollToNowRequest, showNowLine, slotHeightPx])
 
   return (
     <>
@@ -357,6 +369,10 @@ export const DayTimeline = forwardRef<
     </>
   )
 })
+
+/** Dates other than Today open at their first block, or here when they have none. */
+const DEFAULT_SCROLL_MINUTE = 8 * 60
+const SCROLL_HEADROOM_PX = 96
 
 function scrollCurrentTimeIntoView(line: HTMLElement, timeline: HTMLElement, viewportHeight = window.innerHeight) {
   window.scrollBy({

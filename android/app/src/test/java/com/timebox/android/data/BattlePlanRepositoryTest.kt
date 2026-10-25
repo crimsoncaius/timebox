@@ -249,9 +249,6 @@ class BattlePlanRepositoryTest {
                         DayDto(
                             id = 1,
                             date = "2026-08-20",
-                            startHour = 8,
-                            endHour = 20,
-                            showFullDay = false,
                             timeBlocks = emptyList(),
                             meta = DayMetaDto(
                                 timezone = "Asia/Singapore",

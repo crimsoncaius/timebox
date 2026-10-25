@@ -32,7 +32,7 @@ import {
   minuteFromPointerYInVisibleLane,
   SLOT_MINUTES,
   TIMELINE_SLOT_HEIGHT_PX,
-  visibleMinuteRange,
+  DAY_MINUTE_RANGE,
   zonedLocalDateTimeToIso,
 } from '../../lib/time'
 import { errorMessage } from '../../lib/errors'
@@ -130,7 +130,7 @@ export function TodayPage() {
   const [readyDropCandidate, setReadyDropCandidate] = useState<{ taskId: number; start: number } | null>(null)
   const readyDropPreview = useMemo(() => {
     if (!day || !readyDropCandidate) return null
-    const range = visibleMinuteRange(day)
+    const range = DAY_MINUTE_RANGE
     const occupied = day.time_blocks.filter(b => b.lane === 'planned')
     const start = nearestBlockStart(draft?.lane === 'planned' ? [...occupied, draft] : occupied,
       readyDropCandidate.start, SLOT_MINUTES, range.start, range.end)
@@ -257,7 +257,7 @@ export function TodayPage() {
       const task = allBattleTasks.find((item) => item.id === taskId && item.ready_to_plan && readiness.isSchedulable(item.id))
       if (!task) return
 
-      const { start: visibleStart, end: visibleEnd } = visibleMinuteRange(day)
+      const { start: visibleStart, end: visibleEnd } = DAY_MINUTE_RANGE
       const saved = day.time_blocks.filter(block => block.lane === 'planned')
       const occupied = draft?.lane === 'planned' ? [...saved, draft] : saved
       const start = previewed ? startMinute
@@ -329,7 +329,7 @@ export function TodayPage() {
           setError('Actual time cannot be recorded in the future')
           return
         }
-        const range = visibleMinuteRange(day)
+        const range = DAY_MINUTE_RANGE
         const occupied = lane === 'planned' ? day.time_blocks.filter(b => b.lane === 'planned') : day.actual_blocks
         const resolved = nearestBlockStart(occupied,
           startMin, SLOT_MINUTES, range.start, lane === 'actual' ? actualPlacementEnd(day) : range.end)
@@ -362,7 +362,7 @@ export function TodayPage() {
       setReadyDropCandidate(null)
       return
     }
-    const range = visibleMinuteRange(day)
+    const range = DAY_MINUTE_RANGE
     setReadyDropCandidate({ taskId: Number(source.data.taskId), start: minuteFromPointerYInVisibleLane(
       pointer.y - rect.top, range.start, range.end, Number(lane.getAttribute('data-slot-height')) || TIMELINE_SLOT_HEIGHT_PX,
     ) })

@@ -71,9 +71,6 @@ fun SettingsScreen(
     state: SettingsUiState,
     isDark: Boolean,
     onToggleDark: () -> Unit,
-    onStartHourDelta: (Int) -> Unit,
-    onEndHourDelta: (Int) -> Unit,
-    onToggleFullDay: () -> Unit,
     onDailyReminderChange: (Boolean, Boolean?, LocalTime?) -> Unit = { _, _, _ -> },
     onPlannedBlockRemindersChange: (PlannedBlockReminderSettings) -> Unit = {},
     exactAlarmsAllowed: Boolean = true,
@@ -87,7 +84,6 @@ fun SettingsScreen(
     onOpenThemePreview: () -> Unit = {},
     onReportingZoneChange: (String) -> Unit = {},
     onSaveReportingZone: () -> Unit = {},
-    onRetry: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -100,45 +96,8 @@ fun SettingsScreen(
         SettingsGroup(
             title = "Day & time",
             scope = "All devices",
-            description = "How the timeline is framed and how daily totals are grouped.",
+            description = "How daily totals are grouped.",
         ) {
-            val window = state.window
-            when {
-                state.loading && window == null -> SettingRow(title = "Day window", description = "Loading…") {}
-                window == null -> SettingRow(title = "Day window", description = state.error ?: "Could not load settings.") {
-                    TextButton(onClick = onRetry) { Text("Try again") }
-                }
-                else -> {
-                    val hoursAlpha = if (window.showFullDay) 0.5f else 1f
-                    Box(Modifier.alpha(hoursAlpha)) {
-                        SettingRow(title = "Start hour", description = "First hour shown on the timeline (0–23).") {
-                            Stepper(
-                                value = window.startHour,
-                                enabled = !window.showFullDay,
-                                onDecrease = { onStartHourDelta(-1) },
-                                onIncrease = { onStartHourDelta(1) },
-                                decreaseLabel = "Decrease start hour",
-                                increaseLabel = "Increase start hour",
-                            )
-                        }
-                    }
-                    Box(Modifier.alpha(hoursAlpha)) {
-                        SettingRow(title = "End hour", description = "Exclusive end (1–24). 8–20 shows 8:00 through 19:59.") {
-                            Stepper(
-                                value = window.endHour,
-                                enabled = !window.showFullDay,
-                                onDecrease = { onEndHourDelta(-1) },
-                                onIncrease = { onEndHourDelta(1) },
-                                decreaseLabel = "Decrease end hour",
-                                increaseLabel = "Increase end hour",
-                            )
-                        }
-                    }
-                    SettingRow(title = "Show full 24 hours", description = "Ignore the start and end hours and show the whole day.") {
-                        TimeboxSwitch(checked = window.showFullDay, onCheckedChange = { onToggleFullDay() })
-                    }
-                }
-            }
             ReportingZoneRow(
                 current = state.timezone,
                 saving = state.saving,
@@ -435,49 +394,6 @@ private fun DailyReminderRow(
     }
 }
 
-@Composable
-private fun Stepper(
-    value: Int,
-    enabled: Boolean = true,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
-    decreaseLabel: String,
-    increaseLabel: String,
-) {
-    val colors = TimeboxTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        RoundIconButton(
-            icon = Icons.Outlined.Remove,
-            contentDescription = decreaseLabel,
-            onClick = onDecrease,
-            enabled = enabled,
-            tint = colors.on,
-            diameter = 36.dp,
-            background = colors.surf,
-            iconSize = 18.dp,
-        )
-        Text(
-            text = value.toString(),
-            style = TimeboxTheme.type.mono.copy(fontSize = 15.sp),
-            color = colors.on,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(42.dp),
-        )
-        RoundIconButton(
-            icon = Icons.Outlined.Add,
-            contentDescription = increaseLabel,
-            onClick = onIncrease,
-            enabled = enabled,
-            tint = colors.on,
-            diameter = 36.dp,
-            background = colors.surf,
-            iconSize = 18.dp,
-        )
-    }
-}
 
 @Composable
 private fun ConnectionField(

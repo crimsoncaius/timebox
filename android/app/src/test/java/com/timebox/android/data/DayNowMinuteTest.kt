@@ -10,9 +10,6 @@ class DayNowMinuteTest {
 
     private fun day(serverNowMinute: Int?, capturedAtElapsedMillis: Long = 1_000_000L) = Day(
         date = LocalDate.of(2026, 8, 10),
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         blocks = emptyList(),
         timezone = "Asia/Singapore",
         today = LocalDate.of(2026, 8, 10),

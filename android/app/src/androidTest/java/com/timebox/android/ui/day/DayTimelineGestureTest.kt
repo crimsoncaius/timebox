@@ -28,7 +28,7 @@ class DayTimelineGestureTest {
     @Test
     fun droppingBlockCannotJumpViewportDuringBackgroundRefresh() {
         val date = LocalDate.of(2026, 8, 20)
-        val base = stateWithBlock(date, startMinute = 1320, endMinute = 1350, endHour = 24, serverNowMinute = 1380)
+        val base = stateWithBlock(date, startMinute = 1320, endMinute = 1350, serverNowMinute = 1380)
         val moving = base.day!!.blocks.single()
         val loaded = base.copy(pages = base.pages + (date to base.page(date).copy(
             day = base.day!!.copy(blocks = listOf(moving, moving.copy(id = 8, startMinute = 1350, endMinute = 1380))))))
@@ -40,7 +40,7 @@ class DayTimelineGestureTest {
                 (date to loaded.page(date).copy(day = loaded.day!!.copy(blocks = loaded.day!!.blocks.map {
                     if (it.id == id) it.copy(startMinute = start, endMinute = end) else it
                 }))) + (date.plusDays(1) to DayPageState(
-                    day = base.day!!.copy(date = date.plusDays(1), endHour = 20), loading = false)))
+                    day = base.day!!.copy(date = date.plusDays(1)), loading = false)))
         })
         compose.onNodeWithTag("day-block-7").performTouchInput {
             down(center)
@@ -309,7 +309,7 @@ class DayTimelineGestureTest {
         var tapped: Pair<Lane, Int>? = null
 
         setDayContent(
-            state = stateWithBlock(date, endHour = 10, includeBlock = false),
+            state = stateWithBlock(date, includeBlock = false),
             haptics = RecordingHaptics(),
             onTapSlot = { lane, minute -> tapped = lane to minute },
         )
@@ -329,8 +329,8 @@ class DayTimelineGestureTest {
     @Test
     fun scrollingKeepsBlocksLockedToHourGutter() {
         val date = LocalDate.of(2026, 8, 20)
-        val planned = stateWithBlock(date, endHour = 23, serverNowMinute = 8 * 60).day!!.blocks.single()
-        val state = stateWithBlock(date, endHour = 23, serverNowMinute = 8 * 60).let { base ->
+        val planned = stateWithBlock(date, serverNowMinute = 8 * 60).day!!.blocks.single()
+        val state = stateWithBlock(date, serverNowMinute = 8 * 60).let { base ->
             base.copy(
                 today = date.minusDays(1),
                 pages = base.pages + (date to base.page(date).copy(
@@ -616,15 +616,11 @@ class DayTimelineGestureTest {
         lane: Lane = Lane.Planned,
         startMinute: Int = 9 * 60,
         endMinute: Int = 10 * 60,
-        endHour: Int = 20,
         includeBlock: Boolean = true,
         serverNowMinute: Int = 9 * 60,
     ): DayUiState {
         val day = Day(
             date = date,
-            startHour = 8,
-            endHour = endHour,
-            showFullDay = false,
             blocks = if (includeBlock) listOf(
                 TimeBlock(
                     id = 7,

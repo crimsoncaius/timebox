@@ -81,8 +81,12 @@ Continuous recording of time in Actual Blocks while enabled, independently of Fo
 _Avoid_: Work Mode, Focus session
 
 **Offline**:
-A condition in which Activity Tracking cannot reach the server. Local recording can continue.
+A condition in which Timebox cannot reach the server, whether for loading content or for confirming changes. Local recording can continue, and content already on the device stays visible.
 _Avoid_: disconnected, airplane mode
+
+**Server Problem**:
+A condition in which the server is reachable but fails to answer a request. Local changes are kept until it recovers. It is distinct from Offline.
+_Avoid_: server error, HTTP error, outage
 
 **Unsynced**:
 A condition in which local Activity Tracking changes have not been confirmed by the server.
@@ -113,7 +117,7 @@ The calendar date in the Reporting Time Zone that contains the current instant.
 _Avoid_: Device today, local today
 
 **Now Line**:
-The Day surface marker for the current instant in the Reporting Time Zone. It appears only on Today, and only while that instant falls inside the hours shown that day.
+The Day surface marker for the current instant in the Reporting Time Zone. It appears only on Today.
 _Avoid_: Playhead, now indicator, current time line, Day view
 
 **Inactivity Prompt**:
@@ -223,6 +227,10 @@ _Avoid_: Planned timebox, Task, appointment
 **Actual Block**:
 A record of time that occurred. It may link to a Planned Block or stand alone and is authoritative for actual time.
 _Avoid_: Actual session, work session, completed block
+
+**Untracked Gap**:
+A stretch of at least 15 minutes on a Day with no Actual Block, lying after that Day's first Actual Block and before either the latest Actual Block's end or, on Today, the current instant. It is an invitation to record time, not recorded time; time before the Day's first Actual Block and time on future dates is never an Untracked Gap.
+_Avoid_: Empty slot, missing time, idle time
 
 **Block Duration**:
 The whole-minute length of one Planned Block or Actual Block, from its start to its end. An Actual Block's duration covers its whole record even where it extends beyond the Day shown, and a running one counts up to now.

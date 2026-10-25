@@ -32,9 +32,6 @@ class DayRead(BaseModel):
 
     id: int | None
     date: date
-    start_hour: int = Field(..., ge=0, le=23)
-    end_hour: int = Field(..., ge=0, le=24)
-    show_full_day: bool
     created_at: datetime | None
     updated_at: datetime | None
     time_blocks: list[TimeBlockRead]
@@ -53,9 +50,6 @@ class DayPreviewRead(BaseModel):
     """Renderable day data that may describe a date not yet stored."""
 
     date: date
-    start_hour: int = Field(..., ge=0, le=23)
-    end_hour: int = Field(..., ge=0, le=24)
-    show_full_day: bool
     time_blocks: list[TimeBlockRead]
     planned_blocks: list[PlannedBlockRead] = Field(default_factory=list)
     actual_blocks: list[ActualBlockDayProjectionRead] = Field(default_factory=list)
@@ -86,9 +80,6 @@ class DayListItem(BaseModel):
 
     id: int
     date: date
-    start_hour: int
-    end_hour: int
-    show_full_day: bool
     updated_at: datetime
     #: How many blocks this saved Day holds.
     block_count: int

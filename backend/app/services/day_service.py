@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
 from app.core.time import get_zone, isoformat_with_timezone, now_in_tz, today_in_tz, utc_now
-from app.models.app_settings import AppSettings
 from app.models.battle_plan import (
     RecurringPlannedBlockRealization,
     RecurringPlannedBlockState,
@@ -25,7 +24,6 @@ from app.schemas.day import (
     DaySummaryRow,
     PlanningPlacementCreate,
 )
-from app.schemas.settings import SettingsPatch
 from app.schemas.time_block import PlannedBlockCreate, PlannedBlockRead, TimeBlockPatch, TimeBlockRead
 from app.services import activity_selection, actual_block_service, planned_intervals, task_type_service
 from app.services.recurrence.protection import protect_task_occurrence
@@ -169,31 +167,8 @@ def get_day_by_date(db: Session, d: dt.date) -> Day | None:
     return db.execute(stmt).scalar_one_or_none()
 
 
-def get_or_create_app_settings(db: Session) -> AppSettings:
-    row = get_app_settings(db)
-    if row is None:
-        row = AppSettings(id=1, start_hour=8, end_hour=20, show_full_day=False)
-        db.add(row)
-        db.flush()
-        db.refresh(row)
-    return row
-
-
-def get_app_settings(db: Session) -> AppSettings | None:
-    """Read the singleton window settings without creating them."""
-
-    stmt = select(AppSettings).where(AppSettings.id == 1)
-    return db.execute(stmt).scalar_one_or_none()
-
-
 def create_day(db: Session, d: dt.date) -> Day:
-    s = get_or_create_app_settings(db)
-    day = Day(
-        date=d,
-        start_hour=s.start_hour,
-        end_hour=s.end_hour,
-        show_full_day=s.show_full_day,
-    )
+    day = Day(date=d)
     db.add(day)
     db.flush()
     db.refresh(day)
@@ -218,9 +193,6 @@ def to_day_read(db: Session, day: Day, settings: Settings) -> DayRead:
     return DayRead(
         id=day.id,
         date=day.date,
-        start_hour=day.start_hour,
-        end_hour=day.end_hour,
-        show_full_day=day.show_full_day,
         created_at=day.created_at,
         updated_at=day.updated_at,
         time_blocks=preview.time_blocks,
@@ -249,20 +221,8 @@ def build_day_preview(
     """Return a renderable day without materialising a missing date."""
 
     if day is None:
-        window = get_app_settings(db) or AppSettings(
-            id=1,
-            start_hour=8,
-            end_hour=20,
-            show_full_day=False,
-        )
-        start_hour = window.start_hour
-        end_hour = window.end_hour
-        show_full_day = window.show_full_day
         blocks: list[TimeBlock] = []
     else:
-        start_hour = day.start_hour
-        end_hour = day.end_hour
-        show_full_day = day.show_full_day
         blocks = sorted(day.time_blocks, key=lambda b: (b.lane.value, b.start_minute, b.id))
 
     planned = planned_intervals.on_day(db, d, settings.app_timezone)
@@ -271,9 +231,6 @@ def build_day_preview(
 
     return DayPreviewRead(
         date=d,
-        start_hour=start_hour,
-        end_hour=end_hour,
-        show_full_day=show_full_day,
         time_blocks=sorted([*[TimeBlockRead.model_validate(b) for b in blocks if b.lane != BlockLane.planned], *projected], key=lambda b: (b.lane, b.start_minute, b.id)),
         planned_blocks=[PlannedBlockRead.model_validate(block).model_copy(update={"start_minute": projection.start_minute, "end_minute": projection.end_minute}) for block, projection in zip(planned, projected, strict=True)],
         actual_blocks=actual.actual_blocks,
@@ -352,43 +309,10 @@ def to_day_list_item(
     return DayListItem(
         id=day.id,
         date=day.date,
-        start_hour=day.start_hour,
-        end_hour=day.end_hour,
-        show_full_day=day.show_full_day,
         updated_at=day.updated_at,
         block_count=block_count + len(actual.actual_blocks),
         actual_blocks=actual.actual_blocks,
     )
-
-
-def patch_app_settings(db: Session, body: SettingsPatch) -> AppSettings:
-    s = get_or_create_app_settings(db)
-    data = body.model_dump(exclude_unset=True)
-    if not data:
-        return s
-    if body.start_hour is not None:
-        s.start_hour = body.start_hour
-    if body.end_hour is not None:
-        s.end_hour = body.end_hour
-    if body.show_full_day is not None:
-        s.show_full_day = body.show_full_day
-    if s.start_hour >= s.end_hour or s.end_hour > 24 or s.start_hour < 0:
-        raise ValueError("Invalid day window: require 0 <= start_hour < end_hour <= 24")
-    s.updated_at = utc_now()
-    db.add(s)
-    db.flush()
-    now = utc_now()
-    db.execute(
-        update(Day).values(
-            start_hour=s.start_hour,
-            end_hour=s.end_hour,
-            show_full_day=s.show_full_day,
-            updated_at=now,
-        )
-    )
-    db.commit()
-    db.refresh(s)
-    return s
 
 
 def _day_block_select(day_id: int, block_id: int, *, for_update: bool = False):

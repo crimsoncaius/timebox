@@ -108,9 +108,6 @@ class BlockSheetTest {
                             date to DayPageState(
                                 day = Day(
                                     date = date,
-                                    startHour = 8,
-                                    endHour = 20,
-                                    showFullDay = false,
                                     blocks = listOf(block),
                                     timezone = "Asia/Singapore",
                                     today = date,

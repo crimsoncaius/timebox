@@ -17,7 +17,6 @@ import type {
   RecurrenceStatus,
   RecurringTemplate,
   RecurringTemplateWrite,
-  SettingsRead,
   TaskCollection,
   TaskCompletionResult,
   TaskStatus,
@@ -33,14 +32,6 @@ export const api = {
 
   getDay: (date: string) => fetchJson<DayRead>(`/days/${date}`),
   chronicleMonth: (month?: string) => fetchJson<ChronicleMonth>(`/days/chronicle${month ? `?month=${month}` : ''}`),
-
-  getSettings: () => fetchJson<SettingsRead>('/settings'),
-
-  patchSettings: (body: Partial<{ start_hour: number; end_hour: number; show_full_day: boolean }>) =>
-    fetchJson<SettingsRead>('/settings', {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    }),
 
   previewTaskTypeMerge: (id: number, targetId: number) => fetchJson<TaskTypeMergePreview>(`/task-types/${id}/merge-preview`, { method: 'POST', body: JSON.stringify({ target_id: targetId }) }),
   mergeTaskType: (preview: TaskTypeMergePreview) => fetchJson<TaskTypeMergePreview>(`/task-types/${preview.source_id}/merge`, { method: 'POST', body: JSON.stringify({ target_id: preview.target_id, preview_token: preview.preview_token }) }),

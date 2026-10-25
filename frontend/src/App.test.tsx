@@ -24,30 +24,6 @@ describe('App routing', () => {
           jsonResponse({ status: 'ok', today: '2026-04-13', timezone: 'UTC' }),
         )
       }
-      if (url.includes('/settings') && method === 'PATCH') {
-        return Promise.resolve(
-          jsonResponse({
-            id: 1,
-            start_hour: 9,
-            end_hour: 20,
-            show_full_day: false,
-            created_at: '2026-01-01T00:00:00Z',
-            updated_at: '2026-01-02T00:00:00Z',
-          }),
-        )
-      }
-      if (url.includes('/settings')) {
-        return Promise.resolve(
-          jsonResponse({
-            id: 1,
-            start_hour: 8,
-            end_hour: 20,
-            show_full_day: false,
-            created_at: '2026-01-01T00:00:00Z',
-            updated_at: '2026-01-01T00:00:00Z',
-          }),
-        )
-      }
       if (url.includes('/task-types') && method === 'GET') {
         return Promise.resolve(jsonResponse([]))
       }
@@ -56,9 +32,6 @@ describe('App routing', () => {
           jsonResponse({
             id: 1,
             date: '2026-04-13',
-            start_hour: 8,
-            end_hour: 20,
-            show_full_day: false,
             created_at: '2026-01-01T00:00:00Z',
             updated_at: '2026-01-01T00:00:00Z',
             time_blocks: [],
@@ -97,7 +70,7 @@ describe('App routing', () => {
     expect(screen.queryByTitle('Not available yet')).not.toBeInTheDocument()
   })
 
-  it('shows day window controls on Settings instead of Day', async () => {
+  it('offers no day window controls now that every Day spans the whole day', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/day/2026-04-13']}>
@@ -105,36 +78,10 @@ describe('App routing', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByRole('link', { name: 'Settings' })
-    await user.click(screen.getByRole('link', { name: 'Settings' }))
-    expect(await screen.findByText(/Start hour/)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('link', { name: 'Day' }))
-    expect(screen.queryByText('Day window')).not.toBeInTheDocument()
-  })
-
-  it('PATCHes settings on start hour blur', async () => {
-    const user = userEvent.setup()
-    render(
-      <MemoryRouter initialEntries={['/day/2026-04-13']}>
-        <AppRoutes />
-      </MemoryRouter>,
-    )
-
-    await screen.findByRole('link', { name: 'Settings' })
-    await user.click(screen.getByRole('link', { name: 'Settings' }))
-    const startInput = await screen.findByLabelText(/Start hour/i)
-    await user.clear(startInput)
-    await user.type(startInput, '9')
-    await user.tab()
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/settings'),
-      expect.objectContaining({
-        method: 'PATCH',
-        body: expect.stringContaining('"start_hour":9'),
-      }),
-    )
+    await user.click(await screen.findByRole('link', { name: 'Settings' }))
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.queryByText(/Start hour/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Show full 24 hours/)).not.toBeInTheDocument()
   })
 })
 
@@ -198,9 +145,6 @@ describe('Ready to Plan route projection', () => {
         return jsonResponse({
           id: 1,
           date: '2026-04-13',
-          start_hour: 8,
-          end_hour: 20,
-          show_full_day: false,
           created_at: '',
           updated_at: '',
           time_blocks: [],

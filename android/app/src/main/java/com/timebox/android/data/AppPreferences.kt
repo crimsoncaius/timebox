@@ -60,7 +60,7 @@ enum class BattlePlanSort(val wire: String) {
     }
 }
 
-data class DayViewPreferences(val calendar: Boolean = true, val tracking: Boolean = false)
+data class DayViewPreferences(val calendar: Boolean = true, val tracking: Boolean = true)
 enum class DayViewSection { Calendar, Tracking }
 
 class AppPreferences(private val context: Context) {
@@ -69,7 +69,7 @@ class AppPreferences(private val context: Context) {
     val dayViewPreferences: Flow<DayViewPreferences> = context.dataStore.data.map { prefs ->
         DayViewPreferences(
             calendar = prefs[dayVisibilityKey(DayViewSection.Calendar)] ?: true,
-            tracking = prefs[dayVisibilityKey(DayViewSection.Tracking)] ?: false,
+            tracking = prefs[dayVisibilityKey(DayViewSection.Tracking)] ?: true,
         )
     }
 

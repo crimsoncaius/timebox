@@ -20,7 +20,7 @@ class PlanningDragPlacementTest {
         assertEquals(630, nearestSavedBlockDragStart(day, -1, 600, 30, Lane.Actual))
         assertEquals(630, nearestSavedBlockDragStart(day, -1, 629, 1, Lane.Actual))
         assertEquals(630, nearestSavedBlockDragStart(day, -1, 580, 90, Lane.Actual))
-        assertEquals(480 to 600, blockResizeBounds(day, 540, 570, lane = Lane.Actual))
+        assertEquals(0 to 600, blockResizeBounds(day, 540, 570, lane = Lane.Actual))
         assertFalse(savedBlockRangeAvailable(day, -1, 610, 640, Lane.Actual))
         assertTrue(savedBlockRangeAvailable(day, -1, 630, 631, Lane.Actual))
     }
@@ -44,10 +44,10 @@ class PlanningDragPlacementTest {
 
     @Test
     fun `exact off-grid gap fits without shrinking or moving its neighbours`() {
-        val day = day(block(1, 480, 602), block(2, 632, 1200))
+        val day = day(block(1, 0, 602), block(2, 632, 1440))
         assertEquals(602, nearestPlanningDragStart(day, emptyList(), null, 600, 30))
         assertNull(nearestPlanningDragStart(day, emptyList(), null, 600, 60))
-        assertEquals(listOf(480 to 602, 632 to 1200), day.blocks.map { it.startMinute to it.endMinute })
+        assertEquals(listOf(0 to 602, 632 to 1440), day.blocks.map { it.startMinute to it.endMinute })
     }
 
     @Test
@@ -57,11 +57,11 @@ class PlanningDragPlacementTest {
     }
 
     @Test
-    fun `search accepts distant gaps but excludes hidden hours and other days`() {
-        val day = day(block(1, 480, 1150))
+    fun `search accepts distant gaps but never spills past midnight`() {
+        val day = day(block(1, 0, 1150), block(2, 1180, 1440))
         assertEquals(1150, nearestPlanningDragStart(day, emptyList(), null, 600, 30))
         assertNull(nearestPlanningDragStart(day, emptyList(), null, 600, 60))
-        assertNull(nearestPlanningDragStart(day(), emptyList(), null, 600, 750))
+        assertNull(nearestPlanningDragStart(day(), emptyList(), null, 600, 1500))
     }
 
     @Test
@@ -103,8 +103,8 @@ class PlanningDragPlacementTest {
     }
 
     private fun day(vararg blocks: TimeBlock) = Day(
-        date = LocalDate.of(2026, 8, 20), startHour = 8, endHour = 20,
-        showFullDay = false, blocks = blocks.toList(), timezone = "Asia/Singapore",
+        date = LocalDate.of(2026, 8, 20),
+        blocks = blocks.toList(), timezone = "Asia/Singapore",
         today = LocalDate.of(2026, 8, 20), elapsedRealtime = { 0L }, serverNowMinute = 540,
     )
 

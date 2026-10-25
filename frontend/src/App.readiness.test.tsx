@@ -84,9 +84,6 @@ function controllableTransport(initialTasks: BattleTask[]) {
       return Promise.resolve(jsonResponse({
         id: 1,
         date: '2026-04-13',
-        start_hour: 8,
-        end_hour: 20,
-        show_full_day: false,
         created_at: '',
         updated_at: '',
         time_blocks: [],

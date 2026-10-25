@@ -117,9 +117,6 @@ class PlannedRecordingStateTest {
 
     private fun day(vararg actuals: ActualBlockDayProjection) = Day(
         date = date,
-        startHour = 8,
-        endHour = 20,
-        showFullDay = false,
         blocks = listOf(plan()),
         actualBlocks = actuals.toList(),
         timezone = "UTC",

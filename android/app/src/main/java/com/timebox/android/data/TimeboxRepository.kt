@@ -13,7 +13,6 @@ import com.timebox.android.data.remote.RecurrenceRuleDto
 import com.timebox.android.data.remote.ReminderClaimActionDto
 import com.timebox.android.data.remote.ReminderClaimRequestDto
 import com.timebox.android.data.remote.RecurringTemplateCreateDto
-import com.timebox.android.data.remote.SettingsPatchDto
 import com.timebox.android.data.remote.TaskTypeCreateDto
 import com.timebox.android.data.remote.TaskIdsDto
 import com.timebox.android.data.remote.TaskCompletionUndoDto
@@ -554,17 +553,6 @@ class TimeboxRepository private constructor(
 
     suspend fun undoRecordPlanned(id: Int, token: String): Result<Unit> = call {
         api().undoRecordPlanned(id, com.timebox.android.data.remote.RecordingUndoRequest(token))
-    }
-
-    suspend fun getWindowSettings(): Result<DayWindowSettings> =
-        call { api().getSettings().toModel() }
-
-    suspend fun patchWindowSettings(
-        startHour: Int? = null,
-        endHour: Int? = null,
-        showFullDay: Boolean? = null,
-    ): Result<DayWindowSettings> = call {
-        api().patchSettings(SettingsPatchDto(startHour, endHour, showFullDay)).toModel()
     }
 
     suspend fun setConnection(baseUrl: String, apiKey: String) {

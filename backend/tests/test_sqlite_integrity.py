@@ -23,8 +23,8 @@ def test_sqlite_engine_enforces_foreign_keys_and_repairs_legacy_operation_orphan
         connection.execute(
             text(
                 """
-                INSERT INTO days (id, date, start_hour, end_hour, show_full_day)
-                VALUES (1, '2026-08-30', 8, 20, 0)
+                INSERT INTO days (id, date)
+                VALUES (1, '2026-08-30')
                 """
             )
         )

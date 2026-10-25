@@ -193,9 +193,6 @@ export interface DayMeta {
 export interface DayRead {
   id: number | null
   date: string
-  start_hour: number
-  end_hour: number
-  show_full_day: boolean
   created_at: string | null
   updated_at: string | null
   time_blocks: TimeBlock[]
@@ -223,9 +220,6 @@ export interface DayRead {
 export interface DayListItem {
   id: number
   date: string
-  start_hour: number
-  end_hour: number
-  show_full_day: boolean
   updated_at: string
   block_count?: number
   actual_blocks?: ActualBlockDayProjection[]
@@ -249,15 +243,6 @@ export interface HealthResponse {
   status: string
   today: string
   timezone: string
-}
-
-export interface SettingsRead {
-  id: number
-  start_hour: number
-  end_hour: number
-  show_full_day: boolean
-  created_at: string
-  updated_at: string
 }
 
 export type RecurrenceWindow = { key: string; start: string; end: string }

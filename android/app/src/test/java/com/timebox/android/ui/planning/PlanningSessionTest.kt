@@ -69,12 +69,12 @@ class PlanningSessionTest {
         session.refreshQueue()
         session.begin()
         session.toggleSelection(1)
-        val occupied = day(blocks = arrayOf(block(99, 480, 1200)))
+        val occupied = day(blocks = arrayOf(block(99, 0, 1440)))
         assertEquals(PlanningEditResult.Rejected("No available space in this day"),
             session.place(1, occupied, 600))
         assertTrue(session.state.value.drafts.isEmpty())
         assertEquals(1, session.state.value.selectedTaskId)
-        assertEquals(PlanningEditResult.Accepted, session.place(1, day(blocks = arrayOf(block(99, 480, 631))), 600))
+        assertEquals(PlanningEditResult.Accepted, session.place(1, day(blocks = arrayOf(block(99, 0, 631))), 600))
         assertEquals(631, session.state.value.drafts.getValue(1).startMinute)
     }
 
@@ -264,9 +264,6 @@ private fun day(
     blocks: Array<out TimeBlock> = emptyArray(),
 ) = Day(
     date = date,
-    startHour = 8,
-    endHour = 20,
-    showFullDay = false,
     blocks = blocks.toList(),
     timezone = "Asia/Singapore",
     today = LocalDate.of(2026, 8, 31),

@@ -12,9 +12,6 @@ const taskTypes: TaskType[] = [
 const day: DayRead = {
   id: 1,
   date: '2026-06-01',
-  start_hour: 8,
-  end_hour: 20,
-  show_full_day: false,
   created_at: '',
   updated_at: '',
   time_blocks: [],

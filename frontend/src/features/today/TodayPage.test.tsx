@@ -6,6 +6,9 @@ import { TodayPage } from './TodayPage'
 import { ReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessProvider } from '../readiness/ReadinessProvider'
 
+/** Where 8 AM sits on the whole-day timeline at the default slot height. */
+const EIGHT_AM_PX = 480 / 30 * 46
+
 // The page is tested against a stubbed Activity repository: the journal, its
 // outbox and its conflict handling have their own tests in features/activity.
 // `activityFake.snapshot` stays null by default, so `day` is the plain API day;
@@ -68,9 +71,6 @@ function jsonResponse(data: unknown, status = 200) {
 const dayPayload = {
   id: 1,
   date: '2026-06-01',
-  start_hour: 8,
-  end_hour: 20,
-  show_full_day: false,
   created_at: '',
   updated_at: '',
   meta: { timezone: 'UTC', today: '2026-06-01', server_now_iso: '2026-06-01T12:00:00Z' },
@@ -389,12 +389,12 @@ describe('TodayPage inspector rail', () => {
         : fallbackFetch(input, init))
     const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
     await screen.findByTestId('day-timeline')
-    fireEvent.click(view.container.querySelector('[data-day-lane="actual"]')!, { clientY: 47 })
+    fireEvent.click(view.container.querySelector('[data-day-lane="actual"]')!, { clientY: EIGHT_AM_PX + 47 })
     expect(screen.getByRole('alert')).toHaveTextContent('Actual time cannot be recorded in the future')
     expect(screen.queryByTestId('draft-block')).not.toBeInTheDocument()
     expect(activityFake.correct).not.toHaveBeenCalled()
     expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
-    fireEvent.click(view.container.querySelector('[data-day-lane="planned"]')!, { clientY: 47 })
+    fireEvent.click(view.container.querySelector('[data-day-lane="planned"]')!, { clientY: EIGHT_AM_PX + 47 })
     expect(screen.getByTestId('draft-block')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
@@ -422,9 +422,9 @@ describe('TodayPage inspector rail', () => {
     await screen.findByText('Activity 41')
     const card = view.container.querySelector('[data-day-lane="actual"] [data-block-id="41"]')!
     const handle = within(card as HTMLElement).getByRole('button', { name: `Resize block ${edge}` })
-    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 100 })
-    fireEvent.pointerMove(window, { pointerId: 1, clientY: Number(y) })
-    fireEvent.pointerUp(window, { pointerId: 1, clientY: Number(y) })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: EIGHT_AM_PX + 100 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientY: EIGHT_AM_PX + Number(y) })
+    fireEvent.pointerUp(window, { pointerId: 1, clientY: EIGHT_AM_PX + Number(y) })
     await waitFor(() => expect(activityFake.correct).toHaveBeenCalledWith('edit', 41, { start_at: expectedStart, end_at: expectedEnd }))
   })
 
@@ -433,15 +433,15 @@ describe('TodayPage inspector rail', () => {
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
       String(input) === '/api/days/2026-06-01'
         ? Promise.resolve(jsonResponse({ ...dayPayload, meta: { ...dayPayload.meta, today }, actual_blocks: [{
-          start_minute: 480, end_minute: 1200,
+          start_minute: 0, end_minute: 1440,
           actual_block: { id: 41, task_type_id: 1, task_type: taskTypes[0], task_id: null, task: null,
             name: 'Recorded activity', note: null, planned_block_id: null,
-            start_at: '2026-06-01T08:00:00Z', end_at: '2026-06-01T20:00:00Z', created_at: '', updated_at: '' },
+            start_at: '2026-06-01T00:00:00Z', end_at: '2026-06-02T00:00:00Z', created_at: '', updated_at: '' },
         }] }))
         : fallbackFetch(input, init))
     const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
     await screen.findByTestId('day-timeline')
-    fireEvent.click(view.container.querySelector('[data-day-lane="actual"]')!, { clientY: 47 })
+    fireEvent.click(view.container.querySelector('[data-day-lane="actual"]')!, { clientY: EIGHT_AM_PX + 47 })
     expect(screen.getByRole('alert')).toHaveTextContent('No available space in this day')
     expect(screen.queryByTestId('draft-block')).not.toBeInTheDocument()
   })
@@ -455,10 +455,10 @@ describe('TodayPage inspector rail', () => {
     const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
     await screen.findByText('Recorded activity')
     const lane = view.container.querySelector('[data-day-lane="actual"]')!
-    fireEvent.click(lane, { clientY: 461 }) // 13:00, more than 30 minutes from an elapsed slot
-    expect(screen.getByTestId('draft-block').style.top).toBe('322px')
-    fireEvent.click(lane, { clientY: 47 }) // 08:30, nearest full slot ties and goes later to 09:00
-    expect(screen.getByTestId('draft-block').style.top).toBe('92px')
+    fireEvent.click(lane, { clientY: EIGHT_AM_PX + 461 }) // 13:00, more than 30 minutes from an elapsed slot
+    expect(screen.getByTestId('draft-block').style.top).toBe(`${EIGHT_AM_PX + 322}px`)
+    fireEvent.click(lane, { clientY: EIGHT_AM_PX + 47 }) // 08:30, nearest full slot ties and goes later to 09:00
+    expect(screen.getByTestId('draft-block').style.top).toBe(`${EIGHT_AM_PX + 92}px`)
   })
 
   it('places a selected task over an occupied card at the closest available time', async () => {
@@ -467,7 +467,7 @@ describe('TodayPage inspector rail', () => {
     const taskButtons = await screen.findAllByRole('button', { name: /Write launch narrative/ })
     await user.click(taskButtons[0]!)
     // Overlay covers the saved card at 08:00; its ordinary editor must not open.
-    fireEvent.click(screen.getByTestId('planned-placement-target'), { clientY: 1 })
+    fireEvent.click(screen.getByTestId('planned-placement-target'), { clientY: EIGHT_AM_PX + 1 })
     await waitFor(() => {
       const request = vi.mocked(globalThis.fetch).mock.calls.find(([input, init]) =>
         String(input).includes('/days/2026-06-01/blocks') && init?.method === 'POST')
@@ -484,7 +484,7 @@ describe('TodayPage inspector rail', () => {
     await user.click(sessionTitle.closest('button')!)
     const plannedLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')
     expect(plannedLane).not.toBeNull()
-    fireEvent.click(plannedLane!, { clientY: 47 })
+    fireEvent.click(plannedLane!, { clientY: EIGHT_AM_PX + 47 })
 
     await waitFor(() => {
       const createBlock = vi.mocked(globalThis.fetch).mock.calls.find(([input, init]) =>
@@ -580,7 +580,7 @@ describe('TodayPage inspector rail', () => {
 
     const plannedLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')
     expect(plannedLane).not.toBeNull()
-    fireEvent.click(plannedLane!, { clientY: 47 })
+    fireEvent.click(plannedLane!, { clientY: EIGHT_AM_PX + 47 })
 
     await waitFor(() => {
       const calls = vi.mocked(globalThis.fetch).mock.calls
@@ -629,7 +629,7 @@ describe('TodayPage inspector rail', () => {
     await screen.findAllByRole('button', { name: 'Write launch narrative' })
     const plannedLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="planned"]')
     expect(plannedLane).not.toBeNull()
-    fireEvent.click(plannedLane!, { clientY: 47 })
+    fireEvent.click(plannedLane!, { clientY: EIGHT_AM_PX + 47 })
     expect(await screen.findByRole('heading', { name: 'New block' })).toBeInTheDocument()
 
     const readyQueue = screen.getByRole('region', { name: 'Ready to Plan tasks' })
@@ -687,7 +687,7 @@ describe('TodayPage inspector rail', () => {
     const rail = await screen.findByRole('complementary', { name: 'Block details' })
     const actualLane = screen.getByTestId('day-timeline').querySelector('[data-day-lane="actual"]')
     expect(actualLane).not.toBeNull()
-    fireEvent.click(actualLane!, { clientY: 47 })
+    fireEvent.click(actualLane!, { clientY: EIGHT_AM_PX + 47 })
 
     await user.type(within(rail).getByLabelText('Block Name (optional)'), 'Evening walk')
     await user.click(within(rail).getByRole('button', { name: 'Create block' }))

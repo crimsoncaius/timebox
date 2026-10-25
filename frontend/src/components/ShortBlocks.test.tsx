@@ -43,8 +43,7 @@ it('saves a one-minute interval and retains server failure for correction', asyn
 })
 
 it('clamps zoom and changes creation coordinates without patching saved blocks', () => {
-  const day: DayRead = { id: 1, date: '2026-09-13', start_hour: 10, end_hour: 14,
-    show_full_day: false, time_blocks: [block], actual_blocks: [], created_at: '', updated_at: '',
+  const day: DayRead = { id: 1, date: '2026-09-13', time_blocks: [block], actual_blocks: [], created_at: '', updated_at: '',
     meta: { timezone: 'UTC', today: '2026-09-13', server_now_iso: '2026-09-13T12:00:00Z' } }
   const patch = vi.fn(async () => {}), create = vi.fn()
   const view = render(<DragDropProvider><DayTimeline now={Date.now} day={day} readOnly={false} draft={null} selectedBlockId={null}
@@ -53,7 +52,7 @@ it('clamps zoom and changes creation coordinates without patching saved blocks',
   fireEvent.wheel(timeline, { ctrlKey: true, deltaY: -1000 })
   const lane = view.container.querySelector('[data-day-lane="planned"]')!
   expect(lane).toHaveAttribute('data-slot-height', '552')
-  fireEvent.click(lane, { clientY: 552 })
+  fireEvent.click(lane, { clientY: 630 / 30 * 552 })
   expect(create).toHaveBeenCalledWith('planned', 630, 660)
   expect(patch).not.toHaveBeenCalled()
   fireEvent.wheel(timeline, { ctrlKey: true, deltaY: 1000 })
@@ -61,8 +60,7 @@ it('clamps zoom and changes creation coordinates without patching saved blocks',
 })
 
 it('cancels a pending block move when a second touch starts a pinch', () => {
-  const day: DayRead = { id: 1, date: '2026-09-13', start_hour: 10, end_hour: 14,
-    show_full_day: false, time_blocks: [block], actual_blocks: [], created_at: '', updated_at: '',
+  const day: DayRead = { id: 1, date: '2026-09-13', time_blocks: [block], actual_blocks: [], created_at: '', updated_at: '',
     meta: { timezone: 'UTC', today: '2026-09-13', server_now_iso: '2026-09-13T12:00:00Z' } }
   const patch = vi.fn(async () => {})
   render(<DragDropProvider><DayTimeline now={Date.now} day={day} readOnly={false} draft={null} selectedBlockId={null}

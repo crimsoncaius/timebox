@@ -45,7 +45,7 @@ class DayCalendarHeaderTest {
             }
         }
 
-        val shortDateTitleHeight = compose.onNodeWithText("Mon, August 31")
+        val shortDateTitleHeight = compose.onNodeWithText("31 August")
             .fetchSemanticsNode().boundsInRoot.height
         val shortDateDividerTop = compose.onNodeWithTag("day-header-divider")
             .fetchSemanticsNode().boundsInRoot.top
@@ -53,7 +53,7 @@ class DayCalendarHeaderTest {
         compose.onNodeWithContentDescription("Wednesday, September 2, 2026").performClick()
         compose.waitForIdle()
 
-        val longDateTitleHeight = compose.onNodeWithText("Wed, September 2")
+        val longDateTitleHeight = compose.onNodeWithText("2 September")
             .fetchSemanticsNode().boundsInRoot.height
         val longDateDividerTop = compose.onNodeWithTag("day-header-divider")
             .fetchSemanticsNode().boundsInRoot.top
@@ -119,150 +119,21 @@ class DayCalendarHeaderTest {
     }
 
     @Test
-    fun todayRemainsActionableWhenSelectedDateIsToday() {
+    fun backToTodayAppearsOnlyAwayFromToday() {
         val selected = LocalDate.of(2026, 8, 28)
-        var todayNavigation: LocalDate? = null
-
-        showDay(
-            state = DayUiState(date = selected, today = selected),
-            onNavigateToday = { todayNavigation = it },
-        )
-        compose.onNodeWithContentDescription("Viewing today")
-            .assertIsDisplayed()
-            .assertHasClickAction()
-            .performClick()
-        compose.onNodeWithText("Today").assertIsDisplayed()
-        compose.runOnIdle { assertEquals(selected, todayNavigation) }
-    }
-
-    @Test
-    fun todayIsDisabledUntilBackendDateIsResolved() {
-        val selected = LocalDate.of(2026, 8, 28)
-
-        showDay(state = DayUiState(date = selected, today = null))
-        compose.onNodeWithContentDescription("Today unavailable")
-            .assertIsDisplayed()
-            .assertIsNotEnabled()
-    }
-
-    @Test
-    fun inlineMonthStaysOpenAndNavigatesOnDateSelection() {
-        val selected = LocalDate.of(2026, 8, 28)
-        var picked: LocalDate? = null
-
-        showDay(
-            state = DayUiState(date = selected, today = selected),
-            onDateSettled = { picked = it },
-        )
-
-        compose.onNodeWithText("Month").performClick()
-        compose.onNodeWithText("August 2026").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Monday, August 10, 2026").performClick()
-        compose.runOnIdle { assertEquals(LocalDate.of(2026, 8, 10), picked) }
-        compose.onNodeWithText("Month").assertIsSelected()
-        compose.onNodeWithText("August 2026").assertIsDisplayed()
-    }
-
-    @Test
-    fun adjacentMonthDateIsTappableAndAdvancesTheGrid() {
-        val selected = LocalDate.of(2026, 8, 28)
-        var picked: LocalDate? = null
-
-        showDay(
-            state = DayUiState(date = selected, today = selected),
-            onDateSettled = { picked = it },
-        )
-
-        compose.onNodeWithText("Month").performClick()
-        compose.onNode(
-            hasContentDescription("Tuesday, September 1, 2026") and
-                hasStateDescription("Outside displayed month"),
-        ).performClick()
-
-        compose.runOnIdle { assertEquals(LocalDate.of(2026, 9, 1), picked) }
-        compose.onNodeWithText("September 2026").assertIsDisplayed()
-        compose.onNodeWithText("Month").assertIsSelected()
-    }
-
-    @Test
-    fun weekControlRestoresTheExistingWeekStrip() {
-        val selected = LocalDate.of(2026, 8, 28)
-
         showDay(state = DayUiState(date = selected, today = selected))
-
-        compose.onNodeWithText("Month").performClick()
-        compose.onNodeWithText("Week").performClick()
-
-        compose.onNodeWithText("Week").assertIsSelected()
-        compose.onNodeWithText("August 2026").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Friday, August 28, 2026").assertIsSelected()
+        compose.onNodeWithText("Friday · Today").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Go to today").assertDoesNotExist()
     }
 
     @Test
-    fun monthSwipeBrowsesWithoutNavigatingTheTimeline() {
-        val selected = LocalDate.of(2026, 8, 28)
-        val navigated = mutableListOf<LocalDate>()
-
-        showDay(
-            state = DayUiState(date = selected, today = selected),
-            onDateSettled = navigated::add,
-        )
-
-        compose.onNodeWithText("Month").performClick()
-        compose.waitForIdle()
-        compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("August 2026").performTouchInput { swipeLeft() }
-
-        compose.onNodeWithText("September 2026").assertIsDisplayed()
-        compose.runOnIdle { assertTrue(navigated.isEmpty()) }
-
-        compose.mainClock.advanceTimeBy(1_000)
-        compose.onNodeWithText("September 2026").assertIsDisplayed()
-        compose.runOnIdle { assertTrue(navigated.isEmpty()) }
+    fun backToTodayIsHiddenUntilBackendDateIsResolved() {
+        showDay(state = DayUiState(date = LocalDate.of(2026, 8, 28), today = null))
+        compose.onNodeWithContentDescription("Go to today").assertDoesNotExist()
     }
 
     @Test
-    fun todayKeepsMonthOpenAndSynchronizesTheDisplayedMonth() {
-        val initialDate = LocalDate.of(2026, 8, 28)
-        val today = LocalDate.of(2026, 9, 2)
-        var navigated: LocalDate? = null
-
-        compose.setContent {
-            TimeboxTheme(darkTheme = false) {
-                var selectedDate by remember { mutableStateOf(initialDate) }
-                DayScreen(
-                    state = DayUiState(date = selectedDate, today = today),
-                    onNavigateToday = { date ->
-                        navigated = date
-                        selectedDate = date
-                    },
-                    onDateSettled = { selectedDate = it },
-                    onRetry = {}, onTapSlot = { _, _ -> }, onSelectBlock = {},
-                    onCommitMove = { _, _, _ -> }, onDismissSheet = {}, onChooseType = {},
-                    onTypeQueryChange = {}, onCreateType = {}, onNoteChange = {},
-                    onDeleteSelected = {},
-                    onConfirmSelectedTaskCompletion = {},
-                    onReopenSelectedTask = {}, onOpenLinkedTask = {},
-                    onSetPlanningMode = {}, onPlanTask = { _, _ -> },
-                    onArmAccessibleTask = {}, onRetryReadyTasks = {},
-                )
-            }
-        }
-
-        compose.onNodeWithText("Month").performClick()
-        compose.onNodeWithContentDescription("Go to today").performClick()
-
-        compose.runOnIdle { assertEquals(today, navigated) }
-        compose.onNodeWithText("Month").assertIsSelected()
-        compose.onNodeWithText("September 2026").assertIsDisplayed()
-        compose.onNode(
-            hasContentDescription("Wednesday, September 2, 2026") and
-                hasStateDescription("Selected, Today"),
-        ).assertIsSelected()
-    }
-
-    @Test
-    fun titleLedHeaderSeparatesDateNavigationPlanningAndCalendarMode() {
+    fun titleRowHoldsDatePlanningAndViewOptionsWithoutAMonthMode() {
         var planning = false
 
         showDay(
@@ -274,17 +145,13 @@ class DayCalendarHeaderTest {
             onSetPlanningMode = { planning = it },
         )
 
-        compose.onNodeWithText("DAY").assertIsDisplayed()
-        compose.onNodeWithText("Fri, Aug 28").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Selected date, Friday, August 28, 2026").assertIsDisplayed()
-        compose.onNodeWithText("Go to today").assertIsDisplayed()
-        compose.onNodeWithText("Week").assertIsDisplayed().assertIsSelected()
-        compose.onNodeWithText("Month").assertIsDisplayed()
+        compose.onNodeWithText("28 August").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Selected date, Friday, August 28, 2026").assertHasClickAction()
+        compose.onNodeWithText("Back to today").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Day view options").assertIsDisplayed()
+        compose.onNodeWithText("Month").assertDoesNotExist()
         compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
         compose.onNodeWithText("Plan").performClick()
-        compose.onNodeWithContentDescription("Day review").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Toggle theme").assertDoesNotExist()
 
         compose.runOnIdle { assertTrue(planning) }
     }
@@ -308,9 +175,6 @@ class DayCalendarHeaderTest {
             onCommitPlanningMode = { committed = true },
         )
 
-        compose.onNodeWithText("Month").performClick()
-        compose.onNodeWithText("August 2026").assertIsDisplayed()
-        compose.onNodeWithText("Month").assertIsSelected()
         compose.onNodeWithText("Done").performClick()
         compose.runOnIdle { assertTrue(committed) }
     }

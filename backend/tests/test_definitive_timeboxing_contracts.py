@@ -17,7 +17,7 @@ UTC = dt.UTC
 
 def _type_and_day(db: Session, date: dt.date = dt.date(2026, 8, 30)) -> tuple[TaskType, Day]:
     task_type = TaskType(name="contract")
-    day = Day(date=date, start_hour=8, end_hour=20, show_full_day=False)
+    day = Day(date=date)
     db.add_all([task_type, day])
     db.commit()
     return task_type, day

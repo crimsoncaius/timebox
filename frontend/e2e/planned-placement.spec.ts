@@ -5,7 +5,6 @@ const apiBase = process.env.PLACEMENT_TEST_API ?? 'http://127.0.0.1:18001'
 const headers = { 'X-Timebox-Protocol': 'activity-online-v1' }
 
 async function seed(request: APIRequestContext, date: string, ranges: number[][]) {
-  await request.patch(`${apiBase}/settings`, { headers, data: { start_hour: 8, end_hour: 20, show_full_day: false } })
   const day = await (await request.get(`${apiBase}/days/${date}`, { headers })).json()
   for (const block of day.time_blocks) {
     await request.delete(`${apiBase}/days/${date}/blocks/${block.id}`, { headers })
@@ -31,7 +30,7 @@ async function queueTask(request: APIRequestContext, title: string) {
 async function atMinute(page: Page, minute: number) {
   const box = await page.locator('[data-day-lane="planned"]').boundingBox()
   if (!box) throw new Error('Planned lane is unavailable')
-  return { x: box.x + box.width / 2, y: box.y + (minute - 480) / 30 * TIMELINE_SLOT_HEIGHT_PX + 2 }
+  return { x: box.x + box.width / 2, y: box.y + minute / 30 * TIMELINE_SLOT_HEIGHT_PX + 2 }
 }
 
 test.use({ viewport: { width: 1440, height: 1000 } })

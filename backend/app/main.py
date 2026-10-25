@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401 — register models on Base before create_all
@@ -20,7 +19,6 @@ from app.api.routes import (
     days,
     habits,
     recurring,
-    settings,
     task_type_recommendations,
     task_types,
     time_goals,
@@ -30,20 +28,11 @@ from app.core.config import Settings, get_settings
 from app.core.time import today_in_tz
 from app.db.base import Base
 from app.db.session import get_db, get_engine, repair_sqlite_actual_record_operation_references
-from app.models.app_settings import AppSettings
 from app.readiness import readiness_details
 from app.services.activity_service import reporting_settings
 from app.services.assistant_storage import recover_interrupted
 from app.services.assistant_tracing import setup_tracing
 from app.services.day_service import validate_timezone
-
-
-def _ensure_app_settings_table() -> None:
-    """Older AUTO_CREATE_TABLES SQLite files may predate app_settings; add the table if missing."""
-    engine = get_engine()
-    insp = inspect(engine)
-    if "app_settings" not in insp.get_table_names():
-        AppSettings.__table__.create(bind=engine)
 
 
 @asynccontextmanager
@@ -52,7 +41,6 @@ async def lifespan(app: FastAPI):
     validate_timezone(settings.app_timezone)
     if os.getenv("AUTO_CREATE_TABLES") == "1":
         Base.metadata.create_all(bind=get_engine())
-        _ensure_app_settings_table()
     repair_sqlite_actual_record_operation_references(get_engine())
     recover_interrupted()
     tracing = setup_tracing()
@@ -88,7 +76,6 @@ app.add_middleware(
 _protected = [Depends(require_api_key), Depends(guard_legacy_actual_writes)]
 
 app.include_router(days.router, dependencies=_protected)
-app.include_router(settings.router, dependencies=_protected)
 app.include_router(task_types.router, dependencies=_protected)
 app.include_router(task_type_recommendations.router, dependencies=[Depends(require_api_key)])
 app.include_router(battle_plan.router, dependencies=_protected)
