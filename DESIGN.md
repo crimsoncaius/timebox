@@ -66,6 +66,18 @@ colors:
   actual-dark: "#7dd3c8"
   actual-dark-surface: "#0c1211"
   actual-dark-border: "#1e3d38"
+  on-planned: "#f7f7fa"
+  on-planned-dark: "#0a1f3d"
+  on-actual: "#f7f7fa"
+  on-actual-dark: "#00201d"
+  planned-tint: "#e9f1fd"
+  planned-dark-tint: "#14213a"
+  actual-tint: "#def1ee"
+  actual-dark-tint: "#0f2724"
+  warn: "#8a5300"
+  warn-surface: "#fbefd9"
+  warn-dark: "#f0b86b"
+  warn-dark-surface: "#33240f"
   timeline-grid-strong: "#dadce0"
   timeline-grid-soft: "#e8eaed"
   timeline-label: "#5f6368"
@@ -364,7 +376,7 @@ The signature experience is the dual-lane timeline. Planned and actual time sit 
 
 The palette is mostly warm neutral paper, graphite text, and desaturated control colors. Use `surface` as the page canvas, `surface-container-low` for grouped workspaces, and `surface-container-lowest` for focused cards, popovers, and editable panels. Avoid pure black in light mode and avoid saturated accents except where the timeline requires fast recognition.
 
-Planned timeline elements use the blue family anchored by `planned`; actual timeline elements use the teal family anchored by `actual`. These accents should remain lane-specific and should not become general brand colors. `primary` is a subdued graphite used for primary actions, selections, and focus rings. `tertiary` is an equally quiet success/save color, and `error` is intentionally earthy rather than alarm-red.
+Planned timeline elements use the blue family anchored by `planned`; actual timeline elements use the teal family anchored by `actual`. These accents should remain lane-specific and should not become general brand colors. The one exception is an action that writes to a lane: a sheet or dialog primary that records actual time takes `actual`, and one that changes the plan takes `planned`, with `on-planned` / `on-actual` text. `primary` is a subdued graphite used for every other primary action, selections, and focus rings. `tertiary` is an equally quiet success/save color, and `error` is intentionally earthy rather than alarm-red.
 
 Dark mode reverses the surface hierarchy without becoming neon. The background becomes deep charcoal, elevated regions move toward warmer stone grays, and planned/actual accents shift to brighter blue and mint so the timeline remains readable.
 
@@ -372,7 +384,7 @@ Dark mode reverses the surface hierarchy without becoming neon. The background b
 
 Typography carries most of the brand personality. Use Manrope for display, headings, time labels, page titles, and navigation. Its light weights and tight tracking create the editorial, architectural tone. Use Inter for body copy, labels, dense controls, task type names, and timeline block text, where legibility matters more than drama.
 
-Headings should be large and light, not bold. A 44px page title with tight tracking is the default page-level gesture. Small labels should be uppercase, letter-spaced, and restrained. Use weight sparingly: medium and semibold are for navigation state, lane labels, compact metadata, or button legibility, not for general emphasis.
+Headings should be large and light, not bold. A 44px page title with tight tracking is the default page-level gesture. Kickers and lane labels should be uppercase, letter-spaced, and restrained. Form field labels are sentence case, sit above an outlined field, and mark optional fields with a muted "optional". Use weight sparingly: medium and semibold are for navigation state, lane labels, compact metadata, or button legibility, not for general emphasis.
 
 ## Layout
 
@@ -402,16 +414,18 @@ Primary buttons use the graphite action gradient defined in `gradients.primary-a
 
 Timeline lanes are the most domain-specific components. Planned and actual headers must preserve their blue and teal identity. Lane surfaces are very pale tints in light mode and near-black tinted panels in dark mode. Time blocks should remain compact, readable, draggable, and softly rounded. Selected blocks become whiter or more luminous and may use a subtle left accent or ring, but should not become visually loud.
 
+Day sheets and their confirmation dialogs share one frame. The header is a lane-colored kicker with a dot (teal for tracking and actual time, blue for planned time) above a light Manrope title; block sheets use the time range as the title with the duration on the right. Sheets open fully expanded on an opaque surface, the body scrolls, and the footer is pinned: Cancel on the left (or the secondary action on view-only sheets), and on the right the primary, which names its result ("Stop at 11:12") or, when disabled, why ("No changes"). Close by swiping down or with Cancel; there is no separate Close button. Time in the other lane appears as a related card tinted by that lane, amber when the action overwrites recorded time. Red is only for a destructive primary.
+
 Popovers, inspector panels, and combobox menus should feel like translucent paper placed over the canvas. They can use blur and ambient shadow, but their text and controls should remain plain and fast to scan.
 
 ## Do's and Don'ts
 
 - Do use whitespace, tonal surfaces, and light Manrope headings to create calm hierarchy.
 - Do keep planned blue and actual teal tied to the timeline lanes.
-- Do use muted graphite primary actions instead of bright brand color.
+- Do use muted graphite primary actions instead of bright brand color, except for a primary that writes to a lane.
 - Do use ambient shadows and backdrop blur only for floating surfaces.
 - Do keep dark mode charcoal, warm, and restrained.
-- Don't use saturated blues for generic actions; blue belongs to planned time.
+- Don't use saturated blues for generic actions; blue belongs to planned time, including the primary that changes it.
 - Don't use thick borders or heavy shadows for sectioning.
 - Don't over-bold headings; scale and spacing should do that work.
 - Don't introduce playful colors, dense dashboard widgets, or decorative illustration.

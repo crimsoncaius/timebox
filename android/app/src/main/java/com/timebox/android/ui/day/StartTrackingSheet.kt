@@ -1,20 +1,24 @@
 package com.timebox.android.ui.day
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
+import com.timebox.android.ui.components.CardLink
+import com.timebox.android.ui.components.SheetField
+import com.timebox.android.ui.components.SheetHelp
+import com.timebox.android.ui.components.SheetPrimary
+import com.timebox.android.ui.components.TimeboxSheet
 import com.timebox.android.data.activityIdentityText
 import com.timebox.android.data.identityText
 import com.timebox.android.data.parseActivityInstant
@@ -41,7 +45,6 @@ internal class StartHistory(
  * Presentation only: asks for the activity when no Planned Block covers the start. Recording begins on confirm.
  * With [history], "Started earlier?" reveals the switch timeline; a prefilled earlier start opens it expanded.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StartTrackingSheet(
     taskTypes: List<TaskType>,
@@ -59,40 +62,28 @@ internal fun StartTrackingSheet(
     onTypeQueryChange: () -> Unit = {},
     history: StartHistory? = null,
 ) {
-    val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
     var expanded by remember { mutableStateOf(history?.timing != null) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.bg,
+    val earlier = history?.let { h -> h.timing?.resolve(h.zone)?.takeIf { it < h.now } }
+    TimeboxSheet(
+        lane = Lane.Actual,
+        kicker = "Activity tracking",
+        title = "Start tracking",
+        onDismiss = onDismiss,
+        busy = busy,
+        primary = when {
+            busy -> SheetPrimary.Disabled("Starting…")
+            selectedType == null -> SheetPrimary.Disabled("Choose a type to start")
+            !enabled -> SheetPrimary.Disabled("Tracking unavailable")
+            earlier != null -> SheetPrimary.Action("Start at ${switchTimeLabel(earlier, history!!.zone)}", onConfirm)
+            else -> SheetPrimary.Action("Start now", onConfirm)
+        },
     ) {
-        Column(
-            Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)
-                .imePadding().padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(
-                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("ACTIVITY TRACKING", style = type.kicker, color = colors.onVariant)
-                Text("Start tracking", style = type.screenTitle.copy(fontSize = 28.sp))
-                ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType, typeError, onTypeQueryChange)
-                if (history != null) StartTime(history, taskTypes, activityIdentityText(name, null, selectedType?.name), expanded, enabled && !busy) { expanded = true }
-                error?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = type.bodySmall,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                }
-            }
-            HorizontalDivider(color = colors.outlineVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel", style = type.button) }
-                Button(onClick = onConfirm, enabled = enabled && !busy && selectedType != null,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(50)) {
-                    Text(if (busy) "Starting…" else "Start", style = type.button)
-                }
-            }
+        ActivitySelectionFields(taskTypes, selectedType, onTypeChange, name, onNameChange, busy, onCreateType, typeError, onTypeQueryChange)
+        if (history != null) StartTime(history, taskTypes, activityIdentityText(name, null, selectedType?.name), expanded, enabled && !busy) { expanded = true }
+        error?.let {
+            Text(it, color = TimeboxTheme.colors.error, style = type.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
     }
 }
@@ -103,18 +94,22 @@ internal fun StartTime(history: StartHistory, taskTypes: List<TaskType>, next: S
     val type = TimeboxTheme.type
     val selected = minOf(history.timing?.resolve(history.zone) ?: history.now, history.now)
     val label = switchTimeLabel(selected, history.zone)
-    if (expanded) {
-        Text("When did this start?", style = type.label)
-        Text("Drag the line. Hold near an edge to keep scrolling.", style = type.bodySmall, color = colors.onVariant)
+    if (expanded) SheetField("When did this start?") {
+        SheetHelp("Drag the line. Hold near an edge to keep scrolling.")
         SwitchActivityTimeline(
             currentId = -1, start = history.now, records = history.records, plans = history.plans, taskTypes = taskTypes,
             nextActivity = next, selected = selected, now = history.now, zone = history.zone, enabled = enabled,
             onSelect = { at -> history.onTimingChange(at?.takeIf { it < history.now }?.let { ActivityTimeValue.from(it, history.zone) }) },
             loadPlanTitles = history.loadPlanTitles, allowHistory = true, afterLabel = "AFTER START",
         )
-    } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Starts now · $label", Modifier.weight(1f), style = type.body)
-        TextButton(onClick = onExpand, enabled = enabled) { Text("Started earlier?") }
+    } else SheetField("Starts") {
+        Row(
+            Modifier.fillMaxWidth().clip(TimeboxShapes.cell).background(colors.low).padding(start = 14.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Now · $label", Modifier.weight(1f), style = type.label.copy(fontWeight = FontWeight.SemiBold))
+            CardLink("Started earlier?", Lane.Actual, onExpand, enabled = enabled)
+        }
     }
     if (selected < history.now) {
         val affected = history.records.filter { (it.endAt?.let(::parseActivityInstant) ?: history.now) > selected }

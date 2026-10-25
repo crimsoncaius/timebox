@@ -29,17 +29,16 @@ class LogTimeFormTest {
                     { savedType = type; savedName = name }, {})
             }
         }
-        compose.onNodeWithText("Block Name (optional)").assertDoesNotExist()
-        compose.onNode(hasSetTextAction()).performTextInput("gy")
+        compose.onNodeWithText("Selected: gym").assertDoesNotExist()
+        compose.onNodeWithTag("task-type-search").performScrollTo().performTextInput("gy")
         compose.onNodeWithText("gym", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("Selected: gym").assertExists()
-        compose.onNodeWithText("Block Name & note", substring = true).performScrollTo().performClick()
-        compose.onNodeWithText("Block Name (optional)").performScrollTo().performTextInput("Training")
-        compose.onNodeWithText("Log 30 min").performClick()
+        compose.onNodeWithTag("log-name-input").performScrollTo().performTextInput("Training")
+        compose.onNodeWithText("Log 30 mins").performClick()
         assertEquals(2, savedType)
         assertEquals("Training", savedName)
-        compose.onAllNodes(hasSetTextAction())[0].performScrollTo().performTextReplacement("coding/ai")
-        compose.onAllNodes(hasSetTextAction())[0].performImeAction()
+        compose.onNodeWithText("Change").performScrollTo().performClick()
+        compose.onNodeWithTag("task-type-search").performScrollTo().performTextReplacement("coding/ai")
+        compose.onNodeWithTag("task-type-search").performImeAction()
         assertEquals("coding/ai", createdPath)
     }
 
@@ -52,8 +51,8 @@ class LogTimeFormTest {
                     { end = ActivityTimeValue("2026-09-12T23:15") }, {})
             }
         }
-        compose.onNodeWithText("Log 30 min").assertIsEnabled().performClick()
+        compose.onNodeWithText("Log 30 mins").assertIsEnabled().performClick()
         compose.onNodeWithText("End must be after start.").assertExists()
-        compose.onNode(hasText("Log time") and hasClickAction()).assertIsNotEnabled()
+        compose.onNode(hasText("Choose a valid time range") and hasClickAction()).assertIsNotEnabled()
     }
 }

@@ -36,12 +36,12 @@ class PlanNowSheetTest {
             }
         }
         compose.onNodeWithText("Change").assertIsDisplayed()
-        compose.onNodeWithText("60 min").performClick()
+        compose.onNodeWithText("1h").performClick()
         compose.onNodeWithText("Draft proposal · Writing until 11:20").assertExists()
-        compose.onNodeWithText("Save plan").performScrollTo().performClick()
+        compose.onNodeWithText("Save plan").performClick()
         assertNull(saved)
-        compose.onNodeWithText("Replace this planned time?").assertIsDisplayed()
-        compose.onNodeWithText("Replace this time").performClick()
+        compose.onNodeWithText("Replace planned time?").assertIsDisplayed()
+        compose.onNode(hasText("of plan", substring = true) and hasClickAction()).performClick()
         assertEquals(listOf(2), saved)
     }
 
@@ -56,9 +56,9 @@ class PlanNowSheetTest {
                     startTracking = true, planEnabled = false)
             }
         }
-        compose.onNodeWithText("15 min").performClick()
-        compose.onNode(hasText("Start") and hasClickAction()).assertIsNotEnabled()
-        compose.onNodeWithText("Open-ended").performClick()
-        compose.onNode(hasText("Start") and hasClickAction()).assertIsEnabled()
+        compose.onNodeWithText("15m").performClick()
+        compose.onNode(hasText("Connect to change your plan") and hasClickAction()).assertIsNotEnabled()
+        compose.onNodeWithText("Open").performClick()
+        compose.onNode(hasText("Start now") and hasClickAction()).assertIsEnabled()
     }
 }

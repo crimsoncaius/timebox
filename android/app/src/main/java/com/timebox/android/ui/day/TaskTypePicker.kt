@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -65,12 +66,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timebox.android.data.TaskType
+import com.timebox.android.data.TaskTypeSubmit
 import com.timebox.android.data.canonicalizeTaskTypePath
 import com.timebox.android.data.createAncestorHint
 import com.timebox.android.data.isSameTaskTypePath
 import com.timebox.android.data.rankTaskTypes
 import com.timebox.android.data.shouldOfferCreate
 import com.timebox.android.data.taskTypePathParts
+import com.timebox.android.data.taskTypeSubmit
 import com.timebox.android.ui.theme.MonoFamily
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -80,8 +83,8 @@ import kotlinx.coroutines.delay
  * The task type combobox from the block sheet: a search field over the existing types
  * with a trailing row that creates whatever path the query names.
  *
- * Choosing a row *is* the commit — there is no separate save step — so both [onChoose]
- * and [onCreate] assign the type to the block straight away.
+ * Choosing a row *is* the picker's commit: [onChoose] and [onCreate] hand the type to the
+ * hosting sheet, which keeps it with its other edits until Save.
  *
  * @param selectedTypeId the block's current type, drawn distinctly and floated to the top.
  * @param autoFocus raises the keyboard on first composition; only wanted for a new block.
@@ -185,10 +188,10 @@ fun TaskTypePicker(
             },
             autoFocus = autoFocus,
             onSubmit = {
-                when {
-                    showCreate -> create()
-                    // An exact match ranks first, so enter on a fully typed path commits it.
-                    results.isNotEmpty() -> choose(results.first())
+                when (val target = taskTypeSubmit(pickerTypes, searchQuery, currentTypeId)) {
+                    is TaskTypeSubmit.Choose -> choose(target.type)
+                    is TaskTypeSubmit.Create -> create()
+                    TaskTypeSubmit.None -> Unit
                 }
             },
         )
@@ -205,7 +208,6 @@ fun TaskTypePicker(
                     .fillMaxWidth()
                     .heightIn(max = ListMaxHeight)
                     .clip(TimeboxShapes.field)
-                    .background(colors.bg)
                     .border(1.dp, colors.hairline, TimeboxShapes.field)
                     .verticalScroll(rememberScrollState()),
             ) {
@@ -312,6 +314,7 @@ private fun SearchField(
         keyboardActions = KeyboardActions(onDone = { onSubmit() }),
         modifier = Modifier
             .fillMaxWidth()
+            .testTag("task-type-search")
             .focusRequester(focusRequester)
             .onFocusChanged { focused = it.isFocused },
         decorationBox = { field ->
@@ -320,7 +323,6 @@ private fun SearchField(
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(TimeboxShapes.field)
-                    .background(colors.bg)
                     .border(
                         width = 1.dp,
                         color = if (focused) colors.outline else colors.hairline,
@@ -399,18 +401,13 @@ private fun ResultRow(type: TaskType, selected: Boolean, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        // Usage only orders the list (ADR-0006); a bare count beside each row read as noise.
         if (selected) {
             Icon(
                 imageVector = Icons.Outlined.Check,
                 contentDescription = "Current type",
                 tint = colors.tertiary,
                 modifier = Modifier.size(18.dp),
-            )
-        } else {
-            Text(
-                text = type.usageCount.toString(),
-                style = TimeboxTheme.type.mono,
-                color = colors.onVariant,
             )
         }
     }
@@ -524,7 +521,6 @@ private fun EmptyPanel() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(TimeboxShapes.field)
-            .background(colors.bg)
             .dashedBorder(colors.hairline, cornerRadius = 12.dp)
             .padding(horizontal = 14.dp, vertical = 16.dp),
     ) {

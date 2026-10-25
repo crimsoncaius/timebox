@@ -33,7 +33,7 @@ class RunningActualSheetTest {
         monotonic.set(1_000_000_000)
         compose.waitUntil(5000) { compose.onAllNodesWithText("46 mins").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Edit details").performClick()
-        compose.onNodeWithText("Recording continues").assertIsDisplayed()
+        compose.onNodeWithText("recording continues", substring = true).assertIsDisplayed()
         monotonic.set(61_000_000_000)
         compose.waitUntil(5000) { compose.onAllNodesWithText("47 mins").fetchSemanticsNodes().isNotEmpty() }
         assertNull(repository.state.value.snapshot!!.current!!.endAt)
@@ -57,7 +57,7 @@ class RunningActualSheetTest {
         compose.onNodeWithText("Keep this note").assertIsDisplayed()
         compose.onNodeWithText("Switch activity").assertIsDisplayed()
         compose.onNodeWithText("Edit details").performClick()
-        compose.onNodeWithText("Block Name (optional)").performTextReplacement("Revised")
+        compose.onNodeWithTag("actual-name-input").performTextReplacement("Revised")
         compose.onNodeWithText("Save changes").performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.name == "Revised" }
         assertNull(repository.state.value.snapshot!!.current!!.endAt)

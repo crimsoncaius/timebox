@@ -2,43 +2,38 @@ package com.timebox.android.ui.day
 
 import com.timebox.android.data.primaryIdentity
 import com.timebox.android.data.secondaryIdentity
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.ActivityRepository
 import com.timebox.android.data.BattleTask
 import com.timebox.android.data.BattleTaskPatch
+import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskCollection
 import com.timebox.android.data.flattenBattleTasks
+import com.timebox.android.data.parseActivityInstant
 import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.PatchField
-import com.timebox.android.ui.theme.TimeboxShapes
+import com.timebox.android.ui.components.SheetField
+import com.timebox.android.ui.components.SheetHelp
+import com.timebox.android.ui.components.SheetPrimary
+import com.timebox.android.ui.components.SheetTextField
+import com.timebox.android.ui.components.TimeboxSheet
+import com.timebox.android.ui.elapsedDuration
 import com.timebox.android.ui.theme.TimeboxTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Duration
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CurrentActivityNotesSheet(
     actual: ActualBlockDto,
@@ -50,10 +45,12 @@ internal fun CurrentActivityNotesSheet(
     val linked = actual.taskId != null
     val readOnly = linked && (actual.task?.archivedAt != null || actual.task?.deletedAt != null)
     val fieldName = if (linked) "Task Description" else "Supporting Note"
+    val fieldLabel = if (linked) "Task description" else "Supporting note"
     val title = actual.primaryIdentity()
     var task by remember(actual.id) { mutableStateOf<BattleTask?>(null) }
     var loading by remember(actual.id) { mutableStateOf(linked) }
     var draft by remember(actual.id) { mutableStateOf(actual.note.orEmpty()) }
+    var baseline by remember(actual.id) { mutableStateOf(actual.note.orEmpty()) }
     var saving by remember(actual.id) { mutableStateOf(false) }
     var error by remember(actual.id) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -71,6 +68,7 @@ internal fun CurrentActivityNotesSheet(
             onSuccess = { result ->
                 task = result.items.flattenBattleTasks().find { it.id == actual.taskId }
                 draft = task?.description.orEmpty()
+                baseline = draft
                 if (task == null) error = "Could not load this Task Description."
             },
             onFailure = { error = "Could not load this Task Description. Check your connection and try again." },
@@ -78,99 +76,71 @@ internal fun CurrentActivityNotesSheet(
         loading = false
     }
 
-    ModalBottomSheet(
-        onDismissRequest = { if (!saving) onDismiss() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.bg,
-        contentColor = colors.on,
-        shape = TimeboxShapes.sheet,
-    ) {
-        Column(
-            Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp).padding(bottom = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("CURRENT ACTIVITY", style = TimeboxTheme.type.kicker, color = colors.actual)
-                    Text(title, style = TimeboxTheme.type.screenTitle, color = colors.on)
-                    actual.secondaryIdentity()?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.onVariant) }
-                }
-                TextButton(enabled = !saving, onClick = onDismiss) { Text("Close", color = colors.onVariant) }
-            }
-            HorizontalDivider(color = colors.hairline)
-            Text(fieldName, style = TimeboxTheme.type.sectionTitle, color = colors.on)
-            when {
-                loading -> Text("Loading…", style = TimeboxTheme.type.body, color = colors.onVariant)
-                readOnly -> {
-                    Text(draft.ifBlank { "No Task Description." }, style = TimeboxTheme.type.body, color = colors.onVariant)
-                    Text(
-                        "This linked Task is ${if (actual.task?.deletedAt != null) "in Trash" else "archived"}, so its Task Description is read-only.",
-                        style = TimeboxTheme.type.bodySmall,
-                        color = colors.onVariant,
-                    )
-                }
-                else -> {
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it; error = null },
-                        enabled = !saving,
-                        label = { Text(fieldName) },
-                        placeholder = {
-                            Text(if (linked) "Add context for this Task…" else "Add context for this recorded activity…")
-                        },
-                        minLines = 5,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = TimeboxShapes.field,
-                    )
-                    Text(
-                        if (linked) "Replaces this Task’s complete Description." else "Replaces this running Actual Block’s complete Supporting Note.",
-                        style = TimeboxTheme.type.bodySmall,
-                        color = colors.onVariant,
-                    )
-                    if (!online) Text("Connect to save notes.", style = TimeboxTheme.type.bodySmall, color = colors.error)
-                }
-            }
-            error?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error) }
-            Spacer(Modifier.heightIn(min = 4.dp))
-            if (readOnly || loading) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Close") }
+    val now by produceState(activityRepository.now()) {
+        while (true) { delay(30_000); value = activityRepository.now() }
+    }
+    val running = elapsedDuration(Duration.between(parseActivityInstant(actual.startAt), now).toMinutes().coerceAtLeast(0))
+    val save: () -> Unit = {
+        saving = true
+        error = null
+        scope.launch {
+            val result = if (linked) {
+                app.repository.patchBattleTask(
+                    actual.taskId!!,
+                    BattleTaskPatch(description = PatchField.of(draft)),
+                ).map { Unit }
             } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(enabled = !saving, onClick = onDismiss, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                        Text("Cancel")
+                runCatching {
+                    check(activityRepository.updateCurrentNoteOnline(actual.id, draft)) {
+                        activityRepository.state.value.error ?: "Could not save Supporting Note."
                     }
-                    Button(
-                        enabled = online && !saving,
-                        onClick = {
-                            saving = true
-                            error = null
-                            scope.launch {
-                                val result = if (linked) {
-                                    app.repository.patchBattleTask(
-                                        actual.taskId!!,
-                                        BattleTaskPatch(description = PatchField.of(draft)),
-                                    ).map { Unit }
-                                } else {
-                                    runCatching {
-                                        check(activityRepository.updateCurrentNoteOnline(actual.id, draft)) {
-                                            activityRepository.state.value.error ?: "Could not save Supporting Note."
-                                        }
-                                    }
-                                }
-                                result.onSuccess {
-                                    activityRepository.refresh()
-                                    onDismiss()
-                                }.onFailure {
-                                    error = "Could not save $fieldName. Check your connection and try again."
-                                }
-                                saving = false
-                            }
-                        },
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    ) { Text(if (saving) "Saving…" else "Save notes") }
                 }
+            }
+            result.onSuccess {
+                activityRepository.refresh()
+                onDismiss()
+            }.onFailure {
+                error = "Could not save $fieldName. Check your connection and try again."
+            }
+            saving = false
+        }
+    }
+    TimeboxSheet(
+        lane = Lane.Actual,
+        kicker = "Current activity",
+        title = title,
+        subtitle = listOfNotNull(actual.secondaryIdentity(), "running $running").joinToString(" · "),
+        onDismiss = onDismiss,
+        busy = saving,
+        primary = when {
+            loading -> SheetPrimary.Disabled("Loading…")
+            readOnly -> SheetPrimary.Disabled("Read-only")
+            saving -> SheetPrimary.Disabled("Saving…")
+            !online -> SheetPrimary.Disabled("Connect to save")
+            draft == baseline -> SheetPrimary.Disabled("No changes")
+            else -> SheetPrimary.Action(if (linked) "Save description" else "Save note", save)
+        },
+    ) {
+        when {
+            loading -> SheetField(fieldLabel) { Text("Loading…", style = TimeboxTheme.type.body, color = colors.onVariant) }
+            readOnly -> SheetField(fieldLabel) {
+                Text(draft.ifBlank { "No Task Description." }, style = TimeboxTheme.type.body, color = colors.onVariant)
+                SheetHelp("This linked Task is ${if (actual.task?.deletedAt != null) "in Trash" else "archived"}, so its Task Description is read-only.")
+            }
+            else -> {
+                SheetTextField(
+                    value = draft,
+                    onValueChange = { draft = it; error = null },
+                    label = fieldLabel,
+                    placeholder = if (linked) "Add context for this task" else "What are you working on?",
+                    enabled = !saving,
+                    singleLine = false,
+                    minLines = 5,
+                )
+                SheetHelp(if (linked) "Replaces this task's whole description." else "Replaces the running block's whole note.")
+                if (!online) SheetHelp("Connect to save notes.", color = colors.error)
             }
         }
+        error?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error) }
     }
 }

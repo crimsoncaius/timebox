@@ -39,7 +39,7 @@ class StopTrackingTimelineTest {
         compose.onNodeWithText("15 min ago").assertDoesNotExist()
         compose.onNodeWithText("Choose time").assertDoesNotExist()
         compose.onNodeWithText("Next activity").assertDoesNotExist()
-        compose.onNodeWithText("Unrecorded", substring = false).assertExists()
+        compose.onNodeWithTag("stop-after-now", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Read ends · 13:29").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(boundary, timing!!.resolve(zone)) }
         compose.onNodeWithText("Cancel").assertIsDisplayed()

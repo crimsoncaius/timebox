@@ -48,7 +48,7 @@ class ActivitySwitchTimelineTest {
         compose.onAllNodes(hasSetTextAction()).onLast().performScrollTo().performTextInput("meal")
         compose.onNodeWithText("Meals", useUnmergedTree = true).performScrollTo().performClick()
         compose.onNodeWithText("Dinner ends · 21:00").performScrollTo().performClick()
-        compose.onNode(hasText("Switch activity") and hasClickAction()).performClick()
+        compose.onNode(hasText("Switch at 21:00") and hasClickAction()).performClick()
         compose.waitUntil(5000) { repository.state.value.snapshot?.current?.taskTypeId == 2 }
         val saved = repository.state.value.snapshot!!
         assertEquals(plan.endAt, saved.current!!.startAt)

@@ -17,6 +17,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -153,10 +155,28 @@ internal fun SwitchActivityTimeline(
                 records.forEach { record -> block(parseActivityInstant(record.startAt),
                     if (!stopping && allowHistory) minOf(selected, record.endAt?.let(::parseActivityInstant) ?: now) else if (record.id == currentId) selected else record.endAt?.let(::parseActivityInstant) ?: now,
                     record.identityText(), false) }
-                // Stopping leaves the recorded lane empty from the selected end onward.
-                // Extend through the visible future so "Now" still previews the unrecorded state.
-                block(selected, if (stopping) maxOf(now, window.end) else now,
-                    nextActivity ?: "Unrecorded", false, preview = true, unrecorded = stopping)
+                // Stopping leaves the recorded lane empty from the selected end until now;
+                // time after now is a faint hatch, since nothing can be recorded there yet.
+                if (stopping) {
+                    if (selected < now) block(selected, now, "Unrecorded", false, preview = true, unrecorded = true)
+                    val top = window.fraction(now).coerceIn(0f, 1f)
+                    val bottom = window.fraction(maxOf(now, window.end)).coerceIn(0f, 1f)
+                    if (bottom > top) {
+                        val stripe = colors.gridStrong
+                        Box(Modifier.offset(x = 58.dp + lane, y = height * top).width(lane).height(height * (bottom - top))
+                            .clip(TimeboxShapes.block).testTag("stop-after-now")
+                            .drawBehind {
+                                val step = 7.dp.toPx()
+                                var x = -size.height
+                                while (x < size.width) {
+                                    drawLine(stripe, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = 1.5.dp.toPx())
+                                    x += step
+                                }
+                            }, contentAlignment = Alignment.Center) {
+                            if (height * (bottom - top) >= 24.dp) Text("After now", style = type.monoSmall, color = colors.onVariant)
+                        }
+                    }
+                } else block(selected, now, nextActivity!!, false, preview = true)
                 val nowFraction = window.fraction(now)
                 if (nowFraction in 0f..1f) HorizontalDivider(Modifier.offset(x = 50.dp, y = height * nowFraction).width(width - 50.dp), color = colors.now)
                 val fraction = if (dragY != null) handle else window.fraction(selected)

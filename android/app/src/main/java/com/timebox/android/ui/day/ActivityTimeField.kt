@@ -6,6 +6,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.timebox.android.ui.theme.TimeboxShapes
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -47,12 +55,25 @@ fun ActivityTimeField(label: String, value: ActivityTimeValue, zone: ZoneId, com
             TimePickerDialog(context, { _, hour, minute -> onChange(ActivityTimeValue(selected.withHour(hour).withMinute(minute).withSecond(0).withNano(0).toString())) }, selected.hour, selected.minute, true).show()
         }
         if (compact) {
-            Text(label, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
-            TextButton(enabled = enabled, onClick = { chooseTime() }, modifier = Modifier.semantics { contentDescription = "$label time" }) {
-                Text(local?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Choose time", style = TimeboxTheme.type.screenTitle)
-            }
-            TextButton(enabled = enabled, onClick = { chooseDate() }, modifier = Modifier.semantics { contentDescription = "$label date" }) {
-                Text(local?.format(DateTimeFormatter.ofPattern("d MMM yyyy")) ?: "Choose date", style = TimeboxTheme.type.bodySmall)
+            val colors = TimeboxTheme.colors
+            // One outlined field: the caption carries the date, the large figure the time.
+            Column(
+                Modifier.fillMaxWidth().clip(TimeboxShapes.field).border(1.dp, colors.outlineVariant, TimeboxShapes.field)
+                    .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    "$label · " + (local?.format(DateTimeFormatter.ofPattern("d MMM")) ?: "Choose date"),
+                    Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button) { chooseDate() }
+                        .semantics { contentDescription = "$label date" }.padding(horizontal = 13.dp, vertical = 4.dp),
+                    style = TimeboxTheme.type.bodySmall, color = colors.outline, maxLines = 1,
+                )
+                Text(
+                    local?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Choose time",
+                    Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button) { chooseTime() }
+                        .semantics { contentDescription = "$label time" }.heightIn(min = 40.dp).padding(horizontal = 13.dp, vertical = 4.dp),
+                    style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, fontWeight = FontWeight.Light),
+                    color = if (enabled) colors.on else colors.onVariant,
+                )
             }
         } else {
             OutlinedTextField(value.local, { onChange(ActivityTimeValue(it)) }, enabled = enabled, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)

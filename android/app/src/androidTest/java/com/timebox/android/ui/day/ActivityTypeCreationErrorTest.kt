@@ -53,7 +53,7 @@ class ActivityTypeCreationErrorTest {
         compose.onNodeWithText("Create work/deep").performScrollTo().performClick()
         compose.waitUntil(5000) { paths.size == 2 }
         compose.onNodeWithText("Creation unavailable").assertDoesNotExist()
-        compose.onNode(hasText(if (switching) "Switch activity" else "Start") and hasClickAction()).assertIsEnabled()
+        compose.onNode(hasText(if (switching) "Switch now" else "Start now") and hasClickAction()).assertIsEnabled()
         assertEquals(listOf("work/deep", "work/deep"), paths)
     }
 }

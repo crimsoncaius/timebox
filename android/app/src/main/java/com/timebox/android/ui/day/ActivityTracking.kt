@@ -28,6 +28,13 @@ import com.timebox.android.data.TaskType
 import com.timebox.android.data.remote.ActivityKind
 import com.timebox.android.ui.components.DiagnosticText
 import com.timebox.android.ui.components.HelperText
+import com.timebox.android.ui.components.RelatedCard
+import com.timebox.android.ui.components.SheetHelp
+import com.timebox.android.ui.components.SheetPrimary
+import com.timebox.android.ui.components.SheetSecondary
+import com.timebox.android.ui.components.TimeboxSheet
+import com.timebox.android.ui.elapsedDuration
+import com.timebox.android.data.Lane
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.time.Duration
 import java.time.Instant
@@ -287,14 +294,26 @@ fun ActivityTracking(
             TextButton(onClick = { focusOptions = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Done") }
         }
     }
-    if (question != null && current != null && checkInOpen) ModalBottomSheet(onDismissRequest = { dismissCheckIn() }) {
-        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text("Still doing this?", style = MaterialTheme.typography.headlineLarge)
-            Text(current.primaryIdentity(), style = MaterialTheme.typography.headlineSmall)
-            current.secondaryIdentity()?.let { Text(it) }
-            Button(modifier = Modifier.fillMaxWidth(), onClick = { scope.launch { if (repository.checkIn(com.timebox.android.data.remote.CheckInEventDto("confirm", questionId = question.id))) checkInOpen = false } }) { Text("Yes, still doing this") }
-            OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { dismissCheckIn(); openSwitch(current.id) }) { Text("Switch activity") }
-            HelperText("Recording continues while you decide.")
+    if (question != null && current != null && checkInOpen) {
+        val since = parseActivityInstant(current.startAt)
+        TimeboxSheet(
+            lane = Lane.Actual,
+            kicker = "Check-in",
+            title = "Still doing this?",
+            onDismiss = { dismissCheckIn() },
+            secondary = SheetSecondary.Action("Switch activity", { dismissCheckIn(); openSwitch(current.id) }),
+            primary = SheetPrimary.Action("Yes, still doing this") {
+                scope.launch { if (repository.checkIn(com.timebox.android.data.remote.CheckInEventDto("confirm", questionId = question.id))) checkInOpen = false }
+            },
+        ) {
+            RelatedCard(
+                lane = Lane.Actual,
+                caption = "Recording since ${switchTimeLabel(since, zone)}",
+                trailing = elapsedDuration(Duration.between(since, now).toMinutes().coerceAtLeast(0)),
+                title = current.primaryIdentity(),
+                text = current.secondaryIdentity(),
+            )
+            SheetHelp("Recording continues while you decide.")
         }
     }
     val notesTarget = state.snapshot?.records?.find { it.id == notesTargetId }

@@ -80,6 +80,11 @@ data class DayUiState(
     val draft: Draft? = null,
     val nameInput: String = "",
     val noteInput: String = "",
+    /** The Planned sheet's unsaved Task Type; null keeps the block's own. Saved together on Save. */
+    val typeInput: Int? = null,
+    /** The Planned sheet's unsaved times; null keeps the block's own. */
+    val startInput: Int? = null,
+    val endInput: Int? = null,
     /** Raw text in the task type picker; cleared whenever the sheet changes what it shows. */
     val typeQuery: String = "",
     val planning: PlanningSessionState = PlanningSessionState(),
@@ -102,8 +107,15 @@ data class DayUiState(
     val sheetLane: Lane
         get() = selectedBlock?.lane ?: draft?.lane ?: Lane.Planned
 
-    val sheetStart: Int get() = selectedBlock?.startMinute ?: draft?.startMinute ?: 0
-    val sheetEnd: Int get() = selectedBlock?.endMinute ?: draft?.endMinute ?: 0
+    val sheetStart: Int get() = startInput ?: selectedBlock?.startMinute ?: draft?.startMinute ?: 0
+    val sheetEnd: Int get() = endInput ?: selectedBlock?.endMinute ?: draft?.endMinute ?: 0
+
+    /** True when the open Planned sheet holds edits that Save would send. */
+    val plannedSheetChanged: Boolean
+        get() = selectedBlock?.takeIf { it.lane == Lane.Planned }?.let { block ->
+            typeInput != null || startInput != null || endInput != null ||
+                nameInput != block.name.orEmpty() || noteInput != block.note.orEmpty()
+        } ?: false
 
     val readyTasks: List<BattleTask> get() = planning.readyTasks
     val readyTasksLoading: Boolean get() = planning.queueLoading
@@ -369,6 +381,9 @@ class DayViewModel(
                 draft = null,
                 nameInput = "",
                 noteInput = "",
+                typeInput = null,
+                startInput = null,
+                endInput = null,
                 typeQuery = "",
                 skipScrollToNow = false,
             )
@@ -393,7 +408,7 @@ class DayViewModel(
         if (block?.lane == Lane.Actual) {
             if (_state.value.isPlanningMode || _state.value.saving) return
             if (activityRepository != null) {
-                _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
+                _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeInput = null, startInput = null, endInput = null, typeQuery = "") }
                 return
             }
             _state.update { it.copy(saving = true) }
@@ -402,7 +417,7 @@ class DayViewModel(
                 if (_state.value.isPlanningMode) return@launch
                 if (actual != null && actual.endAt == null && activityRepository == null) {
                 } else {
-                    _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeQuery = "") }
+                    _state.update { it.copy(selectedBlockId = blockId, draft = null, nameInput = block.name.orEmpty(), noteInput = block.note.orEmpty(), typeInput = null, startInput = null, endInput = null, typeQuery = "") }
                 }
                 _state.update { it.copy(saving = false) }
             }
@@ -414,6 +429,9 @@ class DayViewModel(
                 draft = null,
                 nameInput = block?.name.orEmpty(),
                 noteInput = block?.note.orEmpty(),
+                typeInput = null,
+                startInput = null,
+                endInput = null,
                 typeQuery = "",
             )
         }
@@ -443,26 +461,25 @@ class DayViewModel(
                 selectedBlockId = null,
                 nameInput = "",
                 noteInput = "",
+                typeInput = null,
+                startInput = null,
+                endInput = null,
                 typeQuery = "",
             )
         }
     }
 
+    /** Swipe, Back, scrim and Cancel all discard the sheet's unsaved edits. */
     fun closeSheet() {
-        val current = _state.value
-        val selected = current.selectedBlock
-        // Text fields save together on dismiss so Name and Note cannot race stale responses.
-        if (!(activityRepository != null && selected?.lane == Lane.Actual) && selected != null &&
-            (current.nameInput != selected.name.orEmpty() || current.noteInput != selected.note.orEmpty())
-        ) {
-            saveBlockText(selected, current.nameInput, current.noteInput)
-        }
         _state.update {
             it.copy(
                 selectedBlockId = null,
                 draft = null,
                 nameInput = "",
                 noteInput = "",
+                typeInput = null,
+                startInput = null,
+                endInput = null,
                 typeQuery = "",
             )
         }
@@ -474,24 +491,66 @@ class DayViewModel(
 
     fun onTypeQueryChange(value: String) = _state.update { it.copy(typeQuery = value) }
 
+    /** Planned sheet time fields; nothing is sent until [saveSelected]. */
+    fun onTimesInput(startMinute: Int, endMinute: Int) = _state.update { state ->
+        val block = state.selectedBlock ?: return@update state
+        state.copy(
+            startInput = startMinute.takeIf { it != block.startMinute || endMinute != block.endMinute },
+            endInput = endMinute.takeIf { startMinute != block.startMinute || it != block.endMinute },
+        )
+    }
+
+    /** Sends every unsaved Planned sheet edit in one patch, then closes the sheet. */
+    fun saveSelected() {
+        val current = _state.value
+        val selected = current.selectedBlock?.takeIf { it.lane == Lane.Planned } ?: return
+        if (current.saving || !current.plannedSheetChanged) return
+        _state.update { it.copy(saving = true) }
+        launchScope.launch {
+            repository.patchBlock(
+                current.date, selected.id,
+                taskTypeId = current.typeInput,
+                name = current.nameInput.takeIf { it != selected.name.orEmpty() },
+                note = current.noteInput.takeIf { it != selected.note.orEmpty() },
+                startMinute = current.startInput,
+                endMinute = current.endInput,
+            ).fold(
+                onSuccess = { day ->
+                    _state.update { state ->
+                        val stillOpen = state.selectedBlockId == selected.id
+                        state.copy(
+                            saving = false,
+                            message = "Saved",
+                            selectedBlockId = if (stillOpen) null else state.selectedBlockId,
+                            nameInput = if (stillOpen) "" else state.nameInput,
+                            noteInput = if (stillOpen) "" else state.noteInput,
+                            typeInput = if (stillOpen) null else state.typeInput,
+                            startInput = if (stillOpen) null else state.startInput,
+                            endInput = if (stillOpen) null else state.endInput,
+                            typeQuery = if (stillOpen) "" else state.typeQuery,
+                        ).withPage(current.date) { DayPageState(day = day, loading = false, materialized = true) }
+                    }
+                },
+                onFailure = { e -> _state.update { it.copy(saving = false, message = e.apiError.message) } },
+            )
+        }
+    }
+
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
     fun chooseTaskType(taskType: TaskType) {
         val current = _state.value
         val draft = current.draft
         if (draft != null) {
-            createBlock(
-                draft.lane,
-                draft.startMinute,
-                draft.endMinute,
-                taskType.id,
-                current.nameInput,
-                current.noteInput,
-                draft.taskId,
-            )
+            // A new block waits for Create block, like every other sheet's Save.
+            _state.update { it.copy(draft = draft.copy(taskTypeId = taskType.id)) }
             return
         }
         val selected = current.selectedBlock ?: return
+        if (selected.lane == Lane.Planned) {
+            _state.update { it.copy(typeInput = taskType.id.takeIf { id -> id != selected.taskTypeId }) }
+            return
+        }
         if (selected.taskTypeId == taskType.id) return
         if (selected.lane == Lane.Actual) {
             launchScope.launch {
@@ -501,9 +560,6 @@ class DayViewModel(
                 )
             }
             return
-        }
-        mutate(current.date, "Saved") {
-            repository.patchBlock(current.date, selected.id, taskTypeId = taskType.id)
         }
     }
 
@@ -722,7 +778,7 @@ class DayViewModel(
 
         if (actualPatch != null) pendingActualMoves[current.date to blockId] = startMinute to endMinute
         _state.update { state ->
-            state.copy(saving = true).withPage(current.date) { page ->
+            state.copy(saving = true, startInput = null, endInput = null).withPage(current.date) { page ->
                 page.copy(day = page.day?.withBlockTimes(blockId, startMinute, endMinute))
             }
         }
@@ -839,31 +895,6 @@ class DayViewModel(
                     refreshAfterTaskCompletion()
                 },
             )
-        }
-    }
-
-    private fun saveBlockText(block: TimeBlock, name: String, note: String) {
-        val date = _state.value.date
-        launchScope.launch {
-            if (block.lane == Lane.Actual) {
-                repository.patchActualBlock(
-                    block.actualBlockId ?: block.id,
-                    name = name,
-                    note = note,
-                ).onSuccess { refreshCurrentDay() }.onFailure { error ->
-                    _state.update { it.copy(message = error.apiError.message) }
-                }
-                return@launch
-            }
-            repository.patchBlock(date, block.id, name = name, note = note).onSuccess { day ->
-                _state.update { state ->
-                    state.withPage(date) {
-                        DayPageState(day = day, loading = false, materialized = true)
-                    }
-                }
-            }.onFailure { error ->
-                _state.update { it.copy(message = error.apiError.message) }
-            }
         }
     }
 
