@@ -59,6 +59,43 @@ class TimeboxAppReadyToPlanTest {
     private val readinessScopes = mutableListOf<CoroutineScope>()
 
     @Test
+    fun directoryRisesAndCloseLowersItBackToTheSource() {
+        setAppContent(ControllableTimeboxApi())
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Navigate").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val enteringTop = compose.onNodeWithText("Timebox").getUnclippedBoundsInRoot().top
+        compose.mainClock.advanceTimeBy(300)
+        val openTop = compose.onNodeWithText("Timebox").getUnclippedBoundsInRoot().top
+        assertTrue("Directory must rise", enteringTop > openTop)
+        compose.onNodeWithContentDescription("Close navigation").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        assertTrue("Directory must lower on Close", compose.onNodeWithText("Timebox").getUnclippedBoundsInRoot().top > openTop)
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("Timebox").assertDoesNotExist()
+        compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun directoryLowersAfterChoosingADestination() {
+        setAppContent(ControllableTimeboxApi())
+        compose.onNodeWithText("Navigate").performClick()
+        val openTop = compose.onNodeWithText("Timebox").getUnclippedBoundsInRoot().top
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Battle Plan").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        assertTrue("Directory must lower after selection", compose.onNodeWithText("Timebox").getUnclippedBoundsInRoot().top > openTop)
+        // Destination accessibility stays hidden while the departing menu covers it.
+        compose.onNodeWithText("Navigate").assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("Timebox").assertDoesNotExist()
+        compose.onAllNodesWithText("Battle Plan").onFirst().assertIsDisplayed()
+        compose.onNodeWithText("Navigate").assertIsDisplayed()
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test
     fun shortcutMovesThePageHeadingWhileDockStaysFixed() {
         setAppContent(ControllableTimeboxApi())
         val dock = compose.onAllNodesWithText("Battle Plan").onLast()

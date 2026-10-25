@@ -1,6 +1,17 @@
 package com.timebox.android.ui
 
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.timebox.android.ui.components.LocalNavigationBlockers
@@ -318,6 +329,10 @@ fun TimeboxApp(
 
     val navigationBlockers = remember { mutableStateOf(0) }
     var directoryOpen by rememberSaveable { mutableStateOf(false) }
+    val directoryVisibility = remember { MutableTransitionState(false) }
+    directoryVisibility.targetState = directoryOpen && !focused
+    val directoryCovering = directoryVisibility.currentState || directoryVisibility.targetState || !directoryVisibility.isIdle
+    var revealDestination by remember { mutableStateOf<String?>(null) }
     var shortcutEditorOpen by rememberSaveable { mutableStateOf(false) }
     val shortcuts by remember(repository) { repository.navigationShortcuts.map(::navigationShortcutRoutes) }.collectAsState(initial = null)
     var navigationHeight by remember { mutableStateOf(0.dp) }
@@ -325,8 +340,10 @@ fun TimeboxApp(
     var shortcutSlide by remember { mutableStateOf<ShortcutSlide?>(null) }
     LaunchedEffect(route) {
         if (shortcutSlide?.to != route) shortcutSlide = null
+        if (revealDestination != route) revealDestination = null
     }
     fun selectDestination(target: String, fromShortcut: Boolean = false) {
+        revealDestination = if (directoryOpen && !fromShortcut) target else null
         shortcutSlide = if (fromShortcut) shortcutSlide(shortcuts.orEmpty(), route, target) else null
         directoryOpen = false
         if (target == route) return
@@ -401,7 +418,7 @@ fun TimeboxApp(
     }
     val navigationOptions = rememberUpdatedState(TimeboxNavigationOptions(
         isDark, onToggleDark, notificationsAllowed, onRequestNotificationPermission,
-        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion, shortcutSlide,
+        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion, shortcutSlide, revealDestination,
     ))
     val navigation = remember(
         screenModels, navController, snackbarHostState, trackingScope,
@@ -431,7 +448,7 @@ fun TimeboxApp(
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
         val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
         if (!focused) Column(
-            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryOpen) Modifier.clearAndSetSemantics {} else Modifier),
+            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryCovering) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
             Box(modifier = Modifier.weight(1f)) {
                 TimeboxNavHost(navigation)
@@ -472,20 +489,33 @@ fun TimeboxApp(
             }
         }
 
-        if (directoryOpen && !focused && !shortcutEditorOpen) {
-            NavigationDirectory(route, { directoryOpen = false }, { selectDestination(it) },
-                onEditShortcuts = if (shortcuts != null) ({ shortcutEditorOpen = true }) else null)
+        if (directoryCovering && !focused && !shortcutEditorOpen) {
+            // Keep exposed portions of the destination inert until the menu has left.
+            Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } })
+        }
+        if (!shortcutEditorOpen) {
+            AnimatedVisibility(
+                visibleState = directoryVisibility,
+                enter = if (reducedMotion) EnterTransition.None else
+                    slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it },
+                exit = if (reducedMotion) ExitTransition.None else
+                    slideOutVertically(tween(250, easing = FastOutSlowInEasing)) { it },
+                modifier = Modifier.testTag("navigation-directory-motion"),
+            ) {
+                NavigationDirectory(route, { directoryOpen = false }, { if (directoryOpen) selectDestination(it) },
+                    onEditShortcuts = if (shortcuts != null) ({ if (directoryOpen) shortcutEditorOpen = true }) else null)
+            }
         }
 
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
         // Only direct directory landings return to Day. Contextual links keep their source.
-        BackHandler(enabled = !focused && !directoryOpen && navigationBlockers.value == 0 && !isImeVisible &&
+        BackHandler(enabled = !focused && !directoryCovering && navigationBlockers.value == 0 && !isImeVisible &&
             !battlePlanState.showComposer && battlePlanState.projectEditor == null && typesState.renaming == null && route != AppRoutes.DayPattern &&
             navigationDestinations.any { it.route == route } &&
             navController.previousBackStackEntry?.destination?.route == AppRoutes.DayPattern) {
             selectDestination(AppRoutes.DayPattern)
         }
-        BackHandler(enabled = directoryOpen) { directoryOpen = false }
+        BackHandler(enabled = directoryCovering) { directoryOpen = false }
         if (shortcutEditorOpen && !focused) shortcuts?.let { pins ->
             NavigationShortcutEditor(pins, onCancel = { shortcutEditorOpen = false }, onSave = { updated ->
                 repository.setNavigationShortcuts(updated)

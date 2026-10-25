@@ -99,6 +99,7 @@ internal data class TimeboxNavigationOptions(
     val onRequestExactAlarms: () -> Unit,
     val reducedMotion: Boolean,
     val shortcutSlide: ShortcutSlide? = null,
+    val revealDestination: String? = null,
 )
 
 /** Mutable collaborators, deliberately without an Immutable/Stable promise.
@@ -124,7 +125,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies) {
             val options = dependencies.options.value
             val slide = options.shortcutSlide?.takeIf { it.from == initialState.destination.route && it.to == targetState.destination.route }
             when {
-                options.reducedMotion -> EnterTransition.None
+                options.reducedMotion || options.revealDestination == targetState.destination.route -> EnterTransition.None
                 slide != null -> slideInHorizontally(tween(250, easing = FastOutSlowInEasing)) { slide.direction * it }
                 else -> fadeIn(tween(700))
             }
@@ -133,7 +134,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies) {
             val options = dependencies.options.value
             val slide = options.shortcutSlide?.takeIf { it.from == initialState.destination.route && it.to == targetState.destination.route }
             when {
-                options.reducedMotion -> ExitTransition.None
+                options.reducedMotion || options.revealDestination == targetState.destination.route -> ExitTransition.None
                 slide != null -> slideOutHorizontally(tween(250, easing = FastOutSlowInEasing)) { -slide.direction * it }
                 else -> fadeOut(tween(700))
             }

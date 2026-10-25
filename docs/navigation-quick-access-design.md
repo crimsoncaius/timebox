@@ -38,11 +38,33 @@ After comparing the native motion prototype, the user selected the full-width
 slide at 250 ms. Tapping a shortcut to the right moves the page left; tapping
 one to the left reverses it. Headings move with their destination and the dock
 stays fixed. Direction follows the saved shortcut order. Reselecting the current
-shortcut does nothing; unpinned sources and ordinary directory/contextual
+shortcut does nothing; unpinned sources and contextual
 navigation keep their previous transition. Android Remove animations skips the
 slide. This is tap-triggered motion, not a finger-swipe navigation gesture.
 
 Implementation is isolated on `codex/navigation-motion`. The original comparison
-is preserved on `codex/shortcut-motion-prototype` at `ac467cf0`. Opening Navigate
-and selecting a destination from its directory are a separate prototype whose
-motion treatment is not yet selected.
+is preserved on `codex/shortcut-motion-prototype` at `ac467cf0`.
+
+## Directory motion decision (2026-10-25)
+
+The user selected A, Rise and reveal, at 250 ms for opening Navigate, closing it,
+and choosing a destination. Navigate rises from the bottom over the source screen.
+Close and Android Back lower it to reveal the unchanged source; selection lowers
+it to reveal the chosen destination already in place, without an additional page
+slide or crossfade. Choosing the current destination simply closes the menu.
+Input and accessibility access to the covered screen resume after the menu exits.
+Android Remove animations makes both transitions immediate.
+
+The menu comparison is preserved on `codex/navigation-menu-motion-prototype`,
+commit `46d336c7`. Implementation remains on `codex/navigation-motion`, separate
+from the debug-only comparison controls and illustrative pages. Existing directory
+state restoration and shortcut-editor behavior remain in effect.
+
+Validation: debug build and six focused instrumentation cases passed together,
+including measured upward entry/downward dismissal for Close and selection,
+covered-screen accessibility, shortcut motion, conversation drafts, Calendar
+state, and Back. An initial Calendar case reached an unmocked Trends response
+and crashed; it passed in isolation and on the full focused rerun without a
+production workaround. The cause of that first-run failure is unconfirmed.
+The installed app was also checked for Close, destination selection, and returning
+from Edit shortcuts. Navigate is left open on emulator-5594 for review.
