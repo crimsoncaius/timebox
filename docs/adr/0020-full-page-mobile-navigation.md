@@ -39,7 +39,7 @@ CONTEXT.md records the platform-specific surface hierarchy without changing the 
 
 ## Quick access revision (2026-10-25)
 
-The user selected prototype C after comparing five treatments. The dock has one rounded tonal surface, icons above labels, and a full selected-item background. It occupies layout space rather than overlaying screen content. This balances predictable one-tap access with the complete directory.
+The user selected prototype C after comparing five treatments. The dock uses icons above labels and a full selected-item background. A subsequent user-requested refinement groups shortcuts in one rounded tonal surface and places Navigate in its own adjacent rounded surface, making their different roles visible. When all shortcuts are removed, only the Navigate surface is drawn. It occupies layout space rather than overlaying screen content. This balances predictable one-tap access with the complete directory.
 
 - Day and Battle Plan are the initial shortcuts. Any directory destination can be selected, including Settings; users can remove all shortcuts.
 - Edit shortcuts lives inside Navigate. It supports selecting up to three destinations, removing and reordering them, with a preview. At capacity, users must remove one before selecting another; nothing is replaced automatically.

@@ -47,17 +47,24 @@ internal fun NavigationDock(
 private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onOpen: () -> Unit, preview: Boolean = false) {
     val colors = TimeboxTheme.colors
     val entries = navigationShortcutRoutes(shortcuts).map { route -> navigationDestinations.first { it.route == route } }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-        .clip(RoundedCornerShape(20.dp)).background(colors.low).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        entries.forEach { destination ->
-            ShortcutDockItem(destination, currentRoute == destination.route, Modifier.weight(1f), preview) {
-                if (currentRoute != destination.route) onSelect(destination.route)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (entries.isEmpty()) Spacer(Modifier.weight(3f))
+        else Row(Modifier.weight(3f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
+            .background(colors.low).padding(6.dp).semantics { isTraversalGroup = true },
+            verticalAlignment = Alignment.CenterVertically) {
+            entries.forEach { destination ->
+                ShortcutDockItem(destination, currentRoute == destination.route, Modifier.weight(1f), preview) {
+                    if (currentRoute != destination.route) onSelect(destination.route)
+                }
             }
+            repeat(3 - entries.size) { Spacer(Modifier.weight(1f)) }
         }
-        repeat(3 - entries.size) { Spacer(Modifier.weight(1f)) }
-        ShortcutDockItem(NavigationDestination("", "Navigate", "directory", Icons.Outlined.GridView),
-            false, Modifier.weight(1f), preview, onOpen)
+        Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
+            .background(colors.low).padding(6.dp), contentAlignment = Alignment.Center) {
+            ShortcutDockItem(NavigationDestination("", "Navigate", "directory", Icons.Outlined.GridView),
+                false, Modifier.fillMaxWidth(), preview, onOpen)
+        }
     }
 }
 

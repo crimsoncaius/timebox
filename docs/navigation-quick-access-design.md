@@ -4,7 +4,7 @@ Status: prototype C selected by the user on 2026-10-25 and implemented; awaiting
 
 ## Accepted design
 
-A rounded, inset tonal dock contains up to three shortcuts and Navigate at the right. Icons sit above text; the current destination gets a filled rounded background. The dock occupies layout space and retains unused shortcut slots, matching prototype C.
+The inset dock visually separates two roles: up to three shortcuts share a rounded tonal surface, and Navigate has its own matching rounded surface at the right, separated by a 10 dp gap. An empty shortcut group is not drawn. Icons sit above text; the current destination gets a filled rounded background. The dock occupies layout space and retains unused shortcut slots, matching prototype C.
 
 - Start with Day and Battle Plan. Any directory destination is eligible; all shortcuts may be removed.
 - Navigate always opens the complete directory. Edit shortcuts inside it supports selecting, removing, and reordering up to three destinations, with a live preview.
@@ -30,4 +30,4 @@ Managed review device: `emulator-5594`, token `43683640e3424ed0ac4bfef0b81de463`
 
 Validation: the debug build passed. Twelve targeted instrumentation cases passed across the initial run and one isolated retry: the task-detail Back case initially lost Espresso window focus and passed unchanged on retry. Coverage includes persistence and explicit empty selections, order, capacity, configuration restoration of editor drafts, Cancel/Back, save-error retry, current-item no-op, full directory access, keyboard visibility, conversation drafts, Calendar state, and detail-screen Back behavior.
 
-The installed app also retained an added Habits shortcut after force-stop and restart. The default Day/Battle Plan selection was restored afterward. The editor and live dock preview are left open for review. The local API on port 8001 is not running, so live Day data remains loading; navigation and local shortcut preferences were reviewed independently of it.
+The installed app also retained an added Habits shortcut after force-stop and restart. The default Day/Battle Plan selection was restored afterward. The editor and live dock preview are left open for review. The local API was subsequently started on port 8001, with its database backed up and migrated; the app now loads live Day data.
