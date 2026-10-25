@@ -1,6 +1,25 @@
 package com.timebox.android.ui
 
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.timebox.android.ui.components.LocalNavigationBlockers
+import com.timebox.android.ui.components.NavigationDirectory
+import com.timebox.android.ui.components.NavigationDock
+import com.timebox.android.ui.components.NavigationShortcutEditor
+import com.timebox.android.ui.components.navigationShortcutRoutes
+import com.timebox.android.ui.components.navigationDestinations
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -49,9 +71,6 @@ import com.timebox.android.ui.battleplan.RecurringViewModel
 import com.timebox.android.ui.battleplan.TaskDetailViewModel
 import com.timebox.android.ui.chronicle.ChronicleView
 import com.timebox.android.ui.chronicle.ChronicleViewModel
-import com.timebox.android.ui.components.TimeboxBottomNav
-import com.timebox.android.ui.components.TimeboxTab
-import com.timebox.android.ui.components.TimeboxTopBar
 import com.timebox.android.ui.components.TransientFeedback
 import com.timebox.android.ui.day.DayViewModel
 import com.timebox.android.ui.focus.FocusMode
@@ -64,6 +83,7 @@ import com.timebox.android.ui.types.TypesViewModel
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -89,7 +109,10 @@ fun TimeboxApp(
     val navController = rememberNavController()
     val reviewRequested by application.reviewRequested.collectAsState()
     LaunchedEffect(reviewRequested) {
-        if (reviewRequested) navController.navigate(AppRoutes.Assistant) { launchSingleTop = true }
+        if (reviewRequested) {
+            navController.navigate(AppRoutes.Review) { launchSingleTop = true }
+            application.reviewRequested.value = false
+        }
     }
 
     val dayViewModel: DayViewModel = viewModel(factory = factory)
@@ -145,13 +168,13 @@ fun TimeboxApp(
     val routeDate = backStackEntry?.arguments?.getString(AppRoutes.DateArg)?.let {
         runCatching { LocalDate.parse(it) }.getOrNull()
     }
-    val surfaceRoute = if (route == AppRoutes.TaskDetailPattern) navController.previousBackStackEntry?.destination?.route ?: AppRoutes.BattlePlan else route
     val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
     val routeBlockId = backStackEntry?.arguments?.getInt(AppRoutes.BlockIdArg)?.takeIf { it >= 0 }
     val routeTemplateId = backStackEntry?.arguments?.getInt(AppRoutes.TemplateIdArg)
     val snackbarHostState = remember { SnackbarHostState() }
     val openedDayEntryIds = remember { mutableSetOf<String>() }
     val openedBattlePlanEntryIds = remember { mutableSetOf<String>() }
+    val openedSettingsEntryIds = remember { mutableSetOf<String>() }
 
     LaunchedEffect(route, routeDate, routeTaskId, routeTemplateId, routeBlockId, backStackEntry?.id) {
         when (route) {
@@ -167,18 +190,27 @@ fun TimeboxApp(
                 dayViewModel.refreshTaskTypes()
                 dayViewModel.refreshReadyToPlan()
             }
-            AppRoutes.Chronicle -> {
+            AppRoutes.Chronicle, AppRoutes.Trends, AppRoutes.Habits, AppRoutes.TimeGoals -> {
                 dayState.day?.today?.let(chronicleViewModel::setToday)
-                chronicleViewModel.open()
+                chronicleViewModel.selectView(when (route) {
+                    AppRoutes.Trends -> ChronicleView.Trends
+                    AppRoutes.Habits -> ChronicleView.Habits
+                    AppRoutes.TimeGoals -> ChronicleView.TimeGoals
+                    else -> ChronicleView.Calendar
+                })
+                if (route == AppRoutes.Chronicle) chronicleViewModel.open()
             }
             AppRoutes.Types -> typesViewModel.load()
-            AppRoutes.Settings -> settingsViewModel.load(dayState.day?.timezone)
+            AppRoutes.Settings -> {
+                val entryId = backStackEntry?.id ?: return@LaunchedEffect
+                if (openedSettingsEntryIds.add(entryId)) settingsViewModel.load(dayState.day?.timezone)
+            }
             AppRoutes.BattlePlan -> {
                 val entryId = backStackEntry?.id ?: return@LaunchedEffect
                 if (openedBattlePlanEntryIds.add(entryId)) battlePlanViewModel.load()
             }
             AppRoutes.TaskDetailPattern -> routeTaskId?.let(taskDetailViewModel::load)
-            AppRoutes.Recurring -> recurringViewModel.load()
+            AppRoutes.Recurring -> recurringViewModel.load(showSpinner = recurringState.templates.isEmpty())
             AppRoutes.RecurringNew -> recurringEditorViewModel.open(null)
             AppRoutes.RecurringDetailPattern -> routeTemplateId?.let { recurringViewModel.openDetail(it); recurringEditorViewModel.open(it) }
             AppRoutes.RecurringEditPattern -> recurringEditorViewModel.open(routeTemplateId)
@@ -295,16 +327,43 @@ fun TimeboxApp(
         }
     }
 
-    val selectedTab = when (route) {
-        AppRoutes.DayPattern -> TimeboxTab.Day
-        AppRoutes.Chronicle -> TimeboxTab.Chronicle
-        AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
-        AppRoutes.Recurring, AppRoutes.RecurringNew,
-        AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern,
-        AppRoutes.Types -> TimeboxTab.BattlePlan
-        AppRoutes.Assistant -> TimeboxTab.Assistant
-        AppRoutes.Settings, AppRoutes.ThemePreview -> TimeboxTab.Settings
-        else -> null
+    val navigationBlockers = remember { mutableStateOf(0) }
+    var directoryOpen by rememberSaveable { mutableStateOf(false) }
+    val directoryVisibility = remember { MutableTransitionState(false) }
+    directoryVisibility.targetState = directoryOpen && !focused
+    val directoryCovering = directoryVisibility.currentState || directoryVisibility.targetState || !directoryVisibility.isIdle
+    var revealDestination by remember { mutableStateOf<String?>(null) }
+    var shortcutEditorOpen by rememberSaveable { mutableStateOf(false) }
+    val shortcuts by remember(repository) { repository.navigationShortcuts.map(::navigationShortcutRoutes) }.collectAsState(initial = null)
+    var navigationHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+    var shortcutSlide by remember { mutableStateOf<ShortcutSlide?>(null) }
+    LaunchedEffect(route) {
+        if (shortcutSlide?.to != route) shortcutSlide = null
+        if (revealDestination != route) revealDestination = null
+    }
+    fun selectDestination(target: String, fromShortcut: Boolean = false) {
+        revealDestination = if (directoryOpen && !fromShortcut) target else null
+        shortcutSlide = if (fromShortcut) shortcutSlide(shortcuts.orEmpty(), route, target) else null
+        directoryOpen = false
+        if (target == route) return
+        // Discard contextual drill-ins before saving a directory destination. Otherwise
+        // restoring its stack would reopen a different destination above it.
+        while (navController.previousBackStackEntry != null &&
+            navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>("directoryRoot") != true &&
+            navController.previousBackStackEntry?.destination?.route != AppRoutes.DayPattern) {
+            if (!navController.popBackStack()) break
+        }
+        if (target == AppRoutes.DayPattern) {
+            navController.popBackStack(AppRoutes.DayPattern, inclusive = false, saveState = true)
+        } else {
+            navController.navigate(target) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            navController.currentBackStackEntry?.savedStateHandle?.set("directoryRoot", true)
+        }
     }
     val colors = TimeboxTheme.colors
     val isImeVisible = imeVisibleOverride ?: WindowInsets.isImeVisible
@@ -359,7 +418,7 @@ fun TimeboxApp(
     }
     val navigationOptions = rememberUpdatedState(TimeboxNavigationOptions(
         isDark, onToggleDark, notificationsAllowed, onRequestNotificationPermission,
-        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion,
+        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion, shortcutSlide, revealDestination,
     ))
     val navigation = remember(
         screenModels, navController, snackbarHostState, trackingScope,
@@ -381,59 +440,29 @@ fun TimeboxApp(
         )
     }
 
-    CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry) {
+    CompositionLocalProvider(LocalReadyToPlanRetry provides readinessCoordinator::retry, LocalNavigationBlockers provides navigationBlockers) {
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
+        val editing = navigationBlockers.value > 0 || battlePlanState.showComposer || battlePlanState.projectEditor != null || typesState.renaming != null ||
+            (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
+        val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
+            shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
+        val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
         if (!focused) Column(
-            modifier = Modifier.fillMaxSize().imePadding(),
+            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryCovering) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
-            if (surfaceRoute != AppRoutes.DayPattern &&
-                surfaceRoute != AppRoutes.Assistant &&
-                surfaceRoute != AppRoutes.RecurringNew &&
-                surfaceRoute != AppRoutes.RecurringEditPattern &&
-                surfaceRoute != AppRoutes.RecurringDetailPattern &&
-                surfaceRoute?.startsWith("prototype/") != true) {
-                TimeboxTopBar(
-                    kicker = routeKicker(surfaceRoute),
-                    title = routeTitle(
-                        surfaceRoute,
-                        formatFullDate(dayState.date),
-                        when (chronicleState.view) {
-                            ChronicleView.Trends -> "Trends"
-                            ChronicleView.Habits -> "Habits"
-                            ChronicleView.TimeGoals -> "Time Goals"
-                            ChronicleView.Calendar -> formatMonthTitle(chronicleState.monthStart)
-                        },
-                    ),
-                )
-            }
-
             Box(modifier = Modifier.weight(1f)) {
                 TimeboxNavHost(navigation)
             }
 
-            if (shouldShowBottomNavigation(
-                    battlePlanState.showComposer,
-                    isImeVisible,
-                    route == AppRoutes.TaskDetailPattern,
-                )) {
-                TimeboxBottomNav(selectedTab) { tab ->
-                    val target = when (tab) {
-                        TimeboxTab.Day -> AppRoutes.day(dayState.date)
-                        TimeboxTab.Chronicle -> AppRoutes.Chronicle
-                        TimeboxTab.BattlePlan -> AppRoutes.BattlePlan
-                        TimeboxTab.Assistant -> AppRoutes.Assistant
-                        TimeboxTab.Settings -> AppRoutes.Settings
-                    }
-                    navController.navigate(target) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                    }
-                }
+            if (showNavigation) shortcuts?.let { pins ->
+                NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) }, { directoryOpen = true },
+                    Modifier.onSizeChanged { navigationHeight = with(density) { it.height.toDp() } })
             }
+
         }
 
         if (route != AppRoutes.TaskDetailPattern) {
-            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = if (undoNotice == null) 92.dp else 172.dp)) { data ->
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = if (undoNotice == null) feedbackBottom else feedbackBottom + 80.dp)) { data ->
                 TransientFeedback(
                     message = data.visuals.message,
                     modifier = Modifier.semantics {
@@ -455,12 +484,45 @@ fun TimeboxApp(
                     onDismiss = { undoLifecycle.dismiss(notice.id) },
                     onExpiryFinished = { undoLifecycle.finishExpiry(notice.id) },
                     reducedMotion = reducedMotion,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 92.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = feedbackBottom),
                 )
             }
         }
 
+        if (directoryCovering && !focused && !shortcutEditorOpen) {
+            // Keep exposed portions of the destination inert until the menu has left.
+            Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } })
+        }
+        if (!shortcutEditorOpen) {
+            AnimatedVisibility(
+                visibleState = directoryVisibility,
+                enter = if (reducedMotion) EnterTransition.None else
+                    slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it },
+                exit = if (reducedMotion) ExitTransition.None else
+                    slideOutVertically(tween(250, easing = FastOutSlowInEasing)) { it },
+                modifier = Modifier.testTag("navigation-directory-motion"),
+            ) {
+                NavigationDirectory(route, { directoryOpen = false }, { if (directoryOpen) selectDestination(it) },
+                    onEditShortcuts = if (shortcuts != null) ({ if (directoryOpen) shortcutEditorOpen = true }) else null)
+            }
+        }
+
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
+        // Only direct directory landings return to Day. Contextual links keep their source.
+        BackHandler(enabled = !focused && !directoryCovering && navigationBlockers.value == 0 && !isImeVisible &&
+            !battlePlanState.showComposer && battlePlanState.projectEditor == null && typesState.renaming == null && route != AppRoutes.DayPattern &&
+            navigationDestinations.any { it.route == route } &&
+            navController.previousBackStackEntry?.destination?.route == AppRoutes.DayPattern) {
+            selectDestination(AppRoutes.DayPattern)
+        }
+        BackHandler(enabled = directoryCovering) { directoryOpen = false }
+        if (shortcutEditorOpen && !focused) shortcuts?.let { pins ->
+            NavigationShortcutEditor(pins, onCancel = { shortcutEditorOpen = false }, onSave = { updated ->
+                repository.setNavigationShortcuts(updated)
+                shortcutEditorOpen = false
+            })
+        }
+
     }
     }
 }
@@ -483,14 +545,16 @@ internal fun isBattlePlanRoute(route: String): Boolean = route in setOf(
     AppRoutes.RecurringEditPattern,
 )
 
-private fun routeKicker(route: String): String = when (route) {
+internal fun routeKicker(route: String): String = when (route) {
     AppRoutes.DayPattern -> "Day"
-    AppRoutes.Chronicle -> "Chronicle"
-    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern,
+    AppRoutes.Chronicle -> "Calendar"
+    AppRoutes.Trends -> "Chronicle"
+    AppRoutes.Habits, AppRoutes.TimeGoals -> "Routines and goals"
+    AppRoutes.Types -> "Organization"
+    AppRoutes.BattlePlan, AppRoutes.TaskDetailPattern -> "Daily work"
     AppRoutes.Recurring, AppRoutes.RecurringNew,
-    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern,
-    AppRoutes.Types -> "Battle Plan"
-    AppRoutes.Assistant -> "Assistant"
+    AppRoutes.RecurringDetailPattern, AppRoutes.RecurringEditPattern -> "Routines and goals"
+    AppRoutes.Assistant, AppRoutes.Review -> "Assistant"
     AppRoutes.Settings, AppRoutes.ThemePreview -> "Settings"
     else -> "Timebox"
 }
@@ -499,9 +563,13 @@ internal fun routeTitle(route: String, day: String, chronicle: String): String =
     when (route) {
         AppRoutes.DayPattern -> day
         AppRoutes.Chronicle -> chronicle
-        AppRoutes.BattlePlan -> "Tasks"
+        AppRoutes.Trends -> "Trends"
+        AppRoutes.Habits -> "Habits"
+        AppRoutes.TimeGoals -> "Time Goals"
+        AppRoutes.Review -> "Review"
+        AppRoutes.BattlePlan -> "Battle Plan"
         AppRoutes.TaskDetailPattern -> "Task details"
-        AppRoutes.Recurring -> "Recurring"
+        AppRoutes.Recurring -> "Recurring Tasks"
         AppRoutes.RecurringNew -> "New recurrence"
         AppRoutes.RecurringDetailPattern -> "Template details"
         AppRoutes.RecurringEditPattern -> "Edit recurrence"

@@ -49,10 +49,11 @@ internal fun trendDuration(seconds: Double): String {
 }
 
 @Composable
-fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
+fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel, onOpenCalendar: () -> Unit = {}) {
     val colors = TimeboxTheme.colors
     val report = state.trends
     var choosingDays by rememberSaveable { mutableStateOf(false) }
+    if (choosingDays) com.timebox.android.ui.components.HideNavigate()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -141,7 +142,7 @@ fun TrendsScreen(state: ChronicleUiState, viewModel: ChronicleViewModel) {
                     report.types.forEach { node -> key(node.path) {
                         TrendDivider()
                         // A Day range always has exactly one contributing day, so it offers no drill-through.
-                        TrendNode(node, report.durationSeconds, 0, if (state.period == "day") null else viewModel::showContributingDays)
+                        TrendNode(node, report.durationSeconds, 0, if (state.period == "day") null else { path, days -> viewModel.showContributingDays(path, days); onOpenCalendar() })
                     } }
                     TrendDivider()
                 }

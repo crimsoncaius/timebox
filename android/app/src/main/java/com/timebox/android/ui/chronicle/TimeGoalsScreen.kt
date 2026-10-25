@@ -27,6 +27,7 @@ fun TimeGoalsScreen(viewModel: TimeGoalsViewModel, state: TimeGoalsUiState) {
         viewModel.refresh()
         while (true) { delay(60_000); viewModel.refresh() }
     }
+    if (state.archiveOpen || state.selectingGoal != null) com.timebox.android.ui.components.HideNavigate()
     val savedScreens = rememberSaveableStateHolder()
     if (state.archiveOpen) {
         savedScreens.SaveableStateProvider("archive") { TimeGoalArchiveContent(state, viewModel) }

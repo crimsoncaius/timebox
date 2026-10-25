@@ -76,26 +76,9 @@ fun RecurringScreen(
     onRequestDelete: (RecurringTemplate) -> Unit = {},
     onDismissDelete: () -> Unit = {},
     onConfirmDelete: () -> Unit = {},
-    navigationState: BattlePlanUiState = BattlePlanUiState(),
-    onSelectScope: (BattlePlanScope) -> Unit = {},
-    onSelectCollection: (com.timebox.android.data.TaskCollection) -> Unit = {},
-    onReorderProjects: (List<Int>) -> Unit = {},
-    onEditProject: (com.timebox.android.data.Project) -> Unit = {},
-    onPrepareDeleteProject: (com.timebox.android.data.Project) -> Unit = {},
-    onNewProject: () -> Unit = {},
-    onOpenTaskTypes: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-            TaskNavigationMenu(
-                state = navigationState, recurring = true,
-                onSelectScope = onSelectScope, onSelectCollection = onSelectCollection,
-                onReorderProjects = onReorderProjects, onEditProject = onEditProject,
-                onPrepareDeleteProject = onPrepareDeleteProject, onNewProject = onNewProject,
-                onOpenTaskTypes = onOpenTaskTypes,
-            )
-        }
         RecurringStatusTabs(state.selectedStatus, onSelectStatus)
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),

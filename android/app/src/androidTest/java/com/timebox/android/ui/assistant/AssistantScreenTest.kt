@@ -50,7 +50,16 @@ class AssistantScreenTest {
         val recovery = AssistantTaskRecovery(scope, journal, { api }, {}, {}, { _, _ -> })
         try {
             val controller = AssistantController(scope, recovery) { api }
-            compose.setContent { TimeboxTheme { AssistantScreen(controller) } }
+            val review = androidx.compose.runtime.mutableStateOf(false)
+            compose.setContent { TimeboxTheme {
+                androidx.compose.foundation.layout.Column {
+                    androidx.compose.material3.TextButton(onClick = { review.value = !review.value }) {
+                        androidx.compose.material3.Text(if (review.value) "Conversation" else "Review")
+                    }
+                    if (review.value) AssistantReviewScreen(controller, {})
+                    else AssistantScreen(controller, onOpenReview = { review.value = true })
+                }
+            } }
             compose.runOnIdle { recovery.foreground(); controller.send("Previous conversation") }
             compose.waitUntil(5000) { controller.state.value.exchanges.lastOrNull()?.status == "Complete" && recovery.state.value.items.size == 1 }
             compose.onNodeWithContentDescription("New conversation").performClick()
@@ -60,6 +69,7 @@ class AssistantScreenTest {
             compose.onNodeWithText("Task changes applied.").assertDoesNotExist()
             compose.onNodeWithText("Review").performClick()
             compose.onNodeWithText("View saved result").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Conversation").performClick()
             compose.onNodeWithContentDescription("New conversation").performClick()
             compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
             compose.onNode(hasSetTextAction()).performTextInput("Fresh conversation")
@@ -74,6 +84,7 @@ class AssistantScreenTest {
             compose.waitUntil(5000) { recovery.state.value.items.isEmpty() }
             compose.runOnIdle { journal.persist(record); recovery.foreground() }
             compose.waitUntil(5000) { recovery.state.value.items.any { !it.record.resolved } }
+            compose.onNodeWithText("Conversation").performClick()
             compose.onNodeWithContentDescription("New conversation").performClick()
             compose.onNodeWithText("Task changes need checking · Review").performClick()
             compose.onNodeWithText("Task changes need checking").performScrollTo().assertIsDisplayed()

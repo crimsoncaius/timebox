@@ -164,7 +164,6 @@ internal fun BattlePlanScreen(
     composerActions: BattlePlanComposerActions = BattlePlanComposerActions(),
     removalActions: BattlePlanRemovalActions = BattlePlanRemovalActions(),
     onOpenRecurring: () -> Unit = {},
-    onOpenTaskTypes: () -> Unit = {},
 ) {
     androidx.compose.runtime.CompositionLocalProvider(
         LocalProjectMove provides ProjectMoveActions(state.projects, state.saving, state.message, projectActions.moveTaskTo),
@@ -195,7 +194,6 @@ internal fun BattlePlanScreen(
                             onRequestMoveProject = onRequestMoveProject,
                             onShowComposer = composerActions.show,
                             onOpenRecurring = onOpenRecurring,
-                            onOpenTaskTypes = onOpenTaskTypes,
                         )
                     }
                 } else {
@@ -273,7 +271,6 @@ private fun MobileKanbanBoard(
     onRequestMoveProject: (BattleTask) -> Unit,
     onShowComposer: (Boolean) -> Unit,
     onOpenRecurring: () -> Unit,
-    onOpenTaskTypes: () -> Unit = {},
 ) {
     val colors = TimeboxTheme.colors
     val density = LocalDensity.current
@@ -426,7 +423,7 @@ private fun MobileKanbanBoard(
             TaskNavigationMenu(
                 state = state, modifier = Modifier.weight(1f),
                 onSelectScope = filterActions.selectScope, onSelectCollection = filterActions.selectCollection,
-                onOpenRecurring = onOpenRecurring, onOpenTaskTypes = onOpenTaskTypes,
+                onOpenRecurring = onOpenRecurring,
                 onReorderProjects = projectActions.reorder,
                 onEditProject = projectActions.edit, onPrepareDeleteProject = projectActions.prepareDelete,
                 onNewProject = projectActions.create,
@@ -1790,11 +1787,9 @@ internal fun TaskNavigationMenu(
     state: BattlePlanUiState,
     modifier: Modifier = Modifier,
     recurring: Boolean = false,
-    taskTypes: Boolean = false,
     onSelectScope: (BattlePlanScope) -> Unit = {},
     onSelectCollection: (TaskCollection) -> Unit = {},
     onOpenRecurring: () -> Unit = {},
-    onOpenTaskTypes: () -> Unit = {},
     onReorderProjects: (List<Int>) -> Unit = {},
     onEditProject: (Project) -> Unit = {},
     onPrepareDeleteProject: (Project) -> Unit = {},
@@ -1811,14 +1806,13 @@ internal fun TaskNavigationMenu(
         scopeMenu = false
         action()
     }
-    // Recurring and Task Types sit outside the task scopes, so no scope or Project reads as selected.
-    val outsideScopes = recurring || taskTypes
+    // Recurring sits outside task scopes, so no scope or Project reads as selected.
+    val outsideScopes = recurring
     Box(modifier) {
         TextButton(onClick = { scopeMenu = true }) {
             Icon(
                 imageVector = when {
                     recurring -> Icons.Outlined.Repeat
-                    taskTypes -> Icons.Outlined.Category
                     state.selectedScope.kind == BattlePlanScopeKind.Project -> Icons.Outlined.Folder
                     else -> Icons.AutoMirrored.Outlined.ListAlt
                 },
@@ -1830,7 +1824,6 @@ internal fun TaskNavigationMenu(
             Text(
                 when {
                     recurring -> "Recurring"
-                    taskTypes -> "Task Types"
                     else -> state.selectedScope.label
                 },
                 maxLines = 1,
@@ -1892,10 +1885,6 @@ internal fun TaskNavigationMenu(
                             ScopeMenuInsetDivider()
                             ScopeMenuItem("Recurring", Icons.Outlined.Repeat, selected = recurring) {
                                 closeScopeMenu { onOpenRecurring() }
-                            }
-                            ScopeMenuInsetDivider()
-                            ScopeMenuItem("Task Types", Icons.Outlined.Category, selected = taskTypes) {
-                                closeScopeMenu { onOpenTaskTypes() }
                             }
                         }
 

@@ -51,15 +51,11 @@ fun AssistantScreen(
     onOpenTask: (Int) -> Unit = {},
     onOpenDay: (LocalDate) -> Unit = {},
     onOpenTrends: (LocalDate, LocalDate) -> Unit = { _, _ -> },
+    onOpenReview: () -> Unit = {},
 ) {
-    var reviewTab by rememberSaveable { mutableStateOf(false) }
     var reviewLater by rememberSaveable { mutableStateOf(false) }
     val state by controller.state.collectAsState()
     val application = LocalContext.current.applicationContext as TimeboxApplication
-    val openReview by application.reviewRequested.collectAsState()
-    LaunchedEffect(openReview) {
-        if (openReview) { reviewTab = true; application.reviewRequested.value = false }
-    }
     LaunchedEffect(state.exchanges.lastOrNull()?.trackingResult) {
         if (state.exchanges.lastOrNull()?.trackingResult?.get("status")?.jsonPrimitive?.content == "recorded") application.activityRepository.refresh()
     }
@@ -79,7 +75,7 @@ fun AssistantScreen(
     val scope = rememberCoroutineScope()
     val composerFocus = remember { FocusRequester() }
     val colors = TimeboxTheme.colors
-    var follow by remember { mutableStateOf(true) }
+    var follow by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress to list.canScrollForward }.collect { (scrolling, more) ->
             if (scrolling) follow = !more
@@ -103,28 +99,21 @@ fun AssistantScreen(
         jumpVisible = canJump
         if (canJump && !list.isScrollInProgress) { delay(2500); jumpVisible = false }
     }
-    fun reset() { controller.newConversation(); draft = ""; follow = true; reviewTab = false }
+    fun reset() { controller.newConversation(); draft = ""; follow = true }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Assistant", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
+                Text("Conversation", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
             }
             OutlinedIconButton(onClick = ::reset, shape = CircleShape, colors = IconButtonDefaults.outlinedIconButtonColors(containerColor = colors.card), border = BorderStroke(1.dp, colors.hairline)) {
                 Icon(Icons.Outlined.Add, contentDescription = "New conversation")
             }
         }
-        TabRow(selectedTabIndex = if (reviewTab) 1 else 0, containerColor = colors.bg, contentColor = colors.on) {
-            Tab(selected = !reviewTab, onClick = { reviewTab = false }, text = { Text("Conversation") })
-            Tab(selected = reviewTab, onClick = { reviewTab = true }, text = { Text("Review") })
-        }
-        if (reviewTab) {
-            AssistantReviewScreen(controller, onOpenDay, Modifier.weight(1f), onOpenTask)
-        } else {
         HorizontalDivider(color = colors.hairline)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             if (recoveryState.items.any { !it.record.resolved } || recoveryState.error != null) item {
-                TextButton(onClick = { reviewTab = true }) {
+                TextButton(onClick = { onOpenReview() }) {
                     Text("Task changes need checking · Review", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
@@ -144,7 +133,7 @@ fun AssistantScreen(
                             "Recorded · ${result["name"]?.jsonPrimitive?.content.orEmpty()}"
                             else result?.get("message")?.jsonPrimitive?.content ?: "Waiting for the saved tracking result. Check before repeating this command.")
                         Row {
-                            TextButton(onClick = { reviewTab = true }) { Text("Review activity") }
+                            TextButton(onClick = { onOpenReview() }) { Text("Review activity") }
                             if (result == null || result["status"]?.jsonPrimitive?.content == "pending") TextButton(onClick = { controller.checkTracking(exchange.runId) }) { Text("Check result") }
                         }
                     }
@@ -196,7 +185,6 @@ fun AssistantScreen(
         else AssistantComposer(draft, { if (it.length <= 4000) draft = it }, composerFocus, state.busy,
             if (state.exchanges.isEmpty()) "What’s on your mind?" else "Ask a follow-up…",
             controller::stop, { follow = true; controller.send(draft, reviewLater); draft = "" })
-        }
     }
 }
 

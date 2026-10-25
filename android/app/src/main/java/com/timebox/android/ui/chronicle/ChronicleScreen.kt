@@ -113,7 +113,6 @@ fun ChronicleScreen(
         modifier = Modifier
             .fillMaxSize(),
     ) {
-        ChronicleViewTabs(state.view, onSelectView)
 
         if (state.view == ChronicleView.Trends) {
             trendsContent()
@@ -259,43 +258,6 @@ internal fun chronicleHighlightSummary(days: Map<String, Double>, range: TrendHi
 }
 
 /** Full-width underline tabs switching between Chronicle's views. */
-@Composable
-private fun ChronicleViewTabs(selected: ChronicleView, onSelect: (ChronicleView) -> Unit) {
-    val colors = TimeboxTheme.colors
-    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-        Row(Modifier.fillMaxWidth().selectableGroup()) {
-            ChronicleView.entries.forEach { view ->
-                val active = view == selected
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("chronicle-view-${view.name.lowercase(Locale.ENGLISH)}")
-                        .selectable(selected = active, role = Role.Tab) { onSelect(view) }
-                        .heightIn(min = 48.dp)
-                        .padding(top = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        view.label,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                        style = TimeboxTheme.type.sectionTitle,
-                        color = if (active) colors.on else colors.onVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth(0.4f)
-                            .height(2.dp)
-                            .background(if (active) colors.on else Color.Transparent),
-                    )
-                }
-            }
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.low))
-    }
-}
-
 /** A bounded three-page track that keeps the displayed month owned by [ChronicleUiState]. */
 @Composable
 private fun ChronicleMonthPager(
