@@ -237,4 +237,3 @@ private fun Choice(label: String, value: String?, options: List<Pair<String, Str
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) { options.forEach { (id, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { open = false; onSelect(id) }) } }
     }
 }
-
