@@ -14,7 +14,7 @@ internal fun JsonObject.flag(key: String): Boolean = getValue(key).jsonPrimitive
 internal fun JsonObject.bounded(bytes: Int) { check(toString().toByteArray(Charsets.UTF_8).size <= bytes) { "Task payload exceeds its bound" } }
 internal fun JsonObject.only(vararg keys: String) { check(this.keys.all { it in keys }) { "Unsupported task payload field" } }
 private val taskKinds = setOf("ordinary", "occurrence", "quota_tracker", "session")
-internal val taskLifecycles = setOf("draft", "pending", "applied", "stale", "cancelled", "replaced", "expired", "invalid")
+internal val taskLifecycles = setOf("draft", "pending", "applied", "stale", "cancelled", "replaced", "expired", "invalid", "suspended")
 private val reviewFields = setOf("title", "description", "project_id", "task_type_id", "urgency", "importance", "deadline", "reminder_at", "blocked", "blocking_reason", "ready_to_plan", "status", "completed_at", "completion_precision", "completion_local_date", "completion_timezone", "completion", "checked")
 
 /** A public projection: private text and internal guards cannot enter this model. */
@@ -85,10 +85,12 @@ data class TaskChangeProposal(val id: String, val operationId: String, val conve
     val contentHash: String, val expiresAt: Instant, val zone: ZoneId, val targets: List<TaskReviewTarget>, val effects: JsonObject,
     val references: JsonObject, val descriptionReview: Boolean, val status: String, val sourceCompleted: Boolean,
     val raw: JsonObject) {
+    val creationOnly: Boolean get() = targets.all { it.before == null } && targets.any { it.kind == "ordinary" } && targets.all { it.transitions.isEmpty() }
+
     companion object {
         fun parse(data: JsonObject, fullDescription: Boolean = false): TaskChangeProposal {
             data.bounded(64 * 1024)
-            data.only("run_id", "sequence", "schema_version", "proposal_id", "revision", "operation_id", "conversation_id", "originating_run_id", "created_at", "expires_at", "request_anchor", "operations", "review_targets", "side_effects", "references", "description_review_available", "parent_ids", "content_hash", "status", "source_completed_at", "supersedes_proposal_id", "request_intent")
+            data.only("run_id", "sequence", "schema_version", "proposal_id", "revision", "operation_id", "conversation_id", "originating_run_id", "created_at", "expires_at", "request_anchor", "operations", "review_targets", "side_effects", "references", "description_review_available", "parent_ids", "content_hash", "status", "source_completed_at", "supersedes_proposal_id", "request_intent", "creation_fields")
             check(fullDescription || "request_intent" !in data)
             check(data.integer("schema_version") == 1 && data.integer("revision") == 1)
             val status = data.text("status").also { check(it in taskLifecycles) }
@@ -134,6 +136,10 @@ data class TaskChangeProposal(val id: String, val operationId: String, val conve
                 val kind = row.text("kind").also { check(it in setOf("ordinary", "subtask")) }
                 val transitions = row.getValue("transitions").jsonArray.map { v -> v.jsonPrimitive.content.also { t -> check(t in setOf("complete_now", "complete_at", "reopen_task")) } }
                 TaskReviewTarget(target, kind, row.text("title"), row["parent"], before, after, transitions)
+            }
+            data["creation_fields"]?.jsonObject?.forEach { (ref, fields) ->
+                check(targets.any { it.target.optionalText("ref") == ref && it.before == null })
+                fields.jsonArray.forEach { check(it.jsonPrimitive.content in reviewFields) }
             }
             check(targets.count { it.kind == "ordinary" } <= 5)
             check(targets.map { it.target }.distinct().size == targets.size)
@@ -225,6 +231,25 @@ internal fun taskValue(value: JsonElement?, field: String = "", references: Json
             value.optionalText("precision") == "date" -> value.text("local_date") + " · " + value.text("reporting_timezone")
             value.optionalText("kind") == "date" -> value.text("date")
             else -> value.entries.joinToString("\n") { (k, v) -> "${taskFieldLabel(k)}: ${taskValue(v, k, references)}" }
+        }
+    }
+}
+
+
+/** Full reviewed values stay immutable; only the collapsed creation presentation is sparse. */
+internal fun creationVisibleFields(proposal: TaskChangeProposal, target: TaskReviewTarget, fields: JsonObject = target.after): Set<String> {
+    val ref = target.target.optionalText("ref")
+    val explicit = proposal.raw["creation_fields"]?.jsonObject?.get(ref)?.jsonArray?.map { it.jsonPrimitive.content }?.toSet()
+        ?: proposal.raw["operations"]?.jsonArray?.map { it.jsonObject }?.firstOrNull { it.optionalText("ref") == ref }?.keys.orEmpty()
+    return fields.keys.filterTo(mutableSetOf()) { field ->
+        field in explicit || when (field) {
+            "status" -> fields[field] != JsonPrimitive("open")
+            "blocked", "ready_to_plan", "checked" -> fields[field] == JsonPrimitive(true)
+            "description" -> when (val value = fields[field]) {
+                is JsonObject -> (value["characters"]?.jsonPrimitive?.intOrNull ?: 0) > 0
+                else -> value != null && value != JsonNull && value != JsonPrimitive("")
+            }
+            else -> fields[field] != JsonNull && fields[field] != null
         }
     }
 }

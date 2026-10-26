@@ -180,14 +180,27 @@ internal fun taskDisplayValue(value: JsonElement?, field: String, zone: ZoneId, 
 
 @Composable
 internal fun TaskChangeCard(proposal: TaskChangeProposal, state: TaskChangeState, onOpenTask: (Int) -> Unit,
-    onDescription: suspend () -> TaskChangeProposal, onCheck: () -> Unit, onDismiss: () -> Unit, onRefresh: () -> Unit, onConfirm: (() -> Unit)? = null, confirmationBlocked: String? = null, onUndo: (() -> Unit)? = null) {
+    onDescription: suspend () -> TaskChangeProposal, onCheck: () -> Unit, onDismiss: () -> Unit, onRefresh: () -> Unit, onConfirm: (() -> Unit)? = null, confirmationBlocked: String? = null, onUndo: (() -> Unit)? = null, onKeep: (() -> Unit)? = null) {
     var details by rememberSaveable(proposal.id) { mutableStateOf(false) }
+    var fullCreation by remember(proposal.id) { mutableStateOf<TaskChangeProposal?>(null) }
+    var descriptionError by remember(proposal.id) { mutableStateOf(false) }
+    var descriptionRetry by remember(proposal.id) { mutableIntStateOf(0) }
+    LaunchedEffect(proposal.id, descriptionRetry) {
+        if (proposal.creationOnly && proposal.descriptionReview) {
+            descriptionError = false
+            try { fullCreation = onDescription() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { descriptionError = true }
+        }
+    }
+    val shownProposal = fullCreation ?: proposal
     if (state.result?.receipt != null) {
-        TaskResultCard(state.result, onOpenTask, onUndo, proposal)
+        TaskResultCard(state.result, onOpenTask, onUndo, shownProposal)
+        if (descriptionError) TextButton(onClick = { descriptionRetry++ }) { Text("Retry description") }
         TextButton(onClick = { details = !details }) { Text(if (details) "Hide reviewed changes" else "View reviewed changes") }
         if (details) TaskSurface {
             Text("Historical review · ${proposal.zone.id}", style = TimeboxTheme.type.bodySmall)
-            TaskReviewContent(proposal, false, onOpenTask, true)
+            TaskReviewContent(shownProposal, false, onOpenTask, true)
         }
         return
     }
@@ -209,15 +222,16 @@ internal fun TaskChangeCard(proposal: TaskChangeProposal, state: TaskChangeState
     val keyboard = LocalSoftwareKeyboardController.current
     val status = if (state.status == "pending" && Instant.now() >= proposal.expiresAt) "expired" else state.status
     TaskSurface {
-        if (proposal.targets.size > 1) Text("${proposal.targets.size} changes to review together", style = TimeboxTheme.type.label)
-        TaskReviewContent(proposal, false, onOpenTask, details)
+        if (proposal.targets.size > 1) Text(if (proposal.creationOnly) "${proposal.targets.count { it.kind == "ordinary" }} tasks" else "${proposal.targets.size} changes to review together", style = TimeboxTheme.type.label)
+        TaskReviewContent(shownProposal, false, onOpenTask, details)
+        if (descriptionError) TextButton(onClick = { descriptionRetry++ }) { Text("Retry description") }
         TextButton(onClick = { details = !details }) { Text(if (details) "Hide review details" else "Review details") }
         if (details) Text("Review expires ${proposal.expiresAt.atZone(proposal.zone).format(taskReadTime)} · ${proposal.zone.id}", style = TimeboxTheme.type.bodySmall)
         if (proposal.targets.size > 1 && status == "pending") Text("All changes will be saved together. Nothing saved yet.", style = TimeboxTheme.type.bodySmall)
-        Text(taskStatusLabel(status, state.result), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = TimeboxTheme.type.bodySmall)
+        Text(if (proposal.creationOnly && status == "pending") "Not saved yet" else taskStatusLabel(status, state.result), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = TimeboxTheme.type.bodySmall)
         state.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-        if (proposal.descriptionReview) {
+        if (proposal.descriptionReview && !proposal.creationOnly) {
             Button(onClick = {
                 keyboard?.hide(); loading = true; error = null
                 scope.launch {
@@ -227,15 +241,16 @@ internal fun TaskChangeCard(proposal: TaskChangeProposal, state: TaskChangeState
                 }
             }, enabled = !loading, modifier = Modifier.fillMaxWidth().focusRequester(reviewFocus).focusProperties { canFocus = true }.onFocusChanged { if (it.isFocused) restoreReviewFocus = false }) { Text(if (loading) "Loading description…" else if (error != null) "Retry description review" else "Review description") }
         } else {
-            Button(onClick = { onConfirm?.invoke() }, enabled = onConfirm != null && confirmationBlocked == null && status == "pending" && state.sourceCompleted && !state.busy, modifier = Modifier.fillMaxWidth()) { Text(taskConfirmationLabel(proposal)) }
+            Button(onClick = { onConfirm?.invoke() }, enabled = onConfirm != null && confirmationBlocked == null && status == "pending" && state.sourceCompleted && !state.busy && (!proposal.creationOnly || !proposal.descriptionReview || fullCreation != null), modifier = Modifier.fillMaxWidth()) { Text(taskConfirmationLabel(proposal)) }
             if (onConfirm == null) Text(TaskConfirmationGate, style = TimeboxTheme.type.bodySmall)
         }
         confirmationBlocked?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = TimeboxTheme.type.bodySmall) }
+        if (status == "suspended") TextButton(onClick = { onKeep?.invoke() }, enabled = onKeep != null && !state.busy && confirmationBlocked == null) { Text("Keep previous proposal") }
         if (status in setOf("stale", "expired")) TextButton(onClick = onRefresh, enabled = !state.busy) { Text("Refresh review") }
         if (details || status !in setOf("draft", "pending")) TextButton(onClick = onCheck, enabled = !state.busy && state.sourceCompleted) { Text(if (state.busy) "Checking…" else "Check result") }
-        if (status in setOf("draft", "pending", "stale", "expired")) TextButton(onClick = onDismiss, enabled = !state.busy && state.sourceCompleted) { Text("Dismiss proposal") }
+        if (status in setOf("draft", "pending", "stale", "expired", "suspended")) TextButton(onClick = onDismiss, enabled = !state.busy && state.sourceCompleted) { Text("Dismiss proposal") }
     }
-    state.result?.let { TaskResultCard(it, onOpenTask, proposal = proposal) }
+    state.result?.takeIf { status !in setOf("pending", "suspended") }?.let { TaskResultCard(it, onOpenTask, proposal = proposal) }
     description?.let { full -> DescriptionReview(full, onOpenTask, onClose = { description = null; restoreReviewFocus = true }, onConfirm = if (onConfirm != null && confirmationBlocked == null && status == "pending" && state.sourceCompleted && !state.busy) ({ onConfirm(); description = null }) else null) }
 }
 
@@ -246,6 +261,7 @@ internal fun taskStatusLabel(status: String, result: TaskOperationResult?): Stri
     else -> when (status) {
         "draft" -> "Waiting for the response to finish and be saved."
         "pending" -> "Pending review. No task changes applied."
+        "suspended" -> "Creation paused while you revise. Retry or keep the previous proposal."
         "applied" -> "Saved result available below."
         "stale" -> "The reviewed state changed. Refresh and review again."
         "cancelled" -> "Proposal dismissed."
@@ -264,8 +280,9 @@ internal fun TaskReviewContent(proposal: TaskChangeProposal, descriptions: Boole
         if (index > 0) HorizontalDivider(color = TimeboxTheme.colors.hairline)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             AssistantTaskTitle(target.title)
+            val visible = if (proposal.creationOnly && !details) creationVisibleFields(proposal, target) else target.after.keys
             val project = (target.after["project_id"] ?: target.before?.get("project_id"))?.let { if (it == JsonNull) "No project" else taskDisplayValue(it, "project_id", proposal.zone, proposal.references) }
-            Text(taskReviewAction(target) + (project?.let { " · $it" } ?: ""), style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+            Text(taskReviewAction(target) + (project?.takeIf { !proposal.creationOnly || "project_id" in visible }?.let { " · $it" } ?: ""), style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
         }
         if (proposal.targets.size == 1) HorizontalDivider(color = TimeboxTheme.colors.hairline)
         if (details) Text(target.identity, style = TimeboxTheme.type.bodySmall)
@@ -274,13 +291,15 @@ internal fun TaskReviewContent(proposal: TaskChangeProposal, descriptions: Boole
             // Precision metadata accompanies its date; never display the stored noon.
             if (field in setOf("completion_precision", "completion_local_date", "completion_timezone")) return@forEach
             if (target.before == null && field in setOf("title", "project_id")) return@forEach
+            if (proposal.creationOnly && !details && field !in creationVisibleFields(proposal, target)) return@forEach
             if (field == "completed_at" && target.before?.optionalText("completion_precision") == "date") {
                 Text("Before · Completed: ${target.before.text("completion_local_date")}", style = TimeboxTheme.type.bodySmall)
                 if (field !in target.after) return@forEach
             }
             if (field == "description") {
-                if (!descriptions) Text("Description changed · separate review", style = TimeboxTheme.type.body)
-                if (descriptions) {
+                if (proposal.creationOnly) CreationDescription(target.after["description"])
+                else if (!descriptions) Text("Description changed · separate review", style = TimeboxTheme.type.body)
+                if (descriptions && !proposal.creationOnly) {
                     Text("Current description", Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
                     SelectionContainer { Text(target.before?.get("description")?.takeUnless { it == JsonNull }?.jsonPrimitive?.content ?: "(Empty)", style = TimeboxTheme.type.body) }
                     Text("Proposed description", Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
@@ -294,6 +313,9 @@ internal fun TaskReviewContent(proposal: TaskChangeProposal, descriptions: Boole
                     Text(if (before != null && after != null) "$before → $after" else after ?: before ?: "None", style = TimeboxTheme.type.body)
                 }
             }
+        }
+        if (proposal.creationOnly && details && "description" !in target.after) {
+            Text("Description: None", style = TimeboxTheme.type.body)
         }
         target.transitions.forEach { transition -> Text(when (transition) {
             "complete_now" -> "Complete now. Child checks stay unchanged; eligible future plans and linked tracking are reviewed below."
@@ -337,6 +359,10 @@ internal fun taskReviewAction(target: TaskReviewTarget): String = when {
 }
 
 internal fun taskConfirmationLabel(proposal: TaskChangeProposal): String {
+    if (proposal.creationOnly) {
+        val count = proposal.targets.count { it.kind == "ordinary" }
+        return if (count == 1) "Create task" else "Create $count tasks"
+    }
     if (proposal.targets.size > 1) return if (proposal.targets.all { it.kind == "ordinary" }) {
         if (proposal.targets.size == 2) "Confirm both tasks" else "Confirm all ${proposal.targets.size} tasks"
     } else "Confirm all changes"
@@ -366,6 +392,24 @@ internal fun DescriptionReview(proposal: TaskChangeProposal, onOpenTask: (Int) -
             }
         }
     }
+}
+
+@Composable
+private fun CreationDescription(value: JsonElement?) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var overflow by remember { mutableStateOf(false) }
+    Text("Description", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
+    if (value is JsonObject) {
+        Text("Loading description…", style = TimeboxTheme.type.body)
+        return
+    }
+    val text = (value as? JsonPrimitive)?.contentOrNull?.ifEmpty { null } ?: "None"
+    SelectionContainer {
+        Text(text, style = TimeboxTheme.type.body, maxLines = if (expanded) Int.MAX_VALUE else 4,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            onTextLayout = { if (!expanded) overflow = it.hasVisualOverflow })
+    }
+    if (overflow || expanded) TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Show less" else "Show more") }
 }
 
 /** Match by authoritative ID/ref mapping, never by receipt order or current mutable Task data. */
@@ -411,16 +455,23 @@ internal fun TaskResultCard(result: TaskOperationResult, onOpenTask: (Int) -> Un
                 }
                 // Receipt values are authoritative; no live task lookup and no private description text.
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val compactCreation = created && target != null && matchedProposal?.creationOnly == true
+                    val visible = if (compactCreation) creationVisibleFields(matchedProposal!!, target!!, fields) else emptySet()
                     fields.forEach { (field, value) ->
                         if (field in setOf("title", "status", "completion_precision", "completion_local_date", "completion_timezone")) return@forEach
-                        if (details || field in setOf("deadline", "ready_to_plan", "description", "checked", "completion", "completed_at")) {
+                        if (details || if (compactCreation) field in visible else field in setOf("deadline", "ready_to_plan", "description", "checked", "completion", "completed_at")) {
+                            if (compactCreation && field == "description") {
+                                CreationDescription(target!!.after["description"])
+                                return@forEach
+                            }
                             val display = if (field == "completed_at" && fields.optionalText("completion_precision") == "date") fields.text("completion_local_date")
                                 else taskDisplayValue(value, field, zone, references)
                             Text(if (field == "description") "Description updated" else "${taskFieldLabel(field)}: $display", style = TimeboxTheme.type.body)
                         }
                     }
+                    if (compactCreation && details && "description" !in fields) Text("Description: None", style = TimeboxTheme.type.body)
                     val otherFields = fields.keys - setOf("title", "status", "completion_precision", "completion_local_date", "completion_timezone", "deadline", "ready_to_plan", "description", "checked", "completion", "completed_at")
-                    if (!details && otherFields.isNotEmpty()) Text("Also saved: ${otherFields.joinToString { taskFieldLabel(it) }}", style = TimeboxTheme.type.bodySmall)
+                    if (!compactCreation && !details && otherFields.isNotEmpty()) Text("Also saved: ${otherFields.joinToString { taskFieldLabel(it) }}", style = TimeboxTheme.type.bodySmall)
                 }
                 if (details) Text("${taskFieldLabel(change.text("kind"))} #$id", style = TimeboxTheme.type.bodySmall)
                 // Subtask IDs are not Task IDs. Only a matched proposal can supply the parent.

@@ -198,4 +198,38 @@ class AssistantTasksTest {
         assertEquals("applied", controller.state.value.taskChanges[proposal.operationId]!!.result!!.status)
         assertEquals(proposal, controller.state.value.exchanges.single().taskProposal)
     }
+
+    @Test fun `creation stays suspended after failed followup until explicitly kept`() = runTest {
+        val create = Fake(listOf("started", "task_proposal", "completed")) { data ->
+            val target = data.getValue("review_targets").jsonArray.first().jsonObject.changed("before" to JsonNull)
+            data.changed("review_targets" to JsonArray(listOf(target)))
+        }
+        var followup = false
+        var kept = false
+        var proposal: TaskChangeProposal? = null
+        val api = object : AssistantTransport by create {
+            override fun stream(conversation: String, run: String, message: String, reviewLater: Boolean) = stream(conversation, run, message)
+            override fun stream(conversation: String, run: String, message: String): Flow<AssistantEvent> =
+                if (followup) Fake(listOf("started", "failed")).stream(conversation, run, message)
+                else create.stream(conversation, run, message)
+            override suspend fun keepTask(id: String): TaskOperationResult {
+                kept = true
+                return TaskOperationResult(proposal!!.operationId, id, "pending", null, null, null, JsonArray(emptyList()))
+            }
+        }
+        val controller = AssistantController(backgroundScope) { api }
+        controller.send("Create report"); runCurrent()
+        proposal = controller.state.value.exchanges.single().taskProposal!!
+        assertTrue(proposal.creationOnly)
+        followup = true
+        controller.send("Actually make it Saturday")
+        assertEquals("suspended", controller.state.value.taskChanges[proposal.operationId]!!.status)
+        controller.keepTask(proposal)
+        assertFalse(kept)
+        runCurrent()
+        assertEquals("suspended", controller.state.value.taskChanges[proposal.operationId]!!.status)
+        controller.keepTask(proposal); runCurrent()
+        assertTrue(kept)
+        assertEquals("pending", controller.state.value.taskChanges[proposal.operationId]!!.status)
+    }
 }

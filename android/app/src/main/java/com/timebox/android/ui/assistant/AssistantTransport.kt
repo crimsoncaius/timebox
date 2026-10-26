@@ -33,6 +33,7 @@ interface AssistantTransport {
     val supportsTrackingProposals: Boolean get() = false
     suspend fun taskReview(id: String): TaskChangeProposal = error("Task review unavailable")
     suspend fun taskStatus(operation: String): TaskOperationResult? = error("Task status unavailable")
+    suspend fun keepTask(id: String): TaskOperationResult? = error("Task recovery unavailable")
     suspend fun dismissTask(id: String): TaskOperationResult? = error("Task dismissal unavailable")
     suspend fun refreshTask(id: String): TaskChangeProposal = error("Task refresh unavailable")
     suspend fun create(): String
@@ -163,6 +164,11 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
         })
         if (data["status"]?.jsonPrimitive?.content == "checking") return null
         return TaskOperationResult.parse(data.getValue("operations").jsonArray.single().jsonObject).also { check(it.operationId == operation) }
+    }
+    override suspend fun keepTask(id: String): TaskOperationResult? {
+        val data = taskRequest("task-proposals/$id/keep")
+        if (data["status"]?.jsonPrimitive?.content == "checking") return null
+        return TaskOperationResult.parse(data).also { check(it.proposalId == id) }
     }
     override suspend fun dismissTask(id: String): TaskOperationResult? {
         val data = taskRequest("task-proposals/$id/dismiss")

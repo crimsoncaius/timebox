@@ -120,8 +120,37 @@ def expire(row, now):
 
 def close_pending(db, conversation_id):
     for row in db.scalars(select(AssistantTaskProposal).where(AssistantTaskProposal.conversation_id == conversation_id,
-                         AssistantTaskProposal.status.in_(["draft", "pending"])).with_for_update()):
+                         AssistantTaskProposal.status.in_(["draft", "pending", "suspended"])).with_for_update()):
         transition(row, "cancelled")
+
+
+def creation_review(review):
+    return (any(target["kind"] == "ordinary" for target in review["review_targets"])
+            and all(target["before"] is None and not target["transitions"] for target in review["review_targets"]))
+
+
+def suspend_creations(db, conversation_id):
+    for row in db.scalars(select(AssistantTaskProposal).where(
+        AssistantTaskProposal.conversation_id == conversation_id,
+        AssistantTaskProposal.status == "pending").with_for_update()):
+        if creation_review(row.review):
+            transition(row, "suspended")
+
+
+def keep_proposal(proposal_id, protocol=None):
+    with transaction() as db:
+        gate(db, protocol, write=False)
+        row = _get(db, proposal_id)
+        conversation = db.get(AssistantConversation, row.conversation_id, with_for_update=True)
+        running = db.scalar(select(AssistantAttempt.run_id).where(
+            AssistantAttempt.conversation_id == row.conversation_id, AssistantAttempt.status == "running"))
+        if running or conversation is None or conversation.closed_at is not None:
+            raise HTTPException(409, "Wait for the response to finish before keeping this proposal.")
+        if row.status == "suspended":
+            transition(row, "pending")
+            expire(row, utc_now())
+        db.commit()
+        return result(row)
 
 
 def finish_source(db, run_id, status):
@@ -131,7 +160,7 @@ def finish_source(db, run_id, status):
         conversation = db.get(AssistantConversation, row.conversation_id, with_for_update=True)
         if status == "completed" and conversation is not None and conversation.closed_at is None:
             for old in db.scalars(select(AssistantTaskProposal).where(
-                AssistantTaskProposal.conversation_id == row.conversation_id, AssistantTaskProposal.status == "pending").with_for_update()):
+                AssistantTaskProposal.conversation_id == row.conversation_id, AssistantTaskProposal.status.in_(["pending", "suspended"])).with_for_update()):
                 transition(old, "replaced")
             row.source_completed_at = utc_now()
             transition(row, "pending")
@@ -413,6 +442,14 @@ def _new_proposal(db, conversation_id, run_id, operations, anchor, zone, *, inte
               "references": guards["references"],
               "description_review_available": any("description" in op.get("set", op) for op in operations),
               "parent_ids": [i for i in parents if isinstance(i, int)], "request_intent": intent}
+    if creation_review(review):
+        explicit = {}
+        for op in (intent or {"operations": operations})["operations"]:
+            if op["op"] == "create_task":
+                explicit[op["ref"]] = set(op) - {"op", "ref"}
+            elif op["op"] == "patch_task" and op["target"].get("ref") in explicit:
+                explicit[op["target"]["ref"]].update(op["set"])
+        review["creation_fields"] = {ref: sorted(fields) for ref, fields in explicit.items()}
     if supersedes:
         review["supersedes_proposal_id"] = supersedes.id
     review["content_hash"] = digest(review)
@@ -504,7 +541,7 @@ def dismiss(proposal_id, protocol=None):
     with transaction() as db:
         gate(db, protocol, write=False)
         row = _get(db, proposal_id)
-        if row.status in {"pending", "draft"}:
+        if row.status in {"pending", "draft", "suspended"}:
             transition(row, "cancelled")
         db.commit()
         return result(row)
@@ -514,7 +551,7 @@ def refresh_proposal(proposal_id, protocol=None):
     with transaction() as db:
         gate(db, protocol, write=False)
         old = _get(db, proposal_id)
-        if old.receipt or old.status in {"draft", "cancelled", "invalid", "replaced"}:
+        if old.receipt or old.status in {"draft", "cancelled", "invalid", "replaced", "suspended"}:
             raise HTTPException(409, {"reason": "ineligible", **result(old)})
         anchor = old.review["request_anchor"]
         zone = reporting_settings(db, get_settings()).app_timezone
@@ -790,3 +827,40 @@ def pending_children(conversation_id):
                           AssistantTaskProposal.status == "pending"))
         return {int(key): guard["parent_id"] for row in rows for key, guard in row.guards["tasks"].items()
                 if guard["parent_id"] is not None}
+
+
+def pending_creation_context(conversation_id):
+    """The current unsaved draft survives rolling chat context and failed revisions."""
+    from zoneinfo import ZoneInfo
+    with Session(get_engine()) as db:
+        rows = list(db.scalars(select(AssistantTaskProposal).where(
+            AssistantTaskProposal.conversation_id == conversation_id,
+            AssistantTaskProposal.status.in_(["pending", "suspended"]))))
+        drafts = []
+        for row in rows:
+            if not creation_review(row.review):
+                continue
+            operations = copy.deepcopy(row.review["operations"])
+            zone = ZoneInfo(row.review["request_anchor"]["reporting_timezone"])
+            for operation in operations:
+                op = operation.get("set", operation)
+                if operation["op"] == "create_task" and "creation_fields" in row.review:
+                    explicit = row.review["creation_fields"].get(operation["ref"], [])
+                    for derived in ("blocked", "blocking_reason"):
+                        if derived not in explicit:
+                            op.pop(derived, None)
+                for field in ("deadline", "reminder_at"):
+                    value = op.get(field)
+                    if not value:
+                        continue
+                    if value["kind"] == "date":
+                        op[field] = {"kind": "absolute", "date": value["date"]}
+                    else:
+                        local = dt.datetime.fromisoformat(value["instant"]).astimezone(zone)
+                        offset = local.strftime("%z")
+                        op[field] = {"date": {"kind": "absolute", "date": local.date().isoformat()},
+                                     "local_time": local.strftime("%H:%M:%S"), "utc_offset": offset[:3] + ":" + offset[3:]}
+            drafts.append({"proposal_id": row.id, "operations": operations})
+        if len(encoded(drafts)) > MAX_TASK_REVIEW_BYTES:
+            raise ValueError("Pending draft is too large; review or dismiss it before continuing.")
+        return drafts

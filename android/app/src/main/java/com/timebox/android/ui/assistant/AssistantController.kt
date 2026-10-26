@@ -41,7 +41,11 @@ class AssistantController(
         val epoch = generation
         val runId = UUID.randomUUID().toString()
         run = runId
-        mutableState.value = state.value.copy(exchanges = state.value.exchanges + AssistantExchange(message, reviewLater = reviewLater, runId = runId), busy = true)
+        mutableState.value = state.value.copy(exchanges = state.value.exchanges + AssistantExchange(message, reviewLater = reviewLater, runId = runId), busy = true,
+            taskChanges = state.value.taskChanges.mapValues { (operation, value) ->
+                val proposal = (state.value.exchanges.mapNotNull { it.taskProposal } + state.value.refreshedTaskProposals).find { it.operationId == operation }
+                if (value.status == "pending" && proposal?.creationOnly == true) value.copy(status = "suspended") else value
+            })
         job = scope.launch {
             var completed = false
             var skippedRetiredCard = false
@@ -120,7 +124,7 @@ class AssistantController(
                 state.value.exchanges.last().taskProposal?.let { proposal ->
                     // Only a saved terminal response activates a draft. HTTP owns later execution state.
                     mutableState.value = state.value.copy(taskChanges = state.value.taskChanges.mapValues { (_, value) ->
-                        if (value.status == "pending") value.copy(status = "replaced") else value
+                        if (value.status in setOf("pending", "suspended")) value.copy(status = "replaced") else value
                     })
                     updateTask(proposal.operationId, TaskChangeState(status = "pending", sourceCompleted = true))
                 }
@@ -168,12 +172,14 @@ class AssistantController(
 
     fun confirmTask(proposal: TaskChangeProposal) {
         var current = state.value.taskChanges[proposal.operationId] ?: return
+        if (proposal.creationOnly && current.status == "suspended") return
         val recovered = taskRecovery?.state?.value?.items?.lastOrNull { it.record.operationId == proposal.operationId }
         if (recovered != null) {
             if (!recovered.record.resolved) return
-            current = current.copy(status = recovered.result?.status ?: current.status, result = recovered.result)
+            val kept = proposal.creationOnly && current.status == "pending" && current.result?.status == "pending" && current.result?.submission == null
+            if (!kept || recovered.result?.receipt != null) current = current.copy(status = recovered.result?.status ?: current.status, result = recovered.result)
         }
-        if (current.busy || current.status != "pending" || !current.sourceCompleted) return
+        if ((state.value.busy && proposal.creationOnly) || current.busy || current.status != "pending" || !current.sourceCompleted) return
         val api = transport ?: return
         val epoch = generation
         taskRecovery?.confirm(proposal.copy(sourceCompleted = true, status = "pending"), api.serverIdentity) { result ->
@@ -182,9 +188,13 @@ class AssistantController(
     }
 
     fun checkTask(proposal: TaskChangeProposal) = taskAction(proposal) { api -> api.taskStatus(proposal.operationId) }
+    fun keepTask(proposal: TaskChangeProposal) {
+        if (state.value.busy) return
+        taskAction(proposal, restorePrevious = true) { api -> api.keepTask(proposal.id) }
+    }
     fun dismissTask(proposal: TaskChangeProposal) = taskAction(proposal) { api -> api.dismissTask(proposal.id) }
 
-    private fun taskAction(proposal: TaskChangeProposal, action: suspend (AssistantTransport) -> TaskOperationResult?) {
+    private fun taskAction(proposal: TaskChangeProposal, restorePrevious: Boolean = false, action: suspend (AssistantTransport) -> TaskOperationResult?) {
         val current = state.value.taskChanges[proposal.operationId] ?: return
         if (current.busy) return
         val epoch = generation
@@ -194,9 +204,11 @@ class AssistantController(
                 val result = action(transport ?: error("Assistant unavailable"))
                 if (epoch != generation) return@launch
                 check(result == null || (result.operationId == proposal.operationId && result.proposalId == proposal.id))
-                updateTask(proposal.operationId, current.copy(status = result?.status ?: "checking", result = result ?: current.result))
+                val live = state.value.taskChanges[proposal.operationId] ?: current
+                val status = if (live.status == "suspended" && result?.status == "pending" && (!restorePrevious || state.value.busy)) "suspended" else result?.status ?: "checking"
+                updateTask(proposal.operationId, live.copy(status = status, busy = false, result = result ?: live.result))
             } catch (error: Exception) {
-                if (epoch == generation) updateTask(proposal.operationId, current.copy(error = "Could not check task changes. Check your connection and try again."))
+                if (epoch == generation) updateTask(proposal.operationId, (state.value.taskChanges[proposal.operationId] ?: current).copy(busy = false, error = "Could not check task changes. Check your connection and try again."))
             }
         }
     }
@@ -214,7 +226,7 @@ class AssistantController(
                 updateTask(proposal.operationId, current.copy(status = "replaced"))
                 mutableState.value = state.value.copy(refreshedTaskProposals = state.value.refreshedTaskProposals + next)
                 mutableState.value = state.value.copy(taskChanges = state.value.taskChanges.mapValues { (_, value) ->
-                    if (value.status == "pending") value.copy(status = "replaced") else value
+                    if (value.status in setOf("pending", "suspended")) value.copy(status = "replaced") else value
                 })
                 updateTask(next.operationId, TaskChangeState(status = "pending", sourceCompleted = true))
             } catch (error: Exception) {

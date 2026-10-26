@@ -30,4 +30,23 @@ class AssistantTaskPresentationTest {
         assertEquals("Description changed · separate review", taskDisplayValue(JsonPrimitive("private prose"), "description", zone))
         assertEquals("None", taskDisplayValue(JsonNull, "deadline", zone))
     }
+
+    @Test fun creationSummaryHidesImplicitDefaultsButKeepsExplicitDefaultsAndEffects() {
+        val original = TaskChangeProposal.parse(fixture("proposal"))
+        val fields = buildJsonObject {
+            put("title", "Report"); put("status", "open"); put("deadline", JsonNull)
+            put("ready_to_plan", false); put("project_id", JsonNull); put("urgency", JsonNull)
+            put("blocked", true); put("blocking_reason", "Waiting for Finance")
+        }
+        val target = TaskReviewTarget(buildJsonObject { put("ref", "draft") }, "ordinary", "Report", null, null, fields, emptyList())
+        val raw = JsonObject(original.raw + ("creation_fields" to buildJsonObject {
+            putJsonArray("draft") { add("title"); add("deadline"); add("blocking_reason") }
+        }))
+        val proposal = original.copy(targets = listOf(target), raw = raw)
+        assertTrue(proposal.creationOnly)
+        assertEquals(setOf("title", "deadline", "blocked", "blocking_reason"), creationVisibleFields(proposal, target))
+        assertEquals("Create task", taskConfirmationLabel(proposal))
+        assertEquals("Create 2 tasks", taskConfirmationLabel(proposal.copy(targets = listOf(target, target.copy(title = "Milk")))))
+        assertTrue(creationVisibleFields(proposal, target, JsonObject(fields + ("ready_to_plan" to JsonPrimitive(true)))).contains("ready_to_plan"))
+    }
 }

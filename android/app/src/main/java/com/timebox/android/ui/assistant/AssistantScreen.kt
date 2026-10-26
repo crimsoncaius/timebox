@@ -141,12 +141,14 @@ fun AssistantScreen(
                     (listOfNotNull(exchange.taskProposal) + state.refreshedTaskProposals.filter { it.runId == exchange.taskProposal?.runId }).forEach { proposal ->
                         val saved = recoveryState.items.lastOrNull { it.record.operationId == proposal.operationId }
                         val current = state.taskChanges[proposal.operationId] ?: TaskChangeState()
-                        val shown = if (saved == null) current else current.copy(status = if (!saved.record.resolved) "unknown" else saved.result?.status ?: current.status, result = saved.result ?: current.result)
+                        val localCreation = proposal.creationOnly && saved?.record?.resolved == true && saved.result?.receipt == null && current.status in setOf("pending", "suspended", "replaced", "cancelled")
+                        val shown = if (saved == null || localCreation) current else current.copy(status = if (!saved.record.resolved) "unknown" else saved.result?.status ?: current.status, result = saved.result ?: current.result)
                         TaskChangeCard(proposal, shown.copy(busy = shown.busy || recoveryState.busy, status = if (recoveryState.operationId == proposal.operationId) recoveryState.phase ?: shown.status else shown.status), onOpenTask,
                             { controller.descriptionReview(proposal) }, { if (saved != null) recovery?.foreground() else controller.checkTask(proposal) },
                             { controller.dismissTask(proposal) }, { controller.refreshTask(proposal) },
                             onConfirm = if (recovery != null) ({ controller.confirmTask(proposal) }) else null,
-                            confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null,
+                            onKeep = if (!state.busy) ({ controller.keepTask(proposal) }) else null,
+                            confirmationBlocked = if (state.busy && proposal.creationOnly) "Updating your proposal…" else if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null,
                             onUndo = if (recovery != null && saved != null && saved.record.resolved && !recoveryState.busy && recoveryState.online && saved.record.kind == "confirm") ({ recovery.undo(saved) }) else null)
                     }
                     AssistantReadCards(exchange, onOpenTask, onOpenDay, onOpenTrends)
