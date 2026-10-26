@@ -286,6 +286,14 @@ _Avoid_: Live task list, task proposal, task receipt
 The Android application's starting surface and the central place for opening its other screens.
 _Avoid_: Navigate, Day
 
+**Shortcut**:
+A user-selected entry that opens a screen from the Shortcut Bar. Removing a Shortcut does not remove the screen or its data.
+_Avoid_: Bookmark, pinned screen
+
+**Shortcut Bar**:
+The ordered collection of a user's Shortcuts for quick access to screens.
+_Avoid_: Bar preview
+
 **Day**:
 The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planning and Day Review start from it.
 _Avoid_: Today view, timeline page

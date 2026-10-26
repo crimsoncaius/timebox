@@ -2,6 +2,8 @@
 
 Status: prototype C selected by the user on 2026-10-25 and implemented; awaiting user review before merge. Tracked in [issue 320](https://github.com/crimsoncaius/timebox/issues/320).
 
+Later revisions: [Home navigation](design/home-navigation.md) supersedes the Navigate/Add shortcut controls below and replaces the editor's duplicate ordered list and passive preview with an editable shortcut bar. The sections below retain the earlier design and validation history.
+
 ## Accepted design
 
 The inset dock visually separates two roles: horizontally scrollable shortcuts share a rounded tonal surface, and Navigate has its own matching rounded surface at the right, separated by a 10 dp gap. Add shortcut follows the saved shortcuts and remains available for an empty selection. Icons sit above text; the current destination gets a filled rounded background. Navigate stays fixed while shortcuts scroll; switching destinations or returning from editing or the directory resets the strip to its beginning. The subsequent floating-navigation refinement overlays these surfaces on the screen, with transparent surrounding space and scroll clearance below content.
