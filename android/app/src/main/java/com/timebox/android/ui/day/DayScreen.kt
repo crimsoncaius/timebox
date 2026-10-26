@@ -165,7 +165,7 @@ fun DayScreen(
                     }
                 },
                 hiddenTrackingAction = {
-                    if (!trackingVisible) androidx.compose.material3.TextButton(modifier = Modifier.semantics { stateDescription = trackingAttention ?: if (activityState.snapshot?.current != null) "Recording" else "Tracking stopped" }, onClick = { setVisible(com.timebox.android.data.DayViewSection.Tracking, true) }) {
+                    if (!trackingVisible) androidx.compose.material3.TextButton(border = androidx.compose.foundation.BorderStroke(1.dp, TimeboxTheme.colors.actualBorder), modifier = Modifier.semantics { stateDescription = trackingAttention ?: if (activityState.snapshot?.current != null) "Recording" else "Tracking stopped" }, onClick = { setVisible(com.timebox.android.data.DayViewSection.Tracking, true) }) {
                         androidx.compose.material3.Text((if (activityState.snapshot?.current != null) "● Tracking" else "Tracking") + (if (trackingAttention != null) " !" else ""), color = TimeboxTheme.colors.actual)
                     }
                 },
@@ -463,7 +463,7 @@ private fun DayPage(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = TimeboxDimens.screenPadding)
-                .padding(top = 8.dp, bottom = 8.dp)
+                .padding(vertical = 16.dp)
                 .testTag("day-lane-headers"),
             horizontalArrangement = Arrangement.spacedBy(TimeboxDimens.laneGap),
         ) {
@@ -473,14 +473,6 @@ private fun DayPage(
         }
 
         if (day != null && page.problem != null) StaleDayStatus(page.problem, onRetry)
-        if (day != null && day.blocks.isEmpty() && page.problem == null) {
-            androidx.compose.material3.Text(
-                "Nothing planned · tap an hour or Plan from tasks",
-                style = TimeboxTheme.type.bodySmall,
-                color = colors.onVariant,
-                modifier = Modifier.padding(horizontal = TimeboxDimens.screenPadding).padding(bottom = 4.dp),
-            )
-        }
         when {
             page.loading && day == null -> LoadingState(Modifier.weight(1f))
             day == null && (page.problem != null || page.error != null) -> DayCouldNotLoad(
