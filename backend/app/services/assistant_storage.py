@@ -118,6 +118,8 @@ def begin(key, run_id, question, model):
     try:
         with write_session() as db:
             db.add(AssistantAttempt(conversation_id=key, run_id=run_id, question=question, model=model))
+            from app.services.assistant_task_operations import suspend_creations
+            suspend_creations(db, key)
             db.commit()
     except IntegrityError:
         raise HTTPException(409, "This response attempt already exists. Please retry as a new attempt.") from None

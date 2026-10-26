@@ -23,6 +23,38 @@ class AssistantTaskCardsTest {
     @get:Rule val compose = createComposeRule()
     private fun fixture(name: String) = Json.parseToJsonElement(InstrumentationRegistry.getInstrumentation().context.assets.open("assistant-tasks.json").bufferedReader().use { it.readText() }).jsonObject.getValue(name).jsonObject
 
+    @Test fun creationShowsRequestedFieldsAndInlineDescriptionWithOneConfirmation() {
+        val original = TaskChangeProposal.parse(fixture("full"), fullDescription = true)
+        val defaults = buildJsonObject {
+            put("status", "open"); put("project_id", JsonNull); put("ready_to_plan", false)
+            put("blocked", false); put("deadline", JsonNull)
+        }
+        val milk = TaskReviewTarget(buildJsonObject { put("ref", "milk") }, "ordinary", "Buy milk", null, null,
+            JsonObject(defaults + ("title" to JsonPrimitive("Buy milk"))), emptyList())
+        val dentist = milk.copy(target = buildJsonObject { put("ref", "dentist") }, title = "Book dentist",
+            after = JsonObject(defaults + mapOf("title" to JsonPrimitive("Book dentist"), "description" to JsonPrimitive("Call after work."))))
+        val full = original.copy(targets = listOf(milk, dentist), expiresAt = java.time.Instant.now().plusSeconds(900),
+            raw = JsonObject(original.raw + ("creation_fields" to buildJsonObject {
+                putJsonArray("milk") { add("title") }
+                putJsonArray("dentist") { add("title"); add("deadline"); add("description") }
+            })))
+        var confirmations = 0
+        compose.setContent { TimeboxTheme {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                TaskChangeCard(full, TaskChangeState("pending", true), {}, { full }, {}, {}, {}, onConfirm = { confirmations++ })
+            }
+        } }
+        compose.onNodeWithText("Call after work.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Review description").assertDoesNotExist()
+        compose.onNodeWithText("No project", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Ready to Plan").assertDoesNotExist()
+        compose.onAllNodesWithText("Deadline").assertCountEquals(1)
+        compose.onNodeWithText("Review details").performScrollTo().performClick()
+        compose.onAllNodesWithText("Ready to Plan").assertCountEquals(2)
+        compose.onNodeWithText("Create 2 tasks").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, confirmations) }
+    }
+
     @Test fun confirmationNeedsCompletedSourceAndDescriptionConfirmationStaysInExplicitReview() {
         val full = TaskChangeProposal.parse(fixture("full"), fullDescription = true)
         val proposal = TaskChangeProposal.parse(fixture("proposal")).copy(expiresAt = java.time.Instant.now().plusSeconds(900))

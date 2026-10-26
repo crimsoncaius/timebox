@@ -159,8 +159,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelec
         screen(dependencies, AppRoutes.Review) {
             val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.timebox.android.TimeboxApplication
             com.timebox.android.ui.assistant.AssistantReviewScreen(application.assistant,
-                { dependencies.navController.navigate(AppRoutes.day(it)) }, Modifier.fillMaxSize(),
-                { dependencies.navController.navigate(AppRoutes.taskDetail(it)) })
+                { dependencies.navController.navigate(AppRoutes.day(it)) }, Modifier.fillMaxSize())
         }
         settingsRoute(dependencies)
         themePreviewRoute(dependencies)

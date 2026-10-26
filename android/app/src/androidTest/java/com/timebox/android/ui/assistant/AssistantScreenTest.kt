@@ -26,7 +26,7 @@ import org.junit.Test
 class AssistantScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun newConversationLeavesSavedTaskResultsInReview() {
+    @Test fun taskResultsStayInAssistantAndNeverEnterActivityReview() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val journal = com.timebox.android.data.AssistantTaskJournal(object : com.timebox.android.data.TaskJournalStorage {
             var value: String? = null
@@ -68,7 +68,10 @@ class AssistantScreenTest {
             compose.onNodeWithText("Saved task results").assertDoesNotExist()
             compose.onNodeWithText("Task changes applied.").assertDoesNotExist()
             compose.onNodeWithText("Review").performClick()
-            compose.onNodeWithText("View saved result").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("View saved result").assertDoesNotExist()
+            compose.onNodeWithText("Saved task results").assertDoesNotExist()
+            compose.onNodeWithText("Reviewed").performClick()
+            compose.onNodeWithText("Saved task results").assertDoesNotExist()
             compose.onNodeWithText("Conversation").performClick()
             compose.onNodeWithContentDescription("New conversation").performClick()
             compose.onNodeWithText("What’s on your mind?").assertIsDisplayed()
@@ -79,15 +82,26 @@ class AssistantScreenTest {
                 check(controller.state.value.exchanges.single().question == "Fresh conversation")
                 check(journal.records(api.serverIdentity).single().resolved)
             }
-            compose.onNodeWithText("Review").performClick()
+            compose.onNodeWithText("Task results").performScrollTo().performClick()
+            compose.onNodeWithText("View saved result").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription("Help: Saved task results").performScrollTo().performClick()
+            compose.onNodeWithText("Task results stay here when you start a new conversation.").assertIsDisplayed()
+            compose.onNodeWithText("Close help").performClick()
             compose.onNodeWithText("Dismiss saved result").performScrollTo().performClick()
             compose.waitUntil(5000) { recovery.state.value.items.isEmpty() }
             compose.runOnIdle { journal.persist(record); recovery.foreground() }
             compose.waitUntil(5000) { recovery.state.value.items.any { !it.record.resolved } }
-            compose.onNodeWithText("Conversation").performClick()
             compose.onNodeWithContentDescription("New conversation").performClick()
-            compose.onNodeWithText("Task changes need checking · Review").performClick()
-            compose.onNodeWithText("Task changes need checking").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Review").performClick()
+            compose.onNodeWithText("Task changes need checking").assertDoesNotExist()
+            compose.onNodeWithText("Check result").assertDoesNotExist()
+            compose.onNodeWithText("Reviewed").performClick()
+            compose.onNodeWithText("Task changes need checking").assertDoesNotExist()
+            compose.onNodeWithText("Conversation").performClick()
+            compose.onNodeWithText("Task changes need checking").performScrollTo().performClick()
+            compose.waitUntil(5000) { !recovery.state.value.busy }
+            compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
+            compose.onNodeWithText("Check result").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Dismiss saved result").assertDoesNotExist()
         } finally { scope.cancel() }
     }

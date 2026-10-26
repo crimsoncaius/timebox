@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -22,6 +23,7 @@ class AssistantReviewTest {
         val corrections = mutableListOf<JsonObject>()
         var reviewed = false
         var loads = 0
+        var loadGate: CompletableDeferred<Unit>? = null
         override suspend fun create() = "unused"
         override suspend fun delete(conversation: String) {}
         override suspend fun stop(conversation: String, run: String) {}
@@ -37,6 +39,7 @@ class AssistantReviewTest {
                 return buildJsonObject { put("reviewed", true) }
             }
             loads++
+            loadGate?.await()
             if (failLoadOnce && loads == 1) throw IOException("Load failed")
             return buildJsonObject {
                 put("timezone", "Asia/Singapore"); put("unchecked_count", if (reviewed) 0 else 1)
@@ -66,6 +69,24 @@ class AssistantReviewTest {
             compose.waitUntil(5000) { compose.onAllNodesWithText("Correct").fetchSemanticsNodes().isNotEmpty() }
             action()
         } finally { scope.cancel() }
+    }
+
+    @Test fun switchingTabsRetainsContentWithoutProgressBarDuringRefresh() {
+        val transport = ReviewTransport()
+        show(transport) {
+            compose.onNodeWithText("Reviewed", useUnmergedTree = true).performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("No activities reviewed yet").fetchSemanticsNodes().isNotEmpty() }
+            compose.runOnIdle { transport.loadGate = CompletableDeferred() }
+            compose.onNodeWithText("To review · 1").performClick()
+            compose.onNodeWithText("Project work").assertIsDisplayed()
+            compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(0)
+            // Navigation remains available even while the previous tab is refreshing.
+            compose.onNodeWithText("Reviewed", useUnmergedTree = true).performClick()
+            compose.onNodeWithText("No activities reviewed yet").assertIsDisplayed()
+            compose.onNodeWithText("Project work").assertDoesNotExist()
+            compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(0)
+            compose.runOnIdle { transport.loadGate?.complete(Unit) }
+        }
     }
 
     @Test fun contextualRetryRecoversLoadWithoutPermanentRefresh() {

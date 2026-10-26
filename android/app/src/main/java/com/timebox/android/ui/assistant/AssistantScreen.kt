@@ -70,6 +70,7 @@ fun AssistantScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val tracking = rememberProposalTracking(controller, state, onOpenDay)
+    var showTaskResults by rememberSaveable { mutableStateOf(false) }
     var draft by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -99,7 +100,7 @@ fun AssistantScreen(
         jumpVisible = canJump
         if (canJump && !list.isScrollInProgress) { delay(2500); jumpVisible = false }
     }
-    fun reset() { controller.newConversation(); draft = ""; follow = true }
+    fun reset() { showTaskResults = false; controller.newConversation(); draft = ""; follow = true }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = LocalNavigationDockInset.current)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             com.timebox.android.ui.components.ScreenBackButton()
@@ -113,9 +114,14 @@ fun AssistantScreen(
         HorizontalDivider(color = colors.hairline)
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (recoveryState.items.any { !it.record.resolved } || recoveryState.error != null) item {
-                TextButton(onClick = { onOpenReview() }) {
-                    Text("Task changes need checking · Review", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            if (recoveryState.items.isNotEmpty() || recoveryState.error != null) item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showTaskResults = !showTaskResults }) {
+                        Text(if (showTaskResults) "Hide task results"
+                            else if (recoveryState.items.any { !it.record.resolved } || recoveryState.error != null) "Task changes need checking"
+                            else "Task results", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    }
+                    if (showTaskResults) SavedTaskResults(controller, onOpenTask)
                 }
             }
             itemsIndexed(state.exchanges) { index, exchange ->
@@ -141,12 +147,14 @@ fun AssistantScreen(
                     (listOfNotNull(exchange.taskProposal) + state.refreshedTaskProposals.filter { it.runId == exchange.taskProposal?.runId }).forEach { proposal ->
                         val saved = recoveryState.items.lastOrNull { it.record.operationId == proposal.operationId }
                         val current = state.taskChanges[proposal.operationId] ?: TaskChangeState()
-                        val shown = if (saved == null) current else current.copy(status = if (!saved.record.resolved) "unknown" else saved.result?.status ?: current.status, result = saved.result ?: current.result)
+                        val localCreation = proposal.creationOnly && saved?.record?.resolved == true && saved.result?.receipt == null && current.status in setOf("pending", "suspended", "replaced", "cancelled")
+                        val shown = if (saved == null || localCreation) current else current.copy(status = if (!saved.record.resolved) "unknown" else saved.result?.status ?: current.status, result = saved.result ?: current.result)
                         TaskChangeCard(proposal, shown.copy(busy = shown.busy || recoveryState.busy, status = if (recoveryState.operationId == proposal.operationId) recoveryState.phase ?: shown.status else shown.status), onOpenTask,
                             { controller.descriptionReview(proposal) }, { if (saved != null) recovery?.foreground() else controller.checkTask(proposal) },
                             { controller.dismissTask(proposal) }, { controller.refreshTask(proposal) },
                             onConfirm = if (recovery != null) ({ controller.confirmTask(proposal) }) else null,
-                            confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null,
+                            onKeep = if (!state.busy) ({ controller.keepTask(proposal) }) else null,
+                            confirmationBlocked = if (state.busy && proposal.creationOnly) "Updating your proposal…" else if (!recoveryState.online) "Connect before confirming Task changes. Nothing is queued offline." else null,
                             onUndo = if (recovery != null && saved != null && saved.record.resolved && !recoveryState.busy && recoveryState.online && saved.record.kind == "confirm") ({ recovery.undo(saved) }) else null)
                     }
                     AssistantReadCards(exchange, onOpenTask, onOpenDay, onOpenTrends)
@@ -223,4 +231,55 @@ private fun AnswerText(text: String) {
         }
     } }
     Text(annotated, style = TimeboxTheme.type.body.copy(fontSize = 15.sp, lineHeight = 25.sp))
+}
+
+/** Saved task outcomes survive conversation resets and stay in the task Assistant. */
+@Composable
+private fun SavedTaskResults(controller: AssistantController, onOpenTask: (Int) -> Unit) {
+    val recovery = controller.taskRecovery ?: return
+    val recoveryState by recovery.state.collectAsState()
+    val state by controller.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    if (recoveryState.items.isEmpty() && recoveryState.error == null) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(if (recoveryState.items.any { !it.record.resolved }) "Task changes need checking" else "Saved task results", Modifier.weight(1f).semantics { heading() })
+            com.timebox.android.ui.components.ContextualHelp("Saved task results", "Task results stay here when you start a new conversation.")
+        }
+        recoveryState.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        TextButton(onClick = recovery::foreground, enabled = !recoveryState.busy) { Text(if (recoveryState.busy) "Checking…" else "Check result") }
+        recoveryState.items.forEach { item ->
+            Text("${if (item.record.kind == "undo") "Completion Undo" else "Task changes"} · Submitted ${item.record.submittedAt}", style = TimeboxTheme.type.bodySmall)
+            if (!item.record.resolved) Text("Overlapping Task controls are blocked until the saved outcome is reconciled.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            var expanded by rememberSaveable(item.record.submissionId) { mutableStateOf(false) }
+            var retryReview by remember(item.record.submissionId) { mutableStateOf<TaskChangeProposal?>(null) }
+            var reviewError by remember(item.record.submissionId) { mutableStateOf<String?>(null) }
+            var dismissalResult by remember(item.record.submissionId) { mutableStateOf<TaskOperationResult?>(null) }
+            item.result?.let { result ->
+                Text(if (result.receipt == null) taskStatusLabel(result.status, result)
+                    else if (item.record.kind == "undo") "Completion undone. Tracking stayed stopped."
+                    else if (result.undo?.optionalText("status") == "applied") "Task changes applied; completion subsequently undone."
+                    else "Task changes applied.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide saved result" else "View saved result") }
+                if (expanded) TaskResultCard(result, onOpenTask, onUndo = if (item.record.resolved && !recoveryState.busy && recoveryState.online && item.record.kind == "confirm") ({ recovery.undo(item) }) else null,
+                    proposal = (state.exchanges.mapNotNull { it.taskProposal } + state.refreshedTaskProposals).find { it.id == result.proposalId && it.operationId == result.operationId })
+            }
+            item.record.parentTaskIds.forEach { id -> TextButton(onClick = { onOpenTask(id) }) { Text("Open Task #$id") } }
+            if (item.record.resolved && item.result?.receipt == null && item.record.kind == "confirm") TextButton(onClick = {
+                scope.launch { try { retryReview = recovery.reviewRetry(item.record); reviewError = null } catch (_: Exception) { reviewError = "Could not load the review. Try again online." } }
+            }, enabled = !recoveryState.busy && recoveryState.online) { Text("Review retry") }
+            reviewError?.let { Text(it) }
+            dismissalResult?.let { TaskResultCard(it, onOpenTask) }
+            retryReview?.let { proposal ->
+                TaskChangeCard(proposal, TaskChangeState(proposal.status, proposal.sourceCompleted, busy = recoveryState.busy), onOpenTask,
+                    { recovery.descriptionReview(proposal, item.record.serverIdentity) }, recovery::foreground,
+                    { scope.launch { try { dismissalResult = recovery.dismissReview(proposal, item.record.serverIdentity); retryReview = null } catch (_: Exception) { reviewError = "Dismissal needs checking. Try again online." } } },
+                    { scope.launch { try { retryReview = recovery.refreshReview(proposal, item.record.serverIdentity) } catch (_: Exception) { reviewError = "Could not refresh review. Make a new request." } } },
+                    onConfirm = { recovery.confirm(proposal, item.record.serverIdentity); retryReview = null },
+                    confirmationBlocked = if (!recoveryState.online) "Connect before confirming Task changes." else null)
+            }
+            if (!item.record.resolved && item.result?.submission?.optionalText("state") == "not_seen") TextButton(onClick = { recovery.retry(item.record) }, enabled = !recoveryState.busy) { Text("Retry same submission") }
+            if (item.record.resolved) TextButton(onClick = { recovery.acknowledge(item.record) }, enabled = !recoveryState.busy) { Text("Dismiss saved result") }
+        }
+    }
 }

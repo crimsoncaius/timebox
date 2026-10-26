@@ -20,8 +20,8 @@ class QuickTrackingEntryTest {
         val intent = Intent(Intent.ACTION_ASSIST).setPackage(app.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         assertNotNull(app.packageManager.resolveActivity(intent, 0))
         ActivityScenario.launch<QuickTrackingActivity>(intent).use { scenario ->
-            scenario.onActivity { activity ->
-                activity.onResults(Bundle().apply { putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf("I'm eating")) })
+            scenario.onActivity {
+                app.quickSpeech.onResults(Bundle().apply { putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf("I'm eating")) })
             }
             val deadline = System.currentTimeMillis() + 120_000
             while (System.currentTimeMillis() < deadline && (app.quickTracking.state.value.busy || app.quickTracking.state.value.text.isBlank())) Thread.sleep(100)

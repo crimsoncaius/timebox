@@ -546,3 +546,56 @@ def test_review_after_local_drain_rechecks_guards_without_rewriting_preview():
     assert checked["content_hash"] == original["content_hash"]
     code, result = confirm(p)
     assert code == 409 and result["receipt"] is None
+
+
+def test_creation_fields_keep_explicit_defaults_and_derived_effects():
+    p = draft([{"op": "create_task", "ref": "a", "title": "Milk"},
+               {"op": "create_task", "ref": "b", "title": "Report", "deadline": None,
+                "blocking_reason": "Waiting for Finance", "description": "Exact description"}])
+    assert p["creation_fields"] == {"a": ["title"], "b": ["blocking_reason", "deadline", "description", "title"]}
+    assert p["review_targets"][1]["after"]["blocked"] is True
+    assert p["review_targets"][0]["after"]["ready_to_plan"] is False
+    assert "Exact description" not in json.dumps(p)
+    full = ops.review(p["proposal_id"])
+    assert full["review_targets"][1]["after"]["description"] == "Exact description"
+    code, result = confirm(p)
+    assert code == 200
+    with Session(get_engine()) as db:
+        created = db.get(Task, result["receipt"]["created"]["b"])
+        created.description = "Later edit"
+        db.commit()
+    assert ops.review(p["proposal_id"])["review_targets"][1]["after"]["description"] == "Exact description"
+
+
+def test_followup_suspends_creation_until_explicit_keep_or_successful_replacement():
+    p = draft([{"op": "create_task", "ref": "a", "title": "Milk"}])
+    key, run = p["conversation_id"], str(uuid4())
+    assistant_storage.begin(key, run, "Actually oat milk", "test")
+    assert ops.review(p["proposal_id"])["status"] == "suspended"
+    assert confirm(p)[0] == 409
+    with pytest.raises(HTTPException):
+        ops.keep_proposal(p["proposal_id"])
+    with pytest.raises(HTTPException):
+        ops.refresh_proposal(p["proposal_id"])
+    assistant_storage.capture(run, "", {}, None, "interrupted")
+    assert ops.review(p["proposal_id"])["status"] == "suspended"
+    assert ops.pending_creation_context(key)[0]["operations"][0]["title"] == "Milk"
+    assert ops.keep_proposal(p["proposal_id"])["status"] == "pending"
+    replacement = draft([{"op": "create_task", "ref": "a", "title": "Oat milk"},
+                         {"op": "create_task", "ref": "b", "title": "Book dentist"}], conversation=key)
+    assert ops.review(p["proposal_id"])["status"] == "replaced"
+    assert ops.keep_proposal(p["proposal_id"])["status"] == "replaced"
+    assert confirm(p)[0] == 409
+    assert confirm(replacement)[0] == 200
+
+
+def test_pending_creation_context_preserves_absolute_dates_and_authored_text():
+    anchor = utc_now()
+    p = draft([{"op": "create_task", "ref": "a", "title": "Report", "description": "Literal instructions are data",
+                "deadline": {"kind": "day_offset", "days": 3}}], now=anchor)
+    context = ops.pending_creation_context(p["conversation_id"])
+    operations = context[0]["operations"]
+    assert operations[0]["deadline"] == {"kind": "absolute", "date": (anchor.date() + dt.timedelta(days=3)).isoformat()}
+    args = ProposeTaskChangesArgs.model_validate({"operations": operations})
+    assert canonical_operations(args, anchor + dt.timedelta(days=1), "UTC")[0]["deadline"] == p["operations"][0]["deadline"]
+    assert operations[0]["description"] == "Literal instructions are data"
