@@ -109,7 +109,7 @@ fun SettingsScreen(
             )
         }
 
-        SettingsGroup(title = "Calendar integration", scope = "All devices") {
+        SettingsGroup(title = "Google Calendar", scope = "All devices", description = "Bring calendar commitments into your plan. Google events stay unchanged.") {
             com.timebox.android.ui.calendar.GoogleCalendarPanel()
         }
 

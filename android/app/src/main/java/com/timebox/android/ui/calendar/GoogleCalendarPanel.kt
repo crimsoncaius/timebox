@@ -14,6 +14,7 @@ import androidx.compose.ui.window.Dialog
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.apiError
 import com.timebox.android.ui.theme.TimeboxTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -22,12 +23,12 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private fun JsonObject.s(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull
-private fun JsonObject.b(key: String) = (get(key) as? JsonPrimitive)?.booleanOrNull == true
-private fun JsonObject.objects(key: String) = (get(key) as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
-private fun JsonObject.strings(key: String) = (get(key) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+internal fun JsonObject.s(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull
+internal fun JsonObject.b(key: String) = (get(key) as? JsonPrimitive)?.booleanOrNull == true
+internal fun JsonObject.objects(key: String) = (get(key) as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+internal fun JsonObject.strings(key: String) = (get(key) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
 private fun command(kind: String, id: String? = null, extra: JsonObjectBuilder.() -> Unit = {}) = buildJsonObject { put("kind", kind); id?.let { put("id", it) }; extra() }
-private fun stamp(value: String?, zone: String): String = value?.let { runCatching { Instant.parse(it).atZone(ZoneId.of(zone)).format(DateTimeFormatter.ofPattern("MMM d, HH:mm")) }.getOrDefault(it) }.orEmpty()
+internal fun stamp(value: String?, zone: String): String = value?.let { runCatching { Instant.parse(it).atZone(ZoneId.of(zone)).format(DateTimeFormatter.ofPattern("MMM d, HH:mm")) }.getOrDefault(it) }.orEmpty()
 
 @Composable
 fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
@@ -38,7 +39,11 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
     val changed by rememberUpdatedState(onChanged)
     var state by remember(date) { mutableStateOf<JsonObject?>(null) }
     var error by remember(date) { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    var operation by remember { mutableStateOf<String?>(null) }
+    val busy = operation != null
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var awaitingGoogle by remember { mutableStateOf(false) }
+    var reloadVersion by remember { mutableIntStateOf(0) }
     var opened by remember(date) { mutableStateOf(false) }
     var updatesOpen by remember(date) { mutableStateOf(false) }
     var selected by remember { mutableStateOf<List<String>?>(null) }
@@ -46,27 +51,82 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
     var preview by remember { mutableStateOf<Pair<JsonObject, JsonObject>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     suspend fun reload() {
+        val version = ++reloadVersion
         val next = repository.googleCalendar(date)
+        if (version != reloadVersion) return
         val oldSync = state?.s("last_success")
+        if (state?.s("account") != next.s("account") || !next.b("connected")) selected = null
         state = next
-        error = null
+        loadError = null
+        if (next.b("connected") && next.s("error") == null) awaitingGoogle = false
+        if (selected == next.strings("selected")) selected = null
         if (oldSync != null && oldSync != next.s("last_success")) changed()
     }
     fun action(cmd: JsonObject, fingerprint: String? = null) {
+        if (operation != null) return
         scope.launch {
-            busy = true; error = null
+            operation = if (fingerprint == null) "Preparing review…" else "Applying changes…"; error = null
+            reloadVersion++
             try {
                 val result = repository.googleCalendarAction("action", buildJsonObject { put("command", cmd); fingerprint?.let { put("fingerprint", it) } })
                 if (fingerprint == null) preview = cmd to result
-                else { preview = null; detail = null; selected = null; reload(); changed(); message = "Calendar plan updated" }
-            } catch (e: Exception) { error = e.apiError.message; if (fingerprint != null) preview = null }
-            finally { busy = false }
+                else {
+                    preview = null; detail = null; selected = null
+                    // Action snapshots omit server configuration; preserve the status endpoint's value.
+                    val configured = state?.b("configured") == true
+                    state = (result["state"] as? JsonObject ?: state)?.let { JsonObject(it + ("configured" to JsonPrimitive(configured))) }
+                    changed(); message = "Calendar plan updated"
+                    try { reload() } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { loadError = calendarFailure(e) }
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { error = calendarFailure(e); if (fingerprint != null) preview = null }
+            finally { operation = null }
         }
     }
     LaunchedEffect(date) {
         while (true) {
-            try { reload() } catch (e: Exception) { error = e.apiError.message }
+            if (operation == null) {
+                try { reload() } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { loadError = calendarFailure(e) }
+            }
             delay(30_000)
+        }
+    }
+    fun retry(refresh: Boolean = false) {
+        if (operation != null) return
+        scope.launch {
+            operation = if (refresh) "Syncing calendars…" else "Checking connection…"
+            if (refresh) error = null
+            try {
+                if (refresh) repository.googleCalendarAction("refresh")
+                reload()
+                if (refresh) changed()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                if (refresh) error = calendarFailure(e) else loadError = calendarFailure(e)
+            } finally { operation = null }
+        }
+    }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, date) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) retry()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    fun connect() {
+        if (operation != null) return
+        scope.launch {
+            operation = "Opening Google…"; error = null
+            try {
+                val result = repository.googleCalendarAction("connect")
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.s("url"))))
+                awaitingGoogle = true
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { error = calendarFailure(e) }
+            finally { operation = null }
         }
     }
     LaunchedEffect(message) {
@@ -77,49 +137,25 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
     val occurrences = current?.objects("occurrences").orEmpty()
     val pending = occurrences.filter { it.s("status") == "pending" }
     val updates = occurrences.filter { it.objects("updates").isNotEmpty() }
-    if (date != null && pending.isEmpty() && updates.isEmpty() && error == null && current?.s("error") == null) return
+    if (date != null && pending.isEmpty() && updates.isEmpty() && error == null && loadError == null && current?.s("error") == null) return
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (date == null) {
-            Text("Google Calendar", style = TimeboxTheme.type.sectionTitle)
-            Text("Import commitments into your plan. Google is never changed.", style = TimeboxTheme.type.bodySmall)
-            if (current == null && error == null) Text("Loading calendar connection…")
-            if (current != null && !current.b("configured")) Text("Google Calendar is not configured on this server. Follow the deployment guide to set up Google OAuth and authenticated access.", style = TimeboxTheme.type.bodySmall)
-            current?.s("account")?.let { Text("${if (current.b("connected")) "Connected to" else "Disconnected from"} $it", style = TimeboxTheme.type.bodySmall) }
-            TextButton(enabled = !busy && current?.b("configured") == true, onClick = {
-                scope.launch { busy = true; try {
-                    val result = repository.googleCalendarAction("connect")
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.s("url"))))
-                } catch (e: Exception) { error = e.apiError.message } finally { busy = false } }
-            }) { Text(if (current?.b("connected") == true) "Reconnect Google" else "Connect Google Calendar") }
-            if (current?.b("connected") == true) {
-                val order = selected ?: current.strings("selected")
-                val calendars = current.objects("calendars")
-                Text("Calendars, in priority order", style = TimeboxTheme.type.body)
-                Text("The first selected copy supplies a duplicated meeting’s details.", style = TimeboxTheme.type.bodySmall)
-                val ordered = order.mapNotNull { id -> calendars.find { it.s("id") == id } } + calendars.filter { it.s("id") !in order }.sortedByDescending { it.b("primary") }
-                ordered.forEach { cal ->
-                    val id = cal.s("id")!!
-                    Row(Modifier.fillMaxWidth()) {
-                        Checkbox(checked = id in order, enabled = !busy, onCheckedChange = { selected = if (it) order + id else order - id })
-                        Text(cal.s("name") ?: id, modifier = Modifier.weight(1f).padding(top = 12.dp), style = TimeboxTheme.type.bodySmall)
-                        if (id in order) TextButton(enabled = !busy && order.indexOf(id) > 0, onClick = { selected = order.toMutableList().apply { val index = indexOf(id); removeAt(index); add(index - 1, id) } }) { Text("Up") }
-                    }
-                }
-                TextButton(enabled = !busy && order != current.strings("selected"), onClick = { action(command("select") { put("selected", JsonArray(order.map(::JsonPrimitive))) }) }) { Text("Preview calendar changes") }
-                TextButton(enabled = !busy, onClick = { action(command("disconnect")) }) { Text("Disconnect") }
-            }
-            if (current?.s("account") != null) TextButton(enabled = !busy, onClick = { action(command("forget")) }) { Text(if (current.b("connected")) "Disconnect and forget" else "Forget retained Google import data") }
+            GoogleCalendarSettings(
+                state = current, busy = operation, loadError = loadError, actionError = error,
+                awaitingGoogle = awaitingGoogle, selected = selected, onSelect = { selected = it },
+                onConnect = ::connect, onRefresh = { retry(true) }, onRetry = { retry() },
+                onReview = { action(command("select") { put("selected", JsonArray((selected ?: current?.strings("selected").orEmpty()).map(::JsonPrimitive))) }) },
+                onDisconnect = { action(command("disconnect")) }, onForget = { action(command("forget")) },
+                onDismissError = { error = null },
+            )
+        } else {
+            (error ?: loadError ?: current?.s("error"))?.let { Text(it, color = TimeboxTheme.colors.error, style = TimeboxTheme.type.bodySmall) }
+            if (error != null || loadError != null || current?.s("error") != null) TextButton(enabled = !busy, onClick = { retry(current?.b("connected") == true) }) { Text("Try again") }
         }
-        if (current?.b("connected") == true) {
-            if (date == null) Text(current.s("last_success")?.let { "Last synced ${stamp(it, zone)}" } ?: "Not synced yet", style = TimeboxTheme.type.bodySmall)
-            if (date == null || error != null || current.s("error") != null) TextButton(enabled = !busy, onClick = {
-                scope.launch { busy = true; error = null; try { repository.googleCalendarAction("refresh"); reload(); changed() } catch (e: Exception) { error = e.apiError.message } finally { busy = false } }
-            }) { Text("Refresh now") }
-        }
-        (error ?: current?.s("error"))?.let { Text(it, color = TimeboxTheme.colors.error, style = TimeboxTheme.type.bodySmall) }
         message?.let { Text(it, style = TimeboxTheme.type.bodySmall) }
-        if (pending.isNotEmpty()) TextButton(onClick = { opened = !opened }) { Text("${pending.size} calendar conflicts — review") }
-        if (date == null || opened) occurrences.filter { it.s("status") in listOf("pending", "excluded") }.forEach { occurrence ->
+        if (pending.isNotEmpty()) TextButton(onClick = { opened = !opened }) { Text(if (opened) "Hide meetings needing attention" else "${pending.size} ${if (pending.size == 1) "meeting needs" else "meetings need"} attention") }
+        if (date == null && occurrences.any { it.s("status") == "excluded" } && pending.isEmpty()) TextButton(onClick = { opened = !opened }) { Text(if (opened) "Hide meetings left out" else "Meetings left out") }
+        if (opened) occurrences.filter { it.s("status") in listOf("pending", "excluded") }.forEach { occurrence ->
             TextButton(onClick = { detail = occurrence }) { Text("${occurrence.s("name")} · ${stamp(occurrence.s("start"), zone)} · ${if (occurrence.s("status") == "excluded") "Left out" else "Needs room"}") }
         }
         if (date != null && updates.isNotEmpty()) {
@@ -134,6 +170,7 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
         CalendarDetails(occurrence, current ?: JsonObject(emptyMap()), busy, onAction = { action(it) }, onClose = { detail = null })
     } }
     preview?.let { (cmd, result) -> CalendarDialog(onDismiss = { if (!busy) preview = null }) {
+        error?.let { Text(it, color = TimeboxTheme.colors.error, style = TimeboxTheme.type.bodySmall) }
         Text("Review calendar changes", style = TimeboxTheme.type.sectionTitle)
         Text("Google events and recorded activity stay unchanged. Plan edits apply together.", style = TimeboxTheme.type.bodySmall)
         if (cmd.s("kind") in listOf("disconnect", "forget")) Text("Disconnect Google and remove future imported plans." + if (cmd.s("kind") == "forget") " Also forget cached details and remembered choices; historical plan identities remain protected." else "")
