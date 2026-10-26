@@ -68,6 +68,7 @@ internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Uni
         .statusBarsPadding().navigationBarsPadding()) {
         Text("Home", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp).semantics { heading() },
             style = TimeboxTheme.type.display, color = colors.on)
+        Hairline()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
             .padding(bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
