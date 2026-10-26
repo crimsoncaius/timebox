@@ -119,17 +119,22 @@ class DayCalendarHeaderTest {
     }
 
     @Test
-    fun backToTodayAppearsOnlyAwayFromToday() {
+    fun todayRemainsActionableOnTodayToReturnToNow() {
         val selected = LocalDate.of(2026, 8, 28)
-        showDay(state = DayUiState(date = selected, today = selected))
-        compose.onNodeWithText("Friday · Today").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Go to today").assertDoesNotExist()
+        var requested: LocalDate? = null
+        showDay(
+            state = DayUiState(date = selected, today = selected),
+            onNavigateToday = { requested = it },
+        )
+        compose.onNodeWithText("Day").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Viewing today").assertIsDisplayed().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(selected, requested) }
     }
 
     @Test
-    fun backToTodayIsHiddenUntilBackendDateIsResolved() {
+    fun todayIsDisabledUntilBackendDateIsResolved() {
         showDay(state = DayUiState(date = LocalDate.of(2026, 8, 28), today = null))
-        compose.onNodeWithContentDescription("Go to today").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Today unavailable").assertIsDisplayed().assertIsNotEnabled()
     }
 
     @Test
@@ -147,7 +152,7 @@ class DayCalendarHeaderTest {
 
         compose.onNodeWithText("28 August").assertIsDisplayed()
         compose.onNodeWithContentDescription("Selected date, Friday, August 28, 2026").assertHasNoClickAction()
-        compose.onNodeWithText("Back to today").assertIsDisplayed()
+        compose.onNodeWithText("Go to today").assertIsDisplayed()
         compose.onNodeWithContentDescription("Day view options").assertIsDisplayed()
         compose.onNodeWithText("Month").assertDoesNotExist()
         compose.onNodeWithTag("planning-mode-action").assertIsDisplayed()
