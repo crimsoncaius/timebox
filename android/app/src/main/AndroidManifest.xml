@@ -27,7 +27,8 @@
         <activity android:name=".quicktracking.QuickTrackingActivity" android:exported="true"
             android:label="Track activity" android:launchMode="singleTop"
             android:showWhenLocked="true" android:turnScreenOn="true"
-            android:theme="@style/Theme.Timebox" android:windowSoftInputMode="adjustResize">
+            android:theme="@style/Theme.Timebox.QuickTracking" android:taskAffinity="com.timebox.android.quicktracking"
+            android:excludeFromRecents="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />

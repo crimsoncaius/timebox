@@ -1,5 +1,13 @@
 # Assistant tracking uses the activity journal with explicit execution modes
 
+## Voice-only Quick Tracking presentation (2026-10-26)
+
+The system assistant gesture and Quick Settings tile share a compact voice-only overlay. This supersedes the typed fallback in the Android quick tracking section below. Listening starts on invocation and final recognition submits automatically. No transcript or conversational answer is displayed or spoken. A brief success indicator dismisses the overlay; failures retain explicit Retry and relevant permission/settings recovery. Review remains the place to inspect and correct results.
+
+Closing before submission discards capture; closing afterward does not cancel process-owned execution. The existing activity uses a translucent window, preserving the interpretation and journal model. See [the agreed design](../design/quick-tracking-overlay.md).
+
+## Tracking execution
+
 In the default confirmation mode, the Assistant never writes Activity Tracking data. Its `propose_tracking` tool accepts only a Track (Task Type Path candidates, optional Block Name, optional start) or Stop (optional end) intent; the server validates the paths against existing Task Types, resolves stated times to instants in the Reporting Time Zone, and returns a Tracking Proposal without persisting any activity change. The client decides at confirmation whether a Track intent starts or switches, renders the live impact from local state, and applies the confirmed change through the ordinary activity journal, the same path as manual tracking.
 
 This keeps the model's job to language (what and when), keeps date arithmetic and tracking-state reasoning deterministic, and preserves offline confirmation, journal reconciliation and the existing switch Undo without a second write path. The default retains a confirmation tap. The optional Review later mode below uses the same journal on the server.
