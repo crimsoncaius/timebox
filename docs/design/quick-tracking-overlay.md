@@ -37,5 +37,5 @@ No new permission to draw over other apps and no additional voice interaction se
 - Independent bounded code and screenshot review: ship for user review within the tested scope. The isolated monochrome overlay preserves the global DESIGN.md system.
 - Live speech-to-backend recording and physical-device assistant gestures were not exercised. The existing speech submission/controller/journal path remains in place.
 
-Pending review: emulator-5602, reservation `707ad00cea844728b96830a4859fa3bf`, under `C:/Users/Caius/TimeboxRuntime/emulators`.
+User accepted the review and authorized merging into master on 2026-10-26. Review device: emulator-5602, reservation `707ad00cea844728b96830a4859fa3bf`, under `C:/Users/Caius/TimeboxRuntime/emulators`.
 
