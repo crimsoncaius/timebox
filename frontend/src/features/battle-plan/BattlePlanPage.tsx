@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { DragDropProvider, useDroppable, type DragEndEvent } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -432,7 +433,7 @@ export function BattlePlanPage() {
         <section className="min-w-0 flex-1">
           <header className="mb-7 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <p className="font-label text-xs uppercase tracking-[0.18em] text-on-surface-variant">Battle Plan</p>
+              <div className="flex items-center gap-2"><p className="font-label text-xs uppercase tracking-[0.18em] text-on-surface-variant">Battle Plan</p><ContextualHelp title="Task status">Drag a task to change its status.</ContextualHelp></div>
               <h1 className="mt-2 font-headline text-[2.5rem] font-extralight leading-none tracking-tighter">
                 {collection === 'archived' ? 'Archive' : collection === 'trash' ? 'Trash' : activeProject?.name ?? (preferences.scope === 'admin' ? 'Admin' : 'All Tasks')}
               </h1>

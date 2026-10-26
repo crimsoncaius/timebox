@@ -42,6 +42,20 @@ class RoutineScreenTest {
         }
     }
 
+    @Test fun preplanningHelpPreservesNestedDraftWithoutSaving() {
+        show(creating = true, draft = RecurringEditorUiState(title = "Draft routine", startDate = "2026-09-08",
+            preplanningSlots = listOf(RecurringPreplanningSlotDraft(start = "08:00", end = "09:00"))))
+        compose.onNodeWithText("Pre-planning").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Planned Block start 1").performTextReplacement("10:00")
+        compose.onNodeWithContentDescription("Help: Pre-planning").performScrollTo().performClick()
+        compose.onNodeWithText("Close help").performClick()
+        compose.onNodeWithContentDescription("Planned Block start 1").assertTextContains("10:00")
+        compose.runOnIdle {
+            assertEquals("08:00", editor.state.value.preplanningSlots.single().start)
+            assertEquals("Draft routine", editor.state.value.title)
+        }
+    }
+
     @Test fun creationExposesOvernightPreplanningSlot() {
         show(creating = true, draft = RecurringEditorUiState(title = "Review", startDate = "2026-09-08",
             preplanningSlots = listOf(RecurringPreplanningSlotDraft(start = "23:00", end = "00:00"))))

@@ -1,5 +1,7 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.ContextualHelp
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
@@ -44,10 +46,9 @@ internal fun ProjectOrderDialog(
     }
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text("Reorder projects") },
+        title = { Row(verticalAlignment = Alignment.CenterVertically) { Text("Reorder projects", Modifier.weight(1f)); ContextualHelp("Project order", "Hold a drag handle to move a project, or use the arrows.") } },
         text = {
             Column {
-                Text("Hold a drag handle to move a project, or use the arrows.")
                 if (saving) Text("Saving project order…")
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {

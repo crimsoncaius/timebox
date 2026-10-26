@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
@@ -152,7 +153,7 @@ export function RecurringPage() {
           <div>
             <p className="font-label text-xs uppercase tracking-[0.18em] text-on-surface-variant">Battle Plan</p>
             <h1 className="mt-2 font-headline text-[2.5rem] font-extralight leading-none tracking-tighter">Recurring</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-on-surface-variant">Templates create independent Battle Plan tasks seven days ahead.</p>
+            <ContextualHelp title="Recurring tasks">Recurring Task Series create independent Battle Plan Tasks seven days ahead.</ContextualHelp>
           </div>
           <button type="button" disabled={!applicationToday} className={`${buttonClass} bg-primary text-on-primary hover:bg-primary-dim disabled:cursor-wait disabled:opacity-50`} onClick={() => { if (applicationToday) setCreating(true) }}>
             New recurring task
@@ -278,7 +279,7 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
           <div><dt className="text-xs text-on-surface-variant">Starts</dt><dd className="mt-1">{displayDate(template.start_date)}</dd></div>
           <div><dt className="text-xs text-on-surface-variant">Ends</dt><dd className="mt-1">{template.end_date ? displayDate(template.end_date) : template.cycle_limit ? `${template.cycle_limit} cycles` : 'Never'}</dd></div>
         </dl>
-        {template.preplanning_mode === 'ready_to_plan' ? <section className="mt-8"><h3 className="font-headline text-lg font-light">Pre-planning</h3><p className="mt-3 text-sm">Ready to Plan · Each occurrence enters the queue on its date.</p></section> : null}
+        {template.preplanning_mode === 'ready_to_plan' ? <section className="mt-8"><h3 className="font-headline text-lg font-light">Pre-planning</h3><p className="mt-3 text-sm">Ready to Plan</p><ContextualHelp title="Pre-planning">Each occurrence enters the queue on its date, without assigning a time.</ContextualHelp></section> : null}
         {template.preplanning_schedule ? (
           <section className="mt-8" aria-labelledby={`preplanning-schedule-${template.id}`}>
             <h3 id={`preplanning-schedule-${template.id}`} className="font-headline text-lg font-light">Recurring Pre-planning Schedule</h3>
@@ -696,8 +697,8 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
             <div className="mt-4 max-w-56">
               <Field label="Day of month">
                 <input aria-label="Day of month" type="number" min={1} max={31} value={monthDay} onChange={(event) => setMonthDay(Number(event.target.value))} className={recurringFieldClass} />
-                <span className="mt-1.5 block text-[11px] text-[var(--task-detail-muted)]">Short months use their final day.</span>
               </Field>
+              <ContextualHelp title="Day of month">Short months use their final day.</ContextualHelp>
             </div>
           ) : null}
 
@@ -711,10 +712,11 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
               />
               <span>
                 <span className="block text-sm text-[var(--task-detail-primary)]">Keep unfinished occurrences overdue</span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-[var(--task-detail-muted)]">Otherwise an unfinished occurrence leaves current work when its scheduled date passes.</span>
+
               </span>
             </label>
           ) : null}
+          {mode === 'scheduled' ? <ContextualHelp title="Unfinished occurrences">After its recurrence period, unfinished work leaves current work unless kept overdue or linked to a future Planned Block.</ContextualHelp> : null}
 
           {mode === 'scheduled' ? (
             <div className="mt-4 rounded-xl border border-[var(--task-detail-border)] p-3.5">
@@ -727,13 +729,13 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
                 <option value="ready_to_plan">Ready to Plan</option>
                 <option value="planned_time">Planned time</option>
               </Select>
-              <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">
+              <ContextualHelp title="Pre-planning">
                 {preplanningMode === 'ready_to_plan'
                   ? 'Add each occurrence to Ready to Plan on its date, without assigning a time.'
                   : preplanningMode === 'planned_time'
                     ? 'Create attached Planned Blocks in the existing seven-day horizon.'
                     : 'Create occurrences without adding them to the queue or assigning a time.'}
-              </p>
+              </ContextualHelp>
               {preplanningMode === 'planned_time' ? (
                 <div className="mt-3 space-y-3">
                   {preplanningSlots.map((slot, index) => {

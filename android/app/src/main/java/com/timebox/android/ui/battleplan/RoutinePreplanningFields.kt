@@ -1,5 +1,7 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.ContextualHelp
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
@@ -46,7 +48,6 @@ internal fun PreplanningDestinationChoices(choice: PreplanningDestination, onCho
                     Icon(option.icon, null, tint = colors.onVariant, modifier = Modifier.size(23.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(option.title, style = TimeboxTheme.type.body, fontWeight = FontWeight.Medium)
-                        Text(option.detail, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                     }
                     RadioButton(active, null, Modifier.size(24.dp))
                 }
@@ -68,6 +69,7 @@ internal fun RoutinePreplanningFields(state: RecurringEditorUiState, onChange: (
     fun updateSlot(index: Int, change: (RecurringPreplanningSlotDraft) -> RecurringPreplanningSlotDraft) {
         onChange(state.copy(preplanningSlots = state.preplanningSlots.mapIndexed { i, slot -> if (i == index) change(slot) else slot }))
     }
+    ContextualHelp("Pre-planning", "No pre-planning leaves each occurrence for you to plan. Ready to Plan adds it to the queue on its date without assigning a time. Planned time reserves a slot when it is free, within the seven-day horizon.")
     PreplanningDestinationChoices(choice) { destination ->
         onChange(state.copy(queuePreplanning = destination == PreplanningDestination.Queue,
             preplanningSlots = if (destination == PreplanningDestination.Time) state.preplanningSlots.ifEmpty {
@@ -103,7 +105,6 @@ internal fun RoutinePreplanningFields(state: RecurringEditorUiState, onChange: (
             }
         }
     }
-    Text("Schedules when this time is free.", Modifier.padding(horizontal = 4.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
     TextButton({ onChange(state.copy(preplanningSlots = state.preplanningSlots + RecurringPreplanningSlotDraft(weekday = state.weekdays.minOrNull()))) }) { Text("Add another time") }
 }
 

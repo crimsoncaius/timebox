@@ -979,8 +979,8 @@ describe('BattlePlanPage', () => {
     await user.selectOptions(screen.getByLabelText('Sort tasks'), 'deadline')
 
     expect(screen.getByText('Draft launch brief').closest('article')).toHaveAttribute(
-      'title',
-      'Drag task to change its status',
+      'aria-label',
+      'Move Draft launch brief',
     )
   })
 

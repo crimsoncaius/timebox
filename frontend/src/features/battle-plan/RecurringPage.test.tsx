@@ -105,6 +105,22 @@ describe('RecurringPage', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps a recurrence draft and selection when nested help opens and closes', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><RecurringPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'New recurring task' }))
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Draft routine')
+    await user.selectOptions(screen.getByLabelText('Pre-planning'), 'ready_to_plan')
+    expect(screen.queryByText('Add each occurrence to Ready to Plan on its date, without assigning a time.')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Help: Pre-planning' }))
+    expect(screen.getByRole('dialog', { name: 'Pre-planning' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close help: Pre-planning' }))
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Draft routine')
+    expect(screen.getByLabelText('Pre-planning')).toHaveValue('ready_to_plan')
+    expect(window.confirm).not.toHaveBeenCalled()
+    expect(active).toHaveLength(1)
+  })
+
   it('shows cadence, detail task links, status filters, and lifecycle controls', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/battle-plan?view=recurring']}><RecurringPage /></MemoryRouter>)
