@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchJson } from '../../lib/api/client'
 import { api } from '../../lib/api'
@@ -72,7 +73,7 @@ export function GoogleCalendar({ date, onChanged }: { date?: string; onChanged?:
   if (date && !pending.length && !updates.length && !state?.error && !error) return null
   return <section aria-label="Google Calendar" className="mb-6 space-y-4 text-on-surface dark:text-dark-on-surface">
     {!date && <>
-      <p className="text-sm text-on-surface-variant">Import commitments into your plan. Google Calendar is never changed.</p>
+      <ContextualHelp title="Google Calendar">Import commitments into your plan. Google Calendar is never changed.</ContextualHelp>
       {!state && !error && <p role="status">Loading calendar connection…</p>}
       {state && !state.configured && <p className="text-sm">Google Calendar is not configured on this server. Set up Google OAuth and authenticated access using the deployment guide.</p>}
       {state?.account && <p className="text-sm">{state.connected ? 'Connected to' : 'Disconnected from'} {state.account}</p>}
@@ -90,7 +91,7 @@ export function GoogleCalendar({ date, onChanged }: { date?: string; onChanged?:
       </div>
       {state?.connected && <fieldset disabled={busy} className="space-y-3">
         <legend className="mb-2 text-sm font-medium">Calendars, in priority order</legend>
-        <p className="text-sm text-on-surface-variant">The first selected copy supplies a duplicated meeting’s details.</p>
+        <ContextualHelp title="Calendar priority">The first selected copy supplies a duplicated meeting’s details. Use Move up to change priority.</ContextualHelp>
         {[...selected.map(id => state.calendars.find(c => c.id === id)).filter(c => !!c), ...state.calendars.filter(c => !selected.includes(c.id)).sort((a, b) => Number(b.primary) - Number(a.primary))].map(c => <div key={c.id} className="flex items-center gap-3">
           <label className="flex min-h-11 flex-1 items-center gap-3"><input type="checkbox" checked={selected.includes(c.id)} onChange={e => setSelected(e.target.checked ? [...selected, c.id] : selected.filter(id => id !== c.id))} />{c.name}</label>
           {selected.includes(c.id) && <button className={button} disabled={selected.indexOf(c.id) === 0} aria-label={`Move ${c.name} earlier`} onClick={() => setSelected(current => { const copy = [...current]; const i = copy.indexOf(c.id); [copy[i - 1], copy[i]] = [copy[i], copy[i - 1]]; return copy })}>Move up</button>}
@@ -180,7 +181,7 @@ export function ApiKeySetting() {
   const [saved, setSaved] = useState(false)
   return <form className="space-y-3" onSubmit={e => { e.preventDefault(); sessionStorage.setItem('timebox.api-key', value.trim()); setSaved(true); window.dispatchEvent(new Event('focus')) }}>
     <label className="block text-sm">Timebox API key<input className={field} type="password" autoComplete="off" value={value} onChange={e => { setValue(e.target.value); setSaved(false) }} /></label>
-    <p className="text-sm text-on-surface-variant">Stored for this browser tab’s session. Required when your server uses authenticated access.</p>
+    <ContextualHelp title="Timebox API key">Stored for this browser tab’s session. Required when your server uses authenticated access.</ContextualHelp>
     <button className={button}>Save connection</button>{saved && <p role="status" className="text-sm">Connection saved.</p>}
   </form>
 }

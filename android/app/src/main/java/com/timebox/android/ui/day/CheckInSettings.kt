@@ -35,7 +35,7 @@ internal fun checkInThresholdLabel(minutes: Int): String = when {
         repository.setCheckInPreferences(next)
         app.checkIns.settingsChanged()
     }
-    SettingRow(title = "Inactivity check-ins", description = "Ask whether an activity is still going after a quiet stretch.") {
+    SettingRow(title = "Inactivity check-ins") {
         TimeboxSwitch(checked = settings.enabled, onCheckedChange = { save(settings.copy(enabled = it)) })
     }
     Box(Modifier.alpha(if (settings.enabled) 1f else 0.5f)) {
@@ -66,6 +66,6 @@ internal fun checkInThresholdLabel(minutes: Int): String = when {
     }
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text("How check-ins work", style = TimeboxTheme.type.label)
-        ContextualHelp("How check-ins work", "Usage access lets Android report screen transitions. Leaving Timebox or missing usage events does not count as inactivity. Allow or block system check-ins in Notifications settings; the in-app question remains available either way.")
+        ContextualHelp("How check-ins work", "Ask whether an activity is still going after a quiet stretch. Usage access lets Android report screen-off intervals; lack of touch while the screen is on does not count. Missing history is unknown. Checks may be delayed by battery policy or until you return. Leaving Timebox or missing usage events does not count as inactivity. Allow or block system check-ins in Notifications settings; the in-app question remains available either way.")
     }
 }

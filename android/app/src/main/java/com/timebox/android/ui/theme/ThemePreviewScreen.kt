@@ -49,7 +49,7 @@ fun ThemePreviewScreen(onBack: () -> Unit) {
     ) {
         TextButton(onClick = onBack) { Text("Back to Settings") }
 
-        SectionHeader("Transient Feedback", "Floating paper · actions and recovery")
+        SectionHeader("Transient Feedback")
         TransientFeedback(
             message = "Task completed",
             detail = "2 future Planned Blocks removed.",
@@ -65,7 +65,7 @@ fun ThemePreviewScreen(onBack: () -> Unit) {
         )
 
         SectionCard {
-            SectionHeader("Surface ladder", "Page → embedded → card → raised → selected")
+            SectionHeader("Surfaces")
             Column(
                 Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(7.dp),
@@ -79,20 +79,20 @@ fun ThemePreviewScreen(onBack: () -> Unit) {
         }
 
         SectionCard {
-            SectionHeader("Typography", "Manrope headlines and Inter interface text")
+            SectionHeader("Typography")
             Column(
                 Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text("Editorial heading", style = TimeboxTheme.type.screenTitle, color = colors.on)
                 Text("Section heading", style = TimeboxTheme.type.sectionTitle, color = colors.on)
-                Text("Body copy stays compact and readable across themes.", style = TimeboxTheme.type.body, color = colors.onVariant)
+                Text("Sample body text.", style = TimeboxTheme.type.body, color = colors.onVariant)
                 Text("08:30–09:00", style = TimeboxTheme.type.mono, color = colors.on)
             }
         }
 
         SectionCard {
-            SectionHeader("Controls", "Primary, selected, disabled, and field treatments")
+            SectionHeader("Controls")
             Column(
                 Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -116,7 +116,7 @@ fun ThemePreviewScreen(onBack: () -> Unit) {
 
         EmptyStateCard(
             title = "A compact empty state",
-            description = "Guidance remains close to the control that resolves it.",
+            description = "Sample empty-state guidance.",
         )
         Spacer(Modifier.height(8.dp))
     }

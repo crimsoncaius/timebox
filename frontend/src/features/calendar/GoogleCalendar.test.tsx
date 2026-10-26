@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { GoogleCalendar } from './GoogleCalendar'
+import { ApiKeySetting, GoogleCalendar } from './GoogleCalendar'
 
 const state = { configured: true, connected: true, account: 'me', selected: ['primary'], calendars: [{ id: 'primary', name: 'Primary' }], occurrences: [], timezone: 'UTC', last_success: null, error: null }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -30,4 +30,16 @@ it('requires a fresh preview after a concurrent plan change rejects confirmation
   fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
   await screen.findByRole('dialog')
   expect(submitted[2].fingerprint).toBeUndefined()
+})
+
+it('keeps an API key draft and does not save when opening or closing help', () => {
+  sessionStorage.removeItem('timebox.api-key')
+  render(<ApiKeySetting />)
+  fireEvent.change(screen.getByLabelText('Timebox API key'), { target: { value: 'unsaved-key' } })
+  expect(screen.queryByText(/Stored for this browser/)).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Help: Timebox API key' }))
+  expect(screen.getByRole('dialog', { name: 'Timebox API key' })).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: 'Close help: Timebox API key' }))
+  expect(screen.getByLabelText('Timebox API key')).toHaveValue('unsaved-key')
+  expect(sessionStorage.getItem('timebox.api-key')).toBeNull()
 })

@@ -267,7 +267,7 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
             Text("Edit shortcuts", style = TimeboxTheme.type.display, color = colors.on,
                 modifier = Modifier.padding(top = 16.dp).semantics { heading() })
-            Text("Keep your most-used screens within reach. Changes apply only to this device.",
+            Text("This device",
                 style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
             error?.let { Text(it, color = colors.error, style = TimeboxTheme.type.body,
                 modifier = Modifier.padding(bottom = 16.dp).semantics { liveRegion = LiveRegionMode.Polite }) }

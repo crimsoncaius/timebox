@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { SettingsRow, settingsButtonClassName, settingsInputClassName } from '../../components/SettingsControls'
 import { ActivityRepository, getActivityRepository } from './activityRepository'
@@ -43,13 +44,14 @@ function ReportingTimezoneForm({ stored, error, repository }: {
     <SettingsRow
       label="Reporting Time Zone"
       htmlFor="settings-reporting-zone"
-      description="Daily totals are grouped by this zone. Travel doesn't change it, and recorded times and durations stay the same."
+      description="Changes daily totals on all devices; recorded times and durations stay the same."
       footer={(showUnknown || error) && (
         <p role="alert" className="mt-2 text-sm text-error">
           {showUnknown ? 'Choose a time zone from the list, such as Asia/Singapore.' : error}
         </p>
       )}
     >
+      <ContextualHelp title="Reporting Time Zone">Daily totals use this zone. Travel does not change it.</ContextualHelp>
       <form
         className="flex w-full min-w-0 items-center gap-2 sm:w-auto"
         onSubmit={async event => {

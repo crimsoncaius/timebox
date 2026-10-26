@@ -130,7 +130,7 @@ export class BrowserCheckIns {
       if (epoch !== this.epoch || !this.running || abort.signal.aborted) return
       const now = this.repository.now()
       const idle = observation.user === 'idle'
-      this.publish({ detail: 'Native device detection is connected while this page can run.' })
+      this.publish({ detail: 'Device detection connected.' })
       if (short.user === null || short.screen === null || observation.user === null || observation.screen === null) { this.reset(); return }
       if (!active && !idle) return // Locked alone supplies no lock duration.
       // Active means some input within the threshold, not input at this instant.
