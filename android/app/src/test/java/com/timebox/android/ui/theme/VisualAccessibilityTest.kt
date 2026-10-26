@@ -104,13 +104,14 @@ class VisualAccessibilityTest {
     }
 
     @Test
-    fun colorRolesShareLaneValuesAndKeepRedForDestructiveActions() {
+    fun colorRolesShareLaneValuesAndHonorNowLineRedException() {
+        assertEquals(Color(0xFF9F403D), LightTimeboxColors.now)
+        assertEquals(Color(0xFFF2A09A), DarkTimeboxColors.now)
         listOf(LightTimeboxColors, DarkTimeboxColors).forEach { colors ->
             assertEquals(colors.planned, colors.accent)
             assertEquals(colors.onPlanned, colors.onAccent)
             assertEquals(colors.actual, colors.done)
             assertEquals(colors.onActual, colors.onDone)
-            assertNotEquals(colors.error, colors.now)
             assertContrastAtLeast(colors.onDone, colors.done, 4.5)
             assertContrastAtLeast(colors.onWarn, colors.warn, 4.5)
             assertContrastAtLeast(colors.onNeutralStrong, colors.neutralStrong, 4.5)
