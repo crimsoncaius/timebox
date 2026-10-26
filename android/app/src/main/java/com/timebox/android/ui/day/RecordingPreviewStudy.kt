@@ -147,7 +147,7 @@ internal fun RecordingPreviewStudy(source: PlannedRecordingDto, timezone: String
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextButton(onClick = onDismiss) { Text(if (recorded) "Close" else "Cancel", style = type.button, color = colors.onVariant) }
                 Button(onClick = { recorded = !recorded }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = TimeboxShapes.chip,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.action, contentColor = colors.onAction)) {
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.warn, contentColor = colors.onWarn)) {
                     Text(if (recorded) "Try again" else "Replace overlapping time", style = type.button)
                 }
             }

@@ -94,7 +94,7 @@ fun RecurringScreen(
             PrimaryButton(
                 "New recurrence",
                 onNew,
-                leading = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = colors.onAction) },
+                leading = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = colors.onAccent) },
             )
         }
         when {

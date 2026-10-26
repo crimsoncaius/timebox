@@ -587,7 +587,7 @@ private fun MobileKanbanBoard(
                 onClick = { onShowComposer(true) },
                 enabled = !state.saving,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = LocalNavigationDockInset.current).padding(18.dp),
-                leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAction, modifier = Modifier.size(18.dp)) },
+                leading = { Icon(Icons.Outlined.Add, null, tint = colors.onAccent, modifier = Modifier.size(18.dp)) },
             )
             visualDrag?.let { drag ->
                 val settling = settlingDrop?.takeIf { it.drag.task.id == drag.task.id }
@@ -668,7 +668,7 @@ private fun BattlePlanFilterSheetContent(
                     Text(
                         "Clear all",
                         style = TimeboxTheme.type.bodySmall.copy(fontSize = 12.5.sp, fontWeight = FontWeight.Medium),
-                        color = colors.planned,
+                        color = colors.accent,
                     )
                 }
             }
@@ -1031,7 +1031,7 @@ private fun MobileDropIndicator(
                 .fillMaxWidth()
                 .height(2.dp)
                 .clip(RoundedCornerShape(1.dp))
-                .background(TimeboxTheme.colors.planned),
+                .background(TimeboxTheme.colors.accent),
         )
     }
 }
@@ -1179,7 +1179,7 @@ private fun CompactTaskMetadata(task: BattleTask, serverNow: java.time.Instant, 
     if (!hasContext && !hasSignals) return
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (hasContext) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            task.project?.let { CompactTaskContext(Icons.Outlined.Folder, it.name, "Project", colors.project) }
+            task.project?.let { CompactTaskContext(Icons.Outlined.Folder, it.name, "Project") }
             task.taskType?.let { CompactTaskContext(Icons.AutoMirrored.Outlined.Label, it.name, "Task type") }
             task.deadlineDate?.let { date ->
                 val overdue = !completed && date < today
@@ -1726,20 +1726,20 @@ private fun MobilePlanningControl(
                         if (task.readyToPlan) "Ready to Plan" else "Add to Plan"
                     } else label,
                     style = TimeboxTheme.type.bodySmall,
-                    color = if (accented) colors.planned else colors.onVariant,
+                    color = if (accented) colors.accent else colors.onVariant,
                 )
             }
             if (actionable) Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                 if (task.readinessPending) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp).clearAndSetSemantics {},
-                        color = if (accented) colors.planned else colors.onVariant,
+                        color = if (accented) colors.accent else colors.onVariant,
                         strokeWidth = 1.5.dp,
                     )
                 } else Text(
                     if (task.readyToPlan) "→" else "+",
                     style = TimeboxTheme.type.bodySmall,
-                    color = if (accented) colors.planned else colors.onVariant,
+                    color = if (accented) colors.accent else colors.onVariant,
                 )
             }
         }
@@ -1818,7 +1818,7 @@ internal fun TaskNavigationMenu(
                     else -> Icons.AutoMirrored.Outlined.ListAlt
                 },
                 contentDescription = null,
-                tint = if (!outsideScopes && state.selectedScope.kind == BattlePlanScopeKind.Project) colors.project else colors.on,
+                tint = if (!outsideScopes && state.selectedScope.kind == BattlePlanScopeKind.Project) colors.accent else colors.on,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(7.dp))

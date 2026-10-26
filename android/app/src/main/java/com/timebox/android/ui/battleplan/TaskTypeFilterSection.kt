@@ -214,15 +214,15 @@ private fun CheckBoxMark(chosen: Boolean, included: Boolean) {
         Modifier
             .size(20.dp)
             .clip(shape)
-            .background(if (chosen) colors.tertiary else Color.Transparent)
-            .border(1.5.dp, if (chosen || included) colors.tertiary else colors.outline, shape),
+            .background(if (chosen) colors.accent else Color.Transparent)
+            .border(1.5.dp, if (chosen || included) colors.accent else colors.outline, shape),
         contentAlignment = Alignment.Center,
     ) {
         if (chosen || included) {
             Icon(
                 Icons.Outlined.Check,
                 contentDescription = null,
-                tint = if (chosen) colors.lowest else colors.tertiary,
+                tint = if (chosen) colors.onAccent else colors.accent,
                 modifier = Modifier.size(14.dp),
             )
         }

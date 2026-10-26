@@ -94,12 +94,27 @@ class VisualAccessibilityTest {
     @Test
     fun productActionsSelectionsAndDisabledStatesUseDedicatedTokens() {
         listOf(LightTimeboxColors, DarkTimeboxColors).forEach { colors ->
-            assertNotEquals(colors.on, colors.action)
+            assertNotEquals(colors.on, colors.accent)
             assertNotEquals(colors.planned, colors.selected)
             assertNotEquals(colors.bg, colors.disabledContainer)
-            assertContrastAtLeast(colors.onAction, colors.action, 4.5)
+            assertContrastAtLeast(colors.onAccent, colors.accent, 4.5)
             assertContrastAtLeast(colors.onSelected, colors.selected, 4.5)
             assertContrastAtLeast(colors.disabledContent, colors.disabledContainer, 4.5)
+        }
+    }
+
+    @Test
+    fun colorRolesShareLaneValuesAndKeepRedForDestructiveActions() {
+        listOf(LightTimeboxColors, DarkTimeboxColors).forEach { colors ->
+            assertEquals(colors.planned, colors.accent)
+            assertEquals(colors.onPlanned, colors.onAccent)
+            assertEquals(colors.actual, colors.done)
+            assertEquals(colors.onActual, colors.onDone)
+            assertNotEquals(colors.error, colors.now)
+            assertContrastAtLeast(colors.onDone, colors.done, 4.5)
+            assertContrastAtLeast(colors.onWarn, colors.warn, 4.5)
+            assertContrastAtLeast(colors.onNeutralStrong, colors.neutralStrong, 4.5)
+            assertContrastAtLeast(colors.now, colors.bg, 3.0)
         }
     }
 

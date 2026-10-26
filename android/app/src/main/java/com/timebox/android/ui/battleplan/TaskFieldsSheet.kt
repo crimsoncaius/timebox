@@ -165,9 +165,9 @@ internal fun TaskFieldsSheet(
         TaskSheetBackHandler(saving, ::dismiss)
         Column(Modifier.fillMaxWidth().imePadding().fillMaxHeight(taskSheetHeightFraction(false))) {
             Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (contextLabel == null) Icons.Outlined.Folder else Icons.Outlined.Repeat, null, Modifier.size(20.dp), tint = colors.project)
+                Icon(if (contextLabel == null) Icons.Outlined.Folder else Icons.Outlined.Repeat, null, Modifier.size(20.dp), tint = colors.onVariant)
                 TextButton(onClick = { open(TaskSheetField.Project) }, enabled = editable && !projectLocked, modifier = Modifier.weight(1f)) {
-                    Text(contextLabel ?: (projects.firstOrNull { it.id == draft.projectId }?.name ?: "Admin"), Modifier.weight(1f), color = colors.project)
+                    Text(contextLabel ?: (projects.firstOrNull { it.id == draft.projectId }?.name ?: "Admin"), Modifier.weight(1f), color = colors.on)
                     if (!projectLocked) Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
                 IconButton(onClick = ::dismiss, enabled = !saving) { Icon(Icons.Outlined.Close, "Close task") }
@@ -177,7 +177,7 @@ internal fun TaskFieldsSheet(
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                     if (!creating && completable) IconButton(onClick = onComplete, enabled = !saving && !dirty) {
                         Icon(if (completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-                            if (completed) "Reopen task" else "Complete task", Modifier.size(28.dp), tint = if (completed) colors.project else colors.onVariant)
+                            if (completed) "Reopen task" else "Complete task", Modifier.size(28.dp), tint = if (completed) colors.done else colors.onVariant)
                     }
                     if (creating) BasicTextField(createTitle, { createTitle = it }, enabled = !saving && !fieldsLocked,
                         textStyle = TextStyle(color = colors.on, fontSize = 25.sp, fontWeight = FontWeight.Medium),

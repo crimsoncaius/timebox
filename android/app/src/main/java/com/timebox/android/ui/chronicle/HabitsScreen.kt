@@ -80,6 +80,7 @@ import com.timebox.android.data.RecurrenceFrequency
 import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.ui.components.ErrorState
 import com.timebox.android.ui.components.LoadingState
+import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.RoundIconButton
 import com.timebox.android.ui.theme.TimeboxDimens
 import com.timebox.android.ui.theme.TimeboxShapes
@@ -283,10 +284,14 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                     style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                TextButton(onClick = { addSheet = true; viewModel.loadCandidates() }, enabled = !state.offline) {
-                    Icon(Icons.Outlined.Add, null)
-                    Text("Add Habit")
-                }
+                PrimaryButton(
+                    text = "Add habit",
+                    onClick = { addSheet = true; viewModel.loadCandidates() },
+                    modifier = Modifier.padding(top = 16.dp),
+                    enabled = !state.offline,
+                    leading = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = if (state.offline) colors.disabledContent else colors.onAccent) },
+                    height = 44.dp,
+                )
             }
         }
     }
@@ -413,11 +418,12 @@ private fun HabitsEmptyState(onAdd: () -> Unit) {
             style = TimeboxTheme.type.bodySmall, color = colors.onVariant, textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
-        TextButton(onClick = onAdd) {
-            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Add habit")
-        }
+        PrimaryButton(
+            text = "Add habit",
+            onClick = onAdd,
+            leading = { Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = colors.onAccent) },
+            height = 44.dp,
+        )
     }
 }
 
@@ -433,12 +439,12 @@ private fun WeekdayHeader(weekStart: LocalDate, today: LocalDate) {
                 Text(
                     date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase(),
                     style = TimeboxTheme.type.laneLabel.copy(fontSize = 9.sp),
-                    color = if (isToday) colors.planned else colors.onVariant,
+                    color = if (isToday) colors.accent else colors.onVariant,
                 )
                 Text(
                     date.dayOfMonth.toString(),
                     style = TimeboxTheme.type.label.copy(fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal),
-                    color = if (isToday) colors.planned else colors.on,
+                    color = if (isToday) colors.accent else colors.on,
                 )
             }
         }
@@ -596,7 +602,7 @@ private fun RowScope.HabitCell(
     onLongPress: (HabitDay) -> Unit,
 ) {
     val colors = TimeboxTheme.colors
-    val onActual = if (colors.actual.luminance() > 0.5f) Color.Black else Color.White
+    val onActual = if (colors.done.luminance() > 0.5f) Color.Black else Color.White
     // The tap already shows; only a save that is taking noticeably long dims the cell.
     var slow by remember { mutableStateOf(false) }
     LaunchedEffect(pending) {
@@ -608,13 +614,13 @@ private fun RowScope.HabitCell(
     }
     val label = if (daily) "${day.count}/${day.target ?: quotaCount ?: 0}" else day.count.toString()
     val background = when (day.state) {
-        HabitDayState.Met, HabitDayState.Count -> colors.actual
-        HabitDayState.Partial -> colors.actual.copy(alpha = 0.3f)
+        HabitDayState.Met, HabitDayState.Count -> colors.done
+        HabitDayState.Partial -> colors.done.copy(alpha = 0.3f)
         HabitDayState.Missed, HabitDayState.Empty -> colors.low
         else -> Color.Transparent
     }
     val border = when (day.state) {
-        HabitDayState.Open -> 1.5.dp to colors.planned
+        HabitDayState.Open -> 1.5.dp to colors.accent
         HabitDayState.Upcoming -> 1.dp to colors.outlineVariant
         else -> null
     }
@@ -676,7 +682,7 @@ private fun HabitTotalView(total: HabitTotal, modifier: Modifier) {
             "${total.done}/${total.target}",
             style = TimeboxTheme.type.label.copy(fontSize = 12.sp, fontWeight = if (met) FontWeight.Bold else FontWeight.Normal),
             color = when (total.tone) {
-                HabitTotalTone.Met -> colors.actual
+                HabitTotalTone.Met -> colors.done
                 HabitTotalTone.Missed -> colors.onVariant
                 HabitTotalTone.Open -> colors.on
             },

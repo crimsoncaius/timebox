@@ -154,7 +154,7 @@ internal fun ProjectNavigationList(
                 val animatedShift by animateFloatAsState(shift, label = "Project position")
                 var rowBounds by remember { mutableStateOf(Rect.Zero) }
                 val selected = project.id == selectedId
-                val projectColor = colors.project
+                val projectColor = colors.accent
                 Row(
                     Modifier.fillMaxWidth().height(56.dp)
                         .zIndex(if (dragging) 1f else 0f)

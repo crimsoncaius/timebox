@@ -84,7 +84,7 @@ private fun weekdayLabel(weekday: Int?): String = listOf(
 @Composable
 internal fun CreationMode(title: String, subtitle: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val colors = TimeboxTheme.colors
-    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp), color = if (selected) colors.selected else colors.card, border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) colors.primary else colors.hairline)) {
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp), color = if (selected) colors.selected else colors.card, border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) colors.accent else colors.hairline)) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, style = TimeboxTheme.type.sectionTitle)
@@ -115,7 +115,7 @@ internal fun CreationDateRow(label: String, value: String, enabled: Boolean, onC
                 Text(label, style = TimeboxTheme.type.label, color = TimeboxTheme.colors.onVariant)
                 Text(value, style = TimeboxTheme.type.body)
             }
-            Text("Change", style = TimeboxTheme.type.label, color = TimeboxTheme.colors.primary)
+            Text("Change", style = TimeboxTheme.type.label, color = TimeboxTheme.colors.accent)
         }
     }
 }

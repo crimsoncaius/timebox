@@ -73,7 +73,7 @@ fun TimeboxSwitch(
 ) {
     val colors = TimeboxTheme.colors
     val track by animateColorAsState(
-        targetValue = if (checked) colors.tertiary else Color(0x47808080),
+        targetValue = if (checked) colors.accent else Color(0x47808080),
         label = "switchTrack",
     )
     val offset by animateDpAsState(
@@ -289,7 +289,7 @@ fun ErrorState(
     }
 }
 
-/** Filled pill using dedicated action and disabled-state tokens. */
+/** Filled accent pill for a screen's main action, with dedicated disabled-state tokens. */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -305,7 +305,7 @@ fun PrimaryButton(
         modifier = modifier
             .height(height)
             .clip(shape)
-            .background(if (enabled) colors.action else colors.disabledContainer)
+            .background(if (enabled) colors.accent else colors.disabledContainer)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -315,7 +315,7 @@ fun PrimaryButton(
         Text(
             text,
             style = TimeboxTheme.type.button,
-            color = if (enabled) colors.onAction else colors.disabledContent,
+            color = if (enabled) colors.onAccent else colors.disabledContent,
         )
     }
 }

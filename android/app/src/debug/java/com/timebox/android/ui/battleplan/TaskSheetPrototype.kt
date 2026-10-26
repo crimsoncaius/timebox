@@ -163,9 +163,9 @@ fun TaskSheetPrototype(startCreating: Boolean = false, initialLayout: String = "
     ) {
         Column(Modifier.fillMaxWidth().imePadding().then(if (compact) Modifier.heightIn(max = 600.dp) else Modifier.fillMaxHeight(if (keyboardVisible) .94f else .78f))) {
             Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Folder, null, tint = colors.project, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.Folder, null, tint = colors.onVariant, modifier = Modifier.size(18.dp))
                 TextButton(onClick = { edit("Project", task.project) }, modifier = Modifier.weight(1f)) {
-                    Text(task.project, modifier = Modifier.weight(1f), color = colors.project)
+                    Text(task.project, modifier = Modifier.weight(1f), color = colors.on)
                     Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
                 IconButton(onClick = ::close) { Icon(Icons.Outlined.Close, "Close task") }
@@ -174,7 +174,7 @@ fun TaskSheetPrototype(startCreating: Boolean = false, initialLayout: String = "
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                     IconButton(onClick = { update(task.copy(completed = !task.completed, ready = false)) }, enabled = !creating) {
                         Icon(if (task.completed) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-                            if (task.completed) "Reopen task" else "Complete task", tint = if (task.completed) colors.project else colors.onVariant, modifier = Modifier.size(28.dp))
+                            if (task.completed) "Reopen task" else "Complete task", tint = if (task.completed) colors.done else colors.onVariant, modifier = Modifier.size(28.dp))
                     }
                     if (creating) BasicTextField(value = task.title, onValueChange = { update(task.copy(title = it)) },
                         textStyle = TextStyle(color = colors.on, fontSize = 25.sp, fontWeight = FontWeight.Medium),
@@ -295,7 +295,7 @@ fun TaskSheetPrototype(startCreating: Boolean = false, initialLayout: String = "
                                 shape = RoundedCornerShape(12.dp), color = if (chosen) colors.selected else colors.low,
                                 modifier = Modifier.fillMaxWidth().semantics { selected = chosen }) {
                                 Row(Modifier.padding(16.dp).heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    Icon(if (isProject) Icons.Outlined.Folder else Icons.Outlined.Label, null, tint = if (isProject) colors.project else colors.onVariant, modifier = Modifier.size(22.dp))
+                                    Icon(if (isProject) Icons.Outlined.Folder else Icons.Outlined.Label, null, tint = colors.onVariant, modifier = Modifier.size(22.dp))
                                     Text(option, color = colors.on, modifier = Modifier.weight(1f))
                                     if (chosen) Icon(Icons.Outlined.Check, "Selected", Modifier.size(20.dp), tint = colors.on)
                                 }

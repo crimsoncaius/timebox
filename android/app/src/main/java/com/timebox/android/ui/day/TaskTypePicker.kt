@@ -406,7 +406,7 @@ private fun ResultRow(type: TaskType, selected: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Outlined.Check,
                 contentDescription = "Current type",
-                tint = colors.tertiary,
+                tint = colors.accent,
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -443,7 +443,7 @@ private fun UnsetRow(selected: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Outlined.Check,
                 contentDescription = "Current type",
-                tint = colors.tertiary,
+                tint = colors.accent,
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -472,7 +472,7 @@ private fun CreateRow(path: String, onClick: () -> Unit) {
         Icon(
             imageVector = Icons.Outlined.Add,
             contentDescription = null,
-            tint = colors.tertiary,
+            tint = colors.accent,
             modifier = Modifier.size(18.dp),
         )
         Text(

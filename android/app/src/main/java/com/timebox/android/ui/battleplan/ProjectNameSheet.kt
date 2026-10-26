@@ -99,9 +99,9 @@ internal fun ProjectNameSheet(
                 isError = state.error != null,
                 shape = TimeboxShapes.field,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.project,
-                    focusedLabelColor = colors.project,
-                    cursorColor = colors.project,
+                    focusedBorderColor = colors.accent,
+                    focusedLabelColor = colors.accent,
+                    cursorColor = colors.accent,
                 ),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (!saving && state.name.isNotBlank()) onSave() }),

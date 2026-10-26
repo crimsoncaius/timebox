@@ -40,7 +40,7 @@ internal fun PreplanningDestinationChoices(choice: PreplanningDestination, onCho
             val active = choice == option
             Surface(onClick = { onChoice(option) }, shape = RoundedCornerShape(16.dp),
                 color = if (active) colors.selected else colors.sheet,
-                border = BorderStroke(1.dp, if (active) colors.primary else colors.hairline),
+                border = BorderStroke(1.dp, if (active) colors.accent else colors.hairline),
                 modifier = Modifier.fillMaxWidth().semantics { role = Role.RadioButton; selected = active }) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Icon(option.icon, null, tint = colors.onVariant, modifier = Modifier.size(23.dp))

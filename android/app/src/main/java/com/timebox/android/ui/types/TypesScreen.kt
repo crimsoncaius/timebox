@@ -108,14 +108,14 @@ fun TypesScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(TimeboxShapes.field)
-                    .background(colors.action)
+                    .background(colors.accent)
                     .clickable(enabled = !state.saving, onClick = onAdd),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Add,
                     contentDescription = "Add task type",
-                    tint = colors.onAction,
+                    tint = colors.onAccent,
                     modifier = Modifier.size(21.dp),
                 )
             }

@@ -78,10 +78,29 @@ colors:
   warn-surface: "#fbefd9"
   warn-dark: "#f0b86b"
   warn-dark-surface: "#33240f"
+  accent: "#1967d2"
+  on-accent: "#f7f7fa"
+  accent-tint: "#e9f1fd"
+  accent-border: "#c5d9f7"
+  accent-dark: "#8ab4f8"
+  on-accent-dark: "#0a1f3d"
+  accent-dark-tint: "#14213a"
+  accent-dark-border: "#2a3f55"
+  done: "#0d6b63"
+  on-done: "#f7f7fa"
+  done-tint: "#def1ee"
+  done-border: "#b5ded6"
+  done-dark: "#7dd3c8"
+  on-done-dark: "#00201d"
+  done-dark-tint: "#0f2724"
+  done-dark-border: "#1e3d38"
+  neutral-strong: "#5d5e61"
+  neutral-strong-dark: "#c8c7cb"
   timeline-grid-strong: "#dadce0"
   timeline-grid-soft: "#e8eaed"
   timeline-label: "#5f6368"
-  now-line: "#9f403d"
+  now-line: "#2d3435"
+  now-line-dark: "#e7e5e4"
   dark-background: "#0c0a09"
   dark-surface: "#121212"
   dark-surface-container-lowest: "#0c0a09"
@@ -277,8 +296,8 @@ components:
     textColor: "{colors.on-surface-variant}"
     typography: "{typography.body-lg}"
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.on-accent}"
     typography: "{typography.label-md}"
     rounded: "{rounded.DEFAULT}"
     padding: 12px 20px
@@ -370,13 +389,24 @@ components:
 
 Timebox should feel like a monastic archive for a day of work: quiet, precise, and intentionally sparse. The product is utilitarian, but the UI avoids the busyness of a dashboard by using large editorial headings, thin typography, warm off-white surfaces, and restrained gray-green neutrals. It should feel like a high-end paper planner translated into software.
 
-The signature experience is the dual-lane timeline. Planned and actual time sit side by side as calm, gridded columns, with only a few clear accents: blue for planned intent, teal for actual record, and muted red for the current time or destructive states. Most hierarchy comes from space, tone, and typography rather than decoration.
+The signature experience is the dual-lane timeline. Planned and actual time sit side by side as calm, gridded columns, with only a few clear accents: blue for planned intent, teal for actual record, and muted red for destructive states. Most hierarchy comes from space, tone, and typography rather than decoration.
 
 ## Colors
 
 The palette is mostly warm neutral paper, graphite text, and desaturated control colors. Use `surface` as the page canvas, `surface-container-low` for grouped workspaces, and `surface-container-lowest` for focused cards, popovers, and editable panels. Avoid pure black in light mode and avoid saturated accents except where the timeline requires fast recognition.
 
-Planned timeline elements use the blue family anchored by `planned`; actual timeline elements use the teal family anchored by `actual`. These accents should remain lane-specific and should not become general brand colors. The one exception is an action that writes to a lane: a sheet or dialog primary that records actual time takes `actual`, and one that changes the plan takes `planned`, with `on-planned` / `on-actual` text. `primary` is a subdued graphite used for every other primary action, selections, and focus rings. `tertiary` is an equally quiet success/save color, and `error` is intentionally earthy rather than alarm-red.
+Color has four roles, and every colored element must mean one of them:
+
+- **Neutral** (paper and graphite) is the base: surfaces, text, icons, secondary and tonal buttons, Cancel, and the current-time line (`now-line`, ink rather than red). Neutral never makes something stand out; size, weight and space do that.
+- **Accent · Plan** (blue, `accent`, the same values as `planned`) means intended, or acts here: the main action on a screen, selected tabs and chips, switches when on, focus rings, links, today's marker, and planned time.
+- **Done · Live** (teal, `done`, the same values as `actual`) means real: it happened or it is happening now. Actual time, live tracking, Start and Stop tracking, completion checks, and met habit cells and totals.
+- **Signals**: `warn` (amber) for an action that replaces recorded time, and `error` (red, intentionally earthy rather than alarm-red) only for what cannot be undone and for error text.
+
+Color a control by what it changes, asking in this order and stopping at the first yes: deletes for good → `error`; replaces recorded time → `warn`; starts, stops or records something real → `done`; the main action or current selection → `accent`; everything else → neutral. Meaning beats utility, so Start tracking is teal even though it is also the main action. Use `on-accent` / `on-done` text on those fills.
+
+Blue works because it is rare: give each area one strong blue (a fill, link or underline), for the selection or the next action. Planned items mark themselves with `accent-tint` plus `accent-border`, never a solid blue fill, so a blue button beside the timeline never reads as plan. Completion is a moment, not a state: the check fills `done` and the row flashes `done-tint` once, then fades to secondary text with a strike-through. Never rely on hue alone, since blue and teal are close in lightness: done carries a check, live a pulse dot and solid edge, plan a tint and outline, today a ring.
+
+Outside the timeline, use the role names (`accent`, `done`) rather than the lane names, so code says why something is colored. `neutral-strong` (graphite) is the exception filled button, for a confirmation that should draw no color. `project` and `tertiary` are retired as colors: project names and icons use ink (the accent when a project scope is selected), and on or chosen states use `accent`. If user-labeled things (habits, task types, projects) need color later, give them a separate tag palette kept off buttons and selection.
 
 Dark mode reverses the surface hierarchy without becoming neon. The background becomes deep charcoal, elevated regions move toward warmer stone grays, and planned/actual accents shift to brighter blue and mint so the timeline remains readable.
 
@@ -410,7 +440,7 @@ Avoid mixing sharp, square controls with highly rounded cards in the same local 
 
 Navigation is quiet and textual: icons are thin outlined symbols, active state is signaled by a strong left rule and darker text, and inactive items stay muted until hover. The app identity uses uppercase Manrope with wide tracking and a small, soft tagline.
 
-Primary buttons use the graphite action gradient defined in `gradients.primary-action`, with light text and a modest radius. Secondary and ghost buttons are tonal, often pill-shaped, and should change background tone on hover. Inputs are pale, rounded, and lightly inset; focus states use thin primary rings rather than saturated outlines.
+Primary buttons are filled with the color their action earns (usually `accent`; `done`, `warn` or `error` by the rule in Colors), with light text and a modest radius. Secondary and ghost buttons are tonal, often pill-shaped, and should change background tone on hover. Inputs are pale, rounded, and lightly inset; focus states use thin `accent` rings.
 
 Timeline lanes are the most domain-specific components. Planned and actual headers must preserve their blue and teal identity. Lane surfaces are very pale tints in light mode and near-black tinted panels in dark mode. Time blocks should remain compact, readable, draggable, and softly rounded. Selected blocks become whiter or more luminous and may use a subtle left accent or ring, but should not become visually loud.
 
@@ -421,11 +451,13 @@ Popovers, inspector panels, and combobox menus should feel like translucent pape
 ## Do's and Don'ts
 
 - Do use whitespace, tonal surfaces, and light Manrope headings to create calm hierarchy.
-- Do keep planned blue and actual teal tied to the timeline lanes.
-- Do use muted graphite primary actions instead of bright brand color, except for a primary that writes to a lane.
+- Do color a control by what it changes: red deletes, amber replaces recorded time, teal records or starts something real, blue is the main action or selection, and everything else is neutral.
+- Do keep teal for real time and finished things only, so it reads as "done".
 - Do use ambient shadows and backdrop blur only for floating surfaces.
 - Do keep dark mode charcoal, warm, and restrained.
-- Don't use saturated blues for generic actions; blue belongs to planned time, including the primary that changes it.
+- Don't give an area more than one strong blue; planned items use the blue tint and outline, not a solid fill.
+- Don't use teal on generic buttons or selection, or as a lasting row background.
+- Don't use red for anything that isn't destructive or an error, including the current-time line.
 - Don't use thick borders or heavy shadows for sectioning.
 - Don't over-bold headings; scale and spacing should do that work.
 - Don't introduce playful colors, dense dashboard widgets, or decorative illustration.
