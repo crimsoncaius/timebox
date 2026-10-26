@@ -62,7 +62,13 @@ class AssistantTaskReviewActivity : ComponentActivity() {
             } else null
             val controller = AssistantController(lifecycleScope, recovery) { api }
             controller.send("Read saved response")
-            setContent { TimeboxTheme { AssistantScreen(controller) } }
+            setContent { TimeboxTheme {
+                var review by remember { mutableStateOf(intent.getBooleanExtra("activity_review", false)) }
+                Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    TextButton(onClick = { review = !review }) { Text(if (review) "Open Assistant" else "Open activity Review") }
+                    if (review) AssistantReviewScreen(controller, {}) else AssistantScreen(controller)
+                }
+            } }
             return
         }
         if (intent.getBooleanExtra("recovery", false)) {
