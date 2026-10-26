@@ -46,6 +46,10 @@ private fun displayReviewTime(value: String?, zone: ZoneId): String = value?.let
 
 // Destination-scoped data survives navigation, including loaded review pages.
 internal class AssistantReviewState : androidx.lifecycle.ViewModel() {
+    val tabs = listOf(ReviewTabState(), ReviewTabState())
+}
+
+internal class ReviewTabState {
     val page = mutableStateOf<JsonObject?>(null)
     val rows = mutableStateOf<List<JsonObject>>(emptyList())
 }
@@ -57,11 +61,13 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     val local by application.activityRepository.state.collectAsState()
     val scope = rememberCoroutineScope()
     val retained: AssistantReviewState = androidx.lifecycle.viewmodel.compose.viewModel()
-    var page by retained.page
-    var rows by retained.rows
     var reviewed by rememberSaveable { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val selectedReviewed = reviewed
+    val tab = retained.tabs[if (reviewed) 1 else 0]
+    var page by tab.page
+    var rows by tab.rows
+    var busy by remember(reviewed) { mutableStateOf(false) }
+    var error by remember(reviewed) { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val accessibility = androidx.compose.ui.platform.LocalAccessibilityManager.current
     LaunchedEffect(notice) {
@@ -81,7 +87,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     val type = TimeboxTheme.type
     suspend fun fetch(more: Boolean = false) {
         val before = if (more) page?.reviewText("next_before") else null
-        val data = controller.reviewRequest("reviews?reviewed=$reviewed" + (before?.let { "&before=$it" } ?: ""))
+        val data = controller.reviewRequest("reviews?reviewed=$selectedReviewed" + (before?.let { "&before=$it" } ?: ""))
         val loaded = data.getValue("items").jsonArray.map { it.jsonObject }
         rows = if (more) (rows + loaded).distinctBy { it.getValue("id") } else loaded
         page = data
@@ -111,8 +117,8 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     }
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(!reviewed, { if (!busy && reviewed) { reviewed = false; rows = emptyList(); page = null } }, label = { Text("To review${page?.reviewText("unchecked_count")?.let { " · $it" }.orEmpty()}") })
-            FilterChip(reviewed, { if (!busy && !reviewed) { reviewed = true; rows = emptyList(); page = null } }, label = { Text("Reviewed") })
+            FilterChip(!reviewed, { reviewed = false }, label = { Text("To review${page?.reviewText("unchecked_count")?.let { " · $it" }.orEmpty()}") })
+            FilterChip(reviewed, { reviewed = true }, label = { Text("Reviewed") })
         }
         if (local.offline) Text("Offline · Reconnect to save corrections or mark reviewed.", style = type.bodySmall)
         if (local.pending) Text("Syncing activity. Corrections are available after sync.", style = type.bodySmall)
@@ -121,7 +127,6 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             TextButton(enabled = !busy, onClick = { refresh++; scope.launch { application.activityRepository.refresh() } }) { Text("Retry") }
         }
         notice?.let { TransientFeedback(it, onDismiss = { notice = null }) }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp + LocalNavigationDockInset.current)) {
             item { SavedTaskResults(controller, onOpenTask) }
             if (!reviewed) items(local.quickReviews, key = { it.interpretation.requestId }) { pending ->
@@ -135,7 +140,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                 }
                 HorizontalDivider(color = colors.hairline)
             }
-            if (rows.isEmpty() && (reviewed || local.quickReviews.isEmpty()) && !busy && error == null) item {
+            if (page != null && rows.isEmpty() && (reviewed || local.quickReviews.isEmpty()) && error == null) item {
                 Column(Modifier.padding(vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (reviewed) "No activities reviewed yet" else "No activities to review", style = type.sectionTitle)
                     Text(if (reviewed) "Activities you mark reviewed will appear here." else "Your next recorded activity will appear here for a quick check.", style = type.body, color = colors.onVariant)
