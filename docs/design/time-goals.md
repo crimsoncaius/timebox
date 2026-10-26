@@ -4,7 +4,7 @@ Status: Time Goals and its separate Chronicle tab are implemented. The creation 
 
 ## Production implementation
 
-The archive refinement accepted on 4 October 2026 replaces End goal with Archive goal and adds a separate all-time archive with period history. Archived goals leave the current active collection immediately and remain marked Archived in past weeks. Reactivation is not supported. See [Time Goal archive](time-goal-archive.md) for the accepted design, implementation and review evidence.
+On 26 October 2026 the user requested removal of Time Goal archiving. The archive screen, period-history browser and archive action are removed, along with their API endpoints. Goals can be edited or deleted with confirmation. Existing ended goals and replaced versions retain their targets and results in past-week browsing, labeled Ended; Actual Blocks remain independent. The [former archive design](time-goal-archive.md) is historical evidence, superseded by this decision.
 
 The `/time-goals` API persists goal identity, cadence, start/end dates and period-effective target history. Progress is derived on each read through the same Reporting Time Zone clipping used by Trends. Migration `038_time_goals` adds the two tables; deploy the backend migration with the updated Android app. Goal deletion never deletes Actual Blocks. Task Type deletion separately requires explicit goal deletion or retargeting; merge retains separate goals and reports their count.
 
@@ -49,11 +49,11 @@ Completed creation review: `emulator-5586`, token `3bad67a4fb1b48d6973cf3b14632c
 - Creation defaults to the current period's start and allows backdating. Existing records count; periods before the chosen start are not judged.
 - Actual Blocks alone supply credit, including manually recorded blocks and running blocks through now. Corrections, deletion and reclassification recalculate past progress and outcomes. Planned Blocks and Task Completion supply no credit.
 - A target edit takes effect next period and preserves historical targets. Changing Task Type or recurrence ends the old goal today and starts a replacement today, with the full target applying to its potentially shortened first period.
-- Archive goal preserves history and excuses an unmet final period. Archived goals have a separate browsable archive, retain their past-week appearances, and cannot be reactivated. Delete goal requires confirmation and removes the goal and its assessments, never Actual Blocks.
+- Replaced goals retain past-week history and excuse an unmet final period. There is no archive action or archive collection. Delete goal requires confirmation and removes the goal and its assessments, never Actual Blocks.
 - Task Type rename preserves goal identity; merge transfers goals to the survivor while retaining separate goals. Deletion requires retargeting or deleting affected goals. Current hierarchy determines historical credit, matching Trends.
 - Android first. Daily cells show duration; row details show full period dates, progress and contributing Actual Blocks. Longer periods retain full-period totals across browsed weeks. No time-goal completion ticks.
 - A row initially selects Today's period in the current week, or Sunday's period in a past week. Selecting a day changes the row's selected period and its dates/progress, including when one displayed week intersects several periods.
-- Habits offers Add Habit; Time Goals offers Add Time Goal and Archive. Time Goal creation collects Task Type, hours/minutes, every N days/weeks/months, start date and a first-period preview. Details expose editing, archiving and deletion, reusing recurring-task editor controls. Future-start goals can be deleted but cannot be archived before they start.
+- Habits offers Add Habit; Time Goals offers Add Time Goal. Time Goal creation collects Task Type, hours/minutes, every N days/weeks/months, start date and a first-period preview. Details expose editing and deletion, reusing recurring-task editor controls. Future-start goals can be deleted.
 - Connection is required to create/edit goals and refresh progress. Already-loaded progress remains visible offline with a last-updated message; unsynced local Activity Tracking contributes only after synchronization. Durable offline reports and goal mutation queues are outside the initial scope.
 
 ## Prototype question

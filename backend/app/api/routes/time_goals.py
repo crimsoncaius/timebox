@@ -4,7 +4,7 @@ import datetime as dt
 from contextlib import contextmanager
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.routes.days import get_reporting_settings
@@ -12,9 +12,7 @@ from app.api.routes.trends import capture_now
 from app.core.config import Settings
 from app.db.session import get_db
 from app.schemas.time_goal import (
-    TimeGoalArchive,
     TimeGoalCreate,
-    TimeGoalHistory,
     TimeGoalRead,
     TimeGoalReplace,
     TimeGoalsWeek,
@@ -50,21 +48,6 @@ def read_period(goal_id: int, anchor: dt.date, week: dt.date, db: Session = Depe
                                     settings.app_timezone, now)
 
 
-@router.get("/archive", response_model=TimeGoalArchive)
-def archive(db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings),
-            now: dt.datetime = Depends(capture_now)):
-    with errors(db):
-        return time_goals.read_archive(db, settings.app_timezone, now)
-
-
-@router.get("/{goal_id}/history", response_model=TimeGoalHistory)
-def history(goal_id: int, before: dt.date | None = None, limit: int = Query(default=30, ge=1, le=50),
-            db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings),
-            now: dt.datetime = Depends(capture_now)):
-    with errors(db):
-        return time_goals.read_history(db, time_goals.get(db, goal_id), before, limit, settings.app_timezone, now)
-
-
 @router.post("", response_model=TimeGoalRead, status_code=201)
 def create(body: TimeGoalCreate, db: Session = Depends(get_db),
            settings: Settings = Depends(get_reporting_settings), now: dt.datetime = Depends(capture_now)):
@@ -82,14 +65,6 @@ def target(goal_id: int, body: TimeGoalTargetChange, db: Session = Depends(get_d
     with errors(db):
         time_goals.change_target(db, time_goals.get(db, goal_id), body.target_minutes,
                                  now.astimezone(ZoneInfo(settings.app_timezone)).date())
-        db.commit()
-
-
-@router.post("/{goal_id}/end", status_code=204)
-def end(goal_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings),
-        now: dt.datetime = Depends(capture_now)):
-    with errors(db):
-        time_goals.end_goal(time_goals.get(db, goal_id), now.astimezone(ZoneInfo(settings.app_timezone)).date())
         db.commit()
 
 

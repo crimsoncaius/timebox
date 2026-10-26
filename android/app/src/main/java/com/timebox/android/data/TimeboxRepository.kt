@@ -418,11 +418,6 @@ class TimeboxRepository private constructor(
     suspend fun timeGoals(week: LocalDate?): Result<TimeGoalsWeek> =
         call { api().timeGoals(week?.toString()).toModel() }
 
-    suspend fun timeGoalArchive(): Result<TimeGoalArchive> = call { api().timeGoalArchive().toModel() }
-
-    suspend fun timeGoalHistory(id: Int, before: LocalDate?): Result<TimeGoalHistory> =
-        call { api().timeGoalHistory(id, before?.toString()).toModel() }
-
     suspend fun timeGoalPeriod(id: Int, anchor: LocalDate, week: LocalDate): Result<TimeGoal> =
         call { api().timeGoalPeriod(id, anchor.toString(), week.toString()).toModel() }
 
@@ -435,7 +430,6 @@ class TimeboxRepository private constructor(
     suspend fun changeTimeGoalTarget(id: Int, minutes: Int): Result<Unit> =
         call { api().changeTimeGoalTarget(id, com.timebox.android.data.remote.TimeGoalTargetDto(minutes)) }
 
-    suspend fun endTimeGoal(id: Int): Result<Unit> = call { api().endTimeGoal(id) }
     suspend fun deleteTimeGoal(id: Int): Result<Unit> = call { api().deleteTimeGoal(id) }
 
     suspend fun tickHabit(templateId: Int, day: LocalDate): Result<HabitsWeek> =

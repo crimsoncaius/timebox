@@ -17,12 +17,6 @@ interface TimeboxApi {
     @GET("time-goals")
     suspend fun timeGoals(@Query("week") week: String?): TimeGoalsWeekDto
 
-    @GET("time-goals/archive")
-    suspend fun timeGoalArchive(): TimeGoalArchiveDto
-
-    @GET("time-goals/{id}/history")
-    suspend fun timeGoalHistory(@Path("id") id: Int, @Query("before") before: String?): TimeGoalHistoryDto
-
     @GET("time-goals/{id}/period")
     suspend fun timeGoalPeriod(@Path("id") id: Int, @Query("anchor") anchor: String, @Query("week") week: String): TimeGoalDto
 
@@ -34,9 +28,6 @@ interface TimeboxApi {
 
     @POST("time-goals/{id}/replace")
     suspend fun replaceTimeGoal(@Path("id") id: Int, @Body body: TimeGoalWriteDto): TimeGoalDto
-
-    @POST("time-goals/{id}/end")
-    suspend fun endTimeGoal(@Path("id") id: Int)
 
     @DELETE("time-goals/{id}")
     suspend fun deleteTimeGoal(@Path("id") id: Int)

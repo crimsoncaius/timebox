@@ -1,5 +1,7 @@
 # Time Goal archive — issue 306
 
+Superseded on 26 October 2026: the user requested removal of Time Goal archive functionality. See [current Time Goal behavior](time-goals.md). The following records the former implementation.
+
 Status: accepted, implemented and merged into local `master` on 4 October 2026 after user review. Implementation commit `0598839b`; integration commit `fdf544a2`. No PR was created.
 
 ## Settled

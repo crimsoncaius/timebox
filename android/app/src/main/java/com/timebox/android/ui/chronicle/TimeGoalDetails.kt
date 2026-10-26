@@ -21,12 +21,12 @@ import java.time.format.DateTimeFormatter
 @Composable
 internal fun TimeGoalDetails(
     goal: TimeGoal, today: LocalDate, timezone: ZoneId, state: TimeGoalsUiState, viewModel: TimeGoalsViewModel,
-    onDismiss: () -> Unit, onEdit: (() -> Unit)? = null, onHistory: (() -> Unit)? = null,
+    onDismiss: () -> Unit, onEdit: (() -> Unit)? = null,
 ) {
     val colors = TimeboxTheme.colors
     val type = TimeboxTheme.type
-    var action by rememberSaveable(goal.id) { mutableStateOf<String?>(null) }
-    val canManage = !state.offline && !state.goalSaving && !state.loading && !state.historyLoading
+    var deleting by rememberSaveable(goal.id) { mutableStateOf(false) }
+    val canManage = !state.offline && !state.goalSaving && !state.loading
     ModalBottomSheet(onDismissRequest = { if (!state.goalSaving) onDismiss() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = colors.sheet.copy(alpha = 1f), shape = TimeboxShapes.sheet) {
@@ -38,7 +38,7 @@ internal fun TimeGoalDetails(
                 style = type.display, color = colors.on, modifier = Modifier.padding(vertical = 12.dp))
             Text(goal.outcomeLabel(), style = type.label, color = colors.on)
             goal.endDate?.let {
-                Text("Archived ${it.format(goalDateFormat)} · history retained", style = type.bodySmall,
+                Text("Ended ${it.format(goalDateFormat)} · history retained", style = type.bodySmall,
                     color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             }
             Text("Includes this Task Type and its descendants.\nReporting time zone · ${timezone.id}",
@@ -63,13 +63,11 @@ internal fun TimeGoalDetails(
             }
             Text("Durations show time credited within this period.", style = type.bodySmall, color = colors.onVariant,
                 modifier = Modifier.padding(top = 12.dp))
-            if (goal.endDate != null && onHistory != null) TextButton(onHistory) { Text("View goal history") }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (goal.endDate == null) {
                     if (onEdit != null) TextButton(onEdit, enabled = canManage) { Text("Edit goal") }
-                    if (goal.startDate <= today) TextButton({ action = "archive" }, enabled = canManage) { Text("Archive goal") }
                 }
-                TextButton({ action = "delete" }, enabled = canManage) { Text("Delete goal", color = colors.error) }
+                TextButton({ deleting = true }, enabled = canManage) { Text("Delete goal", color = colors.error) }
             }
             if (goal.startDate > today) Text("This goal has not started. You can delete it before its start date.", style = type.bodySmall, color = colors.onVariant)
             state.goalError?.let { Text(it, color = colors.error, style = type.bodySmall) }
@@ -77,27 +75,26 @@ internal fun TimeGoalDetails(
             TextButton(onDismiss, Modifier.align(Alignment.End), enabled = !state.goalSaving) { Text("Done") }
         }
     }
-    action?.let { pending ->
-        TimeGoalActionDialog(goal.id, pending, state, viewModel, onCancel = { action = null },
-            onSaved = { action = null; onDismiss() })
+    if (deleting) {
+        TimeGoalDeleteDialog(goal.id, state, viewModel, onCancel = { deleting = false },
+            onSaved = { deleting = false; onDismiss() })
     }
 }
 
 @Composable
-internal fun TimeGoalActionDialog(id: Int, pending: String, state: TimeGoalsUiState, viewModel: TimeGoalsViewModel,
+internal fun TimeGoalDeleteDialog(id: Int, state: TimeGoalsUiState, viewModel: TimeGoalsViewModel,
                                  onCancel: () -> Unit, onSaved: () -> Unit) {
     val colors = TimeboxTheme.colors
     AlertDialog(onDismissRequest = { if (!state.goalSaving) onCancel() },
-        title = { Text(if (pending == "archive") "Archive this goal today?" else "Delete this goal?") },
+        title = { Text("Delete this goal?") },
         text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-            Text(if (pending == "archive") "Stop future targets and keep this goal’s targets and results in the archive. The final period is excused if its target is unmet. Actual Blocks stay unchanged. This goal cannot be reactivated."
-                else "Permanently remove this goal and all its targets and results, including its archived history. Actual Blocks stay unchanged.")
+            Text("Permanently remove this goal and all its targets and results. Actual Blocks stay unchanged.")
             state.goalError?.let { Text(it, color = colors.error) }
         } },
         confirmButton = { TextButton({
-            if (pending == "archive") viewModel.archiveGoal(id, onSaved) else viewModel.deleteGoal(id, onSaved)
+            viewModel.deleteGoal(id, onSaved)
         }, enabled = !state.goalSaving && !state.offline) {
-            Text(if (state.goalSaving) "Saving…" else if (pending == "archive") "Archive goal" else "Delete goal")
+            Text(if (state.goalSaving) "Saving…" else "Delete goal")
         } },
         dismissButton = { TextButton(onCancel, enabled = !state.goalSaving) { Text("Cancel") } })
 }

@@ -40,7 +40,7 @@ internal fun goalCadence(unit: String, interval: Int): String =
 internal fun TimeGoal.outcomeLabel() = when (period.outcome) {
     "met" -> "Met"
     "missed" -> "Missed"
-    "excused" -> "Excused · goal archived"
+    "excused" -> "Excused · goal ended"
     "upcoming" -> "Upcoming"
     else -> "${goalDuration(kotlin.math.ceil((period.targetMinutes * 60 - period.durationSeconds) / 60).toInt())} to go"
 }
@@ -88,7 +88,7 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
             }
             LinearProgressIndicator(progress = { (goal.period.durationSeconds / (goal.period.targetMinutes * 60)).toFloat().coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(3.dp), color = colors.actual, trackColor = colors.low)
-            if (goal.endDate != null) Text("Archived ${goal.endDate.format(goalDateFormat)}", style = type.bodySmall,
+            if (goal.endDate != null) Text("Ended ${goal.endDate.format(goalDateFormat)}", style = type.bodySmall,
                 color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             else goal.nextTargetMinutes?.let {
                 Text("${goalDuration(it)} from ${goal.nextTargetDate.format(goalDateFormat)}", style = type.bodySmall,
@@ -128,8 +128,7 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
     report.goals.find { it.id == detailId }?.let { goal ->
         TimeGoalDetails(goal, report.today, report.timezone, state, viewModel,
             onDismiss = { detailId = null },
-            onEdit = { editorId = goal.id; detailId = null },
-            onHistory = { detailId = null; viewModel.openGoalHistory(goal.id) })
+            onEdit = { editorId = goal.id; detailId = null })
     }
     editorId?.let { id ->
         TimeGoalEditor(report.goals.find { it.id == id }, report.today, report.timezone.id, state, viewModel) {

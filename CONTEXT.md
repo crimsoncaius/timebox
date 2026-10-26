@@ -200,8 +200,8 @@ _Avoid_: Session quota, Planned time target
 A fixed repeating span of a user-chosen number of days, weeks, or months over which a Time Goal is judged, with no surplus carried forward; daily cycles anchor to the chosen start date, and weekly or monthly cycles to its Calendar Week or calendar month in the Reporting Time Zone. Progress reflects Actual Blocks through now and later corrections to past records; periods before the goal's chosen start are not judged, and a shortened first period retains its full target.
 _Avoid_: Rolling window, Habit Period
 
-**Archived Time Goal**:
-A Time Goal whose expectations have ended, with its historical targets and results retained. It cannot be reactivated; starting again requires a new Time Goal, and its recorded Actual Blocks remain independent of its lifecycle.
+**Ended Time Goal**:
+A previous Time Goal whose expectations have ended, with its historical targets and results retained in past weeks. Replacing a Time Goal ends the previous version; there is no separate archive action or collection. It cannot be reactivated; starting again requires a new Time Goal, and its recorded Actual Blocks remain independent of its lifecycle.
 _Avoid_: Paused goal, deleted goal
 
 **Habit Period**:

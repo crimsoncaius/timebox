@@ -9,7 +9,6 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -28,16 +27,9 @@ fun TimeGoalsScreen(viewModel: TimeGoalsViewModel, state: TimeGoalsUiState) {
         viewModel.refresh()
         while (true) { delay(60_000); viewModel.refresh() }
     }
-    if (state.archiveOpen || state.selectingGoal != null) com.timebox.android.ui.components.HideNavigate()
-    val savedScreens = rememberSaveableStateHolder()
-    if (state.archiveOpen) {
-        savedScreens.SaveableStateProvider("archive") { TimeGoalArchiveContent(state, viewModel) }
-        return
-    }
-    Column(Modifier.fillMaxSize()) {
-        TextButton(viewModel::openArchive, Modifier.align(Alignment.End).padding(end = TimeboxDimens.screenPadding), enabled = !state.goalSaving) { Text("Archive") }
-        savedScreens.SaveableStateProvider("week") { TimeGoalsWeekContent(viewModel, state) }
-    }
+
+    if (state.selectingGoal != null) com.timebox.android.ui.components.HideNavigate()
+    TimeGoalsWeekContent(viewModel, state)
 }
 
 @Composable
