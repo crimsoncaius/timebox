@@ -8,8 +8,7 @@ import { getActivityRepository } from '../activity/activityRepository'
 type RecordData = { id: number; name: string | null; task_type_id: number; task_type: { name: string }; start_at: string; end_at: string | null }
 type Review = { id: number; revision: string; record: RecordData | null; reviewed: boolean; changed_since_review: boolean; receipt: { question: string; action: string; record: RecordData } }
 type Page = { items: Review[]; next_before: number | null; unchecked_count: number; timezone: string; task_types: { id: number; name: string }[] }
-type Result = { status: string; name?: string; message?: string }
-type Exchange = { run: string; question: string; answer: string; result?: Result; error?: string; task?: boolean }
+type Exchange = { run: string; question: string; answer: string; error?: string; task?: boolean; tracking?: boolean }
 const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) })
 const message = (error: unknown) => error instanceof Error ? error.message : 'Could not connect. Please try again.'
 
@@ -21,12 +20,12 @@ export function AssistantPage() {
       <button aria-current={tab === 'conversation' ? 'page' : undefined} onClick={() => setTab('conversation')}>Conversation</button>
       <button aria-current={tab === 'review' ? 'page' : undefined} onClick={() => setTab('review')}>Review</button>
     </nav>
-    <div hidden={tab !== 'conversation'}><Conversation onReview={() => setTab('review')} /></div>
+    <div hidden={tab !== 'conversation'}><Conversation /></div>
     {tab === 'review' && <Reviews />}
   </section></Layout>
 }
 
-function Conversation({ onReview }: { onReview: () => void }) {
+function Conversation() {
   const [draft, setDraft] = useState('')
   const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [busy, setBusy] = useState(false)
@@ -37,10 +36,6 @@ function Conversation({ onReview }: { onReview: () => void }) {
   function update(run: string, change: Partial<Exchange> | ((e: Exchange) => Partial<Exchange>)) {
     setExchanges(all => all.map(e => e.run === run ? { ...e, ...(typeof change === 'function' ? change(e) : change) } : e))
   }
-  async function check(run: string) {
-    try { update(run, { result: await fetchJson<Result>(`/assistant/tracking-results/${run}`), error: undefined }) }
-    catch (error) { update(run, { error: message(error) }) }
-  }
   async function send() {
     if (busy || !draft.trim()) return
     const run = crypto.randomUUID(), question = draft.trim()
@@ -50,7 +45,7 @@ function Conversation({ onReview }: { onReview: () => void }) {
       if (previous.current) { await fetchVoid(`/assistant/conversations/${conversation.current}/runs/${previous.current}/ack`, post({})); previous.current = null }
       const controller = new AbortController(); abort.current = controller
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/assistant/conversations/${conversation.current}/messages`, {
-        ...post({ run_id: run, message: question, tracking_mode: 'review_later' }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(135000)]), headers: { 'Content-Type': 'application/json', ...protocolHeaders() },
+        ...post({ run_id: run, message: question, tracking_mode: 'confirm' }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(135000)]), headers: { 'Content-Type': 'application/json', ...protocolHeaders() },
       })
       if (!response.ok) { const error = await response.json(); throw new Error(typeof error.detail === 'string' ? error.detail : 'Could not start Assistant.') }
       const reader = response.body!.getReader(), decoder = new TextDecoder()
@@ -65,33 +60,30 @@ function Conversation({ onReview }: { onReview: () => void }) {
           const raw = frame.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n')
           if (!raw) continue
           const data = JSON.parse(raw)
-          if (data.run_id !== run || data.sequence !== ++sequence) throw new Error('Response interrupted. Check the saved result before repeating your command.')
+          if (data.run_id !== run || data.sequence !== ++sequence) throw new Error('Response interrupted. Please send a new message.')
           if (kind === 'text_delta') update(run, e => ({ answer: e.answer + data.text }))
-          if (kind === 'tracking_result') { update(run, { result: data }); if (data.status === 'recorded') void getActivityRepository().refresh() }
+          if (kind === 'tracking_proposal') update(run, { tracking: true })
           if (kind === 'task_proposal') update(run, { task: true })
-          if (kind === 'failed' || kind === 'stopped') throw new Error(data.message || 'Response stopped. Check result before repeating your command.')
+          if (kind === 'failed' || kind === 'stopped') throw new Error(data.message || 'Response stopped. Please send a new message.')
           if (kind === 'completed') completed = true
         }
       }
-      if (!completed) throw new Error('Connection lost. Check result before repeating your command.')
+      if (!completed) throw new Error('Connection lost. Please send a new message.')
       previous.current = run
     } catch (error) { update(run, { error: message(error) }) }
     finally { setBusy(false); abort.current = null }
   }
   return <div className="assistant-conversation">
-    {exchanges.length === 0 && <div className="assistant-intro"><h2>Say it. Get on with your day.</h2><p>“I’m going to the gym.” “Starting work.” “I’m done.”</p><p>Your activity is recorded immediately. Check or correct it later in Review.</p></div>}
+    {exchanges.length === 0 && <div className="assistant-intro"><h2>What’s on your mind?</h2><p>Ask about your day, your tasks, or your tracked time.</p></div>}
     <div aria-live="polite">{exchanges.map(e => <article className="assistant-exchange" key={e.run}>
       <p className="assistant-question">{e.question}</p><p className="assistant-answer">{e.answer}</p>
+      {e.tracking && <p>Tracking changes need confirmation. Use the Android Assistant to request and confirm this activity change.</p>}
       {e.task && <p>Task changes still need confirmation. Use the Android Assistant to request and confirm this task change.</p>}
-      {e.result?.status === 'recorded' && <p className="assistant-receipt">✓ Recorded · {e.result.name} <button onClick={onReview}>Review activity →</button></p>}
-      {e.result && e.result.status !== 'recorded' && !e.task && <p>{e.result.message}</p>}
       {e.error && <p role="alert">{e.error}</p>}
-      {(e.error || e.result?.status === 'pending') && <button disabled={busy} onClick={() => void check(e.run)}>Check saved result</button>}
     </article>)}</div>
     <form onSubmit={e => { e.preventDefault(); void send() }} className="assistant-composer">
-      <label htmlFor="tracking-command">Track now, review later <span>Activity only · Online</span></label>
-      <div><input id="tracking-command" maxLength={4000} value={draft} onChange={e => setDraft(e.target.value)} placeholder="What are you doing?" /><button disabled={busy || !draft.trim()} type="submit">{busy ? 'Recording…' : 'Send →'}</button></div>
-      <small>Sending authorizes activity tracking. Task and subtask changes are never applied here.</small>
+      <label htmlFor="tracking-command">Message Assistant</label>
+      <div><input id="tracking-command" maxLength={4000} value={draft} onChange={e => setDraft(e.target.value)} placeholder="What’s on your mind?" /><button disabled={busy || !draft.trim()} type="submit">{busy ? 'Thinking…' : 'Send →'}</button></div>
     </form>
   </div>
 }

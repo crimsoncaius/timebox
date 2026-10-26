@@ -54,7 +54,6 @@ fun AssistantScreen(
     onOpenTrends: (LocalDate, LocalDate) -> Unit = { _, _ -> },
     onOpenReview: () -> Unit = {},
 ) {
-    var reviewLater by rememberSaveable { mutableStateOf(false) }
     val state by controller.state.collectAsState()
     val application = LocalContext.current.applicationContext as TimeboxApplication
     LaunchedEffect(state.exchanges.lastOrNull()?.trackingResult) {
@@ -176,17 +175,10 @@ fun AssistantScreen(
             }
         }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Track now, review later", style = TimeboxTheme.type.bodySmall)
-                Text("Activity only · Task changes need confirmation", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-            }
-            Switch(checked = reviewLater, onCheckedChange = { reviewLater = it }, enabled = !state.busy)
-        }
         if (state.ended != null) Button(onClick = ::reset, modifier = Modifier.fillMaxWidth().padding(12.dp)) { Text("New conversation") }
         else AssistantComposer(draft, { if (it.length <= 4000) draft = it }, composerFocus, state.busy,
             if (state.exchanges.isEmpty()) "What’s on your mind?" else "Ask a follow-up…",
-            controller::stop, { follow = true; controller.send(draft, reviewLater); draft = "" })
+            controller::stop, { follow = true; controller.send(draft); draft = "" })
     }
 }
 
