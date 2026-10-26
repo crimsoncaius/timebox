@@ -156,6 +156,31 @@ class NavigationShortcutsTest {
         compose.runOnIdle { assertTrue(added) }
     }
 
+    @Test fun editorMovesShortcutLaterAndSavesOrder() {
+        var saved: List<String>? = null
+        compose.setContent { TimeboxTheme {
+            NavigationShortcutEditor(navigationShortcutRoutes(null), {}, { saved = it })
+        } }
+        compose.onNodeWithContentDescription("Move Battle Plan later").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Move Day later").performClick()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertEquals(listOf(AppRoutes.BattlePlan, AppRoutes.DayPattern), saved) }
+    }
+
+    @Test fun homeGroupsShortcutEditorWithPreferences() {
+        var opened = false
+        compose.setContent { TimeboxTheme {
+            NavigationDirectory(AppRoutes.Home, {}, onEditShortcuts = { opened = true })
+        } }
+        compose.onNodeWithText("Edit shortcuts").performScrollTo()
+        val preferences = compose.onNodeWithText("PREFERENCES").getUnclippedBoundsInRoot()
+        val editor = compose.onNodeWithText("Edit shortcuts").getUnclippedBoundsInRoot()
+        val settings = compose.onNodeWithText("Settings").getUnclippedBoundsInRoot()
+        assertTrue(preferences.bottom <= editor.top && editor.bottom <= settings.top)
+        compose.onNodeWithText("Edit shortcuts").performClick()
+        compose.runOnIdle { assertTrue(opened) }
+    }
+
     @Test fun stripScrollsAndResetsOnReturn() {
         val route = mutableStateOf(AppRoutes.DayPattern)
         val editing = mutableStateOf(false)

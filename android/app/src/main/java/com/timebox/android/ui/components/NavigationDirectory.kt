@@ -68,23 +68,25 @@ internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Uni
         .statusBarsPadding().navigationBarsPadding()) {
         Text("Home", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp).semantics { heading() },
             style = TimeboxTheme.type.display, color = colors.on)
+        Hairline()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
             .padding(bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (onEditShortcuts != null) {
-                Row(Modifier.fillMaxWidth().clip(groupShape).background(colors.low)
-                    .clickable(onClick = onEditShortcuts).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Tune, null, Modifier.size(24.dp), tint = colors.onVariant)
-                    Text("Edit shortcuts", Modifier.weight(1f).padding(horizontal = 16.dp),
-                        style = TimeboxTheme.type.body, color = colors.on)
-                    Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = colors.onVariant)
-                }
-            }
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
                 Column(Modifier.fillMaxWidth().clip(groupShape).background(colors.low)
                     .border(1.dp, colors.hairline, groupShape).padding(8.dp)) {
                     Text(group.uppercase(Locale.ROOT), Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
                         .semantics { heading() }, style = TimeboxTheme.type.laneLabel.copy(fontSize = 11.sp), color = colors.onVariant)
+                    if (group == "Preferences" && onEditShortcuts != null) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .clickable(onClick = onEditShortcuts).heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Tune, null, Modifier.size(24.dp), tint = colors.onVariant)
+                            Text("Edit shortcuts", Modifier.weight(1f).padding(horizontal = 16.dp),
+                                style = TimeboxTheme.type.body, color = colors.on)
+                            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = colors.onVariant)
+                        }
+                    }
+                    if (group == "Preferences" && onEditShortcuts != null) Hairline(Modifier.padding(horizontal = 12.dp))
                     destinations.forEachIndexed { index, destination ->
                         val current = currentRoute == destination.route
                         if (index > 0 && !current && currentRoute != destinations[index - 1].route) {
