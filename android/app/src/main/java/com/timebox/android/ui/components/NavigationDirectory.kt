@@ -1,5 +1,6 @@
 package com.timebox.android.ui.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.timebox.android.ui.AppRoutes
 import com.timebox.android.ui.theme.TimeboxTheme
 
@@ -61,35 +63,48 @@ internal val navigationDestinations = listOf(
 @Composable
 internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Unit, onEditShortcuts: (() -> Unit)? = null) {
     val colors = TimeboxTheme.colors
+    val groupShape = RoundedCornerShape(16.dp)
     Column(Modifier.fillMaxSize().background(colors.bg).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Home" }
         .statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Home", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
-        }
-        if (onEditShortcuts != null) TextButton(onClick = onEditShortcuts, modifier = Modifier.padding(horizontal = 16.dp)) {
-            Icon(Icons.Outlined.Tune, null, Modifier.size(20.dp), tint = colors.on)
-            Spacer(Modifier.width(10.dp))
-            Text("Edit shortcuts", style = TimeboxTheme.type.label, color = colors.on)
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = LocalNavigationDockInset.current + 20.dp)) {
-            navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
-                if (group == "Preferences") {
-                    Hairline(Modifier.padding(top = 20.dp))
+        Text("Home", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp).semantics { heading() },
+            style = TimeboxTheme.type.display, color = colors.on)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
+            .padding(bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (onEditShortcuts != null) {
+                Row(Modifier.fillMaxWidth().clip(groupShape).background(colors.low)
+                    .clickable(onClick = onEditShortcuts).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Tune, null, Modifier.size(24.dp), tint = colors.onVariant)
+                    Text("Edit shortcuts", Modifier.weight(1f).padding(horizontal = 16.dp),
+                        style = TimeboxTheme.type.body, color = colors.on)
+                    Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = colors.onVariant)
                 }
-                Text(group, Modifier.padding(start = 8.dp, top = 20.dp, bottom = 6.dp).semantics { heading() },
-                    style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-                destinations.forEach { destination ->
-                    val current = currentRoute == destination.route
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                        .background(if (current) colors.high else Color.Transparent)
-                        .semantics { selected = current }
-                        .clickable(onClickLabel = "Open ${destination.label}") { onSelect(destination.route) }
-                        .heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(destination.icon, null, Modifier.size(21.dp), tint = colors.onVariant)
-                        Spacer(Modifier.width(14.dp))
-                        Text(destination.label, Modifier.weight(1f), style = TimeboxTheme.type.body, color = colors.on)
-                        if (current) {
-                            Text("Current", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            }
+            navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
+                Column(Modifier.fillMaxWidth().clip(groupShape).background(colors.low)
+                    .border(1.dp, colors.hairline, groupShape).padding(8.dp)) {
+                    Text(group.uppercase(Locale.ROOT), Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
+                        .semantics { heading() }, style = TimeboxTheme.type.laneLabel.copy(fontSize = 11.sp), color = colors.onVariant)
+                    destinations.forEachIndexed { index, destination ->
+                        val current = currentRoute == destination.route
+                        if (index > 0 && !current && currentRoute != destinations[index - 1].route) {
+                            Hairline(Modifier.padding(horizontal = 12.dp))
+                        }
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .background(if (current) colors.high else Color.Transparent)
+                            .semantics { selected = current }
+                            .clickable(onClickLabel = "Open ${destination.label}") { onSelect(destination.route) }
+                            .heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(destination.icon, null, Modifier.size(24.dp), tint = colors.onVariant)
+                            Text(destination.label, Modifier.weight(1f).padding(start = 16.dp, end = 8.dp),
+                                style = TimeboxTheme.type.body, color = colors.on)
+                            if (current) {
+                                Text("Current", Modifier.clip(RoundedCornerShape(50)).background(colors.highest)
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = TimeboxTheme.type.bodySmall, color = colors.on)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = colors.onVariant)
                         }
                     }
                 }

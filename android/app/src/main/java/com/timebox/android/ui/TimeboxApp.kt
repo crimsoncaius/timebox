@@ -425,7 +425,7 @@ fun TimeboxApp(
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         val editing = navigationBlockers.value > 0 || battlePlanState.showComposer || battlePlanState.projectEditor != null || typesState.renaming != null ||
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
-        val showNavigation = !focused && (route == AppRoutes.Home || navigationDestinations.any { it.route == route }) &&
+        val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
         val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
         if (!focused) Box(
