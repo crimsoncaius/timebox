@@ -489,7 +489,7 @@ private fun DayPage(
                     .timelinePinch(scrollState, active = active)
                     .verticalScroll(scrollState)
                     .padding(horizontal = TimeboxDimens.screenPadding)
-                    .padding(bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current),
+                    .padding(bottom = LocalNavigationDockInset.current),
             ) {
                 val elapsedDay = day.actualBlocks.any { it.dayLengthMinutes != 1440 }
                 Column {
