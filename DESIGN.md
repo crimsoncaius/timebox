@@ -99,8 +99,8 @@ colors:
   timeline-grid-strong: "#dadce0"
   timeline-grid-soft: "#e8eaed"
   timeline-label: "#5f6368"
-  now-line: "#2d3435"
-  now-line-dark: "#e7e5e4"
+  now-line: "#9f403d"
+  now-line-dark: "#f2a09a"
   dark-background: "#0c0a09"
   dark-surface: "#121212"
   dark-surface-container-lowest: "#0c0a09"
@@ -397,10 +397,12 @@ The palette is mostly warm neutral paper, graphite text, and desaturated control
 
 Color has four roles, and every colored element must mean one of them:
 
-- **Neutral** (paper and graphite) is the base: surfaces, text, icons, secondary and tonal buttons, Cancel, and the current-time line (`now-line`, ink rather than red). Neutral never makes something stand out; size, weight and space do that.
+- **Neutral** (paper and graphite) is the base: surfaces, text, icons, secondary and tonal buttons, Cancel. Neutral never makes something stand out; size, weight and space do that.
 - **Accent · Plan** (blue, `accent`, the same values as `planned`) means intended, or acts here: the main action on a screen, selected tabs and chips, switches when on, focus rings, links, today's marker, and planned time.
 - **Done · Live** (teal, `done`, the same values as `actual`) means real: it happened or it is happening now. Actual time, live tracking, Start and Stop tracking, completion checks, and met habit cells and totals.
 - **Signals**: `warn` (amber) for an action that replaces recorded time, and `error` (red, intentionally earthy rather than alarm-red) only for what cannot be undone and for error text.
+
+**Now Line exception (2026-10-26):** The current-time line and its leading dot use red so the present moment is easy to locate across the timeline. Use `now-line` (`#9f403d`) in light mode and `now-line-dark` (`#f2a09a`) in dark mode. This is a time-position indicator, not an error or destructive action; other uses of red retain the rules above.
 
 Color a control by what it changes, asking in this order and stopping at the first yes: deletes for good → `error`; replaces recorded time → `warn`; starts, stops or records something real → `done`; the main action or current selection → `accent`; everything else → neutral. Meaning beats utility, so Start tracking is teal even though it is also the main action. Use `on-accent` / `on-done` text on those fills.
 
@@ -457,7 +459,7 @@ Popovers, inspector panels, and combobox menus should feel like translucent pape
 - Do keep dark mode charcoal, warm, and restrained.
 - Don't give an area more than one strong blue; planned items use the blue tint and outline, not a solid fill.
 - Don't use teal on generic buttons or selection, or as a lasting row background.
-- Don't use red for anything that isn't destructive or an error, including the current-time line.
+- Reserve red for destructive actions and errors, except for the Now Line and its leading dot (the explicit current-time indicator exception).
 - Don't use thick borders or heavy shadows for sectioning.
 - Don't over-bold headings; scale and spacing should do that work.
 - Don't introduce playful colors, dense dashboard widgets, or decorative illustration.
