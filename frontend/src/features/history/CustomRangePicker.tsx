@@ -132,7 +132,6 @@ export function CustomRangePicker({ start, end, today, onChange }: {
           return <div key={cell.iso} className={`flex h-9 items-center justify-center ${band ? `${draft.end ? 'bg-surface-container-high dark:bg-dark-surface-container-high' : 'bg-surface-container dark:bg-dark-surface-container'} ${bandShape}` : ''}`}>
             <button type="button" disabled={future} data-endpoint={last ? 'last' : first ? 'first' : undefined}
               aria-label={`${dayName(cell.iso)}${cell.iso === today ? ', today' : ''}${state}`} aria-pressed={first || last}
-              title={future ? 'Days after Today have no recorded time' : undefined}
               onPointerEnter={() => setHovered(cell.iso)} onFocus={() => setHovered(cell.iso)}
               onClick={() => setDraft(current => nextRangeDraft(current, cell.iso))}
               className={`grid size-9 place-items-center rounded-full font-headline text-sm tabular-nums transition-colors disabled:cursor-default disabled:text-on-surface-variant/35 dark:disabled:text-dark-on-surface-variant/35 ${first || last
@@ -144,6 +143,7 @@ export function CustomRangePicker({ start, end, today, onChange }: {
         })}
       </div>
 
+      <p className="mt-3 text-xs text-on-surface-variant dark:text-dark-on-surface-variant">Days after Today have no recorded time.</p>
       <div className="mt-3 flex items-center justify-end gap-2">
         <button type="button" onClick={() => setOpen(false)} className="rounded-full px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container">Cancel</button>
         <button type="button" disabled={!draft.end} onClick={apply}

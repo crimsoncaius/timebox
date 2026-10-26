@@ -57,6 +57,10 @@ class TimeGoalCreationTest {
         compose.onNodeWithText("Done").performScrollTo().performClick()
         compose.onNodeWithTag("goal-period").performClick()
         compose.onNodeWithText("Month", substring = false).performClick()
+        compose.onNodeWithContentDescription("Help: Goal periods").performClick()
+        compose.onNodeWithText("Weeks start Monday. Months follow the calendar.").assertIsDisplayed()
+        compose.onNodeWithText("Close help").performClick()
+        compose.runOnIdle { assertFalse(dismissed); assertNull(saved) }
         compose.onNodeWithText("Done").performScrollTo().performClick()
         compose.onNodeWithText("Create Time Goal").assertIsEnabled().performClick()
         compose.waitUntil(10_000) { dismissed }

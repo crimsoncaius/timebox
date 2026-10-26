@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -9,7 +10,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -65,7 +65,6 @@ internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: Str
     var touched by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var entryField by rememberSaveable { mutableStateOf<String?>(null) }
-    var showPeriod by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     LaunchedEffect(Unit) { viewModel.loadGoalTypes() }
     val parsedHours = hours.toIntOrNull()
@@ -130,6 +129,7 @@ internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: Str
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (chooseType) "Task Type" else if (original == null) "New Time Goal" else "Edit Time Goal",
                     Modifier.weight(1f), style = type.sectionTitle, color = colors.on)
+                ContextualHelp("Goal progress", "Actual Blocks in this Task Type and its descendants count, including existing recorded time. Extra time does not carry forward.")
                 TextButton({ if (chooseType) chooseType = false else dismiss() }, enabled = !state.goalSaving) {
                     Text(if (chooseType) "Back" else "Cancel")
                 }
@@ -152,27 +152,21 @@ internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: Str
                         TextButton({ chooseDate = true }, enabled = !state.goalSaving, modifier = Modifier.weight(1f)) {
                             Text("Starts ${start.format(goalDateFormat)}", style = type.body)
                         }
-                        TextButton({ showPeriod = !showPeriod }) {
-                            Text("First period", style = type.bodySmall)
-                            Icon(if (showPeriod) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (showPeriod) "Hide details" else "Show details")
-                        }
                     }
                     Text(end?.let { "${goalDuration(target.coerceAtLeast(0))} by ${it.format(goalDateFormat)}" } ?: "Choose an earlier date",
                         style = type.body, color = colors.onVariant)
                     if ((unit == "week" && start.dayOfWeek.value != 1) || (unit == "month" && start.dayOfMonth != 1))
                         Text("This first period is shorter. Its full target still applies.", style = type.bodySmall, color = colors.onVariant)
-                    if (showPeriod) {
-                        Text(end?.let { goalRange(start, it) } ?: "Choose an earlier date", style = type.label)
-                        Text("Actual Blocks in this Task Type and its descendants count, including existing recorded time. Extra time does not carry forward.",
-                            style = type.bodySmall, color = colors.onVariant)
-                        Text("Reporting time zone · $timezone", style = type.bodySmall, color = colors.onVariant)
-                    }
+                    Text(end?.let { goalRange(start, it) } ?: "Choose an earlier date", style = type.label)
+                    Text("Reporting time zone · $timezone", style = type.bodySmall, color = colors.onVariant)
                 } else {
                     CreationDateRow("Task Type", path.ifEmpty { "Choose a Task Type" }, !state.goalSaving) { query = ""; chooseType = true }
-                    Text("Includes time in all descendant Task Types.", style = type.bodySmall, color = colors.onVariant)
                     Text("Target duration", style = type.label, color = colors.on)
                     durationFields()
-                    Text("Repeat", style = type.label, color = colors.on)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Repeat", style = type.label, color = colors.on, modifier = Modifier.weight(1f))
+                        ContextualHelp("Goal periods", "Weeks start Monday. Months follow the calendar.")
+                    }
                     periodFields()
                     HorizontalDivider(color = colors.hairline)
                     when {
@@ -220,9 +214,12 @@ internal fun TimeGoalEditor(original: TimeGoal?, today: LocalDate, timezone: Str
                 "duration" -> durationFields()
                 "type" -> {
                     typePicker()
-                    Text("Time in this Task Type and its descendants counts.", style = type.bodySmall, color = colors.onVariant)
+                    ContextualHelp("Task Type time", "Time in this Task Type and its descendants counts.")
                 }
-                "period" -> { periodFields(); Text("Weeks start Monday. Months follow the calendar.", style = type.bodySmall, color = colors.onVariant) }
+                "period" -> {
+                    ContextualHelp("Goal periods", "Weeks start Monday. Months follow the calendar.")
+                    periodFields()
+                }
             }
             state.goalError?.let { Text(it, color = colors.error, style = type.bodySmall) }
             if (entryField == "type" && state.goalError != null && !state.goalSaving)

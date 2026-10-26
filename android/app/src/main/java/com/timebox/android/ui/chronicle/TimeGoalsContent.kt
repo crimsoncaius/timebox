@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -56,7 +57,7 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
     var editorId by rememberSaveable { mutableStateOf<Int?>(null) }
     if (detailId != null || editorId != null) com.timebox.android.ui.components.HideNavigate()
     val canManage = !state.offline && !state.goalSaving && !state.loading
-    Text("Recorded time, measured against each goal’s period", style = type.bodySmall, color = colors.onVariant)
+    ContextualHelp("Time Goals", "Recorded time is measured against each goal’s period. Expand a goal and select a day to view its period.")
     state.goalError?.let { message ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(message, Modifier.weight(1f), style = type.bodySmall, color = colors.error)
@@ -96,8 +97,6 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
             }
         }
         if (open) {
-            Text("Select a day to view its period", style = type.bodySmall, color = colors.onVariant,
-                modifier = Modifier.padding(bottom = 8.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 repeat(7) { index ->
                     val date = report.weekStart.plusDays(index.toLong())

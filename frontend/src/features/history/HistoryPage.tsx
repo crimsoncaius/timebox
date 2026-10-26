@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { Layout } from '../../components/Layout'
 import { api, type ChronicleDay } from '../../lib/api'
 import { ChronicleMonthGrid } from './ChronicleMonthGrid'
@@ -79,11 +80,9 @@ export function HistoryPage() {
           <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
             {view === 'trends' ? 'Trends' : 'Chronicle of focus'}
           </h1>
-          <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-            {view === 'trends'
-              ? 'Recorded time by Task Type.'
-              : 'Browse planned, recorded, and completed days through today. Any date opens in Day.'}
-          </p>
+          {view === 'calendar' && <ContextualHelp title="Calendar">
+            Browse planned, recorded, and completed days through today. Any date opens in Day.
+          </ContextualHelp>}
         </div>
       </section>
 
