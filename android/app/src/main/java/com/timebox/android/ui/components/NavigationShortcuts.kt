@@ -132,8 +132,7 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
         .semantics { paneTitle = "Edit shortcuts" }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(enabled = !saving, onClick = onCancel) { Text("Cancel") }
-            Text("Edit shortcuts", Modifier.weight(1f).semantics { heading() }, textAlign = TextAlign.Center,
-                style = TimeboxTheme.type.label, color = colors.on)
+            Spacer(Modifier.weight(1f))
             TextButton(enabled = !saving, onClick = {
                 saving = true
                 error = null
@@ -142,51 +141,70 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
                     catch (_: IOException) { error = "Couldn't save shortcuts. Try again." }
                     finally { saving = false }
                 }
-            }) { Text(if (saving) "Saving…" else "Save") }
+            }) { Text(if (saving) "Saving..." else "Save") }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-            Text("${draft.size} selected", style = TimeboxTheme.type.screenTitle, color = colors.on,
-                modifier = Modifier.padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Polite })
-            Text("Choose the screens you reach for most. Swipe the bar to reach more shortcuts.",
+            Text("Edit shortcuts", style = TimeboxTheme.type.display, color = colors.on,
+                modifier = Modifier.padding(top = 16.dp).semantics { heading() })
+            Text("Keep your most-used screens within reach. Changes apply only to this device.",
                 style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
             error?.let { Text(it, color = colors.error, style = TimeboxTheme.type.body,
                 modifier = Modifier.padding(bottom = 16.dp).semantics { liveRegion = LiveRegionMode.Polite }) }
             if (draft.isNotEmpty()) {
-                Text("Your shortcuts · in bar order", style = TimeboxTheme.type.label, color = colors.onVariant)
-                draft.forEachIndexed { index, route ->
-                    val destination = navigationDestinations.first { it.route == route }
-                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(destination.icon, null, Modifier.size(20.dp), tint = colors.onVariant)
-                        Text(destination.label, Modifier.weight(1f).padding(start = 12.dp), style = TimeboxTheme.type.body, color = colors.on)
-                        IconButton(enabled = !saving && index > 0, onClick = {
-                            draft = draft.toMutableList().also { it[index] = it[index - 1]; it[index - 1] = route }
-                        }) { Icon(Icons.Outlined.ArrowUpward, "Move ${destination.label} earlier") }
-                        IconButton(enabled = !saving, onClick = { draft = draft - route }) {
-                            Icon(Icons.Outlined.RemoveCircleOutline, "Remove ${destination.label}")
+                Text("Your shortcuts", style = TimeboxTheme.type.sectionTitle, color = colors.on, modifier = Modifier.padding(bottom = 12.dp).semantics { heading() })
+                Column(Modifier.clip(RoundedCornerShape(16.dp)).background(colors.low).padding(8.dp)) {
+                    draft.forEachIndexed { index, route ->
+                        val destination = navigationDestinations.first { it.route == route }
+                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(destination.icon, null, Modifier.size(20.dp), tint = colors.onVariant)
+                            Text(destination.label, Modifier.weight(1f).padding(start = 12.dp), style = TimeboxTheme.type.body, color = colors.on)
+                            IconButton(enabled = !saving && index > 0, onClick = {
+                                draft = draft.toMutableList().also { it[index] = it[index - 1]; it[index - 1] = route }
+                            }) { Icon(Icons.Outlined.ArrowUpward, "Move ${destination.label} earlier") }
+                            IconButton(enabled = !saving && index < draft.lastIndex, onClick = {
+                                draft = draft.toMutableList().also { it[index] = it[index + 1]; it[index + 1] = route }
+                            }) { Icon(Icons.Outlined.ArrowDownward, "Move ${destination.label} later") }
+                            IconButton(enabled = !saving, onClick = { draft = draft - route }) {
+                                Icon(Icons.Outlined.RemoveCircleOutline, "Remove ${destination.label}")
+                            }
                         }
                     }
                 }
-                Hairline(Modifier.padding(vertical = 12.dp))
+            } else {
+                Text("No shortcuts yet", style = TimeboxTheme.type.sectionTitle, color = colors.on)
+                Text("Choose a screen below to start your bar. Add shortcut always stays available.",
+                    style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             }
+            Text("Choose screens", style = TimeboxTheme.type.sectionTitle, color = colors.on,
+                modifier = Modifier.padding(top = 28.dp, bottom = 4.dp).semantics { heading() })
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
                 Text(group, style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
                     modifier = Modifier.padding(top = 16.dp, bottom = 4.dp).semantics { heading() })
-                destinations.forEach { destination ->
-                    val chosen = destination.route in draft
-                    val enabled = !saving
-                    Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(RoundedCornerShape(8.dp))
-                        .toggleable(value = chosen, role = Role.Checkbox, enabled = enabled) {
-                            draft = if (chosen) draft - destination.route else draft + destination.route
-                        }, verticalAlignment = Alignment.CenterVertically) {
-                        Icon(destination.icon, null, Modifier.size(20.dp), tint = if (enabled) colors.onVariant else colors.disabledContent)
-                        Text(destination.label, Modifier.weight(1f).padding(start = 12.dp), style = TimeboxTheme.type.body,
-                            color = if (enabled) colors.on else colors.disabledContent)
-                        Checkbox(checked = chosen, enabled = enabled, onCheckedChange = null)
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.low).padding(8.dp)) {
+                    destinations.forEach { destination ->
+                        val chosen = destination.route in draft
+                        val enabled = !saving
+                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(12.dp))
+                            .background(if (chosen) colors.high else Color.Transparent)
+                            .toggleable(value = chosen, role = Role.Checkbox, enabled = enabled) {
+                                draft = if (chosen) draft - destination.route else draft + destination.route
+                            }.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(destination.icon, null, Modifier.size(20.dp), tint = if (enabled) colors.onVariant else colors.disabledContent)
+                            Text(destination.label, Modifier.weight(1f).padding(start = 12.dp), style = TimeboxTheme.type.body,
+                                color = if (enabled) colors.on else colors.disabledContent)
+                            Checkbox(checked = chosen, enabled = enabled, onCheckedChange = null)
+                        }
                     }
                 }
             }
+            Spacer(Modifier.height(24.dp))
         }
-        Text("Bar preview", Modifier.padding(start = 20.dp, top = 8.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+        Hairline()
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Text("Bar preview", Modifier.weight(1f), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+            Text("${draft.size} selected", style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        }
         ShortcutDockItems(draft, "", {}, {}, preview = true)
     }
 }
