@@ -1,3 +1,4 @@
+import { ContextualHelp } from './ContextualHelp'
 import { BlockTimeFields } from './BlockTimeFields'
 import { formatBlockDuration, formatDuration } from '../lib/duration'
 import { ActivityActualEditor } from '../features/activity/ActivityActualEditor'
@@ -347,13 +348,14 @@ function LegacyTimeBlockInspectorContent({
       {block?.start_at && block.end_at && <p className="text-sm">{new Date(block.start_at).toLocaleString(undefined, { timeZone: day.meta.timezone })} – {new Date(block.end_at).toLocaleString(undefined, { timeZone: day.meta.timezone })}</p>}
       {block?.google_calendar ? <p className="text-sm">Google Calendar · {block.google_calendar.calendar_id} {block.google_calendar.url && <a className="underline" href={block.google_calendar.url} target="_blank" rel="noreferrer">Open source event</a>}</p> : block && <BlockTimeFields key={`${block.lane}-${block.id}-${block.start_minute}-${block.end_minute}`} block={block} onSave={onSave} />}
 
+      {!isCreateMode && block && !block.google_calendar && <ContextualHelp title="Adjust block time">Drag the block edges on the timeline to adjust.</ContextualHelp>}
       {/* Helper text */}
       <p className="max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">
         {isCreateMode
           ? isNameEditable
             ? 'Add a Name, choose a Task Type if useful, then create the block.'
             : 'Pick a Task Type to create this block. Edits save as you make them.'
-          : block?.google_calendar ? 'Name and time follow Google. Local classification and notes save here.' : 'Drag the block edges on the timeline to adjust. Edits save as you make them.'}
+          : block?.google_calendar ? 'Name and time follow Google. Local classification and notes save here.' : 'Edits save as you make them.'}
       </p>
 
       {(block?.task ?? (draft?.task_id ? { id: draft.task_id, title: 'Selected Battle Plan task' } : null)) ? (

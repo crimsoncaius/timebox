@@ -1,3 +1,4 @@
+import { ContextualHelp } from './ContextualHelp'
 import type { ReactNode } from 'react'
 
 export const settingsInputClassName =
@@ -105,14 +106,9 @@ export function SettingsToggle({ checked, onChange, label, disabled }: {
 
 /** Long explanations stay one click away instead of crowding the rows. */
 export function SettingsDetails({ summary, children }: { summary: string; children: ReactNode }) {
-  return (
-    <details className="group rounded-xl px-4 py-2 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">
-      <summary className="cursor-pointer select-none font-label font-medium text-on-surface-variant transition-colors hover:text-on-surface marker:text-outline dark:text-dark-on-surface-variant dark:hover:text-dark-on-surface">
-        {summary}
-      </summary>
-      <div className="mt-2 max-w-xl space-y-2 leading-relaxed">{children}</div>
-    </details>
-  )
+  return <div className="flex items-center gap-1 px-4 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">
+    <span>{summary}</span><ContextualHelp title={summary}>{children}</ContextualHelp>
+  </div>
 }
 
 /** Read-only state for a permission or capability the page cannot change itself. */

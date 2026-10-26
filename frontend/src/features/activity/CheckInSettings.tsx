@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useSyncExternalStore } from 'react'
 import {
   SettingsDetails,
@@ -58,9 +59,9 @@ export function CheckInSettings() {
       <SettingsRow
         label="Check in after"
         htmlFor="settings-check-in-threshold"
-        description="How long the device must be idle before asking."
         disabled={!settings.enabled}
       >
+        <ContextualHelp title="Check in after">How long the device must be idle before asking.</ContextualHelp>
         <select
           id="settings-check-in-threshold"
           className={`${settingsInputClassName} pr-8`}
