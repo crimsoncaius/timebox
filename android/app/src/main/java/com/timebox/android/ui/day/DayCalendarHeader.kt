@@ -102,25 +102,29 @@ internal fun DayCalendarHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            com.timebox.android.ui.components.ScreenBackButton()
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterVertically)
-                    .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
-                    },
+            Row(
+                modifier = Modifier.align(Alignment.CenterVertically),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = dayTitleKicker(selectedDate, today),
-                    style = TimeboxTheme.type.bodySmall,
-                    color = if (selectedDate == today) colors.planned else colors.onVariant,
-                )
-                Text(
-                    text = dayTitle(selectedDate, today),
-                    style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
-                    color = colors.on,
-                )
+                com.timebox.android.ui.components.ScreenBackButton()
+                Column(
+                    modifier = Modifier
+                        .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
+                        },
+                ) {
+                    Text(
+                        text = dayTitleKicker(selectedDate, today),
+                        style = TimeboxTheme.type.bodySmall,
+                        color = if (selectedDate == today) colors.planned else colors.onVariant,
+                    )
+                    Text(
+                        text = dayTitle(selectedDate, today),
+                        style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
+                        color = colors.on,
+                    )
+                }
             }
             Row(
                 modifier = Modifier.align(Alignment.CenterVertically),
