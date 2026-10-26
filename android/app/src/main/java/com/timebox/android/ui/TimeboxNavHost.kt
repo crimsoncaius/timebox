@@ -128,7 +128,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelec
             when {
                 options.reducedMotion -> EnterTransition.None
                 slide != null -> slideInHorizontally(tween(250, easing = FastOutSlowInEasing)) { slide.direction * it }
-                else -> fadeIn(tween(700))
+                else -> fadeIn(tween(220))
             }
         },
         exitTransition = {
@@ -137,7 +137,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelec
             when {
                 options.reducedMotion -> ExitTransition.None
                 slide != null -> slideOutHorizontally(tween(250, easing = FastOutSlowInEasing)) { -slide.direction * it }
-                else -> fadeOut(tween(700))
+                else -> fadeOut(tween(220))
             }
         },
     ) {
