@@ -32,7 +32,7 @@ class NavigationShortcutsTest {
         val pins = mutableStateOf(listOf(AppRoutes.DayPattern))
         compose.setContent { TimeboxTheme {
             Box(Modifier.width(360.dp).testTag("dock-host")) {
-                NavigationDock(pins.value, AppRoutes.DayPattern, {}, onAdd = {})
+                NavigationDock(pins.value, AppRoutes.DayPattern, {})
             }
         } }
         val strip = compose.onNodeWithTag("shortcut-strip")
@@ -53,18 +53,18 @@ class NavigationShortcutsTest {
         assertTrue((full.right - full.left) > (single.right - single.left))
         assertEquals(((host.left + host.right) / 2).value, ((full.left + full.right) / 2).value, 1f)
         assertTrue(strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].maxValue() > 0)
-        compose.onNodeWithText("Add shortcut").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(navigationDestinations[6].label).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Add shortcut").assertDoesNotExist()
         compose.runOnIdle { pins.value = emptyList() }
         compose.waitForIdle()
-        val empty = strip.getUnclippedBoundsInRoot()
-        assertTrue(empty.right - empty.left < single.right - single.left)
-        compose.onNodeWithText("Add shortcut").assertIsDisplayed()
+        strip.assertDoesNotExist()
+        compose.onNodeWithText("Add shortcut").assertDoesNotExist()
     }
 
     @Test fun swipesSettleOnShortcutBoundariesOrTheEnd() {
         compose.setContent { TimeboxTheme {
             NavigationDock(listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan, AppRoutes.Habits,
-                AppRoutes.Trends, AppRoutes.Settings), AppRoutes.DayPattern, {}, onAdd = {})
+                AppRoutes.Trends, AppRoutes.Settings), AppRoutes.DayPattern, {})
         } }
         val strip = compose.onNodeWithTag("shortcut-strip")
         val itemWidth = with(compose.density) {
@@ -146,14 +146,13 @@ class NavigationShortcutsTest {
         compose.runOnIdle { assertEquals(emptyList<String>(), saved) }
     }
 
-    @Test fun emptyDockOffersAddShortcut() {
-        var added = false
+    @Test fun emptyDockIsHidden() {
         compose.setContent { TimeboxTheme {
-            NavigationDock(emptyList(), AppRoutes.DayPattern, {}, onAdd = { added = true })
+            NavigationDock(emptyList(), AppRoutes.DayPattern, {})
         } }
-        compose.onNodeWithText("Add shortcut").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("shortcut-strip").assertDoesNotExist()
+        compose.onNodeWithText("Add shortcut").assertDoesNotExist()
         compose.onNodeWithText("Navigate").assertDoesNotExist()
-        compose.runOnIdle { assertTrue(added) }
     }
 
     @Test fun editorMovesShortcutLaterAndSavesOrder() {
@@ -184,15 +183,14 @@ class NavigationShortcutsTest {
     @Test fun stripScrollsAndResetsOnReturn() {
         val route = mutableStateOf(AppRoutes.DayPattern)
         val editing = mutableStateOf(false)
-        var added = false
         compose.setContent { TimeboxTheme {
             NavigationDock(listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan, AppRoutes.Habits, AppRoutes.Trends, AppRoutes.Settings),
-                route.value, { route.value = it }, onAdd = { added = true }, resetScroll = editing.value)
+                route.value, { route.value = it }, resetScroll = editing.value)
         } }
         compose.onNodeWithText("Settings").performScrollTo().performClick()
         compose.onNodeWithText("Day").assertIsDisplayed()
-        compose.onNodeWithText("Add shortcut").performScrollTo().performClick()
-        compose.runOnIdle { assertTrue(added); editing.value = true }
+        compose.onNodeWithText("Settings").performScrollTo()
+        compose.runOnIdle { editing.value = true }
         compose.runOnIdle { editing.value = false }
         compose.onNodeWithText("Day").assertIsDisplayed()
         compose.onNodeWithText("Navigate").assertDoesNotExist()
@@ -201,7 +199,7 @@ class NavigationShortcutsTest {
     @Test fun dockReselectDoesNothingAndOtherShortcutsNavigate() {
         var selected: String? = null
         compose.setContent { TimeboxTheme {
-            NavigationDock(navigationShortcutRoutes(null), AppRoutes.DayPattern, { selected = it }, onAdd = {})
+            NavigationDock(navigationShortcutRoutes(null), AppRoutes.DayPattern, { selected = it })
         } }
         compose.onNodeWithText("Day").assertIsSelected().performClick()
         compose.runOnIdle { assertNull(selected) }

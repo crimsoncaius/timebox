@@ -49,24 +49,25 @@ internal val LocalNavigationDockInset = compositionLocalOf { 0.dp }
 internal fun NavigationDock(
     shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onAdd: () -> Unit,
     resetScroll: Boolean = false,
 ) {
+    if (shortcuts.isEmpty()) return
     Column(modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
-        ShortcutDockItems(shortcuts, currentRoute, onSelect, onAdd, resetScroll)
+        ShortcutDockItems(shortcuts, currentRoute, onSelect, resetScroll)
     }
 }
 
 @Composable
-private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onAdd: () -> Unit, resetScroll: Boolean = false, preview: Boolean = false) {
+private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, resetScroll: Boolean = false, preview: Boolean = false) {
     val colors = TimeboxTheme.colors
     val entries = navigationShortcutRoutes(shortcuts).map { route -> navigationDestinations.first { it.route == route } }
+    if (entries.isEmpty()) return
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center) {
         val availableWidth = (maxWidth - 12.dp).coerceAtLeast(1.dp)
-        // Four destinations fit before Add scrolls into view; small selections stay compact.
+        // Four destinations fit before the strip scrolls; small selections stay compact.
         val visibleItems = 4
         val itemWidthDp = 88.dp.coerceAtMost(availableWidth / visibleItems)
         val itemWidth = with(density) { itemWidthDp.toPx() }
@@ -85,7 +86,7 @@ private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onS
         }
         val flingBehavior = rememberSnapFlingBehavior(snapLayout)
         LaunchedEffect(currentRoute, resetScroll) { scroll.scrollTo(0) }
-        Row(Modifier.width(itemWidthDp * minOf(entries.size + 1, visibleItems) + 12.dp)
+        Row(Modifier.width(itemWidthDp * minOf(entries.size, visibleItems) + 12.dp)
             .shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
             .background(colors.low).border(1.dp, colors.hairline, RoundedCornerShape(20.dp)).padding(6.dp)
             .horizontalScroll(scroll, flingBehavior = flingBehavior).testTag("shortcut-strip")
@@ -96,8 +97,6 @@ private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onS
                     if (currentRoute != destination.route) onSelect(destination.route)
                 }
             }
-            ShortcutDockItem(NavigationDestination("", "Add shortcut", "shortcuts", Icons.Outlined.Add),
-                false, Modifier.width(itemWidthDp), preview, onAdd)
         }
     }
 }
@@ -172,7 +171,7 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
                 }
             } else {
                 Text("No shortcuts yet", style = TimeboxTheme.type.sectionTitle, color = colors.on)
-                Text("Choose a screen below to start your bar. Add shortcut always stays available.",
+                Text("Choose a screen below to start your bar.",
                     style = TimeboxTheme.type.body, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             }
             Text("Choose screens", style = TimeboxTheme.type.sectionTitle, color = colors.on,
@@ -205,6 +204,6 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
             Text("${draft.size} selected", style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
-        ShortcutDockItems(draft, "", {}, {}, preview = true)
+        ShortcutDockItems(draft, "", {}, preview = true)
     }
 }

@@ -427,12 +427,13 @@ fun TimeboxApp(
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
         val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
-        val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
+        val showDock = showNavigation && shortcuts?.isNotEmpty() == true
+        val feedbackBottom = if (showDock) navigationHeight + 12.dp else 24.dp
         if (!focused) Box(
             modifier = Modifier.fillMaxSize().imePadding().then(if (shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
             CompositionLocalProvider(
-                LocalNavigationDockInset provides if (showNavigation) navigationHeight else 0.dp,
+                LocalNavigationDockInset provides if (showDock) navigationHeight else 0.dp,
                 // Home has its own header without ScreenBackButton. Keep this callback
                 // available while the outgoing destination fades away above Home.
                 com.timebox.android.ui.components.LocalScreenBack provides if (showNavigation || route == AppRoutes.Home) ({
@@ -444,10 +445,10 @@ fun TimeboxApp(
                 TimeboxNavHost(navigation, { selectDestination(it) }, { shortcutEditorOpen = true })
             }
 
-            if (showNavigation) shortcuts?.let { pins ->
+            if (showDock) shortcuts?.let { pins ->
                 NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) },
                     Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = with(density) { it.height.toDp() } },
-                    onAdd = { shortcutEditorOpen = true }, resetScroll = shortcutEditorOpen)
+                    resetScroll = shortcutEditorOpen)
             }
 
         }
