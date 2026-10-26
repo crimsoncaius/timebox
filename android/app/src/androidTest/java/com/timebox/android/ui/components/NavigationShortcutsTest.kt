@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
@@ -110,7 +111,8 @@ class NavigationShortcutsTest {
         } }
         compose.onNode(hasText("Habits") and isToggleable()).performScrollTo().performClick()
         compose.onNode(hasText("Trends") and isToggleable()).performScrollTo().performClick()
-        compose.onNodeWithContentDescription("Move Habits earlier").performScrollTo().performClick()
+        compose.onNodeWithTag("edit-shortcut-${AppRoutes.Habits}").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            .first { it.label == "Move left" }.let { action -> compose.runOnIdle { assertTrue(action.action()) } }
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle { assertEquals(listOf(AppRoutes.DayPattern, AppRoutes.Habits, AppRoutes.BattlePlan, AppRoutes.Trends), saved) }
@@ -160,10 +162,71 @@ class NavigationShortcutsTest {
         compose.setContent { TimeboxTheme {
             NavigationShortcutEditor(navigationShortcutRoutes(null), {}, { saved = it })
         } }
-        compose.onNodeWithContentDescription("Move Battle Plan later").assertIsNotEnabled()
-        compose.onNodeWithContentDescription("Move Day later").performClick()
+        compose.onNodeWithTag("edit-shortcut-${AppRoutes.BattlePlan}").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            .let { assertFalse(it.any { action -> action.label == "Move right" }) }
+        compose.onNodeWithTag("edit-shortcut-${AppRoutes.DayPattern}").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            .first { it.label == "Move right" }.let { action -> compose.runOnIdle { assertTrue(action.action()) } }
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle { assertEquals(listOf(AppRoutes.BattlePlan, AppRoutes.DayPattern), saved) }
+    }
+
+    @Test fun draggingReordersAndMinusRemovesWithoutSavingUntilSave() {
+        var saved: List<String>? = null
+        compose.setContent { TimeboxTheme {
+            NavigationShortcutEditor(navigationShortcutRoutes(null), {}, { saved = it })
+        } }
+        compose.onNodeWithText("Your shortcuts").assertDoesNotExist()
+        val day = compose.onNodeWithTag("edit-shortcut-${AppRoutes.DayPattern}")
+        val width = day.fetchSemanticsNode().boundsInRoot.width
+        day.performTouchInput {
+            down(Offset(width / 2, height * 0.75f))
+            advanceEventTime(700)
+            moveBy(Offset(width, 0f), 200)
+            up()
+        }
+        compose.onNodeWithTag("edit-shortcut-${AppRoutes.DayPattern}")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2 of 2"))
+        compose.runOnIdle { assertNull(saved) }
+        compose.onNodeWithContentDescription("Remove Battle Plan").performClick()
+        compose.onNode(hasText("Battle Plan") and isToggleable()).assertIsOff()
+        compose.onNodeWithContentDescription("Remove Day").performClick()
+        compose.onNodeWithText("No shortcuts selected").assertIsDisplayed()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertEquals(emptyList<String>(), saved) }
+    }
+
+    @Test fun holdingDraggedShortcutAtEitherEdgeScrollsAndReorders() {
+        val routes = navigationDestinations.take(7).map { it.route }
+        var saved: List<String>? = null
+        compose.setContent { TimeboxTheme {
+            NavigationShortcutEditor(routes, {}, { saved = it })
+        } }
+        val strip = compose.onNodeWithTag("editable-shortcut-strip")
+        val first = compose.onNodeWithTag("edit-shortcut-${routes.first()}")
+        val itemWidth = first.fetchSemanticsNode().boundsInRoot.width
+        val stripWidth = strip.fetchSemanticsNode().boundsInRoot.width
+        compose.mainClock.autoAdvance = false
+        strip.performTouchInput {
+            down(Offset(itemWidth / 2, height * 0.75f))
+            advanceEventTime(700)
+            moveTo(Offset(stripWidth - 2, height * 0.75f), 300)
+        }
+        compose.mainClock.advanceTimeBy(2500)
+        strip.performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        first.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "7 of 7"))
+        compose.mainClock.autoAdvance = false
+        strip.performTouchInput {
+            down(Offset(stripWidth - itemWidth / 2, height * 0.75f))
+            advanceEventTime(700)
+            moveTo(Offset(2f, height * 0.75f), 300)
+        }
+        compose.mainClock.advanceTimeBy(2500)
+        strip.performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        first.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 of 7"))
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertEquals(routes, saved) }
     }
 
     @Test fun homeGroupsShortcutEditorWithPreferences() {
