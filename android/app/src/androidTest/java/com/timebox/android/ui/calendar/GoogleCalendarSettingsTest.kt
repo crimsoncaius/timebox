@@ -64,6 +64,11 @@ class GoogleCalendarSettingsTest {
         compose.onNodeWithContentDescription("Manage calendars").performClick()
         compose.onNodeWithText("Home").performScrollTo().performClick()
         compose.onNodeWithText("Home").assertIsOn()
+        compose.onNodeWithText("Hold and drag", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Help: Calendar priority").performScrollTo().performClick()
+        compose.onNodeWithText("Hold and drag", substring = true).assertExists()
+        compose.onNodeWithText("Close help").performClick()
+        compose.onNodeWithText("Home").performScrollTo().assertIsOn()
         compose.runOnIdle { assertEquals(0, reviews); offline = true }
         compose.onNodeWithText("Home").performScrollTo().assertIsOn().assertIsNotEnabled()
         compose.onNodeWithText("Review calendar changes").performScrollTo().assertIsNotEnabled()

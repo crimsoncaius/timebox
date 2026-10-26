@@ -5,13 +5,8 @@
 
 .assistant-page header{
   margin:12px 0 28px}
-.assistant-eyebrow{
-  font-size:.75rem;
-  text-transform:uppercase;
-  letter-spacing:.14em;
-  opacity:.55;
-  margin-bottom:10px}
 .assistant-page h1{
+  overflow-wrap:anywhere;
   font-family:var(--font-headline);
   font-size:2.75rem;
   font-weight:300;
@@ -93,9 +88,13 @@
   font-size:.875rem}
 .assistant-review-heading{
   display:flex;
+  flex-wrap:wrap;
   align-items:start;
   justify-content:space-between;
   gap:20px}
+.assistant-review-heading>div{
+  min-width:0;
+  max-width:100%}
 .assistant-review-heading p{
   font-size:.875rem;
   opacity:.6;

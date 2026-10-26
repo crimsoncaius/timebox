@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { Layout } from '../../components/Layout'
 import { BattlePlanSidebarFrame } from '../battle-plan/BattlePlanSidebarFrame'
 import { RenameTaskTypeSheet } from './RenameTaskTypeSheet'
@@ -214,19 +214,13 @@ export function TaskTypesPage() {
         {/* Left: editorial intro — intentional asymmetry */}
         <section className="min-w-0 shrink-0 lg:max-w-md lg:pt-4">
           <div className="space-y-5">
-            <h1 className="font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
-              Task Types
-            </h1>
-            <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-              Saved task type paths for time blocks (e.g. work, coding, coding/ai, exercise/cardio). Add a{' '}
-              <Link
-                to="/"
-                className="text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:text-on-surface"
-              >
-                Day
-              </Link>{' '}
-              block only after at least one type exists.
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">Task Types</h1>
+              <ContextualHelp title="Task Type Paths">
+                <p>Task Types classify Tasks and Blocks. Use / to nest a Task Type Path, such as coding/ai.</p>
+                <p>Creating a nested path also creates any missing parent Task Types.</p>
+              </ContextualHelp>
+            </div>
           </div>
           <div
             className="mt-10 inline-flex items-center gap-2 rounded-full border border-outline-variant/15 bg-surface-container-low/90 px-3 py-1.5 text-xs font-medium backdrop-blur-sm dark:border-dark-outline-variant dark:bg-dark-surface-container/50"
@@ -308,7 +302,7 @@ export function TaskTypesPage() {
             </h2>
             {types.length === 0 ? (
               <p className="font-body text-sm font-light leading-relaxed text-on-surface-variant">
-                No task types yet. Add one above.
+                No Task Types yet. Add one above before adding a Day block.
               </p>
             ) : visibleTypes.length === 0 ? (
               <p className="font-body text-sm font-light leading-relaxed text-on-surface-variant">

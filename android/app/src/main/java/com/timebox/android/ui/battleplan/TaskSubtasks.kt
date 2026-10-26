@@ -89,7 +89,7 @@ internal fun TaskSubtasks(
             Button(onClick = { submittedCount = count; onAdd(title.trim()) }, enabled = !saving && title.isNotBlank() && title.length <= 500, modifier = Modifier.fillMaxWidth()) {
                 Text(if (saving) "Adding…" else "Add subtask")
             }
-            Text("$count subtasks · Add another or close to return", color = TimeboxTheme.colors.onVariant)
+            Text("$count subtasks", color = TimeboxTheme.colors.onVariant)
         }
     }
     val renaming = rename?.let { active -> subtasks.firstOrNull { it.id == active.subtaskId } }

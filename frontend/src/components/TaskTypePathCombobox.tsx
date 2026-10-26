@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { ContextualHelp } from './ContextualHelp'
 import type { TaskType } from '../lib/api'
 import { useTaskTypeRecommendation } from './useTaskTypeRecommendation'
 import {
@@ -121,9 +122,12 @@ export function TaskTypePathCombobox({
         setQuery(selected?.name ?? '')
       }}
     >
-      <label htmlFor={inputId} className="mb-0.5 block font-body text-xs text-on-surface-variant">
-        {label}
-      </label>
+      <div className="flex items-center gap-1">
+        <label htmlFor={inputId} className="font-body text-xs text-on-surface-variant">{label}</label>
+        <ContextualHelp title="Task Type Paths">
+          <p>Use / to nest a Task Type Path, such as coding/ai. Creating a nested path also creates any missing parent Task Types.</p>
+        </ContextualHelp>
+      </div>
       <input
         id={inputId}
         name="timebox-task-type-search"

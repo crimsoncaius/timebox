@@ -1,5 +1,6 @@
 package com.timebox.android.quicktracking
 
+import com.timebox.android.ui.components.ContextualHelp
 import android.Manifest
 import android.app.KeyguardManager
 import android.app.StatusBarManager
@@ -87,11 +88,13 @@ class QuickTrackingActivity : ComponentActivity() {
                         }
                         if (setup) {
                             Text("Speak an activity. When you finish speaking, Timebox records it automatically. Correct the result later in Assistant → Review.")
-                            Text(if (assistantAssigned) "Timebox is your default digital assistant." else "Choose Timebox as your default digital assistant to use the system assistant gesture.")
+                            Text(if (assistantAssigned) "Timebox is your default digital assistant." else "Timebox is not your default digital assistant.")
                             Button(onClick = ::chooseAssistant) { Text(if (assistantAssigned) "Assistant settings" else "Choose default assistant") }
                             Button(onClick = ::addTile) { Text("Add Quick Settings tile") }
-                            Text("On Samsung: Settings → Apps → Choose default apps → Digital assistant app → Timebox. Then Advanced features → Side button → Long press → Digital assistant. Availability and menu names depend on your model and One UI version.", style = TimeboxTheme.type.bodySmall)
-                            Text("On gesture navigation, enable the device’s assistant gesture. A button assigned to Bixby or the power menu will not open Timebox.", style = TimeboxTheme.type.bodySmall)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Assistant setup", modifier = Modifier.weight(1f))
+                                ContextualHelp("Assistant setup", "Choose Timebox as your default digital assistant to use the system assistant gesture.\n\nOn Samsung: Settings → Apps → Choose default apps → Digital assistant app → Timebox. Then Advanced features → Side button → Long press → Digital assistant. Availability and menu names depend on your model and One UI version.\n\nOn gesture navigation, enable the device’s assistant gesture. A button assigned to Bixby or the power menu will not open Timebox.")
+                            }
                             speech.status?.let { Text(it) }
                             TextButton(onClick = {
                                 startActivity(Intent(this@QuickTrackingActivity, QuickTrackingActivity::class.java).putExtra("source", "app").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))

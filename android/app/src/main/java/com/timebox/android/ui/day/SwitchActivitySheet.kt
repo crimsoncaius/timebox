@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.data.activityIdentityText
 import com.timebox.android.data.identityText
 import com.timebox.android.data.parseActivityInstant
@@ -162,7 +163,7 @@ internal fun SwitchActivitySheet(
             if (startTracking) {
                 StartTime(StartHistory(records, plans, now, zone, timing, onTimingChange, loadPlanTitles), taskTypes, nextActivity, startExpanded, enabled && !busy) { startExpanded = true }
             } else SheetField("When did this change happen?") {
-                SheetHelp("Drag the line. Hold near an edge to keep scrolling.")
+                ContextualHelp("Change time", "Drag the line. Hold near an edge to keep scrolling.")
                 SwitchActivityTimeline(
                     currentId = currentId, start = start, records = records, plans = plans, taskTypes = taskTypes,
                     nextActivity = nextActivity, selected = selected, now = now, zone = zone,

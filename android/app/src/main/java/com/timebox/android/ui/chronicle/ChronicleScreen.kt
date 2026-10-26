@@ -1,6 +1,7 @@
 package com.timebox.android.ui.chronicle
 
 import com.timebox.android.ui.components.LocalNavigationDockInset
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -416,11 +417,7 @@ private fun ChronicleMonthPage(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text(
-            text = "A dot means time was recorded. Tap any date to open Day.",
-            style = TimeboxTheme.type.bodySmall,
-            color = colors.onVariant,
-        )
+        if (interactive) ContextualHelp("Calendar", "A dot means time was recorded. Tap any date to open Day.")
     }
 }
 

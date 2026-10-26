@@ -111,7 +111,7 @@ class AndroidCheckIns(private val context: Context, private val repository: Acti
             if (storage.getString("boundary", null) != boundary) {
                 check(storage.edit().putString("boundary", boundary).putLong("boundaryAt", wall).commit())
             }
-            mutableStatus.value = "Approximate detection: Android screen-off intervals only, not lack of touch while the screen is on. Missing history is unknown. Checks may be delayed by battery policy or until you return."
+            mutableStatus.value = "Detecting screen-off intervals."
             val floor = maxOf(storage.getLong("floor", wall), wall - 9 * 60 * 60_000L)
             val history = context.getSystemService(UsageStatsManager::class.java).queryEvents(floor, wall)
             if (history == null) {

@@ -1,5 +1,6 @@
 package com.timebox.android.ui.calendar
 
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -76,10 +77,8 @@ internal fun CalendarSelectionList(calendars: List<JsonObject>, order: List<Stri
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Imported calendars", style = TimeboxTheme.type.bodySmall, fontWeight = FontWeight.Medium, modifier = Modifier.semantics { heading() })
-        Text(
-            if (order.isEmpty()) "Select a calendar below to start importing." else "Hold and drag to change priority. The first calendar supplies details when a meeting appears more than once.",
-            style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
-        )
+        if (order.isEmpty()) Text("Select a calendar below to start importing.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+        ContextualHelp("Calendar priority", "Hold and drag to change priority, or use the Move up and Move down accessibility actions. The first calendar supplies details when a meeting appears more than once.")
         Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(TimeboxShapes.field)
             .onGloballyPositioned { viewport = it.boundsInWindow() }
             .verticalScroll(scroll, enabled = dragged == null), verticalArrangement = Arrangement.spacedBy(8.dp)) {

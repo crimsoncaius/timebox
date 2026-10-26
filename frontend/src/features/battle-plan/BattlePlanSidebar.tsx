@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { DragDropProvider, type DragEndEvent } from '@dnd-kit/react'
@@ -54,6 +55,7 @@ export function BattlePlanSidebar({ open, collection, scope, recurring = false, 
         </nav>
         <div className="mt-8 flex items-center justify-between px-3">
           <span className="font-label text-[10px] uppercase tracking-[0.16em] text-on-surface-variant">Projects</span>
+          <ContextualHelp title="Project order">Drag a handle, or focus it and press Space then use arrow keys. The project menu also has Move up and Move down.</ContextualHelp>
           <button type="button" aria-label="New project" className="text-on-surface-variant" onClick={onNewProject}>+</button>
         </div>
         <DragDropProvider onDragEnd={drop}>
@@ -81,7 +83,7 @@ function ProjectRow({ project, index, count, active, saving, onSelect, onEdit, o
   const [menu, setMenu] = useState(false)
   return <li ref={ref} className={`group relative rounded-lg ${isDragging ? 'z-10 bg-surface-container-high shadow-lg ring-2 ring-primary' : ''}`}>
     <div className={`flex items-center rounded-lg ${active ? 'bg-surface-container-high dark:bg-dark-surface-container-high' : 'hover:bg-surface-container-low dark:hover:bg-dark-surface-container'}`}>
-      <button ref={handleRef} type="button" disabled={saving} aria-label={`Reorder ${project.name}`} title="Drag to reorder, or press Space and use arrow keys" className="touch-none rounded p-1 text-on-surface-variant opacity-40 hover:opacity-100 focus:opacity-100 group-hover:opacity-100">
+      <button ref={handleRef} type="button" disabled={saving} aria-label={`Reorder ${project.name}`} className="touch-none rounded p-1 text-on-surface-variant opacity-40 hover:opacity-100 focus:opacity-100 group-hover:opacity-100">
         <span className="material-symbols-outlined text-[16px]" aria-hidden>drag_indicator</span>
       </button>
       <button type="button" onClick={onSelect} aria-current={active ? 'page' : undefined} className="flex min-w-0 flex-1 items-center gap-2 py-2 text-left text-sm">

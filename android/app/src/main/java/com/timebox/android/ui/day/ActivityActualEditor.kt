@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.ui.components.HelperText
 import com.timebox.android.ui.elapsedDuration
 
@@ -185,11 +186,11 @@ fun ActivityActualEditor(state: DayUiState, onDismiss: () -> Unit,
             )
         }
         SheetTextField(note, { note = it }, "Note", optional = true, placeholder = "Add a note", enabled = !saving, singleLine = false, minLines = 2)
+        ContextualHelp("Recording time", "Recording time does not change Task Completion.")
         actual.task?.let { task ->
             SheetField("Battle Plan task") {
                 LinkedTaskRow(task.title + if (task.status == "completed") "  ✓" else "",
-                    if (task.status == "completed") "Completed · Recording time does not change Task Completion."
-                    else "Recording time does not change Task Completion.",
+                    if (task.status == "completed") "Completed" else "",
                     onOpen = { onOpenLinkedTask(task.id) }, lane = Lane.Actual, enabled = !saving)
             }
         }

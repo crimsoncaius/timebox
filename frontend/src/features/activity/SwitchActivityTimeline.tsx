@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useEffect, useRef, useState } from 'react'
 import type { ActualBlock } from '../../lib/api'
 import { blockIdentityText } from '../../lib/blockIdentity'
@@ -77,7 +78,7 @@ export function SwitchActivityTimeline({ records, plans, selected, now, zone, ne
         event.preventDefault(); onSelect(Math.min(now, selected + (['ArrowUp', 'ArrowLeft'].includes(event.key) ? -minute : minute)))
       }}><span>↕ {new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit' }).format(selected)}</span></div>}
     </div>
-    <p className="switch-time-hint">Drag the line. Hold near an edge to keep scrolling.</p>
+    <ContextualHelp title="Change time">Drag the line. Hold near an edge to keep scrolling. Use the arrow keys to adjust the focused line.</ContextualHelp>
     <p>{selected < currentStart ? `${affected.length} activities change. ${nextActivity} replaces time from ${day(selected)}, ${time(selected)} through now.` : `Previous ends and ${nextActivity} starts at ${time(selected)}.`} You can Undo.</p>
     {selected < currentStart && <details><summary>See what changes</summary><ul>{affected.map(r => <li key={r.id}>{blockIdentityText(r)}: {Date.parse(r.start_at) < selected ? `ends at ${time(selected)}` : 'replaced entirely'}{r.note && Date.parse(r.start_at) >= selected ? ` · Note also replaced: ${r.note}` : ''}</li>)}{gap > 0 && <li>{gap} minutes of unrecorded time filled.</li>}</ul></details>}
   </section>

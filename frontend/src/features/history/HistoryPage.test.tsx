@@ -38,6 +38,20 @@ describe('HistoryPage', () => {
     vi.restoreAllMocks()
   })
 
+  it('opens optional calendar help without changing the selected month', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+    await screen.findByTestId('chronicle-month-heading')
+    await user.click(screen.getByRole('button', { name: 'Previous month' }))
+    expect(await screen.findByTestId('chronicle-month-heading')).toHaveTextContent('January 1980')
+    const copy = 'Browse planned, recorded, and completed days through today. Any date opens in Day.'
+    expect(screen.queryByText(copy)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Help: Calendar' }))
+    expect(screen.getByText(copy)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Close help: Calendar' }))
+    expect(screen.getByTestId('chronicle-month-heading')).toHaveTextContent('January 1980')
+  })
+
   it('switches between the Calendar and Trends views', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter initialEntries={['/history']}><HistoryPage /></MemoryRouter>)

@@ -1,6 +1,7 @@
 package com.timebox.android.ui.chronicle
 
 import com.timebox.android.ui.components.LocalNavigationDockInset
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -279,10 +280,8 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                         color = colors.onVariant, strokeWidth = 2.dp,
                     )
                 }
-                if (week.habits.isNotEmpty()) Text(
-                    "Tap a day to record it. Long-press a quota day to remove a session.",
-                    style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
-                    modifier = Modifier.padding(top = 8.dp),
+                if (week.habits.isNotEmpty()) ContextualHelp(
+                    "Record habits", "Tap a day to record it. Long-press a quota day to remove a session.",
                 )
                 PrimaryButton(
                     text = "Add habit",
@@ -349,11 +348,10 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
             containerColor = colors.sheet.copy(alpha = 1f),
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-                Text("Add habit", style = TimeboxTheme.type.sectionTitle, color = colors.on)
-                Text(
-                    "Choose a routine, or one of its checklist items. Past completions and checks count.",
-                    style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Add habit", style = TimeboxTheme.type.sectionTitle, color = colors.on, modifier = Modifier.weight(1f))
+                    ContextualHelp("Choose a habit", "Choose a routine or checklist item. Past completions and checks count.")
+                }
                 Spacer(Modifier.height(12.dp))
                 val candidates = state.candidates
                 when {

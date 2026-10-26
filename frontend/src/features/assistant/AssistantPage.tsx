@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { fetchJson, fetchVoid, protocolHeaders } from '../../lib/api/client'
 import './assistant.css'
 import { getActivityRepository } from '../activity/activityRepository'
@@ -15,7 +16,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : 'Co
 export function AssistantPage() {
   const [tab, setTab] = useState<'conversation' | 'review'>('conversation')
   return <Layout><section className="assistant-page">
-    <header><p className="assistant-eyebrow">A little help with your day</p><h1>Assistant</h1></header>
+    <header><h1>Assistant</h1></header>
     <nav aria-label="Assistant sections" className="assistant-tabs">
       <button aria-current={tab === 'conversation' ? 'page' : undefined} onClick={() => setTab('conversation')}>Conversation</button>
       <button aria-current={tab === 'review' ? 'page' : undefined} onClick={() => setTab('review')}>Review</button>
@@ -112,7 +113,7 @@ function Reviews() {
     catch (e) { setError(message(e)); setBusy(false) }
   }
   return <section>
-    <div className="assistant-review-heading"><div><h2>A moment to look back</h2><p>Already recorded. Correct anything that doesn’t look right.</p></div><button disabled={busy} onClick={() => void load(false, reviewed)}>Refresh</button></div>
+    <div className="assistant-review-heading"><div><div className="flex items-center gap-2"><h2>A moment to look back</h2><ContextualHelp title="Review activity">Correct anything that doesn’t look right.</ContextualHelp></div><p>Already recorded.</p></div><button disabled={busy} onClick={() => void load(false, reviewed)}>Refresh</button></div>
     <div className="assistant-review-toolbar"><div className="assistant-filters">{[false, true].map(history => <button key={String(history)} aria-pressed={reviewed === history} disabled={busy} onClick={() => { setReviewed(history); setRows([]); void load(false, history) }}>{history ? 'Reviewed' : `To review${page ? ` · ${page.unchecked_count}` : ''}`}</button>)}</div><span>Times in {zone}</span></div>
     {error && <p role="alert" className="assistant-error">{error}</p>}
     {busy && <p role="status">Loading…</p>}

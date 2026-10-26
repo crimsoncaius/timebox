@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { SubtaskTitle } from './SubtaskTitle'
 import { getActivityRepository } from '../activity/activityRepository'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -446,7 +447,7 @@ export function TaskDetailPanel({
                 </button>
                 {readinessPending ? <p role="status" aria-label={`${task.title} readiness`} className="mt-2 text-xs text-[var(--task-detail-muted)]">Saving Ready to Plan…</p> : null}
                 <ReadinessFailureNotice task={task} className="mt-2" />
-                <p className="mt-2 text-xs leading-relaxed text-[var(--task-detail-muted)]">Planning readiness is separate from work status.</p>
+                <ContextualHelp title="Ready to Plan">Planning readiness is separate from work status.</ContextualHelp>
               </div>
             </div>
 

@@ -1,5 +1,6 @@
 package com.timebox.android.ui.focus
 
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.data.primaryIdentity
 import kotlinx.coroutines.launch
 import com.timebox.android.data.BattleTask
@@ -31,8 +32,8 @@ import com.timebox.android.ui.theme.TimeboxTheme
     val state by controller.state.collectAsState()
     com.timebox.android.ui.components.SettingRow(
         title = "Keep display awake in Focus",
-        description = "Battery policy applies; manual locking still works.",
     ) {
+        ContextualHelp("Keep display awake in Focus", "Battery policy applies; manual locking still works.")
         com.timebox.android.ui.components.TimeboxSwitch(checked = state.wake, onCheckedChange = controller::setWake)
     }
 }

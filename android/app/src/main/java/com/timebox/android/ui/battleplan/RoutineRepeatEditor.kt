@@ -1,5 +1,7 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.ContextualHelp
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -74,14 +76,14 @@ internal fun RoutineRepeatEditor(saved: RecurringEditorUiState, creating: Boolea
                 }
                 if (quota) {
                     CreationCount("Times per $unit", state.quotaCount.toIntOrNull() ?: 1, 100) { state = state.copy(quotaCount = it) }
-                    Text("Choose when to do each session within the $unit.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    ContextualHelp("Quota sessions", "Choose when to do each session within the $unit.")
                 } else {
                     CreationCount("Repeat every (${unit}s)", state.interval.toIntOrNull() ?: 1, 365) { state = state.copy(interval = it) }
                     when (state.frequency) {
                         RecurrenceFrequency.Weekly -> WeekdayPicker(state.weekdays) { day -> state = state.copy(weekdays = if (day in state.weekdays) state.weekdays - day else state.weekdays + day) }
                         RecurrenceFrequency.Monthly -> {
                             CreationCount("Day of month", state.monthDay.toIntOrNull() ?: 1, 31) { state = state.copy(monthDay = it) }
-                            Text("For shorter months, use the last day available.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                            ContextualHelp("Day of month", "Short months use their final day.")
                         }
                         else -> Unit
                     }
@@ -97,13 +99,13 @@ internal fun RoutineRepeatEditor(saved: RecurringEditorUiState, creating: Boolea
                 if (state.endMode == RecurrenceEndMode.EndDate) CreationDateRow("End date", state.endDate, true) { dateTarget = "end" }
                 if (state.endMode == RecurrenceEndMode.CycleLimit) {
                     CreationCount("Cycles", state.cycleLimit.toIntOrNull() ?: 12, 10000) { state = state.copy(cycleLimit = it) }
-                    Text("A cycle is one recurrence period, not one completed task.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                    ContextualHelp("Cycles", "A cycle is one recurrence period, not one completed task.")
                 }
                 if (!quota) Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Keep unfinished occurrences overdue", style = TimeboxTheme.type.body)
-                        Text("Otherwise they leave current work after their recurrence period.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
                     }
+                    ContextualHelp("Unfinished occurrences", "After its recurrence period, unfinished work leaves current work unless kept overdue or linked to a future Planned Block.")
                     Switch(state.keepUnfinishedOverdue, { state = state.copy(keepUnfinishedOverdue = it) })
                 }
                 if (!quota && state.preplanningSlots.isNotEmpty()) {

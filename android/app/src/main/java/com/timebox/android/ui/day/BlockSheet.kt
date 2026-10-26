@@ -26,6 +26,7 @@ import com.timebox.android.data.Day
 import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeBlock
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.ui.components.CardLink
 import com.timebox.android.ui.components.LinkedTaskRow
 import com.timebox.android.ui.components.RelatedCard
@@ -104,7 +105,7 @@ fun BlockSheet(
         if (block != null) {
             PlannedTimeFields(state.sheetStart, state.sheetEnd, enabled = !state.saving && block.googleCalendar == null) { start, end -> onChangeTimes(block.id, start, end) }
             timesError?.let { SheetHelp(it, color = colors.error) }
-            if (block.googleCalendar == null) SheetHelp("Drag the block on the timeline to move it, or pull its grooves to resize.")
+            if (block.googleCalendar == null) ContextualHelp("Adjust block time", "Drag the block on the timeline to move it, or pull its grooves to resize.")
             else {
                 SheetHelp("Name and time follow Google Calendar. Local classification and notes save here.")
                 val context = LocalContext.current
@@ -231,8 +232,10 @@ private fun PlannedRecordingCards(
                 caption = "Already recorded · no update needed",
                 trailing = elapsedDuration((linked.endMinute - linked.startMinute).toLong()),
                 title = "${hhmm(linked.startMinute)} – ${hhmm(linked.endMinute)}",
-                text = "Plan notes stay on the plan.",
-            ) { CardLink("Open actual", Lane.Actual, { onOpenActual(linked.id) }) }
+            ) {
+                CardLink("Open actual", Lane.Actual, { onOpenActual(linked.id) })
+                ContextualHelp("Plan notes", "Plan notes stay on the plan.")
+            }
         }
         PlannedRecordingKind.Override -> {
             val linked = recording.override!!

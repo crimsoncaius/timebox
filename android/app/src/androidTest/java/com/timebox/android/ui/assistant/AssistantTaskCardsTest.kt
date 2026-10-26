@@ -66,6 +66,11 @@ class AssistantTaskCardsTest {
         } }
         compose.onNodeWithText("Confirm all changes").assertDoesNotExist()
         compose.onNodeWithText("Review description").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Help: Description review").performClick()
+        compose.onNodeWithText("Full descriptions are shown literally.").assertIsDisplayed()
+        compose.onNodeWithText("Close help").performClick()
+        compose.onNodeWithText("Nothing saved yet. Confirming saves all reviewed changes together.").assertIsDisplayed()
+        assertEquals(0, confirmations)
         compose.onNodeWithText("Confirm all changes").assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(1, confirmations) }
         compose.onNodeWithText("Back to preview").assertDoesNotExist()
@@ -89,6 +94,11 @@ class AssistantTaskCardsTest {
         } }
         compose.onNodeWithText("Saved Tasks").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Heading))
         compose.onNodeWithText("Fourth saved Task").assertDoesNotExist()
+        compose.onNodeWithText("Open Task shows current details; this snapshot stays unchanged.").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Help: Task snapshots").performClick()
+        compose.onNodeWithText("Open Task shows current details; this snapshot stays unchanged.").assertIsDisplayed()
+        compose.onNodeWithText("Close help").performClick()
+        assertEquals(0, opened)
         compose.onNodeWithText("Show all 4 loaded Tasks").performScrollTo().performClick()
         compose.onNodeWithText("Fourth saved Task").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Open current Task Fourth saved Task, ID 4").performScrollTo().performClick()

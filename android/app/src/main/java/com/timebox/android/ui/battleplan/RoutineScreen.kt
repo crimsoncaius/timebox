@@ -1,5 +1,7 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.ContextualHelp
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -118,7 +120,7 @@ fun RoutineScreen(
                 val names = state.checklistText.lineSequence().filter { it.isNotBlank() }.toList()
                 TaskSubtasks(emptyList(), editable, busy, state.saveError, {}, {}, { commit(state.copy(checklistText = (names + it).joinToString("\n"))) },
                     draftNames = names, onRemoveDraft = { index -> commit(state.copy(checklistText = names.filterIndexed { i, _ -> i != index }.joinToString("\n"))) })
-                Text("Included in each ${if (state.mode == RecurrenceMode.Quota) "session" else "occurrence"}.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                ContextualHelp("Checklist inheritance", "Each ${if (state.mode == RecurrenceMode.Quota) "Session Task" else "Task Occurrence"} receives these Checklist Items as Subtasks.")
                 if (creating) PreviewCard(state, viewModel::refreshPreview)
                 if (template != null) {
                     HorizontalDivider(Modifier.padding(top = 16.dp), color = colors.hairline)

@@ -1,6 +1,6 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useSyncExternalStore } from 'react'
 import {
-  SettingsDetails,
   SettingsRow,
   SettingsStatus,
   SettingsToggle,
@@ -48,7 +48,8 @@ export function CheckInSettings() {
   const canRequestDetection = detection.capability === 'supported' && detection.permission === 'prompt'
   return (
     <>
-      <SettingsRow label="Inactivity check-ins" description="Ask whether an activity is still going after a quiet stretch.">
+      <SettingsRow label="Inactivity check-ins">
+        <ContextualHelp title="Inactivity check-ins"><p>Ask whether an activity is still going after a quiet stretch.</p><p>Only native device inactivity counts. Time away from Timebox never proves inactivity.</p><p>Hidden, frozen, discarded or closed pages may not detect inactivity; returning starts fresh observation.</p><p>Recording continues regardless of detection or notification settings.</p></ContextualHelp>
         <SettingsToggle
           label="Inactivity check-ins"
           checked={settings.enabled}
@@ -58,9 +59,9 @@ export function CheckInSettings() {
       <SettingsRow
         label="Check in after"
         htmlFor="settings-check-in-threshold"
-        description="How long the device must be idle before asking."
         disabled={!settings.enabled}
       >
+        <ContextualHelp title="Check in after">How long the device must be idle before asking.</ContextualHelp>
         <select
           id="settings-check-in-threshold"
           className={`${settingsInputClassName} pr-8`}
@@ -73,7 +74,7 @@ export function CheckInSettings() {
       </SettingsRow>
       <SettingsRow
         label="Device detection"
-        description={`Lets Timebox notice when this device goes idle.${detection.permission === 'denied' ? blockedHint : ''}`}
+        description={detection.permission === 'denied' ? blockedHint.trim() : undefined}
         disabled={!settings.enabled}
         footer={settings.enabled && detection.detail && (
           <p className="mt-2 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">{detection.detail}</p>
@@ -87,11 +88,7 @@ export function CheckInSettings() {
           <SettingsStatus>{detectionStatus(detection.capability, detection.permission)}</SettingsStatus>
         )}
       </SettingsRow>
-      <SettingsDetails summary="How check-ins work">
-        <p>Only native device inactivity counts. Time away from Timebox never proves inactivity.</p>
-        <p>Hidden, frozen, discarded or closed pages may not detect inactivity; returning starts fresh observation.</p>
-        <p>Recording keeps working whatever you choose for detection or notifications.</p>
-      </SettingsDetails>
+
     </>
   )
 }
@@ -102,13 +99,9 @@ export function BrowserNotificationSettings() {
   return (
     <SettingsRow
       label="Browser notifications"
-      description={`Used for check-in questions and Battle Plan reminders.${detection.notification === 'denied' ? blockedHint : ''}`}
-      footer={
-        <p className="mt-2 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">
-          Check-in notifications need a connection when the question is created. Missed notifications aren't replayed after reconnecting.
-        </p>
-      }
+      description={detection.notification === 'denied' ? blockedHint.trim() : undefined}
     >
+      <ContextualHelp title="Browser notifications"><p>Used for check-in questions and Battle Plan reminders.</p><p>Check-in notifications need a connection when the question is created. Missed notifications aren't replayed after reconnecting.</p></ContextualHelp>
       {detection.notification === 'default' ? (
         <button className={settingsButtonClassName} onClick={() => void adapter.requestNotifications()}>
           Allow notifications

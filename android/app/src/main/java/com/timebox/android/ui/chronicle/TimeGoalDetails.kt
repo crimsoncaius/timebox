@@ -1,5 +1,6 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -41,7 +42,8 @@ internal fun TimeGoalDetails(
                 Text("Ended ${it.format(goalDateFormat)} · history retained", style = type.bodySmall,
                     color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             }
-            Text("Includes this Task Type and its descendants.\nReporting time zone · ${timezone.id}",
+            ContextualHelp("Goal progress", "Includes this Task Type and its descendants.")
+            Text("Reporting time zone · ${timezone.id}",
                 style = type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(top = 8.dp))
             if (goal.endDate == null) goal.nextTargetMinutes?.let {
                 Text("Target changes to ${goalDuration(it)} on ${goal.nextTargetDate.format(goalDateFormat)}.",

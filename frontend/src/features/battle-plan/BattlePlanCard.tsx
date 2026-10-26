@@ -86,7 +86,7 @@ export function BattlePlanCard({
         task.status === 'completed' ? task.title : `Move ${task.title}`,
         recurrenceLabel,
       ].filter(Boolean).join('. ')}
-      title={task.status === 'completed' ? 'Completed Task' : 'Drag task to change its status'}
+      title={task.status === 'completed' ? 'Completed Task' : undefined}
       onClick={() => onOpen()}
       onKeyDown={(event) => {
         if (event.currentTarget !== event.target || event.key !== 'Enter') return

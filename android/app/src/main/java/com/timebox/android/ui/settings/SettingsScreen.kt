@@ -1,5 +1,6 @@
 package com.timebox.android.ui.settings
 
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.ui.components.LocalNavigationDockInset
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
@@ -97,7 +98,6 @@ fun SettingsScreen(
         SettingsGroup(
             title = "Day & time",
             scope = "All devices",
-            description = "How daily totals are grouped.",
         ) {
             ReportingZoneRow(
                 current = state.timezone,
@@ -109,7 +109,7 @@ fun SettingsScreen(
             )
         }
 
-        SettingsGroup(title = "Google Calendar", scope = "All devices", description = "Bring calendar commitments into your plan. Google events stay unchanged.") {
+        SettingsGroup(title = "Google Calendar", scope = "All devices", help = "Bring calendar commitments into your plan. Google events stay unchanged.") {
             com.timebox.android.ui.calendar.GoogleCalendarPanel()
         }
 
@@ -121,8 +121,9 @@ fun SettingsScreen(
         SettingsGroup(
             title = "Reminders",
             scope = "This device",
+            help = "Delivery may be delayed by battery restrictions.",
             description = if (notificationsAllowed) {
-                "Delivery may be delayed by battery restrictions."
+                null
             } else {
                 "Battle Plan reminders still save to the server and Daily Reminder preferences stay saved on this device, " +
                     "but this device cannot display any reminders until notifications are enabled."
@@ -155,14 +156,15 @@ fun SettingsScreen(
 
         SettingsGroup(title = "Quick tracking", scope = "This device") {
             val context = LocalContext.current
-            SettingRow(title = "Voice entry points", description = "Quick Settings tile and default digital assistant.") {
+            SettingRow(title = "Voice entry points") {
+                ContextualHelp("Voice entry points", "Use the Quick Settings tile or default digital assistant to start Quick Tracking.")
                 TextButton(onClick = {
                     context.startActivity(android.content.Intent(context, com.timebox.android.quicktracking.QuickTrackingActivity::class.java).putExtra("setup", true).putExtra("source", "app"))
                 }) { Text("Set up") }
             }
         }
         SettingsGroup(title = "Appearance", scope = "This device") {
-            SettingRow(title = "Dark theme", description = "Charcoal surfaces, brighter lanes.") {
+            SettingRow(title = "Dark theme") {
                 TimeboxSwitch(checked = isDark, onCheckedChange = { onToggleDark() })
             }
         }
@@ -170,7 +172,7 @@ fun SettingsScreen(
         SettingsGroup(
             title = "Advanced",
             scope = "This device",
-            description = "Where this device finds the Timebox API. The key is only needed when the server sets API_KEY.",
+            help = "Set the Timebox server address for this device. An API key is required only when your server uses authenticated access.",
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 8.dp).padding(bottom = 4.dp),
@@ -195,7 +197,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            SettingRow(title = "Theme preview", description = "Inspect surfaces, type, controls, and states.") {
+            SettingRow(title = "Theme preview") {
                 TextButton(onClick = onOpenThemePreview) { Text("Open") }
             }
         }
@@ -208,6 +210,7 @@ private fun SettingsGroup(
     title: String,
     scope: String,
     description: String? = null,
+    help: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = TimeboxTheme.colors
@@ -219,12 +222,11 @@ private fun SettingsGroup(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = TimeboxTheme.type.sectionTitle,
-                    color = colors.on,
-                    modifier = Modifier.semantics { heading() },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = TimeboxTheme.type.sectionTitle, color = colors.on,
+                        modifier = Modifier.weight(1f).semantics { heading() })
+                    help?.let { ContextualHelp(title, it) }
+                }
                 if (description != null) {
                     Spacer(Modifier.height(4.dp))
                     Text(description, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
@@ -258,8 +260,9 @@ private fun ReportingZoneRow(current: String?, saving: Boolean, onSave: (String)
     var choosing by remember { mutableStateOf(false) }
     SettingRow(
         title = "Reporting Time Zone",
-        description = "${current ?: "Not set"}. Daily totals are grouped by this zone; travel does not change it.",
+        description = current ?: "Not set",
     ) {
+        ContextualHelp("Reporting Time Zone", "Daily totals use this shared zone. Travel does not change it.")
         TextButton(enabled = !saving, onClick = { choosing = true }) { Text("Change") }
     }
     if (choosing) {
@@ -295,7 +298,7 @@ private fun ReportingZoneDialog(current: String?, onDismiss: () -> Unit, onSave:
         ) {
             Text("Reporting Time Zone", style = TimeboxTheme.type.sectionTitle, color = colors.on)
             Text(
-                "Shared by all devices. Changing it regroups daily totals; recorded times and elapsed duration stay the same.",
+                "Changes daily totals on all devices; recorded times and elapsed duration stay the same.",
                 style = TimeboxTheme.type.bodySmall,
                 color = colors.onVariant,
             )

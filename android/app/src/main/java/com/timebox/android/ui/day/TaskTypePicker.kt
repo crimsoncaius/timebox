@@ -65,6 +65,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TaskTypeSubmit
 import com.timebox.android.data.canonicalizeTaskTypePath
@@ -177,24 +178,29 @@ fun TaskTypePicker(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        SearchField(
-            query = searchQuery,
-            onQueryChange = { typed = true; onQueryChange(it) },
-            // The example path doubles as the syntax lesson when there is nothing to search.
-            placeholder = when {
-                pickerTypes.isEmpty() && !allowUnset -> "Name this type, e.g. coding/ai"
-                allowUnset -> "Unset"
-                else -> "Search or create a type"
-            },
-            autoFocus = autoFocus,
-            onSubmit = {
-                when (val target = taskTypeSubmit(pickerTypes, searchQuery, currentTypeId)) {
-                    is TaskTypeSubmit.Choose -> choose(target.type)
-                    is TaskTypeSubmit.Create -> create()
-                    TaskTypeSubmit.None -> Unit
-                }
-            },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                SearchField(
+                    query = searchQuery,
+                    onQueryChange = { typed = true; onQueryChange(it) },
+                    // The example path doubles as the syntax lesson when there is nothing to search.
+                    placeholder = when {
+                        pickerTypes.isEmpty() && !allowUnset -> "Name this type, e.g. coding/ai"
+                        allowUnset -> "Unset"
+                        else -> "Search or create a type"
+                    },
+                    autoFocus = autoFocus,
+                    onSubmit = {
+                        when (val target = taskTypeSubmit(pickerTypes, searchQuery, currentTypeId)) {
+                            is TaskTypeSubmit.Choose -> choose(target.type)
+                            is TaskTypeSubmit.Create -> create()
+                            TaskTypeSubmit.None -> Unit
+                        }
+                    },
+                )
+            }
+            ContextualHelp("Task Type Paths", "Use / to nest a Task Type Path, such as coding/ai. Creating a nested path also creates any missing parent Task Types.")
+        }
 
         Spacer(Modifier.height(8.dp))
         TaskTypeRecommendation(recommendation, choose, { localRecommendationState.dismiss() }, recommendationEnabled)
@@ -516,7 +522,6 @@ private fun CreateRow(path: String, onClick: () -> Unit) {
 @Composable
 private fun EmptyPanel() {
     val colors = TimeboxTheme.colors
-    val code = SpanStyle(fontFamily = MonoFamily, fontSize = 12.sp, color = colors.on)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -525,15 +530,7 @@ private fun EmptyPanel() {
             .padding(horizontal = 14.dp, vertical = 16.dp),
     ) {
         Text(
-            text = buildAnnotatedString {
-                append("No types yet. Type a name to make your first one. Use ")
-                withStyle(code) { append("/") }
-                append(" to nest — ")
-                withStyle(code) { append("coding/ai") }
-                append(" creates ")
-                withStyle(code) { append("coding") }
-                append(" too.")
-            },
+            text = "No Task Types yet. Enter a name to create your first one.",
             style = TimeboxTheme.type.body.copy(fontSize = 13.sp, lineHeight = 20.8.sp),
             color = colors.onVariant,
         )

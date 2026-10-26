@@ -12,9 +12,7 @@ export function SettingsPage() {
         <h1 className="mb-2 font-headline text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
           Settings
         </h1>
-        <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
-          Shared settings apply on every device. The rest stay on this one.
-        </p>
+
       </section>
 
       <div className="max-w-3xl space-y-6">
@@ -23,7 +21,6 @@ export function SettingsPage() {
           id="settings-day"
           title="Day & time"
           scope="shared"
-          description="How daily totals are grouped."
         >
           <ReportingTimezoneSettings />
         </SettingsSection>

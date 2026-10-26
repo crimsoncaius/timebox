@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -16,7 +17,6 @@ import com.timebox.android.data.Lane
 import com.timebox.android.data.TaskType
 import com.timebox.android.ui.components.CardLink
 import com.timebox.android.ui.components.SheetField
-import com.timebox.android.ui.components.SheetHelp
 import com.timebox.android.ui.components.SheetPrimary
 import com.timebox.android.ui.components.TimeboxSheet
 import com.timebox.android.data.activityIdentityText
@@ -95,7 +95,7 @@ internal fun StartTime(history: StartHistory, taskTypes: List<TaskType>, next: S
     val selected = minOf(history.timing?.resolve(history.zone) ?: history.now, history.now)
     val label = switchTimeLabel(selected, history.zone)
     if (expanded) SheetField("When did this start?") {
-        SheetHelp("Drag the line. Hold near an edge to keep scrolling.")
+        ContextualHelp("Start time", "Drag the line. Hold near an edge to keep scrolling.")
         SwitchActivityTimeline(
             currentId = -1, start = history.now, records = history.records, plans = history.plans, taskTypes = taskTypes,
             nextActivity = next, selected = selected, now = history.now, zone = history.zone, enabled = enabled,

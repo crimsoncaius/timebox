@@ -25,7 +25,6 @@ export function DayViewOptions({ preferences, onChange, zoom, onZoomChange, onRe
     className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-3xl bg-surface p-0 text-on-surface backdrop:bg-black/50 dark:bg-dark-surface dark:text-dark-on-surface">
     <div className="p-6">
       <h2 id="day-view-title" className="font-headline text-[27px] font-extralight tracking-tight">Day view</h2>
-      <p className="mt-2 text-sm text-on-surface-variant dark:text-dark-on-surface-variant">Choose what stays in view.</p>
       <div className="mt-5 divide-y divide-outline-variant/40 dark:divide-dark-outline-variant">
         {([['calendar', 'Calendar', 'calendar_today'], ['tracking', 'Activity Tracking', 'play_arrow']] as const).map(([key, label, icon]) =>
           <button key={key} type="button" role="switch" aria-checked={preferences[key]} onClick={() => onChange(key, !preferences[key])}

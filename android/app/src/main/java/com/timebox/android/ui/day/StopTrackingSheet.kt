@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.ContextualHelp
 import com.timebox.android.ui.elapsedDuration
 
 import androidx.compose.material3.Text
@@ -14,7 +15,6 @@ import com.timebox.android.data.remote.ActualBlockDto
 import com.timebox.android.data.remote.ActivityPlanDto
 import com.timebox.android.ui.components.RelatedCard
 import com.timebox.android.ui.components.SheetField
-import com.timebox.android.ui.components.SheetHelp
 import com.timebox.android.ui.components.SheetPrimary
 import com.timebox.android.ui.components.TimeboxSheet
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -64,7 +64,7 @@ internal fun StopTrackingSheet(
         },
     ) {
         SheetField("When did you stop?") {
-            SheetHelp("Drag the line or tap a time. Nearby block boundaries snap into place.")
+            ContextualHelp("Stop time", "Drag the line or tap a time. Nearby block boundaries snap into place.")
             SwitchActivityTimeline(
                 currentId = currentId, start = start, records = records, plans = plans, taskTypes = taskTypes,
                 nextActivity = null, selected = selected, now = now, zone = zone,

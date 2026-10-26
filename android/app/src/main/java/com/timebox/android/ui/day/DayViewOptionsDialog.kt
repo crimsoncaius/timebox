@@ -41,7 +41,6 @@ internal fun DayViewOptionsDialog(
             Column(Modifier.fillMaxWidth().padding(24.dp)) {
                 Text("Day view", style = TimeboxTheme.type.screenTitle)
                 Spacer(Modifier.height(8.dp))
-                Text("Choose what stays in view.", style = TimeboxTheme.type.body, color = colors.onVariant)
                 Spacer(Modifier.height(20.dp))
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                     VisibilityRow("Week strip", Icons.Outlined.CalendarToday, calendar, onCalendar)

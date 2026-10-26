@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { api, type BattleTask } from '../../lib/api'
@@ -12,7 +13,8 @@ import { useUndoNotice } from '../../components/useUndoNotice'
 export function FocusWakeSettings() {
   const controller = getFocusController()
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-  return <SettingsRow label="Keep display awake in Focus" description="Browser and battery policy apply; manual locking still works.">
+  return <SettingsRow label="Keep display awake in Focus">
+    <ContextualHelp title="Keep display awake in Focus">Browser and battery policy apply; manual locking still works.</ContextualHelp>
     <SettingsToggle label="Keep display awake in Focus" checked={state.wake} onChange={controller.setWake} />
   </SettingsRow>
 }
