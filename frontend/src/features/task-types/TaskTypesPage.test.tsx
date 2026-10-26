@@ -150,7 +150,7 @@ describe('TaskTypesPage', () => {
     expect(screen.getByRole('heading', { name: 'Task type' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Saved types' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Search or add (e.g. work)')).toBeInTheDocument()
-    expect(await screen.findByText('No task types yet. Add one above.')).toBeInTheDocument()
+    expect(await screen.findByText('No Task Types yet. Add one above before adding a Day block.')).toBeInTheDocument()
     expect(screen.getByText('Up to date')).toBeInTheDocument()
   })
 

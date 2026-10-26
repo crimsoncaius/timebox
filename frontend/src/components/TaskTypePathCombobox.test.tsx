@@ -10,6 +10,22 @@ const taskTypes = [
 ]
 
 describe('TaskTypePathCombobox', () => {
+  it('keeps a typed path when help opens and closes without creating or assigning', async () => {
+    const user = userEvent.setup()
+    const select = vi.fn()
+    const create = vi.fn()
+    render(<TaskTypePathCombobox label="Task Type" taskTypes={taskTypes} valueTaskTypeId={null}
+      onSelectTaskTypeId={select} onCreateTaskTypePath={create} />)
+    expect(screen.queryByText(/Use \/ to nest/)).not.toBeInTheDocument()
+    await user.type(screen.getByRole('combobox'), 'work/deep')
+    await user.click(screen.getByRole('button', { name: 'Help: Task Type Paths' }))
+    expect(screen.getByRole('dialog', { name: 'Task Type Paths' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Close help: Task Type Paths' }))
+    expect(screen.getByRole('combobox')).toHaveValue('work/deep')
+    expect(screen.getByRole('button', { name: 'Help: Task Type Paths' })).toHaveFocus()
+    expect(select).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+  })
   it('shows predictions only inside the open picker and accepts without submitting', async () => {
     const request = vi.spyOn(api, 'recommendTaskType').mockResolvedValue({ task_type_id: 2, confidence: .95, reason: 'recommended' })
     const select = vi.fn()
