@@ -2,9 +2,12 @@ package com.timebox.android.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -22,7 +25,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -31,6 +36,8 @@ import com.timebox.android.ui.AppRoutes
 import com.timebox.android.ui.theme.TimeboxTheme
 import java.io.IOException
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import kotlin.math.abs
 
 internal fun navigationShortcutRoutes(saved: List<String>?): List<String> =
     (saved ?: listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan))
@@ -56,23 +63,45 @@ private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onS
     val colors = TimeboxTheme.colors
     val entries = navigationShortcutRoutes(shortcuts).map { route -> navigationDestinations.first { it.route == route } }
     val scroll = rememberScrollState()
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val minimumItemWidth = with(density) { 88.dp.toPx() }
+    val visibleItems = (viewportWidth / minimumItemWidth).toInt().coerceAtLeast(1)
+    val itemWidth = if (viewportWidth > 0) viewportWidth.toFloat() / visibleItems else minimumItemWidth
+    val itemWidthDp = with(density) { itemWidth.toDp() }
+    val snapLayout = remember(scroll, itemWidth) {
+        object : SnapLayoutInfoProvider {
+            override fun calculateApproachOffset(velocity: Float, decayOffset: Float) = decayOffset
+
+            override fun calculateSnapOffset(velocity: Float): Float {
+                val boundary = ((scroll.value / itemWidth).roundToInt() * itemWidth)
+                    .coerceIn(0f, scroll.maxValue.toFloat())
+                val end = scroll.maxValue.toFloat()
+                val target = if (abs(end - scroll.value) < abs(boundary - scroll.value)) end else boundary
+                return target - scroll.value
+            }
+        }
+    }
+    val flingBehavior = rememberSnapFlingBehavior(snapLayout)
     LaunchedEffect(currentRoute, resetScroll) { scroll.scrollTo(0) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(3f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
-            .background(colors.low).padding(6.dp).horizontalScroll(scroll).testTag("shortcut-strip")
+            .background(colors.low).border(1.dp, colors.hairline, RoundedCornerShape(20.dp)).padding(6.dp)
+            .onSizeChanged { viewportWidth = it.width }
+            .horizontalScroll(scroll, flingBehavior = flingBehavior).testTag("shortcut-strip")
             .semantics { isTraversalGroup = true },
             verticalAlignment = Alignment.CenterVertically) {
             entries.forEach { destination ->
-                ShortcutDockItem(destination, currentRoute == destination.route, Modifier.width(88.dp), preview) {
+                ShortcutDockItem(destination, currentRoute == destination.route, Modifier.width(itemWidthDp), preview) {
                     if (currentRoute != destination.route) onSelect(destination.route)
                 }
             }
             ShortcutDockItem(NavigationDestination("", "Add shortcut", "shortcuts", Icons.Outlined.Add),
-                false, Modifier.width(88.dp), preview, onAdd)
+                false, Modifier.width(itemWidthDp), preview, onAdd)
         }
         Box(Modifier.weight(1f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
-            .background(colors.low).padding(6.dp), contentAlignment = Alignment.Center) {
+            .background(colors.low).border(1.dp, colors.hairline, RoundedCornerShape(20.dp)).padding(6.dp), contentAlignment = Alignment.Center) {
             ShortcutDockItem(NavigationDestination("", "Navigate", "directory", Icons.Outlined.GridView),
                 false, Modifier.fillMaxWidth(), preview, onOpen)
         }

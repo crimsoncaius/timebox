@@ -6,6 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.geometry.Offset
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import com.timebox.android.data.AppPreferences
 import com.timebox.android.ui.AppRoutes
 import com.timebox.android.ui.theme.TimeboxTheme
@@ -18,6 +22,33 @@ import java.io.IOException
 
 class NavigationShortcutsTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun swipesSettleOnShortcutBoundariesOrTheEnd() {
+        compose.setContent { TimeboxTheme {
+            NavigationDock(listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan, AppRoutes.Habits,
+                AppRoutes.Trends, AppRoutes.Settings), AppRoutes.DayPattern, {}, {}, onAdd = {})
+        } }
+        val strip = compose.onNodeWithTag("shortcut-strip")
+        val navigate = compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot()
+        val itemWidth = with(compose.density) {
+            (compose.onNodeWithText("Battle Plan").getUnclippedBoundsInRoot().left -
+                compose.onNodeWithText("Day").getUnclippedBoundsInRoot().left).toPx()
+        }
+        for ((distance, duration) in listOf(1.4f to 1000L, 2.4f to 200L, -1.4f to 1000L, 10f to 1000L)) {
+            strip.performTouchInput {
+                val start = if (distance > 0) width * 0.9f else width * 0.1f
+                val end = (start - distance * itemWidth).coerceIn(1f, width - 1f)
+                swipe(Offset(start, height / 2f), Offset(end, height / 2f), duration)
+            }
+            compose.waitForIdle()
+            val range = strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange]
+            val offset = range.value()
+            if (distance > 0) assertTrue("Swipe did not scroll", offset > 0)
+            assertTrue("Unsnapped offset: $offset", abs(offset - range.maxValue()) < 2f ||
+                abs(offset - (offset / itemWidth).roundToInt() * itemWidth) < 2f)
+            assertEquals(navigate, compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot())
+        }
+    }
 
     @Test fun settingsPreserveOrderAndExplicitEmptySelection() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
