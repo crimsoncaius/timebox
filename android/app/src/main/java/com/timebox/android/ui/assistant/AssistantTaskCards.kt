@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.timebox.android.ui.theme.TimeboxShapes
 import com.timebox.android.ui.theme.TimeboxTheme
+import com.timebox.android.ui.components.ContextualHelp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import java.time.Instant
@@ -75,7 +76,10 @@ internal fun TaskReadCard(card: AssistantTaskCard, onOpenTask: (Int) -> Unit) {
     var expanded by rememberSaveable(card.id) { mutableStateOf(false) }
     TaskSurface {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Saved Tasks", Modifier.semantics { heading() }, style = TimeboxTheme.type.label)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("Saved Tasks", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.label)
+                ContextualHelp("Task snapshots", "Open Task shows current details; this snapshot stays unchanged.")
+            }
             Text("Historical snapshot · Read ${card.readAt.atZone(card.zone).format(taskReadTime)} · ${card.zone.id}", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
             card.queryAt?.takeIf { it != card.readAt }?.let { Text("Membership as of ${it.atZone(card.zone).format(taskReadTime)}", style = TimeboxTheme.type.bodySmall) }
             Text(when (card.countRelation) {
@@ -101,7 +105,6 @@ internal fun TaskReadCard(card: AssistantTaskCard, onOpenTask: (Int) -> Unit) {
                 else -> "Some saved identities are unavailable."
             }, style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
         }
-        Text("Open Task shows current details; this snapshot stays unchanged.", style = TimeboxTheme.type.bodySmall, color = TimeboxTheme.colors.onVariant)
     }
 }
 
@@ -356,8 +359,11 @@ internal fun DescriptionReview(proposal: TaskChangeProposal, onOpenTask: (Int) -
             Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 TextButton(onClick = onClose) { Text("Back to preview") }
                 Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(if (proposal.targets.size > 1) "Review all changes" else "Review description", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle)
-                    Text("Nothing saved yet. Confirming saves all reviewed changes together. Full descriptions are shown literally.", style = TimeboxTheme.type.bodySmall)
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(if (proposal.targets.size > 1) "Review all changes" else "Review description", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.screenTitle)
+                        ContextualHelp("Description review", "Full descriptions are shown literally.")
+                    }
+                    Text("Nothing saved yet. Confirming saves all reviewed changes together.", style = TimeboxTheme.type.bodySmall)
                     TaskReviewContent(proposal, true, onOpenTask)
                     if (onConfirm == null) Text(TaskConfirmationGate, style = TimeboxTheme.type.bodySmall)
                     Spacer(Modifier.height(12.dp))

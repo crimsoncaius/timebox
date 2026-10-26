@@ -26,213 +26,214 @@ Web saves block edits immediately; Android keeps drafts until Save. Help changes
 | #324 | Settings, reporting zone, Google setup/selection, Focus/check-ins, notifications, connection, Home, Edit shortcuts, Quick Tracking setup Activity/device instructions, reachable Theme preview | Settings/reporting zone, Google, Focus/check-ins, notifications, API key, navigation; Home shortcut editor, Quick Tracking setup and Theme preview absent | Complete #324; detailed groups below |
 | #325 | Day, planning queue, block editors, Record Actual, start/switch/stop, Plan Now, notes, view options, calendar conflicts, Focus overlay; empty/offline/overlap/validation states | Day/drawers/dialogs/editors, calendar panel, global Focus/check-in hosts | Complete #325; detailed groups below |
 | #326 | Battle Plan, task/subtask editors, Projects selection/order/deletion, filters/Trash, recurring list, scheduled/quota routine subforms and confirmations | Battle Plan, Project/task panels, recurring view/editor | Complete #326; detailed groups below |
-| #327 | Chronicle Calendar/Trends, Habits, Time Goals, editors/confirmations, shortened first period warning, empty data | History Calendar/Trends; Habits and Time Goals UI absent | Pending |
-| #328 | Task Types management, shared pickers and every consumer, rename/merge/delete resolution, disabled/conflict/empty states | Types management/shared picker/rename/merge/delete | Pending |
-| #329 | Conversation, read cards, change confirmations, tracking proposals, activity/task Review, offline/sync/recovery, aggregate scan | Conversation, Review, activity correction; task/tracking confirmation execution absent, Android-directed guidance present | Pending |
+| #327 | Chronicle Calendar/Trends, Habits, Time Goals, editors/confirmations, shortened first period warning, empty data | History Calendar/Trends; Habits and Time Goals UI absent | Complete #327; detailed groups below |
+| #328 | Task Types management, shared pickers and every consumer, rename/merge/delete resolution, disabled/conflict/empty states | Types management/shared picker/rename/merge/delete | Complete #328; detailed groups below |
+| #329 | Conversation, read cards, change confirmations, tracking proposals, activity/task Review, offline/sync/recovery, aggregate scan | Conversation, Review, activity correction; task/tracking confirmation execution absent, Android-directed guidance present | Complete #329; detailed groups below |
 
 ## Production source register
 
-Discovery register, not completed copy review. Each batch must inspect conditional branches and shared consumers, record groups above or mark no applicable copy. Debug/prototype sources excluded.
+Reconciled production source register. Family entries refer to the detailed copy decisions and verification below; this is source coverage, not a claim that every conditional state was exercised live. Supporting code has no optional rendered copy; its validation/recovery messages are kept. Debug/prototype sources are explicitly excluded.
 
 | Platform | Source | Status |
 | --- | --- | --- |
-| Web | `frontend/src/App.tsx` | Pending family review |
-| Web | `frontend/src/components/BlockTimeFields.tsx` | Pending family review |
-| Web | `frontend/src/components/CalendarDateField.tsx` | Pending family review |
-| Web | `frontend/src/components/ContextualHelp.tsx` | Pending family review |
-| Web | `frontend/src/components/DayCalendarPopover.tsx` | Pending family review |
-| Web | `frontend/src/components/DayTimeline.tsx` | Pending family review |
-| Web | `frontend/src/components/DeleteTaskTypeResolutionModal.tsx` | Pending family review |
-| Web | `frontend/src/components/HelperText.tsx` | Pending family review |
+| Web | `frontend/src/App.tsx` | Reconciled #329 route/host matrix; no additional optional copy |
+| Web | `frontend/src/components/BlockTimeFields.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/components/CalendarDateField.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Web | `frontend/src/components/ContextualHelp.tsx` | Reviewed #323; shared interaction and named close controls |
+| Web | `frontend/src/components/DayCalendarPopover.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Web | `frontend/src/components/DayTimeline.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/components/DeleteTaskTypeResolutionModal.tsx` | Reviewed #328; picker/management states and consumer matrix below |
+| Web | `frontend/src/components/HelperText.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
 | Web | `frontend/src/components/Layout.tsx` | Reviewed #324; groups below |
-| Web | `frontend/src/components/ReminderWatcher.tsx` | Pending family review |
-| Web | `frontend/src/components/SettingsControls.tsx` | Pending family review |
-| Web | `frontend/src/components/TaskTypePathCombobox.tsx` | Pending family review |
+| Web | `frontend/src/components/ReminderWatcher.tsx` | Reviewed #329; feedback is outcome/recovery/data, no optional tutorial |
+| Web | `frontend/src/components/SettingsControls.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Web | `frontend/src/components/TaskTypePathCombobox.tsx` | Reviewed #328; picker/management states and consumer matrix below |
 | Web | `frontend/src/components/ThemeToggle.tsx` | Reviewed #324; groups below |
-| Web | `frontend/src/components/TimeBlockCard.tsx` | Pending family review |
-| Web | `frontend/src/components/TimeBlockInspectorContent.tsx` | Pending family review |
-| Web | `frontend/src/components/TransientFeedback.tsx` | Pending family review |
-| Web | `frontend/src/components/UndoFailureHost.tsx` | Pending family review |
-| Web | `frontend/src/components/UndoNotice.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ActivityActualEditor.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ActivitySwitchDialog.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ActivitySwitchUndoHost.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ActivityTimeField.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ActivityTracking.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ActivityTrackingStatus.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/BrowserCheckInHost.tsx` | Pending family review |
+| Web | `frontend/src/components/TimeBlockCard.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/components/TimeBlockInspectorContent.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/components/TransientFeedback.tsx` | Reviewed #329; feedback is outcome/recovery/data, no optional tutorial |
+| Web | `frontend/src/components/UndoFailureHost.tsx` | Reviewed #329; feedback is outcome/recovery/data, no optional tutorial |
+| Web | `frontend/src/components/UndoNotice.tsx` | Reviewed #329; feedback is outcome/recovery/data, no optional tutorial |
+| Web | `frontend/src/features/activity/ActivityActualEditor.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/ActivitySwitchDialog.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/ActivitySwitchUndoHost.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/ActivityTimeField.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/ActivityTracking.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/ActivityTrackingStatus.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/BrowserCheckInHost.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
 | Web | `frontend/src/features/activity/CheckInSettings.tsx` | Reviewed #324; groups below |
-| Web | `frontend/src/features/activity/FocusMode.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/PlanNowEditor.tsx` | Pending family review |
-| Web | `frontend/src/features/activity/ReportingDayActuals.tsx` | Pending family review |
+| Web | `frontend/src/features/activity/FocusMode.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/PlanNowEditor.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/activity/ReportingDayActuals.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
 | Web | `frontend/src/features/activity/ReportingTimezoneSettings.tsx` | Reviewed #324; groups below |
-| Web | `frontend/src/features/activity/SwitchActivityTimeline.tsx` | Pending family review |
-| Web | `frontend/src/features/assistant/AssistantPage.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/BattlePlanCard.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/BattlePlanPage.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/BattlePlanSidebar.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/BattlePlanSidebarFrame.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/MoveProjectDialog.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/ProjectEditor.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/RecurringPage.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/SubtaskTitle.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/TaskComposer.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/TaskDetailPanel.tsx` | Pending family review |
-| Web | `frontend/src/features/battle-plan/TaskTypeFilterMenu.tsx` | Pending family review |
-| Web | `frontend/src/features/calendar/GoogleCalendar.tsx` | Pending family review |
-| Web | `frontend/src/features/history/ChronicleHighlight.tsx` | Pending family review |
-| Web | `frontend/src/features/history/ChronicleMonthGrid.tsx` | Pending family review |
-| Web | `frontend/src/features/history/CustomRangePicker.tsx` | Pending family review |
-| Web | `frontend/src/features/history/HistoryPage.tsx` | Pending family review |
-| Web | `frontend/src/features/history/TrendsPanel.tsx` | Pending family review |
-| Web | `frontend/src/features/home/HomeRedirect.tsx` | Pending family review |
-| Web | `frontend/src/features/readiness/ReadinessFailureNotice.tsx` | Pending family review |
-| Web | `frontend/src/features/readiness/ReadinessProvider.tsx` | Pending family review |
+| Web | `frontend/src/features/activity/SwitchActivityTimeline.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/assistant/AssistantPage.tsx` | Reviewed #329; Assistant/Review matrix below |
+| Web | `frontend/src/features/battle-plan/BattlePlanCard.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/BattlePlanPage.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/BattlePlanSidebar.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/BattlePlanSidebarFrame.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Web | `frontend/src/features/battle-plan/MoveProjectDialog.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/ProjectEditor.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/RecurringPage.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/SubtaskTitle.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/TaskComposer.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/TaskDetailPanel.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/battle-plan/TaskTypeFilterMenu.tsx` | Reviewed #328; picker/management states and consumer matrix below |
+| Web | `frontend/src/features/calendar/GoogleCalendar.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/history/ChronicleHighlight.tsx` | Reviewed #327; reporting matrix below |
+| Web | `frontend/src/features/history/ChronicleMonthGrid.tsx` | Reviewed #327; reporting matrix below |
+| Web | `frontend/src/features/history/CustomRangePicker.tsx` | Reviewed #327; reporting matrix below |
+| Web | `frontend/src/features/history/HistoryPage.tsx` | Reviewed #327; reporting matrix below |
+| Web | `frontend/src/features/history/TrendsPanel.tsx` | Reviewed #327; reporting matrix below |
+| Web | `frontend/src/features/home/HomeRedirect.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Web | `frontend/src/features/readiness/ReadinessFailureNotice.tsx` | Reviewed #326; task/Project/recurrence matrix below |
+| Web | `frontend/src/features/readiness/ReadinessProvider.tsx` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
 | Web | `frontend/src/features/settings/SettingsPage.tsx` | Reviewed #324; groups below |
-| Web | `frontend/src/features/task-types/RenameTaskTypeSheet.tsx` | Pending family review |
-| Web | `frontend/src/features/task-types/TaskTypesPage.tsx` | Pending family review |
-| Web | `frontend/src/features/today/DayViewOptions.tsx` | Pending family review |
-| Web | `frontend/src/features/today/ReadyToPlanDrawer.tsx` | Pending family review |
-| Web | `frontend/src/features/today/RecordingPreview.tsx` | Pending family review |
-| Web | `frontend/src/features/today/TodayPage.tsx` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/data/ActivityDay.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/data/ActivityInstant.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/data/ActivityRepository.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/data/remote/ActivityDto.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/MainActivity.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/quicktracking/QuickTrackingActivity.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/AppRoutes.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantCard.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantCards.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantController.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantReviewScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTaskCards.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTaskRecovery.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTasks.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTransport.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/ProposalTracking.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/TrackingProposal.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/TrackingProposalCard.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/BattlePlanActions.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/BattlePlanScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/BattlePlanViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/KanbanDragMath.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/MoveProjectMenuItem.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/PlannedDates.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectNameSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectNavigationList.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectOrderDialog.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectSelectionMotion.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringCreationScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringEditorViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineCalendarSection.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineDraftSaver.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutinePreplanningFields.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineRepeatEditor.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskComposerSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskDetailViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskFieldsSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskReminder.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskSubtasks.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskTypeFilter.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskTypeFilterSection.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/calendar/CalendarSelectionList.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/calendar/GoogleCalendarPanel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/calendar/GoogleCalendarSettings.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/ChronicleScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/ChronicleViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/CustomRangeSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/HabitEdits.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/HabitsScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/HabitsViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalDetails.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalEditor.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalsContent.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalsScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalsViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TrendsScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/Chrome.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/Common.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/ContextualHelp.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/CurrentRangeAction.kt` | Pending family review |
+| Web | `frontend/src/features/task-types/RenameTaskTypeSheet.tsx` | Reviewed #328; picker/management states and consumer matrix below |
+| Web | `frontend/src/features/task-types/TaskTypesPage.tsx` | Reviewed #328; picker/management states and consumer matrix below |
+| Web | `frontend/src/features/today/DayViewOptions.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/today/ReadyToPlanDrawer.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/today/RecordingPreview.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Web | `frontend/src/features/today/TodayPage.tsx` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/data/ActivityDay.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/data/ActivityInstant.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/data/ActivityRepository.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/data/remote/ActivityDto.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/MainActivity.kt` | Reconciled #329 route/host matrix; no additional optional copy |
+| Android | `android/app/src/main/java/com/timebox/android/quicktracking/QuickTrackingOverlay.kt` | Reviewed #329; visible capture state/error/recovery, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/quicktracking/QuickTrackingActivity.kt` | Reviewed #324; settings/setup matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/AppRoutes.kt` | Reconciled #329 route/host matrix; no additional optional copy |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantCard.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantCards.kt` | Reviewed #329; Assistant/Review matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantController.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantReviewScreen.kt` | Reviewed #329; Assistant/Review matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantScreen.kt` | Reviewed #329; Assistant/Review matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTaskCards.kt` | Reviewed #329; Assistant/Review matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTaskRecovery.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTasks.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/AssistantTransport.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/ProposalTracking.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/TrackingProposal.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/assistant/TrackingProposalCard.kt` | Reviewed #329; Assistant/Review matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/BattlePlanActions.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/BattlePlanScreen.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/BattlePlanViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/KanbanDragMath.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/MoveProjectMenuItem.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/PlannedDates.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectNameSheet.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectNavigationList.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectOrderDialog.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/ProjectSelectionMotion.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringCreationScreen.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringEditorViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringScreen.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RecurringViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineCalendarSection.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineDraftSaver.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutinePreplanningFields.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineRepeatEditor.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/RoutineScreen.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskComposerSheet.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskDetailViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskFieldsSheet.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskReminder.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskSubtasks.kt` | Reviewed #326; task/Project/recurrence matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskTypeFilter.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/battleplan/TaskTypeFilterSection.kt` | Reviewed #328; picker/management states and consumer matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/calendar/CalendarSelectionList.kt` | Reviewed #324; settings/setup matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/calendar/GoogleCalendarPanel.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/calendar/GoogleCalendarSettings.kt` | Reviewed #324; settings/setup matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/ChronicleScreen.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/ChronicleViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/CustomRangeSheet.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/HabitEdits.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/HabitsScreen.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/HabitsViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalDetails.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalEditor.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalsContent.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalsScreen.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TimeGoalsViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/chronicle/TrendsScreen.kt` | Reviewed #327; reporting matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/Chrome.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/Common.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/ContextualHelp.kt` | Reviewed #323; shared interaction and named close controls |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/CurrentRangeAction.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
 | Android | `android/app/src/main/java/com/timebox/android/ui/components/NavigationDirectory.kt` | Reviewed #324; groups below |
 | Android | `android/app/src/main/java/com/timebox/android/ui/components/NavigationShortcuts.kt` | Reviewed #324; groups below |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/TimeboxSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/TransientFeedback.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/components/WheelDatePicker.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityActualEditor.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivitySelectionFields.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityStatus.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTimeField.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTimeMetrics.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTracking.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTrackingStatus.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockDuration.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockEmphasis.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockPlacement.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockTimeFields.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockTimeInteraction.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/CheckInSettings.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ClipInPlace.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/CurrentActivityControl.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/CurrentActivityNotesSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayCalendarHeader.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayCalendarHeaderLogic.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayLoadProblem.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayTimeline.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayViewOptionsDialog.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/LogTimeForm.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/LongPressArmedDragGesture.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/PlanMode.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/PlannedBlockSuggestion.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/PlannedRecordingState.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingPreview.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingPreviewStudy.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingTimeline.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingTimelineModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/ReportingDayActuals.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/RunningActualSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/StartTrackingSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/StopTrackingSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/SwitchActivitySheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/SwitchActivityTimeline.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/SwitchTimelineModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/TaskTypePicker.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/TaskTypeRecommendation.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/TimelineZoom.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/TrackingHandoff.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/day/UntrackedGaps.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/ElapsedDuration.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/focus/FocusController.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/focus/FocusMode.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/MondayDatePicker.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/planning/PlanningSession.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/readiness/ReadyToPlanCoordinator.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/readiness/ReadyToPlanFailureNotice.kt` | Pending family review |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/TimeboxSheet.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/TransientFeedback.kt` | Reviewed #329; feedback is outcome/recovery/data, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/components/WheelDatePicker.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityActualEditor.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivitySelectionFields.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityStatus.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTimeField.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTimeMetrics.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTracking.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ActivityTrackingStatus.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockDuration.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockEmphasis.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockPlacement.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockSheet.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockTimeFields.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/BlockTimeInteraction.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/CheckInSettings.kt` | Reviewed #324; settings/setup matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ClipInPlace.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/CurrentActivityControl.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/CurrentActivityNotesSheet.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayCalendarHeader.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayCalendarHeaderLogic.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayLoadProblem.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayScreen.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayTimeline.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/DayViewOptionsDialog.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/LogTimeForm.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/LongPressArmedDragGesture.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/PlanMode.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/PlannedBlockSuggestion.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/PlannedRecordingState.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingPreview.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingPreviewStudy.kt` | Excluded; debug-only study, not production |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingTimeline.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/RecordingTimelineModel.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/ReportingDayActuals.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/RunningActualSheet.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/StartTrackingSheet.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/StopTrackingSheet.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/SwitchActivitySheet.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/SwitchActivityTimeline.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/SwitchTimelineModel.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/TaskTypePicker.kt` | Reviewed #328; picker/management states and consumer matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/TaskTypeRecommendation.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/TimelineZoom.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/TrackingHandoff.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/day/UntrackedGaps.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/ElapsedDuration.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/focus/FocusController.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/focus/FocusMode.kt` | Reviewed #325; Day/recording/Focus and conditional-state matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/MondayDatePicker.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/planning/PlanningSession.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/readiness/ReadyToPlanCoordinator.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/readiness/ReadyToPlanFailureNotice.kt` | Reviewed #326; task/Project/recurrence matrix below |
 | Android | `android/app/src/main/java/com/timebox/android/ui/settings/SettingsScreen.kt` | Reviewed #324; groups below |
-| Android | `android/app/src/main/java/com/timebox/android/ui/settings/SettingsViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/ShortcutSlide.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/taskcompletion/TaskCompletion.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/theme/Colors.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/theme/Theme.kt` | Pending family review |
+| Android | `android/app/src/main/java/com/timebox/android/ui/settings/SettingsViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/ShortcutSlide.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/taskcompletion/TaskCompletion.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/theme/Colors.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/theme/Theme.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
 | Android | `android/app/src/main/java/com/timebox/android/ui/theme/ThemePreviewScreen.kt` | Reviewed #324; groups below |
-| Android | `android/app/src/main/java/com/timebox/android/ui/theme/Type.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/TimeboxApp.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/TimeboxNavHost.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/TimeFormat.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/types/RenameTaskTypeSheet.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/types/TypesScreen.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/types/TypesViewModel.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/undo/UndoLifecycle.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/undo/UndoNoticeHost.kt` | Pending family review |
-| Android | `android/app/src/main/java/com/timebox/android/ui/ViewModelFactory.kt` | Pending family review |
+| Android | `android/app/src/main/java/com/timebox/android/ui/theme/Type.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/TimeboxApp.kt` | Reconciled #329 route/host matrix; no additional optional copy |
+| Android | `android/app/src/main/java/com/timebox/android/ui/TimeboxNavHost.kt` | Reconciled #329 route/host matrix; no additional optional copy |
+| Android | `android/app/src/main/java/com/timebox/android/ui/TimeFormat.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/types/RenameTaskTypeSheet.kt` | Reviewed #328; picker/management states and consumer matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/types/TypesScreen.kt` | Reviewed #328; picker/management states and consumer matrix below |
+| Android | `android/app/src/main/java/com/timebox/android/ui/types/TypesViewModel.kt` | Reviewed supporting source; keep validation/status/recovery output at family host, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/undo/UndoLifecycle.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
+| Android | `android/app/src/main/java/com/timebox/android/ui/undo/UndoNoticeHost.kt` | Reviewed #329; feedback is outcome/recovery/data, no optional tutorial |
+| Android | `android/app/src/main/java/com/timebox/android/ui/ViewModelFactory.kt` | Reviewed; no optional explanatory copy in this helper/format/control; caller copy and validation retained |
 
 ## Foundation validation and review (2026-10-26)
 
@@ -243,7 +244,7 @@ Discovery register, not completed copy review. Each batch must inspect condition
 - Review: web http://127.0.0.1:12107/settings; API http://127.0.0.1:12106 with isolated SQLite C:/Users/Caius/TimeboxRuntime/contextual-help-322.db. Vite and Uvicorn run from this worktree; Uvicorn uses the existing primary checkout Python environment only as its interpreter.
 - Android review: emulator-5606, token f1c680cd89aa47e591ea6c965c823af6, owner initiative-322 contextual help review, storage root C:/Users/Caius/TimeboxRuntime/emulators. App installed from updated tree with -PreviewApiBaseUrl=http://10.0.2.2:12106/. Normal text size restored, light Settings at Focus & check-ins; help dismissed. Resume this reservation for later batches, then return it to review. Preserve unrelated devices.
 - Screenshots retained outside Git at C:/Users/Caius/TimeboxRuntime/help322-web-light.png, help322-web-nested.png, help322-android-short-final.png and help322-android-dark-large.png. Early Android screenshots without the -final suffix captured before popup animation settled and are not validation evidence.
-- Remaining source-register rows deliberately pending for #324–329. These batches must classify each group and explicitly mark reviewed no-copy surfaces; no family is certified complete by this foundation.
+- Historical foundation status: the register initially left later families pending. #324–329 have now reconciled those rows; see each batch and the aggregate evidence below.
 
 ## Settings, integrations and navigation #324
 
@@ -302,7 +303,7 @@ Paths are relative to `frontend/src/` (web) or `android/app/src/main/java/com/ti
 - Web GoogleCalendar appears in Settings (no date) and TodayPage (date); setup/priority changes apply to Settings. Android GoogleCalendarPanel appears in Settings and DayScreen; GoogleCalendarSettings is only its no-date branch. CalendarSelectionList has only GoogleCalendarSettings as a consumer. Shared nested editors/confirmations retain visible consequences on both routes; #325 finishes Day audit.
 - Web SettingsDetails remains the shared contextual-help wrapper introduced in #323, with no production consumers after grouping check-in help. No inline explanation-only expander remains in this family. Google Calendar expanders reveal controls or results.
 - Quick Tracking setup is a separate Activity using the same ContextualHelp without the main navigation host. Home/shortcut editor, Quick Tracking setup/device instructions, reachable Theme preview, server-address field, Daily Reminder and Planned Block reminder settings have no web Settings counterpart. Browser session-storage and idle-permission details remain platform-specific.
-- SettingsViewModel has result handling but no additional optional explanation surface. Navigation destination declarations and theme token/type files have no applicable production explanatory copy. Focus overlay and Activity Tracking content beyond the shared wake setting remain for #325; Quick Tracking capture remains for #329.
+- SettingsViewModel has result handling but no additional optional explanation surface. Navigation destination declarations and theme token/type files have no applicable production explanatory copy. Focus overlay and Activity Tracking content beyond the shared wake setting are covered by #325; Quick Tracking capture is covered by #329.
 
 ### #324 validation and review (2026-10-26)
 
@@ -480,3 +481,93 @@ All production sources in Android `ui/types/`, `ui/day/TaskTypePicker.kt`, `ui/b
 - ContextualHelpTest passed 3/3 on the restored implementation (short and long nested help plus the new typed Task Type Path/no-mutation case). The final Android layout puts the information button beside the search field, avoiding a duplicate heading above it; the focused picker case was rerun after that adjustment. Normal/light Start tracking was inspected during review without starting tracking.
 - Final picker-only device rerun passed 1/1 after the layout adjustment. Final debug APK reinstalled with `-PreviewApiBaseUrl=http://10.0.2.2:12106/`; touch opened path help inside Start tracking, screenshot and semantics inspected for readable content/Close help, Back dismissed only help and retained the parent form. Start tracking is left open with no draft entered and no tracking started, normal font/light theme. Evidence: help328-android.png, help328.xml and help328-back.xml in C:/Users/Caius/TimeboxRuntime/. Immediate post-launch dumps needed a settled retry.
 - Review runtime preserved: web http://127.0.0.1:12107/task-types (help closed), API 12106 with isolated contextual-help-322.db; no server restart. Android emulator-5606, token f1c680cd89aa47e591ea6c965c823af6, owner initiative-322 contextual help review, storage C:/Users/Caius/TimeboxRuntime/emulators; review hold restored. Unrelated review devices and unrelated cleanup-pending reservation untouched. No PR, merge, tracker or backend changes.
+
+## Assistant and Review #329
+
+All production `ui/assistant/` sources and web `features/assistant/AssistantPage.tsx` were inspected, including text emitted by controller, transport, proposal derivation and recovery code. Original text equals final text wherever the decision says keep. Generated answers, user questions/titles/descriptions and server-supplied result values are data, not copy rewritten here. No backend, domain, confirmation, correction or recovery behavior changed.
+
+| Platform / source / display condition | Original group | Treatment, final wording and placement | Verification |
+| --- | --- | --- | --- |
+| Web AssistantPage / always | A little help with your day | Remove redundant eyebrow; Assistant remains the heading. Remove unused CSS. | Build, source and browser |
+| Web Conversation / empty | What’s on your mind? Ask about your day, your tasks, or your tracked time. | Keep useful first-message guidance; no new automatic introduction. | Source/browser |
+| Web Conversation / task or tracking proposal | Tracking changes need confirmation… / Task changes still need confirmation… Use the Android Assistant to request and confirm… | Keep both complete current-decision instructions visible. Web has no execution counterpart for these proposals. | Existing confirmation-mode test |
+| Web Conversation / busy, failed, interrupted or stopped response | Thinking; sequence/connection interruption and send-new-message guidance | Keep status and alerts, preserve draft/send behavior. User questions and generated answers excluded. | Source and existing tests |
+| Web Reviews / both To review and Reviewed tabs | Already recorded. Correct anything that doesn’t look right. | Keep “Already recorded.” visible. Move “Correct anything that doesn’t look right.” unchanged into Review activity help beside heading. | Selection preserved through open/close in test; click/Enter/Escape/browser |
+| Web Reviews / loading, empty, missing/split record, changed revision, stale acknowledgement, earlier page | Loading; All caught up / No reviewed activity yet; Activity recorded with Review later will appear here; This activity was removed or split. Inspect it in Day; Changed since you reviewed it; error and Refresh | Keep all visible; times/reporting zone, loaded selection and count remain. Originally recorded expander contains actual receipt data and stays an expander. | Existing stale batch test + source |
+| Web Correction / running or finished, invalid/lost reply | Times in your device’s timezone; Name/Task Type/Start/End; error and Save correction/Cancel | Keep timezone visible (device zone differs from Review reporting zone). Running end remains absent. Native Task Type select is intentionally not the shared path-creation picker. Preserve operation identity and retry precision. | Existing lost-reply test |
+| Android AssistantScreen / empty, composing, busy, ended, failed, review-later result, recovery pending | Placeholder/status; Task changes need checking · Review; recorded/pending outcome; This attempt won’t be used in later answers; Retry response/Check result/New conversation | Keep current state and recovery visible. No new optional introduction. AnswerText renders excluded generated content. | Source; prior conversation tests not repeated |
+| Android AssistantCards / Blocks and Task Type cards, all lanes/dates/filter conditions | Read timestamp/zone, future recurring exclusion, actual unavailable, Actual time stops at the read time; Trends shows recorded time through Today; Earlier time is hidden. Show larger… | Keep all visible because they qualify the displayed data or destination. Empty Blocks/type totals, running-at-read and midnight-crossing totals remain visible. Show larger/fewer and child expansion show data, not help. | Source; unchanged rendering |
+| Android AssistantTaskCards TaskReadCard / each saved-task card | Open Task shows current details; this snapshot stays unchanged. | Move unchanged to Task snapshots help beside Saved Tasks. Keep Historical snapshot and Read timestamp/zone visible. | Added device open/close/no-navigation check |
+| Android TaskReadCard / partial, pagination, unknown count, saved recurring records, missing identities | Partial results; more saved results/next page; incomplete empty result; saved_only, unverified_readiness, query_limit, payload_limit and fallback unavailable caveats | Keep every conditional limitation and recovery instruction visible. Exact/at-least/unknown totals and loaded counts remain. | Source, selected card test |
+| Android TaskSnapshotRow / unavailable, blocked, completed, nested sessions/children, incomplete dates | Availability not verified; blocked reason; completion precision; loaded child counts; Planned dates are incomplete; ask for another page | Keep factual qualifications in their existing visible/data-detail context. Saved details expands record data; its conditional limitations remain with that data. | Source |
+| Android TaskChangeCard and TaskReviewContent / pending, multiple targets, description, offline, stale/expired/invalid, synchronization, unknown outcome | Nothing saved/all together; pending source; reviewed field values and side effects; confirmation gate; connect/sync; refresh/check/dismiss actions | Keep visible. Completion now versus earlier and reopening effects, linked tracking stop, removed plans, detached Actuals and cleared fields remain fully disclosed. Review details is a data expander, not optional instructions. | Source; focused confirmation device test |
+| Android DescriptionReview / full description dialog, single/multiple targets | Nothing saved yet. Confirming saves all reviewed changes together. Full descriptions are shown literally. | Keep first two consequence sentences visible. Move “Full descriptions are shown literally.” unchanged into Description review help beside heading. Raw descriptions remain literal and private until explicit review. | Nested help no-confirmation/close test; large dark description/Back test |
+| Android TaskResultCard / applied/rolled back/rejected/not_seen/unknown, Undo available/conflict/applied | Outcome unknown/check result; no changes saved; saved together; stopped Actuals/removed plans; Undo tracking stays stopped; historical receipt | Keep all visible in current result or its existing saved-data details. Never put a saved-outcome uncertainty or Undo consequence behind help. | Source; unchanged callbacks |
+| Android AssistantReviewScreen SavedTaskResults / recovery results or error exists | Task results stay here when you start a new conversation. | Move unchanged to Saved task results help beside heading; heading still distinguishes unresolved Task changes need checking. | Source/build; shared interaction evidence reused |
+| Android SavedTaskResults / unresolved, resolved, retry review, exact retry, dismissal | Overlapping Task controls blocked until reconciled; applied/undone outcome; Check result, Review retry, Retry same submission, Dismiss saved result, Open Task; online/error reasons | Keep visible. TaskChangeCard and TaskResultCard reuse the same policy here and in Conversation, including refreshed/retry proposals. | Source |
+| Android AssistantReviewScreen / local unsynced/rejected, offline, syncing, empty/history, changed/uneditable | Reconnect; corrections available after sync; Saved on this device · Unsynced; Could not sync · Open Day for recovery; no activities; no single editable record; changed since review | Keep all current-state explanations and Retry/Open day/Correct/Looks right routes. Tracking details contains receipt/current data, no optional explanation to migrate. | Source; baseline limitations below |
+| Android correction / start, stop, Task Type step, date/time, invalid, pending save, discard | Times in zone; start/end constraints; reconnect/sync; save may have completed; closing does not cancel; return to Review; unsaved changes lost | Keep visible. Start edits category/name/start, stop edits stop time; no web parity change. Nested TaskTypePicker inherits #328 help. | Source, shared picker/draft evidence reused |
+
+### Aggregate production route reconciliation
+
+Route wiring checked in `frontend/src/App.tsx`, Android `ui/AppRoutes.kt`, `ui/TimeboxNavHost.kt`, `ui/TimeboxApp.kt`, `ui/components/NavigationDirectory.kt`, and `AndroidManifest.xml`. The detailed matrices above cover nested editors and conditional copy; the following closes route/host omissions. All rows are source-reviewed; live verification is explicitly scoped below.
+
+| Production entry | Surfaces reached / disposition |
+| --- | --- |
+| Web `/`, unknown route | HomeRedirect/redirect to Day; no rendered explanatory copy. |
+| Web `/day/:date` | TodayPage, timeline/calendar date popover, queue, inspector, Record Actual/Plan Now, Google panel, view options and recording/conflict previews: #325. |
+| Web `/history` | HistoryPage Calendar, custom date range and retained Trends panel: #327. No Habits or Time Goals UI. |
+| Web `/task-types` | Management, rename, merge and deletion resolution: #328. |
+| Web `/battle-plan` and query-selected task/recurring views | BattlePlanPage, sidebar/Projects, task composer/detail/subtasks, filters, Trash and RecurringPage create/edit: #326. |
+| Web `/assistant` | Conversation and both Review tabs, receipt details/correction: #329 matrix. No Android-style saved-task cards/task recovery/proposal execution UI. |
+| Web `/settings` | Shared/device settings, timezone, Google Calendar, Focus/check-ins, notifications, API key: #324. No Android Home shortcut editor, Theme preview, usage-access or Quick Tracking Activity counterpart. |
+| Web global hosts | FocusHost/FocusMode/BrowserCheckInHost/ActivitySwitchUndoHost: #325; ReminderWatcher, ReadinessProvider/ReadinessFailureNotice, UndoFailureHost/UndoNotice/TransientFeedback: keep outcome/error/retry/data. Layout/ThemeToggle navigation: #324; ordinary icon names/title attributes retained. |
+| Android Home and navigation | Home directory, shortcuts/editor, route titles and task/Day deep links: #324. Labels/icons/data only after removal of route-description clutter. |
+| Android Day | Day, calendar header, timeline, queue/planning, view options, BlockSheet, LogTimeForm/ActivityActualEditor, RunningActualSheet, Start/Switch/Stop, notes, overlap previews/Google conflicts: #325. |
+| Android Chronicle/Trends/Habits/TimeGoals | Shared Chronicle shell and four production tabs; custom range, add/record habit, quota session adjustment, goal list/new/edit/nested type/period/details/end/delete: #327. |
+| Android BattlePlan/task detail/recurring/new/detail/edit | Project selection/order/delete, Tasks/Subtasks/completion/Trash, recurrence scheduled/quota/checklist/repeat/pre-planning/date editors and lifecycle confirmations: #326. |
+| Android Types | TypesScreen, TaskTypePicker and RenameTaskTypeSheet merge/deletion destinations: #328. |
+| Android Assistant/Review | Conversation, cards, description confirmation, tracking change sheet, activity correction/details, saved task recovery/retry: #329. |
+| Android Settings/ThemePreview | Preferences, reporting zone, Google, connection, notifications, Focus/check-ins, Quick Tracking setup and reachable ThemePreviewScreen: #324. Theme preview is production; theme token/data files themselves have no explanations. |
+| Android manifest QuickTrackingActivity/QuickTrackingTile | Setup UI already #324. Added missing register entry `quicktracking/QuickTrackingOverlay.kt`: listening/recording/saved status and error/Retry/Settings/Speak again/Close only, keep visible; no optional tutorial. Tile launches the same Activity. SpeechRecognizer permission/network/unavailable guidance and tile setup result remain visible in Activity. OS-owned permission dialogs and notifications excluded. |
+| Android other global hosts and non-UI sources | FocusMode, check-in and current-activity controls: #325. Readiness failure and task completion/Undo recovery: visible status/consequences. Data/remote/repository/viewmodel transport validation output is kept at its host; there is no optional tutorial to migrate in state/serialization/math helpers. |
+| Excluded/unreachable sources | Web development PlanNowPrototype and Android debug studies (including RecordingPreviewStudy), OS notification content, system permission dialogs, generated Assistant answers and user-authored content excluded. `RecurringCreationScreen.kt` has production CreationMode/Count/DateRow helpers (labels and necessary scheduled/quota distinctions); its old `RecurringPreplanningScheduleEditor` has no callers and is not a production copy occurrence. Actual nested pre-planning uses RoutinePreplanningFields. |
+
+### Shared occurrence closure and residual explanations
+
+The register intentionally lists implementation owners once; these consumer lists identify every occurrence of the migrated reusable copy. Surrounding feature-specific text is classified in its batch table.
+
+- Task Type Paths: every web/Android assignment consumer is enumerated under #328, including Focus and Assistant correction. Management syntax/help, filter selection facts, creation consequences and merge/delete warnings are separate entries there.
+- Android `BlockSheet` time help applies to every non-Google Planned Block editor reached from Day; plan-note help is its nested notes editor. Web `TimeBlockInspectorContent` time help applies to Day existing non-Google block inspection; TaskTypePathCombobox and BlockTimeFields keep their own rules and validation. Google ownership reasons remain inline.
+- Recording time: Android `ActivityActualEditor` and `LogTimeForm`; web `ActivityActualEditor`. Start/Change/Stop time gestures: Android StartTrackingSheet, SwitchActivitySheet, StopTrackingSheet and their Day/Focus/Assistant proposal hosts; web SwitchActivityTimeline through ActivityTracking (including Focus) and PlanNowEditor. The duplicate instances use the same component, not another copy variant.
+- Check-in rules/idle threshold: CheckInSettings in Settings on each platform; web SettingsDetails delegates to ContextualHelp (no active inline help expander remains). Focus awake-policy help is the settings component exported from each FocusMode file and rendered in Settings. Android SettingsGroup `help` supplies Google Calendar import/nonmutation, Notifications battery-delivery policy, and Connection server/authentication guidance; ReportingZoneRow and QuickTrackingActivity own their distinct help.
+- Calendar priority: Android CalendarSelectionList in GoogleCalendarSettings, web GoogleCalendar in both Settings and Day panel. Google import/nonmutation help and API-key field help use those same web components. Consequences/preview lists remain separate visible data.
+- Project order: Android ProjectOrderDialog from Battle Plan, web BattlePlanSidebar. Task status/Ready to Plan: web BattlePlanPage, TaskDetailPanel, ReadyToPlanDrawer; Android current instructions are labels/actions/conditional restrictions as recorded #326.
+- Recurrence: RoutineRepeatEditor is reused in new/edit RoutineScreen; quota, month-end, cycles and unfinished-occurrence help follow the corresponding field conditions. RoutinePreplanningFields appears both in repeat setup and separate Pre-planning nested sheet. Checklist inheritance is RoutineScreen's checklist subform. Web RecurringPage TemplateForm owns create/edit month and pre-planning rules; its details-view pre-planning help is also inventoried #326.
+- Reporting: ChronicleScreen current month only (offscreen swipe pages omit trigger), web HistoryPage Calendar only; Android HabitsScreen week grid and Add habit; TimeGoalsContent list, TimeGoalEditor new/edit/nested type/period and TimeGoalDetails. #327 lists both Goal periods occurrences and all Goal progress variants.
+- Assistant snapshots: TaskReadCard used via AssistantReadCards in Conversation, including multi-card pager. DescriptionReview used by TaskChangeCard in Conversation and saved-result retry Review. Saved task results help occurs only in Review when results/error exist. Web Review activity help covers both To review and Reviewed tabs.
+- Android residual `SheetHelp` calls are all retained necessities: ActivityTracking (recording continues); BlockSheet (invalid times/Google ownership); CurrentActivityNotesSheet (archived/Trash read-only, whole-description/note replacement, offline); LogTimeForm (invalid range); RecordingPreview (date/zone, no overlap, plan/Task Completion consequence); RunningActualSheet (zone); SwitchActivitySheet (offline plan restriction/current start/switch consequence). The function remains an inline style wrapper for necessary text, not an optional-help expander.
+- Android residual `HelperText` calls: ActivityActualEditor Current Activity restriction; ActivityTimeField missing/repeated clock time and occurrence selection; ActivityTracking rejected/legacy recovery and dismissal consequence; BattlePlanScreen completion date/quota values; TaskFieldsSheet no matches; ReportingDayActuals clock-change interpretation. Keep all; no hidden instruction left in these wrappers.
+- Web residual HelperText/DiagnosticText: ActivityActualEditor Current Activity restriction; ActivityTracking continued recording/planning restriction/status, recovery payloads and linked Actual totals; ActivityTimeField nonexistent local time; ReportingDayActuals clock-change interpretation. All retained. Recovery `<details>` show retained device data and its recovery guidance, not a tutorial.
+- Web remaining native `<details>`: Task actions/filter controls, Google updates/local classification controls, recording name/note change preview, switch consequences, merge branch changes, Assistant original receipt and activity recovery payloads. Retain actual data/control disclosure. Remaining HTML `title` attributes are date values, icon action names, current Project/priority/status labels. No instructional-only hover hint remains.
+- Shared no-copy controls: date/time values, native select controls, CalendarDateField/DayCalendarPopover, MondayDatePicker/WheelDatePicker, Project name/selection menus, Subtask title, priority controls, rendering wrappers, theme tokens and animation/math helpers. Keep their labels, accessible names, validation and values. Failure notices/TransientFeedback/UndoNotice/ReminderWatcher show current outcomes or user task titles and actions; no tutorial is hidden or removed.
+
+### Aggregate verification and limits
+
+Coverage is complete at source level across the production entries above, using each accepted batch's detailed inspections. It is not exhaustive live execution of every network, permission, date, account or recovery branch. No automatic help, separate help centre, feature-parity addition, backend behavior change or domain terminology change was introduced.
+
+| Concern | Evidence and limits |
+| --- | --- |
+| Hidden initially, discoverable named triggers | Shared web/Android tests #323 and #328; each migrated group uses those components. #329 tests snapshot help starts hidden and opens explicitly; web Review help hidden until requested. |
+| Touch/click, keyboard, dismissal and focus | Real web click/Enter/Escape returns focus to Help: Review activity; explicit close test keeps selection. Android snapshot and nested description explicit Close help pass. Existing large-text description dialog Back/focus test passes. Prior real Android Back and shared nested tests #323–328 retained. |
+| Single panel, overlay, draft preservation | Shared foundation tests cover one panel, long/short nested help and retained text. #324 timezone draft, #325 block/time fields, #326 recurrence draft, #327 nested goal period and #328 picker path/title tests remain valid. #329 selection and no-confirmation/no-navigation checks added; no state mutations inside help callbacks. |
+| Screen-reader names/order | Web accessibility snapshots expose trigger, named dialog, heading, body and Close help in order. Android Compose semantics tests and previous device dumps cover named trigger/heading/content/Close help. No audio screen-reader or TalkBack session; no claim of spoken-output verification. |
+| Large text, narrow layout, themes | Previous #323–328 light/dark, Android 200%/nested and web 360px/200% evidence reused. #329 real web help inspected in light desktop and dark 360px/200% text: panel width/scrollWidth 328px, no help clipping. Assistant title/review header now wrap. Existing global Layout topbar overflows at 200% text (theme button right edge 445px on 360px viewport); this is outside the migrated help, remains a disclosed layout limit. Android existing dark 1.6x description test passes; no claim of every screen at every scale. |
+| Necessary visible facts | Source matrices confirm independent recording/Task Completion, recurrence choice distinctions, shortened first Time Goal full-target warning, Assistant partial/future exclusions, zone context, confirmation/unknown-save/recovery reasons retained. Domain/behavior tests reported by previous batches reused. |
+| Baseline failures | #325 recorded three pre-existing web duplicate-alert tests and four Android failures against earlier accepted source. #328 two picker creation-error assertions reproduced at accepted 13465735; shared help checks pass. The repository Android instrumentation baseline also lists six Assistant cases (including correction selectors); full suites deliberately not rerun. |
+
+#329 checks: web production build, focused ESLint and five tests across AssistantPage/ContextualHelp passed. Android app/test APK builds passed; selected snapshot help/no-navigation case passed, nested description help/confirmation case passed, existing dark large-text description privacy/Back/focus case passed. Initial nested-help Espresso Back attempt failed with RootViewWithoutFocusException; changed the test to the explicit Close help control and reran successfully. This does not establish that Back failed in the app; shared Back evidence is from earlier batches. No full suites, physical-device, live OAuth, microphone submission, real model conversation or exhaustive offline/clock-change checks.
+
+Review runtime: Vite and API were no longer listening when #329 browser review began; relaunched from this worktree on the same ports and isolated database. Web is http://127.0.0.1:12107/assistant, Review tab, help closed, normal text/light theme. API 12106 uses C:/Users/Caius/TimeboxRuntime/contextual-help-322.db. Android final launch/hold is recorded below. Screenshots outside Git: C:/Users/Caius/TimeboxRuntime/help329-web-light.png and help329-web-large-final.png. No tracker updates, PR or merge performed.
+
+Final Android review: final APK reinstalled and MainActivity launched from this worktree with `-PreviewApiBaseUrl=http://10.0.2.2:12106/`; Home → Review opened and its empty-state guidance inspected. Normal font/light theme, no recording or test data submitted. Emulator emulator-5606, token f1c680cd89aa47e591ea6c965c823af6, owner initiative-322 contextual help review, storage C:/Users/Caius/TimeboxRuntime/emulators; review hold restored. Device screenshot/XML: help329-review.png and help329-review.xml under C:/Users/Caius/TimeboxRuntime/. Other review reservations untouched. Final web build/lint and diff whitespace check passed after wrapping changes.

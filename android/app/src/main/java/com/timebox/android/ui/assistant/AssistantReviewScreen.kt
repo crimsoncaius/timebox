@@ -349,8 +349,10 @@ private fun SavedTaskResults(controller: AssistantController, onOpenTask: (Int) 
     val scope = rememberCoroutineScope()
     if (recoveryState.items.isEmpty() && recoveryState.error == null) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (recoveryState.items.any { !it.record.resolved }) "Task changes need checking" else "Saved task results", Modifier.semantics { heading() })
-        Text("Task results stay here when you start a new conversation.", style = TimeboxTheme.type.bodySmall)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(if (recoveryState.items.any { !it.record.resolved }) "Task changes need checking" else "Saved task results", Modifier.weight(1f).semantics { heading() })
+            com.timebox.android.ui.components.ContextualHelp("Saved task results", "Task results stay here when you start a new conversation.")
+        }
         recoveryState.error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         TextButton(onClick = recovery::foreground, enabled = !recoveryState.busy) { Text(if (recoveryState.busy) "Checking…" else "Check result") }
         recoveryState.items.forEach { item ->
