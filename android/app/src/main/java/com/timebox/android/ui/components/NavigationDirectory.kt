@@ -70,7 +70,7 @@ internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Uni
             style = TimeboxTheme.type.display, color = colors.on)
         Hairline()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
-            .padding(bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            .padding(top = 20.dp, bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
                 Column(Modifier.fillMaxWidth().clip(groupShape).background(colors.low)
                     .border(1.dp, colors.hairline, groupShape).padding(8.dp)) {
