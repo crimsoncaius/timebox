@@ -622,6 +622,9 @@ private fun NavGraphBuilder.screen(
                     AppRoutes.RecurringEditPattern, AppRoutes.RecurringDetailPattern)) {
                 val chronicle by dependencies.models.chronicleViewModel.state.collectAsState()
                 TimeboxTopBar(routeKicker(route), routeTitle(route, "", formatMonthTitle(chronicle.monthStart)))
+                if (route in listOf(AppRoutes.BattlePlan, AppRoutes.Recurring, AppRoutes.TimeGoals)) {
+                    com.timebox.android.ui.components.Hairline()
+                }
             }
             Box(Modifier.weight(1f)) { content(entry) }
         }
