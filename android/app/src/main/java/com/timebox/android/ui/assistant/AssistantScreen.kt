@@ -103,6 +103,7 @@ fun AssistantScreen(
     fun reset() { controller.newConversation(); draft = ""; follow = true }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = LocalNavigationDockInset.current)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            com.timebox.android.ui.components.ScreenBackButton()
             Column(Modifier.weight(1f)) {
                 Text("Conversation", Modifier.semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
             }

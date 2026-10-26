@@ -99,7 +99,6 @@ internal data class TimeboxNavigationOptions(
     val onRequestExactAlarms: () -> Unit,
     val reducedMotion: Boolean,
     val shortcutSlide: ShortcutSlide? = null,
-    val revealDestination: String? = null,
 )
 
 /** Mutable collaborators, deliberately without an Immutable/Stable promise.
@@ -118,14 +117,16 @@ internal class TimeboxNavigationDependencies(
 )
 
 @Composable
-internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies) {
-    NavHost(dependencies.navController, startDestination = AppRoutes.DayPattern,
+internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelect: (String) -> Unit, onEditShortcuts: () -> Unit) {
+    val select = androidx.compose.runtime.rememberUpdatedState(onSelect)
+    val editShortcuts = androidx.compose.runtime.rememberUpdatedState(onEditShortcuts)
+    NavHost(dependencies.navController, startDestination = AppRoutes.Home,
         modifier = Modifier.clipToBounds(),
         enterTransition = {
             val options = dependencies.options.value
             val slide = options.shortcutSlide?.takeIf { it.from == initialState.destination.route && it.to == targetState.destination.route }
             when {
-                options.reducedMotion || options.revealDestination == targetState.destination.route -> EnterTransition.None
+                options.reducedMotion -> EnterTransition.None
                 slide != null -> slideInHorizontally(tween(250, easing = FastOutSlowInEasing)) { slide.direction * it }
                 else -> fadeIn(tween(700))
             }
@@ -134,12 +135,16 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies) {
             val options = dependencies.options.value
             val slide = options.shortcutSlide?.takeIf { it.from == initialState.destination.route && it.to == targetState.destination.route }
             when {
-                options.reducedMotion || options.revealDestination == targetState.destination.route -> ExitTransition.None
+                options.reducedMotion -> ExitTransition.None
                 slide != null -> slideOutHorizontally(tween(250, easing = FastOutSlowInEasing)) { -slide.direction * it }
                 else -> fadeOut(tween(700))
             }
         },
     ) {
+        composable(AppRoutes.Home) {
+            com.timebox.android.ui.components.NavigationDirectory(AppRoutes.Home,
+                { select.value(it) }, onEditShortcuts = { editShortcuts.value() })
+        }
         prototypeRoutes()
         dayRoute(dependencies)
         chronicleRoute(dependencies)

@@ -282,6 +282,10 @@ _Avoid_: Live task list, task proposal, task receipt
 
 ### Surfaces
 
+**Home**:
+The Android application's starting surface and the central place for opening its other screens.
+_Avoid_: Navigate, Day
+
 **Day**:
 The surface for one calendar date's Planned Blocks and Actual Blocks. Day Planning and Day Review start from it.
 _Avoid_: Today view, timeline page

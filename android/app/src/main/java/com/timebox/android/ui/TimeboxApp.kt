@@ -1,21 +1,9 @@
 package com.timebox.android.ui
 
 import android.provider.Settings
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.testTag
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.timebox.android.ui.components.LocalNavigationBlockers
-import com.timebox.android.ui.components.NavigationDirectory
 import com.timebox.android.ui.components.LocalNavigationDockInset
 import com.timebox.android.ui.components.NavigationDock
 import com.timebox.android.ui.components.NavigationShortcutEditor
@@ -153,7 +141,7 @@ fun TimeboxApp(
     val recurringState by recurringViewModel.state.collectAsState()
     val recurringEditorState by recurringEditorViewModel.state.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val route = backStackEntry?.destination?.route ?: AppRoutes.DayPattern
+    val route = backStackEntry?.destination?.route ?: AppRoutes.Home
     val lifecycleOwner = LocalLifecycleOwner.current
     var appResumed by remember(lifecycleOwner) {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
@@ -328,11 +316,6 @@ fun TimeboxApp(
     }
 
     val navigationBlockers = remember { mutableStateOf(0) }
-    var directoryOpen by rememberSaveable { mutableStateOf(false) }
-    val directoryVisibility = remember { MutableTransitionState(false) }
-    directoryVisibility.targetState = directoryOpen && !focused
-    val directoryCovering = directoryVisibility.currentState || directoryVisibility.targetState || !directoryVisibility.isIdle
-    var revealDestination by remember { mutableStateOf<String?>(null) }
     var shortcutEditorOpen by rememberSaveable { mutableStateOf(false) }
     val shortcuts by remember(repository) { repository.navigationShortcuts.map(::navigationShortcutRoutes) }.collectAsState(initial = null)
     var navigationHeight by remember { mutableStateOf(0.dp) }
@@ -340,24 +323,22 @@ fun TimeboxApp(
     var shortcutSlide by remember { mutableStateOf<ShortcutSlide?>(null) }
     LaunchedEffect(route) {
         if (shortcutSlide?.to != route) shortcutSlide = null
-        if (revealDestination != route) revealDestination = null
     }
     fun selectDestination(target: String, fromShortcut: Boolean = false) {
-        revealDestination = if (directoryOpen && !fromShortcut) target else null
         shortcutSlide = if (fromShortcut) shortcutSlide(shortcuts.orEmpty(), route, target) else null
-        directoryOpen = false
         if (target == route) return
         // Discard contextual drill-ins before saving a directory destination. Otherwise
         // restoring its stack would reopen a different destination above it.
         while (navController.previousBackStackEntry != null &&
             navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>("directoryRoot") != true &&
-            navController.previousBackStackEntry?.destination?.route != AppRoutes.DayPattern) {
+            navController.previousBackStackEntry?.destination?.route != AppRoutes.Home) {
             if (!navController.popBackStack()) break
         }
-        if (target == AppRoutes.DayPattern) {
-            navController.popBackStack(AppRoutes.DayPattern, inclusive = false, saveState = true)
+        if (target == AppRoutes.Home) {
+            navController.popBackStack(AppRoutes.Home, inclusive = false, saveState = true)
         } else {
-            navController.navigate(target) {
+            val destination = if (target == AppRoutes.DayPattern) AppRoutes.day(dayState.date) else target
+            navController.navigate(destination) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
@@ -418,7 +399,7 @@ fun TimeboxApp(
     }
     val navigationOptions = rememberUpdatedState(TimeboxNavigationOptions(
         isDark, onToggleDark, notificationsAllowed, onRequestNotificationPermission,
-        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion, shortcutSlide, revealDestination,
+        onOpenNotificationSettings, exactAlarmsAllowed, onRequestExactAlarms, reducedMotion, shortcutSlide,
     ))
     val navigation = remember(
         screenModels, navController, snackbarHostState, trackingScope,
@@ -444,20 +425,27 @@ fun TimeboxApp(
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         val editing = navigationBlockers.value > 0 || battlePlanState.showComposer || battlePlanState.projectEditor != null || typesState.renaming != null ||
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
-        val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
+        val showNavigation = !focused && (route == AppRoutes.Home || navigationDestinations.any { it.route == route }) &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
         val feedbackBottom = if (showNavigation) navigationHeight + 12.dp else 24.dp
         if (!focused) Box(
-            modifier = Modifier.fillMaxSize().imePadding().then(if (directoryCovering || shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
+            modifier = Modifier.fillMaxSize().imePadding().then(if (shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
-            CompositionLocalProvider(LocalNavigationDockInset provides if (showNavigation) navigationHeight else 0.dp) {
-                TimeboxNavHost(navigation)
+            CompositionLocalProvider(
+                LocalNavigationDockInset provides if (showNavigation) navigationHeight else 0.dp,
+                com.timebox.android.ui.components.LocalScreenBack provides if (showNavigation && route != AppRoutes.Home) ({
+                    if (navController.previousBackStackEntry?.destination?.route == AppRoutes.Home) selectDestination(AppRoutes.Home)
+                    else navController.popBackStack()
+                    Unit
+                }) else null,
+            ) {
+                TimeboxNavHost(navigation, { selectDestination(it) }, { shortcutEditorOpen = true })
             }
 
             if (showNavigation) shortcuts?.let { pins ->
-                NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) }, { directoryOpen = true },
+                NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) },
                     Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = with(density) { it.height.toDp() } },
-                    onAdd = { shortcutEditorOpen = true }, resetScroll = directoryCovering || shortcutEditorOpen)
+                    onAdd = { shortcutEditorOpen = true }, resetScroll = shortcutEditorOpen)
             }
 
         }
@@ -490,33 +478,13 @@ fun TimeboxApp(
             }
         }
 
-        if (directoryCovering && !focused && !shortcutEditorOpen) {
-            // Keep exposed portions of the destination inert until the menu has left.
-            Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } })
-        }
-        if (!shortcutEditorOpen) {
-            AnimatedVisibility(
-                visibleState = directoryVisibility,
-                enter = if (reducedMotion) EnterTransition.None else
-                    slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it },
-                exit = if (reducedMotion) ExitTransition.None else
-                    slideOutVertically(tween(250, easing = FastOutSlowInEasing)) { it },
-                modifier = Modifier.testTag("navigation-directory-motion"),
-            ) {
-                NavigationDirectory(route, { directoryOpen = false }, { if (directoryOpen) selectDestination(it) },
-                    onEditShortcuts = if (shortcuts != null) ({ if (directoryOpen) shortcutEditorOpen = true }) else null)
-            }
-        }
-
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
-        // Only direct directory landings return to Day. Contextual links keep their source.
-        BackHandler(enabled = !focused && !directoryCovering && navigationBlockers.value == 0 && !isImeVisible &&
-            !battlePlanState.showComposer && battlePlanState.projectEditor == null && typesState.renaming == null && route != AppRoutes.DayPattern &&
+        // Direct destinations return Home; contextual links keep their source.
+        BackHandler(enabled = showNavigation && route != AppRoutes.Home &&
             navigationDestinations.any { it.route == route } &&
-            navController.previousBackStackEntry?.destination?.route == AppRoutes.DayPattern) {
-            selectDestination(AppRoutes.DayPattern)
+            navController.previousBackStackEntry?.destination?.route == AppRoutes.Home) {
+            selectDestination(AppRoutes.Home)
         }
-        BackHandler(enabled = directoryCovering) { directoryOpen = false }
         if (shortcutEditorOpen && !focused) shortcuts?.let { pins ->
             NavigationShortcutEditor(pins, onCancel = { shortcutEditorOpen = false }, onSave = { updated ->
                 repository.setNavigationShortcuts(updated)

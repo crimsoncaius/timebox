@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Checklist
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,7 +54,6 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,10 +71,11 @@ private val weekdayFormatter = DateTimeFormatter.ofPattern("EEEEE", Locale.ENGLI
 private val WEEK_SWIPE_THRESHOLD = 55.dp
 
 /**
- * One title row above an optional week strip. The
+ * Date and actions share a row when they fit, wrapping without squeezing the date. The
  * "Back to today" pill appears only while another date is shown.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun DayCalendarHeader(
     selectedDate: LocalDate,
     today: LocalDate?,
@@ -94,50 +95,52 @@ internal fun DayCalendarHeader(
             .background(colors.bg)
             .statusBarsPadding(),
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 20.dp, end = 12.dp, top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
-                    },
+            Row(
+                modifier = Modifier.align(Alignment.CenterVertically),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = dayTitleKicker(selectedDate, today),
-                    style = TimeboxTheme.type.bodySmall,
-                    color = if (selectedDate == today) colors.planned else colors.onVariant,
-                    maxLines = 1,
-                )
-                Text(
-                    text = dayTitle(selectedDate, today),
-                    style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
-                    color = colors.on,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                com.timebox.android.ui.components.ScreenBackButton()
+                Column(
+                    modifier = Modifier
+                        .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
+                        },
+                ) {
+                    Text(
+                        text = dayTitleKicker(selectedDate, today),
+                        style = TimeboxTheme.type.bodySmall,
+                        color = if (selectedDate == today) colors.planned else colors.onVariant,
+                    )
+                    Text(
+                        text = dayTitle(selectedDate, today),
+                        style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
+                        color = colors.on,
+                    )
+                }
             }
             Row(
+                modifier = Modifier.align(Alignment.CenterVertically),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (today != null && selectedDate != today) BackToTodayPill { onNavigateToday(today) }
                 hiddenTrackingAction()
-                if (!showCalendar) {
-                    androidx.compose.material3.TextButton(onClick = { onSelectDate(selectedDate.minusDays(1)) }) { Text("‹", modifier = Modifier.semantics { contentDescription = "Previous day" }) }
-                    androidx.compose.material3.TextButton(onClick = { onSelectDate(selectedDate.plusDays(1)) }) { Text("›", modifier = Modifier.semantics { contentDescription = "Next day" }) }
-                }
                 PlanningModeAction(
                     isPlanningMode = isPlanningMode,
                     enabled = planningActionEnabled,
                     onClick = { onSetPlanningMode(!isPlanningMode) },
                 )
                 viewAction()
+            }
+            if (today != null && selectedDate != today) {
+                BackToTodayPill { onNavigateToday(today) }
             }
         }
 
