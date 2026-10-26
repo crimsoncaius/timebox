@@ -12,7 +12,7 @@ Status: design confirmed and implementation authorized, 2026-10-26.
 - If understanding or recording fails, keep the overlay open with a short error and an explicit retry option.
 - Voice only: no typed input or keyboard control.
 - Do not display recognized speech or repeat the request back to the user.
-- Closing before submission discards the capture. Closing after submission lets the submitted request finish; dismissal is not cancellation.
+- Revised on 2026-10-26: closing, going Home, or switching apps stops capture and requests final transcription immediately. The speech session submits the final result after the overlay closes, without requiring a silence pause. Empty or failed recognition records nothing; partial transcripts never execute. Rotation cancels without submission. Closing after submission lets the submitted request finish.
 - The Quick Settings tile opens the same overlay as the system assistant gesture.
 - The normal presentation has only a central orb and close button; there is no left-hand control. The orb visually distinguishes listening, processing, and success.
 - When microphone access or speech recognition is unavailable, explain the problem and offer the relevant permission/settings action or Retry. Do not introduce a typing fallback.
@@ -22,7 +22,7 @@ These choices retain the Quick Tracking execution model in [ADR 0014](../adr/001
 
 ## Implementation
 
-The existing Quick Tracking activity uses a translucent window with its own task affinity, so system assistant and Quick Settings launches preserve the foreground screen underneath. The capture controller and activity journal remain unchanged. Setup retains its opaque screen and launches capture separately.
+The existing Quick Tracking activity uses a translucent window with its own task affinity, so system assistant and Quick Settings launches preserve the foreground screen underneath. A process-owned speech session handles the final result independently of the activity. It releases the recognizer on completion or failure, with a bounded timeout when finishing. Reopening while it finishes reuses the pending capture. The capture controller and activity journal remain unchanged. Setup retains its opaque screen and launches capture separately.
 
 The orb uses a monochrome shaded surface with breathing motion for listening, faster motion for processing, and a checkmark for success. Errors provide short recovery text above the controls. Accessibility descriptions expose the state without displaying transcription. Success dismisses after 900 milliseconds.
 
@@ -39,3 +39,9 @@ No new permission to draw over other apps and no additional voice interaction se
 
 User accepted the review and authorized merging into master on 2026-10-26. Review device: emulator-5602, reservation `707ad00cea844728b96830a4859fa3bf`, under `C:/Users/Caius/TimeboxRuntime/emulators`.
 
+
+## Finish-on-exit revision — 2026-10-26
+
+The user requested that leaving the overlay finish the spoken request without waiting for silence. Recognition now belongs to the application, and Close, Back, Home, and stopping the capture activity request a final result. The microphone stops; only a final nonempty transcript enters the existing Quick Tracking controller. Pending recognition is shared when capture reopens and is released after completion, error, or a 15-second finishing timeout. Rotation still cancels without submitting.
+
+Validation uses an Android recognition-service fixture that returns its final transcript after the activity exits, with the backend set to an unreachable local endpoint to prevent data writes. Both exit tests fail against the original APK and pass against the updated APK. The overlay instrumentation test and both QuickTrackingTest unit tests also pass. This verifies delivery into the existing recording controller and its journal tests, not live microphone recognition or a live backend round trip. Physical-phone recognizer behavior still needs user review.

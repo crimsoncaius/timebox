@@ -4,7 +4,7 @@
 
 The system assistant gesture and Quick Settings tile share a compact voice-only overlay. This supersedes the typed fallback in the Android quick tracking section below. Listening starts on invocation and final recognition submits automatically. No transcript or conversational answer is displayed or spoken. A brief success indicator dismisses the overlay; failures retain explicit Retry and relevant permission/settings recovery. Review remains the place to inspect and correct results.
 
-Closing before submission discards capture; closing afterward does not cancel process-owned execution. The existing activity uses a translucent window, preserving the interpretation and journal model. See [the agreed design](../design/quick-tracking-overlay.md).
+Revised on 2026-10-26: dismissing capture or leaving for Home/another app stops microphone capture and requests final transcription immediately. The process-owned speech session remains alive for that result and submits it through Quick Tracking after the overlay closes; it never executes partial recognition. Empty or failed recognition does not record an activity. Rotation cancels capture without submitting. Closing after submission does not cancel process-owned execution. This replaces the original discard-on-close behavior at the user's request. The existing activity uses a translucent window, preserving the interpretation and journal model. See [the agreed design](../design/quick-tracking-overlay.md).
 
 ## Tracking execution
 

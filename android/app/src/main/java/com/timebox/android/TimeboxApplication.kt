@@ -69,6 +69,7 @@ class TimeboxApplication : Application() {
     val trackingHandoff by lazy { com.timebox.android.ui.day.TrackingHandoff() }
     val reviewRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
     val quickTracking by lazy { com.timebox.android.quicktracking.QuickTrackingController(this, repository, activityRepository) }
+    val quickSpeech by lazy { com.timebox.android.quicktracking.QuickTrackingSpeech(this, quickTracking) }
     val checkIns by lazy { com.timebox.android.checkin.AndroidCheckIns(this, activityRepository) }
     val activityRepository by lazy {
         com.timebox.android.data.ActivityRepository(
