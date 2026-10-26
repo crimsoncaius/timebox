@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { HelperText } from '../../components/HelperText'
 import { useEffect, useState } from 'react'
 import type { ActualBlock, BlockDraftPlacement, DayRead, TaskType } from '../../lib/api'
@@ -37,7 +38,7 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
       setDirty(false); onDirtyChange?.(false)
     } catch (cause) { setError(errorMessage(cause, 'Could not save correction')) } finally { setSaving(false) }
   }}>
-    <h2>{actual ? 'Actual Block' : 'New Actual Block'}</h2>
+    <div className="flex items-center gap-2"><h2>{actual ? 'Actual Block' : 'New Actual Block'}</h2><ContextualHelp title="Recording time">Recording time does not change Task Completion.</ContextualHelp></div>
     {actual?.end_at ? <p className="font-mono text-xs">{formatBlockDuration((Date.parse(actual.end_at) - Date.parse(actual.start_at)) / 60_000)}</p> : null}
     <p className="text-xs">Reporting Time Zone: {zone}</p>
     {running ? <HelperText>Use Switch or Stop above the Day timeline to correct the Current Activity.</HelperText> : <>
@@ -53,7 +54,7 @@ export function ActivityActualEditor({ actual, draft, day, taskTypes, onSave, on
       />
       <label className="block">Block Name (optional)<input className="block w-full rounded border p-2 dark:bg-dark-surface" maxLength={500} value={name} onChange={e => setName(e.target.value)} /></label>
       <label className="block">Note<textarea className="block w-full rounded border p-2 dark:bg-dark-surface" value={note} onChange={e => setNote(e.target.value)} /></label>
-      {actual?.task ? <p>Task: {actual.task.title} · Task Completion stays independent.</p> : null}
+      {actual?.task ? <p>Task: {actual.task.title}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       <button disabled={saving}>{actual ? 'Save changes' : 'Create block'}</button>
       {actual ? <button type="button" disabled={saving} className="ml-4 text-error" onClick={async () => {

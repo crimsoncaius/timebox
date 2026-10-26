@@ -1,3 +1,4 @@
+import { ContextualHelp } from '../../components/ContextualHelp'
 import { READY_TASK_DRAG_TYPE } from '../../components/DayTimeline'
 import { PointerSensor, useDraggable } from '@dnd-kit/react'
 import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
@@ -22,7 +23,7 @@ export function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTas
         <div>
           <p className="font-label text-[10px] uppercase tracking-[0.16em] text-primary">Battle Plan</p>
           <h2 className="mt-1 font-headline text-xl font-light text-on-surface">Ready to Plan</h2>
-          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">Drag a task to Planned, or select it and choose a time slot.</p>
+          <ContextualHelp title="Ready to Plan">Drag a task to Planned, or select it and choose a time slot.</ContextualHelp>
         </div>
         <span className="rounded-full bg-surface-container px-2 py-1 text-xs text-on-surface-variant">{tasks.length}</span>
       </div>
@@ -111,7 +112,6 @@ function ReadyToPlanTaskCard({ task, selected, dragInstance, disabled, pending, 
         type="button"
         disabled={disabled}
         aria-label={`Drag ${displayTitle} to Planned timeline`}
-        title="Drag onto the Planned timeline"
         className="flex w-11 shrink-0 touch-none cursor-grab items-center justify-center rounded-r-xl text-on-surface-variant/65 hover:bg-primary/8 hover:text-primary active:cursor-grabbing disabled:cursor-wait disabled:opacity-40"
       >
         <span className="material-symbols-outlined text-[20px]" aria-hidden>drag_indicator</span>

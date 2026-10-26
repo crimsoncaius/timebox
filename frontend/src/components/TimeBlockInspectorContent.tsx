@@ -353,8 +353,8 @@ function LegacyTimeBlockInspectorContent({
       <p className="max-w-xs font-body text-xs leading-relaxed text-on-surface-variant">
         {isCreateMode
           ? isNameEditable
-            ? 'Add a Name, choose a Task Type if useful, then create the block.'
-            : 'Pick a Task Type to create this block. Edits save as you make them.'
+            ? 'Choosing a Task Type creates the block automatically.'
+            : 'Choosing a Task Type creates the block automatically.'
           : block?.google_calendar ? 'Name and time follow Google. Local classification and notes save here.' : 'Edits save as you make them.'}
       </p>
 

@@ -47,6 +47,19 @@ const props = {
 }
 
 describe('ActivityActualEditor', () => {
+  it('preserves an unsaved note when recording help opens and closes without saving', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn(async () => {})
+    render(<ActivityActualEditor actual={makeActual()} draft={null} onSave={onSave} {...props} />)
+    await user.type(screen.getByLabelText('Note'), 'Keep this draft')
+    expect(screen.queryByText('Recording time does not change Task Completion.')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Help: Recording time' }))
+    expect(screen.getByRole('dialog', { name: 'Recording time' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close help: Recording time' }))
+    expect(screen.getByLabelText('Note')).toHaveValue('Keep this draft')
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
   it('creates a named standalone Actual Block from a draft without choosing a Task Type', async () => {
     const user = userEvent.setup()
     const onCreate = vi.fn(async () => {})

@@ -232,8 +232,10 @@ private fun PlannedRecordingCards(
                 caption = "Already recorded · no update needed",
                 trailing = elapsedDuration((linked.endMinute - linked.startMinute).toLong()),
                 title = "${hhmm(linked.startMinute)} – ${hhmm(linked.endMinute)}",
-                text = "Plan notes stay on the plan.",
-            ) { CardLink("Open actual", Lane.Actual, { onOpenActual(linked.id) }) }
+            ) {
+                CardLink("Open actual", Lane.Actual, { onOpenActual(linked.id) })
+                ContextualHelp("Plan notes", "Plan notes stay on the plan.")
+            }
         }
         PlannedRecordingKind.Override -> {
             val linked = recording.override!!

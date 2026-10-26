@@ -1,5 +1,6 @@
 package com.timebox.android.ui.day
 
+import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,7 +63,7 @@ internal fun LogTimeForm(
             TaskTypePicker(taskTypes, query, onQuery, selectedTypeId, onChooseType, onCreateType, recommendationName = name, recommendationEnabled = !saving)
         }
         SheetTextField(note, onNote, "Note", optional = true, placeholder = "Add a note", enabled = !saving, singleLine = false, minLines = 2)
-        SheetHelp("Records past time. Doesn't complete a task.")
+        ContextualHelp("Recording time", "Records past time. Recording time does not change Task Completion.")
         error?.let { Text(it, style = TimeboxTheme.type.bodySmall, color = colors.error) }
     }
 }
