@@ -77,7 +77,7 @@ data class TimeboxColors(
     val gridStrong: Color,
     val gridSoft: Color,
     val timelineLabel: Color,
-    /** The current-time line: ink, since red is reserved for destructive actions. */
+    /** The red current-time line: an explicit exception to the error/destructive color rule. */
     val now: Color,
     val error: Color,
     val onError: Color,
@@ -158,7 +158,7 @@ val LightTimeboxColors = TimeboxColors(
     gridStrong = Color(0xFFDADCE0),
     gridSoft = Color(0xFFE8EAED),
     timelineLabel = Color(0xFF5F6368),
-    now = Color(0xFF2D3435),
+    now = Color(0xFF9F403D),
     error = Color(0xFF9F403D),
     onError = Color(0xFFFFF7F6),
     errorContainer = Color(0xFFFE8983),
@@ -238,7 +238,7 @@ val DarkTimeboxColors = TimeboxColors(
     gridStrong = Color(0xFF44403C),
     gridSoft = Color(0xFF292524),
     timelineLabel = Color(0xFFA8A29E),
-    now = Color(0xFFE7E5E4),
+    now = Color(0xFFF2A09A),
     error = Color(0xFFF2A09A),
     onError = Color(0xFF4B0D0B),
     errorContainer = Color(0xFF6B1F1B),
