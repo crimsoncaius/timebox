@@ -5,15 +5,34 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { AssistantPage } from './AssistantPage'
 import { fetchJson } from '../../lib/api/client'
 vi.mock('../../components/Layout', () => ({ Layout: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }))
-vi.mock('../../lib/api/client', () => ({ fetchJson: vi.fn(), fetchVoid: vi.fn() }))
+vi.mock('../../lib/api/client', () => ({ fetchJson: vi.fn(), fetchVoid: vi.fn(), protocolHeaders: () => ({}) }))
 vi.mock('../activity/activityRepository', () => ({ getActivityRepository: () => ({ refresh: vi.fn() }) }))
 const record = { id: 7, name: 'Workout', task_type_id: 2, task_type: { name: 'Gym' }, start_at: '2026-10-23T10:00:37Z', end_at: null }
 const row = { id: 1, revision: 'saved-revision', record, receipt: { question: 'Gym now', action: 'start', record }, reviewed: false }
 const page = { items: [row], next_before: null, unchecked_count: 1, timezone: 'UTC', task_types: [{ id: 2, name: 'Gym' }] }
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
   vi.mocked(fetchJson).mockResolvedValue(page)
+})
+it('sends conversation messages in confirmation mode and explains how to confirm tracking', async () => {
+  const user = userEvent.setup()
+  vi.mocked(fetchJson).mockResolvedValue({ conversation_id: 'conversation' })
+  const request = vi.fn(async (_url: string, options: RequestInit) => {
+    const body = JSON.parse(String(options.body))
+    expect(body.tracking_mode).toBe('confirm')
+    const frames = ['tracking_proposal', 'completed'].map((kind, index) =>
+      `event: ${kind}\ndata: ${JSON.stringify({ run_id: body.run_id, sequence: index + 1 })}\n\n`).join('')
+    return new Response(frames)
+  })
+  vi.stubGlobal('fetch', request)
+  render(<MemoryRouter><AssistantPage /></MemoryRouter>)
+  expect(screen.queryByText(/Track now, review later/)).not.toBeInTheDocument()
+  await user.type(screen.getByLabelText('Message Assistant'), 'Gym now')
+  await user.click(screen.getByRole('button', { name: 'Send →' }))
+  expect(await screen.findByText(/Tracking changes need confirmation/)).toBeInTheDocument()
+  expect(request).toHaveBeenCalledTimes(1)
 })
 it('marks only the inspected revision and exposes a stale batch without losing the selection', async () => {
   const user = userEvent.setup()

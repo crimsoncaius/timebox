@@ -13,6 +13,8 @@ Status: agreed on 2026-10-26; implementation authorized.
 
 - Android only; web navigation is unchanged.
 - Home reuses the existing grouped destination directory, with the title Home and no Close control.
+- Edit shortcuts belongs in Home's Preferences group beside Settings. Add shortcut in the dock still opens the same editor directly.
+- The shortcut editor uses the Home typography and tonal groups, with an ordered selection, earlier/later controls, grouped screen choices, and a live bar preview. Save applies this device's selection; Cancel and Back discard changes.
 - Keep the customizable shortcut dock and Add shortcut; remove its Navigate item.
 - Header arrows on main destinations return Home. Details, editors, contextual visits, and Focus Mode retain their existing return behavior.
 - Android system Back follows the same hierarchy and uses normal exit behavior from Home.

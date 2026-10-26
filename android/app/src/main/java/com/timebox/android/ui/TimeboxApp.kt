@@ -433,7 +433,9 @@ fun TimeboxApp(
         ) {
             CompositionLocalProvider(
                 LocalNavigationDockInset provides if (showNavigation) navigationHeight else 0.dp,
-                com.timebox.android.ui.components.LocalScreenBack provides if (showNavigation && route != AppRoutes.Home) ({
+                // Home has its own header without ScreenBackButton. Keep this callback
+                // available while the outgoing destination fades away above Home.
+                com.timebox.android.ui.components.LocalScreenBack provides if (showNavigation || route == AppRoutes.Home) ({
                     if (navController.previousBackStackEntry?.destination?.route == AppRoutes.Home) selectDestination(AppRoutes.Home)
                     else navController.popBackStack()
                     Unit

@@ -128,7 +128,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelec
             when {
                 options.reducedMotion -> EnterTransition.None
                 slide != null -> slideInHorizontally(tween(250, easing = FastOutSlowInEasing)) { slide.direction * it }
-                else -> fadeIn(tween(700))
+                else -> fadeIn(tween(220))
             }
         },
         exitTransition = {
@@ -137,7 +137,7 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelec
             when {
                 options.reducedMotion -> ExitTransition.None
                 slide != null -> slideOutHorizontally(tween(250, easing = FastOutSlowInEasing)) { -slide.direction * it }
-                else -> fadeOut(tween(700))
+                else -> fadeOut(tween(220))
             }
         },
     ) {
@@ -622,6 +622,9 @@ private fun NavGraphBuilder.screen(
                     AppRoutes.RecurringEditPattern, AppRoutes.RecurringDetailPattern)) {
                 val chronicle by dependencies.models.chronicleViewModel.state.collectAsState()
                 TimeboxTopBar(routeKicker(route), routeTitle(route, "", formatMonthTitle(chronicle.monthStart)))
+                if (route in listOf(AppRoutes.BattlePlan, AppRoutes.Recurring, AppRoutes.TimeGoals)) {
+                    com.timebox.android.ui.components.Hairline()
+                }
             }
             Box(Modifier.weight(1f)) { content(entry) }
         }
