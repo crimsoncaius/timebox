@@ -25,7 +25,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
@@ -63,32 +62,32 @@ private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onS
     val colors = TimeboxTheme.colors
     val entries = navigationShortcutRoutes(shortcuts).map { route -> navigationDestinations.first { it.route == route } }
     val scroll = rememberScrollState()
-    var viewportWidth by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
-    val minimumItemWidth = with(density) { 88.dp.toPx() }
-    val visibleItems = (viewportWidth / minimumItemWidth).toInt().coerceAtLeast(1)
-    val itemWidth = if (viewportWidth > 0) viewportWidth.toFloat() / visibleItems else minimumItemWidth
-    val itemWidthDp = with(density) { itemWidth.toDp() }
-    val snapLayout = remember(scroll, itemWidth) {
-        object : SnapLayoutInfoProvider {
-            override fun calculateApproachOffset(velocity: Float, decayOffset: Float) = decayOffset
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center) {
+        val availableWidth = (maxWidth - 12.dp).coerceAtLeast(1.dp)
+        // Four destinations fit before Add scrolls into view; small selections stay compact.
+        val visibleItems = 4
+        val itemWidthDp = 88.dp.coerceAtMost(availableWidth / visibleItems)
+        val itemWidth = with(density) { itemWidthDp.toPx() }
+        val snapLayout = remember(scroll, itemWidth) {
+            object : SnapLayoutInfoProvider {
+                override fun calculateApproachOffset(velocity: Float, decayOffset: Float) = decayOffset
 
-            override fun calculateSnapOffset(velocity: Float): Float {
-                val boundary = ((scroll.value / itemWidth).roundToInt() * itemWidth)
-                    .coerceIn(0f, scroll.maxValue.toFloat())
-                val end = scroll.maxValue.toFloat()
-                val target = if (abs(end - scroll.value) < abs(boundary - scroll.value)) end else boundary
-                return target - scroll.value
+                override fun calculateSnapOffset(velocity: Float): Float {
+                    val boundary = ((scroll.value / itemWidth).roundToInt() * itemWidth)
+                        .coerceIn(0f, scroll.maxValue.toFloat())
+                    val end = scroll.maxValue.toFloat()
+                    val target = if (abs(end - scroll.value) < abs(boundary - scroll.value)) end else boundary
+                    return target - scroll.value
+                }
             }
         }
-    }
-    val flingBehavior = rememberSnapFlingBehavior(snapLayout)
-    LaunchedEffect(currentRoute, resetScroll) { scroll.scrollTo(0) }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
+        val flingBehavior = rememberSnapFlingBehavior(snapLayout)
+        LaunchedEffect(currentRoute, resetScroll) { scroll.scrollTo(0) }
+        Row(Modifier.width(itemWidthDp * minOf(entries.size + 1, visibleItems) + 12.dp)
+            .shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
             .background(colors.low).border(1.dp, colors.hairline, RoundedCornerShape(20.dp)).padding(6.dp)
-            .onSizeChanged { viewportWidth = it.width }
             .horizontalScroll(scroll, flingBehavior = flingBehavior).testTag("shortcut-strip")
             .semantics { isTraversalGroup = true },
             verticalAlignment = Alignment.CenterVertically) {

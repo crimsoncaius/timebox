@@ -68,3 +68,13 @@ and crashed; it passed in isolation and on the full focused rerun without a
 production workaround. The cause of that first-run failure is unconfirmed.
 The installed app was also checked for Close, destination selection, and returning
 from Edit shortcuts. Navigate is left open on emulator-5594 for review.
+
+## Compact island revision — 2026-10-26
+
+The user selected A from the single-shortcut comparison. The dock now centers and wraps its contents instead of filling the screen. One saved shortcut plus Add forms a small island; an empty list still shows Add. The island grows up to four visible items, then scrolls with the existing item snapping. Four saved destinations are visible together; Add follows them offscreen. This is a visible-slot limit, not a saved-shortcut limit.
+
+Items retain an 88 dp preferred width and share available space equally when four would otherwise exceed the viewport. The live dock and editor preview use the same sizing. Navigation, selected states, scroll resets, local persistence, and content clearance remain unchanged.
+
+Primary source: `codex/single-shortcut-prototype`, commit `c2f30301`. Implementation: `codex/compact-shortcut-island`. The comparison activity and controls remain on the throwaway branch.
+
+Validation: all 9 NavigationShortcutsTest instrumentation cases passed on emulator-5596, including the new constrained-width layout check. Installed and launched the actual app; visually checked one and four saved shortcuts. Review is left on Day with Day, Battle Plan, Calendar, and Trends visible. Review token: 060a7ac025f94217814009638e94c2f1. Storage root: C:/Users/Caius/TimeboxRuntime/emulators.

@@ -2,6 +2,11 @@ package com.timebox.android.ui.components
 
 import android.content.Context
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -22,6 +27,39 @@ import java.io.IOException
 
 class NavigationShortcutsTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun islandFitsItsContentsStaysCenteredAndScrollsWhenFull() {
+        val pins = mutableStateOf(listOf(AppRoutes.DayPattern))
+        compose.setContent { TimeboxTheme {
+            Box(Modifier.width(360.dp).testTag("dock-host")) {
+                NavigationDock(pins.value, AppRoutes.DayPattern, {}, onAdd = {})
+            }
+        } }
+        val strip = compose.onNodeWithTag("shortcut-strip")
+        val host = compose.onNodeWithTag("dock-host").getUnclippedBoundsInRoot()
+        val single = strip.getUnclippedBoundsInRoot()
+        assertTrue("One shortcut should leave space on both sides", (single.right - single.left) < (host.right - host.left) * 0.65f)
+        assertEquals(((host.left + host.right) / 2).value, ((single.left + single.right) / 2).value, 1f)
+        assertEquals(0f, strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].maxValue(), 1f)
+        compose.runOnIdle { pins.value = navigationDestinations.take(4).map { it.route } }
+        compose.waitForIdle()
+        val four = strip.getUnclippedBoundsInRoot()
+        val fourth = compose.onNodeWithText("Trends").getUnclippedBoundsInRoot()
+        assertTrue("Fourth shortcut must fit completely", fourth.right <= four.right)
+        compose.onNodeWithText("Trends").assertIsDisplayed()
+        compose.runOnIdle { pins.value = navigationDestinations.take(7).map { it.route } }
+        compose.waitForIdle()
+        val full = strip.getUnclippedBoundsInRoot()
+        assertTrue((full.right - full.left) > (single.right - single.left))
+        assertEquals(((host.left + host.right) / 2).value, ((full.left + full.right) / 2).value, 1f)
+        assertTrue(strip.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].maxValue() > 0)
+        compose.onNodeWithText("Add shortcut").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { pins.value = emptyList() }
+        compose.waitForIdle()
+        val empty = strip.getUnclippedBoundsInRoot()
+        assertTrue(empty.right - empty.left < single.right - single.left)
+        compose.onNodeWithText("Add shortcut").assertIsDisplayed()
+    }
 
     @Test fun swipesSettleOnShortcutBoundariesOrTheEnd() {
         compose.setContent { TimeboxTheme {
