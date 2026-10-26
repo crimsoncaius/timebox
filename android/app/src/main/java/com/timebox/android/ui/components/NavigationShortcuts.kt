@@ -276,7 +276,8 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
                 Text(group, style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
                     modifier = Modifier.padding(top = 16.dp, bottom = 4.dp).semantics { heading() })
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.low).padding(8.dp)) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.low).padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     destinations.forEach { destination ->
                         val chosen = destination.route in draft
                         val enabled = !saving
