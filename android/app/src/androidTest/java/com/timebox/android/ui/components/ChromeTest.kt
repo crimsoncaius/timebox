@@ -15,11 +15,15 @@ import org.junit.Test
 class ChromeTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun navigateButtonOpensDirectory() {
-        var opened = false
-        compose.setContent { TimeboxTheme { NavigationDock(emptyList(), AppRoutes.DayPattern, {}, { opened = true }, onAdd = {}) } }
-        compose.onNodeWithText("Navigate").assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(true, opened) }
+    @Test fun headerArrowReturnsToItsNavigationSource() {
+        var returned = false
+        compose.setContent { TimeboxTheme {
+            androidx.compose.runtime.CompositionLocalProvider(LocalScreenBack provides { returned = true }) {
+                TimeboxTopBar("Daily work", "Battle Plan")
+            }
+        } }
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(true, returned) }
     }
 
     @Test fun everyDestinationIsDirectlyReachableAtNarrowWidth() {
@@ -27,7 +31,7 @@ class ChromeTest {
         compose.setContent {
             TimeboxTheme {
                 Box(Modifier.width(320.dp)) {
-                    NavigationDirectory(AppRoutes.DayPattern, {}, { selected = it })
+                    NavigationDirectory(AppRoutes.Home, { selected = it })
                 }
             }
         }
@@ -36,6 +40,7 @@ class ChromeTest {
             compose.runOnIdle { assertEquals(destination.route, selected) }
         }
         compose.onNodeWithText("Pinned").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Close navigation").assertIsDisplayed()
+        compose.onNodeWithText("Home").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close navigation").assertDoesNotExist()
     }
 }

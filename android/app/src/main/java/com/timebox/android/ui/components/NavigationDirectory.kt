@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,20 +59,19 @@ internal val navigationDestinations = listOf(
 )
 
 @Composable
-internal fun NavigationDirectory(currentRoute: String, onClose: () -> Unit, onSelect: (String) -> Unit, onEditShortcuts: (() -> Unit)? = null) {
+internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Unit, onEditShortcuts: (() -> Unit)? = null) {
     val colors = TimeboxTheme.colors
-    Column(Modifier.fillMaxSize().background(colors.bg).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Timebox navigation" }
+    Column(Modifier.fillMaxSize().background(colors.bg).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Home" }
         .statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Timebox", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
-            IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "Close navigation", tint = colors.on) }
+            Text("Home", Modifier.weight(1f).semantics { heading() }, style = TimeboxTheme.type.screenTitle, color = colors.on)
         }
         if (onEditShortcuts != null) TextButton(onClick = onEditShortcuts, modifier = Modifier.padding(horizontal = 16.dp)) {
             Icon(Icons.Outlined.Tune, null, Modifier.size(20.dp), tint = colors.on)
             Spacer(Modifier.width(10.dp))
             Text("Edit shortcuts", style = TimeboxTheme.type.label, color = colors.on)
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = LocalNavigationDockInset.current + 20.dp)) {
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
                 if (group == "Preferences") {
                     Hairline(Modifier.padding(top = 20.dp))

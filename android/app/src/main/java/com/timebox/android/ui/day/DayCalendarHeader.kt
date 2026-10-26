@@ -100,6 +100,7 @@ internal fun DayCalendarHeader(
                 .padding(start = 20.dp, end = 12.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            com.timebox.android.ui.components.ScreenBackButton()
             Column(
                 modifier = Modifier
                     .weight(1f)

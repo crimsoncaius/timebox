@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ fun TimeboxTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        ScreenBackButton()
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = kicker.uppercase(),
@@ -56,6 +58,21 @@ fun TimeboxTopBar(
             TextButton(onClick = onPrimaryAction) {
                 Text(primaryActionLabel, style = TimeboxTheme.type.label, color = colors.planned)
             }
+        }
+    }
+}
+
+internal val LocalScreenBack = androidx.compose.runtime.compositionLocalOf<(() -> Unit)?> { null }
+
+@Composable
+internal fun ScreenBackButton() {
+    LocalScreenBack.current?.let { onBack ->
+        androidx.compose.material3.IconButton(onClick = onBack) {
+            androidx.compose.material3.Icon(
+                androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                contentDescription = "Back",
+                tint = TimeboxTheme.colors.on,
+            )
         }
     }
 }

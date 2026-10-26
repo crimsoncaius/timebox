@@ -41,25 +41,25 @@ internal val LocalNavigationDockInset = compositionLocalOf { 0.dp }
 
 @Composable
 internal fun NavigationDock(
-    shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onOpen: () -> Unit,
+    shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     onAdd: () -> Unit,
     resetScroll: Boolean = false,
 ) {
     Column(modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
-        ShortcutDockItems(shortcuts, currentRoute, onSelect, onOpen, onAdd, resetScroll)
+        ShortcutDockItems(shortcuts, currentRoute, onSelect, onAdd, resetScroll)
     }
 }
 
 @Composable
-private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onOpen: () -> Unit, onAdd: () -> Unit, resetScroll: Boolean = false, preview: Boolean = false) {
+private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onSelect: (String) -> Unit, onAdd: () -> Unit, resetScroll: Boolean = false, preview: Boolean = false) {
     val colors = TimeboxTheme.colors
     val entries = navigationShortcutRoutes(shortcuts).map { route -> navigationDestinations.first { it.route == route } }
     val scroll = rememberScrollState()
     LaunchedEffect(currentRoute, resetScroll) { scroll.scrollTo(0) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(3f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
+        Row(Modifier.weight(1f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
             .background(colors.low).padding(6.dp).horizontalScroll(scroll).testTag("shortcut-strip")
             .semantics { isTraversalGroup = true },
             verticalAlignment = Alignment.CenterVertically) {
@@ -70,11 +70,6 @@ private fun ShortcutDockItems(shortcuts: List<String>, currentRoute: String, onS
             }
             ShortcutDockItem(NavigationDestination("", "Add shortcut", "shortcuts", Icons.Outlined.Add),
                 false, Modifier.width(88.dp), preview, onAdd)
-        }
-        Box(Modifier.weight(1f).fillMaxHeight().shadow(6.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
-            .background(colors.low).padding(6.dp), contentAlignment = Alignment.Center) {
-            ShortcutDockItem(NavigationDestination("", "Navigate", "directory", Icons.Outlined.GridView),
-                false, Modifier.fillMaxWidth(), preview, onOpen)
         }
     }
 }
@@ -164,6 +159,6 @@ internal fun NavigationShortcutEditor(initialShortcuts: List<String>, onCancel: 
             }
         }
         Text("Bar preview", Modifier.padding(start = 20.dp, top = 8.dp), style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
-        ShortcutDockItems(draft, "", {}, {}, {}, preview = true)
+        ShortcutDockItems(draft, "", {}, {}, preview = true)
     }
 }

@@ -82,35 +82,34 @@ class NavigationShortcutsTest {
     @Test fun emptyDockOffersAddShortcut() {
         var added = false
         compose.setContent { TimeboxTheme {
-            NavigationDock(emptyList(), AppRoutes.DayPattern, {}, {}, onAdd = { added = true })
+            NavigationDock(emptyList(), AppRoutes.DayPattern, {}, onAdd = { added = true })
         } }
         compose.onNodeWithText("Add shortcut").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Navigate").assertIsDisplayed()
+        compose.onNodeWithText("Navigate").assertDoesNotExist()
         compose.runOnIdle { assertTrue(added) }
     }
 
-    @Test fun stripScrollsWhileNavigateStaysFixedAndResetsOnReturn() {
+    @Test fun stripScrollsAndResetsOnReturn() {
         val route = mutableStateOf(AppRoutes.DayPattern)
         val editing = mutableStateOf(false)
         var added = false
         compose.setContent { TimeboxTheme {
             NavigationDock(listOf(AppRoutes.DayPattern, AppRoutes.BattlePlan, AppRoutes.Habits, AppRoutes.Trends, AppRoutes.Settings),
-                route.value, { route.value = it }, {}, onAdd = { added = true }, resetScroll = editing.value)
+                route.value, { route.value = it }, onAdd = { added = true }, resetScroll = editing.value)
         } }
-        val navigate = compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot()
         compose.onNodeWithText("Settings").performScrollTo().performClick()
         compose.onNodeWithText("Day").assertIsDisplayed()
         compose.onNodeWithText("Add shortcut").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(added); editing.value = true }
         compose.runOnIdle { editing.value = false }
         compose.onNodeWithText("Day").assertIsDisplayed()
-        assertEquals(navigate, compose.onNodeWithText("Navigate").getUnclippedBoundsInRoot())
+        compose.onNodeWithText("Navigate").assertDoesNotExist()
     }
 
     @Test fun dockReselectDoesNothingAndOtherShortcutsNavigate() {
         var selected: String? = null
         compose.setContent { TimeboxTheme {
-            NavigationDock(navigationShortcutRoutes(null), AppRoutes.DayPattern, { selected = it }, {}, onAdd = {})
+            NavigationDock(navigationShortcutRoutes(null), AppRoutes.DayPattern, { selected = it }, onAdd = {})
         } }
         compose.onNodeWithText("Day").assertIsSelected().performClick()
         compose.runOnIdle { assertNull(selected) }
