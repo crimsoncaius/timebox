@@ -59,6 +59,10 @@ class CollapsedDayHeaderTest {
                     }
                 }
                 compose.onNodeWithText("● Tracking !").assertIsDisplayed()
+                compose.onNodeWithText("Day").assertIsDisplayed()
+                val titleBounds = compose.onNodeWithText("Day").fetchSemanticsNode().boundsInRoot
+                val dateBounds = compose.onNodeWithText(dayTitle(date, today)).fetchSemanticsNode().boundsInRoot
+                assertTrue("Date needs its own row below Day", dateBounds.top > titleBounds.bottom)
                 compose.onNodeWithText("Plan").assertIsDisplayed()
                 compose.onNodeWithContentDescription("Day view options").assertIsDisplayed()
                 compose.onNodeWithContentDescription("Previous day").assertDoesNotExist()

@@ -79,7 +79,7 @@ Implement the settled queue changes independently; use the focused correction re
 - Rejected saves retain an editable draft. Unknown outcomes retain the exact retry request and associated edit lock.
 - Edited-draft dismissal retains discard protection.
 - Reviewed records remain inspectable/correctable; later changes retain their indication.
-- Saved task results and recovery controls remain available even though the introductory sentence is removed.
+- Updated 26 October: activity Review excludes Assistant task changes. Saved task results and recovery controls remain in the Assistant conversation, separate from activity review.
 
 For the existing integration contract, read `docs/design/review-queue.md` and `docs/adr/0014-assistant-proposes-tracking-client-applies.md`.
 

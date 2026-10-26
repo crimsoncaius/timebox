@@ -57,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.timebox.android.ui.components.CurrentRangeAction
+import com.timebox.android.ui.components.CurrentRangeState
 import com.timebox.android.ui.components.Hairline
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.launch
@@ -71,8 +73,7 @@ private val weekdayFormatter = DateTimeFormatter.ofPattern("EEEEE", Locale.ENGLI
 private val WEEK_SWIPE_THRESHOLD = 55.dp
 
 /**
- * Date and actions share a row when they fit, wrapping without squeezing the date. The
- * "Back to today" pill appears only while another date is shown.
+ * Screen actions and date navigation have separate rows, wrapping on narrow displays.
  */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -107,24 +108,12 @@ internal fun DayCalendarHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 com.timebox.android.ui.components.ScreenBackButton()
-                Column(
-                    modifier = Modifier
-                        .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
-                        .semantics(mergeDescendants = true) {
-                            contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
-                        },
-                ) {
-                    Text(
-                        text = dayTitleKicker(selectedDate, today),
-                        style = TimeboxTheme.type.bodySmall,
-                        color = if (selectedDate == today) colors.planned else colors.onVariant,
-                    )
-                    Text(
-                        text = dayTitle(selectedDate, today),
-                        style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
-                        color = colors.on,
-                    )
-                }
+                Text(
+                    text = "Day",
+                    style = TimeboxTheme.type.screenTitle,
+                    color = colors.on,
+                    modifier = Modifier.padding(end = 12.dp),
+                )
             }
             Row(
                 modifier = Modifier.align(Alignment.CenterVertically),
@@ -139,9 +128,40 @@ internal fun DayCalendarHeader(
                 )
                 viewAction()
             }
-            if (today != null && selectedDate != today) {
-                BackToTodayPill { onNavigateToday(today) }
+        }
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
+                    },
+            ) {
+                Text(
+                    text = dayTitleKicker(selectedDate, today),
+                    style = TimeboxTheme.type.bodySmall,
+                    color = if (selectedDate == today) colors.planned else colors.onVariant,
+                )
+                Text(
+                    text = dayTitle(selectedDate, today),
+                    style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
+                    color = colors.on,
+                )
             }
+            CurrentRangeAction(
+                state = when {
+                    today == null -> CurrentRangeState.Resolving
+                    selectedDate == today -> CurrentRangeState.Current
+                    else -> CurrentRangeState.Navigate
+                },
+                currentLabel = "Today",
+                navigateLabel = "Go to today",
+                onClick = { today?.let(onNavigateToday) },
+            )
         }
 
         if (showCalendar) {
@@ -154,30 +174,6 @@ internal fun DayCalendarHeader(
         }
         Spacer(Modifier.height(6.dp))
         Hairline(Modifier.testTag("day-header-divider"))
-    }
-}
-
-@Composable
-private fun BackToTodayPill(onClick: () -> Unit) {
-    val colors = TimeboxTheme.colors
-    val shape = RoundedCornerShape(percent = 50)
-    Box(
-        modifier = Modifier
-            .height(48.dp)
-            .clip(shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Go to today" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "Back to today",
-            style = TimeboxTheme.type.navLabel,
-            color = colors.planned,
-            modifier = Modifier
-                .clip(shape)
-                .border(1.dp, colors.plannedBorder, shape)
-                .padding(horizontal = 10.dp, vertical = 7.dp),
-        )
     }
 }
 

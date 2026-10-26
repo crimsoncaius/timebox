@@ -427,7 +427,7 @@ fun TimeboxApp(
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
         val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
-        val showDock = showNavigation && shortcuts?.isNotEmpty() == true
+        val showDock = showNavigation && route != AppRoutes.Settings && shortcuts?.isNotEmpty() == true
         val feedbackBottom = if (showDock) navigationHeight + 12.dp else 24.dp
         if (!focused) Box(
             modifier = Modifier.fillMaxSize().imePadding().then(if (shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
