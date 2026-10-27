@@ -26,6 +26,36 @@ import kotlinx.serialization.json.*
 class AssistantTaskReviewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("review_details", false)) {
+            val record = Json.parseToJsonElement("""{"id":7,"name":"Prepare workshop","task_type_id":1,"task_type":{"name":"Work / Teaching"},"start_at":"2026-10-27T01:00:00Z","end_at":"2026-10-27T02:30:00Z"}""").jsonObject
+            val api = object : AssistantTransport {
+                override suspend fun create() = "fixture"
+                override suspend fun delete(conversation: String) {}
+                override suspend fun stop(conversation: String, run: String) {}
+                override suspend fun acknowledge(conversation: String, run: String) {}
+                override fun stream(conversation: String, run: String, message: String) = kotlinx.coroutines.flow.emptyFlow<AssistantEvent>()
+                override suspend fun reviewRequest(path: String, body: JsonObject?) = buildJsonObject {
+                    put("timezone", "Asia/Singapore"); put("unchecked_count", 1)
+                    putJsonArray("items") { add(buildJsonObject {
+                        put("id", 1); put("revision", "a".repeat(64)); put("record", record)
+                        put("correction_available", true); put("outcome", "applied")
+                        putJsonObject("receipt") {
+                            put("record", record); put("action", "start")
+                            put("question", "I started preparing the workshop at nine")
+                        }
+                    }) }
+                }
+            }
+            val controller = AssistantController(lifecycleScope) { api }
+            setContent { TimeboxTheme { Surface(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    Text("Illustrative review · local fixture", Modifier.padding(horizontal = 20.dp), style = TimeboxTheme.type.bodySmall)
+                    com.timebox.android.ui.components.TimeboxTopBar("Assistant", "Review")
+                    AssistantReviewScreen(controller, {})
+                }
+            } } }
+            return
+        }
         if (intent.getBooleanExtra("historical_response", false)) {
             val events = Json.parseToJsonElement(assets.open("assistant-historical-response.json").bufferedReader().use { it.readText() }).jsonArray
             val api = object : AssistantTransport {

@@ -88,7 +88,10 @@ class AssistantReviewTest {
             compose.waitUntil(5000) { compose.onAllNodesWithText("Details").fetchSemanticsNodes().isNotEmpty() }
             val before = compose.onNodeWithText("Review").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithText("Details").performClick()
-            compose.onNodeWithText("Tracking details").assertIsDisplayed()
+            compose.onNodeWithText("09:00 – 10:00").assertIsDisplayed()
+            compose.onNodeWithText("1 hour").assertIsDisplayed()
+            compose.onNodeWithText("Originally recorded").performClick()
+            compose.onNodeWithText("Hide original recording").assertIsDisplayed()
             compose.onNodeWithContentDescription("Back").assertExists()
             assertEquals(before, compose.onNodeWithText("Review").fetchSemanticsNode().boundsInRoot)
         } finally { scope.cancel() }

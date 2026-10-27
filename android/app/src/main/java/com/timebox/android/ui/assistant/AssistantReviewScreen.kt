@@ -3,8 +3,6 @@ package com.timebox.android.ui.assistant
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -173,22 +171,54 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     details?.let { row ->
         val receipt = row.getValue("receipt").jsonObject
         val original = receipt.getValue("record").jsonObject
-        ModalBottomSheet(onDismissRequest = { details = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = colors.sheet, contentColor = colors.on) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Tracking details", style = type.sectionTitle)
-                Text("You said: “${receipt.reviewText("question").orEmpty()}”", style = type.body)
-                Text("Originally recorded", style = type.label)
+        val current = row.reviewRecord()
+        val shown = current ?: original
+        val start = Instant.parse(shown.reviewText("start_at")).atZone(zone)
+        val end = shown.reviewText("end_at")?.let { Instant.parse(it).atZone(zone) }
+        val clock = DateTimeFormatter.ofPattern("HH:mm")
+        val endText = end?.format(if (end.toLocalDate() == start.toLocalDate()) clock else DateTimeFormatter.ofPattern("d MMM · HH:mm"))
+            ?: if (current != null) "Running" else "Running when recorded"
+        var history by remember(row.getValue("id")) { mutableStateOf(false) }
+        TimeboxSheet(
+            lane = Lane.Actual, kicker = if (current != null) "Actual block" else "Originally recorded",
+            title = "${start.format(clock)} – $endText",
+            subtitle = "${start.format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy"))} · ${zone.id}",
+            meta = end?.let { com.timebox.android.ui.elapsedDuration(Duration.between(start, it).toMinutes().coerceAtLeast(0)) },
+            onDismiss = { details = null },
+            secondary = SheetSecondary.Action("Open day", {
+                details = null
+                onOpenDay(start.toLocalDate())
+            }),
+            primary = when {
+                !row.canCorrect() -> SheetPrimary.Action("Close") { details = null }
+                local.offline -> SheetPrimary.Disabled("Adjust · Offline")
+                local.pending -> SheetPrimary.Disabled("Waiting for sync")
+                busy -> SheetPrimary.Disabled("Please wait")
+                else -> SheetPrimary.Action("Adjust") { details = null; editText = row.toString() }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val category = shown.getValue("task_type").jsonObject.reviewText("name").orEmpty()
+                val identity = shown.reviewText("name")?.takeIf { it.isNotBlank() } ?: category
+                Text(identity, style = type.sectionTitle)
+                if (identity != category) Text(category, style = type.bodySmall, color = colors.onVariant)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("You said", style = type.label, color = colors.onVariant)
+                Text("“${receipt.reviewText("question").orEmpty()}”", style = type.body)
+                Text("${if (row.isStop()) "Stopped" else "Started"} at ${displayReviewTime(row.eventTime(), zone)}", style = type.bodySmall, color = colors.onVariant)
+            }
+            if (!row.canCorrect()) Text("This event no longer has one editable record. Inspect it in Day.", style = type.bodySmall)
+            else if (row.reviewText("outcome") != "applied") Text("Changed by later activity", style = type.bodySmall)
+            if (row["changed_since_review"]?.jsonPrimitive?.boolean == true) Text("Changed since you reviewed it", style = type.bodySmall)
+            HorizontalDivider(color = colors.hairline)
+            TextButton(onClick = { history = !history }, contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.semantics { stateDescription = if (history) "Expanded" else "Collapsed" }) {
+                Text(if (history) "Hide original recording" else "Originally recorded", style = type.label)
+            }
+            if (history) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 ReviewIdentity(original)
-                Text("${if (row.isStop()) "Stopped" else "Started"} at ${displayReviewTime(receipt.reviewText("effective_at") ?: original.reviewText(if (row.isStop()) "end_at" else "start_at"), zone)}", style = type.body)
-                row.reviewRecord()?.let { current ->
-                    Text("Current activity", style = type.label)
-                    ReviewIdentity(current)
-                    Text("${displayReviewTime(current.reviewText("start_at"), zone)} → ${current.reviewText("end_at")?.let { displayReviewTime(it, zone) } ?: "Running"}", style = type.body)
-                }
-                TextButton(onClick = { details = null; onOpenDay(Instant.parse(original.reviewText("start_at")).atZone(zone).toLocalDate()) }) { Text("Open day") }
-                TextButton(onClick = { details = null }) { Text("Close") }
+                Text("${if (row.isStop()) "Stopped" else "Started"} at ${displayReviewTime(receipt.reviewText("effective_at") ?: original.reviewText(if (row.isStop()) "end_at" else "start_at"), zone)}", style = type.bodySmall)
             }
         }
     }
