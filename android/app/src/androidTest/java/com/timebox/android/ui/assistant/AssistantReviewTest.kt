@@ -2,6 +2,8 @@ package com.timebox.android.ui.assistant
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -31,6 +33,10 @@ class AssistantReviewTest {
         override fun stream(conversation: String, run: String, message: String) = emptyFlow<AssistantEvent>()
         val record = Json.parseToJsonElement("""{"id":7,"name":"Project work","task_type_id":1,"task_type":{"name":"Work"},"start_at":"2026-10-23T01:00:37Z","end_at":"2026-10-23T02:00:41Z"}""").jsonObject
         override suspend fun reviewRequest(path: String, body: JsonObject?): JsonObject {
+            if (path == "reviews/acknowledge") {
+                reviewed = true
+                return buildJsonObject { put("reviewed", true) }
+            }
             if (path.endsWith("correct-event")) {
                 corrections.add(requireNotNull(body))
                 if (rejectFirst && corrections.size == 1) throw ReviewRejectedException(409, "Activity overlaps known time")
@@ -61,12 +67,51 @@ class AssistantReviewTest {
         }
     }
 
+    @Test fun detailsKeepsHeaderPositionAndBackArrow() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val blockers = mutableStateOf(0)
+        try {
+            val controller = AssistantController(scope) { ReviewTransport() }
+            compose.setContent {
+                TimeboxTheme {
+                    CompositionLocalProvider(
+                        com.timebox.android.ui.components.LocalNavigationBlockers provides blockers,
+                        com.timebox.android.ui.components.LocalScreenBack provides if (blockers.value == 0) ({}) else null,
+                    ) {
+                        Column {
+                            com.timebox.android.ui.components.TimeboxTopBar("Assistant", "Review")
+                            AssistantReviewScreen(controller, {}, Modifier.fillMaxSize())
+                        }
+                    }
+                }
+            }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Details").fetchSemanticsNodes().isNotEmpty() }
+            val before = compose.onNodeWithText("Review").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithText("Details").performClick()
+            compose.onNodeWithText("Tracking details").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Back").assertExists()
+            assertEquals(before, compose.onNodeWithText("Review").fetchSemanticsNode().boundsInRoot)
+        } finally { scope.cancel() }
+    }
+
+    @Test fun acknowledgingRemovesRowWithoutSuccessMessage() {
+        val transport = ReviewTransport()
+        show(transport) {
+            compose.onNodeWithText("Looks right").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("To review · 0").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Marked reviewed").assertDoesNotExist()
+            compose.onNodeWithText("Project work").assertDoesNotExist()
+            compose.onNodeWithText("Reviewed", useUnmergedTree = true).performClick()
+            compose.onNodeWithText("Project work").assertIsDisplayed()
+        }
+    }
+
     private fun show(transport: ReviewTransport, action: () -> Unit) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         try {
             val controller = AssistantController(scope) { transport }
             compose.setContent { TimeboxTheme { AssistantReviewScreen(controller, {}, Modifier.fillMaxSize()) } }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Correct").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Adjust").fetchSemanticsNodes().isNotEmpty() }
             action()
         } finally { scope.cancel() }
     }
@@ -98,7 +143,7 @@ class AssistantReviewTest {
             compose.waitUntil(5000) { compose.onAllNodesWithText("Retry").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Refresh").assertDoesNotExist()
             compose.onNodeWithText("Retry").performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Correct").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Adjust").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Retry").assertDoesNotExist()
         } finally { scope.cancel() }
     }
@@ -110,7 +155,7 @@ class AssistantReviewTest {
         try {
             val controller = AssistantController(scope) { transport }
             compose.setContent { TimeboxTheme { if (visible.value) AssistantReviewScreen(controller, {}, Modifier.fillMaxSize()) } }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Correct").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Adjust").fetchSemanticsNodes().isNotEmpty() }
             compose.runOnIdle { visible.value = false }
             compose.waitForIdle()
             compose.runOnIdle { transport.reviewed = true; visible.value = true }
@@ -124,7 +169,7 @@ class AssistantReviewTest {
         val transport = ReviewTransport()
         show(transport) {
             compose.onNodeWithText("You said: “I started working”").assertIsDisplayed()
-            compose.onNodeWithText("Correct").performClick()
+            compose.onNodeWithText("Adjust").performClick()
             compose.onNodeWithText("Change").performClick()
             compose.onNodeWithTag("task-type-search").performTextInput("Learn")
             compose.onNodeWithText("Learning").performClick()
@@ -133,6 +178,7 @@ class AssistantReviewTest {
             compose.waitUntil(5000) { transport.corrections.isNotEmpty() }
             compose.waitUntil(5000) { compose.onAllNodesWithText("To review · 0").fetchSemanticsNodes().isNotEmpty() }
             val body = transport.corrections.single()
+            compose.onNodeWithText("Saved and marked reviewed").assertDoesNotExist()
             assertEquals(2, body.getValue("task_type_id").jsonPrimitive.int)
             assertEquals("Study", body.getValue("name").jsonPrimitive.content)
             assertEquals("2026-10-23T01:00:37Z", body.getValue("effective_at").jsonPrimitive.content)
@@ -142,7 +188,7 @@ class AssistantReviewTest {
 
     @Test fun pickerCancellationAndDiscardProtectionPreserveDraft() {
         show(ReviewTransport()) {
-            compose.onNodeWithText("Correct").performClick()
+            compose.onNodeWithText("Adjust").performClick()
             compose.onNodeWithContentDescription("Block Name").performScrollTo().performTextReplacement("My draft")
             compose.onNodeWithText("Change").performScrollTo().performClick()
             compose.onNodeWithTag("task-type-search").performTextInput("Learning")
@@ -159,8 +205,8 @@ class AssistantReviewTest {
         val transport = ReviewTransport(stopEvent = true)
         show(transport) {
             compose.onNodeWithText("Stopped at 23 Oct 2026 · 10:00").assertIsDisplayed()
-            compose.onNodeWithText("Correct").performClick()
-            compose.onNodeWithText("Correct stop").assertIsDisplayed()
+            compose.onNodeWithText("Adjust").performClick()
+            compose.onNodeWithText("Adjust stop").assertIsDisplayed()
             compose.onNodeWithContentDescription("Stopped at time").assertExists()
             compose.onNodeWithText("Change").assertDoesNotExist()
             compose.onNodeWithContentDescription("Block Name").assertDoesNotExist()
@@ -174,7 +220,7 @@ class AssistantReviewTest {
     @Test fun lostReplyRetriesExactOperationAndDoesNotEnableAnotherEdit() {
         val transport = ReviewTransport(loseReply = true)
         show(transport) {
-            compose.onNodeWithText("Correct").performClick()
+            compose.onNodeWithText("Adjust").performClick()
             compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Retry save").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("Block Name").assertIsNotEnabled()
@@ -187,7 +233,7 @@ class AssistantReviewTest {
     @Test fun rejectedSaveKeepsDraftEditableAndNextEditGetsNewIdentity() {
         val transport = ReviewTransport(rejectFirst = true)
         show(transport) {
-            compose.onNodeWithText("Correct").performClick()
+            compose.onNodeWithText("Adjust").performClick()
             compose.onNodeWithText("Save & mark reviewed").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Activity overlaps known time").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("Block Name").performScrollTo().performTextReplacement("Retained draft")

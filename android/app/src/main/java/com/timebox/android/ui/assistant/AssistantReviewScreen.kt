@@ -68,19 +68,11 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     var rows by tab.rows
     var busy by remember(reviewed) { mutableStateOf(false) }
     var error by remember(reviewed) { mutableStateOf<String?>(null) }
-    var notice by remember { mutableStateOf<String?>(null) }
-    val accessibility = androidx.compose.ui.platform.LocalAccessibilityManager.current
-    LaunchedEffect(notice) {
-        if (notice != null) {
-            kotlinx.coroutines.delay(accessibility?.calculateRecommendedTimeoutMillis(5000, containsText = true, containsControls = true) ?: 5000)
-            notice = null
-        }
-    }
     var editText by rememberSaveable { mutableStateOf<String?>(null) }
     if (editText != null) com.timebox.android.ui.components.HideNavigate()
     val edit = editText?.let { Json.parseToJsonElement(it).jsonObject }
     var details by remember { mutableStateOf<JsonObject?>(null) }
-    if (details != null) com.timebox.android.ui.components.HideNavigate()
+    // The modal sheet blocks background interaction without changing the header layout.
     var refresh by rememberSaveable { mutableIntStateOf(0) }
     val zone = ZoneId.of(page?.reviewText("timezone") ?: local.snapshot?.reportingTimezone ?: "UTC")
     val colors = TimeboxTheme.colors
@@ -108,7 +100,6 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                 controller.reviewRequest("reviews/acknowledge", buildJsonObject {
                     putJsonArray("items") { add(buildJsonObject { put("id", row.getValue("id")); put("revision", row.getValue("revision")) }) }
                 })
-                notice = "Marked reviewed"
                 refresh++
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e.message ?: "Could not mark reviewed. Reload Review and try again." }
@@ -126,7 +117,6 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = type.bodySmall)
             TextButton(enabled = !busy, onClick = { refresh++; scope.launch { application.activityRepository.refresh() } }) { Text("Retry") }
         }
-        notice?.let { TransientFeedback(it, onDismiss = { notice = null }) }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp + LocalNavigationDockInset.current)) {
             if (!reviewed) items(local.quickReviews, key = { it.interpretation.requestId }) { pending ->
                 val result = pending.interpretation
@@ -161,7 +151,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { details = row }) { Text("Details") }
                         Spacer(Modifier.weight(1f))
-                        TextButton(enabled = row.canCorrect() && !busy && !local.offline && !local.pending, onClick = { editText = row.toString() }) { Text("Correct") }
+                        TextButton(enabled = row.canCorrect() && !busy && !local.offline && !local.pending, onClick = { editText = row.toString() }) { Text("Adjust") }
                         if (!reviewed) FilledTonalButton(enabled = !busy && !local.offline && !local.pending, onClick = { acknowledge(row) }) { Text("Looks right") }
                     }
                 }
@@ -205,7 +195,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     edit?.let { row ->
         ReviewCorrectionSheet(row, page?.get("task_types")?.jsonArray.orEmpty(), zone, controller,
             available = !local.offline && !local.pending, onDismiss = { editText = null; refresh++ },
-            onSaved = { notice = "Saved and marked reviewed"; editText = null; refresh++; scope.launch { application.activityRepository.refresh() } })
+            onSaved = { editText = null; refresh++; scope.launch { application.activityRepository.refresh() } })
     }
 }
 
@@ -279,7 +269,7 @@ private fun ReviewCorrectionSheet(row: JsonObject, types: List<JsonElement>, zon
     }
     TimeboxSheet(
         lane = Lane.Actual, kicker = "Recorded activity",
-        title = if (chooseCategory) "Task Type" else if (stop) "Correct stop" else "Correct activity",
+        title = if (chooseCategory) "Task Type" else if (stop) "Adjust stop" else "Adjust activity",
         onDismiss = { if (chooseCategory) chooseCategory = false else dismiss() },
         dismissAllowed = !changed && pendingText == null && !chooseCategory,
         onCancel = { if (chooseCategory) chooseCategory = false else dismiss() },
