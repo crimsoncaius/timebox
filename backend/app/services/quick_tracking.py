@@ -4,7 +4,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,10 +31,16 @@ class QuickRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     source: Literal["tile", "assistant", "app"]
     current: CurrentActivity | None = None
+    reference_at: AwareDatetime | None = None
+    attempt_id: UUID | None = None
+    device_id: UUID | None = None
 
 
 async def interpret(body: QuickRequest):
     received = dt.datetime.now(dt.UTC)
+    reference = body.reference_at or received
+    if not received - dt.timedelta(minutes=15) <= reference <= received + dt.timedelta(seconds=5):
+        raise HTTPException(409, "This command is too old to retry. Correct the activity in Day.")
     request = body.model_dump(mode="json")
     with Session(get_engine()) as db:
         existing = db.scalar(select(AssistantAttempt).where(AssistantAttempt.run_id == str(body.request_id)))
@@ -43,6 +49,9 @@ async def interpret(body: QuickRequest):
                 raise HTTPException(409, "Request ID already used.")
             return existing.context_inputs["result"]
         snapshot = activity_service.read(db, get_settings().app_timezone)
+    from zoneinfo import ZoneInfo
+    if reference.astimezone(ZoneInfo(snapshot.reporting_timezone)).date() != received.astimezone(ZoneInfo(snapshot.reporting_timezone)).date():
+        raise HTTPException(409, "This command is from an earlier day. Correct the activity in Day.")
     types = {t.id: t.name for t in snapshot.task_types}
     current = None
     if body.current:
@@ -50,10 +59,10 @@ async def interpret(body: QuickRequest):
             raise HTTPException(409, "Task Types changed. Refresh Activity Tracking and retry.")
         current = {"task_type": types[body.current.task_type_id], "block_name": body.current.name, "end": None}
     state = {"timezone": snapshot.reporting_timezone, "task_types": list(types.values()), "blocks": [current] if current else []}
-    decision, usage, validation = await language.interpret_workflow(state, body.message, received)
+    decision, usage, validation = await language.interpret_workflow(state, body.message, reference)
     result = {"request_id": str(body.request_id), "question": body.message, "source": body.source,
               "action": decision.action, "task_type_id": next((i for i, name in types.items() if name == decision.task_type), None),
-              "effective_at": validation.get("effective_at"), "received_at": received.isoformat(),
+              "effective_at": validation.get("effective_at"), "received_at": reference.isoformat(),
               "timezone": snapshot.reporting_timezone, "timing": validation.get("timing"),
               "message": validation.get("rejection") or ("Ready to record." if decision.action else "No tracking change requested." if validation.get("choice") == "no_change" else "Please describe one activity to track."),
               "usage": usage}

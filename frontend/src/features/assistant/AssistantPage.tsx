@@ -4,6 +4,7 @@ import { Layout } from '../../components/Layout'
 import { ContextualHelp } from '../../components/ContextualHelp'
 import { fetchJson, fetchVoid, protocolHeaders } from '../../lib/api/client'
 import './assistant.css'
+import { QuickFailures } from './QuickFailures'
 import { getActivityRepository } from '../activity/activityRepository'
 
 type RecordData = { id: number; name: string | null; task_type_id: number; task_type: { name: string }; start_at: string; end_at: string | null }
@@ -113,12 +114,13 @@ function Reviews() {
     catch (e) { setError(message(e)); setBusy(false) }
   }
   return <section>
-    <div className="assistant-review-heading"><div><div className="flex items-center gap-2"><h2>A moment to look back</h2><ContextualHelp title="Review activity">Correct anything that doesn’t look right.</ContextualHelp></div><p>Already recorded.</p></div><button disabled={busy} onClick={() => void load(false, reviewed)}>Refresh</button></div>
-    <div className="assistant-review-toolbar"><div className="assistant-filters">{[false, true].map(history => <button key={String(history)} aria-pressed={reviewed === history} disabled={busy} onClick={() => { setReviewed(history); setRows([]); void load(false, history) }}>{history ? 'Reviewed' : `To review${page ? ` · ${page.unchecked_count}` : ''}`}</button>)}</div><span>Times in {zone}</span></div>
+    <div className="assistant-review-heading"><div><div className="flex items-center gap-2"><h2>A moment to look back</h2><ContextualHelp title="Review activity">Correct anything that doesn’t look right.</ContextualHelp></div><p>Check recorded activities and commands that need attention.</p></div><button disabled={busy} onClick={() => void load(false, reviewed)}>Refresh</button></div>
+    <div className="assistant-review-toolbar"><div className="assistant-filters">{[false, true].map(history => <button key={String(history)} aria-pressed={reviewed === history} disabled={busy} onClick={() => { setReviewed(history); setRows([]); void load(false, history) }}>{history ? 'History' : 'Needs attention'}</button>)}</div><span>Times in {zone}</span></div>
     {error && <p role="alert" className="assistant-error">{error}</p>}
     {busy && <p role="status">Loading…</p>}
     {!reviewed && rows.length > 0 && <div className="assistant-selection"><label><input type="checkbox" disabled={busy} checked={selected.size === rows.length} onChange={e => setSelected(e.target.checked ? new Set(rows.map(r => r.id)) : new Set())} /> Select loaded</label><button disabled={busy || !selected.size} onClick={() => void acknowledge()}>Mark reviewed ({selected.size})</button></div>}
-    {!busy && !error && rows.length === 0 && <div className="assistant-empty"><h3>{reviewed ? 'No reviewed activity yet' : 'All caught up'}</h3><p>Activity recorded with Review later will appear here.</p></div>}
+    <QuickFailures key={String(reviewed)} history={reviewed} timezone={zone} />
+    {!busy && !error && rows.length === 0 && <div className="assistant-empty"><h3>{reviewed ? 'No reviewed activity yet' : 'No recorded activities to review'}</h3><p>Recorded activities appear here separately from failed commands.</p></div>}
     {rows.map(row => { const record = row.record || row.receipt.record; return <article key={row.id} className="assistant-review-row">
       {!reviewed && <input aria-label={`Select ${row.receipt.question}`} type="checkbox" disabled={busy} checked={selected.has(row.id)} onChange={e => setSelected(old => { const next = new Set(old); if (e.target.checked) next.add(row.id); else next.delete(row.id); return next })} />}
       <div><blockquote>“{row.receipt.question}”</blockquote><h3><span>{row.receipt.action}</span> {record.name || record.task_type.name}</h3><p>{record.task_type.name} · {time(record.start_at)} → {time(record.end_at)}</p>

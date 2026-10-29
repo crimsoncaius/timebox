@@ -44,7 +44,7 @@ class QuickTrackingActivity : ComponentActivity() {
     private var started = false
     private var source = "assistant"
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) { speech.status = "Microphone permission is off."; speech.settings = appSettingsIntent() }
+        if (!granted) { speech.status = "Microphone permission is off."; speech.settings = appSettingsIntent(); app.quickTracking.captureFailed(speech.status!!, source) }
         else if (!isFinishing && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) speech.listen(source)
     }
     private val assistantRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { updateRole() }
@@ -75,11 +75,15 @@ class QuickTrackingActivity : ComponentActivity() {
                     QuickTrackingOverlay(capture, speech.listening, speech.status, speech.settings != null,
                         onClose = { speech.finish(); finish() },
                         onRetry = {
-                            if (speech.status == null && capture.text.isNotBlank()) app.quickTracking.submit(capture.text, source)
-                            else requestListen()
+                            if (speech.status == null && capture.text.isNotBlank()) {
+                                app.reviewRequested.value = true
+                                startActivity(Intent(this, com.timebox.android.MainActivity::class.java))
+                                finish()
+                            }
+                            else if (app.quickTracking.replaceCurrent()) requestListen()
                         },
                         onSettings = { speech.settings?.let { startActivity(it) } },
-                        onSpeakAgain = ::requestListen)
+                        onSpeakAgain = { if (app.quickTracking.replaceCurrent()) requestListen() })
                 } else Surface(color = TimeboxTheme.colors.bg, modifier = Modifier.fillMaxSize()) {
                     Column(Modifier.safeDrawingPadding().imePadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -145,6 +149,7 @@ class QuickTrackingActivity : ComponentActivity() {
         else if (getSystemService(KeyguardManager::class.java).isDeviceLocked) {
             speech.status = "Unlock your phone to enable microphone access."
             speech.settings = appSettingsIntent()
+            app.quickTracking.captureFailed(speech.status!!, source)
         } else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
 

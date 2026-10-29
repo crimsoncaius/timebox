@@ -55,7 +55,7 @@ internal fun QuickTrackingOverlay(
                     Text(error, color = Color.White, textAlign = TextAlign.Center,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TextButton(onClick = onRetry, colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text("Retry") }
+                        TextButton(onClick = onRetry, colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text(if (speechStatus == null && capture.text.isNotBlank()) "Review command" else "Retry") }
                         if (hasSettings) TextButton(onClick = onSettings, colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text("Settings") }
                         else if (speechStatus == null && capture.text.isNotBlank()) TextButton(onClick = onSpeakAgain, colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) { Text("Speak again") }
                     }

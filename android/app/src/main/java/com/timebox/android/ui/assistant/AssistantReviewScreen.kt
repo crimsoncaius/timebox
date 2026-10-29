@@ -106,8 +106,8 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
     }
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(!reviewed, { reviewed = false }, label = { Text("To review${page?.reviewText("unchecked_count")?.let { " · $it" }.orEmpty()}") })
-            FilterChip(reviewed, { reviewed = true }, label = { Text("Reviewed") })
+            FilterChip(!reviewed, { reviewed = false }, label = { Text("Needs attention") })
+            FilterChip(reviewed, { reviewed = true }, label = { Text("History") })
         }
         if (local.offline) Text("Offline · Reconnect to save corrections or mark reviewed.", style = type.bodySmall)
         if (local.pending) Text("Syncing activity. Corrections are available after sync.", style = type.bodySmall)
@@ -116,6 +116,7 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             TextButton(enabled = !busy, onClick = { refresh++; scope.launch { application.activityRepository.refresh() } }) { Text("Retry") }
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp + LocalNavigationDockInset.current)) {
+            item { com.timebox.android.quicktracking.QuickFailureReview(controller, reviewed, onOpenDay) }
             if (!reviewed) items(local.quickReviews, key = { it.interpretation.requestId }) { pending ->
                 val result = pending.interpretation
                 Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -129,8 +130,8 @@ fun AssistantReviewScreen(controller: AssistantController, onOpenDay: (LocalDate
             }
             if (page != null && rows.isEmpty() && (reviewed || local.quickReviews.isEmpty()) && error == null) item {
                 Column(Modifier.padding(vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (reviewed) "No activities reviewed yet" else "No activities to review", style = type.sectionTitle)
-                    Text(if (reviewed) "Activities you mark reviewed will appear here." else "Your next recorded activity will appear here for a quick check.", style = type.body, color = colors.onVariant)
+                    Text(if (reviewed) "No activities reviewed yet" else "No recorded activities to review", style = type.sectionTitle)
+                    Text(if (reviewed) "Activities you mark reviewed will appear here." else "Recorded activities appear here separately from failed commands.", style = type.body, color = colors.onVariant)
                 }
             }
             items(rows, key = { it.getValue("id").jsonPrimitive.int }) { row ->

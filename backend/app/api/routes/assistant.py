@@ -16,7 +16,13 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
-from app.services import assistant_reviews, assistant_storage, assistant_task_operations, quick_tracking
+from app.services import (
+    assistant_reviews,
+    assistant_storage,
+    assistant_task_operations,
+    quick_tracking,
+    quick_tracking_failures,
+)
 from app.services.assistant_agent import MODEL, agent_events, task_read_context
 from app.services.assistant_limits import (
     MAX_CARDS,
@@ -34,7 +40,38 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 @router.post("/quick-tracking")
 async def quick_track(body: quick_tracking.QuickRequest):
-    return await quick_tracking.interpret(body)
+    try:
+        quick_tracking_failures.capture_request(body)
+        return await quick_tracking.interpret(body)
+    except Exception as error:
+        with suppress(Exception):
+            quick_tracking_failures.server_error(body.attempt_id or body.request_id, body.request_id, error)
+        raise
+
+
+@router.post("/quick-failures")
+def upload_quick_failure(body: quick_tracking_failures.FailureReport):
+    return quick_tracking_failures.upload(body)
+
+
+@router.get("/quick-failures")
+def quick_failures(history: bool = False, before: str | None = None):
+    return quick_tracking_failures.listing(history, before)
+
+
+@router.post("/quick-failures/{attempt_id}/dismiss")
+def dismiss_quick_failure(attempt_id: UUID):
+    return quick_tracking_failures.dismiss(attempt_id)
+
+
+@router.get("/quick-failures/{attempt_id}")
+def quick_failure(attempt_id: UUID):
+    return quick_tracking_failures.get(attempt_id)
+
+
+@router.post("/quick-failures/{attempt_id}/diagnostics")
+def quick_diagnostic(attempt_id: UUID, body: quick_tracking_failures.Diagnostic):
+    return quick_tracking_failures.diagnostic(attempt_id, body)
 
 
 class MessageRequest(BaseModel):

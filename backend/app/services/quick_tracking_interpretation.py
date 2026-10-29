@@ -296,6 +296,7 @@ async def interpret_workflow(state, message, now):
     started = time.perf_counter()
     stages = []
     attempts = []
+    errors = []
 
     async def run(name, function):
         try:
@@ -304,6 +305,7 @@ async def interpret_workflow(state, message, now):
             attempts.extend({**a, "stage": name} for a in validation.get("attempts", []))
             return value, validation
         except Exception as error:
+            errors.append(error)
             detail = (
                 error.detail if isinstance(error, HTTPException) and isinstance(error.detail, dict) else {}
             )
@@ -362,7 +364,7 @@ async def interpret_workflow(state, message, now):
                 "usage": usage,
                 "validation": validation,
             },
-        )
+        ) from (errors[0] if errors else None)
     return decision, usage, validation
 
 
