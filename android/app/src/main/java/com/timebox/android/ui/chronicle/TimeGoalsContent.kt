@@ -6,6 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import com.timebox.android.ui.components.CenteredEmptyState
+import com.timebox.android.ui.components.PrimaryButton
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -57,7 +60,7 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
     var editorId by rememberSaveable { mutableStateOf<Int?>(null) }
     if (detailId != null || editorId != null) com.timebox.android.ui.components.HideNavigate()
     val canManage = !state.offline && !state.goalSaving && !state.loading
-    ContextualHelp("Time Goals", "Recorded time is measured against each goal’s period. Expand a goal and select a day to view its period.")
+    if (report.goals.isNotEmpty()) ContextualHelp("Time Goals", "Recorded time is measured against each goal’s period. Expand a goal and select a day to view its period.")
     state.goalError?.let { message ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(message, Modifier.weight(1f), style = type.bodySmall, color = colors.error)
@@ -65,10 +68,13 @@ internal fun TimeGoalsContent(state: TimeGoalsUiState, viewModel: TimeGoalsViewM
         }
     }
     if (report.goals.isEmpty()) {
-        Text("No time goals for this week", style = type.body, color = colors.on, modifier = Modifier.padding(top = 24.dp))
-        Text("Choose a Task Type and a repeating time target. Your Actual Blocks supply the progress.",
-            style = type.bodySmall, color = colors.onVariant, modifier = Modifier.padding(vertical = 12.dp))
-        Button(onClick = { editorId = 0 }, enabled = canManage) { Text("Add Time Goal") }
+        CenteredEmptyState(
+            icon = Icons.Outlined.Flag,
+            title = "No time goals for this week",
+            description = "Choose a Task Type and a repeating time target. Your Actual Blocks supply the progress.",
+        ) {
+            PrimaryButton("Add Time Goal", { editorId = 0 }, enabled = canManage)
+        }
     }
     report.goals.forEach { goal ->
         val open = expanded == goal.id

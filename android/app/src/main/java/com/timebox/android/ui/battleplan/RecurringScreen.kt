@@ -55,7 +55,9 @@ import com.timebox.android.data.RecurrenceMode
 import com.timebox.android.data.RecurrenceStatus
 import com.timebox.android.data.RecurringTemplate
 import com.timebox.android.ui.components.ErrorState
-import com.timebox.android.ui.components.EmptyStateCard
+import com.timebox.android.ui.components.CenteredEmptyState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Archive
 import com.timebox.android.ui.components.LoadingState
 import com.timebox.android.ui.components.PrimaryButton
 import com.timebox.android.ui.components.SectionCard
@@ -81,7 +83,7 @@ fun RecurringScreen(
     val colors = TimeboxTheme.colors
     Column(Modifier.fillMaxSize()) {
         RecurringStatusTabs(state.selectedStatus, onSelectStatus)
-        Row(
+        if (state.templates.isNotEmpty()) Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -91,7 +93,7 @@ fun RecurringScreen(
                 color = colors.onVariant,
                 modifier = Modifier.weight(1f),
             )
-            PrimaryButton(
+            if (state.selectedStatus == RecurrenceStatus.Active) PrimaryButton(
                 "New recurrence",
                 onNew,
                 leading = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp), tint = colors.onAccent) },
@@ -100,15 +102,20 @@ fun RecurringScreen(
         when {
             state.loading -> LoadingState()
             state.error != null && state.templates.isEmpty() -> ErrorState(state.error, onRetry)
-            state.templates.isEmpty() -> EmptyStateCard(
-                title = "No ${state.selectedStatus.label.lowercase()} series",
-                description = if (state.selectedStatus == RecurrenceStatus.Active) {
-                    "Create a recurrence to generate Tasks on a schedule or quota."
-                } else {
-                    "Recurring Task Series appear here when their lifecycle changes."
-                },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            state.templates.isEmpty() -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalNavigationDockInset.current)) {
+                CenteredEmptyState(
+                    icon = if (state.selectedStatus == RecurrenceStatus.Ended) Icons.Outlined.Archive else Icons.Outlined.Repeat,
+                    title = "No ${state.selectedStatus.label.lowercase()} series",
+                    description = when (state.selectedStatus) {
+                        RecurrenceStatus.Active -> "Create a Recurring Task Series for work that repeats on a schedule or quota."
+                        RecurrenceStatus.Paused -> "Series you pause appear here. Resume one when you’re ready to continue."
+                        RecurrenceStatus.Ended -> "Series you end appear here, keeping them separate from your active routines."
+                    },
+                ) {
+                    if (state.selectedStatus == RecurrenceStatus.Active) PrimaryButton("New recurrence", onNew)
+                    else PrimaryButton("View active series", { onSelectStatus(RecurrenceStatus.Active) })
+                }
+            }
             else -> LazyColumn(
                 Modifier.fillMaxSize().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

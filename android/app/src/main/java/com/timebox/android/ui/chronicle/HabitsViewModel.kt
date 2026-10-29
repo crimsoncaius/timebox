@@ -30,6 +30,7 @@ data class HabitsUiState(
     val pending: Set<HabitCellKey> = emptySet(),
     val candidates: List<RecurringTemplate>? = null,
     val candidatesError: String? = null,
+    val hasActiveRoutines: Boolean = false,
     val offline: Boolean = false,
 )
 
@@ -131,7 +132,7 @@ class HabitsViewModel(private val repository: TimeboxRepository) : ViewModel() {
         viewModelScope.launch {
             repository.listRecurringTemplates(RecurrenceStatus.Active).fold(
                 onSuccess = { templates ->
-                    _state.update { state -> state.copy(candidates = templates.filter { it.hasHabitCandidate() }) }
+                    _state.update { state -> state.copy(candidates = templates.filter { it.hasHabitCandidate() }, hasActiveRoutines = templates.isNotEmpty()) }
                 },
                 onFailure = { e -> _state.update { it.copy(candidatesError = e.apiError.message) } },
             )
