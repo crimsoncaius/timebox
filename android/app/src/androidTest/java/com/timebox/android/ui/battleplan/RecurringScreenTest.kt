@@ -1,6 +1,7 @@
 package com.timebox.android.ui.battleplan
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -21,6 +22,30 @@ import org.junit.Test
 
 class RecurringScreenTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun emptyLifecycleTabsOnlyCreateFromActive() {
+        val status = mutableStateOf(RecurrenceStatus.Active)
+        var created = 0
+        compose.setContent {
+            TimeboxTheme(darkTheme = true) {
+                RecurringScreen(
+                    state = RecurringUiState(selectedStatus = status.value),
+                    onRetry = {}, onSelectStatus = { status.value = it },
+                    onNew = { created++ }, onOpen = {},
+                )
+            }
+        }
+        compose.onNodeWithText("New recurrence").performClick()
+        compose.runOnIdle { assertEquals(1, created) }
+        for (tab in listOf("Paused", "Ended")) {
+            compose.onNodeWithText(tab).performClick()
+            compose.onNodeWithText("New recurrence").assertDoesNotExist()
+            compose.onNodeWithText("No ${tab.lowercase()} series").assertIsDisplayed()
+            compose.onNodeWithText("View active series").performClick()
+            compose.onNodeWithText("New recurrence").assertIsDisplayed()
+        }
+    }
 
     @Test
     fun listCardsShowEqualChipsAndOpenOnTap() {

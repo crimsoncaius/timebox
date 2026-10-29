@@ -264,7 +264,7 @@ private fun NavGraphBuilder.chronicleRoute(dependencies: TimeboxNavigationDepend
                                 factory = viewModelFactory { initializer { HabitsViewModel(repository) } },
                             )
                             val habitsState by habitsViewModel.state.collectAsState()
-                            HabitsScreen(habitsViewModel, habitsState) { templateId ->
+                            HabitsScreen(habitsViewModel, habitsState, onCreateRoutine = { navController.navigate(AppRoutes.RecurringNew) }) { templateId ->
                                 navController.navigate(AppRoutes.recurringDetail(templateId))
                             }
                         },

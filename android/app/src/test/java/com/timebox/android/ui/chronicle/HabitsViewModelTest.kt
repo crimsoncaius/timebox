@@ -13,6 +13,7 @@ import com.timebox.android.data.remote.HabitItemDto
 import com.timebox.android.data.remote.HabitTotalDto
 import com.timebox.android.data.remote.HabitsWeekDto
 import com.timebox.android.data.remote.TimeboxApi
+import com.timebox.android.data.remote.RecurringTemplateDto
 import com.timebox.android.data.toModel
 import java.lang.reflect.Proxy
 import java.time.Instant
@@ -85,6 +86,27 @@ class HabitsViewModelTest {
         } as TimeboxApi
 
     private fun gymState(vm: HabitsViewModel) = vm.state.value.week!!.habits.single().days[2].state.wire
+
+    @Test fun `empty candidates distinguish no routines from already tracked routines`() = runTest(dispatcher) {
+        var routines = emptyList<RecurringTemplateDto>()
+        val vm = HabitsViewModel(TimeboxRepository(api { name, _ ->
+            check(name == "listRecurringTemplates")
+            routines
+        }, dispatcher))
+        vm.loadCandidates()
+        advanceUntilIdle()
+        assertEquals(emptyList<RecurringTemplate>(), vm.state.value.candidates)
+        assertFalse(vm.state.value.hasActiveRoutines)
+        routines = listOf(RecurringTemplateDto(
+            id = 1, title = "Walk", description = "", mode = "scheduled", status = "active",
+            frequency = "daily", interval = 1, startDate = "2026-09-21", trackAsHabit = true,
+            createdAt = "2026-09-21T00:00:00Z", updatedAt = "2026-09-21T00:00:00Z", cadence = "Daily",
+        ))
+        vm.loadCandidates()
+        advanceUntilIdle()
+        assertEquals(emptyList<RecurringTemplate>(), vm.state.value.candidates)
+        assertTrue(vm.state.value.hasActiveRoutines)
+    }
 
     @Test fun `tick shows at once and the server's week replaces it`() = runTest(dispatcher) {
         var fail = false

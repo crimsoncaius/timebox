@@ -1,5 +1,7 @@
 package com.timebox.android.ui.chronicle
 
+import com.timebox.android.ui.components.CenteredEmptyState
+import androidx.compose.material.icons.outlined.DoneAll
 import com.timebox.android.ui.components.LocalNavigationDockInset
 import com.timebox.android.ui.components.ContextualHelp
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -133,7 +135,7 @@ internal fun habitTotalUnit(total: HabitTotal): String = when (total.unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine: (Int) -> Unit) {
+fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onCreateRoutine: () -> Unit, onOpenRoutine: (Int) -> Unit) {
     val colors = TimeboxTheme.colors
     val haptics = LocalHapticFeedback.current
     LaunchedEffect(viewModel) {
@@ -224,8 +226,20 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                     .padding(bottom = TimeboxDimens.bottomInset + LocalNavigationDockInset.current)
                     .testTag("habits-week"),
             ) {
-                WeekdayHeader(week.weekStart, week.today)
-                if (week.habits.isEmpty()) {
+                val currentEmpty = week.habits.isEmpty() && week.weekStart == currentWeek
+                if (!currentEmpty) WeekdayHeader(week.weekStart, week.today)
+                if (currentEmpty) {
+                    CenteredEmptyState(
+                        icon = Icons.Outlined.DoneAll,
+                        title = "Build a habit from a routine",
+                        description = "Track a recurring routine or one of its checklist items. Your weekly progress will appear here.",
+                    ) {
+                        PrimaryButton("Create a routine", onCreateRoutine, enabled = !state.offline)
+                        TextButton(onClick = { addSheet = true; viewModel.loadCandidates() }, enabled = !state.offline) {
+                            Text("Add habit from existing routines")
+                        }
+                    }
+                } else if (week.habits.isEmpty()) {
                     Text(
                         "No habits were active this week.",
                         style = TimeboxTheme.type.bodySmall, color = colors.onVariant,
@@ -283,7 +297,7 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 if (week.habits.isNotEmpty()) ContextualHelp(
                     "Record habits", "Tap a day to record it. Long-press a quota day to remove a session.",
                 )
-                PrimaryButton(
+                if (!currentEmpty) PrimaryButton(
                     text = "Add habit",
                     onClick = { addSheet = true; viewModel.loadCandidates() },
                     modifier = Modifier.padding(top = 16.dp),
@@ -357,7 +371,16 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 when {
                     state.candidatesError != null -> Text(state.candidatesError, color = colors.error)
                     candidates == null -> CircularProgressIndicator(Modifier.size(20.dp), color = colors.onVariant, strokeWidth = 2.dp)
-                    candidates.isEmpty() -> Text("Every active routine and checklist item is already a habit.", color = colors.onVariant)
+                    candidates.isEmpty() -> Column(Modifier.verticalScroll(rememberScrollState())) {
+                        CenteredEmptyState(
+                            icon = Icons.Outlined.DoneAll,
+                            title = if (state.hasActiveRoutines) "Everything is already tracked" else "Create a routine first",
+                            description = if (state.hasActiveRoutines) "Every active routine and checklist item is already a habit."
+                                else "Habits come from recurring routines and their checklist items. Create one, then choose what to track.",
+                        ) {
+                            PrimaryButton("Create a routine", { addSheet = false; onCreateRoutine() }, enabled = !state.offline)
+                        }
+                    }
                     else -> Column(Modifier.verticalScroll(rememberScrollState())) {
                         candidates.forEach { candidate ->
                             Row(
@@ -399,29 +422,6 @@ fun HabitsScreen(viewModel: HabitsViewModel, state: HabitsUiState, onOpenRoutine
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun HabitsEmptyState(onAdd: () -> Unit) {
-    val colors = TimeboxTheme.colors
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("No habits yet", style = TimeboxTheme.type.sectionTitle, color = colors.on)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Choose routines to track here. Their past completions are included.",
-            style = TimeboxTheme.type.bodySmall, color = colors.onVariant, textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(16.dp))
-        PrimaryButton(
-            text = "Add habit",
-            onClick = onAdd,
-            leading = { Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = colors.onAccent) },
-            height = 44.dp,
-        )
     }
 }
 
