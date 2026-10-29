@@ -117,10 +117,8 @@ internal class TimeboxNavigationDependencies(
 )
 
 @Composable
-internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelect: (String) -> Unit, onEditShortcuts: () -> Unit) {
-    val select = androidx.compose.runtime.rememberUpdatedState(onSelect)
-    val editShortcuts = androidx.compose.runtime.rememberUpdatedState(onEditShortcuts)
-    NavHost(dependencies.navController, startDestination = AppRoutes.Home,
+internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, startDestination: String) {
+    NavHost(dependencies.navController, startDestination = startDestination,
         modifier = Modifier.clipToBounds(),
         enterTransition = {
             val options = dependencies.options.value
@@ -141,10 +139,6 @@ internal fun TimeboxNavHost(dependencies: TimeboxNavigationDependencies, onSelec
             }
         },
     ) {
-        composable(AppRoutes.Home) {
-            com.timebox.android.ui.components.NavigationDirectory(AppRoutes.Home,
-                { select.value(it) }, onEditShortcuts = { editShortcuts.value() })
-        }
         prototypeRoutes()
         dayRoute(dependencies)
         chronicleRoute(dependencies)

@@ -4,7 +4,6 @@ import java.time.LocalDate
 
 /** Stable route names shared by in-app navigation and future notification intents. */
 object AppRoutes {
-    const val Home = "home"
     const val DateArg = "date"
     const val TaskIdArg = "taskId"
     const val BlockIdArg = "blockId"

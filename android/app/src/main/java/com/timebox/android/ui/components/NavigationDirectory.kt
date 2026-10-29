@@ -1,6 +1,5 @@
 package com.timebox.android.ui.components
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -63,18 +62,17 @@ internal val navigationDestinations = listOf(
 @Composable
 internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Unit, onEditShortcuts: (() -> Unit)? = null) {
     val colors = TimeboxTheme.colors
-    val groupShape = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxSize().background(colors.bg).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Home" }
+    val shelfBackground = if (colors.isDark) colors.low else colors.surf
+    val selectedBackground = if (colors.isDark) colors.high else colors.highest
+    Column(Modifier.fillMaxSize().background(shelfBackground).pointerInput(Unit) { detectTapGestures { } }.semantics { paneTitle = "Navigation shelf" }
         .statusBarsPadding().navigationBarsPadding()) {
-        Text("Home", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp).semantics { heading() },
-            style = TimeboxTheme.type.display, color = colors.on)
-        Hairline()
+        Text("Navigation", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() },
+            style = TimeboxTheme.type.screenTitle, color = colors.on)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
-            .padding(top = 20.dp, bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            .padding(top = 12.dp, bottom = LocalNavigationDockInset.current + 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             navigationDestinations.groupBy { it.group }.forEach { (group, destinations) ->
-                Column(Modifier.fillMaxWidth().clip(groupShape).background(colors.low)
-                    .border(1.dp, colors.hairline, groupShape).padding(8.dp)) {
-                    Text(group.uppercase(Locale.ROOT), Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
+                Column(Modifier.fillMaxWidth()) {
+                    Text(group.uppercase(Locale.ROOT), Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
                         .semantics { heading() }, style = TimeboxTheme.type.laneLabel.copy(fontSize = 11.sp), color = colors.onVariant)
                     if (group == "Preferences" && onEditShortcuts != null) {
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
@@ -86,26 +84,16 @@ internal fun NavigationDirectory(currentRoute: String, onSelect: (String) -> Uni
                             Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = colors.onVariant)
                         }
                     }
-                    if (group == "Preferences" && onEditShortcuts != null) Hairline(Modifier.padding(horizontal = 12.dp))
-                    destinations.forEachIndexed { index, destination ->
+                    destinations.forEach { destination ->
                         val current = currentRoute == destination.route
-                        if (index > 0 && !current && currentRoute != destinations[index - 1].route) {
-                            Hairline(Modifier.padding(horizontal = 12.dp))
-                        }
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                            .background(if (current) colors.high else Color.Transparent)
+                            .background(if (current) selectedBackground else Color.Transparent)
                             .semantics { selected = current }
                             .clickable(onClickLabel = "Open ${destination.label}") { onSelect(destination.route) }
                             .heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(destination.icon, null, Modifier.size(24.dp), tint = colors.onVariant)
                             Text(destination.label, Modifier.weight(1f).padding(start = 16.dp, end = 8.dp),
                                 style = TimeboxTheme.type.body, color = colors.on)
-                            if (current) {
-                                Text("Current", Modifier.clip(RoundedCornerShape(50)).background(colors.highest)
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                                    style = TimeboxTheme.type.bodySmall, color = colors.on)
-                                Spacer(Modifier.width(8.dp))
-                            }
                             Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp), tint = colors.onVariant)
                         }
                     }

@@ -110,6 +110,10 @@ class TimeboxRepository private constructor(
 
     val dailyReminders: Flow<DailyReminderSettings> = preferences?.dailyReminders ?: flowOf(DailyReminderSettings())
 
+    val lastMainDestination: Flow<String?> = preferences?.lastMainDestination ?: flowOf(null)
+
+    suspend fun setLastMainDestination(route: String) { preferences?.setLastMainDestination(route) }
+
     val navigationShortcuts: Flow<List<String>?> = preferences?.navigationShortcuts ?: flowOf(null)
 
     suspend fun setNavigationShortcuts(routes: List<String>) = checkNotNull(preferences).setNavigationShortcuts(routes)

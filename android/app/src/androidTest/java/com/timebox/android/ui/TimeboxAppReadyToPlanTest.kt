@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.click
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.test.core.app.ApplicationProvider
@@ -59,62 +60,57 @@ class TimeboxAppReadyToPlanTest {
     private val readinessScopes = mutableListOf<CoroutineScope>()
 
     @Test
-    fun launchesOnHomeAndHeaderArrowReturnsHome() {
-        setAppContent(ControllableTimeboxApi(), openDay = false)
-        compose.onNodeWithText("Home").assertIsDisplayed()
-        compose.onNodeWithText("Navigate").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Back").assertDoesNotExist()
-        navigate("Day")
+    fun launchesOnDayAndSidebarButtonOpensShelf() {
+        setAppContent(ControllableTimeboxApi())
         compose.onNodeWithTag("day-pager").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithText("Home").assertIsDisplayed()
-        navigate("Day")
+        compose.onNodeWithText("Navigation").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
+        compose.onNodeWithText("Navigation").assertIsDisplayed()
+        compose.onNodeWithTag("shortcut-strip").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close navigation shelf").performClick()
         compose.onNodeWithTag("day-pager").assertIsDisplayed()
     }
 
     @Test
-    fun homeRestoresSelectedDayAfterHeaderAndSystemBack() {
+    fun shelfSwipeAndSystemBackPreserveSelectedDay() {
         setAppContent(ControllableTimeboxApi())
         compose.onNodeWithContentDescription("Monday, September 7, 2026").performClick()
-        compose.onNodeWithContentDescription("Back").performClick()
-        navigate("Day")
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
+        compose.onNodeWithTag("navigation-shelf").performTouchInput { swipeLeft() }
         compose.onNodeWithContentDescription("Selected date, Monday, September 7, 2026").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
         androidx.test.espresso.Espresso.pressBack()
-        compose.onNodeWithText("Home").assertIsDisplayed()
-        navigate("Day")
         compose.onNodeWithContentDescription("Selected date, Monday, September 7, 2026").assertIsDisplayed()
     }
 
     @Test
-    fun homeArrowPreservesCalendarMonthAndContextualReturn() {
+    fun shelfPreservesCalendarMonthAndContextualReturn() {
         setAppContent(ControllableTimeboxApi())
         navigate("Calendar")
         compose.onNodeWithContentDescription("Previous month").performClick()
         compose.onNodeWithContentDescription("2026-08-21, no time recorded").performClick()
-        compose.onNodeWithContentDescription("Back").performClick()
+        androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithText("August 2026").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithText("Home").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
         navigate("Calendar")
         compose.onNodeWithText("August 2026").assertIsDisplayed()
     }
 
     @Test
-    fun addShortcutOpensEditorDirectlyAndCancelReturnsToDay() {
+    fun shelfShortcutEditorCancelReturnsToDay() {
         setAppContent(ControllableTimeboxApi())
-        compose.onNodeWithText("Add shortcut").performScrollTo().performClick()
-        compose.onNodeWithText("Edit shortcuts").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
+        compose.onNodeWithText("Edit shortcuts").performScrollTo().performClick()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithTag("day-pager").assertIsDisplayed()
-        compose.onNodeWithText("Add shortcut").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Close navigation").assertDoesNotExist()
+        compose.onNodeWithTag("shortcut-strip").assertIsDisplayed()
     }
 
     @Test
     fun dayContentExtendsBehindFloatingNavigation() {
         setAppContent(ControllableTimeboxApi())
         val day = compose.onNodeWithTag("day-pager").getUnclippedBoundsInRoot()
-        val navigation = compose.onNodeWithText("Add shortcut").getUnclippedBoundsInRoot()
+        val navigation = compose.onNodeWithTag("shortcut-strip").getUnclippedBoundsInRoot()
         assertTrue("Day must extend below the floating navigation", day.bottom > navigation.bottom)
     }
 
@@ -155,13 +151,13 @@ class TimeboxAppReadyToPlanTest {
         }
         navigate("Conversation")
         compose.onNodeWithContentDescription("Message Assistant").assertIsDisplayed()
-        compose.onNodeWithText("Add shortcut").assertIsDisplayed()
+        compose.onNodeWithTag("shortcut-strip").assertIsDisplayed()
         compose.runOnIdle { imeVisible.value = true }
-        compose.onNodeWithText("Add shortcut").assertDoesNotExist()
+        compose.onNodeWithTag("shortcut-strip").assertDoesNotExist()
         compose.onNodeWithContentDescription("Send").assertIsDisplayed()
         compose.runOnIdle { imeVisible.value = false }
         navigate("Day")
-        compose.onNodeWithText("Add shortcut").assertIsDisplayed()
+        compose.onNodeWithTag("shortcut-strip").assertIsDisplayed()
 
     }
 
@@ -197,7 +193,7 @@ class TimeboxAppReadyToPlanTest {
         }
 
         compose.waitUntil(15_000) {
-            compose.onAllNodesWithText("Add shortcut").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithTag("shortcut-strip").fetchSemanticsNodes().isNotEmpty()
         }
         navigate("Battle Plan")
         compose.waitUntil(5_000) {
@@ -259,7 +255,7 @@ class TimeboxAppReadyToPlanTest {
             .performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("day-lane-planned").performTouchInput { click(center) }
         compose.onNodeWithContentDescription("Planning draft App projection Task").assertExists()
-        compose.onNodeWithText("Add shortcut").assertDoesNotExist()
+        compose.onNodeWithTag("shortcut-strip").assertDoesNotExist()
 
         navigate("Battle Plan")
         compose.onNodeWithContentDescription("Remove App projection Task from Ready to Plan").performClick()
@@ -426,41 +422,44 @@ class TimeboxAppReadyToPlanTest {
     private fun navigate(label: String) {
         val onDay = compose.onAllNodesWithTag("planning-mode-action").fetchSemanticsNodes().isNotEmpty()
         if (label == "Day" && onDay) return
-        if (compose.onAllNodesWithText("Add shortcut").fetchSemanticsNodes().isEmpty() && onDay) {
+        if (compose.onAllNodesWithTag("shortcut-strip").fetchSemanticsNodes().isEmpty() && onDay) {
             // The redesign requires leaving the planning editor before navigating.
             resumePlanning = true
             androidx.test.espresso.Espresso.pressBack()
         }
-        while (compose.onAllNodesWithText("Home").fetchSemanticsNodes().isEmpty()) {
-            compose.onNodeWithContentDescription("Back").performClick()
+        if (compose.onAllNodesWithText("Navigation").fetchSemanticsNodes().isEmpty()) {
+            compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("Open navigation shelf").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Open navigation shelf").performClick()
         }
         compose.onAllNodesWithText(label).onFirst().performScrollTo().performClick()
         if (label == "Day" && resumePlanning) compose.onNodeWithTag("planning-mode-action").performClick()
     }
 
     @Test
-    fun homeRestoresConversationDraft() {
+    fun shelfRestoresConversationDraft() {
         setAppContent(ControllableTimeboxApi())
         navigate("Conversation")
         compose.onNodeWithContentDescription("Message Assistant").performTextReplacement("Keep this draft")
-        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
         navigate("Conversation")
         compose.onNodeWithText("Keep this draft").assertIsDisplayed()
         navigate("Battle Plan")
         navigate("Conversation")
         compose.onNodeWithText("Keep this draft").assertIsDisplayed()
         compose.onNodeWithText("Review").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
         androidx.test.espresso.Espresso.pressBack()
         navigate("Conversation")
         compose.onNodeWithText("Keep this draft").assertIsDisplayed()
     }
 
     @Test
-    fun topLevelSystemBackReturnsHomeAndReopensDestination() {
+    fun systemBackClosesShelfAndKeepsDestination() {
         setAppContent(ControllableTimeboxApi())
         navigate("Battle Plan")
+        compose.onNodeWithContentDescription("Open navigation shelf").performClick()
         androidx.test.espresso.Espresso.pressBack()
-        compose.onNodeWithText("Home").assertIsDisplayed()
+        compose.onNodeWithText("Navigation").assertDoesNotExist()
         navigate("Battle Plan")
         compose.onAllNodesWithText("Battle Plan").onFirst().assertIsDisplayed()
     }
@@ -490,11 +489,11 @@ class TimeboxAppReadyToPlanTest {
         setAppContent(ControllableTimeboxApi())
         navigate("Battle Plan")
         compose.onNodeWithText("App projection Task").performClick()
-        compose.onNodeWithText("Add shortcut").assertDoesNotExist()
+        compose.onNodeWithTag("shortcut-strip").assertDoesNotExist()
         androidx.test.espresso.Espresso.pressBack()
         compose.onAllNodesWithText("Battle Plan").onFirst().assertIsDisplayed()
         compose.onNodeWithText("App projection Task").assertIsDisplayed()
-        compose.onNodeWithText("Add shortcut").assertIsDisplayed()
+        compose.onNodeWithTag("shortcut-strip").assertIsDisplayed()
     }
 
     private fun setAppContent(transport: ControllableTimeboxApi, openDay: Boolean = true) {
@@ -514,7 +513,7 @@ class TimeboxAppReadyToPlanTest {
             )
         }
         compose.waitUntil(15_000) {
-            compose.onAllNodesWithText("Add shortcut").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithTag("shortcut-strip").fetchSemanticsNodes().isNotEmpty()
         }
         if (openDay) navigate("Day")
     }

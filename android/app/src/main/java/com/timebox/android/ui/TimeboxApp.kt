@@ -1,7 +1,6 @@
 package com.timebox.android.ui
 
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.timebox.android.ui.components.LocalNavigationBlockers
 import com.timebox.android.ui.components.LocalNavigationDockInset
@@ -47,7 +46,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.timebox.android.ui.components.NavigationShelf
+import com.timebox.android.ui.components.LocalOpenNavigationShelf
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.produceState
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.timebox.android.TimeboxApplication
@@ -88,6 +90,12 @@ fun TimeboxApp(
     readinessCoordinator: ReadyToPlanCoordinator,
     imeVisibleOverride: Boolean? = null,
 ) {
+    // Read once before creating the graph; subsequent selections must not change its start.
+    val launchRoute by produceState<String?>(null, repository) {
+        val saved = repository.lastMainDestination.first()
+        value = saved?.takeIf { candidate -> navigationDestinations.any { it.route == candidate } } ?: AppRoutes.DayPattern
+    }
+    val initialRoute = launchRoute ?: return
     val application = LocalContext.current.applicationContext as TimeboxApplication
     val activityRepository = application.activityRepository
     val undoLifecycle = application.undoLifecycle
@@ -141,7 +149,13 @@ fun TimeboxApp(
     val recurringState by recurringViewModel.state.collectAsState()
     val recurringEditorState by recurringEditorViewModel.state.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val route = backStackEntry?.destination?.route ?: AppRoutes.Home
+    val route = backStackEntry?.destination?.route ?: initialRoute
+    LaunchedEffect(route) {
+        if (navigationDestinations.any { it.route == route }) repository.setLastMainDestination(route)
+    }
+    val startDestination = remember(initialRoute) {
+        if (initialRoute == AppRoutes.DayPattern) AppRoutes.day(dayState.date) else initialRoute
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     var appResumed by remember(lifecycleOwner) {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
@@ -316,6 +330,7 @@ fun TimeboxApp(
     }
 
     val navigationBlockers = remember { mutableStateOf(0) }
+    var shelfOpen by remember { mutableStateOf(false) }
     var shortcutEditorOpen by rememberSaveable { mutableStateOf(false) }
     val shortcuts by remember(repository) { repository.navigationShortcuts.map(::navigationShortcutRoutes) }.collectAsState(initial = null)
     var navigationHeight by remember { mutableStateOf(0.dp) }
@@ -325,26 +340,22 @@ fun TimeboxApp(
         if (shortcutSlide?.to != route) shortcutSlide = null
     }
     fun selectDestination(target: String, fromShortcut: Boolean = false) {
+        shelfOpen = false
         shortcutSlide = if (fromShortcut) shortcutSlide(shortcuts.orEmpty(), route, target) else null
         if (target == route) return
         // Discard contextual drill-ins before saving a directory destination. Otherwise
         // restoring its stack would reopen a different destination above it.
         while (navController.previousBackStackEntry != null &&
-            navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>("directoryRoot") != true &&
-            navController.previousBackStackEntry?.destination?.route != AppRoutes.Home) {
+            navController.currentBackStackEntry?.savedStateHandle?.get<Boolean>("directoryRoot") != true) {
             if (!navController.popBackStack()) break
         }
-        if (target == AppRoutes.Home) {
-            navController.popBackStack(AppRoutes.Home, inclusive = false, saveState = true)
-        } else {
-            val destination = if (target == AppRoutes.DayPattern) AppRoutes.day(dayState.date) else target
-            navController.navigate(destination) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
-            }
-            navController.currentBackStackEntry?.savedStateHandle?.set("directoryRoot", true)
+        val destination = if (target == AppRoutes.DayPattern) AppRoutes.day(dayState.date) else target
+        navController.navigate(destination) {
+            popUpTo(navController.graph.id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
+        navController.currentBackStackEntry?.savedStateHandle?.set("directoryRoot", true)
     }
     val colors = TimeboxTheme.colors
     val isImeVisible = imeVisibleOverride ?: WindowInsets.isImeVisible
@@ -427,28 +438,38 @@ fun TimeboxApp(
             (route == AppRoutes.DayPattern && (dayState.sheetOpen || dayState.isPlanningMode))
         val showNavigation = !focused && navigationDestinations.any { it.route == route } &&
             shouldShowBottomNavigation(editing, isImeVisible, route == AppRoutes.TaskDetailPattern)
-        val showDock = showNavigation && route != AppRoutes.Settings && shortcuts?.isNotEmpty() == true
+        val dockAvailable = showNavigation && route != AppRoutes.Settings && shortcuts?.isNotEmpty() == true
+        val showDock = dockAvailable && !shelfOpen
         val feedbackBottom = if (showDock) navigationHeight + 12.dp else 24.dp
-        if (!focused) Box(
-            modifier = Modifier.fillMaxSize().imePadding().then(if (shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
+        LaunchedEffect(showNavigation) { if (!showNavigation) shelfOpen = false }
+        if (!focused) NavigationShelf(
+            open = shelfOpen && !shortcutEditorOpen,
+            onClose = { shelfOpen = false },
+            currentRoute = route,
+            onSelect = { selectDestination(it) },
+            onEditShortcuts = { shelfOpen = false; shortcutEditorOpen = true },
+            reducedMotion = reducedMotion,
         ) {
-            CompositionLocalProvider(
-                LocalNavigationDockInset provides if (showDock) navigationHeight else 0.dp,
-                // Home has its own header without ScreenBackButton. Keep this callback
-                // available while the outgoing destination fades away above Home.
-                com.timebox.android.ui.components.LocalScreenBack provides if (showNavigation || route == AppRoutes.Home) ({
-                    if (navController.previousBackStackEntry?.destination?.route == AppRoutes.Home) selectDestination(AppRoutes.Home)
-                    else navController.popBackStack()
-                    Unit
-                }) else null,
+            Box(
+                modifier = Modifier.fillMaxSize().imePadding().then(if (shortcutEditorOpen) Modifier.clearAndSetSemantics {} else Modifier),
             ) {
-                TimeboxNavHost(navigation, { selectDestination(it) }, { shortcutEditorOpen = true })
-            }
+                CompositionLocalProvider(
+                    LocalNavigationDockInset provides if (dockAvailable) navigationHeight else 0.dp,
+                    LocalOpenNavigationShelf provides if (showNavigation) ({ shelfOpen = true }) else null,
+                    com.timebox.android.ui.components.LocalScreenBack provides if (showNavigation && navController.previousBackStackEntry != null) ({
+                        navController.popBackStack()
+                        Unit
+                    }) else null,
+                ) {
+                    TimeboxNavHost(navigation, startDestination)
+                }
 
-            if (showDock) shortcuts?.let { pins ->
-                NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) },
-                    Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = with(density) { it.height.toDp() } },
-                    resetScroll = shortcutEditorOpen)
+                if (showDock) shortcuts?.let { pins ->
+                    NavigationDock(pins, route, { selectDestination(it, fromShortcut = true) },
+                        Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = with(density) { it.height.toDp() } },
+                        resetScroll = shortcutEditorOpen)
+                }
+
             }
 
         }
@@ -482,12 +503,6 @@ fun TimeboxApp(
         }
 
         if (focused) FocusMode(onTaskChanged = { dayViewModel.refreshAfterTaskCompletion(); battlePlanViewModel.refreshAfterTaskCompletion() })
-        // Direct destinations return Home; contextual links keep their source.
-        BackHandler(enabled = showNavigation && route != AppRoutes.Home &&
-            navigationDestinations.any { it.route == route } &&
-            navController.previousBackStackEntry?.destination?.route == AppRoutes.Home) {
-            selectDestination(AppRoutes.Home)
-        }
         if (shortcutEditorOpen && !focused) shortcuts?.let { pins ->
             NavigationShortcutEditor(pins, onCancel = { shortcutEditorOpen = false }, onSave = { updated ->
                 repository.setNavigationShortcuts(updated)

@@ -79,6 +79,7 @@ class AppPreferences(private val context: Context) {
 
 
     private object Keys {
+        val lastMainDestination = stringPreferencesKey("last_main_destination")
         val navigationShortcuts = stringPreferencesKey("navigation_shortcuts")
         val baseUrl = stringPreferencesKey("base_url")
         val apiKey = stringPreferencesKey("api_key")
@@ -120,6 +121,13 @@ class AppPreferences(private val context: Context) {
             importance = prefs[Keys.battlePlanImportance].toPreferenceSet(),
             taskTypes = prefs[Keys.battlePlanTaskTypes].toPreferenceSet(),
         )
+    }
+
+    /** Last main screen only; transient screen state is not persisted here. */
+    val lastMainDestination: Flow<String?> = context.dataStore.data.map { it[Keys.lastMainDestination] }
+
+    suspend fun setLastMainDestination(route: String) {
+        context.dataStore.edit { it[Keys.lastMainDestination] = route }
     }
 
     /** Null means unconfigured; an empty list is an intentional choice. Order is significant. */

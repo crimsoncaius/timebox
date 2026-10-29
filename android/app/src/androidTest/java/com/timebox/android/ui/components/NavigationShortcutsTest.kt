@@ -29,6 +29,18 @@ import java.io.IOException
 class NavigationShortcutsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun lastMainDestinationIsDeviceLocalAndSurvivesNewPreferencesInstance() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = AppPreferences(context)
+        val previous = preferences.lastMainDestination.first()
+        try {
+            preferences.setLastMainDestination(AppRoutes.Trends)
+            assertEquals(AppRoutes.Trends, AppPreferences(context).lastMainDestination.first())
+        } finally {
+            preferences.setLastMainDestination(previous ?: AppRoutes.DayPattern)
+        }
+    }
+
     @Test fun islandFitsItsContentsStaysCenteredAndScrollsWhenFull() {
         val pins = mutableStateOf(listOf(AppRoutes.DayPattern))
         compose.setContent { TimeboxTheme {
@@ -232,7 +244,7 @@ class NavigationShortcutsTest {
     @Test fun homeGroupsShortcutEditorWithPreferences() {
         var opened = false
         compose.setContent { TimeboxTheme {
-            NavigationDirectory(AppRoutes.Home, {}, onEditShortcuts = { opened = true })
+            NavigationDirectory(AppRoutes.DayPattern, {}, onEditShortcuts = { opened = true })
         } }
         compose.onNodeWithText("Edit shortcuts").performScrollTo()
         val preferences = compose.onNodeWithText("PREFERENCES").getUnclippedBoundsInRoot()

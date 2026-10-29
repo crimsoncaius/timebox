@@ -1,5 +1,13 @@
 package com.timebox.android.ui.components
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,15 +72,28 @@ fun TimeboxTopBar(
 
 internal val LocalScreenBack = androidx.compose.runtime.compositionLocalOf<(() -> Unit)?> { null }
 
+internal val LocalOpenNavigationShelf = androidx.compose.runtime.compositionLocalOf<(() -> Unit)?> { null }
+
 @Composable
 internal fun ScreenBackButton() {
-    LocalScreenBack.current?.let { onBack ->
+    val openShelf = LocalOpenNavigationShelf.current
+    (openShelf ?: LocalScreenBack.current)?.let { onBack ->
         androidx.compose.material3.IconButton(onClick = onBack) {
-            androidx.compose.material3.Icon(
-                androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                contentDescription = "Back",
-                tint = TimeboxTheme.colors.on,
-            )
+            if (openShelf != null) {
+                val color = TimeboxTheme.colors.on
+                Canvas(Modifier.size(24.dp).semantics { contentDescription = "Open navigation shelf" }) {
+                    val unit = size.width / 24f
+                    drawRoundRect(color, Offset(2 * unit, 3 * unit), Size(20 * unit, 18 * unit),
+                        CornerRadius(3 * unit), style = Stroke(2 * unit))
+                    drawRoundRect(color, Offset(5 * unit, 6 * unit), Size(4 * unit, 12 * unit), CornerRadius(unit))
+                }
+            } else {
+                androidx.compose.material3.Icon(
+                    androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                    contentDescription = "Back",
+                    tint = TimeboxTheme.colors.on,
+                )
+            }
         }
     }
 }

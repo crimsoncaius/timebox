@@ -31,7 +31,7 @@ class ChromeTest {
         compose.setContent {
             TimeboxTheme {
                 Box(Modifier.width(320.dp)) {
-                    NavigationDirectory(AppRoutes.Home, { selected = it })
+                    NavigationDirectory(AppRoutes.DayPattern, { selected = it })
                 }
             }
         }
@@ -40,7 +40,7 @@ class ChromeTest {
             compose.runOnIdle { assertEquals(destination.route, selected) }
         }
         compose.onNodeWithText("Pinned").assertDoesNotExist()
-        compose.onNodeWithText("Home").assertIsDisplayed()
+        compose.onNodeWithText("Navigation").assertIsDisplayed()
         compose.onNodeWithContentDescription("Close navigation").assertDoesNotExist()
     }
 }

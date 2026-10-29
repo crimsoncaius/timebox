@@ -282,9 +282,9 @@ _Avoid_: Live task list, task proposal, task receipt
 
 ### Surfaces
 
-**Home**:
-The Android application's starting surface and the central place for opening its other screens.
-_Avoid_: Navigate, Day
+**Navigation Shelf**:
+The Android application's menu for opening its main screens, accessible beside the current screen.
+_Avoid_: Home, Navigate, Day
 
 **Shortcut**:
 A user-selected entry that opens a screen from the Shortcut Bar. Removing a Shortcut does not remove the screen or its data.

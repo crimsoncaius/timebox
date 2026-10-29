@@ -37,7 +37,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -219,10 +218,7 @@ internal fun ProjectNavigationList(
                     ) {
                         if (selected) {
                             Box(Modifier.size(10.dp).clip(TimeboxShapes.chip).background(projectColor))
-                            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                Text("CURRENT PROJECT", style = TimeboxTheme.type.bodySmall, color = projectColor, fontWeight = FontWeight.Bold)
-                                Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
+                            Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         } else {
                             Icon(Icons.Outlined.Folder, null, tint = colors.onVariant, modifier = Modifier.size(18.dp))
                             Text(project.name, style = TimeboxTheme.type.label, color = colors.on, maxLines = 1, overflow = TextOverflow.Ellipsis)
