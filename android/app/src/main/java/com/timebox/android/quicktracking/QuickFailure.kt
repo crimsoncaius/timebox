@@ -2,15 +2,19 @@ package com.timebox.android.quicktracking
 
 import com.timebox.android.data.QuickInterpretation
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 
 @Serializable data class QuickFailureEvent(val at: String, val command: String? = null, val reason: String)
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable data class QuickFailure(
-    val id: String = UUID.randomUUID().toString(), val endpoint: String, val deviceId: String,
-    val occurredAt: String = Instant.now().toString(), val command: String? = null, val source: String = "app",
+    // Runtime defaults create a new attempt; persistence must never compare or regenerate them.
+    @EncodeDefault val id: String = UUID.randomUUID().toString(), val endpoint: String, val deviceId: String,
+    @EncodeDefault val occurredAt: String = Instant.now().toString(), val command: String? = null, val source: String = "app",
     val revision: Int = 1, val uploadedRevision: Int = 0, val status: String = "uncertain",
     val reason: String = "Waiting to check recording", val stage: String = "interpretation", val retryable: Boolean = false,
     val requestIds: List<String> = emptyList(), val history: List<QuickFailureEvent> = emptyList(),
