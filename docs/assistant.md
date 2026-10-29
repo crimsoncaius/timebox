@@ -12,6 +12,38 @@ deadline. Only the latest 20 explicitly acknowledged completed exchanges enter l
 Android acknowledges the previous completed response before sending the next
 message. A lost acknowledgement can be repeated without regenerating an answer.
 
+## Quick Tracking failure recovery
+
+Android retains each failed command (or a capture failure with no transcript),
+its readable reason, original time reference, request identities and retry history.
+Assistant Review shows these under **Needs attention** on Android and web;
+dismissed and resolved attempts remain in **History**. Only the originating
+installation on its original server can retry. Retry reconciles local operations
+and server receipts, then previews the interpreted activity and original time.
+Confirmation rechecks activity state. Commands older than fifteen minutes or
+from an earlier Reporting Day require correction in Day. Nothing executes merely
+because the connection returns. See [ADR 0022](adr/0022-quick-tracking-failure-recovery.md).
+
+`quick_tracking_failures` stores shared product history without expiry.
+`quick_tracking_diagnostics` stores technical events keyed by attempt and request
+IDs: exception class, stack frames without messages or locals, HTTP/speech error
+codes, app version and Android version. It contains no audio, credentials or
+unrelated activity. Diagnostic events expire after 30 days; an hourly backend
+cleanup and ingestion cleanup remove expired events, including delayed uploads.
+The phone also removes expired queued diagnostics. Original command text and
+readable reasons remain product history, separate from these technical details.
+
+Android uploads through authenticated `/assistant/quick-failures` and
+`/assistant/quick-failures/{id}/diagnostics`, using a durable queue and a
+network-constrained WorkManager job. Upload failure never blocks recording.
+`GET /assistant/quick-failures?history=false` lists attention entries; `history=true`
+lists resolved/dismissed entries. `POST /assistant/quick-failures/{id}/dismiss`
+is independent of client report revisions, so a delayed upload cannot undo it.
+Backend interpretation failures are captured before any activity mutation.
+This is Quick Tracking diagnostics, not general crash reporting.
+
+Deploy migration `045_quick_failures` and the backend before updated clients.
+
 ## Plan cards and compatibility
 
 Conversation creation accepts `capabilities: ["plan_card_v1"]` and echoes the

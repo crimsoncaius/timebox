@@ -67,6 +67,24 @@ class AssistantQueryCursor(Base):
     offset: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class QuickTrackingFailure(Base):
+    __tablename__ = "quick_tracking_failures"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    dismissed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class QuickTrackingDiagnostic(Base):
+    __tablename__ = "quick_tracking_diagnostics"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
 class AssistantTaskProposal(Base):
     __tablename__ = "assistant_task_proposals"
 

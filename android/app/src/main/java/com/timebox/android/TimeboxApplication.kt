@@ -120,6 +120,7 @@ class TimeboxApplication : Application() {
         readinessCoordinator = createReadyToPlanCoordinator(repository, applicationScope)
         readinessCoordinator.taskRecoveryBlocked = { taskJournal.blocked(assistantServerIdentity, listOf(it)) }
         taskCompletion = TaskCompletion(RepositoryTaskCompletionTransport(repository))
+        quickTracking.refresh()
         val connectivity = getSystemService(android.net.ConnectivityManager::class.java)
         fun publishConnection() { assistantScope.launch { taskRecovery.connectionChanged(connectivity.activeNetwork != null) } }
         connectivity.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {

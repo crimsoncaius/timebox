@@ -21,8 +21,10 @@ import kotlin.coroutines.resumeWithException
 data class AssistantEvent(val kind: String, val data: JsonObject)
 class AssistantEndedException(message: String) : IOException(message)
 class ReviewRejectedException(val status: Int, message: String) : IOException(message)
+class AssistantHttpException(val statusCode: Int, message: String) : IOException(message)
 
 interface AssistantTransport {
+    suspend fun interpretQuick(body: JsonObject): com.timebox.android.data.QuickInterpretation = error("Quick Tracking unavailable")
     suspend fun reviewRequest(path: String, body: JsonObject? = null): JsonObject = error("Review unavailable")
     fun stream(conversation: String, run: String, message: String, reviewLater: Boolean): Flow<AssistantEvent> = stream(conversation, run, message)
     val serverIdentity: String get() = "test"
@@ -56,7 +58,7 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     private val taskClient = client.newBuilder().callTimeout(30, TimeUnit.SECONDS).build()
     private val quickClient = client.newBuilder().readTimeout(115, TimeUnit.SECONDS).callTimeout(120, TimeUnit.SECONDS).build()
 
-    suspend fun interpretQuick(body: JsonObject): com.timebox.android.data.QuickInterpretation = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    override suspend fun interpretQuick(body: JsonObject): com.timebox.android.data.QuickInterpretation = kotlinx.coroutines.withContext(Dispatchers.IO) {
         execute(request("quick-tracking", body = body), quickClient).use {
             check(it)
             ApiFactory.json.decodeFromString<com.timebox.android.data.QuickInterpretation>(it.body!!.string())
@@ -76,7 +78,7 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (continuation.isActive) continuation.resumeWithException(IOException("Cannot reach Assistant. Check your connection."))
+                if (continuation.isActive) continuation.resumeWithException(IOException("Cannot reach Assistant. Check your connection.", e))
             }
             override fun onResponse(call: Call, response: Response) {
                 continuation.resume(response) { response.close() }
@@ -87,12 +89,16 @@ class HttpAssistantTransport(private val settings: AppSettings) : AssistantTrans
     private fun check(response: Response) {
         if (response.isSuccessful) return
         val detail = runCatching {
-            ApiFactory.json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject["detail"]?.jsonPrimitive?.content
+            when (val value = ApiFactory.json.parseToJsonElement(response.body?.string().orEmpty()).jsonObject["detail"]) {
+                is JsonPrimitive -> value.contentOrNull
+                is JsonObject -> value["message"]?.jsonPrimitive?.contentOrNull
+                else -> null
+            }
         }.getOrNull()
         if (response.code == 410 || (response.code == 409 && detail?.contains("20 exchanges") == true)) {
             throw AssistantEndedException(detail ?: "Conversation expired. Start a new conversation.")
         }
-        throw IOException(detail ?: when (response.code) {
+        throw AssistantHttpException(response.code, detail ?: when (response.code) {
             401, 403 -> "Check the Timebox API key in Settings."
             410 -> "Conversation expired. Start a new conversation."
             else -> "Assistant could not respond (${response.code}). Please retry."

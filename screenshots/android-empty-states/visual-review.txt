@@ -1,0 +1,119 @@
+ANDROID EMPTY-STATE VISUAL REVIEW — 29 OCTOBER 2026
+
+Scope: independent sub-agent judgement of the 37 captured states, excluding Day.
+This is a screenshot critique, not an interaction or accessibility certification.
+The current calm, editorial style is the baseline. Empty space itself is not a
+problem; disconnected hierarchy and unclear next steps are.
+
+TOP PRIORITY: BATTLE PLAN'S EMPTY STATES
+
+1. WEAK — Battle Plan tabs, Archive and Trash
+   Evidence: 01-battle-plan-open.png, 02-battle-plan-in-progress.png,
+   03-battle-plan-completed.png, 05-archive.png, 06-trash.png.
+   The muted one-line message sits far below the filters/tabs. It reads like a
+   leftover placeholder within a vacant canvas, rather than a designed state.
+   In the board views the New task button is another detached visual island.
+   Archive and Trash are even weaker: identical “Nothing here.” copy provides
+   neither a specific state title nor an explanation of what belongs there.
+   Direction: make a compact, consistently positioned title-and-explanation
+   group within the content area. Relate the creation action to the Open state;
+   explain In Progress/Completed instead of presenting creation as their answer.
+   Archive/Trash need specific reassurance, not a forced primary action.
+
+2. WEAK — Conversation before the first message
+   Evidence: 15-conversation.png.
+   Almost the whole screen is blank; the input's “What's on your mind?” is the
+   only guidance. Nothing in the empty content area explains what this particular
+   assistant helps with. The large New conversation control is visually prominent
+   even though the current conversation is already new.
+   Direction: one concise capability statement and two or three useful example
+   prompts, placed near the composer. Preserve the quiet canvas; avoid a large
+   illustration or generic welcome carousel.
+
+3. WEAK — Habits and its empty Add habit sheet
+   Evidence: 07-habits.png, 08-habits-no-candidates.png.
+   The empty weekday scaffold dominates the actual state message. “No habits
+   were active this week” is styled like a table footnote, followed by a strong
+   Add habit button. In the no-candidate case that button opens a sheet containing
+   only “Every active routine and checklist item is already a habit.” It looks
+   like a dead end and is misleading for the captured fresh account with none.
+   Direction: give the absence a clear heading; distinguish “no routines exist”
+   from “all eligible routines are already tracked.” The former should visibly
+   offer the prerequisite next step. Keep a historical empty week quieter than
+   the first-use state. This is partly a guidance issue, not only styling.
+
+4. WEAK — Task Type picker with an empty library
+   Evidence: 36-task-type-picker-empty.png.
+   The sheet shows “Unset” in the search field and again as its sole selectable
+   row. It does not visibly explain that no Task Types exist or that entering a
+   name can create one. The duplicate label makes the sheet feel unpopulated
+   rather than intentionally empty.
+   Direction: keep Unset as a legitimate choice, but give the field a real
+   search/create hint and add a short, separate empty-library explanation.
+   Preserve the concrete recovery row shown in 37-task-type-picker-no-match.png.
+
+5. NEEDS POLISH — Time Goals
+   Evidence: 12-time-goals.png.
+   The content is useful, but the information icon floats alone between the week
+   control and the text. Large intervening gaps split the date control, help,
+   explanation and action into separate pieces. The neutral filled Add Time Goal
+   button also reads quieter than equivalent blue add actions in this set.
+   Direction: put help next to the relevant heading; tighten the title, supporting
+   copy and action into one clear group. Review primary-action emphasis against
+   the established button semantics before changing its colour. Preserve the
+   explanation of how Actual Blocks supply progress.
+
+6. WEAK COMPONENT — Google Calendar with no available calendars
+   Evidence: 28-calendar-none.png; compare 29-calendar-unselected.png.
+   Within the production settings component, account status and sync metadata
+   lead; the actionable empty message is far below them. More seriously, “Select
+   a calendar below” appears when there are no calendars to select. A standalone
+   information icon and large gap further separate the explanation from recovery.
+   Direction: collapse the empty imported-list section to a compact state beside
+   its recovery action; show selection guidance only when choices exist. Keep
+   “no calendars available” distinct from “calendars available, none selected.”
+   These are fixture captures: the review title, scenario chooser and outer
+   fixture spacing are NOT findings about the shipped screen.
+
+7. NEEDS POLISH — Recurring Tasks, especially Paused and Ended
+   Evidence: 09-recurring-active.png, 10-recurring-paused.png,
+   11-recurring-ended.png.
+   The active empty card is reasonably clear. On Paused/Ended, the bright New
+   recurrence button remains the dominant element, although it does not explain
+   the selected empty collection. “0 series” and “No ... series” repeat the same
+   information, while the explanation about “lifecycle changes” is abstract.
+   Direction: retain the compact card pattern, reduce redundant count emphasis,
+   and explain the selected tab in concrete terms. Keep creation available as a
+   secondary route on inactive tabs rather than the visual answer to that state.
+
+STRONGER EXAMPLES TO PRESERVE
+
+- 18-task-types.png and 19-task-types-no-match.png: compact title/explanation
+  grouping next to the relevant input. The initial field hint could be clearer,
+  but the state itself has a useful structure.
+- 16-review-pending.png and 17-review-reviewed.png: restrained, specific copy
+  explains what will appear. These do not need decorative artwork or a forced
+  call to action simply because space remains below them.
+- 37-task-type-picker-no-match.png and 26-project-no-match.png: recovery is local
+  to the search context; the former provides a concrete creation action.
+- 13-trends.png and 22-goal-no-recorded-time.png: retain the genuine zero and
+  its range/period context. These are empty data within useful reporting views,
+  so a large first-use illustration would add little.
+
+OTHER OBSERVATIONS
+
+The Assistant result-card fixtures (30–35) have understandable boundaries and
+metadata hierarchy. Do not penalize their surrounding blank fixture shell as
+production UI. 32-assistant-both.png has awkward “No both Blocks” wording, a small
+copy issue rather than a weak visual composition. The empty shortcut preview
+(21) is appropriately embedded beside the controls that populate it.
+
+The shared improvement is a small family of empty-state treatments: first use,
+empty collection, no search results, and zero data. Reuse spacing and hierarchy;
+do not force identical copy, actions, icons or cards onto every case.
+
+Method: visual inspection and existing DESIGN.md context; Impeccable design
+principles informed judgement. Its deterministic source scan returned no
+findings; that does not validate these screenshot layouts. This is the requested
+single-reviewer assessment, not the full dual-assessment Impeccable audit.
+Questions skipped: this request asks for judgement and notes, not redesign.

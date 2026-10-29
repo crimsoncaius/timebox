@@ -1,5 +1,8 @@
 package com.timebox.android.ui.battleplan
 
+import com.timebox.android.ui.components.CenteredEmptyState
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Checklist
 import com.timebox.android.ui.components.LocalNavigationDockInset
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -540,6 +543,10 @@ private fun MobileKanbanBoard(
                     status = status,
                     tasks = tasks,
                     listState = laneListStates.getValue(status),
+                    onNewTask = { onShowComposer(true) },
+                    onViewOpen = { filterActions.selectStatus(TaskStatus.Open) },
+                    canCreate = !state.saving,
+                    hasFilters = state.urgencyFilter.isNotEmpty() || state.importanceFilter.isNotEmpty() || state.taskTypeFilter.isNotEmpty(),
                     taskCount = { target -> state.filteredTasks.count { it.status == target } },
                     serverNow = state.serverNow,
                     timezone = state.timezone,
@@ -582,7 +589,7 @@ private fun MobileKanbanBoard(
                     },
                 )
             }
-            PrimaryButton(
+            if (state.filteredTasks.any { it.status == battlePlanStatuses[pagerState.currentPage] }) PrimaryButton(
                 text = "New task",
                 onClick = { onShowComposer(true) },
                 enabled = !state.saving,
@@ -903,6 +910,10 @@ private fun MobileTaskLane(
     status: TaskStatus,
     tasks: List<BattleTask>,
     listState: LazyListState,
+    onNewTask: () -> Unit,
+    onViewOpen: () -> Unit,
+    canCreate: Boolean,
+    hasFilters: Boolean,
     taskCount: (TaskStatus) -> Int,
     serverNow: java.time.Instant,
     timezone: String,
@@ -1002,8 +1013,23 @@ private fun MobileTaskLane(
             }
         }
         if (visibleTasks.isEmpty() && insertionIndex == null) {
-            Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text("No ${status.label.lowercase()} tasks", color = TimeboxTheme.colors.onVariant)
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalNavigationDockInset.current)) {
+                CenteredEmptyState(
+                    icon = if (status == TaskStatus.Completed) Icons.Outlined.CheckCircle else Icons.Outlined.Checklist,
+                    title = if (hasFilters) "No matching ${status.label.lowercase()} tasks" else when (status) {
+                        TaskStatus.Open -> "No open tasks"
+                        TaskStatus.InProgress -> "Nothing in progress"
+                        else -> "No completed tasks yet"
+                    },
+                    description = if (hasFilters) "Try changing your filters to see more tasks." else when (status) {
+                        TaskStatus.Open -> "Add a task when you have something to work on. Your next steps will appear here."
+                        TaskStatus.InProgress -> "Tasks you start appear here, so you can keep track of what’s underway."
+                        else -> "Tasks you mark complete will appear here."
+                    },
+                ) {
+                    if (status == TaskStatus.Open) PrimaryButton("New task", onNewTask, enabled = canCreate)
+                    else PrimaryButton("View open tasks", onViewOpen)
+                }
             }
         }
     }
@@ -1467,7 +1493,15 @@ private fun UtilityTaskList(
             )
         }
         if (state.visibleTasks.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { Text("Nothing here.", color = TimeboxTheme.colors.onVariant) }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalNavigationDockInset.current)) {
+                val archived = state.collection == TaskCollection.Archived
+                CenteredEmptyState(
+                    icon = if (archived) Icons.Outlined.Archive else Icons.Outlined.Delete,
+                    title = if (archived) "No archived tasks" else "Trash is empty",
+                    description = if (archived) "Completed tasks you archive appear here. You can restore them to the board any time."
+                        else "Tasks you delete stay here for 30 days, so you have time to restore them.",
+                )
+            }
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(state.visibleTasks, key = { it.id }) { task ->

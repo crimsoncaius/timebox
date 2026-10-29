@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
-  vi.mocked(fetchJson).mockResolvedValue(page)
+  vi.mocked(fetchJson).mockImplementation(async path => String(path).includes('quick-failures') ? { items: [], next_before: null } : page)
 })
 it('sends conversation messages in confirmation mode and explains how to confirm tracking', async () => {
   const user = userEvent.setup()
@@ -43,7 +43,7 @@ it('marks only the inspected revision and exposes a stale batch without losing t
   await user.click(screen.getByRole('button', { name: 'Help: Review activity' }))
   expect(screen.getByText('Correct anything that doesn’t look right.')).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Close help: Review activity' }))
-  expect(screen.getByText('Already recorded.')).toBeVisible()
+  expect(screen.getByText('Check recorded activities and commands that need attention.')).toBeVisible()
   expect(screen.getByRole('checkbox', { name: 'Select Gym now' })).toBeChecked()
   vi.mocked(fetchJson).mockRejectedValueOnce(new Error('An activity changed. Refresh.'))
   await user.click(screen.getByRole('button', { name: 'Mark reviewed (1)' }))

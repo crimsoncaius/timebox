@@ -28,6 +28,7 @@ class QuickTrackingSpeech(private val context: Context, private val capture: Qui
     private val timeout = Runnable {
         release()
         status = "Speech recognition did not finish. Try again."
+        capture.captureFailed(status!!, source)
     }
 
     fun listen(source: String) {
@@ -35,6 +36,7 @@ class QuickTrackingSpeech(private val context: Context, private val capture: Qui
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             status = "Speech recognition is unavailable. Check your voice input settings."
             settings = Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
+            capture.captureFailed(status!!, source)
             return
         }
         this.source = source
@@ -63,9 +65,10 @@ class QuickTrackingSpeech(private val context: Context, private val capture: Qui
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 })
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             release()
             status = "Could not start the microphone. Try again."
+            capture.captureFailed(status!!, source, error)
         }
     }
 
@@ -76,7 +79,10 @@ class QuickTrackingSpeech(private val context: Context, private val capture: Qui
         // A recognizer that never calls back must not retain its connection indefinitely.
         handler.postDelayed(timeout, 15_000)
         try { recognizer?.stopListening() }
-        catch (_: Exception) { onError(SpeechRecognizer.ERROR_CLIENT) }
+        catch (error: Exception) {
+            release(); status = "Speech recognition could not finish. Try again."
+            capture.captureFailed(status!!, source, error)
+        }
     }
 
     fun cancel() {
@@ -109,12 +115,13 @@ class QuickTrackingSpeech(private val context: Context, private val capture: Qui
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required. Enable it in app settings."
             else -> "Speech recognition could not finish. Try again."
         }
+        capture.captureFailed(status!!, source, SpeechCaptureException(error))
     }
     override fun onResults(results: Bundle?) {
         if (!listening) return
         val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()
         release()
-        if (text.isNullOrEmpty()) { status = "No speech heard. Try again."; return }
+        if (text.isNullOrEmpty()) { status = "No speech heard. Try again."; capture.captureFailed(status!!, source); return }
         status = null
         capture.submit(text, source)
     }

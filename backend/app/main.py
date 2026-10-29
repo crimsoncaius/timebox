@@ -35,6 +35,7 @@ from app.services.activity_service import reporting_settings
 from app.services.assistant_storage import recover_interrupted
 from app.services.assistant_tracing import setup_tracing
 from app.services.day_service import validate_timezone
+from app.services.quick_tracking_failures import retention_loop
 
 
 @asynccontextmanager
@@ -47,9 +48,13 @@ async def lifespan(app: FastAPI):
     recover_interrupted()
     tracing = setup_tracing()
     calendar_poller = asyncio.create_task(google_calendar.poll())
+    diagnostic_retention = asyncio.create_task(retention_loop())
     try:
         yield
     finally:
+        diagnostic_retention.cancel()
+        with suppress(asyncio.CancelledError):
+            await diagnostic_retention
         calendar_poller.cancel()
         with suppress(asyncio.CancelledError):
             await calendar_poller

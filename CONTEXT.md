@@ -104,6 +104,10 @@ _Avoid_: Current Task, Activity catalog
 A spoken or typed request to record an activity immediately, without a separate confirmation. Its result can be checked and corrected in Assistant Review. An uninterpreted request is not recorded activity.
 _Avoid_: Tracking Proposal, scheduled activity
 
+**Failed Quick Tracking Attempt**:
+A Quick Tracking attempt known not to have recorded its requested activity, retaining the original command when captured and the reason it failed for inspection in Assistant Review. A speech capture failure may have no transcript; an uncertain recording outcome is not yet a confirmed failure.
+_Avoid_: Failed activity, Execution Receipt
+
 **Reporting Time Zone**:
 The shared time zone used to divide recorded activity between calendar days on all devices. Changing it changes daily attribution without changing elapsed time.
 _Avoid_: Device time zone
