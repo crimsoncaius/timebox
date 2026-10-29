@@ -1,0 +1,10 @@
+const keys=['A','B','C'], names={A:'Compact and inline',B:'Grouped panel',C:'Centered guidance'};
+let active=keys.includes(new URLSearchParams(location.search).get('variant'))?new URLSearchParams(location.search).get('variant'):'A';
+function setVariant(value,update=true){active=value;document.querySelectorAll('[data-variant]').forEach(b=>{const chosen=b.dataset.variant===value;b.classList.toggle('chosen',chosen);b.setAttribute('aria-pressed',chosen)});document.querySelectorAll('iframe[data-case]').forEach(f=>{f.src=`prototype/index.html?case=${f.dataset.case}&variant=${value}`});document.querySelectorAll('[data-preview]').forEach(a=>a.href=`prototype/index.html?case=${a.dataset.preview}&variant=${value}`);document.querySelectorAll('.variant-name').forEach(n=>n.textContent=`${value} · ${names[value]}`);document.querySelectorAll('.preview-status').forEach(n=>n.textContent='Initial empty state · no saved data');if(update){const url=new URL(location.href);url.searchParams.set('variant',value);history.replaceState(null,'',url)}}
+document.querySelectorAll('[data-variant]').forEach(b=>b.onclick=()=>setVariant(b.dataset.variant));
+document.querySelector('#previous').onclick=()=>setVariant(keys[(keys.indexOf(active)+2)%3]);
+document.querySelector('#next').onclick=()=>setVariant(keys[(keys.indexOf(active)+1)%3]);
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select,[contenteditable]'))return;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setVariant(keys[(keys.indexOf(active)+(e.key==='ArrowLeft'?2:1))%3])}});
+document.querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>{const f=document.querySelector(`iframe[data-case="${b.dataset.reset}"]`);f.src=`prototype/index.html?case=${b.dataset.reset}&variant=${active}`});
+window.addEventListener('message',e=>{const d=e.data;if(!d||d.type!=='empty-prototype-state')return;const f=document.querySelector(`iframe[data-case="${d.id}"]`);if(!f||e.source!==f.contentWindow)return;document.querySelector(`[data-status="${d.id}"]`).textContent=`${d.variant} · ${d.action} · no saved data`});
+setVariant(active,false);
