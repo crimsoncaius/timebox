@@ -45,7 +45,6 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
     var awaitingGoogle by remember { mutableStateOf(false) }
     var reloadVersion by remember { mutableIntStateOf(0) }
     var opened by remember(date) { mutableStateOf(false) }
-    var updatesOpen by remember(date) { mutableStateOf(false) }
     var selected by remember { mutableStateOf<List<String>?>(null) }
     var detail by remember { mutableStateOf<JsonObject?>(null) }
     var preview by remember { mutableStateOf<Pair<JsonObject, JsonObject>?>(null) }
@@ -136,8 +135,8 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
     val zone = current?.s("timezone") ?: "UTC"
     val occurrences = current?.objects("occurrences").orEmpty()
     val pending = occurrences.filter { it.s("status") == "pending" }
-    val updates = occurrences.filter { it.objects("updates").isNotEmpty() }
-    if (date != null && pending.isEmpty() && updates.isEmpty() && error == null && loadError == null && current?.s("error") == null) return
+    // Update history remains in the calendar data for a future surface outside Day.
+    if (date != null && pending.isEmpty() && error == null && loadError == null && current?.s("error") == null) return
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (date == null) {
             GoogleCalendarSettings(
@@ -157,13 +156,6 @@ fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
         if (date == null && occurrences.any { it.s("status") == "excluded" } && pending.isEmpty()) TextButton(onClick = { opened = !opened }) { Text(if (opened) "Hide meetings left out" else "Meetings left out") }
         if (opened) occurrences.filter { it.s("status") in listOf("pending", "excluded") }.forEach { occurrence ->
             TextButton(onClick = { detail = occurrence }) { Text("${occurrence.s("name")} · ${stamp(occurrence.s("start"), zone)} · ${if (occurrence.s("status") == "excluded") "Left out" else "Needs room"}") }
-        }
-        if (date != null && updates.isNotEmpty()) {
-            TextButton(onClick = { updatesOpen = !updatesOpen }) { Text("Calendar updates") }
-            if (updatesOpen) updates.forEach { occurrence ->
-                Text(occurrence.s("name").orEmpty(), style = TimeboxTheme.type.body)
-                occurrence.objects("updates").forEach { Text("${it.s("kind")} · ${stamp(it.s("at"), zone)}", style = TimeboxTheme.type.bodySmall) }
-            }
         }
     }
     detail?.let { occurrence -> CalendarDialog(onDismiss = { if (!busy) detail = null }) {
