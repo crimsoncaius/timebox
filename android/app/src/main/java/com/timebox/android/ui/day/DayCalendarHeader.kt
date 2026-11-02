@@ -129,42 +129,42 @@ internal fun DayCalendarHeader(
                 viewAction()
             }
         }
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
-                    },
+        if (showCalendar) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = dayTitleKicker(selectedDate, today),
-                    style = TimeboxTheme.type.bodySmall,
-                    color = if (selectedDate == today) colors.planned else colors.onVariant,
-                )
-                Text(
-                    text = dayTitle(selectedDate, today),
-                    style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
-                    color = colors.on,
+                Column(
+                    modifier = Modifier
+                        .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "Selected date, ${selectedDate.format(fullCalendarDateFormatter)}"
+                        },
+                ) {
+                    Text(
+                        text = dayTitleKicker(selectedDate, today),
+                        style = TimeboxTheme.type.bodySmall,
+                        color = if (selectedDate == today) colors.planned else colors.onVariant,
+                    )
+                    Text(
+                        text = dayTitle(selectedDate, today),
+                        style = TimeboxTheme.type.screenTitle.copy(fontSize = 23.sp, lineHeight = 27.sp),
+                        color = colors.on,
+                    )
+                }
+                CurrentRangeAction(
+                    state = when {
+                        today == null -> CurrentRangeState.Resolving
+                        selectedDate == today -> CurrentRangeState.Current
+                        else -> CurrentRangeState.Navigate
+                    },
+                    currentLabel = "Today",
+                    navigateLabel = "Go to today",
+                    onClick = { today?.let(onNavigateToday) },
                 )
             }
-            CurrentRangeAction(
-                state = when {
-                    today == null -> CurrentRangeState.Resolving
-                    selectedDate == today -> CurrentRangeState.Current
-                    else -> CurrentRangeState.Navigate
-                },
-                currentLabel = "Today",
-                navigateLabel = "Go to today",
-                onClick = { today?.let(onNavigateToday) },
-            )
-        }
 
-        if (showCalendar) {
             Spacer(Modifier.height(4.dp))
             WeekRow(
                 selectedDate = selectedDate,
