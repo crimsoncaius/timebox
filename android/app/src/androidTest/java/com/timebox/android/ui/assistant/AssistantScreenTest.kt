@@ -86,7 +86,7 @@ class AssistantScreenTest {
             compose.onNodeWithText("View saved result").performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription("Help: Saved task results").performScrollTo().performClick()
             compose.onNodeWithText("Task results stay here when you start a new conversation.").assertIsDisplayed()
-            compose.onNodeWithText("Close help").performClick()
+            com.timebox.android.ui.components.dismissContextualHelp(compose)
             compose.onNodeWithText("Dismiss saved result").performScrollTo().performClick()
             compose.waitUntil(5000) { recovery.state.value.items.isEmpty() }
             compose.runOnIdle { journal.persist(record); recovery.foreground() }

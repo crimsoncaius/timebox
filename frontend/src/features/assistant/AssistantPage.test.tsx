@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -42,7 +42,7 @@ it('marks only the inspected revision and exposes a stale batch without losing t
   expect(screen.queryByText('Correct anything that doesn’t look right.')).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Help: Review activity' }))
   expect(screen.getByText('Correct anything that doesn’t look right.')).toBeVisible()
-  await user.click(screen.getByRole('button', { name: 'Close help: Review activity' }))
+  fireEvent(screen.getByRole('dialog', { name: 'Review activity' }), new Event('cancel', { cancelable: true }))
   expect(screen.getByText('Check recorded activities and commands that need attention.')).toBeVisible()
   expect(screen.getByRole('checkbox', { name: 'Select Gym now' })).toBeChecked()
   vi.mocked(fetchJson).mockRejectedValueOnce(new Error('An activity changed. Refresh.'))

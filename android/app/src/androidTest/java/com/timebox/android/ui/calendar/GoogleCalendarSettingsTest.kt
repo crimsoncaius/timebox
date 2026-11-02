@@ -67,7 +67,7 @@ class GoogleCalendarSettingsTest {
         compose.onNodeWithText("Hold and drag", substring = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Help: Calendar priority").performScrollTo().performClick()
         compose.onNodeWithText("Hold and drag", substring = true).assertExists()
-        compose.onNodeWithText("Close help").performClick()
+        com.timebox.android.ui.components.dismissContextualHelp(compose)
         compose.onNodeWithText("Home").performScrollTo().assertIsOn()
         compose.runOnIdle { assertEquals(0, reviews); offline = true }
         compose.onNodeWithText("Home").performScrollTo().assertIsOn().assertIsNotEnabled()

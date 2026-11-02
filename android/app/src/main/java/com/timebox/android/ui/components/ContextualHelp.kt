@@ -1,5 +1,8 @@
 package com.timebox.android.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,6 +13,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
@@ -28,6 +36,7 @@ private var activeHelp by mutableStateOf<Any?>(null)
 fun ContextualHelp(title: String, text: String) {
     val token = remember { Any() }
     val focus = remember { FocusRequester() }
+    val helpFocus = remember { FocusRequester() }
     val colors = TimeboxTheme.colors
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -38,10 +47,10 @@ fun ContextualHelp(title: String, text: String) {
     val dismiss = { activeHelp = null; focus.requestFocus() }
     DisposableEffect(token) { onDispose { if (activeHelp === token) activeHelp = null } }
     @Composable fun Content() {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LaunchedEffect(Unit) { helpFocus.requestFocus() }
+        Column(Modifier.fillMaxWidth().padding(16.dp).focusRequester(helpFocus).focusable(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = TimeboxTheme.type.label, color = colors.on, modifier = Modifier.semantics { heading() })
             Text(text, style = TimeboxTheme.type.body, color = colors.onVariant)
-            TextButton(onClick = dismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Close help") }
         }
     }
     Box {
@@ -50,10 +59,17 @@ fun ContextualHelp(title: String, text: String) {
         }
         if (compact) {
             DropdownMenu(expanded = activeHelp === token, onDismissRequest = dismiss,
-                modifier = Modifier.width(width).heightIn(max = (configuration.screenHeightDp - 48).dp).semantics { paneTitle = title },
-                containerColor = colors.bg) { Content() }
+                modifier = Modifier.width(width).heightIn(max = (configuration.screenHeightDp - 48).dp)
+                    .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Back || event.key == Key.Escape) {
+                            if (event.type == KeyEventType.KeyUp) dismiss()
+                            true
+                        } else false
+                    }.semantics { paneTitle = title },
+                containerColor = colors.bg, border = BorderStroke(1.dp, colors.outlineVariant)) { Content() }
         } else if (activeHelp === token) {
             ModalBottomSheet(onDismissRequest = dismiss,
+                modifier = Modifier.border(1.dp, colors.outlineVariant, BottomSheetDefaults.ExpandedShape),
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor = colors.bg) {
                 Column(Modifier.verticalScroll(rememberScrollState()).semantics { paneTitle = title }) { Content() }

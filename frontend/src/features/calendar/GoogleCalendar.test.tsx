@@ -39,7 +39,7 @@ it('keeps an API key draft and does not save when opening or closing help', () =
   expect(screen.queryByText(/Stored for this browser/)).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Help: Timebox API key' }))
   expect(screen.getByRole('dialog', { name: 'Timebox API key' })).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Close help: Timebox API key' }))
+  fireEvent(screen.getByRole('dialog', { name: 'Timebox API key' }), new Event('cancel', { cancelable: true }))
   expect(screen.getByLabelText('Timebox API key')).toHaveValue('unsaved-key')
   expect(sessionStorage.getItem('timebox.api-key')).toBeNull()
 })

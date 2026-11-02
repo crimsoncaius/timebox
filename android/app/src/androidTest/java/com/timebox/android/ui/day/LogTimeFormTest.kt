@@ -35,7 +35,7 @@ class LogTimeFormTest {
         compose.onNodeWithTag("log-name-input").performScrollTo().performTextInput("Training")
         compose.onNodeWithContentDescription("Help: Recording time").performScrollTo().performClick()
         compose.onNodeWithText("Records past time. Recording time does not change Task Completion.").assertIsDisplayed()
-        compose.onNodeWithText("Close help").performClick()
+        com.timebox.android.ui.components.dismissContextualHelp(compose)
         compose.onNodeWithTag("log-name-input").assertTextContains("Training")
         assertEquals("", savedName)
         compose.onNodeWithText("Log 30 mins").performClick()

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ActualBlock, DayRead, TaskType } from '../../lib/api'
@@ -55,7 +55,7 @@ describe('ActivityActualEditor', () => {
     expect(screen.queryByText('Recording time does not change Task Completion.')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Help: Recording time' }))
     expect(screen.getByRole('dialog', { name: 'Recording time' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Close help: Recording time' }))
+    fireEvent(screen.getByRole('dialog', { name: 'Recording time' }), new Event('cancel', { cancelable: true }))
     expect(screen.getByLabelText('Note')).toHaveValue('Keep this draft')
     expect(onSave).not.toHaveBeenCalled()
   })

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +48,7 @@ describe('HistoryPage', () => {
     expect(screen.queryByText(copy)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Help: Calendar' }))
     expect(screen.getByText(copy)).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Close help: Calendar' }))
+    fireEvent(screen.getByRole('dialog', { name: 'Calendar' }), new Event('cancel', { cancelable: true }))
     expect(screen.getByTestId('chronicle-month-heading')).toHaveTextContent('January 1980')
   })
 

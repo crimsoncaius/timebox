@@ -48,7 +48,7 @@ class RoutineScreenTest {
         compose.onNodeWithText("Pre-planning").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Planned Block start 1").performTextReplacement("10:00")
         compose.onNodeWithContentDescription("Help: Pre-planning").performScrollTo().performClick()
-        compose.onNodeWithText("Close help").performClick()
+        com.timebox.android.ui.components.dismissContextualHelp(compose)
         compose.onNodeWithContentDescription("Planned Block start 1").assertTextContains("10:00")
         compose.runOnIdle {
             assertEquals("08:00", editor.state.value.preplanningSlots.single().start)

@@ -30,7 +30,7 @@ class ContextualHelpTest {
         }
         compose.onNodeWithTag("task-type-search").performTextInput("work/deep")
         compose.onNodeWithContentDescription("Help: Task Type Paths").performClick()
-        compose.onNodeWithText("Close help").performScrollTo().performClick()
+        com.timebox.android.ui.components.dismissContextualHelp(compose)
         compose.onNodeWithTag("task-type-search").assertTextContains("work/deep")
         org.junit.Assert.assertEquals(0, mutations)
     }
@@ -51,8 +51,10 @@ class ContextualHelpTest {
         compose.onNodeWithText("Draft").performTextInput("Unsaved change")
         compose.onNodeWithContentDescription("Help: Editing").performClick()
         compose.onNodeWithText(help).assertExists()
-        compose.onNodeWithText("Close help").performScrollTo().performClick()
+        compose.onNodeWithText("Close help").assertDoesNotExist()
+        com.timebox.android.ui.components.dismissContextualHelp(compose)
         compose.onNodeWithText("Unsaved change").assertExists()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(help).fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText(help).assertDoesNotExist()
     }
 }

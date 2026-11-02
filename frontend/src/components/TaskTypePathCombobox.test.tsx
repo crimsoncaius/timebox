@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TaskTypePathCombobox } from './TaskTypePathCombobox'
@@ -20,7 +20,7 @@ describe('TaskTypePathCombobox', () => {
     await user.type(screen.getByRole('combobox'), 'work/deep')
     await user.click(screen.getByRole('button', { name: 'Help: Task Type Paths' }))
     expect(screen.getByRole('dialog', { name: 'Task Type Paths' })).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Close help: Task Type Paths' }))
+    fireEvent(screen.getByRole('dialog', { name: 'Task Type Paths' }), new Event('cancel', { cancelable: true }))
     expect(screen.getByRole('combobox')).toHaveValue('work/deep')
     expect(screen.getByRole('button', { name: 'Help: Task Type Paths' })).toHaveFocus()
     expect(select).not.toHaveBeenCalled()

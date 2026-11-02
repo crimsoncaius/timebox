@@ -35,7 +35,7 @@ export function ContextualHelp({ title, children }: { title: string; children: R
     observer.observe(body.current!)
     window.addEventListener('resize', position)
     window.addEventListener('scroll', position, true)
-    dialog.querySelector('button')?.focus()
+    dialog.focus()
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', position)
@@ -50,17 +50,17 @@ export function ContextualHelp({ title, children }: { title: string; children: R
       className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container focus-visible:outline-2 focus-visible:outline-planned dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container">
       <span aria-hidden className="material-symbols-outlined text-xl">info</span>
     </button>
-    {open && <dialog ref={panel} id={id} role="dialog" aria-labelledby={`${id}-title`}
+    {open && <dialog ref={panel} id={id} role="dialog" tabIndex={-1} aria-labelledby={`${id}-title`}
       onCancel={event => { event.preventDefault(); event.stopPropagation(); setOpen(false) }}
-      onClick={event => event.stopPropagation()}
+      onClick={event => {
+        event.stopPropagation()
+        if (event.target !== event.currentTarget) return
+        const rect = event.currentTarget.getBoundingClientRect()
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) setOpen(false)
+      }}
       onKeyDown={event => event.stopPropagation()}
-      className="fixed m-0 max-h-[calc(100dvh-2rem)] max-w-none overflow-y-auto rounded-2xl bg-surface-container-lowest p-[20px] text-on-surface shadow-lg backdrop:bg-black/20 dark:bg-dark-surface-container dark:text-dark-on-surface">
-      <div className="flex items-start justify-between gap-3">
-        <h2 id={`${id}-title`} className="font-headline text-lg font-medium">{title}</h2>
-        <button type="button" onClick={() => setOpen(false)} aria-label={`Close help: ${title}`} className="min-h-[44px] min-w-[44px] shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-planned">
-          <span aria-hidden className="material-symbols-outlined">close</span>
-        </button>
-      </div>
+      className="fixed m-0 max-h-[calc(100dvh-2rem)] max-w-none overflow-y-auto rounded-2xl border border-outline-variant bg-surface-container-lowest p-[20px] text-on-surface backdrop:bg-black/20 dark:border-dark-outline-variant dark:bg-dark-surface-container dark:text-dark-on-surface">
+      <h2 id={`${id}-title`} className="mb-3 font-headline text-lg font-medium">{title}</h2>
       <div ref={body} className="space-y-2 text-sm leading-relaxed text-on-surface-variant dark:text-dark-on-surface-variant">{children}</div>
     </dialog>}
   </>

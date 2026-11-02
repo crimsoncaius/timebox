@@ -59,7 +59,7 @@ class TimeGoalCreationTest {
         compose.onNodeWithText("Month", substring = false).performClick()
         compose.onNodeWithContentDescription("Help: Goal periods").performClick()
         compose.onNodeWithText("Weeks start Monday. Months follow the calendar.").assertIsDisplayed()
-        compose.onNodeWithText("Close help").performClick()
+        com.timebox.android.ui.components.dismissContextualHelp(compose)
         compose.runOnIdle { assertFalse(dismissed); assertNull(saved) }
         compose.onNodeWithText("Done").performScrollTo().performClick()
         compose.onNodeWithText("Create Time Goal").assertIsEnabled().performClick()

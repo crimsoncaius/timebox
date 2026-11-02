@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -114,7 +114,7 @@ describe('RecurringPage', () => {
     expect(screen.queryByText('Add each occurrence to Ready to Plan on its date, without assigning a time.')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Help: Pre-planning' }))
     expect(screen.getByRole('dialog', { name: 'Pre-planning' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Close help: Pre-planning' }))
+    fireEvent(screen.getByRole('dialog', { name: 'Pre-planning' }), new Event('cancel', { cancelable: true }))
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Draft routine')
     expect(screen.getByLabelText('Pre-planning')).toHaveValue('ready_to_plan')
     expect(window.confirm).not.toHaveBeenCalled()
