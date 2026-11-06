@@ -19,10 +19,10 @@ Validation: `assembleDebug` passed. The focused instrumentation test
 `AssistantReviewTest#detailsKeepsHeaderPositionAndBackArrow` passed, including
 time range, duration, disclosure, and stable background header checks.
 
-Reproduce on a reserved emulator using the repository helper:
+Reproduce on an emulator opened through `docs/agents/t3-devices.md`:
 
 ```powershell
-python scripts/android-emulator.py adb TOKEN shell am start -n com.timebox.android/.ui.assistant.AssistantTaskReviewActivity --ez review_details true
+<agent-device> open com.timebox.android --relaunch --activity .ui.assistant.AssistantTaskReviewActivity --launch-args --ez --launch-args review_details --launch-args true
 ```
 
 The fixture is for visual inspection. It does not persist review actions, and its

@@ -102,11 +102,11 @@ and release. Check whether the remaining finger target feels comfortable.
 ## Launch
 
 Build: `scripts/android-gradle.ps1 assembleDebug` with the Android SDK configured.
-Acquire an emulator using `scripts/android-emulator.py acquire --owner ...`.
-Use its returned token with the helper to install the debug APK, then:
+Open an emulator and install the debug APK following `docs/agents/t3-devices.md`,
+then:
 
 ```powershell
-python scripts/android-emulator.py adb TOKEN shell am start -n com.timebox.android/.MainActivity --ez timelinePrototype true
+<agent-device> open com.timebox.android --relaunch --launch-args --ez --launch-args timelinePrototype --launch-args true
 ```
 
 Launched on the user-requested additional emulator-5584; the two earlier review

@@ -56,10 +56,10 @@ $env:ANDROID_HOME=Join-Path $env:LOCALAPPDATA 'Android\Sdk'
 ./scripts/android-gradle.ps1 :app:assembleDebug -PrecordingPrototype=true -PreviewApiBaseUrl=http://10.0.2.2:12018/ -PreviewApplicationIdSuffix=.issue173
 ```
 
-The historical review used `emulator-5586`, package `com.timebox.android.issue173`, isolated API port 12018. Acquire a fresh managed device and start the isolated API to reproduce it. Navigate Day → September 13, 2026 → Write chapter → Record Actual as planned. With an owned reservation, each presentation is directly selectable (substitute the reservation token; change `timeline` to `summary`):
+The historical review used `emulator-5586`, package `com.timebox.android.issue173`, isolated API port 12018. Open a device following `docs/agents/t3-devices.md`, install this build, and start the isolated API to reproduce it. Navigate Day → September 13, 2026 → Write chapter → Record Actual as planned. Each presentation is directly selectable (change `timeline` to `summary`):
 
 ```powershell
-python scripts/android-emulator.py adb TOKEN shell am start -f 0x20000000 -n com.timebox.android.issue173/com.timebox.android.MainActivity --es recording_preview_variant timeline
+<agent-device> open com.timebox.android.issue173 --activity com.timebox.android.MainActivity --launch-args -f --launch-args 0x20000000 --launch-args --es --launch-args recording_preview_variant --launch-args timeline
 ```
 
 Review task: select Split and identify which parts of Earlier draft survive. Compare both views, inspect the name/note disclosure, then try replacement and Undo. Recommendation remains Before-after for spatial clarity; Summary exposes the details disclosure with less scrolling. Both retain fixed confirmation actions.

@@ -1,5 +1,9 @@
 # Android emulator ownership
 
+Interactive emulator work goes through T3 Code's Device panel by default:
+follow `docs/agents/t3-devices.md`. Use this helper for instrumentation tests,
+when the T3 device tools fail, and to recover or release a device it reserved.
+
 ## Acquire and use
 
 Run from the working tree being tested. Python 3 is required. Unit tests and APK

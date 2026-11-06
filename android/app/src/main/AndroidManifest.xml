@@ -46,9 +46,11 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.Timebox"
             android:windowSoftInputMode="adjustResize">
+            <!-- DEFAULT lets agent-device launch on API 33+, which rejects explicit intents whose categories the filter lacks. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

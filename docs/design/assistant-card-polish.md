@@ -82,8 +82,10 @@ must use them as a coverage checklist independently of which visuals the user pr
 Launch from this working tree:
 
 ```powershell
-python scripts/android-emulator.py adb af7e600ed01f43579e2a8c77533045d8 shell "am start -W -a android.intent.action.VIEW -d 'timebox://prototype/assistant-polish?layout=focused&scenario=complete' -p com.timebox.android"
+<agent-device> open com.timebox.android 'timebox://prototype/assistant-polish?layout=focused^^^&scenario=complete'
 ```
+
+`<agent-device>` is the command `device_open` returns; see `docs/agents/t3-devices.md`.
 
 Review is pending; no overall layout preference has been accepted and no production cards changed.
 

@@ -110,8 +110,9 @@ Android device tests use the shared emulator reservation helper:
 python scripts/android-emulator.py test --owner "your-task-id"
 ```
 
-It selects an isolated emulator and releases it after testing. For interactive
-work, review holds, and recovery, see [Android emulator ownership](docs/agents/android-emulators.md).
+It selects an isolated emulator and releases it after testing. Interactive work
+and reviews use T3 Code's Device panel; see [T3 Code device workflow](docs/agents/t3-devices.md).
+For helper review holds and recovery, see [Android emulator ownership](docs/agents/android-emulators.md).
 
 On macOS or Linux, set `JAVA_HOME` to JDK 17+ and run `cd android && ./gradlew testDebugUnitTest assembleDebug`.
 
