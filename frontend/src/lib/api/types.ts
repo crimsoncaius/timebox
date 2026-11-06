@@ -256,6 +256,10 @@ export type RecurringPreplanningSlot = {
   end_minute: number
 }
 export type RecurringPreplanningUnavailableSlot = {
+  task_id?: number
+  task_title?: string
+  reason?: 'planned_block_overlap'
+  can_add_to_ready?: boolean
   date: string
   slot_key: string
   start_minute: number

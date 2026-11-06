@@ -16,6 +16,9 @@ import com.timebox.android.data.RecurringTemplatePatch
 import com.timebox.android.data.ServerErrorDetail
 import com.timebox.android.data.TaskType
 import com.timebox.android.data.TimeboxRepository
+import com.timebox.android.data.flattenBattleTasks
+import com.timebox.android.ui.readiness.ReadyToPlanCoordinator
+import kotlinx.coroutines.flow.first
 import com.timebox.android.data.apiError
 import com.timebox.android.data.remote.PatchField
 import com.timebox.android.ui.formatMinuteLabel24
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import java.time.LocalDate
 
 enum class RecurrenceEndMode { Never, EndDate, CycleLimit }
@@ -76,13 +80,50 @@ data class RecurringEditorUiState(
     val message: String? = null,
 )
 
-class RecurringEditorViewModel(private val repository: TimeboxRepository) : ViewModel() {
+class RecurringEditorViewModel(private val repository: TimeboxRepository, private val readinessCoordinator: ReadyToPlanCoordinator? = null) : ViewModel() {
     suspend fun calendar(templateId: Int, month: java.time.YearMonth?) = repository.getRoutineCalendar(templateId, month)
 
     private val _state = MutableStateFlow(RecurringEditorUiState())
     val state: StateFlow<RecurringEditorUiState> = _state.asStateFlow()
     private var previewJob: Job? = null
+    private var loadJob: Job? = null
     private var baseline: RecurringEditorUiState? = null
+
+    fun addUnavailableToReady(taskId: Int) {
+        if (_state.value.saving) return
+        val coordinator = readinessCoordinator ?: return
+        val templateId = _state.value.templateId
+        _state.update { it.copy(saving = true, saveError = null) }
+        viewModelScope.launch {
+            val result = runCatching {
+                val tasks = repository.listBattleTasks().getOrThrow().items
+                coordinator.mergeServerTasks(tasks)
+                val task = tasks.flattenBattleTasks().firstOrNull { it.id == taskId }
+                    ?: error("This Task is no longer available. Reopen the routine to refresh.")
+                coordinator.setReady(task, true)
+                val updated = coordinator.projections.first { rows -> rows.any { it.id == taskId && (!it.readinessPending || it.readinessFailureMessage != null) } }
+                    .first { it.id == taskId }
+                check(updated.readyToPlan && !updated.readinessPending && updated.readinessFailureMessage == null) {
+                    updated.readinessFailureMessage ?: "This Task cannot be added to Ready to Plan. Open its details to review it."
+                }
+            }
+            result.exceptionOrNull()?.let { if (it is kotlinx.coroutines.CancellationException) throw it }
+            if (_state.value.templateId == templateId) result.fold(
+                onSuccess = {
+                    val refreshed = templateId?.let { repository.getRecurringTemplate(it).getOrNull() }
+                    if (_state.value.templateId == templateId) _state.update { state ->
+                        val updated = refreshed ?: state.template?.let { template -> template.copy(
+                            preplanningSchedule = template.preplanningSchedule?.let { schedule -> schedule.copy(
+                                unavailableSlots = schedule.unavailableSlots.map { if (it.taskId == taskId) it.copy(canAddToReady = false) else it },
+                            ) },
+                        ) }
+                        state.copy(saving = false, template = updated, message = "Task added to Ready to Plan")
+                    }
+                },
+                onFailure = { error -> _state.update { it.copy(saving = false, saveError = error.apiError.message) } },
+            )
+        }
+    }
 
     fun applyDraft(draft: RecurringEditorUiState) {
         if (_state.value.saving) return
@@ -103,18 +144,23 @@ class RecurringEditorViewModel(private val repository: TimeboxRepository) : View
     }
 
     fun open(templateId: Int?) {
+        loadJob?.cancel()
         previewJob?.cancel()
         baseline = null
         _state.value = RecurringEditorUiState(templateId = templateId, loading = true)
-        viewModelScope.launch {
-            val taskTypes = repository.listTaskTypes().getOrElse {
+        loadJob = viewModelScope.launch {
+            val typesResult = repository.listTaskTypes()
+            ensureActive()
+            val taskTypes = typesResult.getOrElse {
                 _state.update { state -> state.copy(loading = false, error = it.apiError.message) }
                 return@launch
             }
             if (templateId == null) {
                 _state.update { it.copy(loading = false, taskTypes = taskTypes) }
             } else {
-                repository.getRecurringTemplate(templateId).fold(
+                val result = repository.getRecurringTemplate(templateId)
+                ensureActive()
+                result.fold(
                     onSuccess = { template ->
                         _state.value = template.toEditorState(taskTypes)
                     },

@@ -175,6 +175,10 @@ data class RecurringPreplanningUnavailableSlot(
     val slotKey: String,
     val startMinute: Int,
     val endMinute: Int,
+    val taskId: Int? = null,
+    val taskTitle: String? = null,
+    val reason: String = "planned_block_overlap",
+    val canAddToReady: Boolean = false,
 )
 data class RecurringPreplanningSchedule(
     val slots: List<RecurringPreplanningSlot>,
@@ -379,6 +383,10 @@ internal fun RecurringPreplanningUnavailableSlotDto.toModel() = RecurringPreplan
     slotKey = slotKey,
     startMinute = startMinute,
     endMinute = endMinute,
+    taskId = taskId,
+    taskTitle = taskTitle,
+    reason = reason,
+    canAddToReady = canAddToReady,
 )
 internal fun RecurringPreplanningScheduleDto.toModel() = RecurringPreplanningSchedule(
     slots = slots.map { it.toModel() },

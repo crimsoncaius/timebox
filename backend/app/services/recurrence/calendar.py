@@ -20,6 +20,7 @@ from app.schemas.battle_plan import RoutineCalendarCompletion, RoutineCalendarRe
 from app.services.recurrence.common import _date_in_tz, _json_list, _month_date
 from app.services.recurrence.helpers import _load_template
 from app.services.recurrence.windows import iter_windows
+from app.services.reporting import reporting_settings
 
 
 def _last_cycle_date(row) -> dt.date:
@@ -54,6 +55,7 @@ def read_calendar(
     db: Session, template_id: int, month: dt.date | None, settings: Settings
 ) -> RoutineCalendarRead:
     """Read completion facts and projected dates without materializing future work."""
+    settings = reporting_settings(db, settings)
     row = _load_template(db, template_id)
     today = today_in_tz(settings.app_timezone)
     tasks = db.scalars(

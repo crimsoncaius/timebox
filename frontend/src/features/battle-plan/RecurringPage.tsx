@@ -13,6 +13,7 @@ import {
   type RecurrenceRuleWrite,
   type RecurrenceStatus,
   type RecurringTemplate,
+  type RecurringPreplanningUnavailableSlot,
   type RecurringTemplateWrite,
   type TaskType,
 } from '../../lib/api'
@@ -24,9 +25,11 @@ import { PriorityControl } from './TaskDetailPanel'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 import { errorMessage } from '../../lib/errors'
 import { CalendarDateField } from '../../components/CalendarDateField'
+import { useModalFocus } from '../../components/useModalFocus'
+import { useReadinessCoordinator } from '../readiness/readinessCoordinator'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const buttonClass = 'rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
+const buttonClass = 'min-h-11 rounded-xl px-3.5 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30'
 
 function displayDate(value: string | null) {
   if (!value) return '—'
@@ -56,6 +59,8 @@ export function RecurringPage() {
   const [projectEditor, setProjectEditor] = useState<Project | null | undefined>(undefined)
   const [projectEditorCount, setProjectEditorCount] = useState(0)
   const [applicationToday, setApplicationToday] = useState<string | null>(null)
+  const [dateError, setDateError] = useState<string | null>(null)
+  const [dateRetry, setDateRetry] = useState(0)
   const latestLoadRequest = useRef(0)
   const selectedId = Number(searchParams.get('recurring')) || null
   const selected = templates.find((template) => template.id === selectedId) ?? null
@@ -75,7 +80,7 @@ export function RecurringPage() {
       setTaskTypes(typeRows)
     } catch (cause) {
       if (requestId !== latestLoadRequest.current) return
-      setError(errorMessage(cause, 'Failed to load recurring templates'))
+      setError(errorMessage(cause, 'Could not load recurring tasks. Please retry.'))
     } finally {
       if (requestId === latestLoadRequest.current) setLoading(false)
     }
@@ -91,9 +96,10 @@ export function RecurringPage() {
     void api.health().then((health) => {
       if (!active) return
       setApplicationToday(health.today)
-    }).catch(() => undefined)
+      setDateError(null)
+    }).catch(() => { if (active) setDateError('Could not load Today. Retry to create a recurring task.') })
     return () => { active = false }
-  }, [])
+  }, [dateRetry])
 
   const lifecycle = async (template: RecurringTemplate, action: 'pause' | 'resume' | 'end') => {
     setError(null)
@@ -131,7 +137,7 @@ export function RecurringPage() {
   return (
     <Layout mainClassName="w-full px-4 py-6 sm:px-8 lg:px-10">
       <div className="mb-6 flex items-center justify-between lg:hidden">
-        <button type="button" className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container" onClick={() => setMobileSidebar(true)}>Lists & projects</button>
+        <button type="button" aria-expanded={mobileSidebar} className="min-h-11 rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container" onClick={() => setMobileSidebar(true)}>Lists & projects</button>
       </div>
       <div className="flex min-h-[calc(100vh-9rem)] gap-6">
         <BattlePlanSidebar
@@ -168,11 +174,12 @@ export function RecurringPage() {
           ))}
         </div>
 
+        {dateError && <div role="alert" className="mt-5 text-sm text-error">{dateError} <button type="button" className="min-h-11 underline" onClick={() => setDateRetry(value => value + 1)}>Retry date</button></div>}
         {error ? <div role="alert" className="mt-5 rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
-        {loading ? <p className="mt-8 text-on-surface-variant">Loading recurring templates…</p> : null}
+        {loading ? <p className="mt-8 text-on-surface-variant">Loading recurring tasks…</p> : null}
         {!loading && templates.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-outline-variant/30 px-6 py-14 text-center">
-            <p className="font-headline text-lg font-light">No {status} templates</p>
+            <p className="font-headline text-lg font-light">No {status} recurring tasks</p>
             <p className="mt-2 text-sm text-on-surface-variant">Create a schedule or period quota to populate this view.</p>
           </div>
         ) : null}
@@ -192,7 +199,7 @@ export function RecurringPage() {
         </section>
       </div>
 
-      {selected ? <TemplateDetail template={selected} onClose={() => setSearchParams({ view: 'recurring' })} onEdit={() => setEditing(selected)} /> : null}
+      {selected && !editing ? <TemplateDetail template={selected} today={applicationToday} onChanged={() => load(status)} onClose={() => setSearchParams({ view: 'recurring' })} onEdit={() => setEditing(selected)} /> : null}
       {(creating || editing) && formApplicationToday ? (
         <TemplateForm
           initialMode={editing?.mode ?? 'scheduled'}
@@ -245,12 +252,13 @@ function TemplateRow({ template, selected, onSelect, onEdit, onLifecycle }: {
 }) {
   return (
     <article className={`grid gap-3 border-b border-outline-variant/15 bg-surface-container-lowest px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(8rem,.7fr)_auto] sm:items-center dark:border-dark-outline-variant/30 dark:bg-dark-surface-container-lowest ${selected ? 'ring-1 ring-inset ring-primary/25' : ''}`}>
-      <button type="button" aria-label={template.title} className="min-w-0 text-left" onClick={onSelect}>
+      <button type="button" aria-label={template.title} className="min-h-11 min-w-0 text-left" onClick={onSelect}>
         <span className="block truncate font-headline text-base">{template.title}</span>
+        {!!template.preplanning_schedule?.unavailable_slots?.length && <span className="mt-1 block text-sm text-warn">{template.preplanning_schedule.unavailable_slots.length} planned {template.preplanning_schedule.unavailable_slots.length === 1 ? 'slot needs' : 'slots need'} attention</span>}
         {template.task_type ? <span className="mt-1 block truncate text-xs text-on-surface-variant">{template.task_type.name}</span> : null}
       </button>
-      <button type="button" className="text-left text-sm text-on-surface-variant" onClick={onSelect}>{template.cadence}</button>
-      <button type="button" className="text-left text-xs text-on-surface-variant" onClick={onSelect}>
+      <button type="button" className="min-h-11 text-left text-sm text-on-surface-variant" onClick={onSelect}>{template.cadence}</button>
+      <button type="button" className="min-h-11 text-left text-xs text-on-surface-variant" onClick={onSelect}>
         <span className="block font-label uppercase tracking-wide">Next</span>
         <span className="mt-1 block text-sm text-on-surface">{displayDate(template.next_occurrence)}</span>
       </button>
@@ -265,13 +273,15 @@ function TemplateRow({ template, selected, onSelect, onEdit, onLifecycle }: {
   )
 }
 
-function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemplate; onClose: () => void; onEdit: () => void }) {
+function TemplateDetail({ template, today, onChanged, onClose, onEdit }: { template: RecurringTemplate; today: string | null; onChanged: () => Promise<void>; onClose: () => void; onEdit: () => void }) {
+  const dialog = useRef<HTMLElement>(null)
+  useModalFocus(dialog, onClose)
   return (
     <div className="fixed inset-0 z-90 flex justify-end bg-black/25" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <aside role="dialog" aria-modal="true" className="h-full w-full max-w-lg overflow-y-auto bg-surface p-6 shadow-2xl dark:bg-dark-background" aria-label={`Recurring template ${template.title}`}>
+      <aside ref={dialog} role="dialog" aria-modal="true" className="h-full w-full max-w-lg overflow-y-auto bg-surface p-6 shadow-2xl dark:bg-dark-background" aria-label={`Recurring task series ${template.title}`}>
         <div className="flex items-start justify-between gap-4">
           <div><p className="font-label text-xs uppercase tracking-[0.16em] text-on-surface-variant">{template.status}</p><h2 className="mt-2 font-headline text-3xl font-light">{template.title}</h2></div>
-          <button type="button" aria-label="Close recurring details" onClick={onClose} className="rounded-full p-2 hover:bg-surface-container-low">×</button>
+          <button type="button" aria-label="Close recurring details" onClick={onClose} className="min-h-11 min-w-11 rounded-full p-2 hover:bg-surface-container-low">×</button>
         </div>
         {template.description ? <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">{template.description}</p> : null}
         <dl className="mt-7 grid grid-cols-2 gap-4 rounded-2xl bg-surface-container-low p-4 text-sm dark:bg-dark-surface-container-low">
@@ -293,12 +303,11 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
             </ul>
             {template.preplanning_schedule.unavailable_slots?.length ? (
               <div role="status" aria-live="polite" className="mt-3 rounded-xl bg-error-container/20 px-3 py-2 text-sm text-on-error-container">
-                <p className="font-medium">Unavailable configured slots</p>
+                <p className="font-medium">Planned slots need attention</p>
+                <p>These occurrences could not be placed because the time was occupied. Review their day; today's Tasks can also enter Ready to Plan.</p>
                 <ul className="mt-1 space-y-1">
                   {template.preplanning_schedule.unavailable_slots.map((slot) => (
-                    <li key={`${slot.date}-${slot.slot_key}`}>
-                      Unavailable on {displayDate(slot.date)}, {formatMinuteLabel24(slot.start_minute)}–{formatMinuteLabel24(slot.end_minute)}
-                    </li>
+                    <PreplanningConflict key={`${slot.date}-${slot.slot_key}`} slot={slot} today={today} onChanged={onChanged} />
                   ))}
                 </ul>
               </div>
@@ -307,10 +316,41 @@ function TemplateDetail({ template, onClose, onEdit }: { template: RecurringTemp
         ) : null}
         <section className="mt-8"><h3 className="font-headline text-lg font-light">Next five</h3><div className="mt-3 space-y-2">{template.upcoming.map((window) => <div key={window.key} className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container-low">{displayWindow(window.start, window.end)}</div>)}</div></section>
         {template.current_tasks.length ? <section className="mt-8"><h3 className="font-headline text-lg font-light">Current and overdue tasks</h3><div className="mt-3 space-y-2">{template.current_tasks.map((task) => <Link key={task.id} to={`/battle-plan?task=${task.id}`} className="flex items-center justify-between rounded-xl bg-surface-container-low px-3 py-2 text-sm hover:bg-surface-container-high dark:bg-dark-surface-container-low"><span>{task.title}</span><span className={task.overdue ? 'text-error' : 'text-on-surface-variant'}>{task.overdue ? 'Overdue' : displayDate(task.deadline_date)}</span></Link>)}</div></section> : null}
-        <button type="button" className={`${buttonClass} mt-8 bg-primary text-on-primary`} onClick={onEdit}>Edit template</button>
+        <button type="button" className={`${buttonClass} mt-8 bg-primary text-on-primary`} onClick={onEdit}>Edit series</button>
       </aside>
     </div>
   )
+}
+
+function PreplanningConflict({ slot, today, onChanged }: { slot: RecurringPreplanningUnavailableSlot; today: string | null; onChanged: () => Promise<void> }) {
+  const readiness = useReadinessCoordinator()
+  const [busy, setBusy] = useState(false)
+  const [added, setAdded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  return <li className="py-2">
+    {slot.task_title && <p className="font-medium">{slot.task_title}</p>}
+    <p>Unavailable on {displayDate(slot.date)}, {formatMinuteLabel24(slot.start_minute)}–{formatMinuteLabel24(slot.end_minute)}</p>
+    <div className="flex flex-wrap gap-3">
+      <Link className="inline-flex min-h-11 items-center underline" to={`/day/${slot.date}`}>View day</Link>
+      {slot.task_id && (added || (slot.can_add_to_ready ?? slot.date === today)) && <button type="button" disabled={busy || added} className="min-h-11 underline disabled:no-underline" onClick={async () => {
+        setBusy(true); setError(null)
+        try {
+          const result = await api.listBattleTasks('active')
+          readiness.observeTasks(result.items)
+          const task = result.items.flatMap(item => [item, ...(item.session_tasks ?? [])]).find(item => item.id === slot.task_id)
+          if (!task) throw new Error('This occurrence is no longer active. Refresh the series to review it.')
+          await readiness.setReadyToPlan(task, true)
+          const state = readiness.stateFor(task.id)
+          if (state.failure) throw new Error(state.failure.message)
+          setAdded(state.confirmed && state.desired && !state.pending)
+          await onChanged()
+        }
+        catch (cause) { setError(errorMessage(cause, 'Could not add this task. Please retry.')) }
+        finally { setBusy(false) }
+      }}>{busy ? 'Saving…' : added ? 'Added to Ready to Plan' : 'Add to Ready to Plan'}</button>}
+    </div>
+    {error && <p role="alert">{error}</p>}
+  </li>
 }
 
 type RecurrencePreset = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'custom' | 'day' | 'week' | 'month'
@@ -427,6 +467,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
   const [preview, setPreview] = useState<RecurrencePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const dialog = useRef<HTMLFormElement>(null)
   const [preset, setPreset] = useState<RecurrencePreset>(() => initialPreset(
     initialMode,
     template?.frequency ?? 'daily',
@@ -457,9 +498,11 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
   ), [applicationToday, checklist, cycleLimit, description, endDate, ending, frequency, importance, initialMode, interval, keepUnfinishedOverdue, mode, monthDay, preplanningMode, initialPreplanningMode, preplanningSlots, quotaCount, startDate, taskTypeId, template, title, urgency, weekdays])
 
   const requestClose = useCallback(() => {
+    if (saving) return
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
     onClose()
-  }, [isDirty, onClose])
+  }, [saving, isDirty, onClose])
+  useModalFocus(dialog, requestClose)
 
   const rule = useMemo<RecurrenceRuleWrite>(() => ({
     mode, frequency, interval: mode === 'quota' ? 1 : interval,
@@ -479,20 +522,6 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
     }, 180)
     return () => { active = false; window.clearTimeout(timer) }
   }, [rule, startDate, frequency, mode, weekdays.length, ending, endDate])
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') requestClose()
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [requestClose])
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = previousOverflow }
-  }, [])
 
   const switchMode = (nextMode: RecurrenceMode) => {
     if (template || nextMode === mode) return
@@ -561,7 +590,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!title.trim() || preplanningError) return
+    if (saving || !title.trim() || preplanningError) return
     setSaving(true)
     setError(null)
     try {
@@ -590,7 +619,7 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
         : await api.createRecurringTemplate(body)
       await onSaved(saved)
     } catch (cause) {
-      setError(errorMessage(cause, 'Failed to save recurring template'))
+      setError(errorMessage(cause, 'Could not save the recurring task. Your changes are kept; try again.'))
     } finally {
       setSaving(false)
     }
@@ -598,13 +627,14 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
 
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center overflow-hidden bg-black/35 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose() }}>
-      <form role="dialog" aria-modal="true" aria-label={template ? `Edit ${template.title}` : 'New recurring task'} onSubmit={(event) => void submit(event)} className="task-detail-dialog max-h-[94vh] w-full max-w-[640px] overflow-y-auto rounded-3xl border border-[var(--task-detail-border)] bg-surface text-[var(--task-detail-primary)] shadow-[var(--task-detail-shadow)] dark:bg-dark-background">
+      <form ref={dialog} role="dialog" aria-modal="true" aria-busy={saving} aria-label={template ? `Edit ${template.title}` : 'New recurring task'} onSubmit={(event) => void submit(event)} className="task-detail-dialog max-h-[94vh] w-full max-w-[640px] overflow-y-auto rounded-3xl border border-[var(--task-detail-border)] bg-surface text-[var(--task-detail-primary)] shadow-[var(--task-detail-shadow)] dark:bg-dark-background">
+        <fieldset disabled={saving} className="contents">
         <header className="flex items-start justify-between gap-4 px-5 pt-[26px] pb-[18px] sm:px-7">
           <div>
-            <p className="font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Recurring template</p>
+            <p className="font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Recurring task series</p>
             <h2 className="mt-2 font-headline text-[28px] font-light tracking-[-0.02em]">{template ? template.title : 'New recurring task'}</h2>
           </div>
-          <button type="button" aria-label="Close recurring form" onClick={requestClose} className="border-0 bg-transparent p-1.5 text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]">
+          <button type="button" aria-label="Close recurring form" onClick={requestClose} className="min-h-11 min-w-11 border-0 bg-transparent p-1.5 text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]">
             <span className="material-symbols-outlined text-[20px]" aria-hidden>close</span>
           </button>
         </header>
@@ -791,13 +821,14 @@ function TemplateForm({ initialMode, template, applicationToday, taskTypes, onCl
           </div>
           {mode === 'scheduled' ? (
             <textarea rows={3} aria-label="Checklist (one title per line)" placeholder="One checklist item per line" value={checklist} onChange={(event) => setChecklist(event.target.value)} className={`${recurringFieldClass} mt-3.5 resize-y leading-[1.7]`} />
-          ) : <p className="mt-3.5 text-xs text-[var(--task-detail-muted)]">Checklists are available on scheduled templates only.</p>}
+          ) : <p className="mt-3.5 text-xs text-[var(--task-detail-muted)]">Checklists are available on scheduled recurring tasks only.</p>}
         </section>
 
         <footer className="flex items-center justify-end gap-2.5 border-t border-[var(--task-detail-divider)] px-5 py-[18px] sm:px-7">
           <button type="button" className="border-0 bg-transparent px-2 py-[9px] text-[13px] text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]" onClick={requestClose}>Cancel</button>
           <button type="submit" disabled={saving || !title.trim() || Boolean(preplanningError)} className="rounded-[10px] bg-primary px-5 py-[9px] text-[13px] font-medium text-on-primary transition-colors duration-120 ease-out hover:bg-primary-dim focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary">{saving ? 'Saving…' : template ? 'Save changes' : 'Create recurrence'}</button>
         </footer>
+        </fieldset>
       </form>
     </div>
   )

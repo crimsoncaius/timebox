@@ -977,13 +977,17 @@ def test_occupied_preplanning_slot_is_exposed_and_materializes_when_conflict_cle
     assert created.status_code == 201, created.text
     template = created.json()
     slot = template["preplanning_schedule"]["slots"][0]
+    occurrence = _task_for_planning_date(client, dt.date.fromisoformat(today), template["id"])
     assert template["preplanning_schedule"]["unavailable_slots"] == [{
         "date": today,
         "slot_key": slot["key"],
         "start_minute": 540,
         "end_minute": 600,
+        "task_id": occurrence["id"],
+        "task_title": occurrence["title"],
+        "reason": "planned_block_overlap",
+        "can_add_to_ready": True,
     }]
-    occurrence = _task_for_planning_date(client, dt.date.fromisoformat(today), template["id"])
     assert occurrence["ready_to_plan"] is False
     assert occurrence["status"] == "open"
     assert client.get(f"/days/{today}").json()["actual_blocks"] == []

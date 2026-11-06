@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 
 enum class TaskDeadlineMode { None, DateOnly, DateTime }
 
@@ -125,6 +126,7 @@ class TaskDetailViewModel(
     private val _state = MutableStateFlow(TaskDetailUiState())
     val state: StateFlow<TaskDetailUiState> = _state.asStateFlow()
     private var clockJob: Job? = null
+    private var loadJob: Job? = null
 
     init {
         readinessCoordinator?.let { coordinator ->
@@ -152,14 +154,18 @@ class TaskDetailViewModel(
     }
 
     fun load(taskId: Int, showSpinner: Boolean = true) {
+        loadJob?.cancel()
         if (showSpinner || _state.value.taskId != taskId) _state.value = TaskDetailUiState(taskId = taskId)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             val tasksDeferred = async { repository.listBattleTasks() }
             val projectsDeferred = async { repository.listProjects() }
             val typesDeferred = async { repository.listTaskTypes() }
             val tasksResult = tasksDeferred.await()
             val projectsResult = projectsDeferred.await()
             val typesResult = typesDeferred.await()
+            ensureActive()
+            // A refresh cannot discard an edit started while the read was in flight.
+            if (_state.value.taskId != taskId || _state.value.dirty) return@launch
             val failure = tasksResult.exceptionOrNull() ?: projectsResult.exceptionOrNull() ?: typesResult.exceptionOrNull()
             val taskList = tasksResult.getOrNull()
             taskList?.let { readinessCoordinator?.mergeServerTasks(it.items) }

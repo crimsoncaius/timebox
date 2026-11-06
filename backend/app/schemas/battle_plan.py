@@ -302,6 +302,10 @@ class RecurringPreplanningUnavailableSlotRead(BaseModel):
     slot_key: str
     start_minute: int
     end_minute: int
+    task_id: int
+    task_title: str
+    reason: Literal["planned_block_overlap"] = "planned_block_overlap"
+    can_add_to_ready: bool
 
 
 class RecurringPreplanningScheduleRead(BaseModel):

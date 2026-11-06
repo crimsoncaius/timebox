@@ -362,7 +362,7 @@ private fun NavGraphBuilder.taskDetailRoute(dependencies: TimeboxNavigationDepen
                         trackingScope.launch {
                             val activity = activityRepository
                             val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activity.trackTask(taskDetailState.task!!) }
-                            if (saved) navController.navigate(AppRoutes.day(LocalDate.now()))
+                            if (saved) navController.navigate(AppRoutes.today(activity.now(), activity.state.value.snapshot!!.reportingTimezone))
                             else snackbarHostState.showSnackbar(activity.state.value.error ?: "Could not start tracking")
                         }
                     }) else null,
@@ -486,6 +486,7 @@ private fun NavGraphBuilder.recurringDetailRoute(dependencies: TimeboxNavigation
                     recurringEditorState, recurringEditorViewModel, { navController.popBackStack() },
                     onOpenTask = { navController.navigate(AppRoutes.taskDetail(it)) },
                     lifecycle = recurringState, lifecycleViewModel = recurringViewModel,
+                    onOpenDay = { navController.navigate(AppRoutes.day(it)) },
                 )
             }
         }
@@ -501,7 +502,8 @@ private fun NavGraphBuilder.editRecurringRoute(dependencies: TimeboxNavigationDe
             ) { entry ->
                 val recurringEditorState by recurringEditorViewModel.state.collectAsState()
                 val templateId = entry.arguments?.getInt(AppRoutes.TemplateIdArg) ?: return@screen
-                RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() })
+                RoutineScreen(recurringEditorState, recurringEditorViewModel, { navController.popBackStack() },
+                    onOpenDay = { navController.navigate(AppRoutes.day(it)) })
             }
         }
     }
@@ -578,9 +580,9 @@ private fun NavGraphBuilder.settingsRoute(dependencies: TimeboxNavigationDepende
                     onReportingZoneChange = settingsViewModel::changeReportingZone,
                     onSaveReportingZone = { settingsViewModel.saveReportingZone { dayViewModel.load(showSpinner = true) } },
                     onSaveConnection = {
-                        settingsViewModel.saveConnection()
-                        dayViewModel.load(showSpinner = true)
+                        settingsViewModel.saveConnection { dayViewModel.load(showSpinner = true) }
                     },
+                    onTestConnection = settingsViewModel::testConnection,
                     notificationsAllowed = notificationsAllowed,
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     onOpenNotificationSettings = onOpenNotificationSettings,

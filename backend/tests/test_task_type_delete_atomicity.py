@@ -25,8 +25,8 @@ def deletion_client(client, request):
 def references(client):
     tid = client.post('/task-types', json={'name': 'work'}).json()['id']
     assert client.post('/tasks', json={'title': 'Keep classification', 'task_type_id': tid}).status_code == 201
-    from app.models.battle_plan import Task
     from app.core.time import utc_now
+    from app.models.battle_plan import Task
     for state in ['archived', 'trashed']:
         task = client.post('/tasks', json={'title': state, 'task_type_id': tid}).json()
         with Session(get_engine()) as db:

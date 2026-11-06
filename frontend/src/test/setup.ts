@@ -5,6 +5,7 @@ import { vi } from 'vitest'
 // jsdom exposes scrollBy but reports it as unimplemented. Keep tests deterministic;
 // focused scrolling tests can spy on this shared mock.
 window.scrollBy = vi.fn()
+window.scrollTo = vi.fn()
 HTMLElement.prototype.scrollIntoView = vi.fn()
 // jsdom has dialog elements but no native top-layer implementation.
 HTMLDialogElement.prototype.showModal = function () { this.open = true }

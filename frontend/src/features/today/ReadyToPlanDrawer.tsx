@@ -20,9 +20,8 @@ export function ReadyToPlanDrawer({ tasks, selectedTaskId, dragInstance, busyTas
   return (
     <section className="rounded-2xl bg-surface-container-lowest/90 p-5 shadow-[0_0_40px_rgba(45,52,53,0.04)] dark:bg-dark-surface-container-lowest/85" aria-label="Ready to Plan tasks">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-label text-[10px] uppercase tracking-[0.16em] text-primary">Battle Plan</p>
-          <h2 className="mt-1 font-headline text-xl font-light text-on-surface">Ready to Plan</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-headline text-xl font-light text-on-surface">Ready to Plan</h2>
           <ContextualHelp title="Ready to Plan">Drag a task to Planned, or select it and choose a time slot.</ContextualHelp>
         </div>
         <span className="rounded-full bg-surface-container px-2 py-1 text-xs text-on-surface-variant">{tasks.length}</span>

@@ -732,7 +732,7 @@ private fun BattlePlanFilterSheetContent(
                     color = colors.onVariant,
                 )
             }
-            TimeboxSwitch(state.hideCompleted, onSetHideCompleted)
+            TimeboxSwitch(state.hideCompleted, onSetHideCompleted, label = "Hide completed tasks")
         }
 
         if (state.completedForArchive.isNotEmpty()) {

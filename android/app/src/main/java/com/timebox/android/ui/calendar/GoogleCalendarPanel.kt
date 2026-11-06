@@ -13,6 +13,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.timebox.android.TimeboxApplication
 import com.timebox.android.data.apiError
+import com.timebox.android.data.TaskType
+import com.timebox.android.data.BattleTask
+import com.timebox.android.data.flattenBattleTasks
+import com.timebox.android.ui.day.ActivityTimeValue
+import com.timebox.android.ui.day.ActivityTimeField
+import com.timebox.android.ui.day.TaskTypePicker
 import com.timebox.android.ui.theme.TimeboxTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -28,7 +34,11 @@ internal fun JsonObject.b(key: String) = (get(key) as? JsonPrimitive)?.booleanOr
 internal fun JsonObject.objects(key: String) = (get(key) as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
 internal fun JsonObject.strings(key: String) = (get(key) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
 private fun command(kind: String, id: String? = null, extra: JsonObjectBuilder.() -> Unit = {}) = buildJsonObject { put("kind", kind); id?.let { put("id", it) }; extra() }
-internal fun stamp(value: String?, zone: String): String = value?.let { runCatching { Instant.parse(it).atZone(ZoneId.of(zone)).format(DateTimeFormatter.ofPattern("MMM d, HH:mm")) }.getOrDefault(it) }.orEmpty()
+internal fun stamp(value: String?, zone: String): String = value?.let { runCatching {
+    val time = Instant.parse(it).atZone(ZoneId.of(zone))
+    val repeated = time.zone.rules.getValidOffsets(time.toLocalDateTime()).size > 1
+    time.format(DateTimeFormatter.ofPattern(if (repeated) "MMM d, HH:mm xxx" else "MMM d, HH:mm"))
+}.getOrDefault(it) }.orEmpty()
 
 @Composable
 fun GoogleCalendarPanel(date: String? = null, onChanged: () -> Unit = {}) {
@@ -196,16 +206,21 @@ private fun CalendarDetails(o: JsonObject, state: JsonObject, busy: Boolean, onA
     var note by remember(id) { mutableStateOf(o.s("note").orEmpty()) }
     var typeId by remember(id) { mutableStateOf(o.s("task_type_id")) }
     var taskId by remember(id) { mutableStateOf(o.s("task_id")) }
-    var types by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var tasks by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var edits by remember(id) { mutableStateOf<Map<String, JsonObject>>(emptyMap()) }
+    var types by remember { mutableStateOf<List<TaskType>>(emptyList()) }
+    var tasks by remember { mutableStateOf<List<BattleTask>>(emptyList()) }
+    var edits by remember(id) { mutableStateOf<Map<String, CalendarPlanEdit>>(emptyMap()) }
+    var typeQuery by remember(id) { mutableStateOf("") }
+    var creatingType by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val zoneId = ZoneId.of(zone)
     var exclusions by remember(id) { mutableStateOf<List<String>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(id) {
         try {
-            types = repository.listTaskTypes().getOrThrow().map { it.id.toString() to it.name }
-            tasks = repository.listBattleTasks().getOrThrow().items.flatMap { listOf(it) + it.sessionTasks }.map { it.id.toString() to it.title }
-        } catch (e: Exception) { error = e.apiError.message }
+            types = repository.listTaskTypes().getOrThrow()
+            tasks = repository.listBattleTasks().getOrThrow().items.flattenBattleTasks()
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { error = e.apiError.message }
     }
     Text(o.s("name").orEmpty(), style = TimeboxTheme.type.sectionTitle)
     Text("${stamp(o.s("start"), zone)} – ${stamp(o.s("end"), zone)}")
@@ -215,35 +230,31 @@ private fun CalendarDetails(o: JsonObject, state: JsonObject, busy: Boolean, onA
     o.objects("overlaps").forEach { block ->
         val blockId = block.s("id")!!
         var operation by remember(blockId) { mutableStateOf("") }
-        var start by remember(blockId) { mutableStateOf(Instant.parse(block.s("start")).atZone(ZoneId.of(zone)).toLocalDateTime().toString()) }
-        var end by remember(blockId) { mutableStateOf(Instant.parse(block.s("end")).atZone(ZoneId.of(zone)).toLocalDateTime().toString()) }
-        fun update() { edits = edits + (blockId to buildJsonObject { put("id", blockId.toInt()); put("action", operation); put("start", start); put("end", end) }) }
+        var start by remember(blockId) { mutableStateOf(ActivityTimeValue.from(Instant.parse(block.s("start")), zoneId)) }
+        var end by remember(blockId) { mutableStateOf(ActivityTimeValue.from(Instant.parse(block.s("end")), zoneId)) }
+        fun update() { edits = edits + (blockId to CalendarPlanEdit(blockId.toInt(), operation, start, end)) }
         Text(block.s("name") ?: "Unnamed Planned Block", style = TimeboxTheme.type.body)
         Text("${stamp(block.s("start"), zone)} – ${stamp(block.s("end"), zone)}", style = TimeboxTheme.type.bodySmall)
         val options = listOf("" to "Keep unchanged", "remove" to if (block.s("occurrence_id") != null) "Leave this meeting out" else "Remove Planned Block") + if (block.s("occurrence_id") == null) listOf("move" to "Move or shorten") else emptyList()
         Choice("Make room", operation, options) { operation = it.orEmpty(); update() }
         if (operation == "move") {
-            OutlinedTextField(start, { start = it; update() }, label = { Text("Start in $zone") }, supportingText = { Text("YYYY-MM-DDTHH:MM") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(end, { end = it; update() }, label = { Text("End in $zone") }, modifier = Modifier.fillMaxWidth())
+            Text("Reporting Time Zone: $zone", style = TimeboxTheme.type.bodySmall)
+            ActivityTimeField("Start", start, zoneId, compact = true, enabled = !busy) { start = it; update() }
+            ActivityTimeField("End", end, zoneId, compact = true, enabled = !busy) { end = it; update() }
+            val interval = runCatching { CalendarPlanEdit(blockId.toInt(), operation, start, end).duration(zoneId) }
+            Text(interval.fold({ "$it minutes" }, { it.message ?: "Choose a valid interval." }),
+                color = if (interval.isFailure) TimeboxTheme.colors.error else TimeboxTheme.colors.onVariant,
+                style = TimeboxTheme.type.bodySmall)
         }
     }
     o.strings("competing_ids").forEach { peer -> Row {
         Checkbox(checked = peer in exclusions, onCheckedChange = { exclusions = if (it) exclusions + peer else exclusions - peer })
         Text("Leave out ${state.objects("occurrences").find { it.s("id") == peer }?.s("name") ?: "the other meeting"}", modifier = Modifier.padding(top = 12.dp))
     } }
-    Button(enabled = !busy && state.b("connected"), onClick = {
+    val validEdits = edits.values.filter { it.operation.isNotEmpty() }.all { runCatching { it.payload(zoneId) }.isSuccess }
+    Button(enabled = !busy && validEdits && state.b("connected"), onClick = {
         try {
-            val normalized = edits.values.filter { !it.s("action").isNullOrEmpty() }.map { e -> buildJsonObject {
-                put("id", e.s("id")!!.toInt()); put("action", e.s("action")!!)
-                if (e.s("action") == "move") {
-                    fun instant(key: String): String {
-                        val local = LocalDateTime.parse(e.s(key)); val zoneId = ZoneId.of(zone)
-                        require(zoneId.rules.getValidOffsets(local).isNotEmpty()) { "That time does not exist in $zone. Choose another time." }
-                        return local.atZone(zoneId).toInstant().toString()
-                    }
-                    put("start", instant("start")); put("end", instant("end"))
-                }
-            } }
+            val normalized = edits.values.filter { it.operation.isNotEmpty() }.map { it.payload(zoneId) }
             onAction(command(if (o.s("status") == "excluded") "include" else "resolve", id) { put("edits", JsonArray(normalized)); put("exclude_ids", JsonArray(exclusions.map(::JsonPrimitive))) })
         } catch (e: Exception) { error = e.message ?: "Enter valid start and end times." }
     }) { Text(if (o.s("status") == "excluded") "Include again" else "Preview making room") }
@@ -251,10 +262,26 @@ private fun CalendarDetails(o: JsonObject, state: JsonObject, busy: Boolean, onA
     TextButton(onClick = onClose) { Text("Resolve later") }
     HorizontalDivider()
     Text("Local classification and notes", style = TimeboxTheme.type.body)
-    Choice("Task Type", typeId, listOf("" to "unspecified") + types) { typeId = it?.ifEmpty { null } }
-    Choice("Battle Plan Task", taskId, listOf("" to "No linked Task") + tasks) { taskId = it?.ifEmpty { null } }
+    if (creatingType) LinearProgressIndicator(Modifier.fillMaxWidth())
+    else if (busy) Text("Task Type: ${types.find { it.id.toString() == typeId }?.name ?: "unspecified"}")
+    else TaskTypePicker(types, typeQuery, { typeQuery = it },
+        selectedTypeId = typeId?.toIntOrNull() ?: types.find { it.name == "unspecified" }?.id,
+        onChoose = { typeId = it.id.toString(); typeQuery = it.name },
+        onCreate = { path ->
+            scope.launch {
+                creatingType = true
+                try {
+                    val created = repository.createTaskType(path).getOrThrow()
+                    types = repository.listTaskTypes().getOrElse { types + created }
+                    typeId = created.id.toString(); typeQuery = created.name
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { error = e.apiError.message }
+                finally { creatingType = false }
+            }
+        }, recommendationEnabled = false, initiallyCollapsed = true)
+    CalendarTaskPicker(tasks, taskId?.toIntOrNull(), enabled = !busy) { taskId = it?.toString() }
     OutlinedTextField(note, { note = it }, label = { Text("Supporting Note") }, modifier = Modifier.fillMaxWidth())
-    TextButton(enabled = !busy, onClick = { onAction(command("metadata", id) { put("task_type_id", typeId?.toInt()?.let(::JsonPrimitive) ?: JsonNull); put("task_id", taskId?.toInt()?.let(::JsonPrimitive) ?: JsonNull); put("note", note) }) }) { Text("Preview local changes") }
+    TextButton(enabled = !busy && !creatingType, onClick = { onAction(command("metadata", id) { put("task_type_id", typeId?.toInt()?.let(::JsonPrimitive) ?: JsonNull); put("task_id", taskId?.toInt()?.let(::JsonPrimitive) ?: JsonNull); put("note", note) }) }) { Text("Preview local changes") }
     error?.let { Text(it, color = TimeboxTheme.colors.error) }
 }
 

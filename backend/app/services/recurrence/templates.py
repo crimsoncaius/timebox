@@ -58,11 +58,13 @@ from app.services.recurrence.synchronization import (
     synchronize,
 )
 from app.services.recurrence.windows import iter_windows
+from app.services.reporting import reporting_settings
 
 
 def create_template(
     db: Session, body: RecurringTemplateCreate, settings: Settings
 ) -> RecurringTemplate:
+    settings = reporting_settings(db, settings)
     _validate_refs(db, body.task_type_id)
     title = body.title.strip()
     if not title:
@@ -187,6 +189,7 @@ def _replace_preplanning_schedule(
 def patch_template(
     db: Session, template_id: int, body: RecurringTemplatePatch, settings: Settings
 ) -> RecurringTemplate:
+    settings = reporting_settings(db, settings)
     row = _load_template(db, template_id)
     fields = body.model_fields_set - {"confirm_backfill"}
     _validate_refs(
@@ -313,6 +316,7 @@ def patch_template(
 def pause_template(
     db: Session, template_id: int, settings: Settings
 ) -> RecurringTemplate:
+    settings = reporting_settings(db, settings)
     row = _load_template(db, template_id)
     if row.status != RecurrenceStatus.active:
         raise ValueError("Only active templates can be paused")
@@ -327,6 +331,7 @@ def pause_template(
 def resume_template(
     db: Session, template_id: int, settings: Settings
 ) -> RecurringTemplate:
+    settings = reporting_settings(db, settings)
     row = _load_template(db, template_id)
     if row.status != RecurrenceStatus.paused:
         raise ValueError("Only paused templates can be resumed")
@@ -353,6 +358,7 @@ def resume_template(
 def end_template(
     db: Session, template_id: int, settings: Settings
 ) -> RecurringTemplate:
+    settings = reporting_settings(db, settings)
     row = _load_template(db, template_id)
     if row.status == RecurrenceStatus.ended:
         return row
@@ -411,6 +417,7 @@ def _to_read_windows(windows: list) -> list[RecurrenceWindow]:
 def to_read(
     db: Session, row: RecurringTemplate, settings: Settings
 ) -> RecurringTemplateRead:
+    settings = reporting_settings(db, settings)
     today = today_in_tz(settings.app_timezone)
     suppressed_keys = set(
         db.execute(
@@ -462,16 +469,25 @@ def to_read(
                 slot_key=realization.slot_key,
                 start_minute=active_slots[realization.slot_key].start_minute,
                 end_minute=active_slots[realization.slot_key].end_minute,
+                task_id=task.id,
+                task_title=task.title,
+                can_add_to_ready=occurrence.cycle_start == today and not task.ready_to_plan,
             )
-            for occurrence, realization in db.execute(
-                select(RecurrenceOccurrence, RecurringPlannedBlockRealization)
+            for occurrence, realization, task in db.execute(
+                select(RecurrenceOccurrence, RecurringPlannedBlockRealization, Task)
                 .join(
                     RecurringPlannedBlockRealization,
                     RecurringPlannedBlockRealization.occurrence_id == RecurrenceOccurrence.id,
                 )
+                .join(Task, Task.id == RecurrenceOccurrence.task_id)
                 .where(
                     RecurrenceOccurrence.template_id == row.id,
                     RecurrenceOccurrence.cycle_start >= today,
+                    RecurrenceOccurrence.skipped.is_(False),
+                    RecurrenceOccurrence.suppressed.is_(False),
+                    Task.status != TaskStatus.completed,
+                    Task.archived_at.is_(None),
+                    Task.deleted_at.is_(None),
                     RecurringPlannedBlockRealization.state == RecurringPlannedBlockState.untouched,
                     RecurringPlannedBlockRealization.planned_block_id.is_(None),
                 )
@@ -541,6 +557,7 @@ def to_read(
 def list_templates(
     db: Session, status: RecurrenceStatus, settings: Settings
 ) -> list[RecurringTemplateRead]:
+    settings = reporting_settings(db, settings)
     if status == RecurrenceStatus.active:
         synchronize(db, settings)
     rows = list(
@@ -563,6 +580,7 @@ def list_templates(
 def get_template(
     db: Session, template_id: int, settings: Settings
 ) -> RecurringTemplateRead:
+    settings = reporting_settings(db, settings)
     synchronize(db, settings)
     return to_read(db, _load_template(db, template_id), settings)
 

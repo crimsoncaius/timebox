@@ -130,7 +130,7 @@ describe('RecurringPage', () => {
     expect(within(sidebar).getByRole('button', { name: 'All Tasks' })).toBeInTheDocument()
     expect(within(sidebar).getByRole('link', { name: 'Recurring' })).toHaveClass('bg-surface-container-high')
     await user.click(screen.getByRole('button', { name: 'Gym' }))
-    const detail = screen.getByRole('dialog', { name: 'Recurring template Gym' })
+    const detail = screen.getByRole('dialog', { name: 'Recurring task series Gym' })
     expect(within(detail).getByText('Next five')).toBeInTheDocument()
     expect(within(detail).getByRole('link', { name: /Gym/ })).toHaveAttribute('href', '/battle-plan?task=17')
     await user.click(within(detail).getByRole('button', { name: 'Close recurring details' }))
@@ -162,11 +162,40 @@ describe('RecurringPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Gym' }))
 
-    const detail = screen.getByRole('dialog', { name: 'Recurring template Gym' })
+    const detail = screen.getByRole('dialog', { name: 'Recurring task series Gym' })
     const schedule = within(detail).getByRole('region', { name: 'Recurring Pre-planning Schedule' })
     expect(within(schedule).getByText('Mon · 08:00–09:00')).toBeInTheDocument()
     expect(within(schedule).getByText('Wed · 15:00–00:00')).toBeInTheDocument()
     expect(within(schedule).getByRole('status')).toHaveTextContent('Unavailable on 19 Aug 2026, 15:00–00:00')
+  })
+
+  it('links conflicting dates and explicitly queues only today through coordinated readiness', async () => {
+    active = [{ ...template, preplanning_schedule: { slots: [], unavailable_slots: [
+      { task_id: 17, task_title: 'Gym today', reason: 'planned_block_overlap', date: applicationToday, slot_key: 'today', start_minute: 900, end_minute: 960 },
+      { task_id: 18, task_title: 'Gym future', reason: 'planned_block_overlap', date: '2099-08-18', slot_key: 'future', start_minute: 900, end_minute: 960 },
+    ] } }]
+    const previousFetch = globalThis.fetch
+    let ready = false
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = String(input)
+      const task = { id: 17, title: 'Gym today', status: 'open', ready_to_plan: ready, version: ready ? 2 : 1 }
+      if (url.includes('/tasks?state=active')) return response({ items: [task], timezone: 'UTC', server_now_iso: `${applicationToday}T12:00:00Z` })
+      if (url.endsWith('/tasks/17') && init?.method === 'PATCH') {
+        ready = JSON.parse(String(init.body)).ready_to_plan
+        return response({ ...task, ready_to_plan: ready, version: 2 })
+      }
+      return previousFetch(input, init)
+    })
+    const user = userEvent.setup()
+    render(<MemoryRouter><RecurringPage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Gym' }))
+    expect(screen.getByText('2 planned slots need attention')).toBeInTheDocument()
+    const links = screen.getAllByRole('link', { name: 'View day' })
+    expect(links.map(link => link.getAttribute('href'))).toEqual([`/day/${applicationToday}`, '/day/2099-08-18'])
+    expect(screen.getAllByRole('button', { name: 'Add to Ready to Plan' })).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Add to Ready to Plan' }))
+    expect(await screen.findByRole('button', { name: 'Added to Ready to Plan' })).toBeDisabled()
+    expect(ready).toBe(true)
   })
 
   it('creates queue preplanning without time slots, even after switching from Planned time', async () => {

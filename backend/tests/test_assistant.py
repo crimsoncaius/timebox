@@ -221,11 +221,18 @@ def test_missing_provider_finish_event_is_interrupted(monkeypatch):
         asyncio.run(consume())
 
 
-def test_provider_503_is_not_retried():
+def test_provider_503_is_not_retried(monkeypatch):
+    import importlib
+
     import httpx
+    from openrouter.errors import ServiceUnavailableResponseError
 
     from app.services.assistant_agent import create_model
     requests = []
+    async def unexpected_retry(*args, **kwargs):
+        pytest.fail("Provider errors must not enter SDK backoff")
+    monkeypatch.setattr(importlib.import_module("openrouter.utils.retries"),
+                        "retry_with_backoff_async", unexpected_retry)
     async def scenario():
         model = create_model()
         config = model.client.sdk_configuration
@@ -238,8 +245,8 @@ def test_provider_503_is_not_retried():
             async with model.client:
                 async def consume():
                     async for _ in model.astream([HumanMessage("hello")]): pass
-                with pytest.raises(Exception) as error:
-                    await asyncio.wait_for(consume(), timeout=2)
-                assert not isinstance(error.value, TimeoutError)
+                with pytest.raises(ServiceUnavailableResponseError) as error:
+                    await consume()
+                assert error.value.status_code == 503
     asyncio.run(scenario())
     assert len(requests) == 1

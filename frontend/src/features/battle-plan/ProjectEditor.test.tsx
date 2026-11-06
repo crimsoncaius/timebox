@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,22 @@ import { ProjectEditor } from './ProjectEditor'
 
 describe('ProjectEditor', () => {
   const originalConfirm = window.confirm
+
+  it('keeps failed saves editable and blocks dismissal while a save is uncertain', async () => {
+    let reject!: (error: Error) => void
+    const onSave = vi.fn(() => new Promise<void>((_, fail) => { reject = fail }))
+    const onClose = vi.fn()
+    render(<ProjectEditor project={null} taskCount={0} onSave={onSave} onDelete={null} onClose={onClose} />)
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Keep my draft' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save project' }))
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Close project editor' })).toBeDisabled()
+    await act(async () => reject(new Error('Connection lost')))
+    expect(screen.getByRole('alert')).toHaveTextContent('Connection lost')
+    expect(screen.getByLabelText('Name')).toHaveValue('Keep my draft')
+    expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled()
+  })
 
   it('creates a project using only its name', async () => {
     const user = userEvent.setup()

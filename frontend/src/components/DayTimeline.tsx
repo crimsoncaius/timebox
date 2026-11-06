@@ -256,7 +256,7 @@ export const DayTimeline = forwardRef<
         ...day.actual_blocks.map((projection) => projection.start_minute),
       ]
       const firstMinute = starts.length ? Math.min(...starts) : DEFAULT_SCROLL_MINUTE
-      window.scrollBy({ top: timeline.getBoundingClientRect().top + (firstMinute / SLOT_MINUTES) * slotHeightPx - SCROLL_HEADROOM_PX, behavior: 'auto' })
+      window.scrollBy({ top: timeline.getBoundingClientRect().top + (firstMinute / SLOT_MINUTES) * slotHeightPx - Math.max(SCROLL_HEADROOM_PX, timelineTopInset() + 16), behavior: 'auto' })
       return
     }
     if (!showNowLine) {
@@ -376,9 +376,14 @@ const SCROLL_HEADROOM_PX = 96
 
 function scrollCurrentTimeIntoView(line: HTMLElement, timeline: HTMLElement, viewportHeight = window.innerHeight) {
   window.scrollBy({
-    top: nowLineScrollDelta(line.getBoundingClientRect().top, timeline.getBoundingClientRect().top, viewportHeight),
+    top: nowLineScrollDelta(line.getBoundingClientRect().top, Math.max(timeline.getBoundingClientRect().top, timelineTopInset()), viewportHeight),
     behavior: 'auto',
   })
+}
+
+function timelineTopInset() {
+  return ['[data-app-header]', '[data-day-toolbar]'].reduce((height, selector) =>
+    height + (document.querySelector(selector)?.getBoundingClientRect().height ?? 0), 0)
 }
 
 function DraftBlockOverlay({

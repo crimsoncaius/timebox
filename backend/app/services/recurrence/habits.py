@@ -143,7 +143,7 @@ class _Habit:
         if occurrence is None or occurrence.task_id is None:
             return None
         task = self.tasks.get(occurrence.task_id)
-        if task is None or task.deleted_at is not None or task.archived_at is not None:
+        if task is None or task.deleted_at is not None:
             return None
         return task
 
@@ -205,7 +205,7 @@ def _scheduled_row(habit: _Habit, days: list[dt.date]) -> tuple[list[HabitDayRea
             cells.append(HabitDayRead(date=day, state="excused"))
             continue
         task = habit.root_task(window)
-        recordable = task is not None and day <= today
+        recordable = task is not None and task.archived_at is None and day <= today
         if _done(task):
             state = "met"
         elif day > today:
@@ -238,7 +238,7 @@ def _quota_row(habit: _Habit, days: list[dt.date]) -> tuple[list[HabitDayRead], 
             cells.append(HabitDayRead(date=day, state="upcoming"))
             continue
         tracker = habit.root_task(window)
-        recordable = tracker is not None
+        recordable = tracker is not None and tracker.archived_at is None
         if frequency == RecurrenceFrequency.daily:
             count = len(habit.completed_sessions(tracker))
             target = habit.target(tracker)
@@ -315,7 +315,7 @@ def _item_row(habit: _Habit, item: RecurringChecklistItem, days: list[dt.date]) 
             state = "open"
         else:
             state = "missed"
-        cells.append(HabitDayRead(date=day, state=state, tickable=day <= today))
+        cells.append(HabitDayRead(date=day, state=state, tickable=day <= today and root.archived_at is None))
     return HabitItemRead(
         item_id=item.id, title=item.title, days=cells, total=_period_total(cells, days[-1] < today)
     )
@@ -401,6 +401,8 @@ def _recordable(db: Session, template_id: int, day: dt.date, settings: Settings,
     root = habit.root_task(window)
     if root is None:
         raise ValueError(NO_PERIOD)
+    if root.archived_at is not None:
+        raise ValueError("Restore the archived Task before changing its Habit history")
     return habit, window, root
 
 

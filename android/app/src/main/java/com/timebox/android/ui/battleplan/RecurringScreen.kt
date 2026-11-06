@@ -200,6 +200,9 @@ private fun RecurringTemplateRow(
             Modifier.padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            template.preplanningSchedule?.unavailableSlots?.size?.takeIf { it > 0 }?.let { count ->
+                Text("$count planned ${if (count == 1) "slot needs" else "slots need"} attention · Open to resolve", style = TimeboxTheme.type.bodySmall, color = colors.on)
+            }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),

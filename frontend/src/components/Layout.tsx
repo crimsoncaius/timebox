@@ -118,7 +118,7 @@ export function Layout({
       </aside>
 
       <div className="min-h-screen pb-20 lg:ml-64 lg:pb-0">
-        <header className="sticky top-0 z-50 flex w-full items-center justify-between bg-surface/85 px-4 py-4 backdrop-blur-[24px] dark:bg-dark-background/85 sm:px-8 lg:px-12 lg:py-6">
+        <header data-app-header className="sticky top-0 z-50 flex h-20 w-full items-center justify-between bg-surface px-4 dark:bg-dark-background sm:px-8 lg:h-24 lg:px-12">
           <div>
             <h2 className="font-headline text-xl font-light tracking-tighter text-on-surface dark:text-dark-on-surface">
               Timebox
@@ -130,7 +130,7 @@ export function Layout({
               aria-label="Settings"
               className={({ isActive }) =>
                 [
-                  "flex items-center gap-2 rounded-full px-3 py-2 text-sm font-headline font-light tracking-tight transition-colors",
+                  "flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-sm font-headline font-light tracking-tight transition-colors",
                   isActive
                     ? "bg-surface-container-low text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface"
                     : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container dark:hover:text-dark-on-surface",

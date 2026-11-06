@@ -8,6 +8,7 @@ import { api, type BlockDraftPlacement, type DayRead, type TaskType, type TimeBl
 import { formatMinuteLabel24, zonedLocalDateTimeToIso } from '../lib/time'
 import { TaskTypePathCombobox } from './TaskTypePathCombobox'
 import { Link } from 'react-router-dom'
+import { errorMessage } from '../lib/errors'
 
 export type TimeBlockInspectorVariant = 'rail' | 'sheet'
 
@@ -24,6 +25,7 @@ export function TimeBlockInspectorContent(props: Parameters<typeof LegacyTimeBlo
     actual={props.day.actual_blocks.find(p => p.actual_block.id === props.block?.id)?.actual_block}
     draft={props.draft} day={props.day} taskTypes={props.taskTypes} onSave={props.onSave} onCreate={props.onCreateFromDraft}
     onDelete={props.onDelete} onClose={props.onClose} onDirtyChange={props.onDirtyChange}
+    onBusyChange={props.onBusyChange}
     onCreateTaskTypePath={props.onCreateTaskTypePath} />
   return <LegacyTimeBlockInspectorContent {...props} />
 }
@@ -41,6 +43,7 @@ function LegacyTimeBlockInspectorContent({
   onOpenActual,
   onCreateTaskTypePath,
   onDirtyChange,
+  onBusyChange,
 }: {
   block: TimeBlock | null
   draft: BlockDraftPlacement | null
@@ -55,6 +58,7 @@ function LegacyTimeBlockInspectorContent({
   onOpenActual?: (id: number) => void
   onCreateTaskTypePath: (path: string) => Promise<TaskType>
   onDirtyChange?: (dirty: boolean) => void
+  onBusyChange?: (busy: boolean) => void
 }) {
   const [taskTypeId, setTaskTypeId] = useState(() => block?.task_type_id ?? draft?.task_type_id ?? 0)
   const [name, setName] = useState(() => block?.name ?? '')
@@ -67,7 +71,12 @@ function LegacyTimeBlockInspectorContent({
     return () => { active = false }
   }, [draft?.task_id])
   const [note, setNote] = useState(() => block?.note ?? '')
-  const [saving, setSaving] = useState(false)
+  const [pendingSaves, setPendingSaves] = useState(0)
+  const saving = pendingSaves > 0
+  const setSaving = useCallback((busy: boolean) => setPendingSaves(count => Math.max(0, count + (busy ? 1 : -1))), [])
+  const [saveError, setSaveError] = useState<string | null>(null)
+  useEffect(() => { onBusyChange?.(saving) }, [saving, onBusyChange])
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange])
   const [clock, setClock] = useState(Date.now)
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [])
   const recordingTiming = useMemo(() => {
@@ -136,8 +145,8 @@ function LegacyTimeBlockInspectorContent({
   }, [block, isCreateMode, name, note, taskTypeId])
 
   useEffect(() => {
-    onDirtyChange?.(dirty)
-  }, [dirty, onDirtyChange])
+    onDirtyChange?.(dirty || saving || !!saveError)
+  }, [dirty, saving, saveError, onDirtyChange])
 
   const canSaveCreate =
     isCreateMode &&
@@ -145,57 +154,61 @@ function LegacyTimeBlockInspectorContent({
     !!onCreateFromDraft
 
   const saveNamePatchIfNeeded = useCallback(async () => {
-    if (!block || isCreateMode || !isNameEditable) return
+    if (!block || isCreateMode || !isNameEditable) return true
     const newName = name.trim() || null
     const oldName = (block.name ?? '').trim() || null
-    if (newName === oldName) return
+    if (newName === oldName) return true
     setSaving(true)
     try {
       await onSave({ name: newName })
       setName((current) => current === name ? newName ?? '' : current)
-    } catch {
-      /* parent shows error */
+      return true
+    } catch (cause) {
+      setSaveError(errorMessage(cause, 'Could not save the block.'))
+      return false
     } finally {
       setSaving(false)
     }
-  }, [block, isCreateMode, isNameEditable, name, onSave])
+  }, [block, isCreateMode, isNameEditable, name, onSave, setSaving])
 
   const saveNotePatchIfNeeded = useCallback(async () => {
-    if (!block || isCreateMode) return
+    if (!block || isCreateMode) return true
     const newNote = note.trim() || null
     const oldNote = (block.note ?? '').trim() || null
-    if (newNote === oldNote) return
+    if (newNote === oldNote) return true
     setSaving(true)
     try {
       await onSave({ note: newNote })
       setNote((current) => current === note ? newNote ?? '' : current)
-    } catch {
-      /* parent shows error */
+      return true
+    } catch (cause) {
+      setSaveError(errorMessage(cause, 'Could not save the block.'))
+      return false
     } finally {
       setSaving(false)
     }
-  }, [block, isCreateMode, note, onSave])
+  }, [block, isCreateMode, note, onSave, setSaving])
 
   const selectTaskType = useCallback((nextTaskTypeId: number) => {
     if (nextTaskTypeId === taskTypeId) return
     setTaskTypeId(nextTaskTypeId)
+    setSaveError(null)
     if (!block || isCreateMode || nextTaskTypeId < 1) return
     clearNoteDebounce()
     setSaving(true)
     void (async () => {
       try {
         await onSave({ task_type_id: nextTaskTypeId })
-      } catch {
-        setTaskTypeId(block.task_type_id)
-        /* parent shows error */
+      } catch (cause) {
+        setSaveError(errorMessage(cause, 'Could not save the Task Type.'))
       } finally {
         setSaving(false)
       }
     })()
-  }, [block, isCreateMode, taskTypeId, onSave, clearNoteDebounce])
+  }, [block, isCreateMode, taskTypeId, onSave, clearNoteDebounce, setSaving])
 
   useEffect(() => {
-    if (!block || isCreateMode) return
+    if (!block || isCreateMode || saveError) return
     const newNote = note.trim() || null
     const oldNote = (block.note ?? '').trim() || null
     if (newNote === oldNote) return
@@ -205,10 +218,10 @@ function LegacyTimeBlockInspectorContent({
       void saveNotePatchIfNeeded()
     }, NOTE_DEBOUNCE_MS)
     return () => clearNoteDebounce()
-  }, [note, block, isCreateMode, saveNotePatchIfNeeded, clearNoteDebounce])
+  }, [note, block, isCreateMode, saveError, saveNotePatchIfNeeded, clearNoteDebounce])
 
   useEffect(() => {
-    if (!block || isCreateMode || !isNameEditable) return
+    if (!block || isCreateMode || !isNameEditable || saveError) return
     const newName = name.trim() || null
     const oldName = (block.name ?? '').trim() || null
     if (newName === oldName) return
@@ -218,9 +231,10 @@ function LegacyTimeBlockInspectorContent({
       void saveNamePatchIfNeeded()
     }, NAME_DEBOUNCE_MS)
     return () => clearNameDebounce()
-  }, [name, block, isCreateMode, isNameEditable, saveNamePatchIfNeeded, clearNameDebounce])
+  }, [name, block, isCreateMode, isNameEditable, saveError, saveNamePatchIfNeeded, clearNameDebounce])
 
   useEffect(() => {
+    if (saveError) return
     if (!isCreateMode) {
       draftCreateAttemptedRef.current = false
       return
@@ -237,30 +251,31 @@ function LegacyTimeBlockInspectorContent({
     void (async () => {
       try {
         await onCreateFromDraft(payload)
-      } catch {
+      } catch (cause) {
+        setSaveError(errorMessage(cause, 'Could not create the block.'))
         draftCreateAttemptedRef.current = false
       } finally {
         setSaving(false)
       }
     })()
-  }, [isCreateMode, canSaveCreate, onCreateFromDraft, taskTypeId, taskTypes, name, note])
+  }, [isCreateMode, canSaveCreate, onCreateFromDraft, taskTypeId, taskTypes, name, note, setSaving, saveError])
 
   const flushNoteNow = useCallback(async () => {
     clearNoteDebounce()
-    await saveNotePatchIfNeeded()
+    return saveNotePatchIfNeeded()
   }, [clearNoteDebounce, saveNotePatchIfNeeded])
 
   const flushNameNow = useCallback(async () => {
     clearNameDebounce()
-    await saveNamePatchIfNeeded()
+    return saveNamePatchIfNeeded()
   }, [clearNameDebounce, saveNamePatchIfNeeded])
 
   const flushTextNow = useCallback(async () => {
-    await Promise.all([flushNameNow(), flushNoteNow()])
+    return (await Promise.all([flushNameNow(), flushNoteNow()])).every(Boolean)
   }, [flushNameNow, flushNoteNow])
 
   const handleActualAction = useCallback(async (action: () => Promise<void>) => {
-    await flushTextNow()
+    if (!await flushTextNow()) return
     setSaving(true)
     try {
       await action()
@@ -269,11 +284,11 @@ function LegacyTimeBlockInspectorContent({
     } finally {
       setSaving(false)
     }
-  }, [flushTextNow])
+  }, [flushTextNow, setSaving])
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('Permanently delete this time block? This cannot be undone.')) return
-    await flushTextNow()
+    if (!await flushTextNow()) return
     setSaving(true)
     try {
       await onDelete()
@@ -283,7 +298,7 @@ function LegacyTimeBlockInspectorContent({
     } finally {
       setSaving(false)
     }
-  }, [flushTextNow, onDelete, onClose])
+  }, [flushTextNow, onDelete, onClose, setSaving])
 
   if (!block && !draft) return null
 
@@ -327,8 +342,9 @@ function LegacyTimeBlockInspectorContent({
           </span>
           <button
             type="button"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container dark:text-dark-on-surface-variant dark:hover:bg-dark-surface-container"
             aria-label="Close"
+            disabled={saving}
             onClick={() => onClose()}
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden>
@@ -344,6 +360,19 @@ function LegacyTimeBlockInspectorContent({
         <span className="text-outline-variant"> – </span>
         <span>{endLabel}</span>
       </p>
+
+      {!isCreateMode && <p role="status" className="text-xs text-on-surface-variant">{saving ? 'Saving block…' : saveError ? 'Changes not saved' : dirty ? 'Unsaved changes' : 'Saved'}</p>}
+      {saveError && <div role="alert" className="text-sm text-error">{saveError} Your changes are kept. <button type="button" disabled={saving} className="min-h-11 underline" onClick={async () => {
+        clearNameDebounce(); clearNoteDebounce(); setSaving(true)
+        try {
+          const patch = { ...(taskTypeId ? { task_type_id: taskTypeId } : {}), name: name.trim() || null, note: note.trim() || null }
+          if (isCreateMode) { draftCreateAttemptedRef.current = true; await onCreateFromDraft?.(patch) }
+          else await onSave(patch)
+          setSaveError(null)
+        }
+        catch (cause) { setSaveError(errorMessage(cause, 'Could not save the block.')) }
+        finally { setSaving(false) }
+      }}>Retry save</button></div>}
 
       {block?.start_at && block.end_at && <p className="text-sm">{new Date(block.start_at).toLocaleString(undefined, { timeZone: day.meta.timezone })} – {new Date(block.end_at).toLocaleString(undefined, { timeZone: day.meta.timezone })}</p>}
       {block?.google_calendar ? <p className="text-sm">Google Calendar · {block.google_calendar.calendar_id} {block.google_calendar.url && <a className="underline" href={block.google_calendar.url} target="_blank" rel="noreferrer">Open source event</a>}</p> : block && <BlockTimeFields key={`${block.lane}-${block.id}-${block.start_minute}-${block.end_minute}`} block={block} onSave={onSave} />}
@@ -386,6 +415,7 @@ function LegacyTimeBlockInspectorContent({
             value={name}
             onChange={(event) => {
               editedFieldsRef.current.name = true
+              setSaveError(null)
               setName(event.target.value)
             }}
             onBlur={() => void flushNameNow()}
@@ -418,6 +448,7 @@ function LegacyTimeBlockInspectorContent({
           value={note}
           onChange={(e) => {
             editedFieldsRef.current.note = true
+            setSaveError(null)
             setNote(e.target.value)
           }}
           onBlur={() => void flushNoteNow()}
@@ -436,8 +467,9 @@ function LegacyTimeBlockInspectorContent({
         {!isCreateMode && (
           <button
             type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-error transition-colors hover:bg-error-container/15"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-error transition-colors hover:bg-error-container/15"
             aria-label={block?.google_calendar && !block.google_calendar.frozen ? 'Leave this meeting out' : 'Delete'}
+            disabled={saving}
             title={block?.google_calendar && !block.google_calendar.frozen ? 'Leave this meeting out' : 'Delete'}
             onClick={() => { if (!block?.google_calendar || block.google_calendar.frozen || window.confirm('Leave this meeting out of your plan? The Google event stays unchanged.')) void handleDelete() }}
           >
@@ -457,7 +489,7 @@ function LegacyTimeBlockInspectorContent({
               draftCreateAttemptedRef.current = true
               setSaving(true)
               void onCreateFromDraft({ name: name.trim() || null, note: note.trim() || null })
-                .catch(() => { draftCreateAttemptedRef.current = false })
+                .catch((cause) => { draftCreateAttemptedRef.current = false; setSaveError(errorMessage(cause, 'Could not create the block.')) })
                 .finally(() => setSaving(false))
             }}
           >

@@ -1,4 +1,3 @@
-import { ContextualHelp } from '../../components/ContextualHelp'
 import { DragDropProvider, useDroppable, type DragEndEvent } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -266,7 +265,7 @@ export function BattlePlanPage() {
     setError(null)
     try {
       const created = await api.createBattleTask({ parent_id: parentId, title })
-      ingestTasks(withCreatedSubtask(storedTasks, parentId, created))
+      setTasks((current) => withCreatedSubtask(current, parentId, created))
     } catch (cause) {
       setError(errorMessage(cause))
       throw cause
@@ -364,7 +363,7 @@ export function BattlePlanPage() {
     setError(null)
     try {
       const saved = checked ? await api.checkSubtask(id) : await api.uncheckSubtask(id)
-      ingestTasks(withSubtask(storedTasks, saved))
+      setTasks((current) => withSubtask(current, saved))
     } catch (cause) {
       setError(errorMessage(cause))
     }
@@ -414,7 +413,7 @@ export function BattlePlanPage() {
   return (
     <Layout mainClassName="w-full px-4 py-6 sm:px-8 lg:px-10">
       <div className="mb-6 flex items-center justify-between lg:hidden">
-        <button type="button" className="rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container" onClick={() => setMobileSidebar(true)}>Lists & projects</button>
+        <button type="button" className="min-h-11 rounded-xl bg-surface-container-low px-3 py-2 text-sm dark:bg-dark-surface-container" aria-expanded={mobileSidebar} onClick={() => setMobileSidebar(true)}>Lists & projects</button>
       </div>
       <div className="flex min-h-[calc(100vh-9rem)] gap-6">
         <BattlePlanSidebar
@@ -431,16 +430,15 @@ export function BattlePlanPage() {
         />
 
         <section className="min-w-0 flex-1">
-          <header className="mb-7 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <header className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <div className="flex items-center gap-2"><p className="font-label text-xs uppercase tracking-[0.18em] text-on-surface-variant">Battle Plan</p><ContextualHelp title="Task status">Drag a task to change its status.</ContextualHelp></div>
               <h1 className="mt-2 font-headline text-[2.5rem] font-extralight leading-none tracking-tighter">
                 {collection === 'archived' ? 'Archive' : collection === 'trash' ? 'Trash' : activeProject?.name ?? (preferences.scope === 'admin' ? 'Admin' : 'All Tasks')}
               </h1>
             </div>
             {collection === 'active' ? (
               <div className="flex flex-wrap items-center gap-2">
-                <select aria-label="Sort tasks" value={preferences.sort} onChange={(event) => setPrefs({ sort: event.target.value as SortMode })} className="rounded-xl bg-surface-container-low px-3 py-2 text-sm outline-none transition-shadow focus-visible:ring-1 focus-visible:ring-primary/25 dark:bg-dark-surface-container">
+                <select aria-label="Sort tasks" value={preferences.sort} onChange={(event) => setPrefs({ sort: event.target.value as SortMode })} className="min-h-11 rounded-xl bg-surface-container-low px-3 py-2 text-sm outline-none transition-shadow focus-visible:ring-1 focus-visible:ring-primary/25 dark:bg-dark-surface-container">
                   <option value="manual">Manual order</option>
                   <option value="deadline">Deadline</option>
                   <option value="urgency">Urgency</option>
@@ -462,9 +460,14 @@ export function BattlePlanPage() {
           {loadedCollection !== collection ? <p className="text-on-surface-variant">Loading Battle Plan…</p> : collection === 'active' ? (
             <>
               <TaskFilters preferences={preferences} taskTypes={taskTypes} tasks={scopeFiltered} onChange={setPrefs} />
+              <nav aria-label="Task statuses" className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
+                {TASK_STATUSES.map(status => <a key={status} href={`#tasks-${status}`} className="flex min-h-11 items-center justify-between rounded-lg bg-surface-container-low px-3 text-sm dark:bg-dark-surface-container">
+                  <span>{STATUS_LABELS[status]}</span><span className="tabular-nums">{columns[status].length}</span>
+                </a>)}
+              </nav>
               <DragDropProvider onDragEnd={(event) => void handleDragEnd(event)}>
-                <div data-testid="battle-plan-board" className="mt-6 overflow-x-auto pb-2">
-                  <div className="grid min-w-[64rem] grid-cols-4 gap-4">
+                <div data-testid="battle-plan-board" className="mt-4 pb-2 lg:overflow-x-auto">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 lg:min-w-[64rem] lg:grid-cols-4">
                     {TASK_STATUSES.map((status) => (
                       <KanbanColumn
                         key={status}
@@ -600,7 +603,7 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
       ? null
       : Number(scope.slice(8))
   return (
-    <section ref={ref} aria-label={`${STATUS_LABELS[status]} tasks`} className={`min-h-72 rounded-3xl bg-surface-container-low p-3 transition-colors dark:bg-dark-surface-container-low ${isDropTarget ? 'ring-1 ring-primary/30' : ''}`}>
+    <section ref={ref} id={`tasks-${status}`} aria-label={`${STATUS_LABELS[status]} tasks`} className={`scroll-mt-24 rounded-2xl bg-surface-container-low p-3 transition-colors dark:bg-dark-surface-container-low lg:min-h-72 ${isDropTarget ? 'ring-1 ring-primary/30' : ''}`}>
       <div className="flex items-center justify-between px-1.5 pb-3 pt-1">
         <h2 className="font-headline text-sm font-normal tracking-tight">{STATUS_LABELS[status]}</h2>
         <span className="text-[13px] text-outline">{tasks.length}</span>
@@ -643,20 +646,26 @@ function KanbanColumn({ status, tasks, projects, taskTypes, scope, timezone, ser
 function TaskFilters({ preferences, taskTypes, tasks, onChange }: { preferences: Preferences; taskTypes: TaskType[]; tasks: BattleTask[]; onChange: (change: Partial<Preferences>) => void }) {
   const toggle = <T,>(values: T[], value: T) => values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
   return (
-    <div className="flex flex-wrap items-start gap-3 rounded-2xl bg-surface-container-low/70 p-3 dark:bg-dark-surface-container-low/70">
+    <details className="rounded-2xl bg-surface-container-low/70 p-3 dark:bg-dark-surface-container-low/70">
+      <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+        Filters{(preferences.urgency.length + preferences.importance.length + preferences.taskTypes.length) > 0 ? ` (${preferences.urgency.length + preferences.importance.length + preferences.taskTypes.length} active)` : ''}
+        <span aria-hidden className="material-symbols-outlined text-lg">expand_more</span>
+      </summary>
+      <div className="flex flex-wrap items-start gap-3 pt-2">
       <FilterGroup label="Urgency" values={[...PRIORITY_LEVELS, 'unset']} selected={preferences.urgency} onToggle={(value) => onChange({ urgency: toggle(preferences.urgency, value as NullableFilter) })} />
       <FilterGroup label="Importance" values={[...PRIORITY_LEVELS, 'unset']} selected={preferences.importance} onToggle={(value) => onChange({ importance: toggle(preferences.importance, value as NullableFilter) })} />
       <TaskTypeFilterMenu taskTypes={taskTypes} tasks={tasks} selected={preferences.taskTypes} onChange={(next) => onChange({ taskTypes: next })} />
       {(preferences.urgency.length || preferences.importance.length || preferences.taskTypes.length) ? <button type="button" className="px-2 py-2 text-xs text-on-surface-variant" onClick={() => onChange({ urgency: [], importance: [], taskTypes: [] })}>Clear filters</button> : null}
-    </div>
+      </div>
+    </details>
   )
 }
 
 function FilterGroup({ label, values, selected, onToggle }: { label: string; values: string[]; selected: string[]; onToggle: (value: string) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div role="group" aria-label={`${label} filter`} className="flex flex-wrap items-center gap-1.5">
       <span className="px-1 text-[10px] uppercase tracking-[0.12em] text-on-surface-variant">{label}</span>
-      {values.map((value) => <button key={value} type="button" aria-pressed={selected.includes(value)} onClick={() => onToggle(value)} className={`rounded-full px-2.5 py-1.5 text-xs capitalize ${selected.includes(value) ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest dark:bg-dark-surface-container'}`}>{value}</button>)}
+      {values.map((value) => <button key={value} type="button" aria-pressed={selected.includes(value)} onClick={() => onToggle(value)} className={`min-h-11 min-w-11 rounded-full px-3 text-xs capitalize ${selected.includes(value) ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest dark:bg-dark-surface-container'}`}>{value}</button>)}
     </div>
   )
 }

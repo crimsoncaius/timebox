@@ -204,6 +204,20 @@ class DayViewModel(
      * Resolved once per process. Afterwards this is an ordinary reload, which keeps the
      * date the user navigated to instead of yanking them back to today.
      */
+    fun openToday() {
+        launchScope.launch {
+            repository.getDaySummary(_state.value.date).fold(
+                onSuccess = { summary ->
+                    todayResolved = true
+                    _state.update { it.copy(today = summary.today) }
+                    if (_state.value.date == summary.today) load(summary.today)
+                    goToDate(summary.today, scrollToNow = true)
+                },
+                onFailure = { error -> _state.update { it.copy(message = error.apiError.message) } },
+            )
+        }
+    }
+
     fun start() {
         launchScope.launch {
             val active = repository.getActiveActualBlock().getOrNull()

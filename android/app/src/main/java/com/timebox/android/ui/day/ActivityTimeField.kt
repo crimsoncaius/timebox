@@ -8,6 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -85,9 +87,15 @@ fun ActivityTimeField(label: String, value: ActivityTimeValue, zone: ZoneId, com
         if (candidates.size > 1) {
             HelperText("This time occurs twice. Choose an occurrence.")
             ReportingTime.Occurrence.entries.forEach { occurrence ->
-                Row {
-                    RadioButton(value.occurrence == occurrence, enabled = enabled, onClick = { onChange(value.copy(occurrence = occurrence, original = null)) })
-                    TextButton(enabled = enabled, onClick = { onChange(value.copy(occurrence = occurrence, original = null)) }) { Text("${occurrence.name} · ${if (occurrence == ReportingTime.Occurrence.Earlier) candidates.first() else candidates.last()}") }
+                val instant = if (occurrence == ReportingTime.Occurrence.Earlier) candidates.first() else candidates.last()
+                val choiceLabel = "${occurrence.name} · UTC${instant.atZone(zone).offset}"
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .selectable(selected = value.occurrence == occurrence, enabled = enabled, role = Role.RadioButton,
+                        onClick = { onChange(value.copy(occurrence = occurrence, original = null)) })
+                    .semantics(mergeDescendants = true) { contentDescription = "$label, $choiceLabel" },
+                    verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(value.occurrence == occurrence, enabled = enabled, onClick = null)
+                    Text(choiceLabel, style = TimeboxTheme.type.bodySmall)
                 }
             }
         } else if (local != null && candidates.isEmpty()) HelperText("That local time does not exist in $zone.", error = true)

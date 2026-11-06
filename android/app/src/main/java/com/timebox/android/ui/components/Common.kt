@@ -43,6 +43,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
@@ -69,6 +70,7 @@ fun Kicker(text: String, color: Color, modifier: Modifier = Modifier) {
 fun TimeboxSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    label: String,
     modifier: Modifier = Modifier,
 ) {
     val colors = TimeboxTheme.colors
@@ -86,7 +88,7 @@ fun TimeboxSwitch(
             .clip(CircleShape)
             .background(track)
             .border(1.dp, colors.hairline, CircleShape)
-            .semantics { stateDescription = if (checked) "On" else "Off" }
+            .semantics { contentDescription = label; stateDescription = if (checked) "On" else "Off" }
             .toggleable(
                 value = checked,
                 role = Role.Switch,

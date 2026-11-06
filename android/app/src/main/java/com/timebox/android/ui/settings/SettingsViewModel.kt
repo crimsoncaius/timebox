@@ -21,6 +21,9 @@ data class SettingsUiState(
     val baseUrlInput: String = "",
     val apiKeyInput: String = "",
     val connectionDirty: Boolean = false,
+    val connectionBusy: Boolean = false,
+    val connectionError: String? = null,
+    val connectionStatus: String? = null,
     val saving: Boolean = false,
     val message: String? = null,
     val dailyReminders: DailyReminderSettings = DailyReminderSettings(),
@@ -77,17 +80,46 @@ class SettingsViewModel(private val repository: TimeboxRepository) : ViewModel()
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
     fun onBaseUrlChange(value: String) =
-        _state.update { it.copy(baseUrlInput = value, connectionDirty = true) }
+        _state.update { it.copy(baseUrlInput = value, connectionDirty = true, connectionError = null, connectionStatus = null) }
 
     fun onApiKeyChange(value: String) =
-        _state.update { it.copy(apiKeyInput = value, connectionDirty = true) }
+        _state.update { it.copy(apiKeyInput = value, connectionDirty = true, connectionError = null, connectionStatus = null) }
 
-    fun saveConnection() {
-        val current = _state.value
+    private fun validatedConnection(): String? = runCatching {
+        com.timebox.android.data.remote.ApiFactory.validatedBaseUrl(_state.value.baseUrlInput.trim())
+    }.getOrElse { error ->
+        _state.update { it.copy(connectionError = error.message, connectionStatus = null) }
+        null
+    }
+
+    fun testConnection() {
+        if (_state.value.connectionBusy) return
+        val address = validatedConnection() ?: return
+        val key = _state.value.apiKeyInput
+        _state.update { it.copy(connectionBusy = true, connectionError = null, connectionStatus = null) }
         viewModelScope.launch {
-            repository.setConnection(current.baseUrlInput, current.apiKeyInput)
-            _state.update { it.copy(connectionDirty = false, message = "Connection saved") }
-            load(current.timezone)
+            repository.testConnection(address, key).fold(
+                onSuccess = { _state.update { it.copy(connectionBusy = false, connectionStatus = "Connected to Timebox. Server access verified.") } },
+                onFailure = { error -> _state.update { it.copy(connectionBusy = false, connectionError = error.apiError.message) } },
+            )
+        }
+    }
+
+    fun saveConnection(onSaved: () -> Unit = {}) {
+        if (_state.value.connectionBusy) return
+        val address = validatedConnection() ?: return
+        val current = _state.value
+        _state.update { it.copy(connectionBusy = true, connectionError = null, connectionStatus = null) }
+        viewModelScope.launch {
+            runCatching { repository.setConnection(address, current.apiKeyInput) }.fold(
+                onSuccess = {
+                    _state.update { it.copy(baseUrlInput = address, connectionDirty = false, connectionBusy = false,
+                        connectionStatus = "Connection settings saved. Test connection to check server access.") }
+                    onSaved()
+                    load(current.timezone)
+                },
+                onFailure = { error -> _state.update { it.copy(connectionBusy = false, connectionError = error.apiError.message) } },
+            )
         }
     }
 

@@ -124,6 +124,7 @@ class TimeBlock(Base):
     @property
     def google_calendar(self) -> dict | None:
         from sqlalchemy.orm import object_session
+
         from app.services.google_calendar import linked
         db = object_session(self)
         row = linked(db, self.id) if db is not None and self.lane == BlockLane.planned else None

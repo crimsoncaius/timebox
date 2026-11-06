@@ -1,5 +1,15 @@
 # Android instrumentation baseline
 
+## Audit fixes follow-up — 2026-11-06
+
+The focused `SettingsNotificationTest` and `RoutineScreenTest` run passed all
+11 cases on managed `timebox-agent-15` (Android 36). The stale denied-permission
+copy assertion listed below was corrected to the existing production wording.
+New cases cover named switches, API key masking, and visible routine exits during
+loading and failure. This removes that Settings assertion from the current known
+failures; the other full-suite failures and flakes below were not re-evaluated.
+Evidence: [focused device results](../reports/audit-2026-11-06/android/fixed-device-tests.xml).
+
 ## Assistant follow-up — 2026-10-24
 
 On managed `timebox-agent-07` (Android 36), six Assistant cases also fail with

@@ -30,7 +30,7 @@ def test_migration_adds_nullable_name_without_backfilling_existing_blocks(
                 Base.metadata.tables["task_types"].insert().values(id=1, name="meetings")
             )
             connection.execute(
-                Base.metadata.tables["days"].insert().values(
+                sa.Table("days", sa.MetaData(), autoload_with=connection).insert().values(start_hour=8, end_hour=20, show_full_day=False,
                     id=1,
                     date=dt.date(2026, 9, 4),
                 )

@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("APP_TIMEZONE", "UTC")
 os.environ.setdefault("CORS_ORIGINS", "*")
 
 import pytest
+from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 import app.models  # noqa: F401
+from alembic import command
+from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_engine
 from app.main import app
@@ -34,87 +39,22 @@ def client() -> TestClient:
 
 @pytest.fixture
 def prepare_legacy_schema():
-    """Create the SQLite schema expected by a legacy migration fixture."""
+    """Start from frozen revision 014, then apply real migrations to the requested era.
+
+    Using current metadata and dropping selected new columns silently left later
+    tables behind. The immutable snapshot keeps upgrades meaningful as models grow.
+    """
+    backend = Path(__file__).resolve().parents[1]
+    schema = (backend / "tests/fixtures/schema_014.sql").read_text()
 
     def prepare(engine, revision: str) -> None:
-        Base.metadata.create_all(engine)
-        with engine.begin() as connection:
-            connection.execute(text("DROP TABLE IF EXISTS assistant_tracking_reviews"))
-            connection.execute(text("DROP TABLE IF EXISTS assistant_attempts"))
-            connection.execute(text("DROP TABLE IF EXISTS assistant_conversations"))
-            connection.execute(text("ALTER TABLE recurring_templates DROP COLUMN preplanning_mode"))
-            from alembic.migration import MigrationContext
-            from alembic.operations import Operations
-            with Operations(MigrationContext.configure(connection)).batch_alter_table("task_types") as batch:
-                batch.drop_constraint("fk_task_type_merge_target", type_="foreignkey")
-                batch.drop_column("merged_into_id")
-                batch.drop_column("is_merged")
-            # Historical revisions predate the whole-day and Monday-only settings migrations.
-            connection.execute(text(
-                "CREATE TABLE app_settings (id INTEGER PRIMARY KEY, "
-                "start_hour INTEGER NOT NULL DEFAULT 8, end_hour INTEGER NOT NULL DEFAULT 20, "
-                "show_full_day BOOLEAN NOT NULL DEFAULT 0, week_start TEXT NOT NULL DEFAULT 'monday', "
-                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-                "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
-            ))
-            connection.execute(text("ALTER TABLE days ADD COLUMN start_hour INTEGER NOT NULL DEFAULT 8"))
-            connection.execute(text("ALTER TABLE days ADD COLUMN end_hour INTEGER NOT NULL DEFAULT 20"))
-            connection.execute(text("ALTER TABLE days ADD COLUMN show_full_day BOOLEAN NOT NULL DEFAULT 0"))
-            connection.execute(text("DROP INDEX IF EXISTS uq_time_blocks_legacy_correspondence"))
-            connection.execute(text("ALTER TABLE time_blocks DROP COLUMN activity_source"))
-            connection.execute(text("DROP TABLE IF EXISTS activity_operations"))
-            connection.execute(text("DROP TABLE IF EXISTS activity_state"))
-            connection.execute(text("DROP TABLE IF EXISTS planned_recording_undo"))
-            connection.execute(text("ALTER TABLE tasks DROP COLUMN reminder_claim_until"))
-            connection.execute(text("ALTER TABLE tasks DROP COLUMN reminder_claim_token"))
-            connection.execute(text("ALTER TABLE tasks DROP COLUMN reminder_skipped_at"))
-            connection.execute(text("DROP TABLE IF EXISTS recurring_planned_block_realizations"))
-            connection.execute(text("DROP TABLE IF EXISTS recurring_preplanning_slots"))
-            project_columns = {
-                column["name"] for column in inspect(connection).get_columns("projects")
-            }
-            if "description" not in project_columns:
-                connection.execute(
-                    text("ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''")
-                )
-            if "deadline_date" not in project_columns:
-                connection.execute(text("ALTER TABLE projects ADD COLUMN deadline_date DATE"))
-            if "deadline_at" not in project_columns:
-                connection.execute(text("ALTER TABLE projects ADD COLUMN deadline_at DATETIME"))
-            template_columns = {
-                column["name"]
-                for column in inspect(connection).get_columns("recurring_templates")
-            }
-            if "project_id" not in template_columns:
-                connection.execute(text("ALTER TABLE recurring_templates ADD COLUMN project_id INTEGER"))
-                connection.execute(
-                    text(
-                        "CREATE INDEX ix_recurring_templates_project_id "
-                        "ON recurring_templates (project_id)"
-                    )
-                )
-            if revision in {"014_recurrence_occurrence_protection", "015_definitive_legacy_cutover"}:
-                connection.execute(text("DROP INDEX uq_task_types_name"))
-                connection.execute(
-                    text("ALTER TABLE recurring_templates DROP COLUMN keep_unfinished_overdue")
-                )
-                connection.execute(text("ALTER TABLE recurring_templates DROP COLUMN position"))
-                connection.execute(text("ALTER TABLE recurrence_occurrences DROP COLUMN skipped"))
-            if revision in {
-                "014_recurrence_occurrence_protection",
-                "015_definitive_legacy_cutover",
-                "016_planned_block_type_resolution",
-                "017_non_accumulating_recurrence",
-            }:
-                connection.execute(text("ALTER TABLE time_blocks DROP COLUMN name"))
-            connection.execute(text("ALTER TABLE projects DROP COLUMN position"))
-            connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
-            connection.execute(
-                text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)")
-            )
-            connection.execute(
-                text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
-                {"revision": revision},
-            )
+        with engine.connect() as connection:
+            connection.connection.driver_connection.executescript(schema)
+            connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255) NOT NULL)"))
+            connection.execute(text("INSERT INTO alembic_version VALUES ('014_recurrence_occurrence_protection')"))
+            connection.commit()
+        if revision != "014_recurrence_occurrence_protection":
+            with patch.object(get_settings(), "database_url", str(engine.url)):
+                command.upgrade(Config(str(backend / "alembic.ini")), revision)
 
     return prepare

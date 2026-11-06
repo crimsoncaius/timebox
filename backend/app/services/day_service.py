@@ -705,7 +705,7 @@ def delete_time_block(db: Session, day: Day, block_id: int) -> None:
     block = get_block(db, day, block_id, for_update=True)
     if block is None:
         raise ValueError("Block not found")
-    from app.services.google_calendar import linked, exclude
+    from app.services.google_calendar import exclude, linked
     google = linked(db, block.id)
     if google:
         now = utc_now()

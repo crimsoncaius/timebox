@@ -103,7 +103,8 @@ class RoutineScreenTest {
                 RecurringPreplanningSlotDto(key = "afternoon", position = 1, startMinute = 900, endMinute = 1440)),
                 listOf(RecurringPreplanningUnavailableSlotDto("2026-09-08", "afternoon", 900, 1440))))
         show()
-        compose.onNodeWithText("Unavailable on 2026-09-08: 15:00–00:00").performScrollTo().assertExists()
+        compose.onNodeWithText("Daily review · 2026-09-08 · 15:00–00:00").performScrollTo().assertExists()
+        compose.onNodeWithText("View day").performScrollTo().assertExists()
         compose.onNodeWithText("Pre-planning").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Planned Block start 1").assertTextContains("08:00")
         compose.onNodeWithContentDescription("Planned Block start 2").assertTextContains("15:00")
@@ -119,6 +120,30 @@ class RoutineScreenTest {
         compose.onNodeWithText("Current work").performScrollTo().assertExists()
         compose.onNodeWithText("Today's review").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(42, opened) }
+    }
+
+    @Test fun loadingRoutineKeepsVisibleCloseAction() {
+        var closed = 0
+        compose.runOnIdle { editor = RecurringEditorViewModel(api.repository()); store.put("editor", editor) }
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                RoutineScreen(RecurringEditorUiState(loading = true), editor, onBack = { closed++ })
+            }
+        }
+        compose.onNodeWithText("Close routine").performClick()
+        compose.runOnIdle { assertEquals(1, closed) }
+    }
+
+    @Test fun failedRoutineKeepsVisibleCloseAction() {
+        var closed = 0
+        compose.runOnIdle { editor = RecurringEditorViewModel(api.repository()); store.put("editor", editor) }
+        compose.setContent {
+            TimeboxTheme(darkTheme = false) {
+                RoutineScreen(RecurringEditorUiState(error = "Offline"), editor, onBack = { closed++ })
+            }
+        }
+        compose.onNodeWithText("Close routine").performClick()
+        compose.runOnIdle { assertEquals(1, closed) }
     }
 }
 

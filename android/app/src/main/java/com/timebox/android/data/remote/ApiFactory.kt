@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
@@ -63,11 +64,24 @@ object ApiFactory {
     /** Retrofit requires a trailing slash; users will type `http://host:8000`. */
     fun normalizeBaseUrl(raw: String): String {
         val trimmed = raw.trim()
-        val withScheme = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        val withScheme = if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
             trimmed
         } else {
             "http://$trimmed"
         }
         return if (withScheme.endsWith("/")) withScheme else "$withScheme/"
+    }
+
+    fun validatedBaseUrl(raw: String): String {
+        require(raw.isNotBlank()) { "Enter the Timebox server address." }
+        require(raw.none(Char::isWhitespace)) { "The server address cannot contain spaces." }
+        val value = normalizeBaseUrl(raw)
+        val url = value.toHttpUrlOrNull()
+        require(url != null && url.host.isNotBlank() && (!raw.contains("://") || raw.startsWith("http://", true) || raw.startsWith("https://", true))) {
+            "Enter a valid HTTP or HTTPS server address."
+        }
+        require(url.username.isEmpty() && url.password.isEmpty()) { "Use the API key field for credentials, not the server address." }
+        require(url.query == null && url.fragment == null) { "Remove the query or fragment from the server address." }
+        return url.toString()
     }
 }

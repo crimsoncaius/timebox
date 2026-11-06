@@ -74,7 +74,7 @@ export function TodayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [storedDay, setDay] = useState<DayRead | null>(null)
+  const [storedDay, storeDay] = useState<DayRead | null>(null)
   const activityRepository = useMemo(() => getActivityRepository(), [])
   const activityState = useSyncExternalStore(activityRepository.subscribe, activityRepository.getSnapshot)
   const day = useMemo(() => date && activityState.snapshot ? activityDay(date, activityState.snapshot, storedDay, activityRepository.now()) : storedDay, [date, activityState.snapshot, storedDay, activityRepository])
@@ -93,6 +93,10 @@ export function TodayPage() {
   const recordingOperation = useRef(0)
   const currentDate = useRef(date)
   useLayoutEffect(() => { currentDate.current = date }, [date])
+  const latestLoad = useRef(0)
+  const setDay = useCallback((next: DayRead) => {
+    if (next.date === currentDate.current) storeDay(next)
+  }, [])
   useEffect(() => { dismiss() }, [date, dismiss])
   useEffect(() => {
     const close = () => dismiss()
@@ -108,6 +112,7 @@ export function TodayPage() {
   const selectedBlockId = selectedBlockRef?.id ?? null
   const [draft, setDraft] = useState<BlockDraftPlacement | null>(null)
   const [inspectorDirty, setInspectorDirty] = useState(false)
+  const [inspectorBusy, setInspectorBusy] = useState(false)
   const [inspectorIsRail, setInspectorIsRail] = useState(() => window.matchMedia?.('(min-width: 1280px)').matches ?? true)
   useEffect(() => {
     const media = window.matchMedia?.('(min-width: 1280px)')
@@ -163,6 +168,7 @@ export function TodayPage() {
 
   const load = useCallback(async () => {
     if (!date) return
+    const request = ++latestLoad.current
     setLoading(true)
     setError(null)
     try {
@@ -171,18 +177,21 @@ export function TodayPage() {
         api.listTaskTypes(),
         api.listBattleTasks('active', date).catch(() => null),
       ])
+      if (request !== latestLoad.current || date !== currentDate.current) return
       setDay(d)
       setTaskTypes(tt)
       ingestBattleTasks(battle?.items ?? [])
     } catch (e) {
+      if (request !== latestLoad.current || date !== currentDate.current) return
       setError(errorMessage(e, 'Failed to load day'))
     } finally {
-      setLoading(false)
+      if (request === latestLoad.current && date === currentDate.current) setLoading(false)
     }
-  }, [date, ingestBattleTasks])
+  }, [date, ingestBattleTasks, setDay])
 
   useEffect(() => {
     void load()
+    return () => { latestLoad.current += 1 }
   }, [load])
 
   useEffect(() => {
@@ -241,9 +250,10 @@ export function TodayPage() {
   }, [day, searchParams])
 
   const tryDiscardIfNeeded = useCallback(() => {
+    if (inspectorBusy) return false
     if (!inspectorDirty) return true
     return confirmDiscardUnsaved()
-  }, [inspectorDirty])
+  }, [inspectorDirty, inspectorBusy])
 
   const tryClosePanel = useCallback(() => {
     if (!tryDiscardIfNeeded()) return
@@ -314,7 +324,7 @@ export function TodayPage() {
         setPlanningTaskBusyId(null)
       }
     },
-    [allBattleTasks, date, day, draft, ingestBattleTasks, readiness],
+    [setDay, allBattleTasks, date, day, draft, ingestBattleTasks, readiness],
   )
 
   const onLaneSlotClick = useCallback(
@@ -441,7 +451,7 @@ export function TodayPage() {
         if (draft.lane === 'planned') setPlanningSaves((count) => count - 1)
       }
     },
-    [date, day, draft, ingestBattleTasks],
+    [setDay, date, day, draft, ingestBattleTasks],
   )
 
   const patchBlock = useCallback(
@@ -505,7 +515,7 @@ export function TodayPage() {
         if (lane === 'planned') setPlanningSaves((count) => count - 1)
       }
     },
-    [date, day],
+    [setDay, date, day],
   )
 
   const deleteBlock = useCallback(
@@ -521,7 +531,7 @@ export function TodayPage() {
         throw e
       }
     },
-    [date],
+    [setDay, date],
   )
 
   const patchActual = useCallback(
@@ -596,7 +606,7 @@ export function TodayPage() {
         throw e
       }
     },
-    [date, day, offer],
+    [setDay, date, day, offer],
   )
 
 
@@ -661,11 +671,12 @@ export function TodayPage() {
       if (iso === day.meta.today) setScrollToNowRequest((n) => n + 1)
       return
     }
+    if (!tryDiscardIfNeeded()) return
     navigate(`/day/${iso}`)
   }
 
   const inspectorSharedProps = {
-    onOpenActual: (id: number) => { setSelectedBlockRef({ id, lane: 'actual' }); setInspectorDirty(false) },
+    onOpenActual: (id: number) => { if (!tryDiscardIfNeeded()) return; setSelectedBlockRef({ id, lane: 'actual' }); setInspectorDirty(false) },
     day,
     taskTypes,
     onClose: tryClosePanel,
@@ -688,6 +699,7 @@ export function TodayPage() {
         : undefined,
     onCreateTaskTypePath: createTaskTypePath,
     onDirtyChange: setInspectorDirty,
+    onBusyChange: setInspectorBusy,
   }
 
   const inspectorOpen = selectedBlock != null || draft != null
@@ -702,13 +714,13 @@ export function TodayPage() {
           <span data-testid="day-date" className="sr-only">
             {day.date}
           </span>
-          <section className="mb-6">
-            <div className="flex flex-wrap items-end justify-between gap-6">
+          <section data-day-toolbar className="sticky top-20 z-40 -mx-1 mb-4 bg-surface px-1 py-2 dark:bg-dark-background lg:top-24">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div>
-                <h1 className="mb-2 font-headline text-3xl sm:text-[2.75rem] font-extralight leading-none tracking-tighter text-on-surface">
+                <h1 className="font-headline text-2xl font-light leading-tight tracking-tight text-on-surface sm:text-3xl">
                   <time dateTime={day.date} title={formatDisplayDate(day.date)} aria-label={formatDisplayDate(day.date)}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}</time>
                 </h1>
-                <p className="max-w-xl font-body text-lg font-light leading-relaxed text-on-surface-variant">
+                <p className="font-body text-xs leading-relaxed text-on-surface-variant">
                   Timezone {day.meta.timezone}.
                 </p>
               </div>
@@ -718,30 +730,38 @@ export function TodayPage() {
               >
                 <button
                   type="button"
-                  className="rounded-full border border-outline-variant/15 px-3 py-1.5 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
+                  className="min-h-11 min-w-11 rounded-full border border-outline-variant/15 px-3 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
                   aria-label="Previous day"
-                  onClick={() => navigate(`/day/${addDaysIso(day.date, -1)}`)}
+                  onClick={() => pickDay(addDaysIso(day.date, -1))}
                 >
-                  ← Prev
+                  ←<span className="hidden sm:inline"> Prev</span>
                 </button>
                 {dayView.calendar && <DayCalendarPopover
                   value={day.date}
                   todayIso={day.meta.today}
                   onSelect={pickDay}
+                  triggerClassName="inline-flex min-h-11 items-center gap-2 rounded-full bg-surface-container px-3 text-sm text-on-surface dark:bg-dark-surface-container dark:text-dark-on-surface"
                 />}
-                <button type="button" className="min-h-11 rounded-full px-3 text-sm" onClick={() => pickDay(day.meta.today)}>Today</button>
                 <button
                   type="button"
-                  className="rounded-full border border-outline-variant/15 px-3 py-1.5 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
+                  className="min-h-11 min-w-11 rounded-full border border-outline-variant/15 px-3 font-headline text-sm text-on-surface transition-colors hover:bg-surface-container-high dark:border-dark-outline-variant dark:text-dark-on-surface dark:hover:bg-dark-surface-container-high"
                   aria-label="Next day"
-                  onClick={() => navigate(`/day/${addDaysIso(day.date, 1)}`)}
+                  onClick={() => pickDay(addDaysIso(day.date, 1))}
                 >
-                  Next →
+                  <span className="hidden sm:inline">Next </span>→
                 </button>
-            {!trackingVisible && <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => changeDayView('tracking', true)}>{activityState.snapshot?.current ? '● Tracking' : 'Tracking'}</button>}
+                <button type="button" className="min-h-11 rounded-full px-3 text-sm" onClick={() => pickDay(day.meta.today)}>Today</button>
+            <button type="button" className="min-h-11 px-3 text-sm text-actual dark:text-actual-dark" onClick={() => {
+              changeDayView('tracking', true)
+              requestAnimationFrame(() => document.querySelector('[aria-label="Activity tracking"]')?.scrollIntoView({ block: 'center' }))
+            }}>{activityState.snapshot?.current ? 'Tracking active' : 'Tracking'}</button>
             <button type="button" className="min-h-11 rounded-full border border-outline-variant/40 px-4 text-sm dark:border-dark-outline-variant" onClick={() => setViewOpen(true)}>View</button>
+            {taskTypes.length === 0 && <button type="button" className="min-h-11 rounded-full bg-primary px-3 text-sm text-on-primary" onClick={() => onLaneSlotClick('planned', 8 * 60, 8 * 60 + SLOT_MINUTES)}>Create plan</button>}
 
               </div>
+            </div>
+            <div aria-hidden="true" className="mt-2 grid grid-cols-[3rem_1fr_1fr] gap-x-1 text-center text-xs uppercase tracking-wide sm:grid-cols-[3.5rem_1fr_1fr] sm:gap-x-2">
+              <span /><span className="text-planned">Planned</span><span className="text-actual">Actual</span>
             </div>
           </section>
 
@@ -750,11 +770,11 @@ export function TodayPage() {
           <GoogleCalendar date={day.date} onChanged={() => { void load(); void activityRepository.refresh() }} />
           {taskTypes.length === 0 && (
             <div className="mb-6 rounded-xl border border-outline-variant/30 bg-surface-container-low/80 px-4 py-3 text-sm text-on-surface-variant">
-              No task types yet.{' '}
+              Choose a time in the Planned lane to create your first plan. A Task Type is optional.{' '}
+              <button type="button" className="min-h-11 px-2 font-medium text-primary underline" onClick={() => onLaneSlotClick('planned', 8 * 60, 8 * 60 + SLOT_MINUTES)}>Create first plan</button>{' '}
               <Link to="/task-types" className="text-primary underline">
-                Create task types
+                Manage Task Types
               </Link>{' '}
-              before adding blocks to the timeline.
             </div>
           )}
 

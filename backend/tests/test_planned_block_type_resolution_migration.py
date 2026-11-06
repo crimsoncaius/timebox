@@ -31,7 +31,7 @@ def test_migration_consolidates_raced_task_types_before_enforcing_uniqueness(
                 [{"id": 1, "name": "unspecified"}, {"id": 2, "name": "unspecified"}],
             )
             connection.execute(
-                Base.metadata.tables["days"].insert().values(
+                sa.Table("days", sa.MetaData(), autoload_with=connection).insert().values(start_hour=8, end_hour=20, show_full_day=False,
                     id=1,
                     date=dt.date(2026, 9, 1),
                 )

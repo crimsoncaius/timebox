@@ -167,7 +167,8 @@ fun TimeboxApp(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    val routeDate = backStackEntry?.arguments?.getString(AppRoutes.DateArg)?.let {
+    val routeDateArgument = backStackEntry?.arguments?.getString(AppRoutes.DateArg)
+    val routeDate = routeDateArgument?.let {
         runCatching { LocalDate.parse(it) }.getOrNull()
     }
     val routeTaskId = backStackEntry?.arguments?.getInt(AppRoutes.TaskIdArg)
@@ -184,11 +185,14 @@ fun TimeboxApp(
                 val entryId = backStackEntry?.id ?: return@LaunchedEffect
                 // A Day entry's argument seeds selection once. Returning from another tab
                 // must retain any newer date selected inside the mounted screen.
-                if (openedDayEntryIds.add(entryId)) {
+                val firstOpen = openedDayEntryIds.add(entryId)
+                val openingToday = firstOpen && routeDateArgument == AppRoutes.TodayArg
+                if (openingToday) dayViewModel.openToday()
+                else if (firstOpen) {
                     routeDate?.let(dayViewModel::goToDate)
                     if (routeBlockId != null) dayViewModel.noteBlockLanding()
                 }
-                dayViewModel.start()
+                if (!openingToday) dayViewModel.start()
                 dayViewModel.refreshTaskTypes()
                 dayViewModel.refreshReadyToPlan()
             }

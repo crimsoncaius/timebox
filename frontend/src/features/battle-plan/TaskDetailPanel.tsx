@@ -27,6 +27,7 @@ import { ReadinessFailureNotice } from '../readiness/ReadinessFailureNotice'
 import { TaskTypePathCombobox } from '../../components/TaskTypePathCombobox'
 import { CalendarDateField, CalendarDateTimeField } from '../../components/CalendarDateField'
 import { calendarIsoDateInTimeZone, zonedLocalToIso } from '../../lib/time'
+import { errorMessage } from '../../lib/errors'
 
 type DeadlineMode = 'none' | 'date' | 'datetime'
 
@@ -101,6 +102,7 @@ export function TaskDetailPanel({
   const [reminderSaveError, setReminderSaveError] = useState<string | null>(null)
   const [trackingError, setTrackingError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [showAllPlannedDates, setShowAllPlannedDates] = useState(false)
   const dialogRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -123,9 +125,10 @@ export function TaskDetailPanel({
   const canSave = !reminderError && isDirty && !isSaving && Boolean(draft.title.trim())
 
   const requestClose = useCallback(() => {
+    if (isSaving) return
     if (isDirty && !window.confirm('Discard your unsaved changes?')) return
     onClose()
-  }, [isDirty, onClose])
+  }, [isDirty, isSaving, onClose])
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -183,12 +186,15 @@ export function TaskDetailPanel({
 
   const save = async () => {
     if (!canSave) return
+    const invalid = Array.from(dialogRef.current?.querySelectorAll<HTMLInputElement>('input') ?? []).find(input => !input.checkValidity())
+    if (invalid) { invalid.reportValidity(); invalid.focus(); return }
     if (draft.reminderAt && draft.reminderAt !== initialDraft.reminderAt
       && new Date(zonedLocalToIso(draft.reminderAt, timezone)).getTime() <= Date.now()) {
       setReminderSaveError('Reminder must be in the future')
       return
     }
     setIsSaving(true)
+    setSaveError(null)
     try {
       if (task.status === 'completed' && draft.status !== 'completed') {
         await onSetCompletion(task.id, false)
@@ -213,6 +219,8 @@ export function TaskDetailPanel({
         await onSetCompletion(task.id, true)
       }
       onClose()
+    } catch (cause) {
+      setSaveError(errorMessage(cause, 'Could not save your task.'))
     } finally {
       setIsSaving(false)
     }
@@ -227,6 +235,7 @@ export function TaskDetailPanel({
     <button
       type="button"
       aria-label="Close task details"
+      disabled={isSaving}
       onClick={requestClose}
       className="rounded-full p-1.5 leading-none text-[var(--task-detail-secondary)] transition-colors duration-120 ease-out hover:text-[var(--task-detail-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--task-detail-secondary)]"
     >
@@ -272,13 +281,15 @@ export function TaskDetailPanel({
         <div className="h-[53px] border-b border-[var(--task-detail-divider)] bg-[var(--task-detail-rail)] min-[720px]:hidden" aria-hidden />
         <div className="absolute top-3 right-4 z-10">{closeButton}</div>
 
-        <div className="grid min-[720px]:grid-cols-[minmax(0,1fr)_22rem]">
+        <fieldset disabled={isSaving} className="grid min-w-0 min-[720px]:grid-cols-[minmax(0,1fr)_22rem]">
           <main className="flex min-w-0 flex-col gap-6 px-5 py-7 min-[480px]:px-9 min-[720px]:px-9 min-[720px]:py-8">
             {task.recurrence_kind !== 'quota_parent' ? <button type="button" disabled={isDirty || isSaving} onClick={async () => {
               if (await getActivityRepository().trackTask(task)) requestClose()
               else setTrackingError(getActivityRepository().state.error ?? 'Could not start tracking')
             }}>Track Task</button> : null}
             {trackingError ? <p role="alert">{trackingError}</p> : null}
+            {saveError ? <p role="alert" className="text-sm text-error">{saveError} Your draft is kept. Try Save again.</p> : null}
+            <p role="status" className="text-xs text-on-surface-variant">{isSaving ? 'Saving task…' : isDirty ? 'Unsaved changes — choose Save when ready.' : 'Task saved'}</p>
             {error ? <div role="alert" className="rounded-xl bg-error-container/20 px-4 py-3 text-sm text-on-error-container">{error}</div> : null}
             <div>
               <p className="mb-2.5 font-label text-[11px] uppercase tracking-[0.18em] text-[var(--task-detail-muted)]">Task details</p>
@@ -390,6 +401,7 @@ export function TaskDetailPanel({
               </div>
 
               <div>
+                <p className="text-xs text-on-surface-variant">Dates and times use {timezone}.</p>
                 <PropertySelect label="Deadline" value={draft.deadlineMode} unset={draft.deadlineMode === 'none'} divider={false} onChange={(value) => setDeadlineMode(value as DeadlineMode)}>
                   <option value="none">No deadline</option>
                   <option value="date">Date only</option>
@@ -461,7 +473,7 @@ export function TaskDetailPanel({
               </button>
             </footer>
           </aside>
-        </div>
+        </fieldset>
       </section>
     </div>
   )

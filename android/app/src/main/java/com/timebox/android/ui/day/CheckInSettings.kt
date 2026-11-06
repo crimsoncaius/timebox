@@ -36,7 +36,7 @@ internal fun checkInThresholdLabel(minutes: Int): String = when {
         app.checkIns.settingsChanged()
     }
     SettingRow(title = "Inactivity check-ins") {
-        TimeboxSwitch(checked = settings.enabled, onCheckedChange = { save(settings.copy(enabled = it)) })
+        TimeboxSwitch(checked = settings.enabled, onCheckedChange = { save(settings.copy(enabled = it)) }, label = "Inactivity check-ins")
     }
     Box(Modifier.alpha(if (settings.enabled) 1f else 0.5f)) {
         SettingRow(title = "Check in after") {

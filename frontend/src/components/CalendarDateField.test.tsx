@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { CalendarDateField, CalendarDateTimeField } from './CalendarDateField'
@@ -38,4 +38,14 @@ it('combines a selected Monday-calendar date with an existing time', async () =>
   await user.click(screen.getByRole('button', { name: 'Choose deadline date' }))
   await user.click(screen.getByRole('button', { name: '2026-04-23' }))
   expect(onChange).toHaveBeenCalledWith('2026-04-23T14:30')
+})
+
+it('retains a time entered before choosing the date', async () => {
+  const user = userEvent.setup()
+  const onChange = vi.fn()
+  render(<CalendarDateTimeField label="Deadline date and time" value="" onChange={onChange} />)
+  fireEvent.change(screen.getByLabelText('Deadline time'), { target: { value: '16:45' } })
+  expect(screen.getByLabelText('Deadline time')).toHaveValue('16:45')
+  await user.type(screen.getByLabelText('Deadline date'), '2026-06-10')
+  expect(onChange).toHaveBeenLastCalledWith('2026-06-10T16:45')
 })

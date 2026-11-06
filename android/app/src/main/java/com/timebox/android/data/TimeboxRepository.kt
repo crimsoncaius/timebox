@@ -569,6 +569,12 @@ class TimeboxRepository private constructor(
         onConnectionChanged()
     }
 
+    /** Read-only probe against the entered values; never changes this installation's connection. */
+    suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> = call {
+        ApiFactory.create(ApiFactory.validatedBaseUrl(baseUrl)) { apiKey.trim() }.listTaskTypes()
+        Unit
+    }
+
     suspend fun setDarkTheme(dark: Boolean) = checkNotNull(preferences).setDarkTheme(dark)
 
     suspend fun setBattlePlanView(view: BattlePlanPreferences) =

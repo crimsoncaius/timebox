@@ -75,7 +75,11 @@ export function GoogleCalendar({ date, onChanged }: { date?: string; onChanged?:
     {!date && <>
       <ContextualHelp title="Google Calendar">Import commitments into your plan. Google Calendar is never changed.</ContextualHelp>
       {!state && !error && <p role="status">Loading calendar connection…</p>}
-      {state && !state.configured && <p className="text-sm">Google Calendar is not configured on this server. Set up Google OAuth and authenticated access using the deployment guide.</p>}
+      {state && !state.configured && <div className="space-y-2 text-sm">
+        <p>Google Calendar connection is not available yet. You can keep planning in Timebox.</p>
+        <button className={button} onClick={() => void load().catch(e => setError(e.message))}>Check again</button>
+        <details><summary className="min-h-11 cursor-pointer py-3">Setup details</summary><p className="text-on-surface-variant">Set up Google OAuth and authenticated access using the server deployment guide, then check again.</p></details>
+      </div>}
       {state?.account && <p className="text-sm">{state.connected ? 'Connected to' : 'Disconnected from'} {state.account}</p>}
       <div className="flex flex-wrap gap-2">
         <button className={button} disabled={busy || !state?.configured} onClick={async () => {
@@ -103,7 +107,10 @@ export function GoogleCalendar({ date, onChanged }: { date?: string; onChanged?:
       <span>{state.last_success ? `Last synced ${format(state.last_success, state.timezone)}` : 'Not synced yet'}</span>
       <button className={button} disabled={busy} onClick={async () => { setBusy(true); setError(null); try { await fetchJson('/google-calendar/refresh', { method: 'POST' }); await load(); changed.current?.() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }}>Refresh now</button>
     </div>}
-    {(error || state?.error) && <p role="alert" className="text-sm text-error dark:text-error-container">{error || state?.error}</p>}
+    {(error || state?.error) && <div className="space-y-2">
+      <p role="alert" className="text-sm text-error dark:text-error-container">{error || state?.error}</p>
+      <button className={button} disabled={busy} onClick={() => void load().catch(e => setError(e.message))}>Retry calendar connection</button>
+    </div>}
     {message && <p role="status" className="text-sm">{message}</p>}
     {pending.length > 0 && <button className={button} aria-expanded={open} onClick={() => setOpen(!open)}>{pending.length} calendar {pending.length === 1 ? 'conflict' : 'conflicts'} — review</button>}
     {(open || !date) && <div className="divide-y divide-outline-variant/30">{state?.occurrences.filter(o => o.status === 'pending' || o.status === 'excluded').map(o => <div className="py-3" key={o.id}>

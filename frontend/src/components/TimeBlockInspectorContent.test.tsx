@@ -46,6 +46,24 @@ describe('TimeBlockInspectorContent', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps a failed autosave available for explicit retry and prevents closing while saving', async () => {
+    let reject!: (error: Error) => void
+    const save = vi.fn().mockImplementationOnce(() => new Promise<void>((_, fail) => { reject = fail })).mockResolvedValue(undefined)
+    const busy = vi.fn()
+    render(<TimeBlockInspectorContent variant="rail" block={makeBlock()} draft={null} day={emptyDay} taskTypes={taskTypes}
+      onClose={vi.fn()} onSave={save} onDelete={vi.fn()} onCreateTaskTypePath={noopCreate} onBusyChange={busy} />)
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Keep this supporting note' } })
+    fireEvent.blur(screen.getByLabelText('Note'))
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+    expect(busy).toHaveBeenLastCalledWith(true)
+    await act(async () => reject(new Error('Connection lost')))
+    expect(screen.getByRole('alert')).toHaveTextContent('Connection lost')
+    expect(screen.getByLabelText('Note')).toHaveValue('Keep this supporting note')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Retry save' })))
+    expect(save).toHaveBeenLastCalledWith({ task_type_id: 1, name: null, note: 'Keep this supporting note' })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('shows read-only start and end as HH:MM', () => {
     render(
       <MemoryRouter>

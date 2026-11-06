@@ -23,6 +23,7 @@ from app.schemas.time_block import ActualBlockRead
 from app.services import activity_check_in, activity_selection
 from app.services import activity_reconciliation as reconciliation
 from app.services import actual_block_service as actuals
+from app.services.reporting import reporting_settings as reporting_settings
 
 
 def _lock(db: Session) -> ActivityState:
@@ -211,10 +212,3 @@ def set_reporting_timezone(db: Session, timezone: str, fallback: str, *, initial
     result = _snapshot(db, state, fallback)
     db.commit()
     return result
-
-
-def reporting_settings(db: Session, settings):
-    state = db.get(ActivityState, 1)
-    if state and state.reporting_timezone:
-        return settings.model_copy(update={"app_timezone": state.reporting_timezone})
-    return settings

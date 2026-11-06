@@ -204,6 +204,10 @@ data class RecurringPreplanningUnavailableSlotDto(
     @SerialName("slot_key") val slotKey: String,
     @SerialName("start_minute") val startMinute: Int,
     @SerialName("end_minute") val endMinute: Int,
+    @SerialName("task_id") val taskId: Int? = null,
+    @SerialName("task_title") val taskTitle: String? = null,
+    val reason: String = "planned_block_overlap",
+    @SerialName("can_add_to_ready") val canAddToReady: Boolean = false,
 )
 
 @Serializable

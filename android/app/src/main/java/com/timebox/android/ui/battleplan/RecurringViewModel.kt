@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 
 data class RecurringUiState(
     val selectedStatus: RecurrenceStatus = RecurrenceStatus.Active,
@@ -27,11 +29,16 @@ data class RecurringUiState(
 class RecurringViewModel(private val repository: TimeboxRepository) : ViewModel() {
     private val _state = MutableStateFlow(RecurringUiState())
     val state: StateFlow<RecurringUiState> = _state.asStateFlow()
+    private var loadJob: Job? = null
+    private var detailJob: Job? = null
 
     fun load(status: RecurrenceStatus = _state.value.selectedStatus, showSpinner: Boolean = true) {
+        loadJob?.cancel()
         _state.update { it.copy(selectedStatus = status, loading = showSpinner, error = null) }
-        viewModelScope.launch {
-            repository.listRecurringTemplates(status).fold(
+        loadJob = viewModelScope.launch {
+            val result = repository.listRecurringTemplates(status)
+            ensureActive()
+            result.fold(
                 onSuccess = { rows -> _state.update { it.copy(templates = rows, loading = false) } },
                 onFailure = { cause ->
                     _state.update { it.copy(loading = false, error = cause.apiError.message) }
@@ -45,9 +52,12 @@ class RecurringViewModel(private val repository: TimeboxRepository) : ViewModel(
     }
 
     fun openDetail(templateId: Int) {
+        detailJob?.cancel()
         _state.update { it.copy(detailLoading = true, selectedTemplate = null, error = null) }
-        viewModelScope.launch {
-            repository.getRecurringTemplate(templateId).fold(
+        detailJob = viewModelScope.launch {
+            val result = repository.getRecurringTemplate(templateId)
+            ensureActive()
+            result.fold(
                 onSuccess = { template ->
                     _state.update { it.copy(detailLoading = false, selectedTemplate = template) }
                 },

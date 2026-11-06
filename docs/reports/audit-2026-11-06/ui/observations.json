@@ -1,0 +1,33 @@
+{
+  "commit": "ab7b736b4aa486aaa0c2e0ea470a2731a838fe5a",
+  "note": "Selected measurements transcribed from live browser tool results; not a replay trace.",
+  "UI-01": {
+    "viewport": [390, 844],
+    "route": "/battle-plan",
+    "action": "Tab through Settings, theme, Lists & projects, then Tab again with sidebar closed",
+    "activeElement": "<button type=\"button\" aria-label=\"Close project sidebar\">×</button>",
+    "rect": {"left": -30.59375, "right": -20, "top": 20, "bottom": 44, "width": 10.59375, "height": 24}
+  },
+  "UI-02": {
+    "viewport": [1280, 800],
+    "before": {"route": "/day/2026-11-04", "scrollY": 1067, "headingTop": -955},
+    "action": "Activate Settings link; initial observation used click, repeat measurement used DOM click after preview pointer timeouts",
+    "after": {"route": "/settings", "scrollY": 781, "headingTop": -645}
+  },
+  "U1": {
+    "viewport": [1280, 800],
+    "route": "/day/2026-11-05",
+    "timezone": "UTC",
+    "scrollY": 1484,
+    "todayButtonTop": -1266.75,
+    "trackingAndViewButtonTop": -1214.75
+  },
+  "U2": {
+    "viewport": [390, 844],
+    "route": "/battle-plan",
+    "boardWidth": 1024,
+    "boardTop": 488,
+    "columnWidth": 244,
+    "filterPillHeight": 28
+  }
+}

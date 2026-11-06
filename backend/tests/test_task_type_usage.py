@@ -61,9 +61,10 @@ def test_parent_path_counts_only_its_own_blocks(client):
 
 def test_inactive_usage_and_restoration_after_type_deletion(client):
     from sqlalchemy.orm import Session
+
+    from app.core.time import utc_now
     from app.db.session import get_engine
     from app.models.battle_plan import Task
-    from app.core.time import utc_now
 
     tid = _tid(client, "research")
     other = _tid(client, "writing")

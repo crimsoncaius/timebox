@@ -76,5 +76,5 @@ fun timeboxViewModelFactory(
             )
         }
         initializer { RecurringViewModel(repository) }
-        initializer { RecurringEditorViewModel(repository) }
+        initializer { RecurringEditorViewModel(repository, readinessCoordinator) }
     }

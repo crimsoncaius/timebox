@@ -383,6 +383,8 @@ def complete_task(
 
     completed_at = as_utc(captured_at)
     activity_state = activity_journal.lock(db)
+    if activity_state.reporting_timezone:
+        settings = settings.model_copy(update={"app_timezone": activity_state.reporting_timezone})
     row = _load_completable_task(db, task_id)
     active_id, active_planned_id = _peek_active_actual(db, task_id)
     planned_rows, days = _lock_planned_blocks(db, task_id)

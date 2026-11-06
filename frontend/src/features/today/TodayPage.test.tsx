@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TodayPage } from './TodayPage'
 import { ReadinessCoordinator } from '../readiness/readinessCoordinator'
 import { ReadinessProvider } from '../readiness/ReadinessProvider'
+import type { DayRead } from '../../lib/api'
 
 /** Where 8 AM sits on the whole-day timeline at the default slot height. */
 const EIGHT_AM_PX = 480 / 30 * 46
@@ -125,6 +126,7 @@ describe('TodayPage inspector rail', () => {
     globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       const method = init?.method ?? 'GET'
+      if (url.includes('/google-calendar')) return Promise.resolve(jsonResponse({ configured: false, connected: false, account: null, selected: [], calendars: [], last_success: null, error: null, timezone: 'UTC', occurrences: [] }))
       if (url.includes('/planned-blocks/10/record-actual-as-planned') && method === 'POST') {
         if (recordingCalls++ > 0) return Promise.resolve(jsonResponse({ status: 'already_recorded', actual_block: { id: 12 }, undo_token: null }, 201))
         return Promise.resolve(jsonResponse({ status: 'recorded', actual_block: { id: 12 }, undo_token: 'record-undo' }, 201))
@@ -276,6 +278,41 @@ describe('TodayPage inspector rail', () => {
 
     await expect(screen.findByLabelText('Task type', { exact: true })).resolves.toHaveValue('alpha')
     expect(within(rail).getByLabelText('Task type', { exact: true })).toBeInTheDocument()
+  })
+
+  it('creates the first plan from an empty Day without requiring a Task Type', async () => {
+    const fallbackFetch = globalThis.fetch
+    const neutralType = { id: 3, name: 'unspecified', created_at: '', updated_at: '' }
+    let savedDay: DayRead = { ...dayPayload, time_blocks: [] }
+    const submitted: Record<string, unknown>[] = []
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/api/task-types') return jsonResponse(savedDay.time_blocks.length ? [neutralType] : [])
+      if (url.includes('/tasks?state=active')) return jsonResponse({ items: [], timezone: 'UTC', server_now_iso: dayPayload.meta.server_now_iso })
+      if (url === '/api/days/2026-06-01') return jsonResponse(savedDay)
+      if (url === '/api/days/2026-06-01/blocks' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>
+        submitted.push(body)
+        savedDay = { ...savedDay, time_blocks: [{
+          id: 12, lane: 'planned', task_type_id: neutralType.id, task_type: neutralType,
+          task_id: null, name: String(body.name), note: null,
+          start_minute: Number(body.start_minute), end_minute: Number(body.end_minute), created_at: '', updated_at: '',
+        }] }
+        return jsonResponse(savedDay, 201)
+      }
+      return fallbackFetch(input, init)
+    })
+    const user = userEvent.setup()
+    const view = render(<MemoryRouter initialEntries={['/day/2026-06-01']}><Routes><Route path="/day/:date" element={<TodayPage />} /></Routes></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: 'Create first plan' }))
+    expect(screen.getByTestId('draft-block')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Name'), 'First focused plan')
+    await user.click(screen.getByRole('button', { name: 'Create block' }))
+    await waitFor(() => expect(view.container.querySelector('[data-block-id="12"]')).toHaveTextContent('First focused plan'))
+    expect(submitted).toEqual([{ lane: 'planned', task_id: null, name: 'First focused plan', start_minute: 480, end_minute: 510 }])
+    expect(savedDay.time_blocks[0].task_type.name).toBe('unspecified')
+    expect(screen.queryByTestId('draft-block')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('keeps a focused Note draft when the earlier Block Name PATCH returns a full day', async () => {

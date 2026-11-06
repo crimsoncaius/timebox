@@ -1,6 +1,8 @@
 package com.timebox.android.ui
 
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 
 /** Stable route names shared by in-app navigation and future notification intents. */
 object AppRoutes {
@@ -28,6 +30,10 @@ object AppRoutes {
 
     const val TaskDeepLinkPattern = "timebox://battle-plan/task/{$TaskIdArg}"
     const val DayDeepLinkPattern = "timebox://day/{$DateArg}?blockId={$BlockIdArg}"
+    const val TodayArg = "today"
+    const val TodayDeepLink = "timebox://day/$TodayArg"
+
+    fun today(now: Instant, reportingTimezone: String): String = day(now.atZone(ZoneId.of(reportingTimezone)).toLocalDate())
 
     fun day(date: LocalDate, blockId: Int? = null): String =
         "day/$date" + (blockId?.let { "?blockId=$it" } ?: "")

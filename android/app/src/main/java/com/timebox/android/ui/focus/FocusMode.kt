@@ -34,7 +34,7 @@ import com.timebox.android.ui.theme.TimeboxTheme
         title = "Keep display awake in Focus",
     ) {
         ContextualHelp("Keep display awake in Focus", "Battery policy applies; manual locking still works.")
-        com.timebox.android.ui.components.TimeboxSwitch(checked = state.wake, onCheckedChange = controller::setWake)
+        com.timebox.android.ui.components.TimeboxSwitch(checked = state.wake, onCheckedChange = controller::setWake, label = "Keep display awake in Focus")
     }
 }
 

@@ -48,6 +48,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,6 +89,7 @@ fun SettingsScreen(
     onOpenThemePreview: () -> Unit = {},
     onReportingZoneChange: (String) -> Unit = {},
     onSaveReportingZone: () -> Unit = {},
+    onTestConnection: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -165,7 +169,7 @@ fun SettingsScreen(
         }
         SettingsGroup(title = "Appearance", scope = "This device") {
             SettingRow(title = "Dark theme") {
-                TimeboxSwitch(checked = isDark, onCheckedChange = { onToggleDark() })
+                TimeboxSwitch(checked = isDark, onCheckedChange = { onToggleDark() }, label = "Dark theme")
             }
         }
 
@@ -181,19 +185,27 @@ fun SettingsScreen(
                 ConnectionField(
                     value = state.baseUrlInput,
                     onValueChange = onBaseUrlChange,
-                    placeholder = "http://10.0.2.2:8000",
+                    placeholder = "http://10.0.2.2:8001",
                     label = "Server address",
+                    enabled = !state.connectionBusy,
                 )
                 ConnectionField(
                     value = state.apiKeyInput,
                     onValueChange = onApiKeyChange,
                     placeholder = "Optional",
                     label = "API key",
+                    password = true,
+                    enabled = !state.connectionBusy,
                 )
+                state.connectionError?.let { Text(it, color = TimeboxTheme.colors.error, style = TimeboxTheme.type.bodySmall) }
+                state.connectionStatus?.let { Text(it, color = TimeboxTheme.colors.onVariant, style = TimeboxTheme.type.bodySmall) }
+                TextButton(onClick = onTestConnection, enabled = !state.connectionBusy) {
+                    Text(if (state.connectionBusy) "Checking connection…" else "Test connection")
+                }
                 PrimaryButton(
                     text = "Save connection",
                     onClick = onSaveConnection,
-                    enabled = state.connectionDirty,
+                    enabled = state.connectionDirty && !state.connectionBusy,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -352,7 +364,7 @@ private fun PlannedBlockReminderRows(
         title = "Remind me before Planned Blocks",
         description = if (settings.enabled) plannedBlockLeadLabel(settings.leadMinutes) else "Off",
     ) {
-        TimeboxSwitch(checked = settings.enabled, onCheckedChange = { onChange(settings.copy(enabled = it)) })
+        TimeboxSwitch(checked = settings.enabled, onCheckedChange = { onChange(settings.copy(enabled = it)) }, label = "Remind me before Planned Blocks")
     }
     Box(Modifier.alpha(if (settings.enabled) 1f else 0.5f)) { SettingRow(title = "When", description = "Applies to every Planned Block") {
         Box {
@@ -397,7 +409,7 @@ private fun DailyReminderRow(
                     }, reminder.time.hour, reminder.time.minute, false).show()
                 },
             ) { Text(reminder.time.toString()) }
-            TimeboxSwitch(checked = reminder.enabled, onCheckedChange = { onChange(planning, it, null) })
+            TimeboxSwitch(checked = reminder.enabled, onCheckedChange = { onChange(planning, it, null) }, label = title)
         }
     }
 }
@@ -409,12 +421,18 @@ private fun ConnectionField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     label: String,
+    password: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val colors = TimeboxTheme.colors
+    var revealed by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
+        enabled = enabled,
+        visualTransformation = if (password && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
+        trailingIcon = if (password) ({ TextButton(onClick = { revealed = !revealed }) { Text(if (revealed) "Hide" else "Show") } }) else null,
         label = {
             Text(label, style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
         },
@@ -423,7 +441,8 @@ private fun ConnectionField(
         },
         textStyle = TimeboxTheme.type.body.copy(color = colors.on),
         shape = TimeboxShapes.field,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, keyboardType = if (password) KeyboardType.Password else KeyboardType.Text,
+            autoCorrectEnabled = if (password) false else null),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = colors.field,
             unfocusedContainerColor = colors.field,

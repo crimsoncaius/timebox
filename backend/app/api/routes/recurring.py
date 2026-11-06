@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.api.routes.days import get_reporting_settings
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.core.time import today_in_tz
 from app.db.session import get_db
 from app.models.battle_plan import RecurrenceStatus
@@ -40,7 +40,7 @@ def _error(exc: ValueError) -> HTTPException:
 @router.post("/preview", response_model=RecurrencePreviewRead)
 def preview_rule(
     body: RecurrencePreviewRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> RecurrencePreviewRead:
     return service.preview(body, today_in_tz(settings.app_timezone))
 
@@ -49,7 +49,7 @@ def preview_rule(
 def list_templates(
     status: RecurrenceStatus = Query(RecurrenceStatus.active),
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> list[RecurringTemplateRead]:
     return service.list_templates(db, status, settings)
 
@@ -58,7 +58,7 @@ def list_templates(
 def create_template(
     body: RecurringTemplateCreate,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> RecurringTemplateRead:
     try:
         row = service.create_template(db, body, settings)
@@ -71,7 +71,7 @@ def create_template(
 def get_template(
     template_id: int,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> RecurringTemplateRead:
     try:
         return service.get_template(db, template_id, settings)
@@ -84,7 +84,7 @@ def patch_template(
     template_id: int,
     body: RecurringTemplatePatch,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> RecurringTemplateRead:
     try:
         row = service.patch_template(db, template_id, body, settings)
@@ -102,17 +102,17 @@ def _lifecycle(action, template_id: int, db: Session, settings: Settings) -> Rec
 
 
 @router.post("/{template_id}/pause", response_model=RecurringTemplateRead)
-def pause_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def pause_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings)):
     return _lifecycle(service.pause_template, template_id, db, settings)
 
 
 @router.post("/{template_id}/resume", response_model=RecurringTemplateRead)
-def resume_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def resume_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings)):
     return _lifecycle(service.resume_template, template_id, db, settings)
 
 
 @router.post("/{template_id}/end", response_model=RecurringTemplateRead)
-def end_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def end_template(template_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings)):
     return _lifecycle(service.end_template, template_id, db, settings)
 
 

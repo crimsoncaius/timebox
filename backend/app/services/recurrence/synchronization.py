@@ -24,6 +24,7 @@ from app.services.recurrence.common import LEAD_DAYS, _json_list
 from app.services.recurrence.helpers import _task_kwargs
 from app.services.recurrence.protection import occurrence_is_protected
 from app.services.recurrence.windows import iter_windows
+from app.services.reporting import reporting_settings
 
 
 def _has_future_planned_block(db: Session, task_id: int, today: dt.date) -> bool:
@@ -465,6 +466,7 @@ def synchronize(
     today: dt.date | None = None,
     planning_date: dt.date | None = None,
 ) -> None:
+    settings = reporting_settings(db, settings)
     today = today or today_in_tz(settings.app_timezone)
     templates = list(db.execute(
         select(RecurringTemplate)

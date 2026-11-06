@@ -34,9 +34,21 @@ fun RoutineScreen(
     onOpenTask: (Int) -> Unit = {},
     lifecycle: RecurringUiState? = null,
     lifecycleViewModel: RecurringViewModel? = null,
+    onOpenDay: (java.time.LocalDate) -> Unit = {},
 ) {
-    if (state.loading) { LoadingState(); return }
-    if (state.error != null) { ErrorState(state.error, onRetry = { viewModel.open(state.templateId) }); return }
+    if (state.loading || state.error != null) {
+        ModalBottomSheet(onDismissRequest = onBack, containerColor = TimeboxTheme.colors.sheet) {
+            Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Recurring routine", Modifier.weight(1f), style = TimeboxTheme.type.sectionTitle)
+                    TextButton(onClick = onBack) { Text("Close routine") }
+                }
+                if (state.loading) CircularProgressIndicator(Modifier.padding(24.dp))
+                else ErrorState(state.error!!, onRetry = { viewModel.open(state.templateId) })
+            }
+        }
+        return
+    }
     LaunchedEffect(lifecycle?.selectedTemplate) { lifecycle?.selectedTemplate?.let(viewModel::acceptTemplate) }
     val creating = state.templateId == null
     val colors = TimeboxTheme.colors
@@ -94,7 +106,15 @@ fun RoutineScreen(
                 if (state.mode == RecurrenceMode.Scheduled) TaskSheetRow(Icons.Outlined.EventAvailable,
                     if (state.queuePreplanning) "Ready to Plan" else if (state.preplanningSlots.isEmpty()) "No pre-planning" else "Planned time · ${state.preplanningSlots.size} slots", "Pre-planning", editable) { open("Pre-planning") }
                 template?.preplanningSchedule?.unavailableSlots?.forEach { slot ->
-                    Text("Unavailable on ${slot.date}: ${com.timebox.android.ui.formatMinuteLabel24(slot.startMinute)}–${com.timebox.android.ui.formatMinuteLabel24(slot.endMinute)}", color = colors.error, style = TimeboxTheme.type.bodySmall)
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Planned time needs attention", style = TimeboxTheme.type.label, color = colors.on)
+                        Text("${slot.taskTitle ?: state.title} · ${slot.date} · ${com.timebox.android.ui.formatMinuteLabel24(slot.startMinute)}–${com.timebox.android.ui.formatMinuteLabel24(slot.endMinute)}", style = TimeboxTheme.type.bodySmall)
+                        Text("Another Planned Block occupies this time. No Planned Block was created for this occurrence.", style = TimeboxTheme.type.bodySmall, color = colors.onVariant)
+                        TextButton(enabled = !busy, onClick = { onOpenDay(slot.date) }) { Text("View day") }
+                        slot.taskId?.takeIf { slot.canAddToReady }?.let { taskId ->
+                            TextButton(enabled = !busy, onClick = { viewModel.addUnavailableToReady(taskId) }) { Text("Add to Ready to Plan") }
+                        }
+                    }
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.TaskAlt, null, tint = colors.onVariant)

@@ -53,7 +53,7 @@ fun nextDailyReminderSchedules(
 ).mapNotNull { (kind, reminder) ->
     if (!reminder.enabled) return@mapNotNull null
     var next = now.toLocalDate().atTime(reminder.time).atZone(now.zone)
-    if (!next.isAfter(now)) next = next.plusDays(1)
+    if (!next.isAfter(now)) next = now.toLocalDate().plusDays(1).atTime(reminder.time).atZone(now.zone)
     DailyReminderScheduleEntry(kind, next.toInstant())
 }
 
@@ -66,7 +66,7 @@ class DailyReminderScheduler(private val context: Context) {
         val entries = nextDailyReminderSchedules(settings, now)
         DailyReminderKind.entries.forEach { kind -> workManager.cancelUniqueWork(workName(kind)) }
         entries.forEach { entry ->
-            enqueue(entry, now)
+            enqueue(entry, now, if (entry.kind == DailyReminderKind.Planning) settings.planning.time else settings.review.time)
         }
     }
 
@@ -81,15 +81,15 @@ class DailyReminderScheduler(private val context: Context) {
             if (kind == DailyReminderKind.Planning) DailyReminderSettings(planning = DailyReminder(true, time))
             else DailyReminderSettings(review = DailyReminder(true, time)), now,
         ).single()
-        enqueue(next, now)
+        enqueue(next, now, time)
     }
 
-    private fun enqueue(entry: DailyReminderScheduleEntry, now: ZonedDateTime) {
+    private fun enqueue(entry: DailyReminderScheduleEntry, now: ZonedDateTime, selectedTime: LocalTime) {
         val delay = Duration.between(now.toInstant(), entry.at).coerceAtLeast(Duration.ZERO)
         val request = OneTimeWorkRequestBuilder<DailyReminderWorker>()
             .setInputData(Data.Builder()
                 .putString(DAILY_REMINDER_KIND_KEY, entry.kind.name)
-                .putString(DAILY_REMINDER_TIME_KEY, entry.at.atZone(now.zone).toLocalTime().toString())
+                .putString(DAILY_REMINDER_TIME_KEY, selectedTime.toString())
                 .putLong(DAILY_REMINDER_AT_KEY, entry.at.toEpochMilli()).build())
             .setInitialDelay(delay).build()
         workManager.enqueueUniqueWork(workName(entry.kind), ExistingWorkPolicy.REPLACE, request)
@@ -129,7 +129,7 @@ class DailyReminderNotifier(private val context: Context) {
         val pendingIntent = PendingIntent.getActivity(
             context,
             kind.notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("timebox://day/${LocalDate.now()}"), context, MainActivity::class.java).apply {
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.timebox.android.ui.AppRoutes.TodayDeepLink), context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

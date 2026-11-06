@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import utc_clock_seam
 from app.api.errors import domain_http_error
-from app.core.config import Settings, get_settings
+from app.api.routes.days import get_reporting_settings
+from app.core.config import Settings
 from app.core.time import now_in_tz
 from app.db.session import get_db
 from app.schemas.battle_plan import (
@@ -82,7 +83,7 @@ def list_tasks(
     state: str = Query("active", pattern="^(active|archived|trash)$"),
     planning_date: dt.date | None = Query(None),
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> TaskListRead:
     now = now_in_tz(settings.app_timezone)
     try:
@@ -96,7 +97,7 @@ def list_tasks(
 def create_task(
     body: TaskCreate,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> TaskRead:
     try:
         row = service.create_task(db, body, settings)
@@ -110,7 +111,7 @@ def patch_task(
     task_id: int,
     body: TaskPatch,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> TaskRead:
     try:
         row = service.patch_task(db, task_id, body, settings)
@@ -139,7 +140,7 @@ def uncheck_subtask(subtask_id: int, db: Session = Depends(get_db)) -> SubtaskRe
 def complete_task(
     task_id: int,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
     captured_at: dt.datetime = Depends(capture_utc_now),
 ) -> TaskCompletionRead:
     try:
@@ -159,7 +160,7 @@ def complete_task(
 def reopen_task(
     task_id: int,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> TaskRead:
     try:
         row = task_completion_service.reopen_task(db, task_id)
@@ -173,7 +174,7 @@ def undo_task_completion(
     task_id: int,
     body: TaskCompletionUndo,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> TaskRead:
     try:
         row = task_completion_service.undo_task_completion(db, task_id, body.undo_token)
@@ -213,7 +214,7 @@ def unarchive_task(task_id: int, db: Session = Depends(get_db)) -> Response:
 def trash_task(
     task_id: int,
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_reporting_settings),
 ) -> TaskRead:
     try:
         row = service.trash_task(db, task_id)
@@ -242,7 +243,7 @@ def permanently_delete_task(task_id: int, db: Session = Depends(get_db)) -> Resp
 
 @router.get("/reminders/due", response_model=list[ReminderRead])
 def due_reminders(
-    db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+    db: Session = Depends(get_db), settings: Settings = Depends(get_reporting_settings)
 ) -> list[ReminderRead]:
     return service.due_reminders(db, settings)
 

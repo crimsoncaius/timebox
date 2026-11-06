@@ -26,6 +26,7 @@ from app.services.battle_plan._shared import (
     _validate_reminder,
 )
 from app.services.recurrence.protection import protect_task_occurrence
+from app.services.reporting import reporting_settings
 
 
 def _purge_expired_trash(db: Session) -> None:
@@ -259,6 +260,7 @@ def list_tasks(
     settings: Settings,
     planning_date: dt.date | None = None,
 ) -> list[TaskRead]:
+    settings = reporting_settings(db, settings)
     from app.services import recurrence_service
 
     _purge_expired_trash(db)
