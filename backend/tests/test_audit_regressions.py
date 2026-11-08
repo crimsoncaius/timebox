@@ -33,7 +33,8 @@ def reporting(client, monkeypatch):
                    "app.api.routes.battle_plan"]:
         monkeypatch.setattr(module + ".now_in_tz", local_now)
     for module in ["app.services.battle_plan.tasks", "app.services.recurrence.templates",
-                   "app.services.recurrence.synchronization", "app.services.recurrence.calendar"]:
+                   "app.services.recurrence.synchronization", "app.services.recurrence.calendar",
+                   "app.api.routes.recurring"]:
         monkeypatch.setattr(module + ".today_in_tz", lambda zone: local_now(zone).date())
     app.dependency_overrides[battle_plan.capture_utc_now] = lambda: NOW
     yield client, settings

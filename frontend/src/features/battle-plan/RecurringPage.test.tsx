@@ -143,6 +143,11 @@ describe('RecurringPage', () => {
   })
 
   it('shows persisted Recurring Pre-planning Schedule details', async () => {
+    // Dates render in the viewer's locale; pin it so the literal below holds on any machine.
+    const RealDateTimeFormat = Intl.DateTimeFormat
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (_locales, options) {
+      return new RealDateTimeFormat('en-GB', options)
+    } as typeof Intl.DateTimeFormat)
     active = [{
       ...template,
       mode: 'scheduled',
@@ -210,7 +215,7 @@ describe('RecurringPage', () => {
     await user.selectOptions(within(form).getByLabelText('Pre-planning'), 'ready_to_plan')
     expect(within(form).queryByLabelText('Pre-planning start')).not.toBeInTheDocument()
     await user.click(within(form).getByRole('button', { name: 'Create recurrence' }))
-    await screen.findByText('Queued routine')
+    await screen.findByRole('button', { name: 'Queued routine' })
     const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
       ([input, init]) => String(input).endsWith('/recurring-templates') && init?.method === 'POST',
     )
@@ -238,7 +243,7 @@ describe('RecurringPage', () => {
     await user.type(within(form).getByLabelText('Pre-planning end'), '09:15')
     await waitFor(() => expect(within(form).getByText(/Every day, starting/)).toBeInTheDocument())
     await user.click(within(form).getByRole('button', { name: 'Create recurrence' }))
-    expect(await screen.findByText('Morning review')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Morning review' })).toBeInTheDocument()
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/recurring-templates'),
       expect.objectContaining({ method: 'POST' }),
