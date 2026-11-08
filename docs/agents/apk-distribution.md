@@ -57,16 +57,20 @@ On a mismatch, stop and report it instead of uploading.
 
 ## Upload and verify
 
-4. Upload through the Google Drive connector with MIME type
-   `application/vnd.android.package-archive`, named with the upload date in
-   `Asia/Singapore`:
+4. Copy the APK into the `Timebox` folder that Google Drive for desktop syncs, and
+   let it upload. An APK is too large to pass through the Google Drive connector,
+   which only accepts file contents inline. On the Mac the folder is
+   `~/Library/CloudStorage/GoogleDrive-*/My Drive/Timebox/`. Name the file with the
+   upload date in `Asia/Singapore`:
    - **Release build:** first move the APK currently in `Current/` to `Archive/`,
-     then upload `Timebox-master-YYYY-MM-DD-<commit8>.apk` to `Current/`.
+     then copy in `Timebox-master-YYYY-MM-DD-<commit8>.apk` to `Current/`.
      `Current/` then holds exactly one file.
-   - **Testing build:** upload `Timebox-#<n>-<label>-YYYY-MM-DD-<commit8>.apk` to the
+   - **Testing build:** copy `Timebox-#<n>-<label>-YYYY-MM-DD-<commit8>.apk` to the
      issue's `Testing/` subfolder, where `<label>` names the option (`option-a`) or
      is `review`.
-5. Retrieve metadata by the returned file ID. Confirm the exact filename, MIME type,
+5. Sync takes about a minute. Find the file through the Google Drive connector by
+   its exact name, retrying for a few minutes, and use the file ID and link it
+   returns. Retrieve metadata by that file ID. Confirm the exact filename, MIME type,
    parent folder and byte size match the local artifact. When Drive exposes a
    checksum, compare it with a local hash using the same algorithm. A mismatch is an
    unsuccessful verification; report it instead of calling the upload verified. If
