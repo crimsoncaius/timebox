@@ -21,12 +21,12 @@ native dependency already shows why.
 
 | Label             | Meaning                                                        | Set by                                    |
 | ----------------- | -------------------------------------------------------------- | ----------------------------------------- |
-| `needs-triage`    | Needs classification with codebase access                      | Grok Bot, or anyone filing an issue       |
-| `ready-for-agent` | Decision-complete; the runner starts an autonomous agent       | Grok Bot, a triage agent, or Grok Bot relaying an answer or feedback |
+| `needs-triage`    | Needs classification with codebase access                      | Timebox Intake bot, or anyone filing an issue |
+| `ready-for-agent` | Decision-complete; the runner starts an autonomous agent       | Timebox Intake bot, a triage agent, or Timebox Review bot recording an answer or feedback |
 | `in-progress`     | An autonomous agent is working on it                           | The runner                                |
 | `needs-info`      | Waiting on the owner's answer, choice, or decision             | An agent                                  |
 | `in-review`       | Report posted; waiting for the owner's approval                | An agent                                  |
-| `approved`        | Owner approved; the runner merges it, or starts a map's children | Grok Bot                                |
+| `approved`        | Owner approved; the runner merges it, or starts a map's children | Timebox Review bot                      |
 
 When a mattpocock skill names one of its five canonical triage roles, use
 `needs-triage`, `needs-info`, or `ready-for-agent` (also the AFK-ready role) by

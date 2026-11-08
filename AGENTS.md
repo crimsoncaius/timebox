@@ -10,7 +10,7 @@ State, type, and scope labels are defined in `docs/agents/triage-labels.md`.
 
 ### Autonomous mode
 
-When `TIMEBOX_AGENT_MODE=autonomous` is set, follow `docs/agents/autonomous.md`; it replaces the review and merge sections below. Grok Bot's side of the pipeline is `docs/agents/grokbot.md`.
+When `TIMEBOX_AGENT_MODE=autonomous` is set, follow `docs/agents/autonomous.md`; it replaces the review and merge sections below. The Grok bots' side of the pipeline is `docs/agents/grokbot-intake.md` and `docs/agents/grokbot-review.md`.
 
 ### Domain docs
 
