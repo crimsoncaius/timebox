@@ -36,6 +36,16 @@ The runner also owns everything after approval: rebase, the test gate, the squas
 merge into `master`, the push, and the deploy check. You never merge or push
 `master`.
 
+## The pipeline bots
+
+The owner reaches the pipeline through two Grok Bots:
+
+- **Timebox Intake bot** turns what the owner dictates into new GitHub issues.
+  Creating issues is the only change it makes. See `grokbot-intake.md`.
+- **Timebox Review bot** shows the owner the pipeline's questions, reports, and
+  failures, then records their replies on the issue and changes its label, which
+  wakes the runner. See `grokbot-review.md`.
+
 ## Ending a run
 
 Every run ends in exactly one of two hand-offs. Swap the state label in one
