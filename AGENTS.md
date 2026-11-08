@@ -35,3 +35,7 @@ Open, install on, launch, and review Android emulators through T3 Code's device 
 The instrumentation suite does not pass. `docs/agents/android-instrumentation-baseline.md`
 records which cases already fail on `master` and which are flaky, so a run can be read
 against a known baseline rather than treated as a regression.
+
+### APK distribution
+
+When building or uploading an APK, for daily use or for testing, follow `docs/agents/apk-distribution.md`.

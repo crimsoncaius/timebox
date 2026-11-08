@@ -67,8 +67,8 @@ Push your branch first (`git push -u origin agent/<n>-<slug>`), then post:
 2. **Verification**: what you ran and its result.
 3. **Screenshots**: of each visible change (see below), or "no visible change".
 4. **Diff**: `https://github.com/crimsoncaius/timebox/compare/master...agent/<n>-<slug>`
-5. **APK**: when `android/` changed, the Drive link from
-   `docs/agents/apk-distribution.md`, using the branch as the source label.
+5. **APK**: when `android/` changed, the Drive link to a testing build, made per
+   `docs/agents/apk-distribution.md`.
 6. **Risks and leftovers**: what you did not do, and anything that might break.
 7. **Follow-ups**: issues you opened.
 
@@ -107,7 +107,9 @@ one-line pointer the runner appends to the map's Decisions-so-far.
 ### `type:prototype`
 
 Build throwaway options on your branch, screenshot or record each, and end with a
-**question** comment asking the owner to choose. This branch never merges. When you
+**question** comment asking the owner to choose. For an Android option, also upload
+a testing build per option (`option-a`, `option-b`, …), so the owner can install
+them side by side. This branch never merges. When you
 are resumed with the owner's choice:
 
 1. Comment the decision and its reasons on the issue.
