@@ -6,6 +6,7 @@ Labels answer separate questions about an issue. Keep those dimensions distinct:
 - **Triage state** — what must happen next?
 - **Scope** — is this directly implementable, or does it need decomposition?
 - **Work type** — research, prototype, or (by default) implementation?
+- **Agent** — which agent should the runner use?
 
 Do not use labels as a substitute for acceptance criteria, issue hierarchy, native dependencies, or prioritization fields.
 
@@ -48,6 +49,17 @@ issue, and close it. An implemented issue should instead be closed with GitHub's
 | `type:prototype` | Build throwaway options for the owner to choose between; never merged |
 
 An issue with no type label is implementation.
+
+## Agent
+
+Pipeline issues run on Codex by default. Add the label `agent:claude` or
+`agent:cursor` only when the owner asks for that agent. Never add a label for
+Codex.
+
+| Label          | Meaning                                      |
+| -------------- | -------------------------------------------- |
+| `agent:claude` | Run on Claude when the owner asks for Claude |
+| `agent:cursor` | Run on Cursor when the owner asks for Cursor |
 
 ## Scope
 

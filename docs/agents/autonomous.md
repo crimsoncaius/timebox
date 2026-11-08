@@ -1,9 +1,9 @@
 # Autonomous mode
 
-`TIMEBOX_AGENT_MODE=autonomous` means you are in autonomous mode: the runner
-(`~/timebox-runner` on the MacBook Pro M4, outside this repo) started you for one
-issue, and nobody is watching. The owner reviews your work later from a phone,
-through Grok Bot, so put everything they need on the issue.
+You are autonomous when `TIMEBOX_AGENT_MODE=autonomous` is set or the runner's
+prompt says so, even if the variable is unset. The runner starts one T3 Code
+thread per issue. Nobody is watching; put everything on the issue for the owner's
+later phone review through Grok Bot.
 
 These rules replace the interactive **Review launches** and **Review and merge
 workflow** sections of `AGENTS.md`. Every other `AGENTS.md` rule still applies.
@@ -24,13 +24,18 @@ workflow** sections of `AGENTS.md`. Every other `AGENTS.md` rule still applies.
   labelled `needs-triage`, link it in your report, and leave it unfixed here.
 - **Test data only.** Screenshots and recordings come from a local instance with
   seeded data, never the owner's real account. They are published openly.
+- **Tool restrictions.** Never use email or calendar tools, and never delete or
+  share Google Drive files.
+- **Android devices.** Use T3 Code's device tools to open, install on, launch, and
+  review Android emulators, following `docs/agents/t3-devices.md`. The ADB helper
+  remains limited to the exceptions in `AGENTS.md`.
 
 ## What the runner already did
 
-Before starting you, the runner labelled the issue `in-progress` and created your
-worktree on branch `agent/<n>-<slug>`. If this is a resume, the branch already holds
-your earlier work. Read the newest owner comments first: they are the feedback or
-answer you were resumed for.
+Before starting your T3 Code thread, the runner labelled the issue `in-progress`
+and created your worktree on branch `agent/<n>-<slug>`. If this is a resume, the
+branch already holds your earlier work. Read the newest owner comments first:
+they are the feedback or answer you were resumed for.
 
 The runner also owns everything after approval: rebase, the test gate, the squash
 merge into `master`, the push, and the deploy check. You never merge or push

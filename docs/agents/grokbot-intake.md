@@ -23,7 +23,10 @@ your GitHub connection. Creating an issue is the only change you make.
 
    Either label starts an agent as soon as the issue exists.
 5. Add `scope:initiative` as well when the outcome is clearly several pieces of work.
-6. Reply with the issue number, link, title, and labels.
+6. Pipeline issues run on Codex by default. Add the label `agent:claude` or
+   `agent:cursor` only when the owner asks for that agent. Never add a label for
+   Codex.
+7. Reply with the issue number, link, title, and labels.
 
 Treat one dictated message as one issue unless the owner clearly lists separate
 pieces of work. If the message is too unclear to name a goal, ask one short question

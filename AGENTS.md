@@ -10,7 +10,11 @@ State, type, and scope labels are defined in `docs/agents/triage-labels.md`.
 
 ### Autonomous mode
 
-When `TIMEBOX_AGENT_MODE=autonomous` is set, follow `docs/agents/autonomous.md`; it replaces the review and merge sections below. The Grok bots' side of the pipeline is `docs/agents/grokbot-intake.md` and `docs/agents/grokbot-review.md`.
+The runner starts each autonomous agent as a T3 Code thread. When `TIMEBOX_AGENT_MODE=autonomous` is set or the runner's prompt says you are in autonomous mode, follow `docs/agents/autonomous.md`, even if the environment variable is unset; it replaces the review and merge sections below. The Grok bots' side of the pipeline is `docs/agents/grokbot-intake.md` and `docs/agents/grokbot-review.md`.
+
+### Tool restrictions
+
+Agents never use email or calendar tools, and never delete or share Google Drive files.
 
 ### Domain docs
 
