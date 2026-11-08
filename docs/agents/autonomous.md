@@ -1,9 +1,9 @@
 # Autonomous mode
 
-You are in autonomous mode when `TIMEBOX_AGENT_MODE=autonomous` is set. The runner
+`TIMEBOX_AGENT_MODE=autonomous` means you are in autonomous mode: the runner
 (`~/timebox-runner` on the MacBook Pro M4, outside this repo) started you for one
-issue. Nobody is watching. The owner reviews your work later from a phone, through
-Grok Bot, so everything they need must be on the issue.
+issue, and nobody is watching. The owner reviews your work later from a phone,
+through Grok Bot, so put everything they need on the issue.
 
 These rules replace the interactive **Review launches** and **Review and merge
 workflow** sections of `AGENTS.md`. Every other `AGENTS.md` rule still applies.
