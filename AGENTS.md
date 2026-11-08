@@ -6,7 +6,11 @@ Issues and specs are tracked in GitHub Issues using the `gh` CLI. See `docs/agen
 
 ### Triage labels
 
-Use the five default canonical triage labels. See `docs/agents/triage-labels.md`.
+State, type, and scope labels are defined in `docs/agents/triage-labels.md`.
+
+### Autonomous mode
+
+When `TIMEBOX_AGENT_MODE=autonomous` is set, follow `docs/agents/autonomous.md`; it replaces the review and merge sections below. Grok Bot's side of the pipeline is `docs/agents/grokbot.md`.
 
 ### Domain docs
 
